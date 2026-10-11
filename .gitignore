@@ -1,0 +1,21 @@
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+*.p12
+*.mobileprovision
+
+# Xcode and Swift build output
+.DS_Store
+DerivedData/
+build/
+.build/
+xcuserdata/
+*.xcuserstate
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Execution scratch
+.superpowers/
