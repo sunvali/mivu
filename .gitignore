@@ -12,6 +12,10 @@ build/
 .build/
 xcuserdata/
 *.xcuserstate
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
 
 # Execution scratch
 .superpowers/
