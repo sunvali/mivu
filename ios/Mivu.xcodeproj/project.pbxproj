@@ -7,6 +7,11 @@
 	objects = {
 
 
+/* Begin PBXBuildFile section */
+        610001000000000000000001 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 610001000000000000000003 /* JOSESwift */; };
+        610001000000000000000002 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 610001000000000000000004 /* JOSESwift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		8B41F65D2DEDD0D6001A66F9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -61,6 +66,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                610001000000000000000001 /* JOSESwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -68,6 +74,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                610001000000000000000002 /* JOSESwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,6 +128,7 @@
 				8BD71C052DEE41D800CEDD92 /* Config */,
 			);
 			name = Mivu;
+            packageProductDependencies = (610001000000000000000003 /* JOSESwift */,);
 			productName = Mivu;
 			productReference = 8B41F6452DEDD0D5001A66F9 /* Mivu.app */;
 			productType = "com.apple.product-type.application";
@@ -142,6 +150,7 @@
 				8B41F65F2DEDD0D6001A66F9 /* MivuTests */,
 			);
 			name = MivuTests;
+            packageProductDependencies = (610001000000000000000004 /* JOSESwift */,);
 			productName = MivuTests;
 			productReference = 8B41F65C2DEDD0D6001A66F9 /* MivuTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -175,7 +184,8 @@
 			);
 			mainGroup = 8B41F63C2DEDD0D5001A66F9;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
+			packageReferences = (610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */,);
+            preferredProjectObjectVersion = 77;
 			productRefGroup = 8B41F6462DEDD0D5001A66F9 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -227,6 +237,19 @@
 			targetProxy = 8B41F65D2DEDD0D6001A66F9 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+        610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */ = {
+            isa = XCRemoteSwiftPackageReference;
+            repositoryURL = "https://github.com/airsidemobile/JOSESwift.git";
+            requirement = { kind = exactVersion; version = 3.0.0; };
+        };
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+        610001000000000000000003 /* JOSESwift */ = {isa = XCSwiftPackageProductDependency; package = 610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */; productName = JOSESwift; };
+        610001000000000000000004 /* JOSESwift */ = {isa = XCSwiftPackageProductDependency; package = 610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */; productName = JOSESwift; };
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		8B41F6642DEDD0D6001A66F9 /* Debug */ = {
