@@ -726,18 +726,12 @@ actor DiaryStore {
                 meal.submissions[s].proposal = proposal
                 if meal.submissions[s].reviewFirst { meal.submissions[s].state = .awaitingReview }
                 else { meal.items = proposedItems; meal.revision += 1; meal.submissions[s].state = .saved }
-                if let eatenAt {
-                    guard dateLabel(eatenAt, zone: turn.captureTimeZoneID) == targetLocalDate else { throw DiaryError.invalidData }
-                    meal.eatenAt = eatenAt; meal.timePrecision = .exact
-                } else if turn.pendingMealRevision == 0 && day.id != turn.activeDayID { meal.eatenAt = day.startAt; meal.timePrecision = .dateOnly }
+                // Coach timestamps are unconfirmed; retain the linked manual capture's precision.
+                if turn.pendingMealRevision == 0 && day.id != turn.activeDayID { meal.eatenAt = day.startAt; meal.timePrecision = .dateOnly }
                 snapshot.meals[m] = meal
             } else {
                 meal = DiaryMeal(dayID: day.id, capturedAt: turn.capturedAt, eatenAt: day.startAt,
                     revision: 1, timePrecision: .dateOnly, items: items, photos: turn.photos)
-                if let eatenAt {
-                    guard dateLabel(eatenAt, zone: turn.captureTimeZoneID) == targetLocalDate else { throw DiaryError.invalidData }
-                    meal.eatenAt = eatenAt; meal.timePrecision = .exact
-                }
                 snapshot.meals.append(meal)
             }
             snapshot.coachTurns[t].photos = []

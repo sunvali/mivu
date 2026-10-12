@@ -47,8 +47,7 @@ struct CoachEngine: Sendable {
                         let subjects = ["i ", "i've ", "i have ", "we ", "we've ", "we have "]
                         guard !subjects.contains(where: { subject in actions.contains { lowered.contains(subject + $0) } }) else { throw CoachError.ungroundedConfirmation }
                         guard !response.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CoachError.ungroundedConfirmation }
-                        if actions.contains(where: lowered.contains) { text = try await store.coachRecordedSummary(expectedProfileID: expectedProfileID) }
-                        else { text = response.text }
+                        text = try await store.coachRecordedSummary(expectedProfileID: expectedProfileID)
                     }
                     try await store.finishCoachTurn(turnID: turnID, assistantText: text, epoch: epoch, expectedProfileID: expectedProfileID)
                     return try await store.coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)

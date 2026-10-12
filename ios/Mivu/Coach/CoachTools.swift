@@ -37,7 +37,7 @@ enum CoachTools {
             ("get_context", "Read actual bounded diary and capture clock. truncated and omittedMeals explicitly mark details not included.", object([:], required: [])),
             ("get_meal", "Retrieve actual owner-scoped meal by UUID before correction. omittedItemCount marks unavailable details requiring manual review.", object(["meal_id": string], required: ["meal_id"])),
             ("lookup_nutrition", "Search retrieved nutrition evidence; unavailable means use clearly uncertain estimates.", object(["query":string], required: ["query"])),
-            ("log_food", "Log all new foods for this turn/date once. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Use eaten_at only for a time explicitly provided by the user; otherwise direct chat remains date-only.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":string], required: ["target_local_date", "items"])),
+            ("log_food", "Log all new foods for this turn/date once. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":string], required: ["target_local_date", "items"])),
             ("correct_item", "Correct only quantity on a retrieved actual item, preserving its nutrition basis and sources.", object(["meal_id":string,"item_id":string,"expected_revision":["type":"integer"],"quantity":["type":"number"]], required: ["meal_id","item_id","expected_revision","quantity"])),
             ("close_day", "Explicitly close a local date as complete, partial, untracked or unknown; retain existing food.", object(["local_date":string,"completeness":["type":"string","enum":DayCompleteness.allCases.map(\.rawValue)]], required: ["local_date","completeness"]))
         ]
@@ -87,11 +87,11 @@ enum CoachTools {
                 }
                 try validateItems([item]); return item
             }
-            var eatenAt: Date?
+            // Validate legacy syntax without treating model output as owner-confirmed time.
             if let value = args["eaten_at"] {
-                guard let value = value as? String, let date = ISO8601DateFormatter().date(from: value) else { throw CoachError.invalidArguments }; eatenAt = date
+                guard let value = value as? String, ISO8601DateFormatter().date(from: value) != nil else { throw CoachError.invalidArguments }
             }
-            return .write(.food(date: try string("target_local_date"), items: items, eatenAt: eatenAt))
+            return .write(.food(date: try string("target_local_date"), items: items, eatenAt: nil))
         case "correct_item":
             try keys(["meal_id", "item_id", "expected_revision", "quantity"], ["meal_id", "item_id", "expected_revision", "quantity"])
             let mealID = try uuid("meal_id"), itemID = try uuid("item_id")

@@ -386,16 +386,16 @@ import Testing
         #expect(try await store.snapshot() == before)
     }
 
-    @Test func explicitEatingTimeAndManualCaptureRemainExact() async throws {
+    @Test func unconfirmedCoachTimeStaysDateOnlyAndManualCaptureRemainsExact() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await store.captureCoachTurn(text: "Breakfast at eight", photos: [], at: now, expectedProfileID: profile.id)
         let time = now.addingTimeInterval(-7200)
         let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], eatenAt: time, expectedProfileID: profile.id)
         let explicit = try #require(await store.snapshot().meals.first { $0.id == receipt.mealID })
-        #expect(explicit.timePrecision == .exact); #expect(explicit.eatenAt == time)
+        #expect(explicit.timePrecision == .dateOnly); #expect(explicit.eatenAt != time)
         let day = try await store.snapshot().days[0], id = UUID()
         _ = try await store.capture(text: "Manual", photos: [], reviewFirst: false, dayID: day.id, at: now, submissionID: id, forCoach: true)
-        let manual = try await store.applyCoachFood(turnID: id, targetLocalDate: day.localDate, items: [food("Soup", 1, 100)], expectedProfileID: profile.id)
+        let manual = try await store.applyCoachFood(turnID: id, targetLocalDate: day.localDate, items: [food("Soup", 1, 100)], eatenAt: time, expectedProfileID: profile.id)
         let saved = try #require(await store.snapshot().meals.first { $0.id == manual.mealID })
         #expect((saved.timePrecision ?? .exact) == .exact); #expect(saved.eatenAt == now)
     }
