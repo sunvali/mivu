@@ -23,6 +23,18 @@ struct CoachView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
                                 NutritionSummary(totals: snapshot.totals(dayID: day.id))
+                                if let goal = snapshot.goal(on: day.localDate) {
+                                    let progress = ProgressAnalytics.daily(snapshot: snapshot, localDate: day.localDate)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Your goals").font(.subheadline.weight(.semibold))
+                                        if let target = goal.targets.kcal {
+                                            Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
+                                        }
+                                        Text("Remaining from recorded food: \(progress.remainingFromRecorded.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "unknown")")
+                                    }
+                                    .font(.subheadline)
+                                    .accessibilityIdentifier("coachGoalSummary")
+                                }
                             }.padding(16).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
                         }
                         if coach.turns.isEmpty {
@@ -31,7 +43,15 @@ struct CoachView: View {
                                 Text("Tell me what you ate, add a photo, or ask about your recorded meals. Food estimates stay open to correction.").foregroundStyle(Color.diarySecondary)
                             }.padding(.vertical, 24)
                         }
-                        ForEach(coach.turns) { turn in bubble(turn).id(turn.id) }
+                        ForEach(conversationRows) { row in
+                            switch row.kind {
+                            case .input: inputBubble(row.turn)
+                            case .reply:
+                                Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
+                                    .accessibilityIdentifier("coachReply")
+                            case .actions: turnActions(row.turn)
+                            }
+                        }
                     } else { ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile.")) }
                 }.padding(16)
             }
@@ -40,6 +60,14 @@ struct CoachView: View {
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 80
             } action: { _, nearBottom in if userScrolling { followLatest = nearBottom } }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { oldHeight, newHeight in
+                guard newHeight > oldHeight, followLatest,
+                      let turn = coach.turns.last, turn.assistantText != nil else { return }
+                Task { @MainActor in
+                    await Task.yield()
+                    if followLatest { proxy.scrollTo("reply-" + turn.id.uuidString, anchor: .top) }
+                }
+            }
             .onChange(of: coach.turns.last?.assistantText) { _, _ in
                 guard followLatest, let id = coach.turns.last?.id, coach.turns.last?.assistantText != nil else { return }
                 Task { @MainActor in
@@ -49,7 +77,7 @@ struct CoachView: View {
             }
             .onChange(of: coach.turns.count) { _, _ in
                 followLatest = true
-                if let id = coach.turns.last?.id { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) } }
+                if let id = coach.turns.last?.id { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("input-" + id.uuidString, anchor: .bottom) } }
             }
         }
         .background(Color.diaryCanvas)
@@ -68,6 +96,23 @@ struct CoachView: View {
         .onChange(of: coach.diary.snapshot?.profile.id) { _, _ in
             preparation.cancel(); preparation = PhotoPreparation()
             showPhotos = false; editing = false
+        }
+    }
+    private struct ConversationRow: Identifiable {
+        enum Kind: String { case input, reply, actions }
+        let turn: CoachTurn
+        let kind: Kind
+        var id: String { kind.rawValue + "-" + turn.id.uuidString }
+    }
+    private var conversationRows: [ConversationRow] {
+        // Lazy scrolling resolves ForEach element IDs before offscreen views exist.
+        coach.turns.flatMap { turn in
+            var rows = [ConversationRow(turn: turn, kind: .input)]
+            if turn.assistantText != nil { rows.append(ConversationRow(turn: turn, kind: .reply)) }
+            if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil }) {
+                rows.append(ConversationRow(turn: turn, kind: .actions))
+            }
+            return rows
         }
     }
     private var composer: some View {
@@ -97,14 +142,15 @@ struct CoachView: View {
             else { Label("Send", systemImage: "arrow.up").frame(minHeight: 44) }
         }.tint(.diaryAccent).foregroundStyle(Color.diaryActionText).disabled(!coach.canSend || !preparation.canCapture).accessibilityIdentifier("coachSend")
     }
-    private func bubble(_ turn: CoachTurn) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func inputBubble(_ turn: CoachTurn) -> some View {
             VStack(alignment: .leading, spacing: 8) {
                 if !turn.text.isEmpty { Text(turn.text).textSelection(.enabled) }
                 if !turn.photoIDs.isEmpty { Label("\(turn.photoIDs.count) attached photos", systemImage: "photo") .font(.caption) }
                 Label("Input saved on this iPhone", systemImage: "internaldrive").font(.caption).foregroundStyle(Color.diarySecondary)
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Color.diaryLeaf.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
-            if let text = turn.assistantText { Text(text).textSelection(.enabled).padding(.horizontal, 8).id("reply-" + turn.id.uuidString).accessibilityIdentifier("coachReply") }
+    }
+    private func turnActions(_ turn: CoachTurn) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             if turn.state != .completed {
                 Label(status(turn.state), systemImage: turn.state == .analyzing ? "hourglass" : "clock").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 if turn.needsDayChoice == true {

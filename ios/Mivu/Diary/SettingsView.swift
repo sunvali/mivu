@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var creatingProfile = false
     @State private var showDelete = false
     @State private var showDiagnostic = false
+    @State private var showGoals = false
     @State private var fields = DiaryPreferencesDraft()
     var body: some View {
         Form {
@@ -26,6 +27,12 @@ struct SettingsView: View {
                 if model.snapshot != nil { Button("Sign out of local profile") { Task { await model.signOut() } }.frame(minHeight: 44) }
             }
             if let profile = model.snapshot?.profile {
+                Section("Goals") {
+                    Button("Set dated goals") { showGoals = true }
+                        .frame(minHeight: 44).accessibilityIdentifier("editGoals")
+                    Text("Your targets are optional settings and are never inferred from meals or workouts.")
+                        .font(.caption).foregroundStyle(Color.diarySecondary)
+                }
                 Section("Diary preferences") {
                     TextField("Timezone", text: $fields.timezone).autocorrectionDisabled().textInputAutocapitalization(.never)
                     TextField("Dietary preferences and restrictions", text: $fields.preferences, axis: .vertical).lineLimit(3...6)
@@ -98,6 +105,7 @@ struct SettingsView: View {
             .environment(\.locale, Locale(identifier: "en"))
             .environment(\.layoutDirection, .leftToRight)
         }
+        .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .onChange(of: model.snapshot?.profile.id, initial: true) { _, _ in fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration) }
         .alert("Create local profile", isPresented: $creatingProfile) {

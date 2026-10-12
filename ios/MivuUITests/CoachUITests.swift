@@ -67,10 +67,10 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         enter("half bread", in: app); app.buttons["coachSend"].tap()
         waitForReplies(2, in: app); openLatestMeal(in: app)
-        XCTAssertTrue(app.staticTexts["1.5 slice"].exists)
-        XCTAssertTrue(app.staticTexts["2 egg"].exists)
-        XCTAssertTrue(app.staticTexts["1 bowl"].exists)
-        XCTAssertTrue(app.staticTexts["300"].exists)
+        for quantity in ["1.5 slice", "2 egg", "1 bowl"] {
+            revealMealDetailItem(app.staticTexts[quantity], in: app)
+        }
+        revealMealDetailItem(app.staticTexts["300"], in: app)
         app.navigationBars.buttons.firstMatch.tap()
         enter("Yesterday I had dessert", in: app); app.buttons["coachSend"].tap()
         waitForReplies(3, in: app)
@@ -125,6 +125,15 @@ import XCTest
     }
     private func revealList(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<10 where !element.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(element.isHittable)
+    }
+    private func revealMealDetailItem(_ element: XCUIElement, in app: XCUIApplication) {
+        guard let list = app.collectionViews.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
+            XCTFail("Meal detail should have a visible list")
+            return
+        }
+        for _ in 0..<8 where !element.isHittable { list.swipeDown() }
+        for _ in 0..<8 where !element.isHittable { list.swipeUp() }
         XCTAssertTrue(element.isHittable)
     }
 }

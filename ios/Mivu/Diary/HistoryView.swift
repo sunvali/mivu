@@ -5,6 +5,15 @@ struct HistoryView: View {
     var body: some View {
         List {
             if let snapshot = model.snapshot {
+                Section {
+                    NavigationLink {
+                        DiaryProgressView(model: model)
+                    } label: {
+                        Label("Progress", systemImage: "chart.xyaxis.line")
+                            .frame(minHeight: 44, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("openProgress")
+                }
                 Section("Coverage") {
                     ForEach(DayCompleteness.allCases, id: \.self) { status in
                         HStack { Text(status.title); Spacer(); Text(snapshot.days.filter { $0.completeness == status }.count.formatted()) }
