@@ -4,6 +4,25 @@ import Testing
 
 @Suite @MainActor struct DiaryFlowTests {
     private func directory() -> URL { URL.temporaryDirectory.appending(path: "MivuFlow-" + UUID().uuidString) }
+    @Test func legacyHebrewPreferenceKeepsEnglishLaunchAndPreservesStoredDiary() async throws {
+        let previousLanguage = DiaryLaunch.defaults.object(forKey: "appLanguage")
+        DiaryLaunch.defaults.set("he", forKey: "appLanguage")
+        defer { if let previousLanguage { DiaryLaunch.defaults.set(previousLanguage, forKey: "appLanguage") } else { DiaryLaunch.defaults.removeObject(forKey: "appLanguage") } }
+        #expect(DiaryLaunch.language == "en")
+        let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
+        let store = DiaryStore(directory: path)
+        let profile = DiaryProfile(name: "יומן סינתטי", language: "he", preferences: "Synthetic retained preference")
+        _ = try await store.createProfile(profile)
+        let day = try await store.startDay()
+        let meal = try await store.capture(text: "Synthetic retained meal", photos: [MealPhoto(data: Data([1, 2, 3]))], reviewFirst: true, dayID: day.id)
+        let model = DiaryViewModel(store: DiaryStore(directory: path))
+        await model.load(); model.enterBackground()
+        let loaded = try #require(model.snapshot)
+        #expect(loaded.profile == profile)
+        #expect(loaded.meals.first?.id == meal.id)
+        #expect(loaded.meals.first?.photos.first?.data == Data([1, 2, 3]))
+        #expect(loaded.meals.first?.submissions.first?.text == "Synthetic retained meal")
+    }
     @Test func captureAllowsTextOrPhotoButRejectsBlankInput() {
         var draft = MealDraft()
         #expect(!draft.isValid)

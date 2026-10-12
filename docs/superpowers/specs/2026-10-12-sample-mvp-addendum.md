@@ -5,7 +5,8 @@ until a working native MVP and full GitHub Actions CI/CD exist; use an apple
 image/prompt result until ChatGPT work resumes; do not wait for feedback.
 This overrides the prior live-connection prerequisite and skill review pauses.
 It does not authorize paid membership/resources, public publication, or accepting
-legal terms. The accepted 2026-10-11 product spec remains the product contract.
+legal terms. The accepted 2026-10-11 product spec remains the product contract,
+subject to the explicit owner language override recorded below.
 
 ## Current release scope
 
@@ -65,6 +66,15 @@ leaf/sage supporting accents, clear food/data surfaces and native glass controls
 Keep capture reachable, spacing/typography deliberate, interaction smooth, and
 status copy concise. System type scales, dark mode follows the system, all
 actions are at least44pt; VoiceOver and reduced-motion/transparency remain
-requirements. Preserve existing Hebrew functionality while English receives the
-MVP polish and acceptance focus. Sample mode stays visible in the diary and
-each synthetic estimate's provenance.
+requirements. The English-only language override below governs MVP UI scope.
+Sample mode stays visible in the diary and each synthetic estimate's provenance.
+
+## Owner language override — 2026-10-12
+
+The owner directs that the MVP be English-only for now. Disable the Hebrew
+language selector and focus MVP polish and acceptance on English. Preserve
+existing profile and archive records, including stored language values; do not
+delete, rewrite, or migrate them as part of this scope. Hebrew RTL functionality
+is not required for MVP acceptance. This current owner decision overrides any
+conflicting language-support guidance in the 2026-10-11 spec and this addendum;
+the original 2026-10-11 spec remains unchanged.

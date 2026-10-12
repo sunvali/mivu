@@ -55,7 +55,7 @@ final class DiaryViewModel {
             } else if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 selected = try await profileSelection(profile.id)
             } else {
-                selected = try await store.createProfile(DiaryProfile(name: String(localized: "My diary"), language: DiaryLaunch.language))
+                selected = try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language))
                 profiles = try await store.profiles()
             }
             await selectBackupProfile(selected.profile.id)
@@ -277,12 +277,7 @@ final class DiaryViewModel {
         if let id = testID, let defaults = UserDefaults(suiteName: "MivuUITest-" + id.uuidString) { return defaults }
         return .standard
     }
-    static var language: String {
-        let args = ProcessInfo.processInfo.arguments
-        if args.contains("--proof-hebrew") { return "he" }
-        if args.contains("--proof-english") { return "en" }
-        return defaults.string(forKey: "appLanguage") ?? "en"
-    }
+    static var language: String { "en" }
     static var directory: URL {
         if let id = testID { return URL.temporaryDirectory.appending(path: "MivuUITest-" + id.uuidString, directoryHint: .isDirectory) }
         return URL.documentsDirectory.appending(path: "Diary", directoryHint: .isDirectory)

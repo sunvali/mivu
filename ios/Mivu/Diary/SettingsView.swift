@@ -21,12 +21,6 @@ struct SettingsView: View {
                 if model.snapshot != nil { Button("Sign out of local profile") { Task { await model.signOut() } }.frame(minHeight: 44) }
             }
             if let profile = model.snapshot?.profile {
-                Section("Language") {
-                    Picker("App language", selection: Binding(get: { profile.language }, set: { value in
-                        var updated = profile; updated.language = value
-                        Task { if await model.change({ try await model.store.updateProfile(updated, expectedProfileID: profile.id) }) { DiaryLaunch.defaults.set(value, forKey: "appLanguage") } }
-                    })) { Text("English").tag("en"); Text("עברית").tag("he") }.pickerStyle(.segmented).frame(minHeight: 44)
-                }
                 Section("Diary preferences") {
                     TextField("Timezone", text: $fields.timezone).autocorrectionDisabled().textInputAutocapitalization(.never)
                     TextField("Dietary preferences and restrictions", text: $fields.preferences, axis: .vertical).lineLimit(3...6)
@@ -59,6 +53,8 @@ struct SettingsView: View {
                 HStack { Spacer(); Button("Done") { showDiagnostic = false }.frame(minHeight: 44) }.padding(.horizontal)
                 ConnectionProofView()
             }
+            .environment(\.locale, Locale(identifier: "en"))
+            .environment(\.layoutDirection, .leftToRight)
         }
         .onChange(of: model.snapshot?.profile.id, initial: true) { _, _ in fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration) }

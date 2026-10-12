@@ -115,7 +115,7 @@ struct MealRow: View {
                 Image(uiImage: image).resizable().scaledToFill().frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 16)).accessibilityHidden(true)
             } else { Image(systemName: "fork.knife").frame(width: 52, height: 52).background(.quaternary, in: RoundedRectangle(cornerRadius: 10)).accessibilityHidden(true) }
             VStack(alignment: .leading, spacing: 5) {
-                Text(meal.items.first.map { $0.provenance == .sample ? String(localized: "Apple (sample)") : $0.name } ?? meal.submissions.first?.text ?? String(localized: "Meal")).lineLimit(2)
+                Text(meal.items.first.map { $0.provenance == .sample ? "Apple (sample)" : $0.name } ?? meal.submissions.first?.text ?? "Meal").lineLimit(2)
                 HStack { Text(meal.state.title); Text(meal.eatenAt, style: .time) }.font(.caption).foregroundStyle(Color.diarySecondary)
             }
             Spacer(minLength: 4)

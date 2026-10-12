@@ -85,7 +85,7 @@ struct MealDetailView: View {
     }
     private func itemRow(_ item: FoodItem, editable: Bool, reviewSubmissionID: UUID? = nil) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(item.provenance == .sample ? String(localized: "Apple (sample)") : item.name).font(.headline)
+            Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.headline)
             Text("\(item.quantity.formatted()) \(item.unit)").foregroundStyle(Color.diarySecondary)
             Text(item.provenance == .user ? "Edited by you" : "Synthetic apple estimate").font(.caption).foregroundStyle(Color.diarySecondary)
             if item.uncertain { Text("Portion or nutrients are uncertain").font(.caption).foregroundStyle(Color.diarySecondary) }
@@ -136,6 +136,8 @@ private struct FoodItemEditor: View {
                 }.disabled(edited == nil || saving).accessibilityIdentifier("saveItem") }
             }
         }
+        .environment(\.locale, Locale(identifier: "en"))
+        .environment(\.layoutDirection, .leftToRight)
     }
     private func number(_ text: String) -> Double? { Double(text.replacingOccurrences(of: ",", with: ".")) }
     private var edited: FoodItem? {
