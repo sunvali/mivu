@@ -1,0 +1,13 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSCameraUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Mivu uses the camera to attach meal photos to your private diary."}},
+        "he": {"stringUnit": {"state": "translated", "value": "Mivu משתמש במצלמה כדי לצרף תמונות של ארוחות ליומן הפרטי שלך."}}
+      }
+    }
+  },
+  "version": "1.0"
+}

@@ -1,38 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "Connection test": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connection test"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בדיקת חיבור"
-          }
-        }
-      }
-    },
-    "Connect your own ChatGPT plan before testing a sample image.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connect your own ChatGPT plan before testing a sample image."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "חברו את מנוי ChatGPT שלכם לפני בדיקת תמונה לדוגמה."
-          }
-        }
-      }
-    },
     "Account": {
       "localizations": {
         "en": {
@@ -49,114 +17,68 @@
         }
       }
     },
-    "Not connected": {
+    "Account connection is not available in this first screen yet.": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Not connected"
+            "value": "Account connection is not available in this first screen yet."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "לא מחובר"
+            "value": "החיבור לחשבון עדיין אינו זמין במסך הראשוני הזה."
           }
         }
       }
     },
-    "Connecting": {
+    "Account model": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connecting"
+            "value": "Account model"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מתחבר"
+            "value": "מודל החשבון"
           }
         }
       }
     },
-    "Connected": {
+    "Analysis paused": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connected"
+            "value": "Analysis paused"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מחובר"
+            "value": "הניתוח מושהה"
           }
         }
       }
     },
-    "Plan permission missing": {
+    "Analysis paused. Retry when ready.": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Plan permission missing"
+            "value": "Analysis paused. Retry when ready."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "חסרה הרשאת מנוי"
-          }
-        }
-      }
-    },
-    "Usage limit reached": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Usage limit reached"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מגבלת השימוש הושגה"
-          }
-        }
-      }
-    },
-    "Connection unavailable": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connection unavailable"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "החיבור אינו זמין"
-          }
-        }
-      }
-    },
-    "Queued": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Queued"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בתור"
+            "value": "הניתוח מושהה. אפשר לנסות שוב כשמוכנים."
           }
         }
       }
@@ -172,7 +94,122 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "בניתוח"
+            "value": "בעיבוד"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "App language": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App language"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שפת היישום"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Authorize plan usage before sending a request.": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authorize plan usage before sending a request."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יש לאשר שימוש בתוכנית לפני שליחת בקשה."
+          }
+        }
+      }
+    },
+    "Browser test cancelled": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browser test cancelled"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקת הדפדפן בוטלה"
+          }
+        }
+      }
+    },
+    "Browser test did not complete": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browser test did not complete"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקת הדפדפן לא הושלמה"
+          }
+        }
+      }
+    },
+    "Browser test not started": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browser test not started"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקת הדפדפן טרם התחילה"
+          }
+        }
+      }
+    },
+    "Cancel browser test": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel browser test"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ביטול בדיקת הדפדפן"
+          }
+        }
+      }
+    },
+    "Cancel connection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel connection"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ביטול החיבור"
           }
         }
       }
@@ -193,98 +230,199 @@
         }
       }
     },
-    "Account connection is not available in this first screen yet.": {
+    "Connect ChatGPT": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Account connection is not available in this first screen yet."
+            "value": "Connect ChatGPT"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "החיבור לחשבון עדיין אינו זמין במסך הראשוני הזה."
+            "value": "חיבור ל־ChatGPT"
           }
         }
       }
     },
-    "Sample request": {
+    "Connect your own ChatGPT plan before testing a sample image.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sample request"
+            "value": "Connect your own ChatGPT plan before testing a sample image."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "בקשה לדוגמה"
+            "value": "חברו את מנוי ChatGPT שלכם לפני בדיקת תמונה לדוגמה."
           }
         }
       }
     },
-    "No request sent": {
+    "Connected": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No request sent"
+            "value": "Connected"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "לא נשלחה בקשה"
+            "value": "מחובר"
           }
         }
       }
     },
-    "Only completed analysis will appear as a result.": {
+    "Connected with plan permission": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only completed analysis will appear as a result."
+            "value": "Connected with plan permission"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "רק ניתוח שהושלם יופיע כתוצאה."
+            "value": "מחובר עם הרשאת שימוש בתוכנית"
           }
         }
       }
     },
-    "Language": {
+    "Connecting": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Language"
+            "value": "Connecting"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שפה"
+            "value": "מתחבר"
           }
         }
       }
     },
-    "App language": {
+    "Connection cancelled": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "App language"
+            "value": "Connection cancelled"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שפת האפליקציה"
+            "value": "החיבור בוטל"
+          }
+        }
+      }
+    },
+    "Connection permission declined": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection permission declined"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הרשאת החיבור נדחתה"
+          }
+        }
+      }
+    },
+    "Connection test": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection test"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקת חיבור"
+          }
+        }
+      }
+    },
+    "Connection unavailable": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection unavailable"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "החיבור אינו זמין"
+          }
+        }
+      }
+    },
+    "Connection unavailable. Try again.": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection unavailable. Try again."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "החיבור אינו זמין. אפשר לנסות שוב."
+          }
+        }
+      }
+    },
+    "Delete synthetic sample": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete synthetic sample"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מחיקת הדוגמה הסינתטית"
+          }
+        }
+      }
+    },
+    "Disconnect": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnect"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ניתוק"
           }
         }
       }
@@ -303,20 +441,88 @@
             "value": "English"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
-    "עברית": {
+    "Language": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "עברית"
+            "value": "Language"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "עברית"
+            "value": "שפה"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Loading account models": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading account models"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "טוען מודלים של החשבון"
+          }
+        }
+      }
+    },
+    "Local credentials removed": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local credentials removed"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פרטי ההרשאה הוסרו מהמכשיר"
+          }
+        }
+      }
+    },
+    "Local credentials removed. Remote revocation unconfirmed.": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local credentials removed. Remote revocation unconfirmed."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פרטי ההרשאה הוסרו מהמכשיר. ביטול ההרשאה המרוחקת לא אושר."
+          }
+        }
+      }
+    },
+    "Local sample storage unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local sample storage unavailable"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אחסון הדוגמה במכשיר אינו זמין"
           }
         }
       }
@@ -353,86 +559,6 @@
         }
       }
     },
-    "Uses a synthetic local callback. No account sign-in or analysis request.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uses a synthetic local callback. No account sign-in or analysis request."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "משתמש בתשובה מקומית סינתטית. ללא כניסה לחשבון או בקשת ניתוח."
-          }
-        }
-      }
-    },
-    "Test native browser": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Test native browser"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בדיקת הדפדפן המובנה"
-          }
-        }
-      }
-    },
-    "Cancel browser test": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel browser test"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ביטול בדיקת הדפדפן"
-          }
-        }
-      }
-    },
-    "Browser test not started": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Browser test not started"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בדיקת הדפדפן טרם התחילה"
-          }
-        }
-      }
-    },
-    "Testing native browser": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Testing native browser"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בודק את הדפדפן המובנה"
-          }
-        }
-      }
-    },
     "Native callback received": {
       "localizations": {
         "en": {
@@ -445,166 +571,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "התקבלה תשובה מהדפדפן המובנה"
-          }
-        }
-      }
-    },
-    "Browser test did not complete": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Browser test did not complete"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בדיקת הדפדפן לא הושלמה"
-          }
-        }
-      }
-    },
-    "Browser test cancelled": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Browser test cancelled"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בדיקת הדפדפן בוטלה"
-          }
-        }
-      }
-    },
-    "This diagnostic uses only a synthetic image and prompt.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This diagnostic uses only a synthetic image and prompt."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בדיקה זו משתמשת רק בתמונה ובהנחיה סינתטיות."
-          }
-        }
-      }
-    },
-    "Cancel connection": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel connection"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ביטול החיבור"
-          }
-        }
-      }
-    },
-    "Connect ChatGPT": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connect ChatGPT"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "חיבור ל־ChatGPT"
-          }
-        }
-      }
-    },
-    "Reauthorize ChatGPT": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reauthorize ChatGPT"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אישור מחדש ל־ChatGPT"
-          }
-        }
-      }
-    },
-    "Disconnect": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disconnect"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ניתוק"
-          }
-        }
-      }
-    },
-    "Loading account models": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Loading account models"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "טוען מודלים של החשבון"
-          }
-        }
-      }
-    },
-    "Account model": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Account model"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מודל החשבון"
-          }
-        }
-      }
-    },
-    "The catalog does not guarantee image support. This sample checks compatibility.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The catalog does not guarantee image support. This sample checks compatibility."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הרשימה אינה מבטיחה תמיכה בתמונות. הדוגמה בודקת תאימות."
           }
         }
       }
@@ -625,22 +591,6 @@
         }
       }
     },
-    "Reload account models": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reload account models"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "טעינה מחדש של מודלי החשבון"
-          }
-        }
-      }
-    },
     "No local sample saved": {
       "localizations": {
         "en": {
@@ -657,66 +607,50 @@
         }
       }
     },
-    "Synthetic sample saved on this iPhone": {
+    "No request sent": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Synthetic sample saved on this iPhone"
+            "value": "No request sent"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הדוגמה הסינתטית שמורה באייפון הזה"
+            "value": "לא נשלחה בקשה"
           }
         }
       }
     },
-    "Save and test synthetic sample": {
+    "Not connected": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save and test synthetic sample"
+            "value": "Not connected"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שמירה ובדיקה של דוגמה סינתטית"
+            "value": "לא מחובר"
           }
         }
       }
     },
-    "Retry analysis": {
+    "Only completed analysis will appear as a result.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retry analysis"
+            "value": "Only completed analysis will appear as a result."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ניסיון ניתוח נוסף"
-          }
-        }
-      }
-    },
-    "Delete synthetic sample": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete synthetic sample"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מחיקת הדוגמה הסינתטית"
+            "value": "רק ניתוח שהושלם יופיע כתוצאה."
           }
         }
       }
@@ -737,18 +671,149 @@
         }
       }
     },
-    "Connected with plan permission": {
+    "Plan permission missing": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connected with plan permission"
+            "value": "Plan permission missing"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מחובר עם הרשאת שימוש בתוכנית"
+            "value": "חסרה הרשאת מנוי"
+          }
+        }
+      }
+    },
+    "Queued": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queued"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בתור"
+          }
+        }
+      }
+    },
+    "Reauthorize ChatGPT": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reauthorize ChatGPT"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אישור מחדש ל־ChatGPT"
+          }
+        }
+      }
+    },
+    "Reconnect to authorize plan usage.": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnect to authorize plan usage."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יש להתחבר מחדש כדי לאשר שימוש בתוכנית."
+          }
+        }
+      }
+    },
+    "Reload account models": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload account models"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "טעינה מחדש של מודלי החשבון"
+          }
+        }
+      }
+    },
+    "Retry analysis": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry analysis"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ניסיון ניתוח נוסף"
+          }
+        }
+      }
+    },
+    "Sample could not be saved. No request sent.": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample could not be saved. No request sent."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הדוגמה לא נשמרה. לא נשלחה בקשה."
+          }
+        }
+      }
+    },
+    "Sample request": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample request"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בקשה לדוגמה"
+          }
+        }
+      }
+    },
+    "Save and test synthetic sample": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save and test synthetic sample"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שמירה ובדיקה של דוגמה סינתטית"
           }
         }
       }
@@ -769,18 +834,131 @@
         }
       }
     },
-    "Analysis paused": {
+    "Synthetic sample saved on this iPhone": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Analysis paused"
+            "value": "Synthetic sample saved on this iPhone"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הניתוח מושהה"
+            "value": "הדוגמה הסינתטית שמורה באייפון הזה"
+          }
+        }
+      }
+    },
+    "Test native browser": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test native browser"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקת הדפדפן המובנה"
+          }
+        }
+      }
+    },
+    "Testing native browser": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testing native browser"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בודק את הדפדפן המובנה"
+          }
+        }
+      }
+    },
+    "The catalog does not guarantee image support. This sample checks compatibility.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The catalog does not guarantee image support. This sample checks compatibility."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הרשימה אינה מבטיחה תמיכה בתמונות. הדוגמה בודקת תאימות."
+          }
+        }
+      }
+    },
+    "This diagnostic uses only a synthetic image and prompt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This diagnostic uses only a synthetic image and prompt."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקה זו משתמשת רק בתמונה ובהנחיה סינתטיות."
+          }
+        }
+      }
+    },
+    "Usage limit reached": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage limit reached"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מגבלת השימוש הושגה"
+          }
+        }
+      }
+    },
+    "Usage limit reached. Retry after your plan allows it.": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage limit reached. Retry after your plan allows it."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הגעת למגבלת השימוש. אפשר לנסות שוב כשהתוכנית תאפשר זאת."
+          }
+        }
+      }
+    },
+    "Uses a synthetic local callback. No account sign-in or analysis request.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses a synthetic local callback. No account sign-in or analysis request."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "משתמש בתשובה מקומית סינתטית. ללא כניסה לחשבון או בקשת ניתוח."
           }
         }
       }
@@ -801,178 +979,2868 @@
         }
       }
     },
-    "Connection cancelled": {
+    "עברית": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connection cancelled"
+            "value": "עברית"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "החיבור בוטל"
+            "value": "עברית"
           }
         }
       }
     },
-    "Connection permission declined": {
+    "A photo cannot prove that food meets a dietary restriction.": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connection permission declined"
+            "value": "A photo cannot prove that food meets a dietary restriction."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הרשאת החיבור נדחתה"
+            "value": "תמונה אינה יכולה להוכיח שהמזון מתאים להגבלה תזונתית."
           }
         }
       }
     },
-    "Connection unavailable. Try again.": {
+    "A tracking day follows your waking cycle.": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connection unavailable. Try again."
+            "value": "A tracking day follows your waking cycle."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "החיבור אינו זמין. אפשר לנסות שוב."
+            "value": "יום המעקב עוקב אחר מחזור הערות שלך."
           }
         }
       }
     },
-    "Sample could not be saved. No request sent.": {
+    "Add message or photo": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sample could not be saved. No request sent."
+            "value": "Add message or photo"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הדוגמה לא נשמרה. לא נשלחה בקשה."
+            "value": "הוספת הודעה או תמונה"
           }
         }
       }
     },
-    "Local sample storage unavailable": {
+    "Add synthetic apple photo": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Local sample storage unavailable"
+            "value": "Add synthetic apple photo"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "אחסון הדוגמה במכשיר אינו זמין"
+            "value": "הוספת תמונת תפוח מלאכותית"
           }
         }
       }
     },
-    "Analysis paused. Retry when ready.": {
+    "After eating": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Analysis paused. Retry when ready."
+            "value": "After eating"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הניתוח מושהה. אפשר לנסות שוב כשמוכנים."
+            "value": "אחרי האכילה"
           }
         }
       }
     },
-    "Usage limit reached. Retry after your plan allows it.": {
+    "Allow camera access in Settings, or choose a photo instead.": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usage limit reached. Retry after your plan allows it."
+            "value": "Allow camera access in Settings, or choose a photo instead."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הגעת למגבלת השימוש. אפשר לנסות שוב כשהתוכנית תאפשר זאת."
+            "value": "אפשרו גישה למצלמה בהגדרות, או בחרו תמונה."
           }
         }
       }
     },
-    "Authorize plan usage before sending a request.": {
+    "Apple (sample)": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Authorize plan usage before sending a request."
+            "value": "Apple (sample)"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "יש לאשר שימוש בתוכנית לפני שליחת בקשה."
+            "value": "תפוח (דוגמה)"
           }
         }
       }
     },
-    "Reconnect to authorize plan usage.": {
+    "Apple sample estimate — not food recognition": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reconnect to authorize plan usage."
+            "value": "Apple sample estimate — not food recognition"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "יש להתחבר מחדש כדי לאשר שימוש בתוכנית."
+            "value": "הערכת תפוח לדוגמה — ללא זיהוי מזון"
           }
         }
       }
     },
-    "Local credentials removed": {
+    "Apple sample mode": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Local credentials removed"
+            "value": "Apple sample mode"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "פרטי ההרשאה הוסרו מהמכשיר"
+            "value": "מצב דוגמה: תפוח"
           }
         }
       }
     },
-    "Local credentials removed. Remote revocation unconfirmed.": {
+    "Attached photos": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Local credentials removed. Remote revocation unconfirmed."
+            "value": "Attached photos"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "פרטי ההרשאה הוסרו מהמכשיר. ביטול ההרשאה המרוחקת לא אושר."
+            "value": "תמונות מצורפות"
+          }
+        }
+      }
+    },
+    "Awaiting review": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Awaiting review"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ממתין לבדיקה"
+          }
+        }
+      }
+    },
+    "Backup and portability": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup and portability"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "גיבוי והעברת נתונים"
+          }
+        }
+      }
+    },
+    "Before eating": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Before eating"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לפני האכילה"
+          }
+        }
+      }
+    },
+    "Calories (kcal)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calories (kcal)"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "קלוריות (קק״ל)"
+          }
+        }
+      }
+    },
+    "Camera": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מצלמה"
+          }
+        }
+      }
+    },
+    "Camera access is off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera access is off"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הגישה למצלמה כבויה"
+          }
+        }
+      }
+    },
+    "Camera is unavailable here. Choose Photos or use the synthetic sample.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera is unavailable here. Choose Photos or use the synthetic sample."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המצלמה אינה זמינה כאן. בחרו תמונות או השתמשו בדוגמה המלאכותית."
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ביטול"
+          }
+        }
+      }
+    },
+    "Cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelled"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בוטל"
+          }
+        }
+      }
+    },
+    "Capture a photo, write a note, or use both.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture a photo, write a note, or use both."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "צלמו תמונה, כתבו הערה או שלבו את שניהם."
+          }
+        }
+      }
+    },
+    "Captured": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captured"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נקלט"
+          }
+        }
+      }
+    },
+    "Carbs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carbs"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פחמימות"
+          }
+        }
+      }
+    },
+    "Carbs (g)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carbs (g)"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פחמימות (גרם)"
+          }
+        }
+      }
+    },
+    "ChatGPT connection diagnostic": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ChatGPT connection diagnostic"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקת חיבור ChatGPT"
+          }
+        }
+      }
+    },
+    "Choose a private local profile in Settings to open your diary.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a private local profile in Settings to open your diary."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בחרו פרופיל מקומי פרטי בהגדרות כדי לפתוח את היומן."
+          }
+        }
+      }
+    },
+    "Choose a smaller image or another photo. Your other input is preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a smaller image or another photo. Your other input is preserved."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בחרו תמונה קטנה יותר או תמונה אחרת. שאר המידע שהזנתם נשמר."
+          }
+        }
+      }
+    },
+    "Choose the tracking day before saving.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the tracking day before saving."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בחרו את יום המעקב לפני השמירה."
+          }
+        }
+      }
+    },
+    "Complete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complete"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מלא"
+          }
+        }
+      }
+    },
+    "Complete days and partial records are kept separate. Missing logs do not mean zero intake.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complete days and partial records are kept separate. Missing logs do not mean zero intake."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ימים מלאים ורישומים חלקיים מוצגים בנפרד. חוסר ברישומים אינו מעיד על אפס צריכה."
+          }
+        }
+      }
+    },
+    "Complete means all intake was recorded. Partial totals describe only recorded meals.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complete means all intake was recorded. Partial totals describe only recorded meals."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מלא פירושו שכל הצריכה תועדה. סכומים חלקיים מתארים רק ארוחות שתועדו."
+          }
+        }
+      }
+    },
+    "Consumed nutrients": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consumed nutrients"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ערכים תזונתיים שנצרכו"
+          }
+        }
+      }
+    },
+    "Correction or extra details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correction or extra details"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תיקון או פרטים נוספים"
+          }
+        }
+      }
+    },
+    "Could not complete action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not complete action"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן להשלים את הפעולה"
+          }
+        }
+      }
+    },
+    "Could not complete this action. Your saved diary is unchanged.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not complete this action. Your saved diary is unchanged."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן להשלים את הפעולה. היומן השמור לא השתנה."
+          }
+        }
+      }
+    },
+    "Could not import photo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not import photo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן לייבא את התמונה"
+          }
+        }
+      }
+    },
+    "Could not save on this iPhone. Your input is still here.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save on this iPhone. Your input is still here."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן לשמור באייפון הזה. המידע שהזנתם עדיין כאן."
+          }
+        }
+      }
+    },
+    "Create": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יצירה"
+          }
+        }
+      }
+    },
+    "Create local profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create local profile"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יצירת פרופיל מקומי"
+          }
+        }
+      }
+    },
+    "Day coverage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Day coverage"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שלמות התיעוד היומי"
+          }
+        }
+      }
+    },
+    "Delete local diary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete local diary"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מחיקת יומן מקומי"
+          }
+        }
+      }
+    },
+    "Delete meal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete meal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מחיקת ארוחה"
+          }
+        }
+      }
+    },
+    "Delete photo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete photo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מחיקת תמונה"
+          }
+        }
+      }
+    },
+    "Delete profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete profile"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מחיקת פרופיל"
+          }
+        }
+      }
+    },
+    "Delete this local profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this local profile"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מחיקת הפרופיל המקומי הזה"
+          }
+        }
+      }
+    },
+    "Delete this meal and its photos?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this meal and its photos?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "למחוק את הארוחה ואת התמונות שלה?"
+          }
+        }
+      }
+    },
+    "Delete this photo?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this photo?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "למחוק את התמונה הזאת?"
+          }
+        }
+      }
+    },
+    "Delete this private local profile?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this private local profile?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "למחוק את הפרופיל המקומי הפרטי הזה?"
+          }
+        }
+      }
+    },
+    "Deletion removes this profile's meals, photos, weights and preferences from this iPhone. Other profiles are preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deletion removes this profile's meals, photos, weights and preferences from this iPhone. Other profiles are preserved."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המחיקה מסירה את הארוחות, התמונות, המשקלים וההעדפות של הפרופיל מהאייפון הזה. פרופילים אחרים נשמרים."
+          }
+        }
+      }
+    },
+    "Diary preferences": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diary preferences"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "העדפות היומן"
+          }
+        }
+      }
+    },
+    "Dietary preferences and restrictions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dietary preferences and restrictions"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "העדפות והגבלות תזונתיות"
+          }
+        }
+      }
+    },
+    "Discard": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מחיקה"
+          }
+        }
+      }
+    },
+    "Discard this input?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard this input?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "למחוק את המידע שהוזן?"
+          }
+        }
+      }
+    },
+    "Edit item": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit item"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עריכת פריט"
+          }
+        }
+      }
+    },
+    "Every capture gets a synthetic apple estimate. Photos and text are saved, but no food recognition runs.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every capture gets a synthetic apple estimate. Photos and text are saved, but no food recognition runs."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "כל רישום מקבל הערכה מלאכותית של תפוח. התמונות והטקסט נשמרים, אך זיהוי מזון אינו פועל."
+          }
+        }
+      }
+    },
+    "Export or save a backup first if you want to keep your records.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export or save a backup first if you want to keep your records."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ייצאו או שמרו גיבוי קודם אם ברצונכם לשמור את הרשומות."
+          }
+        }
+      }
+    },
+    "Fat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fat"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שומן"
+          }
+        }
+      }
+    },
+    "Fat (g)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fat (g)"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שומן (גרם)"
+          }
+        }
+      }
+    },
+    "Food items": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Food items"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פריטי מזון"
+          }
+        }
+      }
+    },
+    "History": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "היסטוריה"
+          }
+        }
+      }
+    },
+    "I ate half": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I ate half"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אכלתי חצי"
+          }
+        }
+      }
+    },
+    "Importing photo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importing photo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מייבא תמונה"
+          }
+        }
+      }
+    },
+    "It may have been deleted or belong to another profile.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It may have been deleted or belong to another profile."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ייתכן שהיא נמחקה או שייכת לפרופיל אחר."
+          }
+        }
+      }
+    },
+    "Keep editing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep editing"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המשך עריכה"
+          }
+        }
+      }
+    },
+    "Leave unknown values blank. Changing only quantity scales the recorded nutrients.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave unknown values blank. Changing only quantity scales the recorded nutrients."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "השאירו ערכים לא ידועים ריקים. שינוי הכמות בלבד מתאים את הערכים התזונתיים הרשומים."
+          }
+        }
+      }
+    },
+    "Log meal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log meal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תיעוד ארוחה"
+          }
+        }
+      }
+    },
+    "Log morning weight": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log morning weight"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תיעוד משקל בוקר"
+          }
+        }
+      }
+    },
+    "Meal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ארוחה"
+          }
+        }
+      }
+    },
+    "Meal details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meal details"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פרטי הארוחה"
+          }
+        }
+      }
+    },
+    "Meal photo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meal photo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תמונת ארוחה"
+          }
+        }
+      }
+    },
+    "Meal unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meal unavailable"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הארוחה אינה זמינה"
+          }
+        }
+      }
+    },
+    "Meals": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meals"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ארוחות"
+          }
+        }
+      }
+    },
+    "Meals already recorded keep their original day. Repeated starts today reuse this day.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meals already recorded keep their original day. Repeated starts today reuse this day."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ארוחות שתועדו נשארות ביום המקורי שלהן. התחלה חוזרת היום משתמשת באותו יום."
+          }
+        }
+      }
+    },
+    "Morning weight": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Morning weight"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "משקל בוקר"
+          }
+        }
+      }
+    },
+    "Move to another day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to another day"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "העברה ליום אחר"
+          }
+        }
+      }
+    },
+    "My diary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My diary"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "היומן שלי"
+          }
+        }
+      }
+    },
+    "Name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שם"
+          }
+        }
+      }
+    },
+    "Needs retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs retry"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נדרש ניסיון נוסף"
+          }
+        }
+      }
+    },
+    "New day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New day"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יום חדש"
+          }
+        }
+      }
+    },
+    "No recorded meals yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recorded meals yet"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עדיין אין ארוחות מתועדות"
+          }
+        }
+      }
+    },
+    "No saved items yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No saved items yet"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עדיין אין פריטים שמורים"
+          }
+        }
+      }
+    },
+    "No tracking days yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No tracking days yet"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עדיין אין ימי מעקב"
+          }
+        }
+      }
+    },
+    "OK": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אישור"
+          }
+        }
+      }
+    },
+    "Open Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פתיחת ההגדרות"
+          }
+        }
+      }
+    },
+    "Optional. Saving starts or reuses today's waking day.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional. Saving starts or reuses today's waking day."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא חובה. השמירה מתחילה או משתמשת ביום הערות של היום."
+          }
+        }
+      }
+    },
+    "Partial": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partial"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "חלקי"
+          }
+        }
+      }
+    },
+    "Photo timing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo timing"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תזמון התמונה"
+          }
+        }
+      }
+    },
+    "Photos": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תמונות"
+          }
+        }
+      }
+    },
+    "Portion or nutrients are uncertain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portion or nutrients are uncertain"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הכמות או הערכים התזונתיים אינם ודאיים"
+          }
+        }
+      }
+    },
+    "Previous day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous day"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "היום הקודם"
+          }
+        }
+      }
+    },
+    "Private local profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private local profile"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פרופיל מקומי פרטי"
+          }
+        }
+      }
+    },
+    "Profile name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile name"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שם הפרופיל"
+          }
+        }
+      }
+    },
+    "Profiles are separate private diaries on this iPhone. Keep a backup folder or export before changing phones.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profiles are separate private diaries on this iPhone. Keep a backup folder or export before changing phones."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פרופילים הם יומנים פרטיים נפרדים באייפון הזה. שמרו תיקיית גיבוי או ייצאו לפני החלפת טלפון."
+          }
+        }
+      }
+    },
+    "Protein": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protein"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "חלבון"
+          }
+        }
+      }
+    },
+    "Protein (g)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protein (g)"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "חלבון (גרם)"
+          }
+        }
+      }
+    },
+    "Quantity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantity"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "כמות"
+          }
+        }
+      }
+    },
+    "Record history": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record history"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "היסטוריית הרישום"
+          }
+        }
+      }
+    },
+    "Recorded totals": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded totals"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סכומים מתועדים"
+          }
+        }
+      }
+    },
+    "Remove": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הסרה"
+          }
+        }
+      }
+    },
+    "Retry sample estimate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry sample estimate"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ניסיון נוסף להערכת הדוגמה"
+          }
+        }
+      }
+    },
+    "Review before saving totals": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review before saving totals"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקה לפני שמירת הסכומים"
+          }
+        }
+      }
+    },
+    "Review estimate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review estimate"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדיקת ההערכה"
+          }
+        }
+      }
+    },
+    "Save": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שמירה"
+          }
+        }
+      }
+    },
+    "Save preferences": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save preferences"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שמירת העדפות"
+          }
+        }
+      }
+    },
+    "Save reviewed meal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save reviewed meal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שמירת הארוחה שנבדקה"
+          }
+        }
+      }
+    },
+    "Saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נשמר"
+          }
+        }
+      }
+    },
+    "Selected profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected profile"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פרופיל נבחר"
+          }
+        }
+      }
+    },
+    "Send": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שליחה"
+          }
+        }
+      }
+    },
+    "Send saves your input on this iPhone first. Pending or unreviewed results do not count in totals.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send saves your input on this iPhone first. Pending or unreviewed results do not count in totals."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שליחה שומרת תחילה את המידע באייפון הזה. תוצאות ממתינות או שלא נבדקו אינן נכללות בסכומים."
+          }
+        }
+      }
+    },
+    "Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הגדרות"
+          }
+        }
+      }
+    },
+    "Sign out of local profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out of local profile"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יציאה מהפרופיל המקומי"
+          }
+        }
+      }
+    },
+    "Some nutrients are unknown. Recorded totals may be incomplete.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some nutrients are unknown. Recorded totals may be incomplete."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "חלק מהערכים התזונתיים אינם ידועים. הסכומים המתועדים עשויים להיות חלקיים."
+          }
+        }
+      }
+    },
+    "Start a waking day?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a waking day?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להתחיל יום ערות?"
+          }
+        }
+      }
+    },
+    "Start new day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start new day"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "התחלת יום חדש"
+          }
+        }
+      }
+    },
+    "Synthetic apple estimate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synthetic apple estimate"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הערכת תפוח מלאכותית"
+          }
+        }
+      }
+    },
+    "The active profile changed. Try again in this profile.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The active profile changed. Try again in this profile."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפרופיל הפעיל השתנה. נסו שוב בפרופיל הזה."
+          }
+        }
+      }
+    },
+    "The diary works in apple sample mode without connecting ChatGPT.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The diary works in apple sample mode without connecting ChatGPT."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "היומן פועל במצב דוגמת תפוח ללא חיבור ל־ChatGPT."
+          }
+        }
+      }
+    },
+    "This backup is older or contains deleted meals. It cannot replace this diary.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This backup is older or contains deleted meals. It cannot replace this diary."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הגיבוי ישן יותר או מכיל ארוחות שנמחקו. הוא אינו יכול להחליף את היומן הזה."
+          }
+        }
+      }
+    },
+    "This meal changed. Open it again before editing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This meal changed. Open it again before editing."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הארוחה השתנתה. פתחו אותה מחדש לפני העריכה."
+          }
+        }
+      }
+    },
+    "This profile is stored privately on this iPhone.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This profile is stored privately on this iPhone."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפרופיל נשמר באופן פרטי באייפון הזה."
+          }
+        }
+      }
+    },
+    "This proposal does not count in totals until you save it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This proposal does not count in totals until you save it."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ההצעה אינה נכללת בסכומים עד שתשמרו אותה."
+          }
+        }
+      }
+    },
+    "Timezone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timezone"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אזור זמן"
+          }
+        }
+      }
+    },
+    "Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שינוי אזור הזמן שומר את הארוחות ואת תוויות הימים הקודמים. ייתכן שתישאלו באיזה יום ערות להשתמש."
+          }
+        }
+      }
+    },
+    "Today": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "היום"
+          }
+        }
+      }
+    },
+    "Tracking days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tracking days"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ימי מעקב"
+          }
+        }
+      }
+    },
+    "Unit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unit"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יחידה"
+          }
+        }
+      }
+    },
+    "Unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ידוע"
+          }
+        }
+      }
+    },
+    "Unspecified": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unspecified"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ללא ציון"
+          }
+        }
+      }
+    },
+    "Untracked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untracked"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא תועד"
+          }
+        }
+      }
+    },
+    "Update meal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update meal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עדכון ארוחה"
+          }
+        }
+      }
+    },
+    "Update this meal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update this meal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עדכון הארוחה הזאת"
+          }
+        }
+      }
+    },
+    "User supplied values": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "User supplied values"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ערכים שהוזנו על ידיכם"
+          }
+        }
+      }
+    },
+    "Waiting for connection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for connection"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ממתין לחיבור"
+          }
+        }
+      }
+    },
+    "Weight in kg": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weight in kg"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "משקל בק״ג"
+          }
+        }
+      }
+    },
+    "Which waking day?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which waking day?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "איזה יום ערות?"
+          }
+        }
+      }
+    },
+    "Write what you ate or what changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write what you ate or what changed"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "כתבו מה אכלתם או מה השתנה"
+          }
+        }
+      }
+    },
+    "Your active day began on an earlier date. A late meal can stay in that day.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your active day began on an earlier date. A late meal can stay in that day."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "היום הפעיל התחיל בתאריך קודם. ארוחה מאוחרת יכולה להישאר באותו יום."
+          }
+        }
+      }
+    },
+    "Your waking day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your waking day"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יום הערות שלך"
+          }
+        }
+      }
+    },
+    "%lld pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld pending"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld בהמתנה"
+          }
+        }
+      }
+    },
+    "kcal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kcal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "קק״ל"
+          }
+        }
+      }
+    },
+    "kg": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kg"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ק״ג"
+          }
+        }
+      }
+    },
+    "lb": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lb"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ליברות"
+          }
+        }
+      }
+    },
+    "medium": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "medium"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בינוני"
+          }
+        }
+      }
+    },
+    "Could not choose this backup folder. Your local diary is preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not choose this backup folder. Your local diary is preserved."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן לבחור את תיקיית הגיבוי הזאת. היומן המקומי נשמר."
+          }
+        }
+      }
+    },
+    "Could not prepare an export. Your local diary is preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not prepare an export. Your local diary is preserved."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן להכין ייצוא. היומן המקומי נשמר."
+          }
+        }
+      }
+    },
+    "Could not read this diary archive. Your local diary is preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read this diary archive. Your local diary is preserved."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן לקרוא את ארכיון היומן הזה. היומן המקומי נשמר."
+          }
+        }
+      }
+    },
+    "Export was not saved. Your local diary is preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export was not saved. Your local diary is preserved."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הייצוא לא נשמר. היומן המקומי נשמר."
+          }
+        }
+      }
+    },
+    "This archive belongs to another local profile. Select that profile before restoring.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This archive belongs to another local profile. Select that profile before restoring."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הארכיון שייך לפרופיל מקומי אחר. בחרו את הפרופיל הזה לפני השחזור."
+          }
+        }
+      }
+    },
+    "Saved to backup folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved to backup folder"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נשמר בתיקיית הגיבוי"
+          }
+        }
+      }
+    },
+    "Backup pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup pending"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "גיבוי ממתין"
+          }
+        }
+      }
+    },
+    "Backup pending. Check that the folder is available, then retry. Your local diary is saved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup pending. Check that the folder is available, then retry. Your local diary is saved."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הגיבוי ממתין. בדקו שהתיקייה זמינה ונסו שוב. היומן המקומי שמור."
+          }
+        }
+      }
+    },
+    "Retry backup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry backup"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ניסיון גיבוי נוסף"
+          }
+        }
+      }
+    },
+    "No backup folder selected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No backup folder selected"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא נבחרה תיקיית גיבוי"
+          }
+        }
+      }
+    },
+    "Choose private backup folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose private backup folder"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בחירת תיקיית גיבוי פרטית"
+          }
+        }
+      }
+    },
+    "Choose a private Files folder, including iCloud Drive when available. Folder acknowledgement does not confirm remote upload.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a private Files folder, including iCloud Drive when available. Folder acknowledgement does not confirm remote upload."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בחרו תיקייה פרטית ביישום קבצים, כולל iCloud Drive כאשר הוא זמין. אישור השמירה בתיקייה אינו מאשר העלאה מרחוק."
+          }
+        }
+      }
+    },
+    "Export diary and photos": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export diary and photos"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ייצוא היומן והתמונות"
+          }
+        }
+      }
+    },
+    "Export saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export saved"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הייצוא נשמר"
+          }
+        }
+      }
+    },
+    "Restore from diary archive": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore from diary archive"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שחזור מארכיון יומן"
+          }
+        }
+      }
+    },
+    "Reading archive": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading archive"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "קורא ארכיון"
+          }
+        }
+      }
+    },
+    "Restore this private diary?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore this private diary?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לשחזר את היומן הפרטי הזה?"
+          }
+        }
+      }
+    },
+    "Restore diary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore diary"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שחזור היומן"
+          }
+        }
+      }
+    },
+    "This replaces the selected profile with the validated archive. Older or deleted records cannot overwrite newer changes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This replaces the selected profile with the validated archive. Older or deleted records cannot overwrite newer changes."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפעולה מחליפה את הפרופיל הנבחר בארכיון שנבדק. רשומות ישנות או מחוקות אינן יכולות לדרוס שינויים חדשים."
+          }
+        }
+      }
+    },
+    "This imports the archived profile as a separate private local diary. The selected profile is preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This imports the archived profile as a separate private local diary. The selected profile is preserved."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפעולה מייבאת את הפרופיל שבארכיון כיומן מקומי פרטי נפרד. הפרופיל הנבחר נשמר."
+          }
+        }
+      }
+    },
+    "Done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סיום"
+          }
+        }
+      }
+    },
+    "Waking day": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waking day"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יום ערות"
+          }
+        }
+      }
+    },
+    "Your first meal starts here": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your first meal starts here"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הארוחה הראשונה מתחילה כאן"
+          }
+        }
+      }
+    },
+    "Photos, a note, or both — saved privately on this iPhone.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos, a note, or both — saved privately on this iPhone."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תמונות, הערה או שניהם — נשמרים באופן פרטי באייפון הזה."
+          }
+        }
+      }
+    },
+    "Edited by you": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edited by you"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נערך על ידיכם"
+          }
+        }
+      }
+    },
+    "Add photos or a note.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add photos or a note."
           }
         }
       }

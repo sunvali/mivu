@@ -45,6 +45,7 @@
                ReferencedContainer = "container:Mivu.xcodeproj">
             </BuildableReference>
          </TestableReference>
+      <TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="620000000000000000000008" BuildableName="MivuUITests.xctest" BlueprintName="MivuUITests" ReferencedContainer="container:Mivu.xcodeproj" /></TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

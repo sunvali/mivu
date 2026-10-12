@@ -1,0 +1,126 @@
+import SwiftUI
+import PhotosUI
+import AVFoundation
+import ImageIO
+
+struct CameraCapture: UIViewControllerRepresentable {
+    let onPhoto: (Data) -> Void
+    let onFailure: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+    func updateUIViewController(_ picker: UIImagePickerController, context: Context) {}
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraCapture
+        init(_ parent: CameraCapture) { self.parent = parent }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage, let data = PhotoImport.jpeg(image) { parent.onPhoto(data) }
+            else { parent.onFailure() }
+            parent.dismiss()
+        }
+    }
+}
+
+enum PhotoImport {
+    static func jpeg(_ data: Data) -> Data? {
+        guard data.count <= 40_000_000, let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1600, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) else { return nil }
+        return jpeg(UIImage(cgImage: cgImage))
+    }
+    static func jpeg(_ image: UIImage) -> Data? {
+        guard image.size.width > 0, image.size.height > 0, image.size.width.isFinite, image.size.height.isFinite else { return nil }
+        let scale = min(1, 1600 / max(image.size.width, image.size.height))
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let rendered = UIGraphicsImageRenderer(size: CGSize(width: image.size.width * scale, height: image.size.height * scale), format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: CGSize(width: image.size.width * scale, height: image.size.height * scale))) }
+        guard let bytes = rendered.jpegData(compressionQuality: 0.72), bytes.count <= 5_000_000 else { return nil }
+        return bytes
+    }
+    static func syntheticApple() -> Data? {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: 300, height: 300), format: format).image { context in
+            UIColor.systemBackground.setFill(); context.fill(CGRect(x: 0, y: 0, width: 300, height: 300))
+            ("🍎" as NSString).draw(at: CGPoint(x: 60, y: 45), withAttributes: [.font: UIFont.systemFont(ofSize: 160)])
+        }.jpegData(compressionQuality: 0.8)
+    }
+}
+
+struct PhotoInput: View {
+    @Binding var photos: [Data]
+    let preparation: PhotoPreparation
+    @Binding var importFailed: Bool
+    @State private var selected: [PhotosPickerItem] = []
+    @State private var showCamera = false
+    @State private var cameraDenied = false
+    @State private var importTask: Task<Void, Never>?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Button { Task { await openCamera() } } label: { Label("Camera", systemImage: "camera") }.buttonStyle(.glass).tint(.diaryLeaf).frame(minHeight: 44)
+                    .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera) || photos.count >= 8 || preparation.isPreparing)
+                Spacer()
+                PhotosPicker(selection: $selected, maxSelectionCount: max(1, 8 - photos.count), matching: .images) { Label("Photos", systemImage: "photo.on.rectangle") }.buttonStyle(.glass).tint(.diaryLeaf).frame(minHeight: 44).disabled(photos.count >= 8 || preparation.isPreparing)
+            }
+            if !UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Text("Camera is unavailable here. Choose Photos or use the synthetic sample.").font(.caption).foregroundStyle(Color.diarySecondary)
+                Button("Add synthetic apple photo") { if let data = PhotoImport.syntheticApple() { photos.append(data) } }.frame(minHeight: 44).disabled(photos.count >= 8 || preparation.isPreparing).accessibilityIdentifier("syntheticPhoto")
+            }
+            if preparation.isPreparing { ProgressView("Importing photo") }
+            if !photos.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack {
+                        ForEach(Array(photos.enumerated()), id: \.offset) { index, data in
+                            VStack {
+                                if let image = UIImage(data: data) { Image(uiImage: image).resizable().scaledToFill().frame(width: 90, height: 90).clipped().clipShape(RoundedRectangle(cornerRadius: 10)) }
+                                Button("Remove", role: .destructive) { photos.remove(at: index) }.frame(minHeight: 44)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .buttonStyle(.borderless)
+        .sheet(isPresented: $showCamera) { CameraCapture(onPhoto: { photos.append($0) }, onFailure: { importFailed = true }).ignoresSafeArea() }
+        .alert("Camera access is off", isPresented: $cameraDenied) {
+            Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Allow camera access in Settings, or choose a photo instead.") }
+        .onChange(of: selected) { _, selection in
+            guard !selection.isEmpty else { return }
+            importTask?.cancel()
+            let generation = preparation.begin()
+            importTask = Task {
+                defer {
+                    if preparation.isCurrent(generation) {
+                        preparation.finish(generation); selected = []; importTask = nil
+                    }
+                }
+                for item in selection {
+                    do {
+                        guard let jpeg = try await preparation.load(generation, using: {
+                            guard let data = try await item.loadTransferable(type: Data.self), let jpeg = PhotoImport.jpeg(data) else { throw DiaryError.invalidData }
+                            return jpeg
+                        }) else { return }
+                        guard photos.count < 8 else { importFailed = true; continue }
+                        photos.append(jpeg)
+                    } catch {
+                        guard preparation.isCurrent(generation), !Task.isCancelled else { return }
+                        importFailed = true
+                    }
+                }
+            }
+        }
+    }
+
+    private func openCamera() async {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        if status == .authorized { showCamera = true }
+        else if status == .notDetermined { showCamera = await AVCaptureDevice.requestAccess(for: .video); cameraDenied = !showCamera }
+        else { cameraDenied = true }
+    }
+}
