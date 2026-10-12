@@ -26,7 +26,8 @@ actor DiaryStore {
 
     func createProfile(_ profile: DiaryProfile) throws -> DiarySnapshot {
         guard !FileManager.default.fileExists(atPath: file(profile.id).path) else { throw DiaryError.invalidData }
-        let snapshot = DiarySnapshot(profile: profile)
+        var snapshot = DiarySnapshot(profile: profile)
+        snapshot.lineage = [UUID()]
         try write(snapshot)
         current = snapshot
         return snapshot
@@ -325,10 +326,13 @@ actor DiaryStore {
         try incoming.validate()
         guard incoming.profile.id == original.profile.id else { throw DiaryError.wrongOwner }
         guard incoming.revision >= original.revision,
+              (incoming == original || incoming.isVerifiedSuccessor(of: original)),
               Set(incoming.meals.map(\.id)).isDisjoint(with: original.deletedMealIDs) else { throw DiaryError.staleArchive }
         var replacement = incoming
         replacement.deletedMealIDs = Array(Set(incoming.deletedMealIDs + original.deletedMealIDs)).sorted { $0.uuidString < $1.uuidString }
         replacement.revision = max(incoming.revision, original.revision) + 1
+        // shortcut: ancestors older than 255 writes cannot prove descent; require explicit recovery then.
+        replacement.lineage = Array((incoming.lineage ?? []).suffix(255)) + [UUID()]
         try write(replacement)
         current = replacement
     }
@@ -337,6 +341,8 @@ actor DiaryStore {
         var next = try snapshot(expectedProfileID: owner)
         try change(&next)
         next.revision += 1
+        // shortcut: bounded ancestry fails closed for snapshots more than 255 writes apart.
+        next.lineage = Array((next.lineage ?? []).suffix(255)) + [UUID()]
         try write(next)
         current = next
     }

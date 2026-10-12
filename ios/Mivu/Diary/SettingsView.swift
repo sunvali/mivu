@@ -51,6 +51,7 @@ struct SettingsView: View {
             }
             Section { SampleBanner() }
         }
+        .disabled(model.isChangingProfile)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .navigationTitle("Settings")
         .sheet(isPresented: $showDiagnostic) {
@@ -63,7 +64,7 @@ struct SettingsView: View {
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration) }
         .alert("Create local profile", isPresented: $creatingProfile) {
             TextField("Profile name", text: $profileName)
-            Button("Create") { let name = profileName.trimmingCharacters(in: .whitespacesAndNewlines); if !name.isEmpty { Task { await model.createProfile(name: name); profileName = "" } } }
+            Button("Create") { let name = profileName.trimmingCharacters(in: .whitespacesAndNewlines); if !name.isEmpty { Task { await model.createProfile(name: name); profileName = "" } } }.disabled(model.isChangingProfile)
             Button("Cancel", role: .cancel) {}
         } message: { Text("This profile is stored privately on this iPhone.") }
         .confirmationDialog("Delete this private local profile?", isPresented: $showDelete, titleVisibility: .visible) {

@@ -29,7 +29,12 @@ struct DiaryBackupSettings: View {
                     Label("Saved to backup folder", systemImage: "checkmark.circle")
                     Text(date, format: .dateTime.day().month().hour().minute()).font(.caption).foregroundStyle(Color.diarySecondary)
                 } else { Label("Backup pending", systemImage: "clock") }
-                if model.backupStatus.pendingError != nil { Text("Backup pending. Check that the folder is available, then retry. Your local diary is saved.").font(.caption).foregroundStyle(Color.diarySecondary) }
+                if let error = model.backupStatus.pendingError {
+                    Text(error == DiaryError.staleArchive.localizedDescription
+                         ? "Backup copies conflict. Your local diary and existing backup are preserved. Export a copy and resolve the folder copy in Files before retrying."
+                         : "Backup pending. Check that the folder is available, then retry. Your local diary is saved.")
+                        .font(.caption).foregroundStyle(Color.diarySecondary)
+                }
                 Button("Retry backup") { model.queueBackup() }.frame(minHeight: 44)
             } else { Text("No backup folder selected").foregroundStyle(Color.diarySecondary) }
             Button("Choose private backup folder") { folderPicker = true }.frame(minHeight: 44)

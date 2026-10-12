@@ -70,10 +70,13 @@ private actor DelayedPhoto {
         var fields = DiaryPreferencesDraft()
         fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration)
         fields.preferences = "Unsaved synthetic old preference"
-        var archive = try #require(model.snapshot)
-        archive.profile.timeZoneID = "Europe/London"
-        archive.profile.preferences = "Synthetic archived restriction"
-        archive.revision += 1
+        let replacement = DiaryStore(directory: path.appending(path: "Replacement"))
+        _ = try await replacement.importProfile(try #require(model.snapshot))
+        var profileFromArchive = try await replacement.snapshot().profile
+        profileFromArchive.timeZoneID = "Europe/London"
+        profileFromArchive.preferences = "Synthetic archived restriction"
+        try await replacement.updateProfile(profileFromArchive, expectedProfileID: profileFromArchive.id)
+        let archive = try await replacement.snapshot()
         #expect(await model.importArchive(archive))
         fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration)
         #expect(fields.timezone == "Europe/London")

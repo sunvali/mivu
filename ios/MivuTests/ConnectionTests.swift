@@ -391,7 +391,7 @@ private final class ConnectionSigningFixture: @unchecked Sendable {
     init() throws { signing = try SyntheticIdentityToken() }
     func setNonce(_ value: String) { lock.withLock { nonce = value } }
     func token() throws -> String {
-        let nonce = lock.withLock { nonce }
+        let nonce = lock.withLock { self.nonce }
         let now = Int(Date.now.timeIntervalSince1970)
         return try signing.token(changes: ["nonce": nonce, "iat": now - 1, "exp": now + 300])
     }
@@ -547,7 +547,7 @@ private final class ConnectionFixtureDirectory: @unchecked Sendable {
     private var directory: URL?
     func set(_ value: URL) { lock.withLock { directory = value } }
     func corruptSavedJob() throws {
-        let directory = try #require(lock.withLock { directory })
+        let directory = try #require(lock.withLock { self.directory })
         try Data("synthetic unreadable job".utf8).write(to: directory.appendingPathComponent("probe-job.json"))
     }
 }

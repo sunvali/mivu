@@ -26,7 +26,7 @@ enum DiaryError: Error, Equatable, LocalizedError {
         case .notFound: "This diary entry no longer exists."
         case .emptyCapture: "Add a photo or a meal description."
         case .ambiguousDay: "Choose the previous waking day or start a new day."
-        case .staleArchive: "This backup is older than the diary or contains deleted meals."
+        case .staleArchive: "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover."
         }
     }
 }
@@ -142,6 +142,11 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     var activeDayID: UUID? = nil
     var previousDayConfirmedAt: Date? = nil
     var deletedMealIDs: [UUID] = []
+    var lineage: [UUID]? = nil
+    func isVerifiedSuccessor(of prior: DiarySnapshot) -> Bool {
+        guard let head = prior.lineage?.last, let lineage, lineage.last != head else { return false }
+        return lineage.dropLast().contains(head)
+    }
     var pendingCount: Int {
         meals.reduce(0) { count, meal in count + meal.submissions.filter { [.captured, .waitingForConnection, .analyzing, .needsRetry].contains($0.state) }.count }
     }
@@ -159,6 +164,7 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
               TimeZone(identifier: profile.timeZoneID) != nil, profile.preferences.count <= 10_000,
               days.count <= 10_000, meals.count <= 50_000, weights.count <= 10_000, deletedMealIDs.count <= 50_000,
               unique(days.map(\.id)), unique(meals.map(\.id)), unique(weights.map(\.id)), unique(deletedMealIDs),
+              lineage == nil || (lineage!.count > 0 && lineage!.count <= 256 && unique(lineage!)),
               activeDayID == nil || days.contains(where: { $0.id == activeDayID }),
               previousDayConfirmedAt == nil || previousDayConfirmedAt!.timeIntervalSince1970.isFinite,
               Set(meals.map(\.id)).isDisjoint(with: deletedMealIDs) else { throw DiaryError.invalidData }
