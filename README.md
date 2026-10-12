@@ -36,3 +36,8 @@ personal meal data. Keep changes on a feature branch, preserve English LTR,
 Hebrew RTL, Dynamic Type, VoiceOver, reduced motion, and accessible touch
 targets. Report verification with its actual environment, result, and remaining
 gates; workflow files alone are not evidence of a hosted run.
+
+## Agent guidance
+
+See [repository instructions](AGENTS.md) and the concise
+[Copilot instructions](.github/copilot-instructions.md).

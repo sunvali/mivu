@@ -17,5 +17,16 @@ for this native app. No web frontend is required.
   the owner's explicit authorization.
 - Keep analysis separate from meal calculations so a later server worker can
   consume the same small operation.
+- Preserve durable local capture: save acknowledgement and backup-folder write
+  acknowledgement are separate. Never claim remote sync from a file-provider
+  write; retain pending errors and never restore stale data over deletions.
 - Preserve Hebrew RTL, English LTR, Dynamic Type, VoiceOver, reduced motion,
   and minimum 44-point touch targets.
+- For behavior changes, include focused evidence from source plus named tests;
+  report the source revision, environment, result counts, and any blocked gates.
+  A workflow definition is not evidence of a hosted run.
+- Follow the PR/CI/release contract in [CI and delivery](docs/development/ci-cd.md):
+  merge through a reviewed PR, verify required checks and artifacts, and keep
+  release claims tied to the exact merged revision and observed run.
+- Before merge, run Ponytail Review, fix blocking findings, and verify CI.
+  Follow the owner's existing authorization for merging; do not add approval gates.
