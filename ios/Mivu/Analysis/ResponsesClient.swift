@@ -44,34 +44,65 @@ struct ResponsesClient: Sendable {
     }
 
     func run(model: String, text: String, image: Data?, accessToken: String) async throws -> ProbeResult {
-        guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || image != nil,
-              text.utf8.count <= 65_536 else {
-            throw Failure.invalidInput
+        let result = try await respond(model: model, input: [.message(role: .user, text: text, images: image.map { [$0] } ?? [])], toolNamespace: nil, accessToken: accessToken)
+        guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure.malformedResponse }
+        return ProbeResult(model: result.model, outputText: result.text)
+    }
+
+    func respond(model: String, input: [CoachInferenceInput], toolNamespace: Data?, accessToken: String) async throws -> CoachInferenceResult {
+        guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, model.utf8.count <= 256,
+              !input.isEmpty, input.count <= 128 else { throw Failure.invalidInput }
+        // Bound the aggregate before allocating base64 strings or serialized history.
+        var inputBytes = 0
+        for item in input {
+            switch item {
+            case let .message(_, text, images):
+                guard text.utf8.count <= 65_536, images.count <= 8 else { throw Failure.invalidInput }
+                inputBytes += text.utf8.count
+                for image in images {
+                    guard image.count <= 5_242_880 else { throw Failure.invalidInput }
+                    inputBytes += ((image.count + 2) / 3) * 4
+                    guard inputBytes <= 8_388_608 else { throw Failure.invalidInput }
+                }
+            case let .priorOutput(data): inputBytes += data.count
+            case let .functionOutput(callID, output): inputBytes += callID.utf8.count + output.utf8.count
+            }
+            guard inputBytes <= 8_388_608 else { throw Failure.invalidInput }
         }
-        if let image {
-            guard image.count <= 5_242_880, image.starts(with: [137, 80, 78, 71, 13, 10, 26, 10]) else { throw Failure.invalidInput }
+        var payload: [String: Any] = ["model": model, "input": try input.map { try $0.object() }, "store": false, "stream": true]
+        if let toolNamespace {
+            guard toolNamespace.count <= 65_536,
+                  let namespace = try? JSONSerialization.jsonObject(with: toolNamespace) as? [String: Any],
+                  namespace["type"] as? String == "namespace",
+                  Set(namespace.keys).isSubset(of: ["type", "name", "description", "tools"]),
+                  let name = namespace["name"] as? String, !name.isEmpty, name.utf8.count <= 256,
+                  namespace["description"] == nil || namespace["description"] is String,
+                  let tools = namespace["tools"] as? [[String: Any]], !tools.isEmpty, tools.count <= 16 else { throw Failure.invalidInput }
+            var names = Set<String>()
+            for tool in tools {
+                guard tool["type"] as? String == "function",
+                      Set(tool.keys).isSubset(of: ["type", "name", "description", "parameters", "strict"]),
+                      let name = tool["name"] as? String, !name.isEmpty, name.utf8.count <= 256,
+                      tool["description"] == nil || tool["description"] is String,
+                      tool["strict"] == nil || tool["strict"] is Bool,
+                      names.insert(name).inserted, let parameters = tool["parameters"] as? [String: Any],
+                      parameters["type"] as? String == "object" else { throw Failure.invalidInput }
+            }
+            payload["tools"] = [namespace]
         }
         var request = try request(path: "responses", accessToken: accessToken)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        var content: [[String: String]] = [["type": "input_text", "text": text]]
-        if let image {
-            content.append(["type": "input_image", "image_url": "data:image/png;base64," + image.base64EncodedString()])
-        }
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": model,
-            "input": [["role": "user", "content": content]],
-            "store": false,
-            "stream": true
-        ])
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        guard body.count <= 8_388_608 else { throw Failure.invalidInput }
+        request.httpBody = body
         let (bytes, response) = try await session.bytes(for: request)
         defer { bytes.task.cancel() }
         try check(response)
         var stream = ResponseEventStream()
         for try await byte in bytes { try stream.append(byte) }
-        return try stream.finish()
+        return try stream.finishInference()
     }
 
     private func request(path: String, accessToken: String) throws -> URLRequest {
@@ -101,7 +132,7 @@ struct ResponseEventStream {
     private var eventName: String?
     private var skipLF = false
     private var totalBytes = 0
-    private var completed: ProbeResult?
+    private var completed: CoachInferenceResult?
 
     mutating func append(_ data: Data) throws {
         for byte in data { try append(byte) }
@@ -122,6 +153,12 @@ struct ResponseEventStream {
     }
 
     func finish() throws -> ProbeResult {
+        let result = try finishInference()
+        guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ResponsesClient.Failure.malformedResponse }
+        return ProbeResult(model: result.model, outputText: result.text)
+    }
+
+    func finishInference() throws -> CoachInferenceResult {
         guard line.isEmpty, eventData.isEmpty, eventName == nil, let completed else {
             throw ResponsesClient.Failure.incompleteResponse
         }
@@ -176,7 +213,10 @@ struct ResponseEventStream {
               response["status"] as? String == "completed",
               response["error"] == nil || response["error"] is NSNull,
               let model = response["model"] as? String, !model.isEmpty,
-              let output = response["output"] as? [[String: Any]] else { throw ResponsesClient.Failure.malformedResponse }
+              let output = response["output"] as? [[String: Any]], output.count <= 128 else { throw ResponsesClient.Failure.malformedResponse }
+        guard output.allSatisfy({ item in
+            ["message", "reasoning", "function_call"].contains(item["type"] as? String ?? "")
+        }) else { throw ResponsesClient.Failure.malformedResponse }
         var texts: [String] = []
         for item in output where item["type"] as? String == "message" {
             guard let content = item["content"] as? [[String: Any]] else { throw ResponsesClient.Failure.malformedResponse }
@@ -186,8 +226,24 @@ struct ResponseEventStream {
             }
         }
         let text = texts.joined(separator: "\n")
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ResponsesClient.Failure.malformedResponse }
-        completed = ProbeResult(model: model, outputText: text)
+        guard text.utf8.count <= 65_536 else { throw ResponsesClient.Failure.limitExceeded }
+        var calls: [CoachToolCall] = []
+        var ids = Set<String>()
+        var callIDs = Set<String>()
+        for item in output where item["type"] as? String == "function_call" {
+            guard let id = item["id"] as? String, !id.isEmpty, id.utf8.count <= 256,
+                  let callID = item["call_id"] as? String, !callID.isEmpty, callID.utf8.count <= 256,
+                  ids.insert(id).inserted, callIDs.insert(callID).inserted,
+                  let name = item["name"] as? String, !name.isEmpty, name.utf8.count <= 256,
+                  item["namespace"] == nil || ((item["namespace"] as? String).map { !$0.isEmpty && $0.utf8.count <= 256 } ?? false),
+                  item["status"] == nil || item["status"] as? String == "completed",
+                  let arguments = item["arguments"] as? String, arguments.utf8.count <= 65_536,
+                  let data = arguments.data(using: .utf8),
+                  (try? JSONSerialization.jsonObject(with: data)) is [String: Any], calls.count < 16 else { throw ResponsesClient.Failure.malformedResponse }
+            calls.append(CoachToolCall(id: id, callID: callID, name: name, namespace: item["namespace"] as? String, arguments: arguments))
+        }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !calls.isEmpty else { throw ResponsesClient.Failure.malformedResponse }
+        completed = CoachInferenceResult(model: model, text: text, calls: calls, outputItems: try output.map { try JSONSerialization.data(withJSONObject: $0, options: .sortedKeys) })
     }
 }
 enum SyntheticConnectionProbe {
