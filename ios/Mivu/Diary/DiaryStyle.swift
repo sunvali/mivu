@@ -53,6 +53,7 @@ struct DiaryCaptureAction: View {
 struct NutritionSummary: View {
     let totals: NutritionTotals
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recorded totals").font(.subheadline.weight(.medium)).foregroundStyle(Color.diarySecondary)
@@ -62,12 +63,20 @@ struct NutritionSummary: View {
                     .contentTransition(.numericText()).animation(reduceMotion ? nil : .snappy(duration: 0.25), value: totals.kcal)
                 Text("kcal").foregroundStyle(Color.diarySecondary)
             }
-            HStack {
-                metric("Carbs", totals.carbs)
-                Spacer(minLength: 8)
-                metric("Protein", totals.protein)
-                Spacer(minLength: 8)
-                metric("Fat", totals.fat)
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 16) {
+                    metric("Carbs", totals.carbs)
+                    metric("Protein", totals.protein)
+                    metric("Fat", totals.fat)
+                }
+            } else {
+                HStack {
+                    metric("Carbs", totals.carbs)
+                    Spacer(minLength: 8)
+                    metric("Protein", totals.protein)
+                    Spacer(minLength: 8)
+                    metric("Fat", totals.fat)
+                }
             }
             if totals.unknownItemCount > 0 {
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.").font(.caption).foregroundStyle(Color.diarySecondary)
@@ -120,10 +129,23 @@ struct MealRow: View {
             } else { Image(systemName: "fork.knife").frame(width: 52, height: 52).background(.quaternary, in: RoundedRectangle(cornerRadius: 10)).accessibilityHidden(true) }
             VStack(alignment: .leading, spacing: 5) {
                 Text(title).lineLimit(2)
-                HStack { Text(meal.state.title); Text(meal.eatenAt, style: .time) }.font(.caption).foregroundStyle(Color.diarySecondary)
+                HStack { Text(meal.state.title); if meal.timePrecision == .dateOnly { Text("Time unspecified") } else { Text(meal.eatenAt, style: .time) } }.font(.caption).foregroundStyle(Color.diarySecondary)
             }
             Spacer(minLength: 4)
             if meal.isSaved { Text(meal.totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—").font(.headline) }
         }.frame(minHeight: 68)
+    }
+}
+
+
+extension NutritionProvenance {
+    var description: String {
+        switch self {
+        case .sample: "Synthetic apple estimate"
+        case .user: "Edited by you"
+        case .confirmedLabel: "Confirmed label values"
+        case .identifiedSource: "Retrieved nutrition source"
+        case .estimate: "Estimated nutrition"
+        }
     }
 }

@@ -15,7 +15,7 @@ struct MealComposerView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { SampleBanner() }
+                if model.sampleMode { Section { SampleBanner() } }
                 Section("Photos") {
                     PhotoInput(photos: $draft.photos, preparation: photoPreparation, importFailed: $photoImportFailed).disabled(submitting)
                     if correctingMealID != nil {
@@ -70,7 +70,7 @@ struct MealComposerView: View {
             submitting = true
             defer { submitting = false }
             if await model.change({
-                _ = try await model.store.correctMeal(mealID: mealID, text: draft.text, photos: draft.photos.map { MealPhoto(data: $0, role: photoRole) }, reviewFirst: draft.reviewFirst, submissionID: draft.submissionID, expectedProfileID: owner)
+                _ = try await model.store.correctMeal(mealID: mealID, text: draft.text, photos: draft.photos.map { MealPhoto(data: $0, role: photoRole) }, reviewFirst: draft.reviewFirst, submissionID: draft.submissionID, forCoach: !model.sampleMode, expectedProfileID: owner)
             }) { model.resumeWorker(); dismiss() }
             return
         }

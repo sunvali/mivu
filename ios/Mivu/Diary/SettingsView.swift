@@ -2,6 +2,11 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var model: DiaryViewModel
+    @Bindable var connection: ChatGPTConnection
+    @State private var window: UIWindow?
+    let nutritionKeys: NutritionAPIKeyStore
+    @State private var nutritionDraft = NutritionKeyDraft()
+    @State private var nutritionConfigured = false
     @State private var profileName = ""
     @State private var creatingProfile = false
     @State private var showDelete = false
@@ -35,23 +40,60 @@ struct SettingsView: View {
                     DiaryBackupSettings(model: model)
                 }
                 Section("Connection") {
-                    Text("The diary works in apple sample mode without connecting ChatGPT.").font(.caption).foregroundStyle(Color.diarySecondary)
+                    Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle")
+                    Text("Captures save locally without a connection. Analysis uses your selected ChatGPT account.").font(.caption).foregroundStyle(Color.diarySecondary)
+                    if connection.isConnecting {
+                        ProgressView("Connecting")
+                        Button("Cancel connection") { connection.cancelConnection() }.frame(minHeight: 44)
+                    } else {
+                        Button(connection.activeRegistrationID == nil ? "Connect ChatGPT" : "Reauthorize ChatGPT") {
+                            guard let window else { return }
+                            Task { await connection.connect(window: window) }
+                        }.frame(minHeight: 44).disabled(window == nil || connection.isDisconnecting)
+                    }
+                    if !connection.models.isEmpty {
+                        Picker("Account model", selection: $connection.selectedModel) {
+                            ForEach(connection.models, id: \.slug) { Text($0.displayName).tag($0.slug) }
+                        }
+                    }
+                    if connection.activeRegistrationID != nil {
+                        Button("Disconnect ChatGPT", role: .destructive) { Task { await connection.disconnect() } }.frame(minHeight: 44)
+                    }
+                    if let notice = connection.notice { Text(notice.rawValue).font(.caption).foregroundStyle(Color.diarySecondary) }
                     Button("ChatGPT connection diagnostic") { showDiagnostic = true }.frame(minHeight: 44)
+                }
+                Section("Optional nutrition source") {
+                    Label(nutritionConfigured ? "USDA lookup configured" : "USDA lookup not configured", systemImage: "leaf")
+                    Text("Food estimates and capture work without a lookup key. Add your own USDA key for retrieved nutrition evidence.").font(.caption).foregroundStyle(Color.diarySecondary)
+                    SecureField("USDA API key", text: $nutritionDraft.text).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Button("Save lookup key") {
+                        if nutritionDraft.save(using: nutritionKeys.save) { nutritionConfigured = true }
+                    }.frame(minHeight: 44).disabled(nutritionDraft.text.isEmpty)
+                    if nutritionConfigured {
+                        Button("Remove lookup key", role: .destructive) {
+                            do { try nutritionKeys.remove(); nutritionConfigured = false; nutritionDraft.message = "Nutrition lookup key removed." }
+                            catch { nutritionDraft.message = "Could not remove the key securely. Try again." }
+                        }.frame(minHeight: 44)
+                    }
+                    if let message = nutritionDraft.message { Text(message).font(.caption).foregroundStyle(Color.diarySecondary) }
+                    Text("This key stays in this iPhone's Keychain and is excluded from diary exports and backups.").font(.caption).foregroundStyle(Color.diarySecondary)
                 }
                 Section("Delete local diary") {
                     Text("Deletion removes this profile's meals, photos, weights and preferences from this iPhone. Other profiles are preserved.").font(.caption).foregroundStyle(Color.diarySecondary)
                     Button("Delete this local profile", role: .destructive) { showDelete = true }.frame(minHeight: 44)
                 }
             }
-            Section { SampleBanner() }
+            if model.sampleMode { Section { SampleBanner() } }
         }
         .disabled(model.isChangingProfile)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .navigationTitle("Settings")
+        .background(PresentationWindowReader { window = $0 })
+        .task { nutritionConfigured = (try? nutritionKeys.load()) != nil }
         .sheet(isPresented: $showDiagnostic) {
             VStack(spacing: 0) {
                 HStack { Spacer(); Button("Done") { showDiagnostic = false }.frame(minHeight: 44) }.padding(.horizontal)
-                ConnectionProofView()
+                ConnectionProofView(connection: connection)
             }
             .environment(\.locale, Locale(identifier: "en"))
             .environment(\.layoutDirection, .leftToRight)

@@ -1,23 +1,58 @@
 import SwiftUI
 
 struct DiaryRootView: View {
-    @State private var model = DiaryViewModel.local()
+    @State private var model: DiaryViewModel
+    @State private var connection: ChatGPTConnection
+    @State private var coach: CoachViewModel
+    @State private var selectedTab: String
+    private let nutritionKeys: NutritionAPIKeyStore
+    init() {
+        let diary = DiaryViewModel.local(), session = ChatGPTConnection()
+        let keys = NutritionAPIKeyStore.local
+        nutritionKeys = keys
+        let foodSource = FoodEvidenceClient()
+        let fixture: (() throws -> CoachViewModel.Inference)? = DiaryLaunch.isCoachInferenceFixture
+            ? { { input, tools in try CoachUITestInference.respond(input, tools) } } : nil
+        _model = State(initialValue: diary)
+        _connection = State(initialValue: session)
+        _coach = State(initialValue: CoachViewModel(diary: diary, connection: session, inference: fixture, lookup: { query in
+            try await foodSource.search(query: query, apiKey: keys.load())
+        }))
+        _selectedTab = State(initialValue: DiaryLaunch.isSampleMode ? "today" : "coach")
+    }
     @Environment(\.scenePhase) private var phase
     @State private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
     @State private var backgroundGeneration: UUID?
     var body: some View {
-        TabView {
-            Tab("Today", systemImage: "sun.max") { NavigationStack { TodayView(model: model) } }
-            Tab("History", systemImage: "calendar") { NavigationStack { HistoryView(model: model) } }
-            Tab("Settings", systemImage: "gearshape") { NavigationStack { SettingsView(model: model) } }
+        TabView(selection: $selectedTab) {
+            Tab("Coach", systemImage: "bubble.left.and.bubble.right", value: "coach") { NavigationStack { CoachView(coach: coach) } }
+            Tab("Today", systemImage: "sun.max", value: "today") { NavigationStack { TodayView(model: model) } }
+            Tab("History", systemImage: "calendar", value: "history") { NavigationStack { HistoryView(model: model) } }
+            Tab("Settings", systemImage: "gearshape", value: "settings") { NavigationStack { SettingsView(model: model, connection: connection, nutritionKeys: nutritionKeys) } }
         }
         .tint(.diaryAccent)
         .foregroundStyle(Color.diaryText)
         .sensoryFeedback(.success, trigger: model.captureReceipt)
-        .task { await model.load() }
+        .task {
+            model.resumeCoach = { coach.resume() }
+            model.retryCoachMeal = { id in
+                Task { await coach.retryMeal(id) }
+            }
+            await model.load()
+            if !DiaryLaunch.isUITest { await connection.restore() }
+            coach.startMonitoring(); coach.resume()
+        }
+        .onChange(of: model.isChangingProfile) { _, changing in
+            if changing { coach.cancel() }
+            else { Task { await coach.waitForWorker(); coach.resume() } }
+        }
+        .onChange(of: model.snapshot?.profile.id) { _, _ in coach.draft = MealDraft(); coach.errorMessage = nil }
+        .onChange(of: connection.sessionRevision) { _, _ in coach.cancel() }
+        .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
+        .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             if value == .background { continueInBackground() }
-            if value == .active { endBackgroundLease(); model.resumeWorker(); model.queueBackup() }
+            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(); model.queueBackup() }
         }
         .alert("Could not complete action", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
@@ -30,15 +65,15 @@ struct DiaryRootView: View {
         }
     }
     private func continueInBackground() {
-        guard model.snapshot?.pendingCount ?? 0 > 0 else { return }
+        guard (model.snapshot?.pendingCount ?? 0) > 0 || coach.hasPendingWork else { coach.enterBackground(); connection.enterBackground(); return }
         endBackgroundLease()
         let generation = UUID()
         backgroundGeneration = generation
         backgroundLease = UIApplication.shared.beginBackgroundTask(withName: "Finish saved meal") {
-            Task { @MainActor in guard backgroundGeneration == generation else { return }; model.enterBackground(); endBackgroundLease() }
+            Task { @MainActor in guard backgroundGeneration == generation else { return }; model.enterBackground(); coach.enterBackground(); connection.enterBackground(); endBackgroundLease() }
         }
         model.resumeWorker()
-        Task { await model.waitForWorker(); if backgroundGeneration == generation { endBackgroundLease() } }
+        Task { await model.waitForWorker(); await coach.waitForWorker(); if backgroundGeneration == generation { coach.enterBackground(); connection.enterBackground(); endBackgroundLease() } }
     }
     private func endBackgroundLease() {
         guard backgroundLease != .invalid else { return }
@@ -55,7 +90,7 @@ struct TodayView: View {
     @State private var confirmDay = false
     var body: some View {
         List {
-            Section { SampleBanner().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) }
+            if model.sampleMode { Section { SampleBanner().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) } }
             if let snapshot = model.snapshot {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {

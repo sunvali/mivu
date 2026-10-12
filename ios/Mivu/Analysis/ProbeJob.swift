@@ -167,7 +167,7 @@ actor ProbeRunner {
         guard try store.matches(job) else { throw Failure.staleJob }
     }
 
-    private static func isTransient(_ error: any Error) -> Bool {
+    static func isTransient(_ error: any Error) -> Bool {
         if let error = error as? URLError {
             return [.timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost,
                     .dnsLookupFailed, .notConnectedToInternet].contains(error.code)

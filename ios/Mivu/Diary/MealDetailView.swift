@@ -17,8 +17,10 @@ struct MealDetailView: View {
                 List {
                     Section {
                         Label(meal.state.title, systemImage: meal.state == .saved ? "checkmark.circle" : "clock")
-                        Text(meal.eatenAt, format: .dateTime.day().month().hour().minute())
-                        Text("Apple sample estimate — not food recognition").font(.caption).foregroundStyle(Color.diarySecondary)
+                        if meal.timePrecision == .dateOnly {
+                            Text(snapshot.days.first(where: { $0.id == meal.dayID })?.localDate ?? "Historical meal; time unspecified")
+                        } else { Text(meal.eatenAt, format: .dateTime.day().month().hour().minute()) }
+                        if model.sampleMode { Text("Apple sample estimate — not food recognition").font(.caption).foregroundStyle(Color.diarySecondary) }
                         if meal.isSaved { NutritionSummary(totals: meal.totals) }
                     }
                     if let review = meal.submissions.last(where: { $0.state == .awaitingReview }), let proposal = review.proposal {
@@ -45,9 +47,9 @@ struct MealDetailView: View {
                     }
                     Section("Update this meal") {
                         Button("Add message or photo") { showCorrection = true }.frame(minHeight: 44).accessibilityIdentifier("correctMeal")
-                        Button("I ate half") { Task { if await model.change({ _ = try await model.store.correctMeal(mealID: mealID, text: "half", expectedProfileID: snapshot.profile.id) }) { model.resumeWorker() } } }.frame(minHeight: 44).disabled(!meal.isSaved || meal.state != .saved).accessibilityIdentifier("halfPortion")
+                        Button("I ate half") { Task { if await model.change({ _ = try await model.store.correctMeal(mealID: mealID, text: "half", forCoach: !model.sampleMode, expectedProfileID: snapshot.profile.id) }) { model.resumeWorker() } } }.frame(minHeight: 44).disabled(!meal.isSaved || meal.state != .saved).accessibilityIdentifier("halfPortion")
                         Button("Move to another day") { showMove = true }.frame(minHeight: 44)
-                        if meal.state == .needsRetry || meal.state == .captured { Button("Retry sample estimate") { model.resumeWorker() }.frame(minHeight: 44) }
+                        if meal.state == .needsRetry || meal.state == .captured { Button("Retry analysis") { if model.sampleMode { model.resumeWorker() } else { model.retryCoachMeal?(mealID) } }.frame(minHeight: 44) }
                         Button("Delete meal", role: .destructive) { showDelete = true }.frame(minHeight: 44).accessibilityIdentifier("deleteMeal")
                     }
                     Section("Record history") {
@@ -87,7 +89,8 @@ struct MealDetailView: View {
         VStack(alignment: .leading, spacing: 7) {
             Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.headline)
             Text("\(item.quantity.formatted()) \(item.unit)").foregroundStyle(Color.diarySecondary)
-            Text(item.provenance == .user ? "Edited by you" : "Synthetic apple estimate").font(.caption).foregroundStyle(Color.diarySecondary)
+            Text(item.provenance.description).font(.caption).foregroundStyle(Color.diarySecondary)
+            if !item.reference.isEmpty { Text(item.reference).font(.caption).foregroundStyle(Color.diarySecondary) }
             if item.uncertain { Text("Portion or nutrients are uncertain").font(.caption).foregroundStyle(Color.diarySecondary) }
             if editable { Button("Edit item") { editingRevision = model.meal(mealID)?.revision; editingSubmissionID = reviewSubmissionID; editedItem = item }.frame(minHeight: 44).accessibilityIdentifier("editItem") }
         }

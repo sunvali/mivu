@@ -28,6 +28,25 @@ struct CameraCapture: UIViewControllerRepresentable {
 }
 
 enum PhotoImport {
+    static func visionCopies(_ originals: [Data]) throws -> [Data] {
+        guard originals.count <= 30 else { throw ResponsesClient.Failure.invalidInput }
+        if originals.isEmpty { return [] }
+        let budget = min(524_288, 4_194_304 / originals.count)
+        return try originals.map { data in
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw ResponsesClient.Failure.invalidInput }
+            for pixels in [1280, 960, 720, 480, 320] {
+                guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceThumbnailMaxPixelSize: pixels,
+                    kCGImageSourceCreateThumbnailWithTransform: true
+                ] as CFDictionary) else { throw ResponsesClient.Failure.invalidInput }
+                for quality in [0.7, 0.5, 0.3] {
+                    if let copy = UIImage(cgImage: image).jpegData(compressionQuality: quality), copy.count <= budget { return copy }
+                }
+            }
+            throw ResponsesClient.Failure.limitExceeded
+        }
+    }
     static func jpeg(_ data: Data) -> Data? {
         guard data.count <= 40_000_000, let source = CGImageSourceCreateWithData(data as CFData, nil),
               let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1600, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) else { return nil }
@@ -67,8 +86,8 @@ struct PhotoInput: View {
                 PhotosPicker(selection: $selected, maxSelectionCount: max(1, 8 - photos.count), matching: .images) { Label("Photos", systemImage: "photo.on.rectangle") }.buttonStyle(.glass).tint(.diaryLeaf).frame(minHeight: 44).disabled(photos.count >= 8 || preparation.isPreparing)
             }
             if !UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Text("Camera is unavailable here. Choose Photos or use the synthetic sample.").font(.caption).foregroundStyle(Color.diarySecondary)
-                Button("Add synthetic apple photo") { if let data = PhotoImport.syntheticApple() { photos.append(data) } }.frame(minHeight: 44).disabled(photos.count >= 8 || preparation.isPreparing).accessibilityIdentifier("syntheticPhoto")
+                Text(DiaryLaunch.isSampleMode ? "Camera is unavailable here. Choose Photos or use the synthetic sample." : "Camera is unavailable here. Choose Photos instead.").font(.caption).foregroundStyle(Color.diarySecondary)
+                if DiaryLaunch.isSampleMode || DiaryLaunch.isCoachUITest { Button(DiaryLaunch.isSampleMode ? "Add synthetic apple photo" : "Add synthetic test photo") { if let data = PhotoImport.syntheticApple() { photos.append(data) } }.frame(minHeight: 44).disabled(photos.count >= 8 || preparation.isPreparing).accessibilityIdentifier("syntheticPhoto") }
             }
             if preparation.isPreparing { ProgressView("Importing photo") }
             if !photos.isEmpty {
