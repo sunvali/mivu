@@ -88,11 +88,32 @@ import XCTest
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
     }
 
+    private func capturePhotoOnlyReview(in app: XCUIApplication) -> XCUIElement {
+        app.buttons["logMeal"].tap()
+        XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5))
+        app.buttons["syntheticPhoto"].tap()
+        let review = app.switches["reviewFirst"]
+        let toggle = review.switches.firstMatch; reveal(toggle, in: app); toggle.tap()
+        XCTAssertEqual(review.value as? String, "1")
+        app.buttons["sendMeal"].tap()
+        let row = app.buttons["mealRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        return row
+    }
+
+    func testPhotoOnlyReviewHasReadableMealTitle() {
+        let app = launch()
+        let row = capturePhotoOnlyReview(in: app)
+        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "Photo-only review meal title"; attachment.lifetime = .keepAlways; add(attachment)
+        XCTAssertTrue(row.label.contains("Meal"), "Photo-only pending/review meals need a readable fallback title; actual label: " + row.label)
+    }
+
     func testEnglishDarkLargeTextRendering() {
-        let app = launch(["--proof-hebrew", "--proof-dark", "--proof-large-text", "-AppleLanguages", "(he)", "-AppleLocale", "he_IL"])
+        let app = launch(["--proof-hebrew", "--proof-dark", "--proof-largest-text", "-AppleLanguages", "(he)", "-AppleLocale", "he_IL"])
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Apple sample mode"].exists)
-        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "English dark accessible Today"; attachment.lifetime = .keepAlways; add(attachment)
+        XCTAssertTrue(app.buttons["logMeal"].isHittable)
+        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "English dark largest accessibility5 Today"; attachment.lifetime = .keepAlways; add(attachment)
     }
 
     func testLegacyHebrewLaunchUsesEnglishLeftToRight() {

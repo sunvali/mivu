@@ -109,13 +109,17 @@ extension DayCompleteness {
 
 struct MealRow: View {
     let meal: DiaryMeal
+    private var title: String {
+        let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return meal.items.first.map { $0.provenance == .sample ? "Apple (sample)" : $0.name } ?? (text.isEmpty ? "Meal" : text)
+    }
     var body: some View {
         HStack(spacing: 12) {
             if let data = meal.photos.first?.data, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFill().frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 16)).accessibilityHidden(true)
             } else { Image(systemName: "fork.knife").frame(width: 52, height: 52).background(.quaternary, in: RoundedRectangle(cornerRadius: 10)).accessibilityHidden(true) }
             VStack(alignment: .leading, spacing: 5) {
-                Text(meal.items.first.map { $0.provenance == .sample ? "Apple (sample)" : $0.name } ?? meal.submissions.first?.text ?? "Meal").lineLimit(2)
+                Text(title).lineLimit(2)
                 HStack { Text(meal.state.title); Text(meal.eatenAt, style: .time) }.font(.caption).foregroundStyle(Color.diarySecondary)
             }
             Spacer(minLength: 4)
