@@ -102,6 +102,10 @@ struct DiaryMeal: Codable, Equatable, Sendable, Identifiable {
     var totals: NutritionTotals { nutritionTotals(items) }
     var isSaved: Bool { revision > 0 }
     var state: SubmissionState { submissions.last?.state ?? .saved }
+    var hasUnresolvedInput: Bool {
+        (!isSaved && submissions.isEmpty)
+            || submissions.contains { $0.state != .saved && $0.state != .cancelled }
+    }
 }
 
 struct WeightEntry: Codable, Equatable, Sendable, Identifiable {
@@ -250,7 +254,7 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     func totals(dayID: UUID) -> NutritionTotals {
         let items = meals.filter { $0.dayID == dayID && $0.isSaved }.flatMap(\.items)
         if items.isEmpty, days.contains(where: { $0.id == dayID && $0.completeness == .complete }),
-           !meals.contains(where: { $0.dayID == dayID && !$0.isSaved }) {
+           !meals.contains(where: { $0.dayID == dayID && $0.hasUnresolvedInput }) {
             return NutritionTotals(kcal: 0, carbs: 0, protein: 0, fat: 0, unknownItemCount: 0)
         }
         return nutritionTotals(items)
