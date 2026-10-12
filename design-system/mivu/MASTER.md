@@ -44,7 +44,10 @@ fallback if composed glass cannot meet readability. No custom blur framework.
 Use system Dynamic Type text styles with SF Pro, tabular nutrition figures,
 semibold headings and regular body copy. Native SF Symbols, consistent sizing,
 44pt minimum targets. Spacing rhythm4/8/16/24/32pt; adaptive wrapping and semantic
-leading/trailing support Hebrew RTL and landscape. No hardcoded body font sizes.
+leading/trailing support English LTR and landscape. The Hebrew selector is
+disabled for this English-only MVP; preserve existing Hebrew profile/archive data
+and stored language values, but Hebrew RTL is not an MVP acceptance requirement.
+No hardcoded body font sizes.
 
 Native interactive press feedback and sheet/navigation motion; interruptible,
 brief value transitions only where they explain a saved change. Respect reduced
@@ -63,7 +66,7 @@ Primary Apple references:
 [Materials](https://developer.apple.com/design/human-interface-guidelines/materials),
 [Liquid Glass custom views](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views).
 
-Acceptance: actual English/Hebrew, light/dark, small/large phone, landscape,
+Acceptance: actual English, light/dark, small/large phone, landscape,
 largest Dynamic Type, reduced motion/transparency and accessible semantic trees.
 Native journeys must retain capture/review/edit/history/profile/backup behavior.
 Screenshots prove appearance; native interaction and unit tests prove behavior.

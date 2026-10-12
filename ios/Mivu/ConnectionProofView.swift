@@ -6,7 +6,6 @@ struct ConnectionProofView: View {
     @State private var window: UIWindow?
     @State private var callbackTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("appLanguage") private var language = "en"
 
     var body: some View {
         NavigationStack {
@@ -88,13 +87,6 @@ struct ConnectionProofView: View {
                         Button("Cancel browser test", role: .cancel) { callbackTask?.cancel() }.frame(minHeight: 44)
                     }
                 }
-                Section("Language") {
-                    Picker("App language", selection: $language) {
-                        Text("English").tag("en")
-                        Text("עברית").tag("he")
-                    }
-                    .pickerStyle(.segmented).frame(minHeight: 44)
-                }
             }
             .navigationTitle("Mivu")
         }
@@ -105,8 +97,6 @@ struct ConnectionProofView: View {
             else if phase == .active { Task { await connection.enterForeground() } }
         }
         .onDisappear { callbackTask?.cancel(); connection.enterBackground() }
-        .environment(\.locale, Locale(identifier: language))
-        .environment(\.layoutDirection, language == "he" ? .rightToLeft : .leftToRight)
         .preferredColorScheme(proofColorScheme)
         .transformEnvironment(\.dynamicTypeSize) {
             if ProcessInfo.processInfo.arguments.contains("--proof-large-text") { $0 = .accessibility3 }

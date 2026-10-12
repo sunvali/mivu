@@ -5,7 +5,6 @@ struct DiaryRootView: View {
     @Environment(\.scenePhase) private var phase
     @State private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
     @State private var backgroundGeneration: UUID?
-    private var language: String { model.snapshot?.profile.language ?? DiaryLaunch.language }
     var body: some View {
         TabView {
             Tab("Today", systemImage: "sun.max") { NavigationStack { TodayView(model: model) } }
@@ -14,8 +13,6 @@ struct DiaryRootView: View {
         }
         .tint(.diaryAccent)
         .foregroundStyle(Color.diaryText)
-        .environment(\.locale, Locale(identifier: language))
-        .environment(\.layoutDirection, language == "he" ? .rightToLeft : .leftToRight)
         .sensoryFeedback(.success, trigger: model.captureReceipt)
         .task { await model.load() }
         .onChange(of: phase) { _, value in
@@ -63,7 +60,7 @@ struct TodayView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Waking day").font(.caption.weight(.medium)).foregroundStyle(Color.diarySecondary)
-                        Text(model.activeDay?.localDate ?? String(localized: "Your waking day")).font(.title2.weight(.semibold))
+                        Text(model.activeDay?.localDate ?? "Your waking day").font(.title2.weight(.semibold))
                     }
                     if let day = model.activeDay { NutritionSummary(totals: snapshot.totals(dayID: day.id)) }
                     else { Text("No recorded meals yet").foregroundStyle(Color.diarySecondary) }
@@ -124,7 +121,10 @@ struct TodayView: View {
                         Task { if await model.change({ _ = try await model.store.recordWeight(value: value, expectedProfileID: owner) }) { showWeight = false; weight = "" } }
                     }.disabled(Double(weight.replacingOccurrences(of: ",", with: ".")).map { $0 > 0 && $0 <= 1000 } != true).accessibilityIdentifier("saveWeight") }
                 }
-            }.presentationDetents([.medium, .large])
+            }
+            .environment(\.locale, Locale(identifier: "en"))
+            .environment(\.layoutDirection, .leftToRight)
+            .presentationDetents([.medium, .large])
         }
     }
 }

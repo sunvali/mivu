@@ -1,8 +1,9 @@
 # Mivu
 
 Mivu is a native iPhone food diary built with SwiftUI and Swift 6 for iOS 26 and
-newer. The English-first MVP centers on Today, meal capture and review, history,
-and settings, with Hebrew support retained.
+newer. The English-only MVP centers on Today, meal capture and review, history,
+and settings. The Hebrew language selector is disabled for now; existing profile
+and archive data, including stored language values, must remain intact.
 
 ## Sample mode
 
@@ -33,9 +34,10 @@ records product and backup requirements.
 
 Use synthetic inputs in diagnostics and tests. Never commit credentials or
 personal meal data. Keep changes on a feature branch, preserve English LTR,
-Hebrew RTL, Dynamic Type, VoiceOver, reduced motion, and accessible touch
-targets. Report verification with its actual environment, result, and remaining
-gates; workflow files alone are not evidence of a hosted run.
+Dynamic Type, VoiceOver, reduced motion, and accessible touch targets. Hebrew RTL
+is not an MVP acceptance requirement. Report verification with its actual
+environment, result, and remaining gates; workflow files alone are not evidence
+of a hosted run.
 
 ## Agent guidance
 

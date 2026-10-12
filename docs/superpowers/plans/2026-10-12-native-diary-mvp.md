@@ -16,10 +16,12 @@ existing singleJOSESwift dependency, GitHub Actions and XcodeBuildMCP locally.
 ## Global constraints
 
 Native iPhone/iOS26+, no server or paid services. Preserve existing connection
-proof. English-first MVP acceptance; preserve existing Hebrew support.44pt,
-VoiceOver/Dynamic Type/reduced motion. Premium native glass and cheerful food
-palette follow design-system/mivu/MASTER.md. Photos retained
-until explicit delete; private app-owned profiles. Input captured before analysis;
+proof. English-only MVP acceptance; disable the Hebrew selector and preserve
+existing profile/archive records and stored language values. Hebrew RTL is not
+required for MVP acceptance. 44pt, VoiceOver/Dynamic Type/reduced motion.
+Premium native glass and cheerful food palette follow
+design-system/mivu/MASTER.md. Photos retained until explicit delete; private
+app-owned profiles. Input captured before analysis;
 all synthetic nutrition labeled. No credentials/logged personal contents in
 archives, tests, artifacts or Actions output. Never mention prohibited workflow
 branding in commits/PRs. Branch feature/native-diary-mvp; no direct main push.

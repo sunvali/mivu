@@ -52,7 +52,7 @@ private struct DayHistoryView: View {
                     ForEach(snapshot.meals.filter { $0.dayID == dayID }.sorted { $0.eatenAt > $1.eatenAt }, id: \.id) { meal in NavigationLink(value: HistoryRoute.meal(meal.id)) { MealRow(meal: meal) } }
                 }
             }
-        }.scrollContentBackground(.hidden).background(Color.diaryCanvas).navigationTitle(model.snapshot?.days.first { $0.id == dayID }?.localDate ?? String(localized: "History"))
+        }.scrollContentBackground(.hidden).background(Color.diaryCanvas).navigationTitle(model.snapshot?.days.first { $0.id == dayID }?.localDate ?? "History")
     }
 }
 

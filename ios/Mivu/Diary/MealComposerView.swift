@@ -61,6 +61,8 @@ struct MealComposerView: View {
                 Button("Keep editing", role: .cancel) {}
             } message: { Text("Your active day began on an earlier date. A late meal can stay in that day.") }
         }
+        .environment(\.locale, Locale(identifier: "en"))
+        .environment(\.layoutDirection, .leftToRight)
     }
     private func send() async {
         guard draft.isValid, photoPreparation.canCapture, !submitting, let owner = model.snapshot?.profile.id else { return }
