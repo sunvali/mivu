@@ -37,7 +37,11 @@ personal meal data. Keep changes on a feature branch, preserve English LTR,
 Dynamic Type, VoiceOver, reduced motion, and accessible touch targets. Hebrew RTL
 is not an MVP acceptance requirement. Report verification with its actual
 environment, result, and remaining gates; workflow files alone are not evidence
-of a hosted run.
+of a hosted run. The released baseline remains a sample diary; the coach
+expansion is underway, not completed. See the [coach feature audit](docs/verification/2026-10-12-coach-feature-audit.md),
+[conversational coach design](docs/superpowers/specs/2026-10-12-conversational-coach-design.md),
+and [P0 implementation plan](docs/superpowers/plans/2026-10-12-coach-p0.md) for
+the current scope and evidence.
 
 ## Agent guidance
 

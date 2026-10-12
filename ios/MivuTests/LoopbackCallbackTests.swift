@@ -5,7 +5,7 @@ import Testing
 @Suite @MainActor struct LoopbackCallbackTests {
     @Test(.timeLimit(.minutes(1)), arguments: ["stop", "success", "timeout"])
     func releasesNetworkListenerAfterFinishing(reason: String) async throws {
-        let callback = LoopbackCallback(timeout: .milliseconds(100))
+        let callback = LoopbackCallback(timeout: .seconds(5))
         let url = try await callback.start()
         weak let networkListener = callback.listener
         #expect(networkListener != nil)

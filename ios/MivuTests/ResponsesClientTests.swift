@@ -5,6 +5,109 @@ import Testing
 
 @Suite(.serialized)
 struct ResponsesClientTests {
+    @Test func acceptsJPEGInput() async throws {
+        let capture = RequestCapture()
+        let client = ResponsesClient(session: sessionReturning(status: 200, body: completed(), capture: capture))
+        _ = try await client.run(model: "fixture-model", text: "Synthetic", image: Data([0xff, 0xd8, 0xff, 0xe0]), accessToken: "fixture-token")
+        let payload = try #require(capture.request?.httpBody)
+        let object = try #require(JSONSerialization.jsonObject(with: payload) as? [String: Any])
+        let input = try #require(object["input"] as? [[String: Any]])
+        let content = try #require(input[0]["content"] as? [[String: String]])
+        #expect(content[1]["image_url"] == "data:image/jpeg;base64,/9j/4A==")
+    }
+
+    @Test func toolOnlyCompletionPreservesCallsReasoningAndUTF8() throws {
+        let items: [[String: Any]] = [
+            ["type": "reasoning", "id": "reason", "encrypted_content": "synthetic", "summary": []],
+            toolCall(id: "one", callID: "first", arguments: #"{"text":"שלום"}"#),
+            toolCall(id: "two", callID: "second", arguments: #"{"quantity":2}"#)
+        ]
+        let bytes = toolCompletion(items)
+        for split in 0...bytes.count {
+            var stream = ResponseEventStream()
+            try stream.append(bytes.prefix(split))
+            try stream.append(bytes.dropFirst(split))
+            let result = try stream.finishInference()
+            #expect(result.text.isEmpty)
+            #expect(result.calls.map(\.callID) == ["first", "second"])
+            #expect(result.calls[0].namespace == "diary")
+            #expect(result.calls[0].arguments == #"{"text":"שלום"}"#)
+            #expect(try result.outputItems.map { try JSONSerialization.jsonObject(with: $0) as! NSDictionary } == items.map { $0 as NSDictionary })
+        }
+    }
+
+    @Test func sendsStatelessContinuationAndLocalNamespace() async throws {
+        let capture = RequestCapture()
+        let output = toolCall(id: "one", callID: "first", arguments: "{}")
+        let outputData = try JSONSerialization.data(withJSONObject: output)
+        let namespace = Data(#"{"type":"namespace","name":"diary","tools":[{"type":"function","name":"record","parameters":{"type":"object","properties":{},"additionalProperties":false}}]}"#.utf8)
+        let result = try await ResponsesClient(session: sessionReturning(status: 200, body: completed(), capture: capture)).respond(
+            model: "fixture-model", input: [.message(role: .developer, text: "Use saved facts"), .message(role: .user, text: "Synthetic", images: [SyntheticConnectionProbe.image]), .priorOutput(outputData), .functionOutput(callID: "first", output: #"{"saved":true}"#), .message(role: .assistant, text: "Earlier reply")], toolNamespace: namespace, accessToken: "fixture-token")
+        #expect(result.text == "Synthetic output שלום")
+        let body = try #require(capture.request?.httpBody)
+        let object = try JSONSerialization.jsonObject(with: body)
+        let payload = try #require(object as? [String: Any])
+        #expect(Set(payload.keys) == ["model", "input", "tools", "store", "stream"])
+        #expect(payload["store"] as? Bool == false && payload["stream"] as? Bool == true)
+        let input = try #require(payload["input"] as? [[String: Any]])
+        #expect(input[0]["role"] as? String == "developer")
+        #expect(input[2] as NSDictionary == output as NSDictionary)
+        #expect(input[3]["type"] as? String == "function_call_output")
+        #expect(input[3]["call_id"] as? String == "first")
+    }
+
+    @Test func rejectsInvalidArgumentsDuplicateCallsAndOversizedArguments() throws {
+        for items in [
+            [toolCall(id: "one", callID: "first", arguments: "[]")],
+            [toolCall(id: "one", callID: "first", arguments: "{bad}")],
+            [toolCall(id: "one", callID: "first", arguments: #"{"text":""# + String(repeating: "a", count: 65_536) + #""}"#)],
+            [toolCall(id: "one", callID: "first", arguments: "{}"), toolCall(id: "two", callID: "first", arguments: "{}")],
+            [toolCall(id: "one", callID: "first", arguments: "{}"), toolCall(id: "one", callID: "second", arguments: "{}")]
+        ] {
+            var stream = ResponseEventStream()
+            #expect(throws: ResponsesClient.Failure.malformedResponse) { try stream.append(toolCompletion(items)) }
+        }
+    }
+
+    @Test func partialToolCallCannotCompleteAndQuotaDiscardsIt() throws {
+        let partial = event(["type": "response.output_item.added", "item": toolCall(id: "one", callID: "first", arguments: "{}")])
+        var stream = ResponseEventStream()
+        try stream.append(partial)
+        #expect(throws: ResponsesClient.Failure.incompleteResponse) { try stream.finishInference() }
+        #expect(throws: ResponsesClient.Failure.quotaReached) { try stream.append(event(["type": "error", "code": "subscription_sharing_usage_limit_exceeded"])) }
+    }
+
+    @Test func rejectsInvalidStructuredInputBeforeNetwork() async {
+        let capture = RequestCapture()
+        let client = ResponsesClient(session: sessionReturning(status: 200, body: completed(), capture: capture))
+        let invalidInputs: [[CoachInferenceInput]] = [
+            [.message(role: .user, text: "", images: [Data([255, 216])])],
+            [.message(role: .developer, text: "Synthetic", images: [SyntheticConnectionProbe.image])],
+            [.priorOutput(Data(#"{"type":"computer_call"}"#.utf8))],
+            [.functionOutput(callID: "", output: "{}")],
+            [.message(role: .user, text: String(repeating: "x", count: 65_537))]
+        ]
+        for input in invalidInputs {
+            await #expect(throws: ResponsesClient.Failure.invalidInput) { try await client.respond(model: "fixture-model", input: input, toolNamespace: nil, accessToken: "fixture-token") }
+        }
+        await #expect(throws: ResponsesClient.Failure.invalidInput) { try await client.respond(model: "fixture-model", input: [.message(role: .user, text: "Synthetic")], toolNamespace: Data(#"{"type":"mcp"}"#.utf8), accessToken: "fixture-token") }
+        #expect(capture.request == nil)
+    }
+
+    @Test func rejectsAggregateImagesAndHostedOutputItems() async {
+        let capture = RequestCapture()
+        let client = ResponsesClient(session: sessionReturning(status: 200, body: completed(), capture: capture))
+        let image = Data([255, 216, 255, 224]) + Data(repeating: 0, count: 4_000_000)
+        await #expect(throws: ResponsesClient.Failure.invalidInput) {
+            try await client.respond(model: "fixture-model", input: [.message(role: .user, text: "Synthetic", images: [image, image])], toolNamespace: nil, accessToken: "fixture-token")
+        }
+        #expect(capture.request == nil)
+        var stream = ResponseEventStream()
+        #expect(throws: ResponsesClient.Failure.malformedResponse) {
+            try stream.append(toolCompletion([["type": "web_search_call", "id": "hosted"], toolCall(id: "one", callID: "first", arguments: "{}")]))
+        }
+    }
+
     @Test func syntheticFixtureIsDecodablePNG() throws {
         let source = try #require(CGImageSourceCreateWithData(SyntheticConnectionProbe.image as CFData, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
@@ -154,6 +257,13 @@ struct ResponsesClientTests {
         var topLevel = ResponseEventStream()
         #expect(throws: ResponsesClient.Failure.quotaReached) { try topLevel.append(event(["type": "error", "code": "subscription_sharing_usage_limit_exceeded"])) }
     }
+}
+
+private func toolCall(id: String, callID: String, arguments: String) -> [String: Any] {
+    ["type": "function_call", "id": id, "call_id": callID, "name": "record", "namespace": "diary", "arguments": arguments, "status": "completed"]
+}
+private func toolCompletion(_ items: [[String: Any]]) -> Data {
+    event(["type": "response.completed", "response": ["status": "completed", "model": "fixture-model", "output": items]])
 }
 
 private func event(_ object: [String: Any]) -> Data {
