@@ -127,9 +127,9 @@ enum CoachTools {
                 return .write(.workout(date: try date("local_date"), draft: try draft()))
             }
             try keys(fields.union(["workout_id", "expected_revision"]), ["workout_id", "expected_revision", "kind", "duration_minutes", "exercises"])
-            let id = try uuid("workout_id")
-            guard workouts.contains(where: { $0.id == id }) || receipts.contains(where: { $0.workoutID == id && $0.operationKey.hasSuffix("/edit_workout/" + id.uuidString) }) else { throw CoachError.invalidArguments }
-            return .write(.editWorkout(id: id, draft: try draft(), revision: try revision()))
+            let id = try uuid("workout_id"), expectedRevision = try revision()
+            guard workouts.contains(where: { $0.id == id && $0.revision == expectedRevision }) || receipts.contains(where: { $0.workoutID == id && $0.operationKey.hasSuffix("/edit_workout/" + id.uuidString) }) else { throw CoachError.invalidArguments }
+            return .write(.editWorkout(id: id, draft: try draft(), revision: expectedRevision))
         case "delete_weight":
             try keys(["weight_id", "expected_revision"], ["weight_id", "expected_revision"])
             return .write(.deleteWeight(id: try uuid("weight_id"), revision: try revision()))

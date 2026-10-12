@@ -864,6 +864,8 @@ actor DiaryStore {
         guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         var snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        let writes = try writes.map { try resolvedCoachWrite($0, turn: turn, snapshot: snapshot) }
+        guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
         let progressTargets = writes.compactMap { write -> String? in
             switch write {
             case .weight(let date, _, _, _):
@@ -987,7 +989,26 @@ actor DiaryStore {
         return facts.joined(separator: "\n")
     }
 
+    private func resolvedCoachWrite(_ write: CoachWrite, turn: CoachTurn, snapshot: DiarySnapshot) throws -> CoachWrite {
+        guard case .weight(let date, let value, let unit, let revision) = write else { return write }
+        let createKey = "\(turn.id.uuidString)/weight/\(date)"
+        // A completed create stays a create replay even after the weight is edited or deleted.
+        if turn.receipts.contains(where: { $0.operationKey == createKey }) { return write }
+        let dayIDs = Set(snapshot.days.filter { $0.localDate == date && $0.timeZoneID == turn.captureTimeZoneID }.map(\.id))
+        let existingID = snapshot.weights.first { $0.dayID.map { dayIDs.contains($0) } == true }?.id
+        let correctedID = turn.receipts.first { receipt in
+            guard let id = receipt.weightID else { return false }
+            return receipt.operationKey == "\(turn.id.uuidString)/correct_weight/\(id.uuidString)" && dayIDs.contains(receipt.dayID)
+        }?.weightID
+        if let id = correctedID ?? existingID {
+            guard let revision else { throw DiaryError.staleRevision }
+            return .correctWeight(id: id, value: value, unit: unit, revision: revision)
+        }
+        return write
+    }
+
     private func mutateCoachProgress(_ write: CoachWrite, turn: CoachTurn, snapshot: inout DiarySnapshot) throws -> CoachReceipt {
+        let write = try resolvedCoachWrite(write, turn: turn, snapshot: snapshot)
         let key = "\(turn.id.uuidString)/\(write.target)"
         if let receipt = turn.receipts.first(where: { $0.operationKey == key }) {
             switch write {
@@ -1004,11 +1025,15 @@ actor DiaryStore {
         var dayID: UUID, weightID: UUID?, workoutID: UUID?, json: String
         switch write {
         case .weight(let date, let value, let unit, let revision):
-            // A morning weight explicitly starts today's waking day; past dates never replace it.
+            // A delayed morning capture cannot undo a newer explicit waking-day choice.
+            let active = snapshot.days.first { $0.id == snapshot.activeDayID }
             var clockTurn = turn
             if date == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) { clockTurn.activeDayID = nil; clockTurn.resolvedDayID = nil }
             let day = try coachDay(localDate: date, turn: clockTurn, snapshot: &snapshot)
-            if date == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) { snapshot.activeDayID = day.id; snapshot.previousDayConfirmedAt = nil }
+            if date == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID),
+               active == nil || (active!.localDate <= date && active!.startAt <= turn.capturedAt) {
+                snapshot.activeDayID = day.id; snapshot.previousDayConfirmedAt = nil
+            }
             guard !snapshot.weights.contains(where: { weight in
                 weight.dayID != day.id && snapshot.days.contains { $0.id == weight.dayID && $0.localDate == date }
             }) else { throw DiaryError.staleRevision }

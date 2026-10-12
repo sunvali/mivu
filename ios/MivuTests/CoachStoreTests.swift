@@ -553,4 +553,62 @@ import Testing
         #expect(try JSONDecoder().decode(CoachProgress.self, from: Data(zeroJSON.utf8)) == zero)
     }
 
+    @Test(arguments: [false, true]) func delayedCapturedWeightPreservesNewerActiveDay(correction: Bool) async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let existing = correction ? try await store.recordWeight(value: 70, at: now) : nil
+        let turn = try await store.captureCoachTurn(text: "Jan 15 morning weight", photos: [], at: now, expectedProfileID: profile.id)
+        let newer = try await store.startDay(at: now.addingTimeInterval(2 * 86400))
+        let receipts = try await store.applyCoachWrites([.weight(date: "2027-01-15", value: 71, unit: "kg", revision: existing?.revision)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let saved = try await store.snapshot()
+        #expect(saved.activeDayID == newer.id)
+        #expect(saved.weights[0].value == 71); #expect(receipts[0].weightID == saved.weights[0].id)
+        #expect(saved.days.first { $0.id == receipts[0].dayID }?.localDate == "2027-01-15")
+        if let existing { #expect(saved.weights[0].id == existing.id); #expect(saved.weights[0].measuredAt == existing.measuredAt) }
+    }
+    @Test func dateWeightCorrectionDoesNotStartAnInactiveDay() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let existing = try await store.recordWeight(value: 70, at: now)
+        var imported = try await store.snapshot(); imported.activeDayID = nil
+        let other = DiaryStore(directory: root.appendingPathComponent("inactive")); _ = try await other.importProfile(imported)
+        let turn = try await other.captureCoachTurn(text: "Correct weight", photos: [], at: now, expectedProfileID: profile.id)
+        _ = try await other.applyCoachWrites([.weight(date: "2027-01-15", value: 71, unit: "kg", revision: existing.revision)], turnID: turn.id, epoch: other.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        #expect(try await other.snapshot().activeDayID == nil)
+    }
+
+    @Test func correctionReplayCannotRetargetReplacementWeightAfterDeletion() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let original = try await store.recordWeight(value: 70, at: now)
+        let correction = try await store.captureCoachTurn(text: "Actually 71", photos: [], at: now, expectedProfileID: profile.id)
+        let dateWrite = CoachWrite.weight(date: "2027-01-15", value: 71, unit: "kg", revision: 1)
+        _ = try await store.applyCoachWrites([dateWrite], turnID: correction.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let deletion = try await store.captureCoachTurn(text: "Delete weight", photos: [], at: now, expectedProfileID: profile.id)
+        let deleteWrite = CoachWrite.deleteWeight(id: original.id, revision: 2)
+        let deleted = try await store.applyCoachWrites([deleteWrite], turnID: deletion.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let replacement = try await store.recordWeight(value: 80, at: now)
+        let before = try await store.snapshot()
+        #expect(replacement.id != original.id)
+        await #expect(throws: DiaryError.notFound) { try await store.applyCoachWrites([dateWrite], turnID: correction.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.notFound) { try await store.applyCoachWrites([.correctWeight(id: original.id, value: 71, unit: "kg", revision: 1)], turnID: correction.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        #expect(try await store.applyCoachWrites([deleteWrite], turnID: deletion.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) == deleted)
+        #expect(try await store.snapshot() == before)
+    }
+
+    @Test func originalWeightCreateReceiptStaysCreationReplayAfterEditAndDelete() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await store.captureCoachTurn(text: "Create morning weight", photos: [], at: now, expectedProfileID: profile.id)
+        let write = CoachWrite.weight(date: "2027-01-15", value: 70, unit: "kg", revision: nil)
+        let receipts = try await store.applyCoachWrites([write], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let manual = try await store.recordWeight(value: 72, at: now)
+        #expect(try await store.applyCoachWrites([.weight(date: "2027-01-15", value: 70, unit: "kg", revision: manual.revision)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) == receipts)
+        #expect(try await store.snapshot().weights == [manual])
+        #expect(try await store.coachTurn(turnID: turn.id, expectedProfileID: profile.id).receipts == receipts)
+        let deletion = try await store.captureCoachTurn(text: "Delete", photos: [], at: now, expectedProfileID: profile.id)
+        let deletes: [CoachWrite] = [.deleteWeight(id: manual.id, revision: manual.revision)]
+        let deleted = try await store.applyCoachWrites(deletes, turnID: deletion.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        await #expect(throws: DiaryError.notFound) { try await store.applyCoachWrites([write], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        #expect(try await store.applyCoachWrites(deletes, turnID: deletion.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) == deleted)
+        #expect(try await store.snapshot() == before)
+    }
+
 }

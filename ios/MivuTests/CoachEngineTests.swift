@@ -374,4 +374,41 @@ private actor CoachInputFixture {
         #expect(finished.assistantText?.contains(otherCapture ? "pending: true" : "complete; pending: false") == true)
     }
 
+    @Test(arguments: [false, true], [false, true]) func correctionRetryCanonicalizesDateAndIDForms(idFirst: Bool, currentRevision: Bool) async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let weight = try await store.recordWeight(value: 70, at: now)
+        func arguments(byID: Bool, revision: Int) -> String {
+            "{\"local_date\":\"2027-01-15\",\"value\":71,\"unit\":\"kg\",\"expected_revision\":\(revision)" + (byID ? ",\"weight_id\":\"\(weight.id)\"}" : "}")
+        }
+        let first = CoachFixture([result([call("log_weight", arguments(byID: idFirst, revision: 1))])])
+        await #expect(throws: CoachError.limitExceeded) { try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
+        let before = try await store.snapshot(), receipt = try #require(before.coachTurns[0].receipts.first)
+        #expect(receipt.operationKey == "\(turn.id)/correct_weight/\(weight.id)")
+        let retry = CoachFixture([result([call("log_weight", arguments(byID: !idFirst, revision: currentRevision ? 2 : 1), id: "regenerated")]), result(text: "Done")])
+        let finished = try await CoachEngine(store: store, infer: { try await retry.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(finished.receipts == [receipt]); #expect(try await store.snapshot().weights == before.weights)
+        #expect(try await store.snapshot().weights[0].revision == 2)
+    }
+    @Test func newerWorkoutReferenceCannotAuthorizeReplacementFromOlderFullRecord() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let squat = WorkoutExercise(name: "Squat", sets: [WorkoutSet(repetitions: 8, loadKg: 40)])
+        let deadlift = WorkoutExercise(name: "Deadlift", sets: [WorkoutSet(repetitions: 5, loadKg: 60)])
+        let original = try await store.createWorkout(localDate: "2027-01-14", draft: WorkoutDraft(kind: .strength, durationMinutes: 30, exercises: [squat], estimatedBurnKcal: nil, burnSource: nil), performedAt: nil, expectedProfileID: profile.id)
+        let oldFull = try await store.coachWorkout(id: original.id, expectedProfileID: profile.id)
+        var nativeEdit = original; nativeEdit.exercises.append(deadlift)
+        let revised = try await store.updateWorkout(nativeEdit, expectedRevision: 1, expectedProfileID: profile.id)
+        let reference = try await store.coachProgress(endingOn: "2027-01-15", days: 7, expectedProfileID: profile.id).workouts.first { $0.id == original.id }
+        #expect(reference?.revision == 2)
+        let staleArguments = "{\"workout_id\":\"\(original.id)\",\"expected_revision\":2,\"kind\":\"strength\",\"duration_minutes\":45,\"exercises\":[{\"name\":\"Squat\",\"sets\":[{\"repetitions\":8,\"load_kg\":40}]}]}"
+        #expect(throws: CoachError.invalidArguments) { try CoachTools.parse(call("edit_workout", staleArguments), meals: [], evidence: [:], receipts: [], workouts: [oldFull]) }
+        #expect(try await store.snapshot().workouts == [revised])
+        let fresh = try await store.coachWorkout(id: original.id, expectedProfileID: profile.id)
+        let arguments = staleArguments.replacingOccurrences(of: "\"exercises\":[{\"name\":\"Squat\",\"sets\":[{\"repetitions\":8,\"load_kg\":40}]}]", with: "\"exercises\":[{\"name\":\"Squat\",\"sets\":[{\"repetitions\":8,\"load_kg\":40}]},{\"name\":\"Deadlift\",\"sets\":[{\"repetitions\":5,\"load_kg\":60}]}]")
+        let parsed = try CoachTools.parse(call("edit_workout", arguments), meals: [], evidence: [:], receipts: [], workouts: [fresh])
+        guard case .write(let write) = parsed else { throw CoachError.invalidArguments }
+        let receipts = try await store.applyCoachWrites([write], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        #expect(try await store.snapshot().workouts[0].exercises == [squat, deadlift])
+        #expect(receipts[0].workoutID == original.id)
+    }
+
 }
