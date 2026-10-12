@@ -32,7 +32,7 @@ this explicitly overrides new-spec/plan approval waits and sequential workers.
 4. Switching profile cannot reveal records or dispatch another profile's work.
 5. Failed/older backup restore cannot erase current records or tombstones.
 
-## Task1: Durable diary domain and business operations
+## Task 1: Durable diary domain and business operations
 
 Files: ios/Mivu/Diary/DiaryModels.swift, DiaryStore.swift, SampleAnalyzer.swift;
 ios/MivuTests/DiaryTests.swift and DayTests.swift. No UI/project edits.
@@ -67,7 +67,7 @@ weight/newday idempotence and history/completeness.
 - [ ] Run GREEN, copy owned sources after coordination; report hashes/evidence.
 - [ ] Independent scoped review and original-worker fixes before integration.
 
-## Task2: Complete native user flow
+## Task 2: Complete native user flow
 
 Files: ios/Mivu/Diary/DiaryViewModel.swift, TodayView.swift, MealComposerView.swift,
 MealDetailView.swift, HistoryView.swift, SettingsView.swift, DiaryStyle.swift,
@@ -91,7 +91,7 @@ switching and same-meal correction before adding behavior.
 - [ ] English/Hebrew/light/dark/large type render and core simulator interaction checks.
 - [ ] Independent scoped review/fixes; aggregate UI smoke evidence and source hashes.
 
-## Task3: Private backup/export/restore and deletion
+## Task 3: Private backup/export/restore and deletion
 
 Files: ios/Mivu/Diary/DiaryArchive.swift, FolderBackup.swift;
 ios/MivuTests/ArchiveTests.swift; settings integration owned Task2 worker.
@@ -110,7 +110,7 @@ older-backup resurrection, deletion propagation and profile switch races.
 - [ ] GREEN isolated/native tests; integrate actual Files picker/export/import.
 - [ ] Independently review data-loss/privacy paths and fix before acceptance.
 
-## Task4: Real GitHub Actions CI/CD
+## Task 4: Real GitHub Actions CI/CD
 
 Files:.github/workflows/ci.yml,.github/workflows/release.yml,scripts/ci/*,
 docs/development/ci-cd.md. No app-code edits. Read authoritative current runner,
@@ -129,7 +129,7 @@ owner secrets/certificates/team IDs, no fake signing or paid enrollment.
 - [ ] Independent workflow/security review; fix and rerun relevant failures.
 - [ ] Document signing prerequisites and actual delivery artifacts, not just YAML.
 
-## Task5: Final acceptance and delivery
+## Task 5: Final acceptance and delivery
 
 Root coordinates integration only, delegates source fixes to original owner.
 - [ ] Aggregate native suite and meaningful simulator UI journey: capture/text/photo,
