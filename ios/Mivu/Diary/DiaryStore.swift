@@ -301,6 +301,8 @@ actor DiaryStore {
                 snapshot.weights[w].value = value
                 snapshot.weights[w].unit = unit
                 snapshot.weights[w].measuredAt = at
+                snapshot.weights[w].timePrecision = .exact
+                snapshot.weights[w].revision += 1
                 weight = snapshot.weights[w]
             } else {
                 weight = WeightEntry(dayID: dayID, measuredAt: at, value: value, unit: unit)
@@ -308,6 +310,104 @@ actor DiaryStore {
             }
         }
         return weight
+    }
+
+    func setGoals(_ goal: GoalRecord, expectedRevision: Int?, expectedProfileID: UUID) throws -> GoalRecord {
+        var saved: GoalRecord!
+        try transaction(expectedProfileID) { snapshot in
+            guard validLocalDate(goal.effectiveLocalDate) else { throw DiaryError.invalidData }
+            if let index = snapshot.goals.firstIndex(where: { $0.effectiveLocalDate == goal.effectiveLocalDate }) {
+                let previous = snapshot.goals[index]
+                guard goal.id == previous.id else { throw DiaryError.staleRevision }
+                guard expectedRevision == previous.revision else { throw DiaryError.staleRevision }
+                saved = goal; saved.revision = previous.revision + 1
+                snapshot.goals[index] = saved
+            } else {
+                guard expectedRevision == nil else { throw DiaryError.staleRevision }
+                guard !snapshot.goals.contains(where: { $0.id == goal.id }) else { throw DiaryError.invalidData }
+                saved = goal; saved.revision = 1
+                snapshot.goals.append(saved)
+            }
+        }
+        return saved
+    }
+
+    func setWeight(dayLocalDate: String, value: Double, unit: String, measuredAt: Date?, expectedRevision: Int?, expectedProfileID: UUID) throws -> WeightEntry {
+        var saved: WeightEntry!
+        try transaction(expectedProfileID) { snapshot in
+            let day = try progressDay(dayLocalDate, in: &snapshot)
+            if let measuredAt {
+                guard measuredAt.timeIntervalSince1970.isFinite,
+                      dateLabel(measuredAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+            }
+            let time = try measuredAt ?? dateOnlyInstant(day.localDate, zone: day.timeZoneID)
+            if let index = snapshot.weights.firstIndex(where: { $0.dayID == day.id }) {
+                guard expectedRevision == snapshot.weights[index].revision else { throw DiaryError.staleRevision }
+                snapshot.weights[index].value = value
+                snapshot.weights[index].unit = unit
+                snapshot.weights[index].measuredAt = time
+                snapshot.weights[index].timePrecision = measuredAt == nil ? .dateOnly : .exact
+                snapshot.weights[index].revision += 1
+                saved = snapshot.weights[index]
+            } else {
+                guard expectedRevision == nil else { throw DiaryError.staleRevision }
+                saved = WeightEntry(dayID: day.id, measuredAt: time, value: value, unit: unit,
+                                    timePrecision: measuredAt == nil ? .dateOnly : .exact)
+                snapshot.weights.append(saved)
+            }
+        }
+        return saved
+    }
+
+    func deleteWeight(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
+        try transaction(expectedProfileID) { snapshot in
+            guard let index = snapshot.weights.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
+            guard snapshot.weights[index].revision == expectedRevision else { throw DiaryError.staleRevision }
+            snapshot.weights.remove(at: index)
+            snapshot.deletedWeightIDs.append(id)
+        }
+    }
+
+    func createWorkout(localDate: String, draft: WorkoutDraft, performedAt: Date?, expectedProfileID: UUID) throws -> WorkoutSession {
+        var saved: WorkoutSession!
+        try transaction(expectedProfileID) { snapshot in
+            let day = try progressDay(localDate, in: &snapshot)
+            if let performedAt {
+                guard performedAt.timeIntervalSince1970.isFinite,
+                      dateLabel(performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+            }
+            saved = WorkoutSession(dayID: day.id, performedAt: try performedAt ?? dateOnlyInstant(day.localDate, zone: day.timeZoneID),
+                                   timePrecision: performedAt == nil ? .dateOnly : .exact, revision: 1,
+                                   kind: draft.kind, durationMinutes: draft.durationMinutes, exercises: draft.exercises,
+                                   estimatedBurnKcal: draft.estimatedBurnKcal, burnSource: draft.burnSource)
+            snapshot.workouts.append(saved)
+        }
+        return saved
+    }
+
+    func updateWorkout(_ session: WorkoutSession, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        var saved: WorkoutSession!
+        try transaction(expectedProfileID) { snapshot in
+            guard let index = snapshot.workouts.firstIndex(where: { $0.id == session.id }) else { throw DiaryError.notFound }
+            let previous = snapshot.workouts[index]
+            guard previous.revision == expectedRevision else { throw DiaryError.staleRevision }
+            guard session.dayID == previous.dayID,
+                  let day = snapshot.days.first(where: { $0.id == session.dayID }),
+                  session.performedAt.timeIntervalSince1970.isFinite,
+                  dateLabel(session.performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+            saved = session; saved.revision = previous.revision + 1
+            snapshot.workouts[index] = saved
+        }
+        return saved
+    }
+
+    func deleteWorkout(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
+        try transaction(expectedProfileID) { snapshot in
+            guard let index = snapshot.workouts.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
+            guard snapshot.workouts[index].revision == expectedRevision else { throw DiaryError.staleRevision }
+            snapshot.workouts.remove(at: index)
+            snapshot.deletedWorkoutIDs.append(id)
+        }
     }
 
     func updateProfile(_ profile: DiaryProfile, expectedProfileID: UUID? = nil) throws {
@@ -339,9 +439,13 @@ actor DiaryStore {
         guard incoming.profile.id == original.profile.id else { throw DiaryError.wrongOwner }
         guard incoming.revision >= original.revision,
               (incoming == original || incoming.isVerifiedSuccessor(of: original)),
-              Set(incoming.meals.map(\.id)).isDisjoint(with: original.deletedMealIDs) else { throw DiaryError.staleArchive }
+              Set(incoming.meals.map(\.id)).isDisjoint(with: original.deletedMealIDs),
+              Set(incoming.weights.map(\.id)).isDisjoint(with: original.deletedWeightIDs),
+              Set(incoming.workouts.map(\.id)).isDisjoint(with: original.deletedWorkoutIDs) else { throw DiaryError.staleArchive }
         var replacement = incoming
         replacement.deletedMealIDs = Array(Set(incoming.deletedMealIDs + original.deletedMealIDs)).sorted { $0.uuidString < $1.uuidString }
+        replacement.deletedWeightIDs = Array(Set(incoming.deletedWeightIDs + original.deletedWeightIDs)).sorted { $0.uuidString < $1.uuidString }
+        replacement.deletedWorkoutIDs = Array(Set(incoming.deletedWorkoutIDs + original.deletedWorkoutIDs)).sorted { $0.uuidString < $1.uuidString }
         replacement.revision = max(incoming.revision, original.revision) + 1
         // shortcut: ancestors older than 255 writes cannot prove descent; require explicit recovery then.
         replacement.lineage = Array((incoming.lineage ?? []).suffix(255)) + [UUID()]
@@ -378,6 +482,28 @@ actor DiaryStore {
         formatter.timeZone = TimeZone(identifier: zone)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
+    }
+
+    private func progressDay(_ localDate: String, in snapshot: inout DiarySnapshot) throws -> TrackingDay {
+        guard validLocalDate(localDate) else { throw DiaryError.invalidData }
+        if let existing = snapshot.days.first(where: {
+            $0.localDate == localDate && $0.timeZoneID == snapshot.profile.timeZoneID
+        }) { return existing }
+        let day = TrackingDay(localDate: localDate, timeZoneID: snapshot.profile.timeZoneID,
+                              startAt: try dateOnlyInstant(localDate, zone: snapshot.profile.timeZoneID))
+        snapshot.days.append(day)
+        return day
+    }
+
+    private func dateOnlyInstant(_ localDate: String, zone: String) throws -> Date {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(identifier: zone)
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        formatter.isLenient = false
+        guard let noon = formatter.date(from: localDate + " 12:00") else { throw DiaryError.invalidData }
+        return noon
     }
 
     private func file(_ id: UUID) -> URL { selectedFile(id).appendingPathComponent("diary.sqlite") }

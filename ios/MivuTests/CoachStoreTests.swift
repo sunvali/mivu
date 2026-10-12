@@ -101,7 +101,7 @@ import Testing
         #expect(decoded.coachTurns[0].photoIDs.isEmpty); #expect(decoded.coachTurns[0].photos.isEmpty)
         #expect(decoded.meals[0].photos.isEmpty)
     }
-    @Test func legacyArchiveImportsEmptyConversationAndV2RetainsPending() async throws {
+    @Test func legacyArchiveImportsEmptyConversationAndV3RetainsPending() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let original = try await store.snapshot()
         var object = try JSONSerialization.jsonObject(with: DiaryArchive.encode(original)) as! [String: Any]
@@ -112,7 +112,7 @@ import Testing
         let current = try await store.snapshot()
         let data = try DiaryArchive.encode(current)
         let envelope = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        #expect(envelope["version"] as? Int == 2)
+        #expect(envelope["version"] as? Int == 3)
         #expect(try DiaryArchive.decode(data) == current)
     }
     @Test func atomicManualCoachCaptureFailureAndRetryStayOneRecord() async throws {

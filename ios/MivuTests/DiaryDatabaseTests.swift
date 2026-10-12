@@ -132,6 +132,22 @@ import Testing
         #expect(try await DiaryStore(directory: root).selectProfile(old.profile.id) == expected)
     }
 
+    @Test(arguments: ["payload", "orphan"]) func corruptWorkoutRowFailsRead(kind: String) async throws {
+        let root = directory(); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root), profile = DiaryProfile(name: "Synthetic workout")
+        _ = try await store.createProfile(profile)
+        _ = try await store.createWorkout(localDate: "2027-01-15",
+            draft: WorkoutDraft(kind: .cardio, durationMinutes: 25, exercises: [], estimatedBurnKcal: nil, burnSource: nil),
+            performedAt: nil, expectedProfileID: profile.id)
+        let path = file(root, profile.id)
+        if kind == "payload" {
+            try mutate(path, sql: "UPDATE workout SET payload = x'00'")
+        } else {
+            try mutate(path, sql: "PRAGMA foreign_keys = OFF; UPDATE workout SET parent = '00000000-0000-0000-0000-000000000000'")
+        }
+        await #expect(throws: DiaryError.invalidData) { try await DiaryStore(directory: root).selectProfile(profile.id) }
+    }
+
     private func mutate(_ url: URL, sql: String) throws {
         var db: OpaquePointer?
         try #require(sqlite3_open(url.path, &db) == SQLITE_OK)

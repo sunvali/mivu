@@ -36,6 +36,7 @@ final class DiaryDatabase {
             do {
                 try execute("CREATE TABLE IF NOT EXISTS coach_turn (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
                 try execute("CREATE TABLE IF NOT EXISTS coach_photo (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, ordinal INTEGER NOT NULL, payload BLOB NOT NULL, bytes BLOB NOT NULL)")
+                try execute("CREATE TABLE IF NOT EXISTS workout (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES day(id), ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
                 try execute("COMMIT")
             } catch { try? execute("ROLLBACK"); throw error }
         } catch {
@@ -68,7 +69,7 @@ final class DiaryDatabase {
             guard meta.count == 1 else { throw DiaryError.invalidData }
             var snapshot = try JSONDecoder().decode(DiarySnapshot.self, from: meta[0].payload)
             guard meta[0].id == snapshot.profile.id.uuidString else { throw DiaryError.wrongOwner }
-            guard snapshot.days.isEmpty, snapshot.meals.isEmpty, snapshot.weights.isEmpty,
+            guard snapshot.days.isEmpty, snapshot.meals.isEmpty, snapshot.weights.isEmpty, snapshot.workouts.isEmpty,
                   snapshot.deletedMealIDs.isEmpty, snapshot.coachTurns.isEmpty else { throw DiaryError.invalidData }
             snapshot.days = try ordered(rows("day")).map { try decode(TrackingDay.self, $0) }
             let submissions = try rows("submission"), items = try rows("item"), photos = try rows("photo")
@@ -97,6 +98,11 @@ final class DiaryDatabase {
                 let weight = try decode(WeightEntry.self, row)
                 guard row.parent == weight.dayID?.uuidString else { throw DiaryError.invalidData }
                 return weight
+            }
+            snapshot.workouts = try ordered(rows("workout")).map { row in
+                let workout = try decode(WorkoutSession.self, row)
+                guard row.parent == workout.dayID.uuidString else { throw DiaryError.invalidData }
+                return workout
             }
             snapshot.deletedMealIDs = try ordered(rows("tombstone")).map { row in
                 let id = try JSONDecoder().decode(UUID.self, from: row.payload)
@@ -136,7 +142,7 @@ final class DiaryDatabase {
             } else {
                 guard try rows("meta").isEmpty else { throw DiaryError.invalidData }
             }
-            var meta = snapshot; meta.days = []; meta.meals = []; meta.weights = []; meta.deletedMealIDs = []; meta.coachTurns = []
+            var meta = snapshot; meta.days = []; meta.meals = []; meta.weights = []; meta.workouts = []; meta.deletedMealIDs = []; meta.coachTurns = []
             try execute("INSERT INTO meta(id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload", [.text(snapshot.profile.id.uuidString), .blob(try JSONEncoder().encode(meta))])
             try reconcile("day", snapshot.days.enumerated().map { try record($0.element.id.uuidString, $0.offset, $0.element) })
             var meals: [Record] = [], submissions: [Record] = [], items: [Record] = [], photos: [Record] = []
@@ -154,6 +160,7 @@ final class DiaryDatabase {
             try reconcile("meal", meals)
             try reconcile("submission", submissions); try reconcile("item", items); try reconcile("photo", photos)
             try reconcile("weight", snapshot.weights.enumerated().map { try record($0.element.id.uuidString, $0.offset, $0.element, parent: $0.element.dayID?.uuidString) })
+            try reconcile("workout", snapshot.workouts.enumerated().map { try record($0.element.id.uuidString, $0.offset, $0.element, parent: $0.element.dayID.uuidString) })
             try reconcile("tombstone", snapshot.deletedMealIDs.enumerated().map { try record($0.element.uuidString, $0.offset, $0.element) })
             var turns: [Record] = [], pendingPhotos: [Record] = []
             for (index, original) in snapshot.coachTurns.enumerated() {
@@ -197,9 +204,9 @@ final class DiaryDatabase {
         var total: Int64 = 0
         var allPhotoBytes: Int64 = 0
         let limits = [("meta", 1), ("day", 10_000), ("meal", 50_000), ("submission", 50_000_000),
-                      ("item", 10_000_000), ("photo", 1_500_000), ("weight", 10_000), ("tombstone", 50_000), ("coach_turn", 10_000), ("coach_photo", 300_000)]
+                      ("item", 10_000_000), ("photo", 1_500_000), ("weight", 10_000), ("workout", 50_000), ("tombstone", 50_000), ("coach_turn", 10_000), ("coach_photo", 300_000)]
         for (table, limit) in limits {
-            let hasParent = ["meal", "submission", "item", "photo", "weight", "coach_photo"].contains(table)
+            let hasParent = ["meal", "submission", "item", "photo", "weight", "workout", "coach_photo"].contains(table)
             let composite = ["item", "photo", "coach_photo"].contains(table)
             var invalid = "typeof(payload) != 'blob' OR typeof(id) != 'text' OR length(id) != \(composite ? 73 : 36)"
             if table != "meta" { invalid += " OR typeof(ordinal) != 'integer' OR ordinal < 0" }
@@ -246,7 +253,7 @@ final class DiaryDatabase {
         for row in records where previous[row.id] != row {
             var columns = "id, ordinal, payload", values: [Value] = [.text(row.id), .integer(row.ordinal), .blob(row.payload)]
             var assignments = "ordinal = excluded.ordinal, payload = excluded.payload"
-            if ["meal", "submission", "item", "photo", "weight", "coach_photo"].contains(table) {
+            if ["meal", "submission", "item", "photo", "weight", "workout", "coach_photo"].contains(table) {
                 columns += ", parent"; values.append(row.parent.map(Value.text) ?? .null); assignments += ", parent = excluded.parent"
             }
             if ["photo", "coach_photo"].contains(table) {
@@ -257,7 +264,7 @@ final class DiaryDatabase {
         }
     }
     private func rows(_ table: String) throws -> [Record] {
-        let hasParent = ["meal", "submission", "item", "photo", "weight", "coach_photo"].contains(table)
+        let hasParent = ["meal", "submission", "item", "photo", "weight", "workout", "coach_photo"].contains(table)
         let columns = table == "meta" ? "id, 0, payload, NULL, NULL" : "id, ordinal, payload, \(hasParent ? "parent" : "NULL"), \(["photo", "coach_photo"].contains(table) ? "bytes" : "NULL")"
         let statement = try prepare("SELECT \(columns) FROM \(table) ORDER BY 2")
         defer { sqlite3_finalize(statement) }

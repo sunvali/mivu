@@ -110,6 +110,66 @@ struct WeightEntry: Codable, Equatable, Sendable, Identifiable {
     var measuredAt: Date
     var value: Double
     var unit = "kg"
+    var revision = 1
+    var timePrecision: MealTimePrecision = .exact
+}
+
+extension WeightEntry {
+    enum CodingKeys: String, CodingKey { case id, dayID, measuredAt, value, unit, revision, timePrecision }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        dayID = try c.decodeIfPresent(UUID.self, forKey: .dayID)
+        measuredAt = try c.decode(Date.self, forKey: .measuredAt)
+        value = try c.decode(Double.self, forKey: .value)
+        unit = try c.decode(String.self, forKey: .unit)
+        revision = try c.decodeIfPresent(Int.self, forKey: .revision) ?? 1
+        timePrecision = try c.decodeIfPresent(MealTimePrecision.self, forKey: .timePrecision) ?? .exact
+    }
+}
+
+struct GoalRecord: Codable, Equatable, Sendable, Identifiable {
+    var id = UUID()
+    var effectiveLocalDate: String
+    var timeZoneID: String
+    var revision = 1
+    var targets: NutritionValues
+    var goalWeightKg: Double?
+    var exerciseCreditEnabled: Bool
+}
+
+enum WorkoutKind: String, Codable, Sendable { case strength, cardio, other }
+enum WorkoutBurnSource: String, Codable, Sendable { case userEstimate, modelEstimate }
+
+struct WorkoutSet: Codable, Equatable, Sendable {
+    var repetitions: Int
+    var loadKg: Double?
+}
+
+struct WorkoutExercise: Codable, Equatable, Sendable {
+    var name: String
+    var sets: [WorkoutSet]
+}
+
+struct WorkoutDraft: Equatable, Sendable {
+    var kind: WorkoutKind
+    var durationMinutes: Int
+    var exercises: [WorkoutExercise]
+    var estimatedBurnKcal: Double?
+    var burnSource: WorkoutBurnSource?
+}
+
+struct WorkoutSession: Codable, Equatable, Sendable, Identifiable {
+    var id = UUID()
+    var dayID: UUID
+    var performedAt: Date
+    var timePrecision: MealTimePrecision
+    var revision: Int
+    var kind: WorkoutKind
+    var durationMinutes: Int
+    var exercises: [WorkoutExercise]
+    var estimatedBurnKcal: Double?
+    var burnSource: WorkoutBurnSource?
 }
 
 struct AnalysisInput: Codable, Equatable, Sendable {
@@ -141,17 +201,22 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     var days: [TrackingDay] = []
     var meals: [DiaryMeal] = []
     var weights: [WeightEntry] = []
+    var goals: [GoalRecord] = []
+    var workouts: [WorkoutSession] = []
     var coachTurns: [CoachTurn] = []
     var activeDayID: UUID? = nil
     var previousDayConfirmedAt: Date? = nil
     var deletedMealIDs: [UUID] = []
+    var deletedWeightIDs: [UUID] = []
+    var deletedWorkoutIDs: [UUID] = []
     var lineage: [UUID]? = nil
-    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, lineage }
-    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], lineage: [UUID]? = nil) {
+    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, goals, workouts, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, deletedWeightIDs, deletedWorkoutIDs, lineage }
+    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], goals: [GoalRecord] = [], workouts: [WorkoutSession] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], deletedWeightIDs: [UUID] = [], deletedWorkoutIDs: [UUID] = [], lineage: [UUID]? = nil) {
         self.schemaVersion = schemaVersion; self.revision = revision; self.profile = profile
-        self.days = days; self.meals = meals; self.weights = weights; self.coachTurns = coachTurns
+        self.days = days; self.meals = meals; self.weights = weights; self.goals = goals; self.workouts = workouts; self.coachTurns = coachTurns
         self.activeDayID = activeDayID; self.previousDayConfirmedAt = previousDayConfirmedAt
-        self.deletedMealIDs = deletedMealIDs; self.lineage = lineage
+        self.deletedMealIDs = deletedMealIDs; self.deletedWeightIDs = deletedWeightIDs
+        self.deletedWorkoutIDs = deletedWorkoutIDs; self.lineage = lineage
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -161,11 +226,18 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
         days = try c.decode([TrackingDay].self, forKey: .days)
         meals = try c.decode([DiaryMeal].self, forKey: .meals)
         weights = try c.decode([WeightEntry].self, forKey: .weights)
+        goals = try c.decodeIfPresent([GoalRecord].self, forKey: .goals) ?? []
+        workouts = try c.decodeIfPresent([WorkoutSession].self, forKey: .workouts) ?? []
         coachTurns = try c.decodeIfPresent([CoachTurn].self, forKey: .coachTurns) ?? []
         activeDayID = try c.decodeIfPresent(UUID.self, forKey: .activeDayID)
         previousDayConfirmedAt = try c.decodeIfPresent(Date.self, forKey: .previousDayConfirmedAt)
         deletedMealIDs = try c.decode([UUID].self, forKey: .deletedMealIDs)
+        deletedWeightIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedWeightIDs) ?? []
+        deletedWorkoutIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedWorkoutIDs) ?? []
         lineage = try c.decodeIfPresent([UUID].self, forKey: .lineage)
+    }
+    func goal(on localDate: String) -> GoalRecord? {
+        goals.filter { $0.effectiveLocalDate <= localDate }.max { $0.effectiveLocalDate < $1.effectiveLocalDate }
     }
     func isVerifiedSuccessor(of prior: DiarySnapshot) -> Bool {
         guard let head = prior.lineage?.last, let lineage, lineage.last != head else { return false }
@@ -184,15 +256,23 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
         return nutritionTotals(items)
     }
     func validate() throws {
+        let linkedWeightDayIDs = weights.compactMap(\.dayID)
         guard schemaVersion == 1, revision >= 0, revision < 10_000_000, !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               profile.name.count <= 200, ["en", "he"].contains(profile.language),
               TimeZone(identifier: profile.timeZoneID) != nil, profile.preferences.count <= 10_000,
-              days.count <= 10_000, meals.count <= 50_000, weights.count <= 10_000, deletedMealIDs.count <= 50_000,
-              unique(days.map(\.id)), unique(meals.map(\.id)), unique(weights.map(\.id)), unique(deletedMealIDs),
+              days.count <= 10_000, meals.count <= 50_000, weights.count <= 10_000,
+              goals.count <= 10_000, workouts.count <= 50_000,
+              deletedMealIDs.count <= 50_000, deletedWeightIDs.count <= 10_000, deletedWorkoutIDs.count <= 50_000,
+              unique(days.map(\.id)), unique(meals.map(\.id)), unique(weights.map(\.id)), unique(linkedWeightDayIDs),
+              unique(goals.map(\.id)), unique(workouts.map(\.id)),
+              unique(deletedMealIDs), unique(deletedWeightIDs), unique(deletedWorkoutIDs),
+              Set(goals.map(\.effectiveLocalDate)).count == goals.count,
               lineage == nil || (lineage!.count > 0 && lineage!.count <= 256 && unique(lineage!)),
               activeDayID == nil || days.contains(where: { $0.id == activeDayID }),
               previousDayConfirmedAt == nil || previousDayConfirmedAt!.timeIntervalSince1970.isFinite,
-              Set(meals.map(\.id)).isDisjoint(with: deletedMealIDs) else { throw DiaryError.invalidData }
+              Set(meals.map(\.id)).isDisjoint(with: deletedMealIDs),
+              Set(weights.map(\.id)).isDisjoint(with: deletedWeightIDs),
+              Set(workouts.map(\.id)).isDisjoint(with: deletedWorkoutIDs) else { throw DiaryError.invalidData }
         var photoBytes = 0
         var submissionIDs = Set<UUID>()
         for day in days {
@@ -260,7 +340,30 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
         for weight in weights {
             guard weight.value.isFinite, weight.value > 0, weight.value <= 1500,
                   ["kg", "lb"].contains(weight.unit), weight.measuredAt.timeIntervalSince1970.isFinite,
+                  weight.revision > 0, weight.revision < 1_000_000,
                   weight.dayID == nil || days.contains(where: { $0.id == weight.dayID }) else { throw DiaryError.invalidData }
+        }
+        for goal in goals {
+            guard validLocalDate(goal.effectiveLocalDate), TimeZone(identifier: goal.timeZoneID) != nil,
+                  goal.revision > 0, goal.revision < 1_000_000,
+                  [goal.targets.kcal, goal.targets.carbs, goal.targets.protein, goal.targets.fat, goal.goalWeightKg]
+                    .allSatisfy({ $0 == nil || ($0!.isFinite && $0! > 0 && $0! <= 10_000_000) }) else { throw DiaryError.invalidData }
+        }
+        for workout in workouts {
+            guard days.contains(where: { $0.id == workout.dayID }),
+                  workout.performedAt.timeIntervalSince1970.isFinite,
+                  workout.revision > 0, workout.revision < 1_000_000,
+                  (1...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
+                  workout.estimatedBurnKcal == nil || (workout.estimatedBurnKcal!.isFinite && workout.estimatedBurnKcal! >= 0 && workout.estimatedBurnKcal! <= 100_000),
+                  workout.burnSource == nil || workout.estimatedBurnKcal != nil else { throw DiaryError.invalidData }
+            for exercise in workout.exercises {
+                guard !exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      exercise.name.count <= 200, exercise.sets.count <= 100 else { throw DiaryError.invalidData }
+                for set in exercise.sets {
+                    guard (1...10_000).contains(set.repetitions),
+                          set.loadKg == nil || (set.loadKg!.isFinite && set.loadKg! >= 0 && set.loadKg! <= 100_000) else { throw DiaryError.invalidData }
+                }
+            }
         }
     }
 }
@@ -276,7 +379,7 @@ func nutritionTotals(_ items: [FoodItem]) -> NutritionTotals {
 
 private func unique(_ ids: [UUID]) -> Bool { Set(ids).count == ids.count }
 
-private func validLocalDate(_ value: String) -> Bool {
+func validLocalDate(_ value: String) -> Bool {
     let formatter = DateFormatter()
     formatter.calendar = Calendar(identifier: .gregorian)
     formatter.locale = Locale(identifier: "en_US_POSIX")
