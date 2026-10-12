@@ -23,6 +23,18 @@ struct CoachView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
                                 NutritionSummary(totals: snapshot.totals(dayID: day.id))
+                                if let goal = snapshot.goal(on: day.localDate) {
+                                    let progress = ProgressAnalytics.daily(snapshot: snapshot, localDate: day.localDate)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Your goals").font(.subheadline.weight(.semibold))
+                                        if let target = goal.targets.kcal {
+                                            Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
+                                        }
+                                        Text("Remaining from recorded food: \(progress.remainingFromRecorded.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "unknown")")
+                                    }
+                                    .font(.subheadline)
+                                    .accessibilityIdentifier("coachGoalSummary")
+                                }
                             }.padding(16).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
                         }
                         if coach.turns.isEmpty {
@@ -48,6 +60,14 @@ struct CoachView: View {
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 80
             } action: { _, nearBottom in if userScrolling { followLatest = nearBottom } }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { oldHeight, newHeight in
+                guard newHeight > oldHeight, followLatest,
+                      let turn = coach.turns.last, turn.assistantText != nil else { return }
+                Task { @MainActor in
+                    await Task.yield()
+                    if followLatest { proxy.scrollTo("reply-" + turn.id.uuidString, anchor: .top) }
+                }
+            }
             .onChange(of: coach.turns.last?.assistantText) { _, _ in
                 guard followLatest, let id = coach.turns.last?.id, coach.turns.last?.assistantText != nil else { return }
                 Task { @MainActor in
