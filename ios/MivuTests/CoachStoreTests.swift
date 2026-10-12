@@ -400,4 +400,157 @@ import Testing
         #expect((saved.timePrecision ?? .exact) == .exact); #expect(saved.eatenAt == now)
     }
 
+    private var strength: WorkoutDraft {
+        WorkoutDraft(kind: .strength, durationMinutes: 30, exercises: [WorkoutExercise(name: "Squat", sets: [WorkoutSet(repetitions: 8, loadKg: 40), WorkoutSet(repetitions: 6, loadKg: nil)])], estimatedBurnKcal: 100, burnSource: .userEstimate)
+    }
+    @Test func progressBatchPersistsActualIDsAndStableReceiptsAcrossRelaunch() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await store.captureCoachTurn(text: "I weighed 70 kg this morning; yesterday strength", photos: [], at: now, expectedProfileID: profile.id)
+        let writes: [CoachWrite] = [.weight(date: "2027-01-15", value: 70, unit: "kg", revision: nil), .workout(date: "2027-01-14", draft: strength)]
+        let before = try await store.snapshot()
+        let receipts = try await store.applyCoachWrites(writes, turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let saved = try await store.snapshot()
+        #expect(saved.revision == before.revision + 1)
+        #expect(receipts[0].weightID == saved.weights[0].id); #expect(receipts[1].workoutID == saved.workouts[0].id)
+        #expect(saved.weights[0].timePrecision == .dateOnly); #expect(saved.workouts[0].timePrecision == .dateOnly)
+        #expect(saved.workouts[0].exercises == strength.exercises)
+        let reload = DiaryStore(directory: root); _ = try await reload.selectProfile(profile.id)
+        #expect(try await reload.applyCoachWrites(writes, turnID: turn.id, epoch: reload.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) == receipts)
+        #expect(try await reload.snapshot() == saved)
+    }
+    @Test func morningWeightStartsCurrentDayAndGuardedCorrectionKeepsManualTime() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await store.startDay(at: now.addingTimeInterval(-86400))
+        let turn = try await store.captureCoachTurn(text: "Morning weight", photos: [], at: now, expectedProfileID: profile.id)
+        _ = try await store.applyCoachWrites([.weight(date: "2027-01-15", value: 70, unit: "kg", revision: nil)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let saved = try await store.snapshot(), first = try #require(saved.weights.first)
+        #expect(saved.activeDayID == first.dayID)
+        let manual = try await store.recordWeight(value: 71, at: now)
+        let correction = try await store.captureCoachTurn(text: "Actually 70", photos: [], at: now, expectedProfileID: profile.id)
+        let receipts = try await store.applyCoachWrites([.weight(date: "2027-01-15", value: 70, unit: "kg", revision: manual.revision)], turnID: correction.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let corrected = try await store.snapshot().weights[0]
+        #expect(corrected.id == manual.id); #expect(corrected.revision == manual.revision + 1)
+        #expect(corrected.measuredAt == now); #expect(corrected.timePrecision == .exact)
+        #expect(receipts[0].weightID == corrected.id)
+    }
+    @Test func historicalWeightIDCorrectionPreservesDayAndTimeAfterTravel() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let old = try await store.setWeight(dayLocalDate: "2026-12-01", value: 70, unit: "kg", measuredAt: nil, expectedRevision: nil, expectedProfileID: profile.id)
+        var changed = profile; changed.timeZoneID = "Pacific/Honolulu"; try await store.updateProfile(changed)
+        let turn = try await store.captureCoachTurn(text: "Correct historical weight", photos: [], at: now, expectedProfileID: profile.id)
+        let active = try await store.snapshot().activeDayID
+        _ = try await store.applyCoachWrites([.correctWeight(id: old.id, value: 154, unit: "lb", revision: old.revision)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let current = try #require(await store.snapshot().weights.first { $0.id == old.id })
+        #expect(current.dayID == old.dayID); #expect(current.measuredAt == old.measuredAt)
+        #expect(current.timePrecision == old.timePrecision); #expect(try await store.snapshot().activeDayID == active)
+        let report = try await store.coachProgress(endingOn: "2026-12-01", days: 1, expectedProfileID: profile.id)
+        #expect(report.weights.first?.record.id == old.id); #expect(report.weights.first?.localDate == "2026-12-01")
+    }
+    @Test func historicalWorkoutEditDeleteAndDeletedReplayAreGuarded() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let create = try await store.captureCoachTurn(text: "Strength", photos: [], at: now, expectedProfileID: profile.id)
+        let write = CoachWrite.workout(date: "2026-12-01", draft: strength)
+        let receipts = try await store.applyCoachWrites([write], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let old = try #require(await store.snapshot().workouts.first)
+        let turn = try await store.captureCoachTurn(text: "45 minutes", photos: [], at: now, expectedProfileID: profile.id)
+        var draft = strength; draft.durationMinutes = 45
+        let edited = try await store.applyCoachWrites([.editWorkout(id: old.id, draft: draft, revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let saved = try await store.coachWorkout(id: old.id, expectedProfileID: profile.id)
+        #expect(saved.id == old.id); #expect(saved.revision == 2); #expect(saved.performedAt == old.performedAt)
+        #expect(saved.dayID == old.dayID); #expect(edited[0].workoutID == old.id)
+        let deletion = try await store.captureCoachTurn(text: "Delete", photos: [], at: now, expectedProfileID: profile.id)
+        let writes: [CoachWrite] = [.deleteWorkout(id: old.id, revision: 2)]
+        let deleted = try await store.applyCoachWrites(writes, turnID: deletion.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        #expect(try await store.snapshot().deletedWorkoutIDs == [old.id])
+        #expect(try await store.applyCoachWrites(writes, turnID: deletion.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) == deleted)
+        await #expect(throws: DiaryError.notFound) { try await store.applyCoachWrites([write], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        #expect(receipts[0].workoutID == old.id)
+    }
+    @Test func progressBatchRejectsDuplicatesStaleForeignAndCommitFailureWithoutMutation() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await store.captureCoachTurn(text: "Synthetic batch", photos: [], at: now, expectedProfileID: profile.id)
+        let before = try await store.snapshot(), weight = CoachWrite.weight(date: "2027-01-15", value: 70, unit: "kg", revision: nil)
+        await #expect(throws: CoachError.invalidArguments) { try await store.applyCoachWrites([weight, weight], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.notFound) { try await store.applyCoachWrites([weight, .deleteWorkout(id: UUID(), revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        #expect(try await store.snapshot() == before)
+        var db: OpaquePointer?; let file = root.appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
+        #expect(sqlite3_open(file.path, &db) == SQLITE_OK); defer { sqlite3_close(db) }
+        #expect(sqlite3_exec(db, "CREATE TRIGGER reject_progress BEFORE UPDATE ON meta BEGIN SELECT RAISE(ABORT, 'synthetic'); END", nil, nil, nil) == SQLITE_OK)
+        await #expect(throws: DiaryError.persistenceFailed) { try await store.applyCoachWrites([weight, .workout(date: "2027-01-14", draft: strength)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        #expect(try await store.snapshot() == before)
+        #expect(try await DiaryStore(directory: root).selectProfile(profile.id) == before)
+    }
+    @Test func progressReferencesAreBoundedAndOversizedWorkoutRefusesReplacement() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        var snapshot = try await store.snapshot(); let day = snapshot.days[0]
+        snapshot.workouts = (0..<105).map { _ in WorkoutSession(dayID: day.id, performedAt: now, timePrecision: .exact, revision: 1, kind: .cardio, durationMinutes: 45, exercises: [], estimatedBurnKcal: nil, burnSource: nil) }
+        let huge = WorkoutSession(dayID: day.id, performedAt: now, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 60, exercises: (0..<100).map { _ in WorkoutExercise(name: "Synthetic", sets: (0..<100).map { _ in WorkoutSet(repetitions: 10, loadKg: 40) }) }, estimatedBurnKcal: nil, burnSource: nil)
+        snapshot.workouts.append(huge)
+        let otherRoot = root.appendingPathComponent("bounded"), otherStore = DiaryStore(directory: otherRoot)
+        _ = try await otherStore.importProfile(snapshot)
+        let report = try await otherStore.coachProgress(endingOn: "2027-01-15", days: 1, expectedProfileID: profile.id)
+        #expect(report.workouts.count == 100); #expect(report.omittedWorkoutCount == 6); #expect(report.truncated)
+        #expect(try coachJSON(report).utf8.count <= 65_536)
+        #expect(report.workouts.contains { $0.id == huge.id && $0.revision == 1 })
+        await #expect(throws: CoachError.limitExceeded) { try await otherStore.coachWorkout(id: huge.id, expectedProfileID: profile.id) }
+    }
+
+    @Test func legacyUnlinkedWeightCorrectionAndDeletionPreserveOriginalFields() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        var snapshot = try await store.snapshot()
+        let original = WeightEntry(dayID: nil, measuredAt: now.addingTimeInterval(-60 * 86400), value: 70)
+        snapshot.weights = [original]
+        let other = DiaryStore(directory: root.appendingPathComponent("legacy")); _ = try await other.importProfile(snapshot)
+        let turn = try await other.captureCoachTurn(text: "Correct legacy weight", photos: [], at: now, expectedProfileID: profile.id)
+        let receipts = try await other.applyCoachWrites([.correctWeight(id: original.id, value: 71, unit: "kg", revision: 1)], turnID: turn.id, epoch: other.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let saved = try await other.snapshot(), corrected = saved.weights[0]
+        #expect(corrected.id == original.id); #expect(corrected.dayID == nil)
+        #expect(corrected.measuredAt == original.measuredAt); #expect(corrected.timePrecision == original.timePrecision)
+        #expect(saved.activeDayID == snapshot.activeDayID)
+        let receiptDay = try #require(saved.days.first { $0.id == receipts[0].dayID })
+        #expect(receiptDay.completeness == .unknown)
+        #expect(ProgressAnalytics.daily(snapshot: saved, localDate: receiptDay.localDate).foodTotals?.kcal == nil)
+        let deletion = try await other.captureCoachTurn(text: "Delete legacy weight", photos: [], at: now, expectedProfileID: profile.id)
+        let writes: [CoachWrite] = [.deleteWeight(id: original.id, revision: 2)]
+        let deleted = try await other.applyCoachWrites(writes, turnID: deletion.id, epoch: other.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        #expect(try await other.applyCoachWrites(writes, turnID: deletion.id, epoch: other.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) == deleted)
+        #expect(try await other.snapshot().deletedWeightIDs == [original.id])
+    }
+    @Test(arguments: [false, true]) func workoutDeletionRetainsSharedProgressPhotosOnly(sharedWeight: Bool) async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let photo = MealPhoto(data: SyntheticConnectionProbe.image)
+        let turn = try await store.captureCoachTurn(text: "Synthetic workout image", photos: [photo], at: now, expectedProfileID: profile.id)
+        var writes: [CoachWrite] = [.workout(date: "2027-01-15", draft: strength)]
+        if sharedWeight { writes.append(.weight(date: "2027-01-15", value: 70, unit: "kg", revision: nil)) }
+        _ = try await store.applyCoachWrites(writes, turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let workout = try #require(await store.snapshot().workouts.first)
+        // The native deletion uses the same cleanup as the conversational path.
+        try await store.deleteWorkout(id: workout.id, expectedRevision: workout.revision, expectedProfileID: profile.id)
+        let saved = try await DiaryStore(directory: root).selectProfile(profile.id)
+        #expect(saved.coachTurns[0].photos == (sharedWeight ? [photo] : []))
+        #expect(saved.coachTurns[0].photoIDs == (sharedWeight ? [photo.id] : []))
+    }
+    @Test func staleWeightAndConflictingWorkoutTargetsRejectWholeBatch() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let weight = try await store.recordWeight(value: 70, at: now)
+        let workout = try await store.createWorkout(localDate: "2027-01-14", draft: strength, performedAt: nil, expectedProfileID: profile.id)
+        let turn = try await store.captureCoachTurn(text: "Synthetic stale edit", photos: [], at: now, expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        await #expect(throws: DiaryError.staleRevision) { try await store.applyCoachWrites([.workout(date: "2027-01-15", draft: strength), .correctWeight(id: weight.id, value: 71, unit: "kg", revision: 99)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        await #expect(throws: CoachError.invalidArguments) { try await store.applyCoachWrites([.editWorkout(id: workout.id, draft: strength, revision: 1), .deleteWorkout(id: workout.id, revision: 2)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        #expect(try await store.snapshot() == before)
+    }
+    @Test func progressJSONDistinguishesUnknownFromCompleteZeroAndRoundTrips() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let day = try await store.snapshot().days[0]
+        let unknown = try await store.coachProgress(endingOn: day.localDate, days: 1, expectedProfileID: profile.id)
+        #expect(unknown.daily.foodTotals?.kcal == nil)
+        try await store.setCompleteness(dayID: day.id, .complete)
+        let zero = try await store.coachProgress(endingOn: day.localDate, days: 1, expectedProfileID: profile.id)
+        #expect(zero.daily.foodTotals?.kcal == 0)
+        let unknownJSON = try coachJSON(unknown), zeroJSON = try coachJSON(zero)
+        #expect(!unknownJSON.contains("\"kcal\":0")); #expect(zeroJSON.contains("\"kcal\":0"))
+        #expect(try JSONDecoder().decode(CoachProgress.self, from: Data(zeroJSON.utf8)) == zero)
+    }
+
 }

@@ -21,9 +21,12 @@ struct CoachEngine: Sendable {
                   images.reduce(0, { $0 + $1.count }) <= 4_194_304 else { throw ResponsesClient.Failure.invalidInput }
             for image in images { _ = try CoachInferenceInput.imageMIME(image) }
             var input: [CoachInferenceInput] = [
-                .message(role: .developer, text: "Contiguous user text chunks and image groups form one captured turn. Context omissions are explicit; omitted items are not empty intake. Use get_meal or manual review for missing detail. Use only mivu tools and real retrieved IDs/revisions. Persisted capture clock/timezone resolves relative dates. Ask when waking day is ambiguous. Never claim food saved without a successful receipt. Nutrition is uncertain unless actual lookup evidence selected; portion remains uncertain. Group all foods for each turn/date into one log_food call. Correct existing items rather than compensating entries. Context: " + (try coachJSON(context)))
+                .message(role: .developer, text: "Contiguous user text chunks and image groups form one captured turn. Context omissions are explicit; omitted items are not empty intake. Use get_meal or manual review for missing detail. Use only mivu tools and real retrieved IDs/revisions. Persisted capture clock/timezone resolves relative dates. Ask when waking day is ambiguous. Never claim food saved without a successful receipt. Nutrition is uncertain unless actual lookup evidence selected; portion remains uncertain. Goals are explicit native settings; never change or prescribe them. Use get_progress for actual requested windows and historical weight/workout IDs. Use get_workout before editing a complete workout; preserve unseen sets. Group all foods for each turn/date into one log_food call. Group one weight and one workout create per turn/date; another workout session needs another turn. measured_at and performed_at are unconfirmed; persisted chat time is date-only. Never claim weight or workout saved without a receipt. Correct existing items rather than compensating entries. Context: " + (try coachJSON(context)))
             ] + capturedInput(text: turn.text, images: images)
             var knownMeals = context.meals
+            var knownWorkouts: [WorkoutSession] = []
+            var requestedProgress: [(String, Int)] = []
+            var requestedWorkouts: [UUID] = []
             var evidence: [Int: FoodEvidenceRecord] = [:]
             let tools = try CoachTools.declarations()
             var callCount = 0
@@ -37,7 +40,7 @@ struct CoachEngine: Sendable {
                 guard callCount <= 16 else { throw CoachError.limitExceeded }
                 if response.calls.isEmpty {
                     let stored = try await store.coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
-                    let text: String
+                    var text: String
                     if !stored.receipts.isEmpty {
                         text = try await store.coachCommittedSummary(turnID: turnID, expectedProfileID: expectedProfileID)
                     } else {
@@ -49,13 +52,23 @@ struct CoachEngine: Sendable {
                         guard !response.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CoachError.ungroundedConfirmation }
                         text = try await store.coachRecordedSummary(expectedProfileID: expectedProfileID)
                     }
+                    if !requestedProgress.isEmpty || !requestedWorkouts.isEmpty {
+                        var actual: [String] = []
+                        for (date, days) in requestedProgress {
+                            actual.append(try await store.coachProgressSummary(endingOn: date, days: days, finalizingTurnID: turnID, expectedProfileID: expectedProfileID))
+                        }
+                        for id in requestedWorkouts {
+                            actual.append(try await store.coachWorkoutSummary(id: id, expectedProfileID: expectedProfileID))
+                        }
+                        text = ((stored.receipts.isEmpty ? [] : [text]) + actual).joined(separator: "\n")
+                    }
                     try await store.finishCoachTurn(turnID: turnID, assistantText: text, epoch: epoch, expectedProfileID: expectedProfileID)
                     return try await store.coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
                 }
                 guard Set(response.calls.map(\.callID)).count == response.calls.count,
                       response.calls.allSatisfy({ !$0.callID.isEmpty && $0.callID.utf8.count <= 256 }) else { throw CoachError.invalidArguments }
                 let currentTurn = try await store.coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
-                let commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts) }
+                let commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts, workouts: knownWorkouts) }
                 let writes = commands.compactMap { command -> CoachWrite? in if case .write(let write) = command { return write }; return nil }
                 guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
                 // Validate the whole batch before awaiting lookups or committing any food.
@@ -69,6 +82,14 @@ struct CoachEngine: Sendable {
                         let meal = try await store.coachMeal(id: id, expectedProfileID: expectedProfileID)
                         knownMeals.removeAll { $0.id == id }; knownMeals.append(meal)
                         outputs[index] = try coachJSON(meal)
+                    case .progress(let date, let days):
+                        outputs[index] = try coachJSON(await store.coachProgress(endingOn: date, days: days, expectedProfileID: expectedProfileID))
+                        if !requestedProgress.contains(where: { $0.0 == date && $0.1 == days }) { requestedProgress.append((date, days)) }
+                    case .workout(let id):
+                        let workout = try await store.coachWorkout(id: id, expectedProfileID: expectedProfileID)
+                        knownWorkouts.removeAll { $0.id == id }; knownWorkouts.append(workout)
+                        outputs[index] = try coachJSON(workout)
+                        if !requestedWorkouts.contains(id) { requestedWorkouts.append(id) }
                     case .lookup(let query):
                         do {
                             let records = try await lookup(query)

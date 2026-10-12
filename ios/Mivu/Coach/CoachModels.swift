@@ -9,6 +9,8 @@ struct CoachReceipt: Codable, Equatable, Sendable {
     var dayID: UUID
     var mealID: UUID? = nil
     var itemID: UUID? = nil
+    var weightID: UUID? = nil
+    var workoutID: UUID? = nil
     var committedRevision: Int
     var resultJSON: String
 }
@@ -61,6 +63,10 @@ struct CoachContext: Codable, Equatable, Sendable {
     var meals: [Meal]
     var weights: [WeightEntry]
     var recentTurns: [Turn]
+    var goal: GoalRecord? = nil
+    var workouts: [WorkoutReference]? = nil
+    var omittedWorkoutCount: Int? = nil
+    var omittedWeightCount: Int? = nil
     var pendingMealID: UUID? = nil
     var pendingMealRevision: Int? = nil
     var additionalMealCount = 0
@@ -75,4 +81,49 @@ func coachJSON<T: Encodable>(_ value: T) throws -> String {
     let data = try encoder.encode(value)
     guard data.count <= 65_536, let text = String(data: data, encoding: .utf8) else { throw DiaryError.invalidData }
     return text
+}
+
+struct WorkoutReference: Codable, Equatable, Sendable {
+    var id: UUID
+    var dayID: UUID
+    var localDate: String
+    var revision: Int
+    var kind: WorkoutKind
+    var durationMinutes: Int
+}
+
+struct CoachWeightReference: Codable, Equatable, Sendable {
+    var localDate: String
+    var record: WeightEntry
+}
+
+struct CoachProgress: Codable, Equatable, Sendable {
+    var startLocalDate: String
+    var endLocalDate: String
+    var daily: DailyProgress
+    var period: PeriodProgress?
+    var weight: WeightProgress
+    var weights: [CoachWeightReference]
+    var workouts: [WorkoutReference]
+    var omittedWeightCount: Int
+    var omittedWorkoutCount: Int
+    var truncated: Bool
+}
+
+extension NutritionTotals: Codable {
+    enum CodingKeys: String, CodingKey { case kcal, carbs, protein, fat, unknownItemCount }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(kcal: try c.decodeIfPresent(Double.self, forKey: .kcal),
+                  carbs: try c.decodeIfPresent(Double.self, forKey: .carbs),
+                  protein: try c.decodeIfPresent(Double.self, forKey: .protein),
+                  fat: try c.decodeIfPresent(Double.self, forKey: .fat),
+                  unknownItemCount: try c.decode(Int.self, forKey: .unknownItemCount))
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(kcal, forKey: .kcal); try c.encodeIfPresent(carbs, forKey: .carbs)
+        try c.encodeIfPresent(protein, forKey: .protein); try c.encodeIfPresent(fat, forKey: .fat)
+        try c.encode(unknownItemCount, forKey: .unknownItemCount)
+    }
 }

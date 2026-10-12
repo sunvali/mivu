@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 @testable import Mivu
 
@@ -84,7 +85,7 @@ private actor CoachInputFixture {
         let stored = try await store.coachTurn(turnID: turn.id, expectedProfileID: profile.id)
         #expect(stored.state == .needsClarification); #expect(stored.assistantText == nil)
     }
-    @Test func profileSwitchAwayAndBackFencesSuspendedResult() async throws {
+    @Test(arguments: [false, true]) func profileSwitchAwayAndBackFencesSuspendedResult(progress: Bool) async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let suspension = CoachSuspension()
         let engine = CoachEngine(store: store, infer: { _,_ in await suspension.infer() })
@@ -92,9 +93,11 @@ private actor CoachInputFixture {
         for _ in 0..<1000 { if await suspension.started { break }; await Task.yield() }
         try #require(await suspension.started)
         _ = try await store.createProfile(DiaryProfile(name: "Other synthetic")); _ = try await store.selectProfile(profile.id)
-        await suspension.finish(result([call("log_food", logArgs)]))
+        await suspension.finish(result([progress ? call("log_weight", "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\"}") : call("log_food", logArgs)]))
         await #expect(throws: DiaryError.wrongOwner) { try await task.value }
         #expect(try await store.snapshot().meals.isEmpty)
+        #expect(try await store.snapshot().weights.isEmpty)
+        #expect(try await store.snapshot().coachTurns[0].receipts.isEmpty)
     }
     @Test func retrievalFailureKeepsEstimatedFoodLoggable() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
@@ -239,6 +242,136 @@ private actor CoachInputFixture {
         await #expect(throws: (any Error).self) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
         #expect(try await store.coachTurn(turnID: turn.id, expectedProfileID: profile.id).state == .waitingForNetwork)
         #expect(try await store.snapshot().meals.isEmpty)
+    }
+
+    @Test func conversationalWeightAndWorkoutReturnActualReceipts() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([
+            result([call("log_weight", "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\"}"),
+                    call("log_workout", "{\"local_date\":\"2027-01-14\",\"kind\":\"cardio\",\"duration_minutes\":45,\"exercises\":[]}", id: "cardio")]),
+            result(text: "Saved 9999 kg")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let snapshot = try await store.snapshot()
+        #expect(snapshot.weights.first?.value == 70)
+        #expect(snapshot.workouts.first?.durationMinutes == 45)
+        #expect(completed.receipts.count == 2)
+        #expect(completed.assistantText?.contains("70 kg") == true)
+        #expect(completed.assistantText?.contains("9999") == false)
+    }
+    @Test func progressAnswerUsesRequestedActualBudget() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic meal", nutrition: NutritionValues(kcal: 500), provenance: .estimate, reference: "Fixture")], expectedProfileID: profile.id)
+        let query = try await store.captureCoachTurn(text: "What is my remaining budget?", photos: [], at: now, expectedProfileID: profile.id)
+        let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: "9999 remaining")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: query.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText?.contains("1500") == true)
+        #expect(completed.assistantText?.contains("9999") == false)
+    }
+
+    @Test func regeneratedProgressCallsReplayStoredReceipts() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let args = "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\",\"measured_at\":\"2027-01-15T08:00:00Z\"}"
+        let first = CoachFixture([result([call("log_weight", args)])])
+        await #expect(throws: CoachError.limitExceeded) { try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
+        let before = try await store.snapshot()
+        let retry = CoachFixture([result([call("log_weight", args, id: "regenerated")]), result(text: "Done")])
+        let completed = try await CoachEngine(store: store, infer: { try await retry.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.receipts == before.coachTurns[0].receipts)
+        #expect(try await store.snapshot().weights == before.weights)
+        #expect(before.weights[0].timePrecision == .dateOnly)
+    }
+    @Test(arguments: [
+        "{\"local_date\":\"2027-02-30\",\"value\":70,\"unit\":\"kg\"}",
+        "{\"local_date\":\"2027-01-15\",\"value\":true,\"unit\":\"kg\"}",
+        "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\",\"profile_id\":\"foreign\"}",
+        "{\"local_date\":\"2027-01-15\",\"value\":-70,\"unit\":\"kg\"}",
+        "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"stone\"}"
+    ]) func invalidProgressArgumentsNeverCommit(args: String) async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result([call("log_weight", args)])])
+        await #expect(throws: CoachError.invalidArguments) { try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
+        #expect(try await store.snapshot().weights.isEmpty)
+        #expect(try await store.snapshot().coachTurns[0].assistantText == nil)
+        #expect(try await store.snapshot().coachTurns[0].receipts.isEmpty)
+    }
+    @Test func workoutEditRequiresCompleteRetrievedRecord() throws {
+        let id = UUID()
+        let arguments = "{\"workout_id\":\"\(id)\",\"expected_revision\":1,\"kind\":\"strength\",\"duration_minutes\":30,\"exercises\":[]}"
+        #expect(throws: CoachError.invalidArguments) { try CoachTools.parse(call("edit_workout", arguments), meals: [], evidence: [:], receipts: []) }
+    }
+
+    @Test func requestedProgressRereadsFactsAfterSuspendedInference() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let goal = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic", nutrition: NutritionValues(kcal: 500), provenance: .estimate)], expectedProfileID: profile.id)
+        let query = try await store.captureCoachTurn(text: "Current progress", photos: [], at: now, expectedProfileID: profile.id)
+        let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")])]), suspended = CoachSuspension()
+        let engine = CoachEngine(store: store, infer: { input, tools in
+            if await replies.calls == 1 { return await suspended.infer() }
+            return try await replies.infer(input, tools)
+        })
+        let task = Task { try await engine.run(turnID: query.id, expectedProfileID: profile.id) }
+        for _ in 0..<1000 { if await suspended.started { break }; await Task.yield() }
+        try #require(await suspended.started)
+        var revised = goal; revised.targets.kcal = 1800
+        _ = try await store.setGoals(revised, expectedRevision: goal.revision, expectedProfileID: profile.id)
+        await suspended.finish(result(text: "1500 remaining"))
+        let completed = try await task.value
+        #expect(completed.assistantText?.contains("1300 kcal") == true)
+        #expect(completed.assistantText?.contains("1500") == false)
+    }
+    @Test func retrievedHistoricalWorkoutEditsCompleteSetsAndReturnsActualRecord() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let draft = WorkoutDraft(kind: .strength, durationMinutes: 30, exercises: [WorkoutExercise(name: "Squat", sets: [WorkoutSet(repetitions: 8, loadKg: 40)])], estimatedBurnKcal: nil, burnSource: nil)
+        let original = try await store.createWorkout(localDate: "2026-12-01", draft: draft, performedAt: nil, expectedProfileID: profile.id)
+        let get = "{\"workout_id\":\"\(original.id)\"}"
+        let edit = "{\"workout_id\":\"\(original.id)\",\"expected_revision\":1,\"kind\":\"strength\",\"duration_minutes\":45,\"exercises\":[{\"name\":\"Squat\",\"sets\":[{\"repetitions\":8,\"load_kg\":40}]}]}"
+        let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2026-12-01\",\"days\":1}"), call("get_workout", get, id: "retrieve")]), result([call("edit_workout", edit, id: "edit")]), result(text: "Saved 9999 minutes")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let receipt = try #require(completed.receipts.first)
+        let returned = try JSONDecoder().decode(WorkoutSession.self, from: Data(receipt.resultJSON.utf8))
+        #expect(returned.id == original.id); #expect(returned.revision == 2)
+        #expect(returned.durationMinutes == 45); #expect(returned.exercises == original.exercises)
+        #expect(returned.performedAt == original.performedAt); #expect(returned.dayID == original.dayID)
+        #expect(completed.assistantText?.contains("9999") == false)
+        #expect(completed.assistantText?.contains("8 reps at 40 kg") == true)
+    }
+    @Test func failedProgressCommitNeverProducesSavedAssistantText() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let args = "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\"}"
+        let output = result([call("log_weight", args)])
+        let file = root.appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
+        let engine = CoachEngine(store: store, infer: { _, _ in
+            var db: OpaquePointer?
+            guard sqlite3_open(file.path, &db) == SQLITE_OK else { throw DiaryError.persistenceFailed }
+            defer { sqlite3_close(db) }
+            guard sqlite3_exec(db, "CREATE TRIGGER reject_coach_progress BEFORE UPDATE ON meta BEGIN SELECT RAISE(ABORT, 'synthetic'); END", nil, nil, nil) == SQLITE_OK else { throw DiaryError.persistenceFailed }
+            return output
+        })
+        await #expect(throws: DiaryError.persistenceFailed) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+        let snapshot = try await store.snapshot()
+        #expect(snapshot.weights.isEmpty); #expect(snapshot.coachTurns[0].receipts.isEmpty)
+        #expect(snapshot.coachTurns[0].assistantText == nil)
+        let reloaded = try await DiaryStore(directory: root).selectProfile(profile.id)
+        #expect(reloaded.weights.isEmpty); #expect(reloaded.coachTurns[0].assistantText == nil)
+    }
+
+    @Test(arguments: [false, true]) func finishedProgressQuestionDoesNotCountItselfAsPending(otherCapture: Bool) async throws {
+        let (store, profile, existing, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        try await store.completeCoachTurn(turnID: existing.id, assistantText: "Synthetic previous turn", expectedProfileID: profile.id)
+        let day = try await store.snapshot().days[0]
+        try await store.setCompleteness(dayID: day.id, .complete)
+        if otherCapture { _ = try await store.captureCoachTurn(text: "Unresolved synthetic food", photos: [], at: now, expectedProfileID: profile.id) }
+        let question = try await store.captureCoachTurn(text: "What is my daily progress?", photos: [], at: now, expectedProfileID: profile.id)
+        let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: "Read complete")])
+        let finished = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: question.id, expectedProfileID: profile.id)
+        let report = try await store.coachProgress(endingOn: day.localDate, days: 1, expectedProfileID: profile.id)
+        #expect(finished.state == .completed)
+        #expect(report.daily.hasPending == otherCapture)
+        #expect(report.daily.foodTotals?.kcal == (otherCapture ? nil : 0))
+        #expect(finished.assistantText?.contains(otherCapture ? "calories unknown" : "Recorded food: 0 kcal") == true)
+        #expect(finished.assistantText?.contains(otherCapture ? "pending: true" : "complete; pending: false") == true)
     }
 
 }

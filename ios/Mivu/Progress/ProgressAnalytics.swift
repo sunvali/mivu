@@ -1,6 +1,6 @@
 import Foundation
 
-struct DailyProgress: Equatable, Sendable {
+struct DailyProgress: Codable, Equatable, Sendable {
     let localDate: String
     let completeness: DayCompleteness?
     let hasPending: Bool
@@ -12,14 +12,14 @@ struct DailyProgress: Equatable, Sendable {
     let exerciseAdjustedKcalRemaining: Double?
 }
 
-struct NutrientSampleCounts: Equatable, Sendable {
+struct NutrientSampleCounts: Codable, Equatable, Sendable {
     let kcal: Int
     let carbs: Int
     let protein: Int
     let fat: Int
 }
 
-struct PeriodProgress: Equatable, Sendable {
+struct PeriodProgress: Codable, Equatable, Sendable {
     let startLocalDate: String
     let endLocalDate: String
     let dayCount: Int
@@ -36,11 +36,11 @@ struct PeriodProgress: Equatable, Sendable {
     let workoutCount: Int
 }
 
-enum PlateauReadiness: Equatable, Sendable {
+enum PlateauReadiness: String, Codable, Equatable, Sendable {
     case insufficientData, stable, changing
 }
 
-struct WeightProgress: Equatable, Sendable {
+struct WeightProgress: Codable, Equatable, Sendable {
     let endLocalDate: String
     let currentSevenDayAverageKg: Double?
     let currentSevenDayObservedCount: Int

@@ -341,20 +341,28 @@ actor DiaryStore {
                       dateLabel(measuredAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
             }
             let time = try measuredAt ?? dateOnlyInstant(day.localDate, zone: day.timeZoneID)
-            if let index = snapshot.weights.firstIndex(where: { $0.dayID == day.id }) {
-                guard expectedRevision == snapshot.weights[index].revision else { throw DiaryError.staleRevision }
-                snapshot.weights[index].value = value
-                snapshot.weights[index].unit = unit
-                snapshot.weights[index].measuredAt = time
-                snapshot.weights[index].timePrecision = measuredAt == nil ? .dateOnly : .exact
-                snapshot.weights[index].revision += 1
-                saved = snapshot.weights[index]
-            } else {
-                guard expectedRevision == nil else { throw DiaryError.staleRevision }
-                saved = WeightEntry(dayID: day.id, measuredAt: time, value: value, unit: unit,
-                                    timePrecision: measuredAt == nil ? .dateOnly : .exact)
-                snapshot.weights.append(saved)
-            }
+            saved = try saveWeight(on: day, value: value, unit: unit, at: time,
+                                   precision: measuredAt == nil ? .dateOnly : .exact,
+                                   expectedRevision: expectedRevision, snapshot: &snapshot)
+        }
+        return saved
+    }
+
+    private func saveWeight(on day: TrackingDay, value: Double, unit: String, at time: Date, precision: MealTimePrecision, expectedRevision: Int?, snapshot: inout DiarySnapshot) throws -> WeightEntry {
+        var saved: WeightEntry!
+        if let index = snapshot.weights.firstIndex(where: { $0.dayID == day.id }) {
+            guard expectedRevision == snapshot.weights[index].revision else { throw DiaryError.staleRevision }
+            snapshot.weights[index].value = value
+            snapshot.weights[index].unit = unit
+            snapshot.weights[index].measuredAt = time
+            snapshot.weights[index].timePrecision = precision
+            snapshot.weights[index].revision += 1
+            saved = snapshot.weights[index]
+        } else {
+            guard expectedRevision == nil else { throw DiaryError.staleRevision }
+            saved = WeightEntry(dayID: day.id, measuredAt: time, value: value, unit: unit,
+                        timePrecision: precision)
+            snapshot.weights.append(saved)
         }
         return saved
     }
@@ -376,12 +384,17 @@ actor DiaryStore {
                 guard performedAt.timeIntervalSince1970.isFinite,
                       dateLabel(performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
             }
-            saved = WorkoutSession(dayID: day.id, performedAt: try performedAt ?? dateOnlyInstant(day.localDate, zone: day.timeZoneID),
+            saved = try appendWorkout(on: day, draft: draft, performedAt: performedAt, snapshot: &snapshot)
+        }
+        return saved
+    }
+
+    private func appendWorkout(on day: TrackingDay, draft: WorkoutDraft, performedAt: Date?, snapshot: inout DiarySnapshot) throws -> WorkoutSession {
+        let saved = WorkoutSession(dayID: day.id, performedAt: try performedAt ?? dateOnlyInstant(day.localDate, zone: day.timeZoneID),
                                    timePrecision: performedAt == nil ? .dateOnly : .exact, revision: 1,
                                    kind: draft.kind, durationMinutes: draft.durationMinutes, exercises: draft.exercises,
                                    estimatedBurnKcal: draft.estimatedBurnKcal, burnSource: draft.burnSource)
-            snapshot.workouts.append(saved)
-        }
+        snapshot.workouts.append(saved)
         return saved
     }
 
@@ -403,10 +416,7 @@ actor DiaryStore {
 
     func deleteWorkout(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
         try transaction(expectedProfileID) { snapshot in
-            guard let index = snapshot.workouts.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
-            guard snapshot.workouts[index].revision == expectedRevision else { throw DiaryError.staleRevision }
-            snapshot.workouts.remove(at: index)
-            snapshot.deletedWorkoutIDs.append(id)
+            try removeWorkout(id: id, expectedRevision: expectedRevision, snapshot: &snapshot)
         }
     }
 
@@ -662,6 +672,12 @@ actor DiaryStore {
         while try JSONEncoder().encode(recent).count > 8192 { recent.removeFirst() }
         var context = CoachContext(profile: profile, capturedAt: turn.capturedAt, captureTimeZoneID: turn.captureTimeZoneID,
             activeDayID: turn.resolvedDayID ?? turn.activeDayID, days: days, meals: [], weights: Array(snapshot.weights.suffix(14)), recentTurns: recent)
+        context.goal = snapshot.goal(on: dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID))
+        context.workouts = Array(snapshot.workouts.suffix(20)).compactMap { workout in
+            snapshot.days.first { $0.id == workout.dayID }.map { WorkoutReference(id: workout.id, dayID: workout.dayID, localDate: $0.localDate, revision: workout.revision, kind: workout.kind, durationMinutes: workout.durationMinutes) }
+        }
+        context.omittedWorkoutCount = max(0, snapshot.workouts.count - (context.workouts?.count ?? 0))
+        context.omittedWeightCount = max(0, snapshot.weights.count - context.weights.count)
         context.pendingMealID = turn.pendingMealID; context.pendingMealRevision = turn.pendingMealRevision
         context.truncated = profile != snapshot.profile || recent.count != snapshot.coachTurns.filter { $0.id != turnID }.count ||
             recent.contains { projected in snapshot.coachTurns.contains { $0.id == projected.id && ($0.text != projected.text || $0.assistantText != projected.assistantText) } }
@@ -677,7 +693,7 @@ actor DiaryStore {
             context.meals.removeFirst()
             context.omittedMeals.append(CoachContext.MealReference(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count))
         }
-        context.truncated = context.truncated || !context.omittedMeals.isEmpty || context.additionalMealCount > 0
+        context.truncated = context.truncated || !context.omittedMeals.isEmpty || context.additionalMealCount > 0 || (context.omittedWorkoutCount ?? 0) > 0 || (context.omittedWeightCount ?? 0) > 0
         guard try JSONEncoder().encode(context).count <= 60_000 else { throw DiaryError.invalidData }
         return context
     }
@@ -848,6 +864,19 @@ actor DiaryStore {
         guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         var snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        let progressTargets = writes.compactMap { write -> String? in
+            switch write {
+            case .weight(let date, _, _, _):
+                let dayIDs = Set(snapshot.days.filter { $0.localDate == date && $0.timeZoneID == turn.captureTimeZoneID }.map(\.id))
+                if let weight = snapshot.weights.first(where: { $0.dayID.map { dayIDs.contains($0) } == true }) { return "weight/\(weight.id)" }
+                return "weight-date/\(date)"
+            case .correctWeight(let id, _, _, _), .deleteWeight(let id, _): return "weight/\(id)"
+            case .editWorkout(let id, _, _), .deleteWorkout(let id, _): return "workout/\(id)"
+            case .workout(let date, _): return "workout-date/\(date)"
+            default: return nil
+            }
+        }
+        guard Set(progressTargets).count == progressTargets.count else { throw CoachError.invalidArguments }
         if turn.pendingMealID != nil {
             guard writes.filter({ if case .food = $0 { return true }; return false }).count <= 1 else { throw CoachError.invalidArguments }
         }
@@ -878,6 +907,9 @@ actor DiaryStore {
                     try validateItems([correctedItem(item, previous: previous)])
                 }
             case .close(let date, _): _ = try coachDay(localDate: date, turn: turn, snapshot: &snapshot)
+            default:
+                _ = try mutateCoachProgress(write, turn: turn, snapshot: &snapshot)
+                var checked = snapshot; checked.revision += 1; try checked.validate()
             }
         }
         guard turn.receipts.count + writes.filter({ write in !turn.receipts.contains { $0.operationKey == "\(turnID.uuidString)/\(write.target)" } }).count <= 16 else { throw CoachError.limitExceeded }
@@ -900,6 +932,13 @@ actor DiaryStore {
                 return try applyCoachItemCorrection(turnID: turnID, mealID: meal, item: item, expectedRevision: revision, expectedProfileID: expectedProfileID)
             case .close(let date, let completeness):
                 return try closeCoachDay(turnID: turnID, localDate: date, completeness: completeness, expectedProfileID: expectedProfileID)
+            default:
+                var receipt: CoachReceipt!
+                try transaction(expectedProfileID) { snapshot in
+                    let turn = snapshot.coachTurns.first { $0.id == turnID }!
+                    receipt = try mutateCoachProgress(write, turn: turn, snapshot: &snapshot)
+                }
+                return receipt
             }
         }
         var next = stagedCoachSnapshot!
@@ -927,7 +966,15 @@ actor DiaryStore {
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         var facts: [String] = []
         for receipt in turn.receipts {
-            if let id = receipt.mealID {
+            if let id = receipt.weightID {
+                if let weight = snapshot.weights.first(where: { $0.id == id }) {
+                    facts.append("Recorded weight: \(coachNumber(weight.value)) \(weight.unit).")
+                } else { facts.append("This weight was deleted.") }
+            } else if let id = receipt.workoutID {
+                if let workout = snapshot.workouts.first(where: { $0.id == id }) {
+                    facts.append("Recorded \(workout.kind.rawValue): \(workout.durationMinutes) minutes.")
+                } else { facts.append("This workout was deleted.") }
+            } else if let id = receipt.mealID {
                 guard let meal = snapshot.meals.first(where: { $0.id == id }) else { facts.append("This meal was deleted."); continue }
                 if meal.state == .awaitingReview { facts.append("Estimate ready for review."); continue }
                 let names = meal.items.map(\.name).joined(separator: ", ")
@@ -937,6 +984,181 @@ actor DiaryStore {
                 facts.append("Closed \(day.localDate) as \(day.completeness.rawValue).")
             }
         }
+        return facts.joined(separator: "\n")
+    }
+
+    private func mutateCoachProgress(_ write: CoachWrite, turn: CoachTurn, snapshot: inout DiarySnapshot) throws -> CoachReceipt {
+        let key = "\(turn.id.uuidString)/\(write.target)"
+        if let receipt = turn.receipts.first(where: { $0.operationKey == key }) {
+            switch write {
+            case .deleteWeight:
+                guard let id = receipt.weightID, snapshot.deletedWeightIDs.contains(id) else { throw DiaryError.notFound }
+            case .deleteWorkout:
+                guard let id = receipt.workoutID, snapshot.deletedWorkoutIDs.contains(id) else { throw DiaryError.notFound }
+            default:
+                guard receipt.weightID.map({ id in snapshot.weights.contains { $0.id == id } }) == true ||
+                      receipt.workoutID.map({ id in snapshot.workouts.contains { $0.id == id } }) == true else { throw DiaryError.notFound }
+            }
+            return receipt
+        }
+        var dayID: UUID, weightID: UUID?, workoutID: UUID?, json: String
+        switch write {
+        case .weight(let date, let value, let unit, let revision):
+            // A morning weight explicitly starts today's waking day; past dates never replace it.
+            var clockTurn = turn
+            if date == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) { clockTurn.activeDayID = nil; clockTurn.resolvedDayID = nil }
+            let day = try coachDay(localDate: date, turn: clockTurn, snapshot: &snapshot)
+            if date == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) { snapshot.activeDayID = day.id; snapshot.previousDayConfirmedAt = nil }
+            guard !snapshot.weights.contains(where: { weight in
+                weight.dayID != day.id && snapshot.days.contains { $0.id == weight.dayID && $0.localDate == date }
+            }) else { throw DiaryError.staleRevision }
+            let previous = snapshot.weights.first { $0.dayID == day.id }
+            let saved = try saveWeight(on: day, value: value, unit: unit, at: previous?.measuredAt ?? dateOnlyInstant(date, zone: day.timeZoneID), precision: previous?.timePrecision ?? .dateOnly, expectedRevision: revision, snapshot: &snapshot)
+            dayID = day.id; weightID = saved.id; json = try coachJSON(saved)
+        case .correctWeight(let id, let value, let unit, let revision):
+            guard let index = snapshot.weights.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
+            guard snapshot.weights[index].revision == revision else { throw DiaryError.staleRevision }
+            let linkedDay = try coachWeightReceiptDay(snapshot.weights[index], snapshot: &snapshot).id
+            snapshot.weights[index].value = value; snapshot.weights[index].unit = unit; snapshot.weights[index].revision += 1
+            dayID = linkedDay; weightID = id; json = try coachJSON(snapshot.weights[index])
+        case .workout(let date, let draft):
+            let day = try coachDay(localDate: date, turn: turn, snapshot: &snapshot)
+            let saved = try appendWorkout(on: day, draft: draft, performedAt: nil, snapshot: &snapshot)
+            dayID = day.id; workoutID = saved.id; json = try coachJSON(saved)
+        case .editWorkout(let id, let draft, let revision):
+            guard let index = snapshot.workouts.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
+            guard snapshot.workouts[index].revision == revision else { throw DiaryError.staleRevision }
+            snapshot.workouts[index].kind = draft.kind; snapshot.workouts[index].durationMinutes = draft.durationMinutes
+            snapshot.workouts[index].exercises = draft.exercises; snapshot.workouts[index].estimatedBurnKcal = draft.estimatedBurnKcal
+            snapshot.workouts[index].burnSource = draft.burnSource; snapshot.workouts[index].revision += 1
+            dayID = snapshot.workouts[index].dayID; workoutID = id; json = try coachJSON(snapshot.workouts[index])
+        case .deleteWeight(let id, let revision):
+            guard let index = snapshot.weights.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
+            guard snapshot.weights[index].revision == revision else { throw DiaryError.staleRevision }
+            let linkedDay = try coachWeightReceiptDay(snapshot.weights[index], snapshot: &snapshot).id
+            snapshot.weights.remove(at: index); snapshot.deletedWeightIDs.append(id)
+            dayID = linkedDay; weightID = id; json = try coachJSON(CoachDeletedRecord(id: id, deleted: true))
+        case .deleteWorkout(let id, let revision):
+            guard let index = snapshot.workouts.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
+            guard snapshot.workouts[index].revision == revision else { throw DiaryError.staleRevision }
+            dayID = snapshot.workouts[index].dayID; workoutID = id
+            try removeWorkout(id: id, expectedRevision: revision, snapshot: &snapshot)
+            json = try coachJSON(CoachDeletedRecord(id: id, deleted: true))
+        default: throw CoachError.invalidArguments
+        }
+        let receipt = CoachReceipt(operationKey: key, turnID: turn.id, dayID: dayID, weightID: weightID, workoutID: workoutID, committedRevision: snapshot.revision + 1, resultJSON: json)
+        let index = snapshot.coachTurns.firstIndex { $0.id == turn.id }!
+        snapshot.coachTurns[index].receipts.append(receipt)
+        return receipt
+    }
+
+    private func coachWeightReceiptDay(_ weight: WeightEntry, snapshot: inout DiarySnapshot) throws -> TrackingDay {
+        if let id = weight.dayID, let day = snapshot.days.first(where: { $0.id == id }) { return day }
+        let zone = snapshot.profile.timeZoneID, date = dateLabel(weight.measuredAt, zone: zone)
+        if let day = snapshot.days.first(where: { $0.localDate == date && $0.timeZoneID == zone }) { return day }
+        let day = TrackingDay(localDate: date, timeZoneID: zone, startAt: try dateOnlyInstant(date, zone: zone))
+        snapshot.days.append(day)
+        return day
+    }
+
+    private func removeWorkout(id: UUID, expectedRevision: Int, snapshot: inout DiarySnapshot) throws {
+        guard let index = snapshot.workouts.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
+        guard snapshot.workouts[index].revision == expectedRevision else { throw DiaryError.staleRevision }
+        snapshot.workouts.remove(at: index); snapshot.deletedWorkoutIDs.append(id)
+        for index in snapshot.coachTurns.indices where snapshot.coachTurns[index].receipts.contains(where: { $0.workoutID == id }) {
+            let attached = snapshot.coachTurns[index]
+            let survivingLink = attached.receipts.contains { $0.weightID.map({ weightID in snapshot.weights.contains { $0.id == weightID } }) == true || $0.mealID.map({ mealID in snapshot.meals.contains { $0.id == mealID } }) == true || $0.workoutID.map({ workoutID in snapshot.workouts.contains { $0.id == workoutID } }) == true }
+            if !survivingLink && attached.pendingMealID == nil {
+                snapshot.coachTurns[index].photos.removeAll(); snapshot.coachTurns[index].photoIDs.removeAll()
+            }
+        }
+    }
+
+    private struct CoachDeletedRecord: Codable { var id: UUID; var deleted: Bool }
+
+    func coachWorkout(id: UUID, expectedProfileID: UUID) throws -> WorkoutSession {
+        guard let workout = try snapshot(expectedProfileID: expectedProfileID).workouts.first(where: { $0.id == id }) else { throw DiaryError.notFound }
+        // Full replacement must never be based on unseen sets.
+        guard try JSONEncoder().encode(workout).count <= 48_000 else { throw CoachError.limitExceeded }
+        return workout
+    }
+
+    func coachProgress(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, expectedProfileID: UUID) throws -> CoachProgress {
+        guard validLocalDate(endingOn), [1, 7, 30].contains(days) else { throw CoachError.invalidArguments }
+        var snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        if let finalizingTurnID {
+            guard let index = snapshot.coachTurns.firstIndex(where: { $0.id == finalizingTurnID }) else { throw DiaryError.notFound }
+            // The successful final reply resolves this question; other captures stay pending.
+            snapshot.coachTurns[index].state = .completed
+        }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: snapshot.profile.timeZoneID)!
+        let start = calendar.date(byAdding: .day, value: 1 - days, to: try dateOnlyInstant(endingOn, zone: snapshot.profile.timeZoneID))!
+        let startLabel = dateLabel(start, zone: snapshot.profile.timeZoneID)
+        let labels = Dictionary(uniqueKeysWithValues: snapshot.days.map { ($0.id, $0.localDate) })
+        let weights = snapshot.weights.compactMap { record -> CoachWeightReference? in
+            let label = record.dayID.flatMap { labels[$0] } ?? dateLabel(record.measuredAt, zone: snapshot.profile.timeZoneID)
+            guard label >= startLabel && label <= endingOn else { return nil }
+            return CoachWeightReference(localDate: label, record: record)
+        }
+        let workouts = snapshot.workouts.compactMap { record -> WorkoutReference? in
+            guard let label = labels[record.dayID], label >= startLabel && label <= endingOn else { return nil }
+            return WorkoutReference(id: record.id, dayID: record.dayID, localDate: label, revision: record.revision, kind: record.kind, durationMinutes: record.durationMinutes)
+        }
+        return CoachProgress(startLocalDate: startLabel, endLocalDate: endingOn,
+            daily: ProgressAnalytics.daily(snapshot: snapshot, localDate: endingOn),
+            period: days == 1 ? nil : ProgressAnalytics.period(snapshot: snapshot, endingOn: endingOn, days: days),
+            weight: ProgressAnalytics.weight(snapshot: snapshot, endingOn: endingOn),
+            weights: Array(weights.suffix(40)), workouts: Array(workouts.suffix(100)),
+            omittedWeightCount: max(0, weights.count - 40), omittedWorkoutCount: max(0, workouts.count - 100),
+            truncated: weights.count > 40 || workouts.count > 100)
+    }
+
+    func coachWorkoutSummary(id: UUID, expectedProfileID: UUID) throws -> String {
+        let snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        if snapshot.deletedWorkoutIDs.contains(id) { return "This workout was deleted." }
+        let workout = try coachWorkout(id: id, expectedProfileID: expectedProfileID)
+        let day = snapshot.days.first { $0.id == workout.dayID }!
+        var facts = ["\(day.localDate): recorded \(workout.kind.rawValue), \(workout.durationMinutes) minutes; revision \(workout.revision)."]
+        for exercise in workout.exercises {
+            facts.append(exercise.name + ": " + exercise.sets.map { "\($0.repetitions) reps" + ($0.loadKg.map { " at \(coachNumber($0)) kg" } ?? " (load unset)") }.joined(separator: ", "))
+        }
+        facts.append("Estimated burn: " + (workout.estimatedBurnKcal.map { "\(coachNumber($0)) kcal (\(workout.burnSource?.rawValue ?? "source unset"))." } ?? "unknown."))
+        return facts.joined(separator: "\n")
+    }
+
+    private func coachNumber(_ value: Double) -> String {
+        value.formatted(.number.grouping(.never).locale(Locale(identifier: "en_US")))
+    }
+
+    func coachProgressSummary(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, expectedProfileID: UUID) throws -> String {
+        let report = try coachProgress(endingOn: endingOn, days: days, finalizingTurnID: finalizingTurnID, expectedProfileID: expectedProfileID)
+        var facts = ["\(report.startLocalDate) through \(report.endLocalDate)."]
+        let daily = report.daily
+        facts.append("Recorded food: " + (daily.foodTotals?.kcal.map { "\(coachNumber($0)) kcal." } ?? "calories unknown."))
+        facts.append("Remaining from recorded food: " + (daily.remainingFromRecorded.kcal.map { "\(coachNumber($0)) kcal." } ?? "unknown (target or intake missing)."))
+        if let goal = daily.goal {
+            facts.append("Configured target: " + (goal.targets.kcal.map { "\(coachNumber($0)) kcal." } ?? "calories unset."))
+        }
+        for (name, field) in [("carbs", \NutritionValues.carbs), ("protein", \NutritionValues.protein), ("fat", \NutritionValues.fat)] {
+            facts.append("Remaining \(name) from recorded food: " + (daily.remainingFromRecorded[keyPath: field].map { "\(coachNumber($0)) g." } ?? "unknown."))
+        }
+        facts.append("Recorded workouts: \(daily.workoutCount).")
+        facts.append("Estimated exercise burn: " + (daily.estimatedBurnKcal.map { "\(coachNumber($0)) kcal." } ?? "unknown."))
+        if let adjusted = daily.exerciseAdjustedKcalRemaining { facts.append("Explicit exercise-adjusted remaining: \(coachNumber(adjusted)) kcal.") }
+        if let period = report.period {
+            facts.append("Coverage: \(period.completeDayCount) complete, \(period.partialDayCount) partial, \(period.untrackedDayCount) untracked, \(period.unknownDayCount) unknown, \(period.missingDayCount) missing, \(period.pendingDayCount) pending days.")
+            facts.append("Average recorded intake: " + (period.averageIntake.kcal.map { "\(coachNumber($0)) kcal from \(period.knownIntakeSamples.kcal) complete known days." } ?? "unknown."))
+            for (name, field, count) in [("carbs", \NutritionValues.carbs, period.knownIntakeSamples.carbs), ("protein", \NutritionValues.protein, period.knownIntakeSamples.protein), ("fat", \NutritionValues.fat, period.knownIntakeSamples.fat)] {
+                facts.append("Average \(name): " + (period.averageIntake[keyPath: field].map { "\(coachNumber($0)) g from \(count) complete known days." } ?? "unknown."))
+            }
+            facts.append("Period recorded workouts: \(period.workoutCount).")
+            facts.append("Within 10% of target: \(period.adherenceNumerator)/\(period.adherenceDenominator) eligible days.")
+        } else { facts.append("Day coverage: \(daily.completeness?.rawValue ?? "missing"); pending: \(daily.hasPending).") }
+        facts.append("Weight average: " + (report.weight.currentSevenDayAverageKg.map { "\(coachNumber($0)) kg" } ?? "unknown") + " from \(report.weight.currentSevenDayObservedCount) measured dates.")
+        facts.append("Weight change versus prior 7-day window: " + (report.weight.changeFromSevenDaysAgoKg.map { "\(coachNumber($0)) kg." } ?? "insufficient data."))
+        facts.append("Weight change versus 30 days ago: " + (report.weight.changeFromThirtyDaysAgoKg.map { "\(coachNumber($0)) kg." } ?? "insufficient data."))
+        facts.append("Observed plateau readiness: \(report.weight.plateau.rawValue).")
+        facts.append("Record references omitted: \(report.omittedWeightCount) weights, \(report.omittedWorkoutCount) workouts.")
         return facts.joined(separator: "\n")
     }
 
