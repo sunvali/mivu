@@ -16,7 +16,9 @@ existing singleJOSESwift dependency, GitHub Actions and XcodeBuildMCP locally.
 ## Global constraints
 
 Native iPhone/iOS26+, no server or paid services. Preserve existing connection
-proof. English/Hebrew,44pt, VoiceOver/Dynamic Type/reduced motion. Photos retained
+proof. English-first MVP acceptance; preserve existing Hebrew support.44pt,
+VoiceOver/Dynamic Type/reduced motion. Premium native glass and cheerful food
+palette follow design-system/mivu/MASTER.md. Photos retained
 until explicit delete; private app-owned profiles. Input captured before analysis;
 all synthetic nutrition labeled. No credentials/logged personal contents in
 archives, tests, artifacts or Actions output. Never mention prohibited workflow
@@ -58,14 +60,14 @@ acceptReview,editItem,correctMeal,addPhotos,deletePhoto,deleteMeal,moveMeal,
 setCompleteness,recordWeight,updateProfile,deleteProfile and snapshot export/restore.
 Finalize exact signatures with controller before other workers consume them.
 
-- [ ] Add meaningful failing tests for capture-save failure, retry stableIDs,
+- [x] Add meaningful failing tests for capture-save failure, retry stableIDs,
 review exclusion, revision guard/delete late result, photos retention/delete,
 nullable sums, profile isolation, four-hour expiry/date rollover/DST/timezone,
 weight/newday idempotence and history/completeness.
-- [ ] Run isolated Foundation harness RED via XcodeBuildMCP swift-package test.
-- [ ] Implement exact contract and tested minimal store/sample proposal worker.
-- [ ] Run GREEN, copy owned sources after coordination; report hashes/evidence.
-- [ ] Independent scoped review and original-worker fixes before integration.
+- [x] Run isolated Foundation harness RED via XcodeBuildMCP swift-package test.
+- [x] Implement exact contract and tested minimal store/sample proposal worker.
+- [x] Run GREEN, copy owned sources after coordination; report hashes/evidence.
+- [x] Independent scoped review and original-worker fixes before integration.
 
 ## Task 2: Complete native user flow
 
@@ -88,7 +90,7 @@ through Task3 interfaces after Task1 completion; no invented success state.
 switching and same-meal correction before adding behavior.
 - [ ] Implement native flow in staged owned files with clear errors and accessibility.
 - [ ] Integrate agreed domain; native targeted tests, actual camera/library fallback.
-- [ ] English/Hebrew/light/dark/large type render and core simulator interaction checks.
+- [ ] English/light/dark/large type render and core simulator interaction checks.
 - [ ] Independent scoped review/fixes; aggregate UI smoke evidence and source hashes.
 
 ## Task 3: Private backup/export/restore and deletion
@@ -123,8 +125,8 @@ source, verifies tests and publishes app+unsigned archive with honest labeling.
 A separately gated signed lane exportsIPA/uploadsTestFlight only with required
 owner secrets/certificates/team IDs, no fake signing or paid enrollment.
 
-- [ ] Validate actual runner availability and cost/allowance, no hidden paid run.
-- [ ] Implement workflows and exact reproducible scripts; fail on zero tests.
+- [x] Validate actual runner availability and cost/allowance, no hidden paid run.
+- [x] Implement workflows and exact reproducible scripts; fail on zero tests.
 - [ ] Run Actions on branch/PR and release rehearsal, inspect logs/artifacts.
 - [ ] Independent workflow/security review; fix and rerun relevant failures.
 - [ ] Document signing prerequisites and actual delivery artifacts, not just YAML.

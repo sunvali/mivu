@@ -1,40 +1,38 @@
 # Mivu
 
-Mivu is a native Swift iPhone meal diary in planning and early implementation.
-The approved product design and execution plan describe the intended diary;
-the current build is a diagnostic connection proof, not a working meal diary.
+Mivu is a native iPhone food diary built with SwiftUI and Swift 6 for iOS 26 and
+newer. The English-first MVP centers on Today, meal capture and review, history,
+and settings, with Hebrew support retained.
 
-## Current status
+## Sample mode
 
-The native diagnostic now includes callback handling, account identity and
-protected sessions, model/Responses transport, and durable synthetic probe
-recovery. On the iOS 27.0 iPhone 18 Pro simulator, the final aggregate run on
-source commit `2f98f7c34741ef744b6fcdac9acc0ea9e0f39807` reported 117 passed,
-0 failed, and 1 skipped across 118 declarations and 9 suites. The skipped test
-is the opt-in browser smoke; its separate run passed 7/7. Independent review
-approved the branch after its storage-state fixes, and the logout fix review
-was accepted.
+The diary works without a ChatGPT connection. Every meal uses the same clearly
+labeled synthetic apple estimate; it is sample data, not food recognition.
+Settings also offers an optional ChatGPT connection diagnostic, separate from
+diary use.
 
-Owner consent and live provider behavior, physical-phone recovery, and full
-VoiceOver/reduced-motion inspection remain unverified. This is not a working
-meal diary or completed proof. No backup provider is selected.
+## Private data and backups
 
-The repository is private and its draft pull request is
-[PR #1](https://github.com/yakov103/mivu/pull/1). No required CI runs have been
-observed. Xcode 27's license was accepted by the owner; compilation and test
-runs have since proceeded. The original license-blocked zero-test attempt is
-retained as historical context in the [verification report](docs/verification/2026-10-11-native-connection-proof.md).
+Diary records are stored locally in separate app-owned profiles. You can choose
+a private folder in Files for backup, or export and import a portable archive.
+“Saved to backup folder” confirms the file-provider write; it does not confirm
+that iCloud or another remote service has finished syncing it. Keep the folder
+available and check the displayed backup status.
 
-- [Product design](docs/superpowers/specs/2026-10-11-food-logger-design.md)
-- [Approved implementation plan](docs/superpowers/plans/2026-10-11-native-connection-proof.md)
-- [Current verification](docs/verification/2026-10-11-native-connection-proof.md)
-- [Integration decision](docs/adr/0001-native-integration-decision.md)
+## Run on a simulator
+
+Open `ios/Mivu.xcodeproj` in Xcode, select the `Mivu` scheme and an iOS 26 or
+newer simulator, then run. Use XcodeBuildMCP for simulator builds, tests, and
+interaction checks. See the [native MVP plan](docs/superpowers/plans/2026-10-12-native-diary-mvp.md)
+for scope and acceptance, [design system](design-system/mivu/MASTER.md) for
+visual and accessibility guidance, and [CI and delivery](docs/development/ci-cd.md)
+for hosted checks and release prerequisites. The [accepted MVP addendum](docs/superpowers/specs/2026-10-12-sample-mvp-addendum.md)
+records product and backup requirements.
 
 ## Development
 
-Use Swift 6, SwiftUI, and platform APIs. Support English LTR, Hebrew RTL,
-Dynamic Type, VoiceOver, reduced motion, and accessible touch targets. Use only
-synthetic inputs in connection diagnostics. Never commit credentials, personal
-meal data, or raw authorization responses. Use a feature branch and pull
-request; record verification with its actual environment, command, result, and
-remaining gates.
+Use synthetic inputs in diagnostics and tests. Never commit credentials or
+personal meal data. Keep changes on a feature branch, preserve English LTR,
+Hebrew RTL, Dynamic Type, VoiceOver, reduced motion, and accessible touch
+targets. Report verification with its actual environment, result, and remaining
+gates; workflow files alone are not evidence of a hosted run.

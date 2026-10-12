@@ -58,8 +58,13 @@ workflow YAML alone. Repository remains private unless separately authorized.
 
 ## Appearance
 
-Use native SwiftUI navigation and controls with a warm neutral surface, restrained
-teal accent, clear meal rows, large capture action, and concise status copy. System
-type scales, dark mode follows the system, all actions are at least44pt, English
-LTR/Hebrew RTL, VoiceOver labels and reduced-motion behavior remain requirements.
-Sample mode is visible in the diary and each synthetic estimate's provenance.
+Owner updated direction on2026-10-12: focus English for MVP acceptance and use
+premium native iOS27 Liquid Glass with cheerful food colors. Follow
+../../../design-system/mivu/MASTER.md: warm cream, coral/apricot action colors,
+leaf/sage supporting accents, clear food/data surfaces and native glass controls.
+Keep capture reachable, spacing/typography deliberate, interaction smooth, and
+status copy concise. System type scales, dark mode follows the system, all
+actions are at least44pt; VoiceOver and reduced-motion/transparency remain
+requirements. Preserve existing Hebrew functionality while English receives the
+MVP polish and acceptance focus. Sample mode stays visible in the diary and
+each synthetic estimate's provenance.
