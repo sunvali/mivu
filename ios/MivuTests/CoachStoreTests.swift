@@ -7,7 +7,8 @@ import Testing
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private func fixture() async throws -> (DiaryStore, DiaryProfile, URL) {
         let root = URL.temporaryDirectory.appending(path: "Coach-" + UUID().uuidString)
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let clock = now
+        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = DiaryProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         return (store, profile, root)
     }
@@ -553,14 +554,21 @@ import Testing
         #expect(try JSONDecoder().decode(CoachProgress.self, from: Data(zeroJSON.utf8)) == zero)
     }
 
-    @Test(arguments: [false, true]) func delayedCapturedWeightPreservesNewerActiveDay(correction: Bool) async throws {
-        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        let existing = correction ? try await store.recordWeight(value: 70, at: now) : nil
+
+    @Test(arguments: ["none", "older", "newer"], [false, true]) func delayedCapturedWeightPreservesProcessingDayChoice(activeState: String, correction: Bool) async throws {
+        let (initial, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let existing = correction ? try await initial.recordWeight(value: 70, at: now) : nil
+        let processingTime = now.addingTimeInterval(2 * 86400)
+        var source = try await initial.snapshot(); source.activeDayID = nil
+        let store = DiaryStore(directory: root.appendingPathComponent("delayed"), currentTime: { processingTime })
+        _ = try await store.importProfile(source)
+        if activeState == "older" { _ = try await store.startDay(at: now.addingTimeInterval(-86400)) }
+        if activeState == "newer" { _ = try await store.startDay(at: processingTime) }
+        let active = try await store.snapshot().activeDayID
         let turn = try await store.captureCoachTurn(text: "Jan 15 morning weight", photos: [], at: now, expectedProfileID: profile.id)
-        let newer = try await store.startDay(at: now.addingTimeInterval(2 * 86400))
         let receipts = try await store.applyCoachWrites([.weight(date: "2027-01-15", value: 71, unit: "kg", revision: existing?.revision)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         let saved = try await store.snapshot()
-        #expect(saved.activeDayID == newer.id)
+        #expect(saved.activeDayID == active)
         #expect(saved.weights[0].value == 71); #expect(receipts[0].weightID == saved.weights[0].id)
         #expect(saved.days.first { $0.id == receipts[0].dayID }?.localDate == "2027-01-15")
         if let existing { #expect(saved.weights[0].id == existing.id); #expect(saved.weights[0].measuredAt == existing.measuredAt) }

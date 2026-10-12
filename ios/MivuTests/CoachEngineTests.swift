@@ -36,7 +36,8 @@ private actor CoachInputFixture {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     private func fixture() async throws -> (DiaryStore, DiaryProfile, CoachTurn, URL) {
         let root = URL.temporaryDirectory.appending(path: "CoachEngine-" + UUID().uuidString)
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let clock = now
+        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = DiaryProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         let turn = try await store.captureCoachTurn(text: "Two eggs, three bread slices and salad", photos: [], at: now, expectedProfileID: profile.id)
         return (store, profile, turn, root)

@@ -7,8 +7,10 @@ actor DiaryStore {
     private var stagedCoachSnapshot: DiarySnapshot?
     private var profileSelectionEpoch: UInt64 = 0
     private var fileIdentities: [UUID: UInt64] = [:]
-    init(directory: URL, maximumFileBytes: Int = 350_000_000) {
+    private let currentTime: @Sendable () -> Date
+    init(directory: URL, maximumFileBytes: Int = 350_000_000, currentTime: @escaping @Sendable () -> Date = { Date() }) {
         self.directory = directory
+        self.currentTime = currentTime
         self.maximumFileBytes = min(maximumFileBytes, 350_000_000)
     }
     private let maximumFileBytes: Int
@@ -806,7 +808,7 @@ actor DiaryStore {
         }
         return receipt
     }
-    private func coachDay(localDate: String, turn: CoachTurn, snapshot: inout DiarySnapshot) throws -> TrackingDay {
+    private func coachDay(localDate: String, turn: CoachTurn, snapshot: inout DiarySnapshot, activateIfEmpty: Bool = true) throws -> TrackingDay {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.calendar = Calendar(identifier: .gregorian); formatter.timeZone = TimeZone(identifier: turn.captureTimeZoneID)
         formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
@@ -821,7 +823,7 @@ actor DiaryStore {
         let day = snapshot.days.first(where: { $0.localDate == localDate && $0.timeZoneID == turn.captureTimeZoneID })
             ?? TrackingDay(localDate: localDate, timeZoneID: turn.captureTimeZoneID, startAt: currentDate ? turn.capturedAt : date)
         if !snapshot.days.contains(where: { $0.id == day.id }) { snapshot.days.append(day) }
-        if snapshot.activeDayID == nil && currentDate { snapshot.activeDayID = day.id; snapshot.previousDayConfirmedAt = nil }
+        if activateIfEmpty && snapshot.activeDayID == nil && currentDate { snapshot.activeDayID = day.id; snapshot.previousDayConfirmedAt = nil }
         return day
     }
 
@@ -1029,8 +1031,9 @@ actor DiaryStore {
             let active = snapshot.days.first { $0.id == snapshot.activeDayID }
             var clockTurn = turn
             if date == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) { clockTurn.activeDayID = nil; clockTurn.resolvedDayID = nil }
-            let day = try coachDay(localDate: date, turn: clockTurn, snapshot: &snapshot)
+            let day = try coachDay(localDate: date, turn: clockTurn, snapshot: &snapshot, activateIfEmpty: false)
             if date == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID),
+               date == dateLabel(currentTime(), zone: snapshot.profile.timeZoneID),
                active == nil || (active!.localDate <= date && active!.startAt <= turn.capturedAt) {
                 snapshot.activeDayID = day.id; snapshot.previousDayConfirmedAt = nil
             }
