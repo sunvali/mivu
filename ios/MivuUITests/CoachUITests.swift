@@ -101,6 +101,90 @@ import XCTest
         XCTAssertTrue(app.staticTexts["coachFixtureBanner"].exists)
     }
 
+    func testFixtureGoalsWeightWorkoutBudgetAndRelaunch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["coachFixtureBanner"].exists)
+        app.tabBars.buttons["Settings"].tap()
+        revealList(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
+        let target = app.textFields["goalKcal"]
+        XCTAssertTrue(target.waitForExistence(timeout: 5)); target.tap(); target.typeText("2000")
+        app.buttons["saveGoals"].tap()
+        app.tabBars.buttons["Coach"].tap()
+        enter("Two eggs, three bread slices and salad", in: app); app.buttons["coachSend"].tap()
+        waitForReplies(1, in: app)
+        openLatestMeal(in: app)
+        XCTAssertTrue(app.staticTexts["Eggs"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        enter("I weighed 70 kg this morning", in: app); app.buttons["coachSend"].tap()
+        waitForReplies(2, in: app)
+        guard app.staticTexts.matching(identifier: "coachReply").element(boundBy: 1).label.contains("Recorded weight: 70 kg.") else {
+            XCTFail("The morning weigh-in must be saved through the production tool and reported from its receipt")
+            return
+        }
+        enter("I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal", in: app)
+        app.buttons["coachSend"].tap(); waitForReplies(3, in: app)
+        let workout = app.buttons["coachWorkoutLink"]
+        revealWorkout(workout, in: app)
+        XCTAssertGreaterThanOrEqual(workout.frame.height, 44); workout.tap()
+        XCTAssertTrue(app.navigationBars["Workout"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Squat"].exists)
+        XCTAssertTrue(app.staticTexts["30 minutes"].exists)
+        XCTAssertTrue(app.staticTexts["Time unspecified"].exists)
+        XCTAssertTrue(app.staticTexts["Set 1: 8 repetitions · 40 kg"].exists)
+        let detail = XCTAttachment(screenshot: app.screenshot()); detail.name = "Synthetic Coach receipt opens actual workout"; detail.lifetime = .keepAlways; add(detail)
+        app.navigationBars.buttons.firstMatch.tap()
+        enter("What is my remaining budget?", in: app); app.buttons["coachSend"].tap()
+        let budget = progressReply(containing: "Day coverage:", in: app)
+        XCTAssertTrue(budget.waitForExistence(timeout: 15)); XCTAssertTrue(budget.isHittable)
+        for fact in ["Recorded food: 420 kcal.", "Remaining from recorded food: 1580 kcal.", "Configured target: 2000 kcal.", "Recorded workouts: 1.", "Estimated exercise burn: 200 kcal.", "Weight average: 70 kg from 1 measured dates."] {
+            XCTAssertTrue(budget.label.contains(fact), fact)
+        }
+        XCTAssertFalse(budget.label.contains("Explicit exercise-adjusted remaining"))
+        enter("Show my weekly report", in: app); app.buttons["coachSend"].tap()
+        let weekly = progressReply(containing: "Period recorded workouts: 1.", in: app)
+        XCTAssertTrue(weekly.waitForExistence(timeout: 15)); XCTAssertTrue(weekly.isHittable)
+        XCTAssertTrue(weekly.label.contains("6 missing"))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        revealCoach(weekly, in: app)
+        XCTAssertTrue(weekly.label.contains("Remaining from recorded food: 1580 kcal."))
+        XCTAssertTrue(weekly.label.contains("Weight average: 70 kg from 1 measured dates."))
+        XCTAssertTrue(weekly.label.contains("Estimated exercise burn: 200 kcal."))
+        for text in ["Two eggs, three bread slices and salad", "I weighed 70 kg this morning", "What is my remaining budget?", "Show my weekly report"] {
+            revealCoach(app.staticTexts[text], in: app)
+        }
+        app.tabBars.buttons["History"].tap()
+        revealList(app.buttons["openProgress"], in: app); app.buttons["openProgress"].tap()
+        XCTAssertTrue(app.navigationBars["Progress"].waitForExistence(timeout: 5))
+        let savedWorkout = app.buttons["workoutRow"].firstMatch
+        revealList(savedWorkout, in: app); savedWorkout.tap()
+        XCTAssertTrue(app.navigationBars["Workout"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Squat"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["30 minutes"].exists)
+        let persisted = XCTAttachment(screenshot: app.screenshot()); persisted.name = "Synthetic Coach workout persisted after relaunch"; persisted.lifetime = .keepAlways; add(persisted)
+    }
+
+    private func revealWorkout(_ link: XCUIElement, in app: XCUIApplication) {
+        // Hittable can include a partially clipped link whose center is under the composer.
+        for _ in 0..<8 {
+            if link.isHittable && link.frame.maxY < app.textFields["coachInput"].frame.minY - 8 { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(link.isHittable)
+        XCTAssertLessThan(link.frame.maxY, app.textFields["coachInput"].frame.minY - 8)
+    }
+    private func progressReply(containing text: String, in app: XCUIApplication) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "coachReply", text)).firstMatch
+    }
+    private func revealCoach(_ element: XCUIElement, in app: XCUIApplication) {
+        // Long report replies virtualize earlier conversation rows.
+        for _ in 0..<12 where !element.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        for _ in 0..<12 where !element.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(element.isHittable)
+    }
     private func enter(_ text: String, in app: XCUIApplication) {
         let input = app.textFields["coachInput"]; XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText(text)
     }

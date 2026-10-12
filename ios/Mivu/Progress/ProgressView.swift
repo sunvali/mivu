@@ -288,7 +288,7 @@ struct DiaryProgressView: View {
     }
 }
 
-private struct WorkoutDetailView: View {
+struct WorkoutDetailView: View {
     @Bindable var model: DiaryViewModel
     let sessionID: UUID
     @State private var editing = false

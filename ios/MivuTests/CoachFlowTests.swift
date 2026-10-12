@@ -180,6 +180,30 @@ extension CoachFlowTests {
     }
     private var finishedReply: CoachInferenceResult { CoachInferenceResult(model: "fixture", text: "Fixture finished.", calls: [], outputItems: []) }
 
+    @Test func workoutReceiptsResolveOwnedSurvivorsAndPreserveMealLinks() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let owner = try #require(diary.snapshot?.profile.id)
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { CoachUITestInference.respond })
+        coach.draft.text = "Two eggs, three bread slices and salad"
+        #expect(await coach.send()); await coach.waitForWorker()
+        let foodTurn = try #require(coach.turns.last), meal = try #require(diary.snapshot?.meals.first)
+        coach.draft.text = "I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal"
+        #expect(await coach.send()); await coach.waitForWorker()
+        let turn = try #require(coach.turns.last), workout = try #require(diary.snapshot?.workouts.first)
+        #expect(coach.linkedWorkouts(turn).map(\.id) == [workout.id])
+        #expect(coach.linkedMeals(turn).isEmpty)
+        #expect(coach.linkedMeals(foodTurn).map(\.id) == [meal.id])
+        #expect(coach.linkedWorkouts(foodTurn).isEmpty)
+        await diary.createProfile(name: "Synthetic other owner")
+        #expect(coach.linkedWorkouts(turn).isEmpty)
+        await diary.switchProfile(owner)
+        #expect(coach.linkedWorkouts(turn).map(\.id) == [workout.id])
+        try await diary.store.deleteWorkout(id: workout.id, expectedRevision: workout.revision, expectedProfileID: owner)
+        try await diary.refresh(profileID: owner)
+        #expect(coach.linkedWorkouts(turn).isEmpty)
+        #expect(coach.linkedMeals(foodTurn).map(\.id) == [meal.id])
+    }
+
     @Test func queuedLegacySubmissionsUseFreshMealRevisionWithoutDuplicateRecords() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let owner = try #require(diary.snapshot?.profile.id), firstID = UUID(), secondID = UUID()

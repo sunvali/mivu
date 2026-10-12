@@ -40,7 +40,7 @@ struct CoachView: View {
                         if coach.turns.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("A little context, a clearer picture.").font(.title2.weight(.semibold))
-                                Text("Tell me what you ate, add a photo, or ask about your recorded meals. Food estimates stay open to correction.").foregroundStyle(Color.diarySecondary)
+                                Text("Log meals, morning weigh-ins or workouts, add photos, or ask about your recorded progress. Estimates stay open to correction.").foregroundStyle(Color.diarySecondary)
                             }.padding(.vertical, 24)
                         }
                         ForEach(conversationRows) { row in
@@ -83,11 +83,12 @@ struct CoachView: View {
         .background(Color.diaryCanvas)
         .navigationTitle("Coach")
         .navigationDestination(for: UUID.self) { MealDetailView(model: coach.diary, mealID: $0) }
+        .navigationDestination(for: WorkoutDestination.self) { WorkoutDetailView(model: coach.diary, sessionID: $0.id) }
         .safeAreaInset(edge: .bottom) { if coach.diary.snapshot != nil { composer } }
         .sheet(isPresented: $showPhotos) {
             NavigationStack {
                 Form { PhotoInput(photos: $coach.draft.photos, preparation: preparation, importFailed: $importFailed) }
-                    .navigationTitle("Meal photos")
+                    .navigationTitle("Coach photos")
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPhotos = false }.frame(minHeight: 44) } }
             }.environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
         }
@@ -98,6 +99,7 @@ struct CoachView: View {
             showPhotos = false; editing = false
         }
     }
+    private struct WorkoutDestination: Hashable { let id: UUID }
     private struct ConversationRow: Identifiable {
         enum Kind: String { case input, reply, actions }
         let turn: CoachTurn
@@ -109,7 +111,7 @@ struct CoachView: View {
         coach.turns.flatMap { turn in
             var rows = [ConversationRow(turn: turn, kind: .input)]
             if turn.assistantText != nil { rows.append(ConversationRow(turn: turn, kind: .reply)) }
-            if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil }) {
+            if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil || $0.workoutID != nil }) {
                 rows.append(ConversationRow(turn: turn, kind: .actions))
             }
             return rows
@@ -120,7 +122,7 @@ struct CoachView: View {
             if let error = coach.errorMessage { Text(error).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachError") }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture { Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.").font(.caption).foregroundStyle(Color.diarySecondary) }
             if !coach.draft.photos.isEmpty { Text("\(coach.draft.photos.count) photos attached").font(.caption).foregroundStyle(Color.diarySecondary) }
-            TextField("What did you eat or want to know?", text: $coach.draft.text, axis: .vertical)
+            TextField("Meals, weigh-ins, workouts or a question?", text: $coach.draft.text, axis: .vertical)
                 .lineLimit(1...(typeSize.isAccessibilitySize ? 2 : 5)).focused($editing).accessibilityIdentifier("coachInput")
                 .padding(12).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16))
             HStack {
@@ -165,6 +167,9 @@ struct CoachView: View {
             ForEach(coach.linkedMeals(turn)) { meal in
                 NavigationLink(value: meal.id) { Label(meal.state == .awaitingReview ? "Review meal estimate" : "Open meal and corrections", systemImage: "fork.knife") }.frame(minHeight: 44).accessibilityIdentifier("coachMealLink")
             }
+            ForEach(coach.linkedWorkouts(turn)) { workout in
+                NavigationLink(value: WorkoutDestination(id: workout.id)) { Label("Open workout and corrections", systemImage: "figure.strengthtraining.traditional").frame(minHeight: 44) }.accessibilityIdentifier("coachWorkoutLink")
+            }
         }
     }
     private func status(_ state: CoachTurnState) -> String {
@@ -174,7 +179,7 @@ struct CoachView: View {
         case .waitingForConnection: "Waiting for an authorized connection"
         case .waitingForNetwork: "Waiting for the network. Your input is saved."
         case .needsRetry: "Analysis paused. Your input is saved."
-        case .needsClarification: "More details are needed. Review the meal or send a follow-up."
+        case .needsClarification: "More details are needed. Review the saved record or send a follow-up."
         case .completed: "Completed"
         }
     }
