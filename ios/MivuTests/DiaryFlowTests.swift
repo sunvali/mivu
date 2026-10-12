@@ -165,7 +165,7 @@ import ImageIO
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         let store = DiaryStore(directory: root.appending(path: "Diary"))
         let backup = FolderBackup(directory: root.appending(path: "BackupSettings"))
-        let model = DiaryViewModel(store: store, backup: backup)
+        let model = DiaryViewModel(store: store, sampleMode: true, backup: backup)
         await model.load()
         let owner = try #require(model.snapshot?.profile.id)
         await model.selectBackupFolder(destination)

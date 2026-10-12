@@ -200,6 +200,26 @@ private actor CoachInputFixture {
         #expect(captured.assistantText == nil); #expect(try await store.snapshot().meals.isEmpty)
     }
 
+    @Test(arguments: [false, true]) func noToolInventedTotalsUseOnlyRecordedIntake(hasFood: Bool) async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        if hasFood {
+            let previous = try await store.captureCoachTurn(text: "Previous", photos: [], at: now, expectedProfileID: profile.id)
+            _ = try await store.applyCoachFood(turnID: previous.id, targetLocalDate: "2027-01-14", items: [FoodItem(name: "Synthetic", nutrition: NutritionValues(kcal: 420), provenance: .estimate)], expectedProfileID: profile.id)
+        }
+        let question = try await store.captureCoachTurn(text: "How many calories did I eat today?", photos: [], at: now, expectedProfileID: profile.id)
+        let replies = CoachFixture([result(text: "About 1,800 kcal today. Yesterday was 2,100 kcal.")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: question.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == (try await store.coachRecordedSummary(expectedProfileID: profile.id)))
+        #expect(completed.receipts.isEmpty)
+    }
+    @Test func unsolicitedModelTimestampCannotEstablishExactMealTime() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await store.captureCoachTurn(text: "I had chocolate yesterday", photos: [], at: now, expectedProfileID: profile.id)
+        let args = "{\"target_local_date\":\"2027-01-14\",\"eaten_at\":\"2027-01-14T12:34:00Z\",\"items\":[{\"name\":\"Chocolate\",\"quantity\":1,\"unit\":\"piece\",\"kcal\":50}]}"
+        let replies = CoachFixture([result([call("log_food", args)]), result(text: "Saved")])
+        _ = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(try await store.snapshot().meals.last?.timePrecision == .dateOnly)
+    }
     @Test func groundedReadonlyHistoryUsesSavedFactsWithoutNewReceipt() async throws {
         let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let previous = try await store.captureCoachTurn(text: "Previous", photos: [], at: now, expectedProfileID: profile.id)
