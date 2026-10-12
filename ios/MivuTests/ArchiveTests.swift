@@ -427,7 +427,7 @@ struct ArchiveTests {
         let newMeal = try await newStore.capture(text: "replacement phone meal", photos: [], reviewFirst: false, dayID: day.id)
         let newBranch = try await newStore.snapshot()
         try await newBackup.save(newBranch, generation: newGeneration)
-        let newFile = root.appendingPathComponent("NewDiary").appendingPathComponent(profile.id.uuidString + ".json")
+        let newFile = root.appendingPathComponent("NewDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
         let newBytes = try Data(contentsOf: newFile)
         let restingStore = DiaryStore(directory: root.appendingPathComponent("MatchingDiary"))
         _ = try await restingStore.importProfile(baseline)
@@ -438,11 +438,11 @@ struct ArchiveTests {
         _ = try await oldStore.capture(text: "old phone meal one", photos: [], reviewFirst: false, dayID: day.id)
         _ = try await oldStore.capture(text: "old phone meal two", photos: [], reviewFirst: false, dayID: day.id)
         let oldBranch = try await oldStore.snapshot()
-        let oldBytes = try Data(contentsOf: root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".json"))
+        let oldBytes = try Data(contentsOf: root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite"))
         #expect(oldBranch.revision > newBranch.revision)
         await #expect(throws: DiaryError.staleArchive) { try await oldBackup.save(oldBranch, generation: oldGeneration) }
         #expect(try Data(contentsOf: file) == providerBytes)
-        #expect(try Data(contentsOf: root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".json")) == oldBytes)
+        #expect(try Data(contentsOf: root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")) == oldBytes)
         #expect(await oldBackup.status(profileID: profile.id).pendingError != nil)
         await #expect(throws: DiaryError.staleArchive) { try await newStore.restore(oldBranch, expectedProfileID: profile.id) }
         #expect(try Data(contentsOf: newFile) == newBytes)
@@ -621,7 +621,7 @@ struct ArchiveTests {
         try await newBackup.save(try await newStore.snapshot(), generation: newGeneration)
         let file = shared.appendingPathComponent(FolderBackup.filename(profileID: profile.id))
         let providerBytes = try Data(contentsOf: file)
-        let localFile = root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".json")
+        let localFile = root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
         let localBytes = try Data(contentsOf: localFile)
         await #expect(throws: DiaryError.staleArchive) { try await oldBackup.removeProfile(profile.id) }
         #expect(try Data(contentsOf: file) == providerBytes)

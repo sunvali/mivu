@@ -143,7 +143,7 @@ struct DiaryTests {
         let store = DiaryStore(directory: directory)
         let profile = DiaryProfile(name: "Synthetic")
         _ = try await store.createProfile(profile)
-        let url = directory.appendingPathComponent(profile.id.uuidString + ".json")
+        let url = directory.appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
         let bad = Data("not a diary".utf8)
         try bad.write(to: url)
         await #expect(throws: DiaryError.invalidData) { try await DiaryStore(directory: directory).selectProfile(profile.id) }
@@ -347,7 +347,7 @@ struct DiaryTests {
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         let before = try await store.snapshot()
-        let url = directory.appendingPathComponent(profile.id.uuidString + ".json")
+        let url = directory.appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
         let fileBefore = try Data(contentsOf: url)
         await #expect(throws: DiaryError.invalidData) {
             try await store.capture(text: String(repeating: "x", count: 3000), photos: [], reviewFirst: false, dayID: day.id)

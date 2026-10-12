@@ -4,6 +4,7 @@ import Foundation
 actor DiaryStore {
     private let directory: URL
     private var current: DiarySnapshot?
+    private var fileIdentities: [UUID: UInt64] = [:]
     init(directory: URL, maximumFileBytes: Int = 350_000_000) {
         self.directory = directory
         self.maximumFileBytes = min(maximumFileBytes, 350_000_000)
@@ -13,19 +14,20 @@ actor DiaryStore {
     func profiles() throws -> [DiaryProfile] {
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
         do {
-            return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-                .filter { $0.pathExtension == "json" && UUID(uuidString: $0.deletingPathExtension().lastPathComponent) != nil }
-                .map { url in
-                    let profile = try read(url).profile
-                    guard url.deletingPathExtension().lastPathComponent == profile.id.uuidString else { throw DiaryError.wrongOwner }
-                    return profile
-                }.sorted { $0.name < $1.name }
+            let ids = Set(try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { ["json", "sqlite"].contains($0.pathExtension) }
+                .compactMap { UUID(uuidString: $0.deletingPathExtension().lastPathComponent) })
+            return try ids.map { id in
+                let profile = try read(file(id), rememberIdentity: false).profile
+                guard profile.id == id else { throw DiaryError.wrongOwner }
+                return profile
+            }.sorted { $0.name < $1.name }
         } catch let error as DiaryError { throw error }
         catch { throw DiaryError.persistenceFailed }
     }
 
     func createProfile(_ profile: DiaryProfile) throws -> DiarySnapshot {
-        guard !FileManager.default.fileExists(atPath: file(profile.id).path) else { throw DiaryError.invalidData }
+        guard !exists(profile.id) else { throw DiaryError.invalidData }
         var snapshot = DiarySnapshot(profile: profile)
         snapshot.lineage = [UUID()]
         try write(snapshot)
@@ -35,7 +37,7 @@ actor DiaryStore {
 
     func importProfile(_ incoming: DiarySnapshot) throws -> DiarySnapshot {
         try incoming.validate()
-        guard !FileManager.default.fileExists(atPath: file(incoming.profile.id).path) else { throw DiaryError.invalidData }
+        guard !exists(incoming.profile.id) else { throw DiaryError.invalidData }
         try write(incoming)
         current = incoming
         return incoming
@@ -312,8 +314,13 @@ actor DiaryStore {
     }
 
     func deleteProfile(_ id: UUID) throws {
-        do { try FileManager.default.removeItem(at: file(id)) }
-        catch { throw DiaryError.persistenceFailed }
+        do {
+            guard exists(id) else { throw DiaryError.persistenceFailed }
+            // Remove recovery material first so deletion cannot expose an old diary.
+            for url in [legacyFile(id), selectedFile(id)] where FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+        } catch { throw DiaryError.persistenceFailed }
         if current?.profile.id == id { current = nil }
     }
 
@@ -366,9 +373,28 @@ actor DiaryStore {
         return formatter.string(from: date)
     }
 
-    private func file(_ id: UUID) -> URL { directory.appendingPathComponent(id.uuidString + ".json") }
+    private func file(_ id: UUID) -> URL { selectedFile(id).appendingPathComponent("diary.sqlite") }
+    private func legacyFile(_ id: UUID) -> URL { directory.appendingPathComponent(id.uuidString + ".json") }
+    private func selectedFile(_ id: UUID) -> URL { directory.appendingPathComponent(id.uuidString + ".sqlite") }
+    private func exists(_ id: UUID) -> Bool {
+        [file(id), legacyFile(id), selectedFile(id)].contains { FileManager.default.fileExists(atPath: $0.path) }
+    }
 
-    private func read(_ url: URL) throws -> DiarySnapshot {
+    private func read(_ url: URL, rememberIdentity: Bool = true) throws -> DiarySnapshot {
+        guard let id = UUID(uuidString: url.deletingLastPathComponent().deletingPathExtension().lastPathComponent) else { throw DiaryError.invalidData }
+        if FileManager.default.fileExists(atPath: url.path) || FileManager.default.fileExists(atPath: selectedFile(id).path) {
+            let loaded = try DiaryDatabase(url: url).read(maximumBytes: maximumFileBytes)
+            let identity = try fileIdentity(url)
+            if rememberIdentity { fileIdentities[id] = identity }
+            return loaded
+        }
+        let snapshot = try readLegacy(legacyFile(id))
+        guard snapshot.profile.id == id else { throw DiaryError.wrongOwner }
+        try createDatabase(snapshot)
+        return snapshot
+    }
+
+    private func readLegacy(_ url: URL) throws -> DiarySnapshot {
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             guard (attributes[.size] as? NSNumber)?.intValue ?? Int.max <= maximumFileBytes else { throw DiaryError.invalidData }
@@ -379,18 +405,46 @@ actor DiaryStore {
         catch { throw DiaryError.invalidData }
     }
 
+    private func createDatabase(_ snapshot: DiarySnapshot) throws {
+        let temporary = directory.appendingPathComponent("migration-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            #if os(iOS)
+            for url in [directory, temporary] {
+                try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: url.path)
+            }
+            #endif
+            do {
+                let database = try DiaryDatabase(url: temporary.appendingPathComponent("diary.sqlite"), create: true)
+                try database.write(snapshot, expected: nil, maximumBytes: maximumFileBytes)
+                guard try database.read(maximumBytes: maximumFileBytes) == snapshot else { throw DiaryError.invalidData }
+            }
+            // The atomic directory switch is also the durable selection fence if its database is removed.
+            try FileManager.default.moveItem(at: temporary, to: selectedFile(snapshot.profile.id))
+            fileIdentities[snapshot.profile.id] = try fileIdentity(file(snapshot.profile.id))
+        } catch let error as DiaryError { throw error }
+        catch { throw DiaryError.persistenceFailed }
+    }
+
+    private func fileIdentity(_ url: URL) throws -> UInt64 {
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            guard attributes[.type] as? FileAttributeType == .typeRegular,
+                  let inode = attributes[.systemFileNumber] as? NSNumber else { throw DiaryError.persistenceFailed }
+            return inode.uint64Value
+        } catch { throw DiaryError.persistenceFailed }
+    }
+
     private func write(_ snapshot: DiarySnapshot) throws {
         try snapshot.validate()
-        let data = try JSONEncoder().encode(snapshot)
-        guard data.count <= maximumFileBytes else { throw DiaryError.invalidData }
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
-            #if os(iOS)
-            try data.write(to: file(snapshot.profile.id), options: [.atomic, .completeFileProtectionUnlessOpen])
-            #else
-            try data.write(to: file(snapshot.profile.id), options: .atomic)
-            #endif
-        } catch { throw DiaryError.persistenceFailed }
+        guard try JSONEncoder().encode(snapshot).count <= maximumFileBytes else { throw DiaryError.invalidData }
+        if let current, current.profile.id == snapshot.profile.id {
+            guard try fileIdentity(file(snapshot.profile.id)) == fileIdentities[snapshot.profile.id] else { throw DiaryError.persistenceFailed }
+            try DiaryDatabase(url: file(snapshot.profile.id)).write(snapshot, expected: current, maximumBytes: maximumFileBytes)
+        } else {
+            try createDatabase(snapshot)
+        }
     }
 }
