@@ -20,6 +20,13 @@
         "identifier": "8B41F65B2DEDD0D6001A66F9",
         "name": "MivuTests"
       }
+    },
+    {
+      "target": {
+        "containerPath": "container:Mivu.xcodeproj",
+        "identifier": "620000000000000000000008",
+        "name": "MivuUITests"
+      }
     }
   ],
   "version": 1
