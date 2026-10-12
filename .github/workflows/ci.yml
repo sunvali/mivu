@@ -1,0 +1,37 @@
+name: Native CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    # Remain NOT_RUN_BLOCKED until actual included minutes AND storage are verified.
+    if: vars.MIVU_ACTIONS_ALLOWANCE_VERIFIED == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check CI result verifier
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+      - name: Build and test native iPhone app
+        run: bash scripts/ci/native.sh test
+      - name: Preserve results and simulator application
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: native-${{ github.sha }}
+          path: |
+            build/ci/Mivu.xcresult
+            build/ci/*.json
+            build/ci/*.txt
+            build/ci/Mivu-simulator.app.zip
+          retention-days: 1
+          if-no-files-found: error
