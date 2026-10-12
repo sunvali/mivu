@@ -4,6 +4,8 @@ import Foundation
 actor DiaryStore {
     private let directory: URL
     private var current: DiarySnapshot?
+    private var stagedCoachSnapshot: DiarySnapshot?
+    private var profileSelectionEpoch: UInt64 = 0
     private var fileIdentities: [UUID: UInt64] = [:]
     init(directory: URL, maximumFileBytes: Int = 350_000_000) {
         self.directory = directory
@@ -32,6 +34,7 @@ actor DiaryStore {
         snapshot.lineage = [UUID()]
         try write(snapshot)
         current = snapshot
+        profileSelectionEpoch &+= 1
         return snapshot
     }
 
@@ -40,6 +43,7 @@ actor DiaryStore {
         guard !exists(incoming.profile.id) else { throw DiaryError.invalidData }
         try write(incoming)
         current = incoming
+        profileSelectionEpoch &+= 1
         return incoming
     }
 
@@ -47,13 +51,14 @@ actor DiaryStore {
         let loaded = try read(file(id))
         guard loaded.profile.id == id else { throw DiaryError.wrongOwner }
         current = loaded
+        profileSelectionEpoch &+= 1
         return loaded
     }
 
-    func signOut() { current = nil }
+    func signOut() { current = nil; profileSelectionEpoch &+= 1 }
 
     func snapshot(expectedProfileID: UUID? = nil) throws -> DiarySnapshot {
-        guard let current else { throw DiaryError.noProfile }
+        guard let current = stagedCoachSnapshot ?? self.current else { throw DiaryError.noProfile }
         guard expectedProfileID == nil || expectedProfileID == current.profile.id else { throw DiaryError.wrongOwner }
         return current
     }
@@ -79,10 +84,11 @@ actor DiaryStore {
         try transaction(expectedProfileID) { snapshot in
             guard snapshot.activeDayID != nil else { throw DiaryError.notFound }
             snapshot.previousDayConfirmedAt = at
+            resolveCoachDayChoices(in: &snapshot, at: at, dayID: snapshot.activeDayID!)
         }
     }
 
-    func capture(text: String, photos: [MealPhoto], reviewFirst: Bool, dayID: UUID, at: Date = Date(), submissionID: UUID = UUID(), expectedProfileID: UUID? = nil) throws -> DiaryMeal {
+    func capture(text: String, photos: [MealPhoto], reviewFirst: Bool, dayID: UUID, at: Date = Date(), submissionID: UUID = UUID(), forCoach: Bool = false, expectedProfileID: UUID? = nil) throws -> DiaryMeal {
         let original = try snapshot(expectedProfileID: expectedProfileID)
         if let existing = original.meals.first(where: { $0.submissions.contains { $0.id == submissionID } }) { return existing }
         var meal = DiaryMeal(dayID: dayID, capturedAt: at, eatenAt: at, photos: photos,
@@ -92,6 +98,7 @@ actor DiaryStore {
             guard snapshot.days.contains(where: { $0.id == dayID }) else { throw DiaryError.notFound }
             meal.items = []
             snapshot.meals.append(meal)
+            if forCoach { appendManualCoachTurn(meal: meal, submissionID: submissionID, at: at, snapshot: &snapshot) }
         }
         return meal
     }
@@ -191,24 +198,7 @@ actor DiaryStore {
             let previous = reviewIndex.map { snapshot.meals[m].submissions[$0].proposal?.items.first { $0.id == item.id } }
                 ?? snapshot.meals[m].items.first { $0.id == item.id }
             guard let previous else { throw DiaryError.notFound }
-            var edited = item
-            edited.nutrientSources = previous.nutrientSources
-            let nutrients: [(String, KeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("carbs", \.carbs), ("protein", \.protein), ("fat", \.fat)]
-            for (name, field) in nutrients {
-                edited.nutrientSources[name] = item.nutrition[keyPath: field] == previous.nutrition[keyPath: field]
-                    ? previous.nutrientSources[name] ?? previous.provenance : .user
-            }
-            if edited.quantity != previous.quantity && edited.nutrition == previous.nutrition {
-                let basis = previous.nutritionBasis ?? (previous.quantity > 0 ? previous.nutrition.scaled(by: 1 / previous.quantity) : nil)
-                guard let basis else { throw DiaryError.invalidData }
-                edited.nutrition = basis.scaled(by: edited.quantity)
-                edited.nutritionBasis = basis
-            } else if edited.quantity > 0 {
-                edited.nutritionBasis = edited.nutrition.scaled(by: 1 / edited.quantity)
-            }
-            edited.provenance = .user
-            edited.reference = previous.reference
-            edited.uncertain = edited.nutrientSources.values.contains { [.sample, .estimate].contains($0) }
+            let edited = try correctedItem(item, previous: previous)
             if let s = reviewIndex {
                 guard snapshot.meals[m].submissions[s].baseRevision == snapshot.meals[m].revision else { throw DiaryError.staleRevision }
                 let i = snapshot.meals[m].submissions[s].proposal!.items.firstIndex { $0.id == item.id }!
@@ -227,7 +217,7 @@ actor DiaryStore {
         }
     }
 
-    func correctMeal(mealID: UUID, text: String, photos: [MealPhoto] = [], reviewFirst: Bool = false, submissionID: UUID = UUID(), expectedProfileID: UUID? = nil) throws -> DiaryMeal {
+    func correctMeal(mealID: UUID, text: String, photos: [MealPhoto] = [], reviewFirst: Bool = false, submissionID: UUID = UUID(), forCoach: Bool = false, expectedProfileID: UUID? = nil) throws -> DiaryMeal {
         let original = try snapshot(expectedProfileID: expectedProfileID)
         if let existing = original.meals.first(where: { $0.submissions.contains { $0.id == submissionID } }) {
             guard existing.id == mealID else { throw DiaryError.invalidData }
@@ -239,6 +229,7 @@ actor DiaryStore {
             snapshot.meals[m].photos.append(contentsOf: photos)
             snapshot.meals[m].submissions.append(MealSubmission(id: submissionID, baseRevision: snapshot.meals[m].revision,
                 text: text, photoIDs: photos.map(\.id), reviewFirst: reviewFirst))
+            if forCoach { appendManualCoachTurn(meal: snapshot.meals[m], submissionID: submissionID, at: Date(), snapshot: &snapshot) }
         }
         return try snapshot(expectedProfileID: expectedProfileID).meals.first { $0.id == mealID }!
     }
@@ -254,6 +245,10 @@ actor DiaryStore {
         try transaction(expectedProfileID) { snapshot in
             guard let m = snapshot.meals.firstIndex(where: { $0.id == mealID }) else { throw DiaryError.notFound }
             snapshot.meals[m].photos.removeAll { $0.id == photoID }
+            for t in snapshot.coachTurns.indices where snapshot.coachTurns[t].pendingMealID == mealID || snapshot.coachTurns[t].receipts.contains(where: { $0.mealID == mealID }) {
+                snapshot.coachTurns[t].photoIDs.removeAll { $0 == photoID }
+                snapshot.coachTurns[t].photos.removeAll { $0.id == photoID }
+            }
             for index in snapshot.meals[m].submissions.indices {
                 if snapshot.meals[m].submissions[index].photoIDs.contains(photoID),
                    snapshot.meals[m].submissions[index].state != .saved {
@@ -268,16 +263,26 @@ actor DiaryStore {
     func deleteMeal(_ mealID: UUID, expectedProfileID: UUID? = nil) throws {
         try transaction(expectedProfileID) { snapshot in
             guard snapshot.meals.contains(where: { $0.id == mealID }) else { throw DiaryError.notFound }
+            let photoIDs = Set(snapshot.meals.first { $0.id == mealID }!.photos.map(\.id))
+            for t in snapshot.coachTurns.indices where snapshot.coachTurns[t].pendingMealID == mealID || snapshot.coachTurns[t].receipts.contains(where: { $0.mealID == mealID }) {
+                snapshot.coachTurns[t].photoIDs.removeAll { photoIDs.contains($0) }
+                if snapshot.coachTurns[t].pendingMealID == mealID { snapshot.coachTurns[t].state = .needsClarification }
+            }
             snapshot.meals.removeAll { $0.id == mealID }
             snapshot.deletedMealIDs.append(mealID)
         }
     }
 
-    func moveMeal(_ mealID: UUID, to dayID: UUID, expectedProfileID: UUID? = nil) throws {
+    func moveMeal(_ mealID: UUID, to dayID: UUID, eatenAt: Date? = nil, expectedProfileID: UUID? = nil) throws {
         try transaction(expectedProfileID) { snapshot in
             guard snapshot.days.contains(where: { $0.id == dayID }), let m = snapshot.meals.firstIndex(where: { $0.id == mealID })
             else { throw DiaryError.notFound }
             snapshot.meals[m].dayID = dayID
+            if let eatenAt {
+                let day = snapshot.days.first { $0.id == dayID }!
+                guard eatenAt.timeIntervalSince1970.isFinite, dateLabel(eatenAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+                snapshot.meals[m].eatenAt = eatenAt; snapshot.meals[m].timePrecision = .exact
+            }
         }
     }
 
@@ -321,7 +326,7 @@ actor DiaryStore {
                 try FileManager.default.removeItem(at: url)
             }
         } catch { throw DiaryError.persistenceFailed }
-        if current?.profile.id == id { current = nil }
+        if current?.profile.id == id { current = nil; profileSelectionEpoch &+= 1 }
     }
 
     func exportData(expectedProfileID: UUID? = nil) throws -> Data {
@@ -347,6 +352,7 @@ actor DiaryStore {
     private func transaction(_ owner: UUID?, _ change: (inout DiarySnapshot) throws -> Void) throws {
         var next = try snapshot(expectedProfileID: owner)
         try change(&next)
+        if stagedCoachSnapshot != nil { stagedCoachSnapshot = next; return }
         next.revision += 1
         // shortcut: bounded ancestry fails closed for snapshots more than 255 writes apart.
         next.lineage = Array((next.lineage ?? []).suffix(255)) + [UUID()]
@@ -361,6 +367,7 @@ actor DiaryStore {
         if !snapshot.days.contains(where: { $0.id == day.id }) { snapshot.days.append(day) }
         snapshot.activeDayID = day.id
         snapshot.previousDayConfirmedAt = nil
+        resolveCoachDayChoices(in: &snapshot, at: at, dayID: day.id)
         return day
     }
 
@@ -447,4 +454,427 @@ actor DiaryStore {
             try createDatabase(snapshot)
         }
     }
+    func selectionEpoch(expectedProfileID: UUID) throws -> UInt64 {
+        _ = try snapshot(expectedProfileID: expectedProfileID)
+        return profileSelectionEpoch
+    }
+    func validateSelection(epoch: UInt64, expectedProfileID: UUID) throws {
+        _ = try snapshot(expectedProfileID: expectedProfileID)
+        guard epoch == profileSelectionEpoch else { throw DiaryError.wrongOwner }
+    }
+    func captureCoachTurn(text: String, photos: [MealPhoto], at: Date = Date(), turnID: UUID = UUID(), pendingMealID: UUID? = nil, expectedProfileID: UUID) throws -> CoachTurn {
+        let original = try snapshot(expectedProfileID: expectedProfileID)
+        if let existing = original.coachTurns.first(where: { $0.id == turnID }) { return existing }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty else { throw DiaryError.emptyCapture }
+        var turn = CoachTurn(id: turnID, capturedAt: at, text: text, photos: photos,
+            captureTimeZoneID: original.profile.timeZoneID, activeDayID: original.activeDayID, photoIDs: photos.map(\.id))
+        if let pendingMealID {
+            guard let meal = original.meals.first(where: { $0.id == pendingMealID }),
+                  let submission = meal.submissions.first(where: { $0.id == turnID }),
+                  [.captured, .waitingForConnection, .analyzing, .needsRetry].contains(submission.state),
+                  submission.baseRevision == meal.revision else { throw DiaryError.notFound }
+            turn.pendingMealID = meal.id; turn.pendingMealRevision = meal.revision; turn.resolvedDayID = meal.dayID
+            turn.captureTimeZoneID = original.days.first { $0.id == meal.dayID }!.timeZoneID
+            turn.photos = []; turn.photoIDs = submission.photoIDs
+        }
+        try transaction(expectedProfileID) { $0.coachTurns.append(turn) }
+        return turn
+    }
+    /// Called by the serialized worker only before starting a fresh analysis attempt.
+    func preparePendingCoachTurn(turnID: UUID, expectedProfileID: UUID) throws -> CoachTurn {
+        let original = try snapshot(expectedProfileID: expectedProfileID)
+        let existing = original.coachTurns.first { $0.id == turnID }
+        if let existing, existing.pendingMealID == nil { return existing }
+        guard existing == nil || (existing!.state != .analyzing && existing!.state != .completed && existing!.receipts.isEmpty),
+              let meal = original.meals.first(where: { $0.submissions.contains { $0.id == turnID } }),
+              existing == nil || existing!.pendingMealID == meal.id,
+              let submission = meal.submissions.first(where: { $0.id == turnID }),
+              [.captured, .waitingForConnection, .analyzing, .needsRetry].contains(submission.state)
+        else { throw DiaryError.staleRevision }
+        if let existing, submission.baseRevision == meal.revision && existing.pendingMealRevision == meal.revision { return existing }
+        var prepared: CoachTurn!
+        try transaction(expectedProfileID) { snapshot in
+            let m = snapshot.meals.firstIndex { $0.id == meal.id }!, s = snapshot.meals[m].submissions.firstIndex { $0.id == turnID }!
+            snapshot.meals[m].submissions[s].baseRevision = meal.revision
+            snapshot.meals[m].submissions[s].proposal = nil
+            snapshot.meals[m].submissions[s].state = .captured
+            if let t = snapshot.coachTurns.firstIndex(where: { $0.id == turnID }) {
+                snapshot.coachTurns[t].pendingMealRevision = meal.revision
+                prepared = snapshot.coachTurns[t]
+            } else {
+                prepared = CoachTurn(id: turnID, capturedAt: meal.capturedAt, text: submission.text, photos: [],
+                    captureTimeZoneID: snapshot.days.first { $0.id == meal.dayID }!.timeZoneID,
+                    activeDayID: meal.dayID, photoIDs: submission.photoIDs, resolvedDayID: meal.dayID,
+                    pendingMealID: meal.id, pendingMealRevision: meal.revision)
+                snapshot.coachTurns.append(prepared)
+            }
+        }
+        return prepared
+    }
+    func coachTurn(turnID: UUID, expectedProfileID: UUID) throws -> CoachTurn {
+        guard let turn = try snapshot(expectedProfileID: expectedProfileID).coachTurns.first(where: { $0.id == turnID }) else { throw DiaryError.notFound }
+        return turn
+    }
+    func coachPhotos(turnID: UUID, expectedProfileID: UUID) throws -> [MealPhoto] {
+        let snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
+        let linkedMeals = Set(turn.receipts.compactMap(\.mealID) + (turn.pendingMealID.map { [$0] } ?? []))
+        return turn.photoIDs.compactMap { id in turn.photos.first { $0.id == id } ?? snapshot.meals.filter { linkedMeals.contains($0.id) }.lazy.flatMap(\.photos).first { $0.id == id } }
+    }
+    func coachContext(turnID: UUID, expectedProfileID: UUID) throws -> CoachContext {
+        let snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
+        let days = Array(snapshot.days.suffix(14)), ids = Set(snapshot.days.suffix(14).map(\.id))
+        let eligibleMeals = snapshot.meals.filter { ids.contains($0.dayID) }
+        var profile = snapshot.profile
+        profile.preferences = coachProse(profile.preferences, maximumBytes: 8192)
+        profile.name = coachProse(profile.name, maximumBytes: 512)
+        var recent = snapshot.coachTurns.filter { $0.id != turnID }.suffix(12).map {
+            CoachContext.Turn(id: $0.id, capturedAt: $0.capturedAt, text: coachProse($0.text, maximumBytes: 1024),
+                assistantText: $0.assistantText.map { coachProse($0, maximumBytes: 1024) })
+        }
+        while try JSONEncoder().encode(recent).count > 8192 { recent.removeFirst() }
+        var context = CoachContext(profile: profile, capturedAt: turn.capturedAt, captureTimeZoneID: turn.captureTimeZoneID,
+            activeDayID: turn.resolvedDayID ?? turn.activeDayID, days: days, meals: [], weights: Array(snapshot.weights.suffix(14)), recentTurns: recent)
+        context.pendingMealID = turn.pendingMealID; context.pendingMealRevision = turn.pendingMealRevision
+        context.truncated = profile != snapshot.profile || recent.count != snapshot.coachTurns.filter { $0.id != turnID }.count ||
+            recent.contains { projected in snapshot.coachTurns.contains { $0.id == projected.id && ($0.text != projected.text || $0.assistantText != projected.assistantText) } }
+        context.additionalMealCount = max(0, eligibleMeals.count - 40)
+        for meal in eligibleMeals.suffix(40) {
+            let projection = CoachContext.Meal(id: meal.id, dayID: meal.dayID, revision: meal.revision,
+                eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: meal.items, state: meal.state)
+            let candidate = context.meals + [projection]
+            if try JSONEncoder().encode(candidate).count <= 24_000 { context.meals.append(projection) }
+            else { context.omittedMeals.append(CoachContext.MealReference(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count)) }
+        }
+        while try JSONEncoder().encode(context).count > 60_000, let meal = context.meals.first {
+            context.meals.removeFirst()
+            context.omittedMeals.append(CoachContext.MealReference(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count))
+        }
+        context.truncated = context.truncated || !context.omittedMeals.isEmpty || context.additionalMealCount > 0
+        guard try JSONEncoder().encode(context).count <= 60_000 else { throw DiaryError.invalidData }
+        return context
+    }
+    private func coachProse(_ value: String, maximumBytes: Int) -> String {
+        guard value.utf8.count > maximumBytes else { return value }
+        return String(decoding: value.utf8.prefix(maximumBytes), as: UTF8.self) + "…"
+    }
+    func setCoachTurnState(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, expectedProfileID: UUID) throws {
+        try transaction(expectedProfileID) { snapshot in
+            guard let i = snapshot.coachTurns.firstIndex(where: { $0.id == turnID }) else { throw DiaryError.notFound }
+            snapshot.coachTurns[i].state = state
+            snapshot.coachTurns[i].needsDayChoice = state == .needsClarification && needsDayChoice ? true : nil
+            if state != .completed { snapshot.coachTurns[i].assistantText = nil }
+        }
+    }
+    func completeCoachTurn(turnID: UUID, assistantText: String, expectedProfileID: UUID) throws {
+        try transaction(expectedProfileID) { snapshot in
+            guard let i = snapshot.coachTurns.firstIndex(where: { $0.id == turnID }) else { throw DiaryError.notFound }
+            snapshot.coachTurns[i].assistantText = assistantText; snapshot.coachTurns[i].state = .completed
+            snapshot.coachTurns[i].needsDayChoice = nil
+        }
+    }
+    func applyCoachFood(turnID: UUID, targetLocalDate: String, items: [FoodItem], eatenAt: Date? = nil, expectedProfileID: UUID) throws -> CoachReceipt {
+        let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
+        let key = "\(turnID.uuidString)/food/\(targetLocalDate)"
+        if let receipt = turn.receipts.first(where: { $0.operationKey == key }) {
+            guard try snapshot(expectedProfileID: expectedProfileID).meals.contains(where: { $0.id == receipt.mealID }) else { throw DiaryError.notFound }
+            return receipt
+        }
+        guard !items.isEmpty else { throw DiaryError.invalidData }; try validateItems(items)
+        var receipt: CoachReceipt!
+        try transaction(expectedProfileID) { snapshot in
+            let t = snapshot.coachTurns.firstIndex { $0.id == turnID }!
+            let day = try coachDay(localDate: targetLocalDate, turn: turn, snapshot: &snapshot)
+            var meal: DiaryMeal
+            if let pendingID = turn.pendingMealID {
+                guard let m = snapshot.meals.firstIndex(where: { $0.id == pendingID }),
+                      let s = snapshot.meals[m].submissions.firstIndex(where: { $0.id == turn.id }),
+                      snapshot.meals[m].submissions[s].state != .cancelled else { throw DiaryError.notFound }
+                guard snapshot.meals[m].revision == turn.pendingMealRevision else { throw DiaryError.staleRevision }
+                meal = snapshot.meals[m]
+                if meal.revision > 0 { guard meal.dayID == day.id else { throw DiaryError.ambiguousDay } }
+                meal.dayID = day.id
+                let proposedItems = try coachFoodItems(items, in: meal, turnID: turn.id)
+                let proposal = AnalysisOutput(profileID: expectedProfileID, mealID: meal.id, submissionID: turn.id, baseRevision: meal.revision, items: proposedItems)
+                meal.submissions[s].proposal = proposal
+                if meal.submissions[s].reviewFirst { meal.submissions[s].state = .awaitingReview }
+                else { meal.items = proposedItems; meal.revision += 1; meal.submissions[s].state = .saved }
+                // Coach timestamps are unconfirmed; retain the linked manual capture's precision.
+                if turn.pendingMealRevision == 0 && day.id != turn.activeDayID { meal.eatenAt = day.startAt; meal.timePrecision = .dateOnly }
+                snapshot.meals[m] = meal
+            } else {
+                meal = DiaryMeal(dayID: day.id, capturedAt: turn.capturedAt, eatenAt: day.startAt,
+                    revision: 1, timePrecision: .dateOnly, items: items, photos: turn.photos)
+                snapshot.meals.append(meal)
+            }
+            snapshot.coachTurns[t].photos = []
+            if turn.pendingMealID != nil { snapshot.coachTurns[t].pendingMealRevision = meal.revision }
+            receipt = CoachReceipt(operationKey: key, turnID: turnID, dayID: day.id, mealID: meal.id,
+                committedRevision: snapshot.revision + 1, resultJSON: try coachJSON(CoachContext.Meal(id: meal.id, dayID: meal.dayID,
+                    revision: meal.revision, eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: meal.items, state: meal.state)))
+            snapshot.coachTurns[t].receipts.append(receipt)
+        }
+        return receipt
+    }
+    func applyCoachItemCorrection(turnID: UUID, mealID: UUID, item: FoodItem, expectedRevision: Int, expectedProfileID: UUID) throws -> CoachReceipt {
+        let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
+        guard turn.pendingMealID == nil || turn.pendingMealID == mealID else { throw DiaryError.invalidData }
+        let key = "\(turnID.uuidString)/correct/\(mealID.uuidString)/\(item.id.uuidString)"
+        let original = try snapshot(expectedProfileID: expectedProfileID)
+        guard let meal = original.meals.first(where: { $0.id == mealID }), let previous = meal.items.first(where: { $0.id == item.id }) else { throw DiaryError.notFound }
+        if let receipt = turn.receipts.first(where: { $0.operationKey == key }) { return receipt }
+        guard meal.revision == expectedRevision,
+              turn.pendingMealID != mealID || meal.revision == turn.pendingMealRevision else { throw DiaryError.staleRevision }
+        let edited = try correctedItem(item, previous: previous); try validateItems([edited])
+        var receipt: CoachReceipt!
+        try transaction(expectedProfileID) { snapshot in
+            let m = snapshot.meals.firstIndex { $0.id == mealID }!, t = snapshot.coachTurns.firstIndex { $0.id == turnID }!
+            var proposedItems = snapshot.meals[m].submissions.first { $0.id == turnID && $0.state == .awaitingReview }?.proposal?.items ?? snapshot.meals[m].items
+            guard let proposedIndex = proposedItems.firstIndex(where: { $0.id == item.id }) else { throw DiaryError.notFound }
+            proposedItems[proposedIndex] = edited
+            if turn.pendingMealID == mealID {
+                guard let s = snapshot.meals[m].submissions.firstIndex(where: { $0.id == turnID }),
+                      snapshot.meals[m].submissions[s].state != .cancelled else { throw DiaryError.notFound }
+                snapshot.meals[m].submissions[s].proposal = AnalysisOutput(profileID: expectedProfileID, mealID: mealID,
+                    submissionID: turnID, baseRevision: snapshot.meals[m].submissions[s].baseRevision, items: proposedItems)
+                if snapshot.meals[m].submissions[s].reviewFirst { snapshot.meals[m].submissions[s].state = .awaitingReview }
+                else { snapshot.meals[m].items = proposedItems; snapshot.meals[m].revision += 1; snapshot.meals[m].submissions[s].state = .saved }
+            } else { snapshot.meals[m].items = proposedItems; snapshot.meals[m].revision += 1 }
+            if turn.pendingMealID != nil { snapshot.coachTurns[t].pendingMealRevision = snapshot.meals[m].revision }
+            receipt = CoachReceipt(operationKey: key, turnID: turnID, dayID: meal.dayID, mealID: mealID, itemID: item.id,
+                committedRevision: snapshot.revision + 1, resultJSON: try coachJSON(CoachItemResult(mealID: mealID, revision: snapshot.meals[m].revision,
+                    state: snapshot.meals[m].state, item: edited)))
+            snapshot.coachTurns[t].receipts.append(receipt)
+        }
+        return receipt
+    }
+    func closeCoachDay(turnID: UUID, localDate: String, completeness: DayCompleteness, expectedProfileID: UUID) throws -> CoachReceipt {
+        let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
+        let key = "\(turnID.uuidString)/close/\(localDate)"
+        if let receipt = turn.receipts.first(where: { $0.operationKey == key }) { return receipt }
+        var receipt: CoachReceipt!
+        try transaction(expectedProfileID) { snapshot in
+            let day = try coachDay(localDate: localDate, turn: turn, snapshot: &snapshot)
+            let d = snapshot.days.firstIndex { $0.id == day.id }!, t = snapshot.coachTurns.firstIndex { $0.id == turnID }!
+            snapshot.days[d].completeness = completeness; snapshot.days[d].closedAt = turn.capturedAt
+            receipt = CoachReceipt(operationKey: key, turnID: turnID, dayID: day.id, committedRevision: snapshot.revision + 1,
+                resultJSON: try coachJSON(snapshot.days[d]))
+            snapshot.coachTurns[t].receipts.append(receipt)
+        }
+        return receipt
+    }
+    private func coachDay(localDate: String, turn: CoachTurn, snapshot: inout DiarySnapshot) throws -> TrackingDay {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian); formatter.timeZone = TimeZone(identifier: turn.captureTimeZoneID)
+        formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
+        guard localDate.count == 10, let date = formatter.date(from: localDate), formatter.string(from: date) == localDate else { throw DiaryError.invalidData }
+        if localDate == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID), let chosen = turn.resolvedDayID {
+            guard let day = snapshot.days.first(where: { $0.id == chosen }) else { throw DiaryError.notFound }
+            return day
+        }
+        if localDate == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID),
+           let active = snapshot.days.first(where: { $0.id == turn.activeDayID }), active.localDate != localDate { throw DiaryError.ambiguousDay }
+        let currentDate = localDate == dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID)
+        let day = snapshot.days.first(where: { $0.localDate == localDate && $0.timeZoneID == turn.captureTimeZoneID })
+            ?? TrackingDay(localDate: localDate, timeZoneID: turn.captureTimeZoneID, startAt: currentDate ? turn.capturedAt : date)
+        if !snapshot.days.contains(where: { $0.id == day.id }) { snapshot.days.append(day) }
+        if snapshot.activeDayID == nil && currentDate { snapshot.activeDayID = day.id; snapshot.previousDayConfirmedAt = nil }
+        return day
+    }
+
+    private func correctedItem(_ item: FoodItem, previous: FoodItem) throws -> FoodItem {
+        var edited = item
+        edited.nutrientSources = previous.nutrientSources
+        let nutrients: [(String, KeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("carbs", \.carbs), ("protein", \.protein), ("fat", \.fat)]
+        for (name, field) in nutrients {
+            edited.nutrientSources[name] = item.nutrition[keyPath: field] == previous.nutrition[keyPath: field]
+                ? previous.nutrientSources[name] ?? previous.provenance : .user
+        }
+        if edited.quantity != previous.quantity && edited.nutrition == previous.nutrition {
+            let basis = previous.nutritionBasis ?? (previous.quantity > 0 ? previous.nutrition.scaled(by: 1 / previous.quantity) : nil)
+            guard let basis else { throw DiaryError.invalidData }
+            edited.nutrition = basis.scaled(by: edited.quantity)
+            edited.nutritionBasis = basis
+        } else if edited.quantity > 0 {
+            edited.nutritionBasis = edited.nutrition.scaled(by: 1 / edited.quantity)
+        }
+        edited.provenance = .user
+        edited.reference = previous.reference
+        edited.uncertain = previous.uncertain || edited.nutrientSources.values.contains { [.sample, .estimate].contains($0) }
+        return edited
+    }
+
+    func coachMeal(id: UUID, expectedProfileID: UUID) throws -> CoachContext.Meal {
+        guard let meal = try snapshot(expectedProfileID: expectedProfileID).meals.first(where: { $0.id == id }) else { throw DiaryError.notFound }
+        var projection = CoachContext.Meal(id: meal.id, dayID: meal.dayID, revision: meal.revision,
+            eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: [], state: meal.state, omittedItemCount: meal.items.count)
+        for item in meal.items {
+            projection.items.append(item); projection.omittedItemCount -= 1
+            if try JSONEncoder().encode(projection).count > 48_000 {
+                projection.items.removeLast(); projection.omittedItemCount += 1; break
+            }
+        }
+        return projection
+    }
+    func validateCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID) throws {
+        try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
+        guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
+        let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
+        var snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        if turn.pendingMealID != nil {
+            guard writes.filter({ if case .food = $0 { return true }; return false }).count <= 1 else { throw CoachError.invalidArguments }
+        }
+        for write in writes {
+            let key = "\(turnID.uuidString)/\(write.target)"
+            let previousReceipt = turn.receipts.first { $0.operationKey == key }
+            switch write {
+            case .food(let date, let items, let eatenAt):
+                let day = try coachDay(localDate: date, turn: turn, snapshot: &snapshot)
+                guard !items.isEmpty else { throw DiaryError.invalidData }; try validateItems(items)
+                if let eatenAt { guard dateLabel(eatenAt, zone: turn.captureTimeZoneID) == date else { throw DiaryError.invalidData } }
+                if let previousReceipt {
+                    guard snapshot.meals.contains(where: { $0.id == previousReceipt.mealID }) else { throw DiaryError.notFound }
+                } else if let pendingID = turn.pendingMealID {
+                    guard let meal = snapshot.meals.first(where: { $0.id == pendingID }),
+                          let submission = meal.submissions.first(where: { $0.id == turnID }), submission.state != .cancelled else { throw DiaryError.notFound }
+                    guard meal.revision == turn.pendingMealRevision else { throw DiaryError.staleRevision }
+                    if meal.revision > 0 { guard meal.dayID == day.id else { throw DiaryError.ambiguousDay } }
+                    _ = try coachFoodItems(items, in: meal, turnID: turnID)
+                }
+            case .correction(let mealID, let item, let revision):
+                guard turn.pendingMealID == nil || turn.pendingMealID == mealID else { throw DiaryError.invalidData }
+                guard let meal = snapshot.meals.first(where: { $0.id == mealID }),
+                      let previous = meal.items.first(where: { $0.id == item.id }) else { throw DiaryError.notFound }
+                if previousReceipt == nil {
+                    guard meal.revision == revision,
+                          turn.pendingMealID != mealID || meal.revision == turn.pendingMealRevision else { throw DiaryError.staleRevision }
+                    try validateItems([correctedItem(item, previous: previous)])
+                }
+            case .close(let date, _): _ = try coachDay(localDate: date, turn: turn, snapshot: &snapshot)
+            }
+        }
+        guard turn.receipts.count + writes.filter({ write in !turn.receipts.contains { $0.operationKey == "\(turnID.uuidString)/\(write.target)" } }).count <= 16 else { throw CoachError.limitExceeded }
+    }
+    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID) throws -> [CoachReceipt] {
+        try validateCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID)
+        guard !writes.isEmpty else { return [] }
+        let original = try snapshot(expectedProfileID: expectedProfileID)
+        let priorKeys = Set(original.coachTurns.first { $0.id == turnID }!.receipts.map(\.operationKey))
+        guard stagedCoachSnapshot == nil else { throw DiaryError.invalidData }
+        stagedCoachSnapshot = original
+        defer { stagedCoachSnapshot = nil }
+        // No await: stage all record/receipt operations, then acknowledge one durable write.
+        let receipts = try writes.map { write in
+            switch write {
+            case .food(let date, let items, let eatenAt):
+                return try applyCoachFood(turnID: turnID, targetLocalDate: date, items: items, eatenAt: eatenAt, expectedProfileID: expectedProfileID)
+            case .correction(let meal, let item, _):
+                let revision = try snapshot(expectedProfileID: expectedProfileID).meals.first { $0.id == meal }!.revision
+                return try applyCoachItemCorrection(turnID: turnID, mealID: meal, item: item, expectedRevision: revision, expectedProfileID: expectedProfileID)
+            case .close(let date, let completeness):
+                return try closeCoachDay(turnID: turnID, localDate: date, completeness: completeness, expectedProfileID: expectedProfileID)
+            }
+        }
+        var next = stagedCoachSnapshot!
+        if next != original {
+            next.revision = original.revision + 1
+            next.lineage = Array((original.lineage ?? []).suffix(255)) + [UUID()]
+        }
+        let t = next.coachTurns.firstIndex { $0.id == turnID }!
+        for i in next.coachTurns[t].receipts.indices where !priorKeys.contains(next.coachTurns[t].receipts[i].operationKey) {
+            next.coachTurns[t].receipts[i].committedRevision = next.revision
+        }
+        if next != original { try write(next); current = next }
+        return receipts.map { receipt in next.coachTurns[t].receipts.first { $0.operationKey == receipt.operationKey }! }
+    }
+    func finishCoachTurn(turnID: UUID, assistantText: String, epoch: UInt64, expectedProfileID: UUID) throws {
+        try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
+        try completeCoachTurn(turnID: turnID, assistantText: assistantText, expectedProfileID: expectedProfileID)
+    }
+    func failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, epoch: UInt64, expectedProfileID: UUID) throws {
+        try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
+        try setCoachTurnState(turnID: turnID, state: state, needsDayChoice: needsDayChoice, expectedProfileID: expectedProfileID)
+    }
+    func coachCommittedSummary(turnID: UUID, expectedProfileID: UUID) throws -> String {
+        let snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
+        var facts: [String] = []
+        for receipt in turn.receipts {
+            if let id = receipt.mealID {
+                guard let meal = snapshot.meals.first(where: { $0.id == id }) else { facts.append("This meal was deleted."); continue }
+                if meal.state == .awaitingReview { facts.append("Estimate ready for review."); continue }
+                let names = meal.items.map(\.name).joined(separator: ", ")
+                let calories = meal.totals.kcal.map { " \(Int($0.rounded())) kcal." } ?? " Calories are incomplete."
+                facts.append("\(receipt.itemID == nil ? "Logged" : "Updated") \(names)." + calories + " Nutrition may be uncertain.")
+            } else if let day = snapshot.days.first(where: { $0.id == receipt.dayID }) {
+                facts.append("Closed \(day.localDate) as \(day.completeness.rawValue).")
+            }
+        }
+        return facts.joined(separator: "\n")
+    }
+
+    private func appendManualCoachTurn(meal: DiaryMeal, submissionID: UUID, at: Date, snapshot: inout DiarySnapshot) {
+        let submission = meal.submissions.first { $0.id == submissionID }!
+        snapshot.coachTurns.append(CoachTurn(id: submissionID, capturedAt: at, text: submission.text,
+            captureTimeZoneID: snapshot.days.first { $0.id == meal.dayID }!.timeZoneID, activeDayID: snapshot.activeDayID,
+            photoIDs: submission.photoIDs, resolvedDayID: meal.dayID, pendingMealID: meal.id, pendingMealRevision: meal.revision))
+    }
+
+    private struct CoachItemResult: Encodable {
+        var mealID: UUID
+        var revision: Int
+        var state: SubmissionState
+        var item: FoodItem
+    }
+    private func coachFoodItems(_ additions: [FoodItem], in meal: DiaryMeal, turnID: UUID) throws -> [FoodItem] {
+        guard meal.revision > 0 else { return additions }
+        let priorItems = meal.submissions.first { $0.id == turnID && $0.state == .awaitingReview }?.proposal?.items ?? meal.items
+        let existingIDs = Set(priorItems.map(\.id))
+        let existingNames = Set(priorItems.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        guard additions.allSatisfy({ !existingIDs.contains($0.id) && !existingNames.contains($0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) }) else { throw DiaryError.invalidData }
+        let items = priorItems + additions
+        try validateItems(items)
+        return items
+    }
+
+    private func resolveCoachDayChoices(in snapshot: inout DiarySnapshot, at: Date, dayID: UUID) {
+        for i in snapshot.coachTurns.indices where snapshot.coachTurns[i].state == .needsClarification && snapshot.coachTurns[i].needsDayChoice == true {
+            let turn = snapshot.coachTurns[i]
+            if dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == dateLabel(at, zone: turn.captureTimeZoneID) {
+                snapshot.coachTurns[i].resolvedDayID = dayID
+                snapshot.coachTurns[i].needsDayChoice = nil
+            }
+        }
+    }
+    func coachRecordedSummary(expectedProfileID: UUID) throws -> String {
+        let snapshot = try snapshot(expectedProfileID: expectedProfileID)
+        let days = snapshot.days.filter { day in day.completeness == .complete || snapshot.meals.contains { $0.dayID == day.id && $0.isSaved } }.suffix(14)
+        let facts = days.map { day in
+            let totals = snapshot.totals(dayID: day.id)
+            return "\(day.localDate): " + (totals.kcal.map { "\(Int($0.rounded())) kcal" } ?? "calories incomplete") + "."
+        }
+        return "No new food was saved in this turn.\n" + (facts.isEmpty ? "There are no recorded food totals yet." : facts.joined(separator: "\n"))
+    }
+
+    func chooseCoachDay(turnID: UUID, usePrevious: Bool, at: Date = Date(), expectedProfileID: UUID) throws {
+        let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
+        guard turn.needsDayChoice == true else { throw DiaryError.invalidData }
+        try transaction(expectedProfileID) { snapshot in
+            let day: TrackingDay
+            if usePrevious {
+                guard let previous = snapshot.days.first(where: { $0.id == turn.activeDayID }) else { throw DiaryError.notFound }
+                day = previous
+            } else {
+                let date = dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID)
+                day = snapshot.days.first { $0.localDate == date && $0.timeZoneID == turn.captureTimeZoneID }
+                    ?? TrackingDay(localDate: date, timeZoneID: turn.captureTimeZoneID, startAt: turn.capturedAt)
+                if !snapshot.days.contains(where: { $0.id == day.id }) { snapshot.days.append(day) }
+                if dateLabel(at, zone: turn.captureTimeZoneID) == date { snapshot.activeDayID = day.id; snapshot.previousDayConfirmedAt = nil }
+            }
+            let i = snapshot.coachTurns.firstIndex { $0.id == turnID }!
+            snapshot.coachTurns[i].resolvedDayID = day.id; snapshot.coachTurns[i].needsDayChoice = nil
+        }
+    }
+
 }

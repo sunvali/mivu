@@ -43,7 +43,7 @@ struct ArchiveTests {
         #expect(throws: DiaryError.invalidData) { try DiaryArchive.decode(Data(encoded.prefix(encoded.count / 2))) }
         #expect(throws: DiaryError.wrongOwner) { try DiaryArchive.decode(encoded, expectedProfileID: UUID()) }
         var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        object["version"] = 2
+        object["version"] = 99
         #expect(throws: DiaryError.invalidData) { try DiaryArchive.decode(JSONSerialization.data(withJSONObject: object)) }
         var wrong = snapshot
         wrong.meals[0].dayID = UUID()

@@ -1,16 +1,21 @@
 # Mivu
 
 Mivu is a native iPhone food diary built with SwiftUI and Swift 6 for iOS 26 and
-newer. The English-only MVP centers on Today, meal capture and review, history,
-and settings. The Hebrew language selector is disabled for now; existing profile
+newer. Coach saves conversational text and photos, with Today, meal review,
+History and Settings alongside it. The Hebrew language selector is disabled for now; existing profile
 and archive data, including stored language values, must remain intact.
 
-## Sample mode
+## Conversational tracking
 
-The diary works without a ChatGPT connection. Every meal uses the same clearly
-labeled synthetic apple estimate; it is sample data, not food recognition.
-Settings also offers an optional ChatGPT connection diagnostic, separate from
-diary use.
+Input saves locally before analysis. Connect ChatGPT and select an eligible model
+in Settings to analyze meals; offline input remains available for retry. Food
+operations update real diary records, and estimates remain open to review and
+correction. Live text/image recognition still needs provider acceptance; the
+[core verification record](docs/verification/2026-10-12-coach-core.md) distinguishes
+tested native persistence from external and physical-device gates.
+
+An explicit `--sample-mode` launch uses a clearly labeled synthetic apple estimate.
+Sample mode and isolated inference fixtures do not establish food recognition.
 
 ## Private data and backups
 
@@ -37,8 +42,9 @@ personal meal data. Keep changes on a feature branch, preserve English LTR,
 Dynamic Type, VoiceOver, reduced motion, and accessible touch targets. Hebrew RTL
 is not an MVP acceptance requirement. Report verification with its actual
 environment, result, and remaining gates; workflow files alone are not evidence
-of a hosted run. The released baseline remains a sample diary; the coach
-expansion is underway, not completed. See the [coach feature audit](docs/verification/2026-10-12-coach-feature-audit.md),
+of a hosted run. The released baseline remains a sample diary; conversational food
+tracking is implemented on this branch, while progress tracking and broader
+coaching remain underway. See the [merged Coach foundation evidence](docs/verification/2026-10-12-coach-foundation.md), the [coach feature audit](docs/verification/2026-10-12-coach-feature-audit.md),
 [conversational coach design](docs/superpowers/specs/2026-10-12-conversational-coach-design.md),
 and [P0 implementation plan](docs/superpowers/plans/2026-10-12-coach-p0.md) for
 the current scope and evidence.

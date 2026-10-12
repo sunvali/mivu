@@ -57,7 +57,7 @@ final class ChatGPTConnection {
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
     @ObservationIgnored private var probeTask: Task<Void, Never>?
     @ObservationIgnored private var listener: LoopbackCallback?
-    @ObservationIgnored private var generation = 0
+    private var generation = 0
     @ObservationIgnored private var isForeground = true
 
     init(auth: AuthSession = AuthSession(), client: ResponsesClient = ResponsesClient(),
@@ -226,6 +226,45 @@ final class ChatGPTConnection {
                 if reloadSavedJob(), !(error is CancellationError) { await reflectFailure(error, revision: revision) }
             }
             if revision == generation { isAnalyzing = false; probeTask = nil }
+        }
+    }
+
+    var sessionRevision: Int { generation }
+
+    func coachInference() throws -> @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult {
+        guard planAuthorized, let owner = activeRegistrationID,
+              !isConnecting, !isDisconnecting,
+              models.contains(where: { $0.slug == selectedModel }) else {
+            throw SessionError.noActiveSession
+        }
+        let revision = generation, model = selectedModel
+        return { [self] input, namespace in
+            try await self.respondForCoach(input: input, namespace: namespace,
+                                           owner: owner, revision: revision, model: model)
+        }
+    }
+
+    private func respondForCoach(input: [CoachInferenceInput], namespace: Data,
+                                 owner: String, revision: Int, model: String) async throws -> CoachInferenceResult {
+        func validate() throws {
+            try Task.checkCancellation()
+            guard generation == revision, activeRegistrationID == owner,
+                  selectedModel == model, planAuthorized,
+                  !isConnecting, !isDisconnecting,
+                  models.contains(where: { $0.slug == model }) else { throw SessionError.sessionChanged }
+        }
+        try validate()
+        do {
+            let token = try await auth.accessToken(expectedRegistrationID: owner)
+            try validate()
+            let result = try await client.respond(model: model, input: input,
+                                                  toolNamespace: namespace, accessToken: token)
+            try validate()
+            return result
+        } catch {
+            try validate()
+            if !(error is CancellationError) { await reflectFailure(error, revision: revision) }
+            throw error
         }
     }
 

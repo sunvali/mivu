@@ -12,6 +12,9 @@ struct MealDraft {
 @MainActor @Observable
 final class DiaryViewModel {
     let store: DiaryStore
+    let sampleMode: Bool
+    var resumeCoach: (() -> Void)?
+    var retryCoachMeal: ((UUID) -> Void)?
     private let profileSelection: @Sendable (UUID) async throws -> DiarySnapshot
     private let preferences: UserDefaults?
     let backup: FolderBackup?
@@ -28,14 +31,14 @@ final class DiaryViewModel {
     private var worker: Task<Void, Never>?
     private var workerID: UUID?
 
-    init(store: DiaryStore, preferences: UserDefaults? = nil, backup: FolderBackup? = nil, profileSelection: (@Sendable (UUID) async throws -> DiarySnapshot)? = nil) {
-        self.store = store; self.preferences = preferences; self.backup = backup
+    init(store: DiaryStore, sampleMode: Bool = false, preferences: UserDefaults? = nil, backup: FolderBackup? = nil, profileSelection: (@Sendable (UUID) async throws -> DiarySnapshot)? = nil) {
+        self.store = store; self.sampleMode = sampleMode; self.preferences = preferences; self.backup = backup
         self.profileSelection = profileSelection ?? { try await store.selectProfile($0) }
     }
 
     static func local() -> DiaryViewModel {
         let directory = DiaryLaunch.directory
-        return DiaryViewModel(store: DiaryStore(directory: directory), preferences: DiaryLaunch.defaults, backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)))
+        return DiaryViewModel(store: DiaryStore(directory: directory), sampleMode: DiaryLaunch.isSampleMode, preferences: DiaryLaunch.defaults, backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)))
     }
 
     var activeDay: TrackingDay? { snapshot?.days.first { $0.id == snapshot?.activeDayID } }
@@ -89,7 +92,7 @@ final class DiaryViewModel {
         isSaving = true
         defer { isSaving = false }
         do {
-            _ = try await store.capture(text: draft.text, photos: draft.photos.map { MealPhoto(data: $0) }, reviewFirst: draft.reviewFirst, dayID: dayID, at: at, submissionID: draft.submissionID, expectedProfileID: owner)
+            _ = try await store.capture(text: draft.text, photos: draft.photos.map { MealPhoto(data: $0) }, reviewFirst: draft.reviewFirst, dayID: dayID, at: at, submissionID: draft.submissionID, forCoach: !sampleMode, expectedProfileID: owner)
             try await refresh(profileID: owner)
             guard snapshot?.profile.id == owner else { return false }
             if isNewSubmission { captureReceipt = draft.submissionID }
@@ -240,6 +243,7 @@ final class DiaryViewModel {
 
     func enterBackground() { worker?.cancel(); worker = nil; workerID = nil }
     func resumeWorker() {
+        guard sampleMode else { resumeCoach?(); return }
         guard !isChangingProfile, worker == nil, let owner = snapshot?.profile.id else { return }
         let id = UUID()
         workerID = id
@@ -267,12 +271,23 @@ final class DiaryViewModel {
 }
 
 @MainActor enum DiaryLaunch {
+    static func shouldLaunchDiary(arguments: [String], environment: [String: String]) -> Bool {
+        guard environment["XCTestConfigurationFilePath"] != nil else { return true }
+        guard let index = arguments.firstIndex(of: "--diary-ui-test"), arguments.indices.contains(index + 1) else { return false }
+        return UUID(uuidString: arguments[index + 1]) != nil
+    }
+    static var shouldLaunchDiary: Bool {
+        shouldLaunchDiary(arguments: ProcessInfo.processInfo.arguments, environment: ProcessInfo.processInfo.environment)
+    }
     static var testID: UUID? {
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "--diary-ui-test"), args.indices.contains(index + 1) else { return nil }
         return UUID(uuidString: args[index + 1])
     }
     static var isUITest: Bool { testID != nil }
+    static var isCoachUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-ui-test") }
+    static var isCoachInferenceFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-inference-fixture") }
+    static var isSampleMode: Bool { (isUITest && !isCoachUITest) || ProcessInfo.processInfo.arguments.contains("--sample-mode") }
     static var defaults: UserDefaults {
         if let id = testID, let defaults = UserDefaults(suiteName: "MivuUITest-" + id.uuidString) { return defaults }
         return .standard

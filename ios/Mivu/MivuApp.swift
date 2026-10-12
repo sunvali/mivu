@@ -4,9 +4,12 @@ import SwiftUI
 struct MivuApp: App {
     var body: some Scene {
         WindowGroup {
-            DiaryRootView()
-                .environment(\.locale, Locale(identifier: "en"))
-                .environment(\.layoutDirection, .leftToRight)
+            Group {
+                if DiaryLaunch.shouldLaunchDiary { DiaryRootView() }
+                else { Color.clear }
+            }
+            .environment(\.locale, Locale(identifier: "en"))
+            .environment(\.layoutDirection, .leftToRight)
         }
     }
 }

@@ -76,6 +76,7 @@ struct TrackingDay: Codable, Equatable, Sendable, Identifiable {
     var timeZoneID: String
     var startAt: Date
     var completeness: DayCompleteness = .unknown
+    var closedAt: Date? = nil
 }
 
 struct MealSubmission: Codable, Equatable, Sendable, Identifiable {
@@ -94,6 +95,7 @@ struct DiaryMeal: Codable, Equatable, Sendable, Identifiable {
     var capturedAt: Date
     var eatenAt: Date
     var revision = 0
+    var timePrecision: MealTimePrecision? = nil
     var items: [FoodItem] = []
     var photos: [MealPhoto] = []
     var submissions: [MealSubmission] = []
@@ -139,16 +141,39 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     var days: [TrackingDay] = []
     var meals: [DiaryMeal] = []
     var weights: [WeightEntry] = []
+    var coachTurns: [CoachTurn] = []
     var activeDayID: UUID? = nil
     var previousDayConfirmedAt: Date? = nil
     var deletedMealIDs: [UUID] = []
     var lineage: [UUID]? = nil
+    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, lineage }
+    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], lineage: [UUID]? = nil) {
+        self.schemaVersion = schemaVersion; self.revision = revision; self.profile = profile
+        self.days = days; self.meals = meals; self.weights = weights; self.coachTurns = coachTurns
+        self.activeDayID = activeDayID; self.previousDayConfirmedAt = previousDayConfirmedAt
+        self.deletedMealIDs = deletedMealIDs; self.lineage = lineage
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        revision = try c.decode(Int.self, forKey: .revision)
+        profile = try c.decode(DiaryProfile.self, forKey: .profile)
+        days = try c.decode([TrackingDay].self, forKey: .days)
+        meals = try c.decode([DiaryMeal].self, forKey: .meals)
+        weights = try c.decode([WeightEntry].self, forKey: .weights)
+        coachTurns = try c.decodeIfPresent([CoachTurn].self, forKey: .coachTurns) ?? []
+        activeDayID = try c.decodeIfPresent(UUID.self, forKey: .activeDayID)
+        previousDayConfirmedAt = try c.decodeIfPresent(Date.self, forKey: .previousDayConfirmedAt)
+        deletedMealIDs = try c.decode([UUID].self, forKey: .deletedMealIDs)
+        lineage = try c.decodeIfPresent([UUID].self, forKey: .lineage)
+    }
     func isVerifiedSuccessor(of prior: DiarySnapshot) -> Bool {
         guard let head = prior.lineage?.last, let lineage, lineage.last != head else { return false }
         return lineage.dropLast().contains(head)
     }
     var pendingCount: Int {
         meals.reduce(0) { count, meal in count + meal.submissions.filter { [.captured, .waitingForConnection, .analyzing, .needsRetry].contains($0.state) }.count }
+        + coachTurns.filter { $0.pendingMealID == nil && [.captured, .analyzing, .waitingForConnection, .waitingForNetwork, .needsRetry, .needsClarification].contains($0.state) }.count
     }
     func totals(dayID: UUID) -> NutritionTotals {
         let items = meals.filter { $0.dayID == dayID && $0.isSaved }.flatMap(\.items)
@@ -172,7 +197,8 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
         var submissionIDs = Set<UUID>()
         for day in days {
             guard validLocalDate(day.localDate), TimeZone(identifier: day.timeZoneID) != nil,
-                  day.startAt.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+                  day.startAt.timeIntervalSince1970.isFinite,
+                  day.closedAt == nil || day.closedAt!.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
         }
         for meal in meals {
             guard days.contains(where: { $0.id == meal.dayID }), meal.revision >= 0, meal.revision < 1_000_000,
@@ -198,6 +224,36 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
                     try validateItems(proposal.items)
                 }
                 guard submission.state != .awaitingReview || submission.proposal != nil else { throw DiaryError.invalidData }
+            }
+        }
+        guard coachTurns.count <= 10_000, unique(coachTurns.map(\.id)) else { throw DiaryError.invalidData }
+        for turn in coachTurns {
+            guard turn.capturedAt.timeIntervalSince1970.isFinite, turn.text.count <= 20_000,
+                  TimeZone(identifier: turn.captureTimeZoneID) != nil, turn.photos.count <= 30,
+                  unique(turn.photos.map(\.id)), unique(turn.photoIDs), turn.photoIDs.count <= 30,
+                  turn.assistantText == nil || turn.assistantText!.utf8.count <= 65_536,
+                  turn.receipts.count <= 16, Set(turn.receipts.map(\.operationKey)).count == turn.receipts.count,
+                  turn.pendingMealRevision == nil || turn.pendingMealRevision! >= 0,
+                  turn.activeDayID == nil || days.contains(where: { $0.id == turn.activeDayID }),
+                  turn.resolvedDayID == nil || days.contains(where: { $0.id == turn.resolvedDayID }),
+                  turn.photos.allSatisfy({ turn.photoIDs.contains($0.id) }) else { throw DiaryError.invalidData }
+            for photo in turn.photos {
+                guard !photo.data.isEmpty, photo.data.count <= 10_000_000,
+                      photo.createdAt.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+                photoBytes += photo.data.count
+            }
+            for id in turn.photoIDs {
+                guard turn.photos.contains(where: { $0.id == id }) || meals.contains(where: { meal in
+                    (meal.id == turn.pendingMealID || turn.receipts.contains(where: { $0.mealID == meal.id })) && meal.photos.contains(where: { $0.id == id })
+                }) else { throw DiaryError.invalidData }
+            }
+            for receipt in turn.receipts {
+                guard receipt.turnID == turn.id, receipt.operationKey.utf8.count <= 500,
+                      !receipt.operationKey.isEmpty, receipt.committedRevision > 0,
+                      receipt.committedRevision <= revision, receipt.resultJSON.utf8.count <= 65_536,
+                      days.contains(where: { $0.id == receipt.dayID }),
+                      let data = receipt.resultJSON.data(using: .utf8),
+                      (try? JSONSerialization.jsonObject(with: data)) != nil else { throw DiaryError.invalidData }
             }
         }
         guard photoBytes <= 250_000_000 else { throw DiaryError.invalidData }

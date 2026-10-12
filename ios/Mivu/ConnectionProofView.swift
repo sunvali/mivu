@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ConnectionProofView: View {
-    @State private var connection = ChatGPTConnection()
+    @Bindable var connection: ChatGPTConnection
     @State private var callbackProbe = BrowserCallbackProbe()
     @State private var window: UIWindow?
     @State private var callbackTask: Task<Void, Never>?
@@ -91,12 +91,10 @@ struct ConnectionProofView: View {
             .navigationTitle("Mivu")
         }
         .background(PresentationWindowReader { window = $0 })
-        .task { await connection.restore() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { callbackTask?.cancel(); connection.enterBackground() }
-            else if phase == .active { Task { await connection.enterForeground() } }
+            if phase == .background { callbackTask?.cancel() }
         }
-        .onDisappear { callbackTask?.cancel(); connection.enterBackground() }
+        .onDisappear { callbackTask?.cancel() }
         .preferredColorScheme(proofColorScheme)
         .transformEnvironment(\.dynamicTypeSize) {
             if ProcessInfo.processInfo.arguments.contains("--proof-large-text") { $0 = .accessibility3 }
@@ -150,7 +148,7 @@ struct ConnectionProofView: View {
     }
 }
 
-private struct PresentationWindowReader: UIViewRepresentable {
+struct PresentationWindowReader: UIViewRepresentable {
     let foundWindow: @MainActor (UIWindow?) -> Void
     func makeUIView(context: Context) -> WindowView { WindowView(foundWindow: foundWindow) }
     func updateUIView(_ view: WindowView, context: Context) {}
