@@ -24,9 +24,8 @@ with **Stop usage: Yes**. Repository variable
 `MIVU_ACTIONS_ALLOWANCE_VERIFIED=true` was set and verified after that evidence.
 The repository remains private with default branch `main`. No billing, budget,
 payment or visibility settings changed. Earlier read-only billing API calls
-returned HTTP 404; dashboard evidence resolved that access limitation.
-Actual workflow runs still require integration and review; allowance verification
-alone is not CI or release success.
+returned HTTP 404; dashboard evidence resolved that access limitation. This
+allowance evidence is separate from the workflow results recorded below.
 
 GitHub's [billing documentation](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
 provides included minutes/storage for private repositories; excess can be billed.
@@ -34,8 +33,8 @@ Larger runners are always paid, so these workflows use neither `large` nor
 `xlarge`. Artifact retention is one day, and no package cache is uploaded.
 Concurrent account usage and storage can exhaust an earlier allowance: the
 variable records verification, it does not enforce a spending limit. Recheck
-before the initial run and release rehearsal; maintain the owner's existing
-hard stop policy. Do not enable payment methods or raise budgets.
+before additional hosted runs; maintain the owner's existing hard stop policy.
+Do not enable payment methods or raise budgets.
 
 An existing dedicated self-hosted Mac would avoid hosted runner minute charges,
 according to GitHub's billing documentation, but registration and persistent
@@ -160,11 +159,34 @@ Primary references checked 2026-10-12:
 - [Apple distribution methods](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases)
 - [Internal TestFlight processing and tester groups](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers)
 
-## Verification status
+## Verification status — 2026-10-12
 
-Workflow implementation and offline checks are not remote execution evidence.
-Included allowance and the existing spending stop are verified; actual CI and
-release runs are **NOT_STARTED**, pending source integration and review. Signed export/upload is **NOT_RUN_BLOCKED** until owner credentials and
-Apple prerequisites exist. The integration report must record actual workflow
-URLs, source commit, UTC time, exit status, native test counts and downloadable
-artifact/release IDs after execution. No device or pilot evidence is implied.
+The English-only change merged in [PR #3](https://github.com/yakov103/mivu/pull/3)
+as `9f02a1568701f62a2afd482bf02fc5ed9d9f30bb`. These are observed workflow and
+test results, not predictions from workflow files:
+
+See the [MVP acceptance matrix](../verification/2026-10-12-native-mvp-acceptance.md)
+for current product and device gates. The final source SHA and release rehearsal
+remain pending the native worker's final UI report.
+
+| Evidence | Source and result |
+|---|---|
+| [PR #3 Native CI](https://github.com/yakov103/mivu/actions/runs/38230868591) | 199 passed, 0 failed, 1 skipped. |
+| [Main Native CI](https://github.com/yakov103/mivu/actions/runs/38232085280) | Source `9f02a1568701f62a2afd482bf02fc5ed9d9f30bb`; macOS 26.6.2 arm64; 2026-10-12 09:52:13 UTC; exit 0; 199 passed, 0 failed, 1 skipped. Downloaded simulator app ZIP integrity and strict code-signature checks passed; the artifact is simulator-only. |
+| Final local aggregate native suite | 200 passed, 0 failed, 1 skipped; exit 0 in 109.4 seconds. XcodeBuildMCP result bundle `test_sim_2026-10-12T10-16-03-467Z_pid12767_0a4b06c1.xcresult`; log `test_sim_2026-10-12T10-16-03-467Z_pid12767_62699a23.log`. At run time HEAD was `251aafce42b3d3b8f9258f45c6dd8c784f33f01f` with uncommitted changes to `DiaryStyle.swift` and `DiaryUITests.swift`; final review hashes and merge commit are pending. |
+| English-focused suite | 10/10 passed. |
+| Accessibility-5/photo-focused UI run | Local working-tree run: 2 passed, 0 failed, 0 skipped in 23.3 seconds; result bundle `test_sim_2026-10-12T10-12-30-197Z_pid12219_955f17db.xcresult`. The Log meal control was hittable. Root visually inspected the dark accessibility-5 screenshot: English LTR, wrapping labels, no permanent horizontal clipping, and below-fold content scrollable in the native list. Full VoiceOver remains unverified. |
+| [Initial release rehearsal](https://github.com/yakov103/mivu/actions/runs/38226669674) | `v1.0.0-rehearsal.1` completed successfully; private draft has five digest-validated assets. The unsigned device archive is not phone-installable. |
+
+The final release rehearsal will run after the remaining native UI/Files changes
+are merged to `main`, against that immutable implementation commit. A following
+evidence-only documentation update will record the same release run without
+changing its source. End-to-end
+acceptance of creating/writing a user-selected Files folder and restoring from
+that backup is **PENDING** while it is being exercised; archive unit tests do not
+prove the file-provider journey. Physical-camera, haptics, and hardware
+VoiceOver/accessibility checks are **NOT_RUN_BLOCKED**. The signed IPA/TestFlight
+lane is **NOT_RUN_BLOCKED** because required Apple signing credentials are
+unavailable.
+Live ChatGPT recognition and Siri remain intentionally deferred. No physical
+device, cloud-sync, or pilot outcome is implied by the passing simulator CI.

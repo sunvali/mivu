@@ -88,12 +88,23 @@ History completeness/weight/coverage. Settings local profiles/signout, language,
 timezone/preferences, connection diagnostic, archive controls. Backups connected
 through Task3 interfaces after Task1 completion; no invented success state.
 
-- [ ] Test UI composition state for save failure/review/cancel/background/profile
-switching and same-meal correction before adding behavior.
-- [ ] Implement native flow in staged owned files with clear errors and accessibility.
-- [ ] Integrate agreed domain; native targeted tests, actual camera/library fallback.
-- [ ] English/light/dark/large type render and core simulator interaction checks.
-- [ ] Independent scoped review/fixes; aggregate UI smoke evidence and source hashes.
+- [x] Add focused failing UI tests for save/review/cancel/profile state before
+implementing the native flow; the reports record the RED and GREEN iterations.
+- [x] Implement Today, sample capture/review, same-meal correction, history,
+profiles/settings and durable capture integration in native SwiftUI.
+- [x] Pass the native core journey for capture, review, half correction, item
+edit, weight, history, cancellation and profile isolation. PR #3 and main report
+199 passed, 0 failed, 1 skipped; English-focused suite reports 10/10 passed.
+- [x] Render and inspect English light, dark, accessibility-3 and
+accessibility-5 states; the focused accessibility-5/photo UI run passed 2/2 and
+Log meal was hittable. Root inspected the dark accessibility-5 screenshot:
+English LTR, wrapping labels, no permanent horizontal clipping, and scrollable
+below-fold content in the native list.
+- [ ] Complete the full VoiceOver audit; physical-device accessibility remains
+unverified.
+- [x] Complete the Task 2 scoped review and fixes; PR #3 merged after whole-branch
+review. See the delivery record in docs/development/ci-cd.md.
+- [ ] Verify physical camera behavior and hardware-only accessibility/haptics.
 
 ## Task 3: Private backup/export/restore and deletion
 
@@ -107,12 +118,17 @@ folder bookmark lives outside exported diary; all work checks selected profile
 and snapshot revision, with a serial writer and atomic destination replacement.
 Use file coordination/security scoped resource and defer stopAccessing correctly.
 
-- [ ] Failing fresh-store roundtrip photos/pending/revisions/owner tests, badversion,
-truncated/oversized/invalid numeric/refID input, write-failure preservation,
-older-backup resurrection, deletion propagation and profile switch races.
-- [ ] Implement minimal codec/folder writer; native API wrapped only at actual boundary.
-- [ ] GREEN isolated/native tests; integrate actual Files picker/export/import.
-- [ ] Independently review data-loss/privacy paths and fix before acceptance.
+- [x] Add focused archive tests and pass archive photo/pending/revision roundtrip,
+acknowledged deletion propagation, configured-folder history and stale-restore
+rejection (`archiveRoundTripRetainsPhotoPendingAndRevision`,
+`acknowledgedMutationsAutomaticallyReachBackupIncludingDeletion`,
+`configuredFolderHistoryReceivesPhotoMealAndProfileDeletion`,
+`deleteRejectsLateResultAndOlderRestore`).
+- [x] Implement the versioned archive, folder writer and native export/restore
+controls; complete independent scoped review and its recovery/privacy fixes.
+- [ ] Exercise actual Files folder selection/write/status, export/import and fresh
+profile restore including photos. This provider journey is pending while it is
+being exercised; automated archive tests are not a substitute.
 
 ## Task 4: Real GitHub Actions CI/CD
 
@@ -129,25 +145,43 @@ owner secrets/certificates/team IDs, no fake signing or paid enrollment.
 
 - [x] Validate actual runner availability and cost/allowance, no hidden paid run.
 - [x] Implement workflows and exact reproducible scripts; fail on zero tests.
-- [ ] Run Actions on branch/PR and release rehearsal, inspect logs/artifacts.
-- [ ] Independent workflow/security review; fix and rerun relevant failures.
-- [ ] Document signing prerequisites and actual delivery artifacts, not just YAML.
+- [x] PR #3 and main Actions runs completed successfully with named native test
+reports and simulator artifacts; see docs/development/ci-cd.md.
+- [x] Initial `v1.0.0-rehearsal.1` completed and produced a private draft with
+five digest-validated assets.
+- [x] Workflow/security review fixes were completed before PR #3 merged.
+- [ ] Run a final release rehearsal after the last native source change, then
+record its exact run and draft-release evidence.
+- [x] Signing prerequisites and the observed unsigned artifact limits are
+documented; signed delivery remains blocked on owner-provided Apple credentials.
 
 ## Task 5: Final acceptance and delivery
 
 Root coordinates integration only, delegates source fixes to original owner.
-- [ ] Aggregate native suite and meaningful simulator UI journey: capture/text/photo,
-review/directedit/halfcorrection/dayhistory/weight/profiles/settings/archive delete.
-- [ ] Fresh-store acknowledged backup restoration including pending photos;
-profile isolation and tombstone/no-resurrection verified.
-- [ ] Inspect final rendered states, localization, DynamicType and accessibility.
-- [ ] Independent whole-branch review and scoped fix review, no recurring full audits.
-- [ ] Clean source commit and exact test/Actions evidence in docs/verification,
-README/status accurate; focused PR attached, checks observed to completion.
-- [ ] Release rehearsal creates downloadable verified artifacts. Signed Apple
-external delivery remains explicitly incomplete if human/legal credentials are absent.
-- [ ] Audit every MVP requirement and CI/CD outcome against authoritative evidence;
-keep goal active if required outcome absent. No14-day pilot claim before14days.
+- [x] Aggregate hosted native test suite: main source `9f02a1568701f62a2afd482bf02fc5ed9d9f30bb`,
+199 passed, 0 failed, 1 skipped. Interactive end-to-end and Files provider
+acceptance remain open.
+- [x] Final local aggregate on the uncommitted native UI working tree: 200 passed,
+0 failed, 1 skipped, exit 0 in 109.4s; xcresult is recorded in
+docs/development/ci-cd.md. It ran at HEAD `251aafce…` plus local `DiaryStyle.swift`
+and `DiaryUITests.swift` changes; HEAD alone does not identify this tested source.
+- [ ] Fresh Files-folder backup write and restore to a fresh profile, including
+photos and pending records; profile isolation and stale-delete protection remain
+under automated coverage, while the actual provider journey is pending.
+- [x] Inspect English light, dark, accessibility-3 and accessibility-5 renders.
+- [ ] Complete the full VoiceOver audit; hardware accessibility checks remain open.
+- [ ] Verify physical-camera and haptics behavior on hardware.
+- [x] Complete independent whole-branch review and scoped source fixes before PR #3
+merged.
+- [x] PR #3 merged and main CI passed; verification details are in
+docs/development/ci-cd.md.
+- [ ] Complete the final release rehearsal after any last native UI fix.
+- [x] Initial private draft release rehearsal produced five validated assets.
+Signed Apple delivery remains NOT_RUN_BLOCKED with required credentials absent.
+- [ ] Merge the remaining native UI/Files changes, run the final release rehearsal
+against that immutable source, then update the verification matrix in a docs-only
+follow-up tied to the same run. Reconcile remaining acceptance rows against that
+source. No 14-day pilot claim before 14 days of evidence.
 
 ## Execution authorization
 
