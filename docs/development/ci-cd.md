@@ -161,32 +161,21 @@ Primary references checked 2026-10-12:
 
 ## Verification status — 2026-10-12
 
-The English-only change merged in [PR #3](https://github.com/yakov103/mivu/pull/3)
-as `9f02a1568701f62a2afd482bf02fc5ed9d9f30bb`. These are observed workflow and
-test results, not predictions from workflow files:
-
-See the [MVP acceptance matrix](../verification/2026-10-12-native-mvp-acceptance.md)
-for current product and device gates. The final source SHA and release rehearsal
-remain pending the native worker's final UI report.
+These are observed results, not predictions from workflow files. The [MVP
+acceptance matrix](../verification/2026-10-12-native-mvp-acceptance.md) separates
+the hosted baseline from local working-tree checks and remaining acceptance gates.
 
 | Evidence | Source and result |
 |---|---|
-| [PR #3 Native CI](https://github.com/yakov103/mivu/actions/runs/38230868591) | 199 passed, 0 failed, 1 skipped. |
-| [Main Native CI](https://github.com/yakov103/mivu/actions/runs/38232085280) | Source `9f02a1568701f62a2afd482bf02fc5ed9d9f30bb`; macOS 26.6.2 arm64; 2026-10-12 09:52:13 UTC; exit 0; 199 passed, 0 failed, 1 skipped. Downloaded simulator app ZIP integrity and strict code-signature checks passed; the artifact is simulator-only. |
-| Final local aggregate native suite | 200 passed, 0 failed, 1 skipped; exit 0 in 109.4 seconds. XcodeBuildMCP result bundle `test_sim_2026-10-12T10-16-03-467Z_pid12767_0a4b06c1.xcresult`; log `test_sim_2026-10-12T10-16-03-467Z_pid12767_62699a23.log`. At run time HEAD was `251aafce42b3d3b8f9258f45c6dd8c784f33f01f` with uncommitted changes to `DiaryStyle.swift` and `DiaryUITests.swift`; final review hashes and merge commit are pending. |
-| English-focused suite | 10/10 passed. |
-| Accessibility-5/photo-focused UI run | Local working-tree run: 2 passed, 0 failed, 0 skipped in 23.3 seconds; result bundle `test_sim_2026-10-12T10-12-30-197Z_pid12219_955f17db.xcresult`. The Log meal control was hittable. Root visually inspected the dark accessibility-5 screenshot: English LTR, wrapping labels, no permanent horizontal clipping, and below-fold content scrollable in the native list. Full VoiceOver remains unverified. |
-| [Initial release rehearsal](https://github.com/yakov103/mivu/actions/runs/38226669674) | `v1.0.0-rehearsal.1` completed successfully; private draft has five digest-validated assets. The unsigned device archive is not phone-installable. |
+| [PR #4](https://github.com/yakov103/mivu/pull/4) | Merged externally while its CI run was still running. |
+| [Main Native CI](https://github.com/yakov103/mivu/actions/runs/38236090700) | Source `7a86d046200fa4e86e5110b96aa31fd479a99822`; macOS 26.6.2 arm64; provenance `2026-10-12T10:29:43.930615Z`; exit 0; 200 passed, 0 failed, 1 skipped. This is the clean hosted baseline. |
+| [Unsigned release rehearsal](https://github.com/yakov103/mivu/actions/runs/38238559422) | Run succeeded against the same `7a86d046200fa4e86e5110b96aa31fd479a99822` source; 200 passed, 0 failed, 1 skipped. Test provenance `2026-10-12T10:53:36.332089Z` and unsigned archive provenance `2026-10-12T10:54:17.610489Z`; both exit 0. Five downloaded assets matched release metadata size and SHA-256; ZIP integrity checks passed. The simulator app ZIP SHA-256 is `edf74aba2512397602b2e7cdc34a529723f34483c9bb0c2ad096809640ae1fa8`; the unsigned archive ZIP SHA-256 is `376652240209c6337671c1e945bede0a8f91e3bab441e42a505b6bcc1214857c`. |
+| [Private draft release](https://github.com/yakov103/mivu/releases/tag/untagged-746cb4d76e3ed82ebe51) | Tag `v1.0.0-rehearsal.2`; the unsigned device archive is not installable on a physical iPhone. |
 
-The final release rehearsal will run after the remaining native UI/Files changes
-are merged to `main`, against that immutable implementation commit. A following
-evidence-only documentation update will record the same release run without
-changing its source. End-to-end
-acceptance of creating/writing a user-selected Files folder and restoring from
-that backup is **PENDING** while it is being exercised; archive unit tests do not
-prove the file-provider journey. Physical-camera, haptics, and hardware
-VoiceOver/accessibility checks are **NOT_RUN_BLOCKED**. The signed IPA/TestFlight
-lane is **NOT_RUN_BLOCKED** because required Apple signing credentials are
-unavailable.
-Live ChatGPT recognition and Siri remain intentionally deferred. No physical
-device, cloud-sync, or pilot outcome is implied by the passing simulator CI.
+The tag-triggered rehearsal did not request signed delivery, so the signed job
+was skipped. Required Apple signing secrets remain unavailable; signed delivery
+is separately blocked. No signed or phone-installable artifact was produced.
+Physical camera, haptics, hardware VoiceOver/accessibility, actual Files-provider
+roundtrip, and pilot acceptance remain unverified. The current coach expansion is
+underway and is not verified by this sample-diary baseline. Simulator CI and
+archive tests do not establish those outcomes.
