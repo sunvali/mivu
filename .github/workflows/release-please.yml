@@ -35,16 +35,6 @@ jobs:
         run: |
           branch=$(python3 -c 'import json, os; print(json.loads(os.environ["RELEASE_PR"])["headBranchName"])')
           title=$(python3 -c 'import json, os; print(json.loads(os.environ["RELEASE_PR"])["title"])')
-          [ "$branch" = release-please--branches--main ] || { echo 'Unexpected release branch.' >&2; exit 1; }
+          [ "$branch" = release-please--branches--main--components--mivu ] || { echo 'Unexpected release branch.' >&2; exit 1; }
           gh workflow run commit-title.yml --repo "$GH_REPO" --ref "$branch" -f "title=$title"
           gh workflow run ci.yml --repo "$GH_REPO" --ref "$branch"
-      - name: Package the new release
-        if: vars.MIVU_AUTO_PACKAGE_RELEASES == 'true' && steps.release.outputs.release_created == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
-        run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid release tag.' >&2; exit 1; }
-          gh workflow run release.yml --repo "$GH_REPO" --ref main \
-            -f "tag=$RELEASE_TAG" -f signed_delivery=false -f upload_testflight=false

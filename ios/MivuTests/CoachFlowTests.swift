@@ -86,7 +86,7 @@ private enum CoachFlowWaitFailure: Error, Equatable {
         diary.snapshot = try await store.snapshot()
         return (diary, path)
     }
-    @Test func sendCommitsTextAndPhotoBeforeInferenceAndRelaunch() async throws {
+    @Test func sendCommitsTextAndPhotoBeforeInferenceCompletesAndSurvivesRelaunch() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let suspended = CoachFlowSuspension()
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in await suspended.respond() } })
@@ -94,13 +94,15 @@ private enum CoachFlowWaitFailure: Error, Equatable {
         let id = coach.draft.submissionID
         #expect(await coach.send())
         #expect(coach.draft.text.isEmpty)
+        // Park the worker before reopening the same database with another store.
+        try await waitUntilStarted(suspended, coach: coach)
+        try #require(await suspended.started)
         let stored = try await DiaryStore(directory: path).selectProfile(#require(diary.snapshot?.profile.id))
         #expect(stored.coachTurns.first?.id == id)
         #expect(stored.coachTurns.first?.text == "Synthetic lunch")
         #expect(stored.coachTurns.first?.photos.first?.data == SyntheticConnectionProbe.image)
+        #expect(stored.coachTurns.first?.state == .analyzing)
         #expect(stored.coachTurns.first?.assistantText == nil)
-        try await waitUntilStarted(suspended, coach: coach)
-        try #require(await suspended.started)
         await suspended.finish(); await coach.waitForWorker()
         #expect(diary.snapshot?.coachTurns.first?.state == .completed)
     }
