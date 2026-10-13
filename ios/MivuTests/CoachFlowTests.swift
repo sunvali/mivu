@@ -4,11 +4,20 @@ import Testing
 
 private actor CoachFlowSuspension {
     private var continuation: CheckedContinuation<CoachInferenceResult, Never>?
+    private var startContinuation: CheckedContinuation<Void, Never>?
     var started = false
+    func waitUntilStarted() async {
+        guard !started else { return }
+        await withCheckedContinuation { startContinuation = $0 }
+    }
     func respond() async -> CoachInferenceResult {
         if started { return CoachInferenceResult(model: "fixture", text: "Unexpected duplicate inference", calls: [], outputItems: []) }
-        started = true
-        return await withCheckedContinuation { continuation = $0 }
+        return await withCheckedContinuation {
+            continuation = $0
+            started = true
+            startContinuation?.resume()
+            startContinuation = nil
+        }
     }
     func finish() { continuation?.resume(returning: CoachInferenceResult(model: "fixture", text: "Synthetic guidance", calls: [], outputItems: [])) }
 }
@@ -35,7 +44,7 @@ private actor CoachFlowSuspension {
         #expect(stored.coachTurns.first?.text == "Synthetic lunch")
         #expect(stored.coachTurns.first?.photos.first?.data == SyntheticConnectionProbe.image)
         #expect(stored.coachTurns.first?.assistantText == nil)
-        for _ in 0..<1000 { if await suspended.started { break }; await Task.yield() }
+        await suspended.waitUntilStarted()
         try #require(await suspended.started)
         await suspended.finish(); await coach.waitForWorker()
         #expect(diary.snapshot?.coachTurns.first?.state == .completed)
@@ -67,7 +76,7 @@ private actor CoachFlowSuspension {
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in await suspended.respond() } })
         coach.draft.text = "Synthetic input"
         #expect(await coach.send())
-        for _ in 0..<1000 { if await suspended.started { break }; await Task.yield() }
+        await suspended.waitUntilStarted()
         try #require(await suspended.started)
         let first = try #require(diary.snapshot?.profile.id)
         await diary.createProfile(name: "Synthetic second")

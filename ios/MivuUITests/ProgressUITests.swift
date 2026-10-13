@@ -119,12 +119,12 @@ import XCTest
         let fields = [("goalKcal", "Energy (kcal)", "2000"), ("goalCarbs", "Carbs (g)", "200"),
                       ("goalProtein", "Protein (g)", "100"), ("goalFat", "Fat (g)", "60"), ("goalWeight", "Weight (kg)", "70")]
         for (id, title, value) in fields {
-            reveal(app.textFields[id], in: app); replace(app.textFields[id], with: value)
+            replace(app.textFields[id], with: value)
             XCTAssertTrue(app.staticTexts[title].exists, "Filled input keeps its visible name and unit: " + title)
         }
         app.buttons["saveGoals"].tap()
         reveal(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
-        for (id, _, _) in fields.dropFirst() { reveal(app.textFields[id], in: app); replace(app.textFields[id], with: "") }
+        for (id, _, _) in fields.dropFirst() { replace(app.textFields[id], with: "") }
         app.buttons["saveGoals"].tap()
         reveal(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
         replace(app.textFields["goalKcal"], with: "")
@@ -288,6 +288,7 @@ import XCTest
     private func replace(_ field: XCUIElement, with value: String) {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
+        XCTAssertTrue(field.isHittable, "Native input tap must reveal the field before editing")
         if let existing = field.value as? String, !existing.isEmpty {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
         }
