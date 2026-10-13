@@ -44,6 +44,8 @@ receipt changes together, then performs one durable snapshot write before
 returning receipts. A repeated operation returns its existing receipt rather
 than duplicating the record. The engine supplies the committed result to the
 tool response; Coach must not report a save based on model prose alone.
+`append_food` groups all additions to one meal in one call per turn, as stated
+in its tool description. Repeating that addition returns its existing receipt.
 
 ## Activity and native handoffs
 
@@ -111,15 +113,20 @@ Use synthetic food and profile content; do not capture personal data in evidence
 Simulator tests exercise local validation, persistence and fixture-driven tool
 responses. They cannot prove a real account authorization, live ChatGPT tool
 selection or response quality, Files-provider behavior, or physical-iPhone
-interaction. Add the final integrated simulator test counts and exact source
-revision to the verification record after the root run; keep every device item
-unchecked until it has direct physical-device evidence.
+interaction. The verification record below identifies the tested sources and
+counts; keep every device item unchecked until it has direct physical-device
+evidence.
 
 ## Local verification
 
-Final-source native verification: **NOT_RUN_FINAL**. The development runs and
-remaining hardware gates are recorded separately; fill the source revision and
-counts only after the final run completes.
+Native inputs `72822ba` passed **417 unit tests, 0 failures, 1 interactive-browser
+skip**. All 15 simulator workflows have covering passes: 13 passed in the full
+target at app source `39066bf`; two Progress workflows passed after a test-only
+keyboard-assertion correction in `72822ba`. The production app source is identical
+between those two commits. This is not a claim of a new single all-target green
+run after the harness correction. Exact commands, artifacts, review and remaining
+gates are in the [verification record](../verification/2026-10-14-coach-edit-parity.md).
+Every physical-device item above remains unchecked.
 
 For development guidance only, see [SwiftUI Agent Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill)
 and [Tool Design](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering/tree/main/skills/tool-design).
