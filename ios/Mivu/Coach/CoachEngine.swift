@@ -123,8 +123,9 @@ struct CoachEngine: Sendable {
                 let state: CoachTurnState
                 if error as? DiaryError == .ambiguousDay || error as? CoachError == .ungroundedConfirmation { state = .needsClarification }
                 else if error as? CoachError == .connectionRequired || error as? ResponsesClient.Failure == .unauthorized ||
-                    error as? ResponsesClient.Failure == .forbidden || error as? ResponsesClient.Failure == .usageUnavailable ||
+                    error as? ResponsesClient.Failure == .forbidden ||
                     error as? SessionError == .noActiveSession || error as? SessionError == .planPermissionMissing { state = .waitingForConnection }
+                else if error as? ResponsesClient.Failure == .usageUnavailable { state = .needsRetry }
                 else if ProbeRunner.isTransient(error) { state = .waitingForNetwork }
                 else { state = .needsRetry }
                 try? await store.failCoachTurn(turnID: turnID, state: state, needsDayChoice: error as? DiaryError == .ambiguousDay, epoch: epoch, expectedProfileID: expectedProfileID)

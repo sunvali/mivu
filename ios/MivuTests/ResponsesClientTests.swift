@@ -193,7 +193,24 @@ struct ResponsesClientTests {
         }
     }
 
-    @Test(arguments: ["subscription_sharing_usage_limit_exceeded", "subscription_sharing_usage_unavailable"])
+    @Test(arguments: ["subscription_sharing_usage_unavailable", "subscription_sharing_user_unavailable"])
+    func classifiesTemporaryHTTP503ErrorsBeforeStreaming(code: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["error": ["code": code, "message": "Synthetic temporary outage", "type": "server_error", "param": NSNull()]])
+        await #expect(throws: ResponsesClient.Failure.usageUnavailable) {
+            try await ResponsesClient(session: sessionReturning(status: 503, body: body)).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token")
+        }
+    }
+
+    @Test(arguments: [Data(), Data(#"{"detail":"Synthetic restriction"}"#.utf8),
+                      Data(#"{"error":{"code":"unknown_synthetic_code"}}"#.utf8), Data("{bad".utf8),
+                      Data(#"{"error":{"code":"subscription_sharing_usage_unavailable"}}"#.utf8) + Data(repeating: 32, count: 65_537)])
+    func unknownMalformedOrOversizedHTTP503RetainsGenericFailure(body: Data) async {
+        await #expect(throws: ResponsesClient.Failure.http(status: 503)) {
+            try await ResponsesClient(session: sessionReturning(status: 503, body: body)).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token")
+        }
+    }
+
+    @Test(arguments: ["subscription_sharing_usage_limit_exceeded", "subscription_sharing_usage_unavailable", "subscription_sharing_user_unavailable"])
     func mapsQuotaErrorsAfterHTTP200(code: String) async {
         let failure = event(["type": "response.failed", "response": ["error": ["code": code]]])
         let expected: ResponsesClient.Failure = code.hasSuffix("exceeded") ? .quotaReached : .usageUnavailable

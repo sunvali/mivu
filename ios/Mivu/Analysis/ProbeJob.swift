@@ -174,7 +174,7 @@ actor ProbeRunner {
         }
         if let error = error as? ResponsesClient.Failure {
             switch error {
-            case .incompleteResponse: return true
+            case .incompleteResponse, .usageUnavailable: return true
             case .http(let status): return (500...599).contains(status) || status == 408
             default: return false
             }

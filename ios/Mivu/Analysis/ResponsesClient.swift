@@ -20,7 +20,7 @@ struct ResponsesClient: Sendable {
         let request = try request(path: "models", accessToken: accessToken)
         let (bytes, response) = try await session.bytes(for: request)
         defer { bytes.task.cancel() }
-        try check(response)
+        try await check(response, bytes: bytes)
         var body = Data()
         for try await byte in bytes {
             guard body.count < 1_048_576 else { throw Failure.limitExceeded }
@@ -99,7 +99,7 @@ struct ResponsesClient: Sendable {
         request.httpBody = body
         let (bytes, response) = try await session.bytes(for: request)
         defer { bytes.task.cancel() }
-        try check(response)
+        try await check(response, bytes: bytes)
         var stream = ResponseEventStream()
         for try await byte in bytes { try stream.append(byte) }
         return try stream.finishInference()
@@ -113,13 +113,26 @@ struct ResponsesClient: Sendable {
         return request
     }
 
-    private func check(_ response: URLResponse) throws {
+    private func check(_ response: URLResponse, bytes: URLSession.AsyncBytes) async throws {
         guard let response = response as? HTTPURLResponse else { throw Failure.malformedResponse }
         switch response.statusCode {
         case 200: return
         case 401: throw Failure.unauthorized
         case 403: throw Failure.forbidden
         case 429: throw Failure.quotaReached
+        case 503:
+            var body = Data()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                guard body.count < 65_536 else { throw Failure.http(status: 503) }
+                body.append(byte)
+            }
+            let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+            let code = (object?["error"] as? [String: Any])?["code"] as? String
+            switch code {
+            case "subscription_sharing_usage_unavailable", "subscription_sharing_user_unavailable": throw Failure.usageUnavailable
+            default: throw Failure.http(status: 503)
+            }
         default: throw Failure.http(status: response.statusCode)
         }
     }
@@ -201,7 +214,7 @@ struct ResponseEventStream {
             let code = error?["code"] as? String ?? object["code"] as? String
             switch code {
             case "subscription_sharing_usage_limit_exceeded": throw ResponsesClient.Failure.quotaReached
-            case "subscription_sharing_usage_unavailable": throw ResponsesClient.Failure.usageUnavailable
+            case "subscription_sharing_usage_unavailable", "subscription_sharing_user_unavailable": throw ResponsesClient.Failure.usageUnavailable
             default: throw ResponsesClient.Failure.responseFailed
             }
         }

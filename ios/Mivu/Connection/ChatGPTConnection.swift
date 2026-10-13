@@ -19,8 +19,8 @@ enum ConnectionNotice: String {
     case saveFailed = "Sample could not be saved. No request sent."
     case storageFailed = "Local sample storage unavailable"
     case retry = "Analysis paused. Retry when ready."
-    case quota = "Usage limit reached. Retry after your plan allows it."
-    case permission = "Authorize plan usage before sending a request."
+    case quota = "ChatGPT usage limit reached. Check ChatGPT usage settings, then retry when usage is available."
+    case permission = "Enable ChatGPT plan usage before sending a request."
     case revoked = "Reconnect to authorize plan usage."
     case disconnected = "Local credentials removed"
     case unconfirmed = "Local credentials removed. Remote revocation unconfirmed."
@@ -125,7 +125,8 @@ final class ChatGPTConnection {
             let returning = registrations.first { $0.id == selection }
             let redirect = try await callback.start()
             guard revision == generation else { return }
-            var attempt = try OAuthAttempt.make(hostID: hostID, issuedClientID: returning?.issuedClientID, callbackURL: redirect)
+            var attempt = try OAuthAttempt.make(hostID: hostID, issuedClientID: returning?.issuedClientID,
+                callbackURL: redirect, requestPlanConsent: returning != nil && accountState == .planPermissionMissing)
             var code: AuthorizationCode?
             _ = try await callback.receive(validating: { code = try attempt.consumeCallback($0) },
                 openBrowser: openBrowser, browserURL: attempt.authorizationURL)
@@ -403,7 +404,7 @@ final class ChatGPTConnection {
             if let job { preferences.set(job.id.uuidString, forKey: "quotaJobID") }
             inferenceState = .quotaReached; notice = .quota
         }
-        else if error as? ResponsesClient.Failure == .forbidden || error as? ResponsesClient.Failure == .usageUnavailable {
+        else if error as? ResponsesClient.Failure == .forbidden {
             pausePermission(snapshot)
             notice = .permission
         } else if error as? ResponsesClient.Failure == .unauthorized {

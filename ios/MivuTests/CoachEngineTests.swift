@@ -193,7 +193,7 @@ private actor CoachInputFixture {
     }
 
     @Test(arguments: [ResponsesClient.Failure.unauthorized, ResponsesClient.Failure.forbidden,
-                      ResponsesClient.Failure.usageUnavailable, SessionError.noActiveSession,
+                      SessionError.noActiveSession,
                       SessionError.planPermissionMissing] as [any Error])
     func permissionFailuresKeepCapturedTurnWaiting(_ error: any Error) async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
@@ -202,6 +202,17 @@ private actor CoachInputFixture {
         let captured = try await store.coachTurn(turnID: turn.id, expectedProfileID: profile.id)
         #expect(captured.state == .waitingForConnection); #expect(captured.text == turn.text)
         #expect(captured.assistantText == nil); #expect(try await store.snapshot().meals.isEmpty)
+    }
+
+    @Test func exhaustedUsageCheckKeepsCapturedTurnRetryableWithoutReauthorization() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let engine = CoachEngine(store: store, infer: { _, _ in throw ResponsesClient.Failure.usageUnavailable })
+        await #expect(throws: ResponsesClient.Failure.usageUnavailable) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+        let captured = try await store.coachTurn(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(captured.state == .needsRetry)
+        #expect(captured.text == turn.text)
+        #expect(captured.assistantText == nil)
+        #expect(try await store.snapshot().meals.isEmpty)
     }
 
     @Test(arguments: [false, true]) func noToolInventedTotalsUseOnlyRecordedIntake(hasFood: Bool) async throws {

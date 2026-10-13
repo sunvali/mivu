@@ -48,12 +48,12 @@ struct SettingsView: View {
                 }
                 Section("Connection") {
                     Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle")
-                    Text("Captures save locally without a connection. Analysis uses your selected ChatGPT account.").font(.caption).foregroundStyle(Color.diarySecondary)
+                    Text("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection.").font(.caption).foregroundStyle(Color.diarySecondary)
                     if connection.isConnecting {
                         ProgressView("Connecting")
                         Button("Cancel connection") { connection.cancelConnection() }.frame(minHeight: 44)
                     } else {
-                        Button(connection.activeRegistrationID == nil ? "Connect ChatGPT" : "Reauthorize ChatGPT") {
+                        Button(connection.accountState == .planPermissionMissing ? "Enable ChatGPT plan usage" : connection.activeRegistrationID == nil ? "Continue with ChatGPT" : "Reauthorize ChatGPT") {
                             guard let window else { return }
                             Task { await connection.connect(window: window) }
                         }.frame(minHeight: 44).disabled(window == nil || connection.isDisconnecting)
@@ -67,6 +67,7 @@ struct SettingsView: View {
                         Button("Disconnect ChatGPT", role: .destructive) { Task { await connection.disconnect() } }.frame(minHeight: 44)
                     }
                     if let notice = connection.notice { Text(notice.rawValue).font(.caption).foregroundStyle(Color.diarySecondary) }
+                    Link("ChatGPT usage settings", destination: URL(string: "https://chatgpt.com/settings/usage")!).frame(minHeight: 44)
                     Button("ChatGPT connection diagnostic") { showDiagnostic = true }.frame(minHeight: 44)
                 }
                 Section("Optional nutrition source") {
