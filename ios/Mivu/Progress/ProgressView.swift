@@ -256,6 +256,7 @@ struct DiaryProgressView: View {
         .navigationTitle("Progress")
         .sheet(isPresented: $showWorkout) { WorkoutEditorView(model: model, localDate: today) }
         .sheet(item: $editingWeight) { WeightCorrectionView(model: model, entry: $0, localDate: today) }
+        .onChange(of: model.snapshot?.profile.id) { _, _ in selectedWeightDate = nil }
     }
 
     private func reportButton(_ title: String, id: String, value: Report) -> some View {

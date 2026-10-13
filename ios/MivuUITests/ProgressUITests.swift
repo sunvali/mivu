@@ -109,6 +109,39 @@ import XCTest
         add(screenshot)
     }
 
+    func testFilledGoalLabelsAndClearingLastTargetSurviveRelaunch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Settings"].tap()
+        reveal(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
+        let fields = [("goalKcal", "Energy (kcal)", "2000"), ("goalCarbs", "Carbs (g)", "200"),
+                      ("goalProtein", "Protein (g)", "100"), ("goalFat", "Fat (g)", "60"), ("goalWeight", "Weight (kg)", "70")]
+        for (id, title, value) in fields {
+            reveal(app.textFields[id], in: app); replace(app.textFields[id], with: value)
+            XCTAssertTrue(app.staticTexts[title].exists, "Filled input keeps its visible name and unit: " + title)
+        }
+        app.buttons["saveGoals"].tap()
+        reveal(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
+        for (id, _, _) in fields.dropFirst() { reveal(app.textFields[id], in: app); replace(app.textFields[id], with: "") }
+        app.buttons["saveGoals"].tap()
+        reveal(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
+        replace(app.textFields["goalKcal"], with: "")
+        guard app.buttons["saveGoals"].isEnabled else { XCTFail("An all-unset dated goal must be saveable"); return }
+        app.buttons["saveGoals"].tap()
+        app.tabBars.buttons["Today"].tap()
+        let summary = app.staticTexts["todayGoalSummary"]
+        reveal(summary, in: app); XCTAssertEqual(summary.label, "No energy target set")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 15))
+        reveal(summary, in: app); XCTAssertEqual(summary.label, "No energy target set")
+        app.tabBars.buttons["Settings"].tap()
+        reveal(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
+        XCTAssertEqual(app.textFields["goalKcal"].value as? String, "Energy (kcal)")
+        let screen = XCTAttachment(screenshot: app.screenshot()); screen.name = "Synthetic cleared dated goals retain visible units"; screen.lifetime = .keepAlways; add(screen)
+    }
+
     func testLargestTextDarkProgressKeepsReportsAccessible() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--proof-dark", "--proof-largest-text"]
@@ -157,10 +190,16 @@ import XCTest
         reveal(workout, in: app)
         workout.tap()
         replace(app.textFields["workoutDuration"], with: "30")
+        XCTAssertTrue(app.staticTexts["Duration in minutes"].exists, "Filled workout input keeps its visible name and unit")
         replace(app.textFields["workoutExercise"], with: "Squat")
         replace(app.textFields["workoutRepetitions"], with: "8")
+        XCTAssertTrue(app.staticTexts["Repetitions"].exists, "Filled workout input keeps its visible name and unit")
         replace(app.textFields["workoutLoad"], with: "40")
+        XCTAssertTrue(app.staticTexts["Load (kg, blank for bodyweight)"].exists, "Filled workout input keeps its visible name and unit")
+        reveal(app.textFields["workoutBurn"], in: app)
         replace(app.textFields["workoutBurn"], with: "120")
+        XCTAssertTrue(app.staticTexts["Estimated burn (kcal)"].exists, "Filled workout input keeps its visible name and unit")
+        let labeled = XCTAttachment(screenshot: app.screenshot()); labeled.name = "Synthetic filled workout fields retain visible units"; labeled.lifetime = .keepAlways; add(labeled)
         app.buttons["saveWorkout"].tap()
 
         let recordedFood = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Recorded food: 95 kcal")).firstMatch
@@ -212,6 +251,26 @@ import XCTest
         screenshot.name = "Selected saved weight on Progress chart"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+        reveal(app.buttons["editWeight"], in: app); app.buttons["editWeight"].tap()
+        XCTAssertTrue(app.textFields["weightCorrectionInput"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Weight in kg"].exists, "Saved weight keeps its visible unit label")
+        app.navigationBars.buttons["Cancel"].tap()
+        app.tabBars.buttons["Settings"].tap()
+        let create = app.buttons["Create local profile"]
+        reveal(create, in: app); create.tap()
+        let name = app.alerts.textFields.firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.typeText("Synthetic chart profile")
+        app.alerts.buttons["Create"].tap()
+        XCTAssertTrue(app.staticTexts["Synthetic chart profile"].firstMatch.waitForExistence(timeout: 5))
+        app.tabBars.buttons["Today"].tap()
+        reveal(weight, in: app); weight.tap()
+        replace(app.textFields["weightInput"], with: "80"); app.buttons["saveWeight"].tap()
+        app.tabBars.buttons["History"].tap()
+        XCTAssertTrue(app.navigationBars["Progress"].waitForExistence(timeout: 5))
+        reveal(chart, in: app)
+        XCTAssertFalse(selected.exists, "A new profile has no chart selection until a fresh tap")
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(selected.waitForExistence(timeout: 5)); XCTAssertTrue(selected.label.contains("80.0 kg"))
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {

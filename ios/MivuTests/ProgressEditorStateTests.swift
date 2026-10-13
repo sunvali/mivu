@@ -36,6 +36,39 @@ import Testing
         #expect(!ProgressDate.validOptional("0"))
     }
 
+    @Test func clearingLastGoalAndLaterUnsetPreserveEarlierTargets() async throws {
+        let root = URL.temporaryDirectory.appending(path: "ProgressEditorClear-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root)
+        let profile = DiaryProfile(name: "Synthetic clear goals")
+        _ = try await store.createProfile(profile)
+        for (date, target) in [("2026-01-01", 1800.0), ("2026-02-01", 2000.0)] {
+            _ = try await store.setGoals(GoalRecord(effectiveLocalDate: date, timeZoneID: profile.timeZoneID,
+                                                  targets: NutritionValues(kcal: target), goalWeightKg: nil,
+                                                  exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        }
+        var values = GoalEditorValues(snapshot: try await store.snapshot(), localDate: "2026-02-01")
+        values.kcal = ""
+        #expect(values.valid)
+        let cleared = try await store.setGoals(values.record(zone: profile.timeZoneID), expectedRevision: values.expectedRevision, expectedProfileID: profile.id)
+        var snapshot = try await store.snapshot()
+        #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-01-15").goal?.targets.kcal == 1800)
+        #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-02-15").goal?.targets.kcal == nil)
+        #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-02-15").remainingFromRecorded.kcal == nil)
+        values.kcal = "2000"
+        _ = try await store.setGoals(values.record(zone: profile.timeZoneID), expectedRevision: cleared.revision, expectedProfileID: profile.id)
+        let later = GoalEditorValues(snapshot: try await store.snapshot(), localDate: "2026-03-01")
+        #expect(later.valid)
+        _ = try await store.setGoals(later.record(zone: profile.timeZoneID), expectedRevision: later.expectedRevision, expectedProfileID: profile.id)
+        snapshot = try await store.snapshot()
+        #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-02-15").goal?.targets.kcal == 2000)
+        #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-03-15").goal?.targets.kcal == nil)
+        for invalid in ["0", "-1", "inf", "nan", "invalid"] {
+            values.kcal = invalid
+            #expect(!values.valid)
+        }
+    }
+
     @Test func chosenGoalDateLoadsExactRecordAndKeepsItsRevision() async throws {
         let root = URL.temporaryDirectory.appending(path: "ProgressEditor-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

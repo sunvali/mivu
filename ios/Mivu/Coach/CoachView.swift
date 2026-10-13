@@ -56,23 +56,28 @@ struct CoachView: View {
                 }.padding(16)
             }
             .scrollDismissesKeyboard(.interactively)
-            .onScrollPhaseChange { _, phase in userScrolling = phase == .interacting || phase == .decelerating }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 80
-            } action: { _, nearBottom in if userScrolling { followLatest = nearBottom } }
+            .onScrollPhaseChange { _, phase in
+                userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
+            } action: { _, remaining in
+                let nearBottom = remaining <= 80
+                if userScrolling, followLatest != nearBottom { followLatest = nearBottom }
+            }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { oldHeight, newHeight in
-                guard newHeight > oldHeight, followLatest,
+                guard newHeight > oldHeight, followLatest, !userScrolling,
                       let turn = coach.turns.last, turn.assistantText != nil else { return }
                 Task { @MainActor in
                     await Task.yield()
-                    if followLatest { proxy.scrollTo("reply-" + turn.id.uuidString, anchor: .top) }
+                    if followLatest, !userScrolling { proxy.scrollTo("reply-" + turn.id.uuidString, anchor: .top) }
                 }
             }
             .onChange(of: coach.turns.last?.assistantText) { _, _ in
                 guard followLatest, let id = coach.turns.last?.id, coach.turns.last?.assistantText != nil else { return }
                 Task { @MainActor in
                     await Task.yield()
-                    if followLatest { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("reply-" + id.uuidString, anchor: .top) } }
+                    if followLatest, !userScrolling { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("reply-" + id.uuidString, anchor: .top) } }
                 }
             }
             .onChange(of: coach.turns.count) { _, _ in
@@ -165,7 +170,7 @@ struct CoachView: View {
                 }
             }
             ForEach(coach.linkedMeals(turn)) { meal in
-                NavigationLink(value: meal.id) { Label(meal.state == .awaitingReview ? "Review meal estimate" : "Open meal and corrections", systemImage: "fork.knife") }.frame(minHeight: 44).accessibilityIdentifier("coachMealLink")
+                NavigationLink(value: meal.id) { Label(meal.state == .awaitingReview ? "Review meal estimate" : "Open meal and corrections", systemImage: "fork.knife").frame(minHeight: 44) }.accessibilityIdentifier("coachMealLink")
             }
             ForEach(coach.linkedWorkouts(turn)) { workout in
                 NavigationLink(value: WorkoutDestination(id: workout.id)) { Label("Open workout and corrections", systemImage: "figure.strengthtraining.traditional").frame(minHeight: 44) }.accessibilityIdentifier("coachWorkoutLink")

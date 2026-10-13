@@ -61,7 +61,6 @@ struct GoalEditorValues {
 
     var valid: Bool {
         [kcal, carbs, protein, fat, weight].allSatisfy(ProgressDate.validOptional)
-            && [kcal, carbs, protein, fat, weight].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     func record(zone: String) -> GoalRecord {
@@ -134,7 +133,7 @@ struct GoalEditorView: View {
     }
 
     private func field(_ title: String, text: Binding<String>, id: String) -> some View {
-        TextField(title, text: text).keyboardType(.decimalPad).accessibilityIdentifier(id)
+        progressNumberField(title, text: text, id: id)
     }
 
     private func save() {
@@ -171,8 +170,7 @@ struct WeightCorrectionView: View {
         NavigationStack {
             Form {
                 Section("Morning weight · \(localDate)") {
-                    TextField("Weight in \(entry.unit)", text: $value)
-                        .keyboardType(.decimalPad).accessibilityIdentifier("weightCorrectionInput")
+                    progressNumberField("Weight in \(entry.unit)", text: $value, id: "weightCorrectionInput")
                     Text("This corrects the saved measurement for this waking day.")
                         .font(.caption).foregroundStyle(Color.diarySecondary)
                 }
@@ -296,7 +294,7 @@ struct WorkoutEditorView: View {
                             kindButton(.other, "Other", id: "workoutOther")
                         }
                     }
-                    TextField("Duration in minutes", text: $duration).keyboardType(.numberPad).accessibilityIdentifier("workoutDuration")
+                    progressNumberField("Duration in minutes", text: $duration, id: "workoutDuration", keyboard: .numberPad)
                 }
                 Section("Exercise details") {
                     ForEach(exercises.indices, id: \.self) { exerciseIndex in
@@ -305,12 +303,10 @@ struct WorkoutEditorView: View {
                                 .accessibilityIdentifier(exerciseIndex == 0 ? "workoutExercise" : "workoutExercise\(exerciseIndex)")
                             ForEach(exercises[exerciseIndex].sets.indices, id: \.self) { setIndex in
                                 HStack {
-                                    TextField("Repetitions", text: $exercises[exerciseIndex].sets[setIndex].repetitions)
-                                        .keyboardType(.numberPad)
-                                        .accessibilityIdentifier(setID("workoutRepetitions", exercise: exerciseIndex, set: setIndex))
-                                    TextField("Load (kg, blank for bodyweight)", text: $exercises[exerciseIndex].sets[setIndex].load)
-                                        .keyboardType(.decimalPad)
-                                        .accessibilityIdentifier(setID("workoutLoad", exercise: exerciseIndex, set: setIndex))
+                                    progressNumberField("Repetitions", text: $exercises[exerciseIndex].sets[setIndex].repetitions,
+                                                        id: setID("workoutRepetitions", exercise: exerciseIndex, set: setIndex), keyboard: .numberPad)
+                                    progressNumberField("Load (kg, blank for bodyweight)", text: $exercises[exerciseIndex].sets[setIndex].load,
+                                                        id: setID("workoutLoad", exercise: exerciseIndex, set: setIndex))
                                 }
                                 if exercises[exerciseIndex].sets.count > 1 {
                                     Button("Remove set \(setIndex + 1)") {
@@ -338,7 +334,7 @@ struct WorkoutEditorView: View {
                         .font(.caption).foregroundStyle(Color.diarySecondary)
                 }
                 Section("Optional estimate") {
-                    TextField("Estimated burn (kcal)", text: $burn).keyboardType(.decimalPad).accessibilityIdentifier("workoutBurn")
+                    progressNumberField("Estimated burn (kcal)", text: $burn, id: "workoutBurn")
                     Text("An estimate, shown separately from recorded food.")
                         .font(.caption).foregroundStyle(Color.diarySecondary)
                 }
@@ -390,5 +386,13 @@ struct WorkoutEditorView: View {
             saving = false
             if success && model.snapshot?.profile.id == ownerID { dismiss() }
         }
+    }
+}
+
+@MainActor private func progressNumberField(_ title: String, text: Binding<String>, id: String,
+                                          keyboard: UIKeyboardType = .decimalPad) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+        Text(title).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+        TextField(title, text: text).keyboardType(keyboard).frame(minHeight: 44).accessibilityIdentifier(id)
     }
 }

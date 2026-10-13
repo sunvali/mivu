@@ -18,8 +18,8 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["Apple sample mode"].exists)
         app.tabBars.buttons["Settings"].tap()
-        revealList(app.buttons["Connect ChatGPT"], in: app)
-        XCTAssertTrue(app.buttons["Connect ChatGPT"].isHittable)
+        revealList(app.buttons["Continue with ChatGPT"], in: app)
+        XCTAssertTrue(app.buttons["Continue with ChatGPT"].isHittable)
         app.tabBars.buttons["Today"].tap()
         XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
         app.terminate(); app.launch()
@@ -90,7 +90,7 @@ import XCTest
         XCTAssertTrue(review.isHittable); review.tap(); app.buttons["sendMeal"].tap()
         app.tabBars.buttons["Coach"].tap(); waitForReplies(4, in: app)
         let reviewLink = app.buttons["Review meal estimate"]
-        for _ in 0..<5 where !reviewLink.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        revealCoachLink(reviewLink, in: app)
         XCTAssertTrue(reviewLink.waitForExistence(timeout: 5)); reviewLink.tap()
         let accept = app.buttons["acceptReview"]; XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap()
         XCTAssertTrue(app.staticTexts["Snack"].exists)
@@ -127,7 +127,7 @@ import XCTest
         enter("I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal", in: app)
         app.buttons["coachSend"].tap(); waitForReplies(3, in: app)
         let workout = app.buttons["coachWorkoutLink"]
-        revealWorkout(workout, in: app)
+        revealCoachLink(workout, in: app)
         XCTAssertGreaterThanOrEqual(workout.frame.height, 44); workout.tap()
         XCTAssertTrue(app.navigationBars["Workout"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Squat"].exists)
@@ -167,7 +167,7 @@ import XCTest
         let persisted = XCTAttachment(screenshot: app.screenshot()); persisted.name = "Synthetic Coach workout persisted after relaunch"; persisted.lifetime = .keepAlways; add(persisted)
     }
 
-    private func revealWorkout(_ link: XCUIElement, in app: XCUIApplication) {
+    private func revealCoachLink(_ link: XCUIElement, in app: XCUIApplication) {
         // Hittable can include a partially clipped link whose center is under the composer.
         for _ in 0..<8 {
             if link.isHittable && link.frame.maxY < app.textFields["coachInput"].frame.minY - 8 { break }
@@ -204,7 +204,7 @@ import XCTest
         XCTAssertGreaterThan(links.count, 0)
         guard links.count > 0 else { return }
         let link = links.element(boundBy: links.count - 1)
-        for _ in 0..<5 where !link.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        revealCoachLink(link, in: app)
         XCTAssertTrue(link.isHittable); link.tap()
     }
     private func revealList(_ element: XCUIElement, in app: XCUIApplication) {
