@@ -112,6 +112,37 @@ if [ "$2" = view ]; then exit "$RELEASE_EXISTS_STATUS"; fi
                 self.assertNotIn('--clobber', commands)
                 if status == '0': self.assertNotIn('release create', commands)
 
+    def test_version_pr_dispatch_accepts_the_configured_component_branch_only(self):
+        step = next(s for s in load_workflow('release-please.yml')['jobs']['release']['steps']
+                    if s.get('name') == 'Check the version pull request')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tool = root / 'gh'
+            tool.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$COMMAND_LOG"\n')
+            tool.chmod(0o755)
+            for branch, accepted in (('release-please--branches--main--components--mivu', True),
+                                     ('release-please--branches--main', False),
+                                     ('feature/untrusted', False)):
+                with self.subTest(branch=branch):
+                    log = root / 'commands'
+                    log.unlink(missing_ok=True)
+                    env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
+                               COMMAND_LOG=str(log), GH_REPO='synthetic/mivu',
+                               RELEASE_PR=json.dumps({'headBranchName': branch,
+                                                      'title': 'chore(main): release 1.1.0'}))
+                    result = subprocess.run(['bash', '-e', '-c', step['run']],
+                                            env=env, capture_output=True, text=True)
+                    if accepted:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        commands = log.read_text().splitlines()
+                        self.assertEqual(len(commands), 2)
+                        self.assertIn('commit-title.yml', commands[0])
+                        self.assertIn('ci.yml', commands[1])
+                        self.assertTrue(all('--ref ' + branch in command for command in commands))
+                    else:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertFalse(log.exists(), 'Unexpected branches must not dispatch workflows')
+
 
 if __name__ == '__main__':
     unittest.main()
