@@ -32,9 +32,13 @@ for this native app. No web frontend is required.
   release claims tied to the exact merged revision and observed run.
 - Before merge, run Ponytail Review, fix blocking findings, and verify CI.
   Follow the owner's existing authorization for merging; do not add approval gates.
-- Use Conventional Commit PR/squash titles. Run quick native checks on updates;
-  record full native UI verification locally for screen/navigation changes.
-  Hosted jobs use Slim for scripts and standard macOS for short unit checks;
-  no hosted job exceeds eight minutes. Release packaging runs unit tests against
-  the immutable version tag and remains explicitly requested by default. Do not
-  count unit-only checks, cost-gated skips or blocked jobs as full UI verification.
+- Use Conventional Commit PR/squash titles. All hosted jobs use `ubuntu-slim`
+  with two-minute limits for script and title checks only. No hosted macOS,
+  self-hosted runner, native build/test, packaging or signing jobs are allowed.
+- Run focused native checks locally with XcodeBuildMCP for Swift changes; record
+  full native unit/UI verification locally for screen/navigation changes. Linux
+  CI does not establish native acceptance. Record the exact tested source SHA.
+- Version/changelog PRs and tags remain automated. Package and sign the exact
+  version tag locally with Xcode/Organizer; record local evidence separately.
+  Keep Actions usage/auto-packaging gates false and never count blocked or
+  skipped native work as passing evidence.

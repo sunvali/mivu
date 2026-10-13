@@ -1,205 +1,99 @@
-# Native CI and delivery
+# CI and local delivery
 
-Mivu stays private. GitHub Actions builds Swift 6 with a stable Xcode 26 on the
-standard `macos-26` Apple Silicon runner. It selects an available iPhone simulator
-with iOS 26 or newer and records the actual tool versions, source commit, UTC
-execution time and exit status. The committed JOSESwift 3.0.0 revision is enforced.
-Local Apple builds/tests use XcodeBuildMCP; hosted jobs use Xcode's installed
-command-line tools directly, without another build wrapper dependency.
+Mivu stays private. GitHub Actions runs short Linux checks only. All hosted jobs
+use `ubuntu-slim` with two-minute limits. Native builds, tests, packaging and
+signing run on the local Mac; no hosted macOS or self-hosted runner is configured.
+This is the owner's approved policy from 2026-10-14.
 
-## Cost and runner limits
+## Hosted checks
 
-`MIVU_ACTIONS_USAGE_APPROVED=true` permits the short workflows after included
-allowance is verified or the owner explicitly approves paid Actions usage. The
-owner reported adding US$10 and authorized short verification on2026-10-13. This
-is spending authorization, not a claim that the account balance or remaining
-included minutes were inspected. Keep the older
-`MIVU_ACTIONS_ALLOWANCE_VERIFIED` gate false: old revisions use it to schedule
-long full-suite runs. Do not enable billing or raise budgets without approval.
-
-All Linux jobs use `ubuntu-slim`, the lowest-priced hosted runner, with two-minute
-limits. Its image supplies Python, Node, yq and the GitHub CLI. Workflow tests use
-its existing yq parser; local machines without yq retain the Ruby fallback. No
-package install, cache upload, larger runner or extra service is added.
-
-Native jobs use standard `macos-26` for the Apple SDK and iOS simulator, with an
-eight-minute limit. GitHub's current rates are US$0.002/minute for Slim and
-US$0.062/minute for standard macOS. An eight-minute native job represents roughly
-US$0.50 in compute at that rate; GitHub rounds partial minutes per job, and
-storage/other account usage are separate. Timeouts are not an account spending
-cap. Preserve the owner's GitHub budget/stop controls.
-
-Sources checked2026-10-13:
-[runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing),
-[Slim image](https://github.com/actions/runner-images/blob/main/images/ubuntu-slim/ubuntu-slim-Readme.md).
-
-`MIVU_AUTO_PACKAGE_RELEASES=false` disables automatic paid release packaging.
-Version PRs, tags and changelogs remain automated. An explicit manual release can
-still package an immutable main tag. No scheduled full-suite or packaging run is
-added. A skipped/blocked native job is not passing native evidence.
-
-## Pull requests and main
-
-`Native CI` runs on `pull_request` or manual dispatch, subject
-to the cost gate. There are no Apple/provider secrets in CI and no privileged
-`pull_request_target` or downstream execution of fork code. Checkout credentials
-are not persisted, and the token has `contents: read` only. New commits cancel
-obsolete CI runs. Each job has a bounded timeout.
-
-The Linux `checks` job runs short CI-script tests and shell syntax checks. Edits
-limited to Markdown or `docs/` stop there. Unknown or empty changed-file lists
-select native verification. Source changes cannot pass by silently skipping an
-unapproved native usage: the selection step fails with a blocked message.
-
-Routine native checks build Debug and run the entire `MivuTests` unit target,
-with an eight-minute timeout and normal simulator signing for Keychain entitlements.
-They do not run UI journeys or package a Release app. There is no second native
-run after merging an already-tested PR. There is no
-new package/build cache or larger runner spending.
-
-Before merging screen/navigation changes, run the complete native unit/UI scheme
-locally using XcodeBuildMCP and record its final source SHA and result. Full UI
-verification remains available; it is never scheduled on a paid hosted runner.
-A later source change needs appropriate fresh evidence. This is a contributor
-merge rule, not an enforced branch-protection setting.
-
-Hosted unit and release modes retain actual `xcresulttool` summary and named-test verification:
-zero-test wrappers, failures and expected failures fail the job. The
-`native-<source SHA>` artifact preserves the result bundle and tool, provenance
-and count files. Unit evidence is not full UI acceptance. Release simulator
-packaging belongs to the release workflow; that app is not a phone installation
-artifact. Hosted durations must be measured from completed runs, not inferred from timeout limits.
-
-Equivalent hosted commands, from the repository root:
+**CI** runs on pull requests and manual dispatch. Its `checks` job runs:
 
 ```sh
 python3 -m unittest discover -s scripts/ci -p 'test_*.py'
-bash scripts/ci/native.sh unit # routine Debug build and unit tests
+bash -n scripts/ci/native.sh scripts/ci/signed.sh
 ```
 
-Each invocation needs a fresh `build/ci` directory; scripts deliberately do not
-overwrite a previous result bundle. For repeated local experiments set
-`MIVU_CI_OUTPUT` to a fresh temporary directory. Do not run signing on your normal
-workstation through these CI scripts.
+The shell check validates syntax; it does not execute native or signing scripts.
+Workflow contract tests inspect every workflow for Slim runners and short limits.
+CI has a read-only token, no Apple/provider secrets, and no privileged
+`pull_request_target` execution. Checkout credentials are not persisted. New
+commits cancel obsolete CI runs. Merges do not repeat the PR checks.
 
-## Versioned unsigned delivery
+**Commit title** validates Conventional Commit PR titles and reruns on title
+edits. **Release versions** runs only on `main`, maintains version/changelog PRs
+using the pinned release-please action, and explicitly dispatches CI and title
+checks for its token-created version PRs. The configured component branch is
+`release-please--branches--main--components--mivu`; unexpected branches fail
+before dispatch. The bot never approves or merges a PR.
 
-Google's pinned **release-please** action maintains a version/changelog PR after
-Conventional Commits reach `main`. Squash merges use the PR title:
-`fix: ...` bumps patch, `feat: ...` bumps minor, and `feat!: ...` or a breaking
-change bumps major. The separate **Commit title** check validates those titles
-and reruns on title edits without restarting native CI. Preserve a conventional
-title when squash-merging; the repository's default squash title is the PR title.
+Keep `MIVU_ACTIONS_USAGE_APPROVED`, `MIVU_ACTIONS_ALLOWANCE_VERIFIED` and
+`MIVU_AUTO_PACKAGE_RELEASES` false. These gates protect older workflow revisions;
+current workflows contain no native or packaging dispatch. Do not change billing
+or budgets without owner approval. Linux CI success proves script/title checks,
+not an Apple build, test run, signed product or phone installation.
 
-The baseline is `1.0.0`, matching `version.txt`, the release manifest and the
-shared Xcode marketing version. Existing rehearsal tags are preserved. Bootstrap
-starts after `4f97261eb10d2af2a1301251c8e46748d7cc0dab`; release-please determines
-the next version from subsequent commits and updates the shared `.xcconfig`
-alongside its version file, manifest and changelog.
+## Local native verification
 
-Merging a reviewed version PR creates its tag and GitHub release. Automatic
-packaging is disabled by default under the current cost policy. To produce
-binaries, explicitly dispatch **Native release** for that tag; hosted verification
-uses the full unit target, while full UI acceptance is recorded locally. Token-created PRs and tags do not automatically start other workflows,
-so version PRs explicitly dispatch quick CI and title validation too. The action
-uses the built-in token; no personal access token or Apple credential is added.
-Bot PR creation must be allowed in repository Actions settings. The workflow
-creates version PRs; it never approves or merges them.
+Use XcodeBuildMCP on the local Mac with Xcode and an iOS 26-or-newer
+simulator. The committed JOSESwift 3.0.0 revision remains enforced. Run focused
+native checks for Swift changes and the full native unit/UI scheme before merging
+screen/navigation changes. A later source change needs appropriate fresh evidence.
+This is a contributor merge rule, separate from hosted branch protection.
 
-Release notes/tag creation and successful binary packaging are separate outcomes.
-Packaging attaches products to an existing release while preserving its notes,
-or creates the earlier private draft release when the tag has no release. It
-never clobbers assets. A duplicate upload fails rather than replacing published
-files. The repository remains private; the optional automatic packaging path never
-requests signed delivery or TestFlight.
+Record the exact command, source SHA, UTC time, Xcode/simulator environment,
+exit status, named tests, pass/fail/skip counts and result bundle location. An
+unavailable native suite is blocked, not passed. Simulator results do not prove
+physical camera, haptics, VoiceOver, provider authentication or phone installation.
 
-Explicitly dispatch `Native release` with `tag`, leaving
-`signed_delivery` and `upload_testflight` false. Accepted tags are `v1.0.0` and
-`v1.0.0-rehearsal.1` style versions. The tag must resolve to a commit already
-merged into `origin/main`. The job checks out that immutable SHA, reruns the
-native unit tests, builds the simulator app and archives the device app with signing
-disabled. Publishing runs separately with `contents: write`; it executes no
-repository code and downloads the current run's immutable artifact with digest
-verification. Release concurrency never cancels an active release.
+`native.sh`, `signed.sh` and their short script tests remain available for local
+or controlled rehearsals; no workflow invokes them. `native.sh` modes retain
+result-bundle and named-test validation. Use a fresh `MIVU_CI_OUTPUT` directory
+for each rehearsal so a previous result bundle cannot be overwritten. Signing
+scripts are intended for an isolated controlled rehearsal, not ordinary workstation
+credential management. Use Xcode/Organizer for normal local signing and delivery.
 
-A private draft GitHub release receives the simulator ZIP, unsigned archive ZIP,
-provenance and test report. Existing releases/assets are not overwritten by a
-rerun: inspect the earlier run, then use a new version if a new delivery is needed.
-The draft remains private to repository collaborators and can be reviewed before
-publication. **`Mivu-unsigned.xcarchive.zip` is not installable on a physical
-phone.** It proves the device target can archive without purchasing membership.
+## Versioning, packaging and signing
 
-```sh
-bash scripts/ci/native.sh release # unit tests and Release simulator packaging
-bash scripts/ci/native.sh unsigned
+Squash merges use the Conventional Commit PR title: `fix: ...` bumps patch,
+`feat: ...` bumps minor, and `feat!: ...` or a breaking change bumps major.
+Release-please updates `version.txt`, its manifest, changelog and shared Xcode
+marketing version. The baseline is `1.0.0`; existing rehearsal tags are preserved.
+Bootstrap starts after `4f97261eb10d2af2a1301251c8e46748d7cc0dab`.
+
+Merging a reviewed version PR creates its tag and GitHub release. Version notes
+and tags are separate from binary delivery. There is no hosted release packaging,
+signing, artifact publishing or TestFlight workflow.
+
+For local delivery, check out the immutable version tag already merged into
+`main`, verify its native source locally, and open that source in Xcode. Select
+the intended device/archive destination and signing team, then archive and export
+through Organizer. Record the exact source SHA, build number, local test evidence
+and exported product. An unsigned archive cannot be installed on a phone.
+
+Apple membership, signing identity, provisioning and any required agreements
+remain owner prerequisites. Keep signing credentials in the local Apple tooling;
+GitHub CI needs no Apple secrets. Any requested TestFlight upload is performed
+locally through Organizer. An upload acknowledgement does not prove processing,
+tester availability or device installation; inspect those outcomes separately.
+Nothing in version automation submits to App Review or distributes a build.
+
+```mermaid
+flowchart LR
+  PR[Pull request] --> Linux[Linux script and title checks]
+  PR --> Local[Local native verification]
+  Linux --> Merge[Reviewed merge]
+  Local --> Merge
+  Merge --> Version[Version PR and changelog]
+  Version --> Tag[Reviewed version merge and tag]
+  Tag --> Xcode[Local Xcode archive and Organizer export]
 ```
 
-## Signed IPA and internal TestFlight
+## Historical hosted evidence — 2026-10-12
 
-Run the release workflow **from `main`**, choose the already merged tag, and set
-`signed_delivery=true`. `upload_testflight=true` also requests signing. The signed
-job checks out the same SHA that passed release tests. Tag pushes never request
-Apple delivery automatically. Store owner signing credentials as **repository
-Actions secrets** under Settings → Secrets and variables → Actions. The signed
-job has no deployment-environment dependency: private environments and their
-secrets require a paid plan, as documented in GitHub's
-[environment availability](https://docs.github.com/en/rest/deployments/environments).
-Mivu remains private on GitHub Free, without an upgrade. The workflow's explicit
-manual/main guard and tested-commit checkout control this lane. Repository
-secrets are available to trusted repository workflows, so review workflow changes
-before merging and restrict repository write access appropriately. No secrets
-are supplied to PR CI. See GitHub's
-[repository secret instructions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets).
-If a future plan supports the desired environment isolation/protection, it may
-be added separately; it is not a signing prerequisite for this workflow.
-
-Required repository Actions secrets:
-
-| Secret | Owner-provided value |
-| --- | --- |
-| `APPLE_DISTRIBUTION_P12_BASE64` | Base64 Apple Distribution certificate and private key exported as P12 |
-| `APPLE_DISTRIBUTION_P12_PASSWORD` | P12 password |
-| `APPLE_PROVISIONING_PROFILE_BASE64` | Base64 unexpired App Store distribution profile for `com.yakov103.mivu` |
-| `APPLE_TEAM_ID` | Matching Apple Developer team identifier |
-| `ASC_KEY_ID` | App Store Connect API key identifier; upload only |
-| `ASC_ISSUER_ID` | App Store Connect API issuer identifier; upload only |
-| `ASC_PRIVATE_KEY_BASE64` | Base64 `.p8` private key; upload only |
-
-The owner must already have valid Apple membership, bundle identifier, matching
-capabilities/profile, App Store Connect app record and appropriate API role.
-Apple agreements remain an owner/legal gate. The workflow does not enroll,
-purchase membership, accept agreements, register a physical device or invite
-testers. Missing required secrets produce a clear **failed** signed lane before
-any Apple operation; unsigned delivery does not claim signing success.
-
-Signing uses a temporary keychain, strict credential decoding and team/bundle/
-expiry/profile validation. The keychain, profile, credential files and private
-logs are cleaned up. Only the exported IPA and credential-free provenance are
-uploaded. The build number is `<workflow run number>.<attempt>` to avoid reusing
-an uploaded build number. An App Store Connect IPA requires Apple distribution;
-it is not an ad-hoc direct-install IPA.
-
-Optional upload uses the App Store Connect API key and Xcode's export/upload
-command with `testFlightInternalTestingOnly=true`. Successful upload acknowledges
-transfer, **not** Apple's processing, tester availability or a device install.
-Verify the resulting build in App Store Connect separately before claiming
-TestFlight delivery. Nothing is submitted to App Review or external testers.
-
-Primary references checked 2026-10-12:
-
-- [Runner software and Xcode versions](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md)
-- [Immutable checkout action releases](https://github.com/actions/checkout/releases)
-- [Upload action releases](https://github.com/actions/upload-artifact/releases)
-- [Download action releases](https://github.com/actions/download-artifact/releases)
-- [GitHub certificate installation](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)
-- [Apple command-line archive/export](https://developer.apple.com/library/archive/technotes/tn2339/_index.html)
-- [Apple API-key Xcode flags](https://developer.apple.com/videos/play/wwdc2021/10204/)
-- [Apple distribution methods](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases)
-- [Internal TestFlight processing and tester groups](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers)
-
-## Verification status — 2026-10-12
-
-These are observed results, not predictions from workflow files. The [MVP
+These results describe the earlier hosted macOS workflows, which were removed
+under the Linux-only policy. They do not verify the current source or delivery
+path. Historical links and outcomes are preserved below. The [MVP
 acceptance matrix](../verification/2026-10-12-native-mvp-acceptance.md) separates
 the hosted baseline from local working-tree checks and remaining acceptance gates.
 

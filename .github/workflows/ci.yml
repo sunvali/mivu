@@ -1,65 +1,21 @@
-name: Native CI
+name: CI
 on:
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: native-ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   checks:
     runs-on: ubuntu-slim
     timeout-minutes: 2
-    outputs:
-      needs_native: ${{ steps.changes.outputs.needs_native }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
       - name: Check CI scripts
         run: |
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           bash -n scripts/ci/native.sh scripts/ci/signed.sh
-      - name: Select native verification
-        id: changes
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          NATIVE_USAGE_APPROVED: ${{ vars.MIVU_ACTIONS_USAGE_APPROVED }}
-        run: |
-          set -o pipefail
-          if [ "$EVENT_NAME" = workflow_dispatch ] || [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
-            native=true
-          else
-            native=$(git diff --name-only -z "$BASE_SHA" HEAD | python3 scripts/ci/needs_native.py)
-          fi
-          echo "needs_native=$native" >> "$GITHUB_OUTPUT"
-          if [ "$native" = true ] && [ "$NATIVE_USAGE_APPROVED" != true ]; then
-            echo 'Native verification blocked: Actions usage is not approved.' >&2
-            exit 1
-          fi
-  native:
-    needs: checks
-    # Requires included allowance or an explicitly approved paid usage budget.
-    if: vars.MIVU_ACTIONS_USAGE_APPROVED == 'true' && needs.checks.outputs.needs_native == 'true'
-    runs-on: macos-26
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Build and test native iPhone app
-        run: bash scripts/ci/native.sh unit
-      - name: Preserve test evidence
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: native-${{ github.sha }}
-          path: |
-            build/ci/Mivu.xcresult
-            build/ci/*.json
-            build/ci/*.txt
-          retention-days: 1
-          if-no-files-found: error
