@@ -74,15 +74,28 @@ import Network
                         break
                     }
                     let sleep = sleep
+                    let store = diary.store
+                    let epoch = try await store.selectionEpoch(expectedProfileID: owner)
                     let resilient: Inference = { input, tools in
+                        func validate() async throws {
+                            try Task.checkCancellation()
+                            try await store.validateSelection(epoch: epoch, expectedProfileID: owner)
+                        }
                         let delays: [Duration] = [.seconds(1), .seconds(2), .seconds(4)]
                         var attempt = 0
                         while true {
-                            try Task.checkCancellation()
-                            do { return try await bound(input, tools) }
+                            try await validate()
+                            do {
+                                let result = try await bound(input, tools)
+                                try await validate()
+                                return result
+                            }
                             catch {
+                                try await validate()
                                 guard attempt < delays.count, ProbeRunner.isTransient(error) else { throw error }
-                                try await sleep(delays[attempt]); attempt += 1
+                                try await sleep(delays[attempt])
+                                try await validate()
+                                attempt += 1
                             }
                         }
                     }
@@ -171,13 +184,19 @@ import Network
         let ids = Set(turn.receipts.compactMap(\.mealID) + (turn.pendingMealID.map { [$0] } ?? []))
         return diary.snapshot?.meals.filter { ids.contains($0.id) } ?? []
     }
+    func linkedWorkouts(_ turn: CoachTurn) -> [WorkoutSession] {
+        let ids = Set(turn.receipts.compactMap(\.workoutID))
+        guard !ids.isEmpty else { return [] }
+        return diary.snapshot?.workouts.filter { ids.contains($0.id) } ?? []
+    }
     private func message(for error: Error) -> String {
+        if error as? ResponsesClient.Failure == .usageUnavailable { return "ChatGPT is temporarily unavailable. Your input is saved. Retry when usage is available." }
         if ProbeRunner.isTransient(error) { return "The network is unavailable. Your input is saved and analysis will resume when the connection returns." }
         if error is CancellationError || error as? SessionError == .sessionChanged { return "Analysis paused after the connection changed. Your input is saved. Retry when ready." }
-        if error as? ResponsesClient.Failure == .quotaReached { return "Your connection usage limit was reached. Your input is saved; retry when usage is available." }
-        if error as? DiaryError == .staleRevision { return "This meal changed while analysis was running. Review the latest meal before retrying." }
+        if error as? ResponsesClient.Failure == .quotaReached { return "Your ChatGPT usage limit was reached. Your input is saved. Check ChatGPT usage settings in Settings and retry when usage is available." }
+        if error as? DiaryError == .staleRevision { return "A meal, weigh-in or workout changed while analysis was running. Review the latest record before retrying." }
         if error as? DiaryError == .ambiguousDay { return "Choose which waking day this capture belongs to. Your input is saved." }
-        if error as? CoachError == .ungroundedConfirmation { return "More details are needed before food can be logged. Your input is saved." }
+        if error as? CoachError == .ungroundedConfirmation { return "More details are needed before a meal, weigh-in or workout can be logged. Your input is saved." }
         if error as? DiaryError == .persistenceFailed { return "Could not update the diary on this iPhone. Your captured input is saved; retry when ready." }
         return "Analysis could not finish. Your input is saved. Check your connection or retry when ready." }
 }

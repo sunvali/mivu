@@ -58,6 +58,13 @@ struct ConnectionProofView: View {
                         .accessibilityIdentifier("localSampleStatus")
                     Label(inferenceStatus, systemImage: connection.lastCompletedProbe == nil ? "hourglass" : "checkmark.circle")
                         .accessibilityIdentifier("inferenceStatus")
+                    #if DEBUG
+                    if let failure = connection.failureDiagnostic {
+                        Text(verbatim: "Request diagnostic: " + failure.summary)
+                            .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                            .accessibilityIdentifier("requestFailureDiagnostic")
+                    }
+                    #endif
                     Text("Only completed analysis will appear as a result.").foregroundStyle(.secondary)
                     if let result = connection.lastCompletedProbe {
                         Text(result.model).font(.caption).foregroundStyle(.secondary)

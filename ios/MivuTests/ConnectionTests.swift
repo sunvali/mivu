@@ -53,6 +53,25 @@ private final class ConnectionCredentialStore: CredentialStoring, @unchecked Sen
 }
 
 extension ConnectionTests {
+    @Test(arguments: [false, true])
+    func explicitMissingPlanActionRequestsConsentWithoutChangingRegistration(permission: Bool) async throws {
+        let fixture = try ConnectionFixture(permission: permission)
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        let before = fixture.requests.values.count
+        await fixture.connection.connect { url in
+            let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+            #expect(query.first { $0.name == "client_id" }?.value == fixture.credentials.registration.issuedClientID)
+            #expect(query.first { $0.name == "prompt" }?.value == (permission ? nil : "consent"))
+            #expect(!query.contains { $0.name == "force_reconsent" })
+            #expect(query.first { $0.name == "scope" }?.value == "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct")
+            throw CancellationError()
+        }
+        #expect(fixture.connection.activeRegistrationID == fixture.credentials.registrationID)
+        #expect(fixture.connection.planAuthorized == permission)
+        #expect(fixture.requests.values.count == before)
+    }
+
     @Test func missingPlanPermissionSendsNeitherCatalogNorResponse() async throws {
         let fixture = try ConnectionFixture(permission: false)
         defer { fixture.cleanup() }

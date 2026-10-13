@@ -44,7 +44,7 @@ common=(-project ios/Mivu.xcodeproj -scheme Mivu -derivedDataPath "$output/Deriv
 xcodebuild -resolvePackageDependencies "${common[@]}" -quiet
 if [ "$mode" = test ]; then
   destination=$(xcrun simctl list devices available --json | python3 -c '
-import json, re, sys
+import json, platform, re, sys
 candidates = []
 for runtime, devices in json.load(sys.stdin)["devices"].items():
     match = re.search(r"iOS-(\d+)-(\d+)", runtime)
@@ -53,7 +53,7 @@ for runtime, devices in json.load(sys.stdin)["devices"].items():
             if device.get("isAvailable") and device["name"].startswith("iPhone"):
                 candidates.append(((int(match[1]), int(match[2])), device["name"], device["udid"]))
 if not candidates: raise SystemExit("No available iPhone simulator with iOS 26 or newer.")
-print("platform=iOS Simulator,id=" + max(candidates)[2])')
+print("platform=iOS Simulator,arch=" + platform.machine() + ",id=" + max(candidates)[2])')
   set +e
   xcodebuild test "${common[@]}" -configuration Debug -destination "$destination" \
     -parallel-testing-enabled NO -resultBundlePath "$output/Mivu.xcresult" -quiet

@@ -22,7 +22,8 @@ struct OAuthAttempt {
     private let issuedClientID: String?
     private var consumed = false
 
-    static func make(hostID: String, issuedClientID: String?, callbackURL: URL) throws -> Self {
+    static func make(hostID: String, issuedClientID: String?, callbackURL: URL,
+                     requestPlanConsent: Bool = false) throws -> Self {
         guard !hostID.isEmpty, issuedClientID != "", issuedClientID != "dynamic_agent_client" else {
             throw OAuthError.invalidRegistration
         }
@@ -52,6 +53,9 @@ struct OAuthAttempt {
         ]
         if issuedClientID == nil {
             authorization.queryItems?.append(URLQueryItem(name: "agent_name_hint", value: "Mivu"))
+        }
+        if requestPlanConsent {
+            authorization.queryItems?.append(URLQueryItem(name: "prompt", value: "consent"))
         }
         guard let url = authorization.url else { throw OAuthError.invalidRedirect }
         return Self(state: state, nonce: nonce, verifier: verifier, callbackURL: callbackURL,

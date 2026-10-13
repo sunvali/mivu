@@ -23,12 +23,24 @@ struct CoachView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
                                 NutritionSummary(totals: snapshot.totals(dayID: day.id))
+                                if let goal = snapshot.goal(on: day.localDate) {
+                                    let progress = ProgressAnalytics.daily(snapshot: snapshot, localDate: day.localDate)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Your goals").font(.subheadline.weight(.semibold))
+                                        if let target = goal.targets.kcal {
+                                            Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
+                                        }
+                                        Text("Remaining from recorded food: \(progress.remainingFromRecorded.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "unknown")")
+                                    }
+                                    .font(.subheadline)
+                                    .accessibilityIdentifier("coachGoalSummary")
+                                }
                             }.padding(16).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
                         }
                         if coach.turns.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("A little context, a clearer picture.").font(.title2.weight(.semibold))
-                                Text("Tell me what you ate, add a photo, or ask about your recorded meals. Food estimates stay open to correction.").foregroundStyle(Color.diarySecondary)
+                                Text("Log meals, morning weigh-ins or workouts, add photos, or ask about your recorded progress. Estimates stay open to correction.").foregroundStyle(Color.diarySecondary)
                             }.padding(.vertical, 24)
                         }
                         ForEach(conversationRows) { row in
@@ -44,15 +56,28 @@ struct CoachView: View {
                 }.padding(16)
             }
             .scrollDismissesKeyboard(.interactively)
-            .onScrollPhaseChange { _, phase in userScrolling = phase == .interacting || phase == .decelerating }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 80
-            } action: { _, nearBottom in if userScrolling { followLatest = nearBottom } }
+            .onScrollPhaseChange { _, phase in
+                userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
+            } action: { _, remaining in
+                let nearBottom = remaining <= 80
+                if userScrolling, followLatest != nearBottom { followLatest = nearBottom }
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { oldHeight, newHeight in
+                guard newHeight > oldHeight, followLatest, !userScrolling,
+                      let turn = coach.turns.last, turn.assistantText != nil else { return }
+                Task { @MainActor in
+                    await Task.yield()
+                    if followLatest, !userScrolling { proxy.scrollTo("reply-" + turn.id.uuidString, anchor: .top) }
+                }
+            }
             .onChange(of: coach.turns.last?.assistantText) { _, _ in
                 guard followLatest, let id = coach.turns.last?.id, coach.turns.last?.assistantText != nil else { return }
                 Task { @MainActor in
                     await Task.yield()
-                    if followLatest { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("reply-" + id.uuidString, anchor: .top) } }
+                    if followLatest, !userScrolling { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("reply-" + id.uuidString, anchor: .top) } }
                 }
             }
             .onChange(of: coach.turns.count) { _, _ in
@@ -63,11 +88,12 @@ struct CoachView: View {
         .background(Color.diaryCanvas)
         .navigationTitle("Coach")
         .navigationDestination(for: UUID.self) { MealDetailView(model: coach.diary, mealID: $0) }
+        .navigationDestination(for: WorkoutDestination.self) { WorkoutDetailView(model: coach.diary, sessionID: $0.id) }
         .safeAreaInset(edge: .bottom) { if coach.diary.snapshot != nil { composer } }
         .sheet(isPresented: $showPhotos) {
             NavigationStack {
                 Form { PhotoInput(photos: $coach.draft.photos, preparation: preparation, importFailed: $importFailed) }
-                    .navigationTitle("Meal photos")
+                    .navigationTitle("Coach photos")
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPhotos = false }.frame(minHeight: 44) } }
             }.environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
         }
@@ -78,6 +104,7 @@ struct CoachView: View {
             showPhotos = false; editing = false
         }
     }
+    private struct WorkoutDestination: Hashable { let id: UUID }
     private struct ConversationRow: Identifiable {
         enum Kind: String { case input, reply, actions }
         let turn: CoachTurn
@@ -89,7 +116,7 @@ struct CoachView: View {
         coach.turns.flatMap { turn in
             var rows = [ConversationRow(turn: turn, kind: .input)]
             if turn.assistantText != nil { rows.append(ConversationRow(turn: turn, kind: .reply)) }
-            if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil }) {
+            if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil || $0.workoutID != nil }) {
                 rows.append(ConversationRow(turn: turn, kind: .actions))
             }
             return rows
@@ -100,7 +127,7 @@ struct CoachView: View {
             if let error = coach.errorMessage { Text(error).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachError") }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture { Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.").font(.caption).foregroundStyle(Color.diarySecondary) }
             if !coach.draft.photos.isEmpty { Text("\(coach.draft.photos.count) photos attached").font(.caption).foregroundStyle(Color.diarySecondary) }
-            TextField("What did you eat or want to know?", text: $coach.draft.text, axis: .vertical)
+            TextField("Meals, weigh-ins, workouts or a question?", text: $coach.draft.text, axis: .vertical)
                 .lineLimit(1...(typeSize.isAccessibilitySize ? 2 : 5)).focused($editing).accessibilityIdentifier("coachInput")
                 .padding(12).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16))
             HStack {
@@ -143,7 +170,10 @@ struct CoachView: View {
                 }
             }
             ForEach(coach.linkedMeals(turn)) { meal in
-                NavigationLink(value: meal.id) { Label(meal.state == .awaitingReview ? "Review meal estimate" : "Open meal and corrections", systemImage: "fork.knife") }.frame(minHeight: 44).accessibilityIdentifier("coachMealLink")
+                NavigationLink(value: meal.id) { Label(meal.state == .awaitingReview ? "Review meal estimate" : "Open meal and corrections", systemImage: "fork.knife").frame(minHeight: 44) }.accessibilityIdentifier("coachMealLink")
+            }
+            ForEach(coach.linkedWorkouts(turn)) { workout in
+                NavigationLink(value: WorkoutDestination(id: workout.id)) { Label("Open workout and corrections", systemImage: "figure.strengthtraining.traditional").frame(minHeight: 44) }.accessibilityIdentifier("coachWorkoutLink")
             }
         }
     }
@@ -154,7 +184,7 @@ struct CoachView: View {
         case .waitingForConnection: "Waiting for an authorized connection"
         case .waitingForNetwork: "Waiting for the network. Your input is saved."
         case .needsRetry: "Analysis paused. Your input is saved."
-        case .needsClarification: "More details are needed. Review the meal or send a follow-up."
+        case .needsClarification: "More details are needed. Review the saved record or send a follow-up."
         case .completed: "Completed"
         }
     }

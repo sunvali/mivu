@@ -4,16 +4,80 @@ import Testing
 
 private actor CoachFlowSuspension {
     private var continuation: CheckedContinuation<CoachInferenceResult, Never>?
+    private var finished = false
     var started = false
     func respond() async -> CoachInferenceResult {
-        if started { return CoachInferenceResult(model: "fixture", text: "Unexpected duplicate inference", calls: [], outputItems: []) }
-        started = true
-        return await withCheckedContinuation { continuation = $0 }
+        if started || finished { return CoachInferenceResult(model: "fixture", text: "Unexpected duplicate inference", calls: [], outputItems: []) }
+        return await withCheckedContinuation {
+            continuation = $0
+            started = true
+        }
     }
-    func finish() { continuation?.resume(returning: CoachInferenceResult(model: "fixture", text: "Synthetic guidance", calls: [], outputItems: [])) }
+    func finish() {
+        finished = true
+        let waiting = continuation
+        continuation = nil
+        waiting?.resume(returning: CoachInferenceResult(model: "fixture", text: "Synthetic guidance", calls: [], outputItems: []))
+    }
+}
+
+private enum CoachFlowWaitFailure: Error, Equatable {
+    case workerEndedBeforeInference(state: CoachTurnState?, message: String?)
+    case inferenceStartTimedOut
 }
 
 @Suite @MainActor struct CoachFlowTests {
+    private func waitUntilStarted(_ suspended: CoachFlowSuspension, coach: CoachViewModel) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(10))
+        do {
+            while !(await suspended.started) {
+                try Task.checkCancellation()
+                guard coach.isWorking else {
+                    throw CoachFlowWaitFailure.workerEndedBeforeInference(state: coach.turns.first?.state, message: coach.errorMessage)
+                }
+                guard clock.now < deadline else { throw CoachFlowWaitFailure.inferenceStartTimedOut }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            try Task.checkCancellation()
+        } catch {
+            coach.cancel()
+            await suspended.finish()
+            await coach.waitForWorker()
+            throw error
+        }
+    }
+
+    @Test func startWaitReportsWorkerExitBeforeInference() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let suspended = CoachFlowSuspension()
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { throw SessionError.noActiveSession })
+        coach.draft.text = "Synthetic pre-inference failure"
+        #expect(await coach.send())
+        await #expect(throws: CoachFlowWaitFailure.workerEndedBeforeInference(state: .waitingForConnection, message: nil)) {
+            try await waitUntilStarted(suspended, coach: coach)
+        }
+        #expect(!(await suspended.started))
+        #expect(!coach.isWorking)
+        #expect(diary.snapshot?.coachTurns.first?.state == .waitingForConnection)
+        #expect(diary.snapshot?.meals.isEmpty == true)
+    }
+
+    @Test func cancelledStartWaitCleansUpSuspendedWorker() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let suspended = CoachFlowSuspension()
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in await suspended.respond() } })
+        coach.draft.text = "Synthetic cancellation"
+        #expect(await coach.send())
+        try await waitUntilStarted(suspended, coach: coach)
+        let waiting = Task { try await waitUntilStarted(suspended, coach: coach) }
+        waiting.cancel()
+        await #expect(throws: CancellationError.self) { try await waiting.value }
+        #expect(!coach.isWorking)
+        #expect(diary.snapshot?.coachTurns.first?.assistantText == nil)
+        await suspended.finish()
+    }
+
     private func fixture() async throws -> (DiaryViewModel, URL) {
         let path = URL.temporaryDirectory.appending(path: "CoachFlow-" + UUID().uuidString)
         let store = DiaryStore(directory: path)
@@ -35,7 +99,7 @@ private actor CoachFlowSuspension {
         #expect(stored.coachTurns.first?.text == "Synthetic lunch")
         #expect(stored.coachTurns.first?.photos.first?.data == SyntheticConnectionProbe.image)
         #expect(stored.coachTurns.first?.assistantText == nil)
-        for _ in 0..<1000 { if await suspended.started { break }; await Task.yield() }
+        try await waitUntilStarted(suspended, coach: coach)
         try #require(await suspended.started)
         await suspended.finish(); await coach.waitForWorker()
         #expect(diary.snapshot?.coachTurns.first?.state == .completed)
@@ -67,7 +131,7 @@ private actor CoachFlowSuspension {
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in await suspended.respond() } })
         coach.draft.text = "Synthetic input"
         #expect(await coach.send())
-        for _ in 0..<1000 { if await suspended.started { break }; await Task.yield() }
+        try await waitUntilStarted(suspended, coach: coach)
         try #require(await suspended.started)
         let first = try #require(diary.snapshot?.profile.id)
         await diary.createProfile(name: "Synthetic second")
@@ -179,6 +243,30 @@ extension CoachFlowTests {
         return CoachInferenceResult(model: "fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: "log_food", namespace: "mivu", arguments: arguments)], outputItems: [])
     }
     private var finishedReply: CoachInferenceResult { CoachInferenceResult(model: "fixture", text: "Fixture finished.", calls: [], outputItems: []) }
+
+    @Test func workoutReceiptsResolveOwnedSurvivorsAndPreserveMealLinks() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let owner = try #require(diary.snapshot?.profile.id)
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { CoachUITestInference.respond })
+        coach.draft.text = "Two eggs, three bread slices and salad"
+        #expect(await coach.send()); await coach.waitForWorker()
+        let foodTurn = try #require(coach.turns.last), meal = try #require(diary.snapshot?.meals.first)
+        coach.draft.text = "I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal"
+        #expect(await coach.send()); await coach.waitForWorker()
+        let turn = try #require(coach.turns.last), workout = try #require(diary.snapshot?.workouts.first)
+        #expect(coach.linkedWorkouts(turn).map(\.id) == [workout.id])
+        #expect(coach.linkedMeals(turn).isEmpty)
+        #expect(coach.linkedMeals(foodTurn).map(\.id) == [meal.id])
+        #expect(coach.linkedWorkouts(foodTurn).isEmpty)
+        await diary.createProfile(name: "Synthetic other owner")
+        #expect(coach.linkedWorkouts(turn).isEmpty)
+        await diary.switchProfile(owner)
+        #expect(coach.linkedWorkouts(turn).map(\.id) == [workout.id])
+        try await diary.store.deleteWorkout(id: workout.id, expectedRevision: workout.revision, expectedProfileID: owner)
+        try await diary.refresh(profileID: owner)
+        #expect(coach.linkedWorkouts(turn).isEmpty)
+        #expect(coach.linkedMeals(foodTurn).map(\.id) == [meal.id])
+    }
 
     @Test func queuedLegacySubmissionsUseFreshMealRevisionWithoutDuplicateRecords() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }

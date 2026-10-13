@@ -32,7 +32,7 @@ newer simulator, then run. Use XcodeBuildMCP for simulator builds, tests, and
 interaction checks. See the [native MVP plan](docs/superpowers/plans/2026-10-12-native-diary-mvp.md)
 for scope and acceptance, [design system](design-system/mivu/MASTER.md) for
 visual and accessibility guidance, and [CI and delivery](docs/development/ci-cd.md)
-for hosted checks and release prerequisites. The [accepted MVP addendum](docs/superpowers/specs/2026-10-12-sample-mvp-addendum.md)
+for hosted checks and release prerequisites. For owner-run live testing after the core build is ready, see [personal iPhone testing](docs/development/personal-iphone-testing.md). The [accepted MVP addendum](docs/superpowers/specs/2026-10-12-sample-mvp-addendum.md)
 records product and backup requirements.
 
 ## Development

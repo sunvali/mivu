@@ -55,8 +55,33 @@ the actual Files-provider export/restore, physical camera/haptics/VoiceOver and
 pilot acceptance remain unverified. Optional nutrition lookup requires a private
 runtime key; missing lookup stays an uncertain estimate.
 
-Hosted PR/main evidence and final immutable delivery will be recorded separately.
+## Hosted integration evidence
+
+[PR #6](https://github.com/yakov103/mivu/pull/6) merged at
+`2026-10-12T17:05:57Z` as `099e72694e4f27cc97b5c36453428df1f8009201`.
+Its tree matches the reviewed PR head `3a57a34a927d6b361de204e783b7e7c0b6fe1654`.
+
+The [PR run](https://github.com/yakov103/mivu/actions/runs/38279845129)
+succeeded on actual tested merge source
+`aef32fcdf513ebd0ab876f833d5d66e7d5839f2d`. Downloaded provenance records
+`2026-10-12T16:55:29.771308+00:00`, macOS 26.6.2 arm64 and exit 0;
+the named-case verifier confirmed **302 passed, 0 failed, 1 skipped**.
+The runner used Xcode 26.6 / Swift 6.3.3.
+
+The [main run](https://github.com/yakov103/mivu/actions/runs/38281956485)
+also succeeded, on exact merged source
+`099e72694e4f27cc97b5c36453428df1f8009201`.
+Its downloaded log reports **302 passed, 0 failed, 1 skipped** at
+`2026-10-12T17:12:27.741803Z`. This is a log timestamp; main artifact
+provenance was not downloaded. The hosted checks prove simulator validation,
+not live inference or physical-device delivery.
+
+Final immutable delivery remains separate.
 Dated goals, workouts, trends and reports are the next
 [P1 milestone](../superpowers/plans/2026-10-12-coach-p1.md); personalized coaching
 and advanced functionality remain later milestones. This slice is not the
 complete nutrition and fitness coach.
+
+The owner requested that core tracking be completed first, with a checkpoint
+before personalized coaching and advanced features. That priority applies to the
+remaining implementation; later milestones must not start automatically.

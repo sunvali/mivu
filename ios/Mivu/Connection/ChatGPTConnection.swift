@@ -19,8 +19,8 @@ enum ConnectionNotice: String {
     case saveFailed = "Sample could not be saved. No request sent."
     case storageFailed = "Local sample storage unavailable"
     case retry = "Analysis paused. Retry when ready."
-    case quota = "Usage limit reached. Retry after your plan allows it."
-    case permission = "Authorize plan usage before sending a request."
+    case quota = "ChatGPT usage limit reached. Check ChatGPT usage settings, then retry when usage is available."
+    case permission = "Enable ChatGPT plan usage before sending a request."
     case revoked = "Reconnect to authorize plan usage."
     case disconnected = "Local credentials removed"
     case unconfirmed = "Local credentials removed. Remote revocation unconfirmed."
@@ -35,6 +35,7 @@ final class ChatGPTConnection {
     var selectedModel = ""
     private(set) var job: ProbeJob?
     private(set) var notice: ConnectionNotice?
+    private(set) var failureDiagnostic: ResponseFailureDiagnostic?
     private(set) var isConnecting = false
     private(set) var isLoadingModels = false
     private(set) var isAnalyzing = false
@@ -102,6 +103,7 @@ final class ChatGPTConnection {
     func connect(openBrowser: @escaping @MainActor (URL) async throws -> Void) async {
         guard !isConnecting, !isDisconnecting, !isAnalyzing else { return }
         generation += 1
+        failureDiagnostic = nil
         let revision = generation
         isConnecting = true
         isLoadingModels = false
@@ -125,7 +127,8 @@ final class ChatGPTConnection {
             let returning = registrations.first { $0.id == selection }
             let redirect = try await callback.start()
             guard revision == generation else { return }
-            var attempt = try OAuthAttempt.make(hostID: hostID, issuedClientID: returning?.issuedClientID, callbackURL: redirect)
+            var attempt = try OAuthAttempt.make(hostID: hostID, issuedClientID: returning?.issuedClientID,
+                callbackURL: redirect, requestPlanConsent: returning != nil && accountState == .planPermissionMissing)
             var code: AuthorizationCode?
             _ = try await callback.receive(validating: { code = try attempt.consumeCallback($0) },
                 openBrowser: openBrowser, browserURL: attempt.authorizationURL)
@@ -156,6 +159,7 @@ final class ChatGPTConnection {
     func cancelConnection() {
         let wasConnecting = isConnecting
         generation += 1
+        failureDiagnostic = nil
         connectionTask?.cancel()
         listener?.stop()
         connectionTask = nil; listener = nil; isConnecting = false; isLoadingModels = false
@@ -165,6 +169,7 @@ final class ChatGPTConnection {
     func loadModels() async {
         guard planAuthorized, let owner = activeRegistrationID, !isLoadingModels, !isDisconnecting else { return }
         let revision = generation
+        failureDiagnostic = nil
         isLoadingModels = true
         defer { if revision == generation { isLoadingModels = false } }
         do {
@@ -215,10 +220,14 @@ final class ChatGPTConnection {
         let revision = generation
         isAnalyzing = true
         inferenceState = .analyzing
-        probeTask = Task {
+        failureDiagnostic = nil
+        probeTask = Task { [self] in
             do {
-                _ = try await runner.run(pending)
+                _ = try await runner.run(pending, diagnostic: { [weak self] failure in
+                    await self?.recordDiagnostic(failure, revision: revision, model: pending.model)
+                })
                 guard revision == generation, job?.id == pending.id else { return }
+                failureDiagnostic = nil
                 _ = reloadSavedJob()
             } catch {
                 guard revision == generation, job?.id == pending.id else { return }
@@ -254,12 +263,16 @@ final class ChatGPTConnection {
                   models.contains(where: { $0.slug == model }) else { throw SessionError.sessionChanged }
         }
         try validate()
+        failureDiagnostic = nil
         do {
             let token = try await auth.accessToken(expectedRegistrationID: owner)
             try validate()
             let result = try await client.respond(model: model, input: input,
-                                                  toolNamespace: namespace, accessToken: token)
+                                                  toolNamespace: namespace, accessToken: token, diagnostic: { [weak self] failure in
+                await self?.recordDiagnostic(failure, revision: revision, model: model)
+            })
             try validate()
+            failureDiagnostic = nil
             return result
         } catch {
             try validate()
@@ -395,15 +408,21 @@ final class ChatGPTConnection {
         notice = .storageFailed
     }
 
+    private func recordDiagnostic(_ failure: ResponseFailureDiagnostic, revision: Int, model: String) {
+        guard revision == generation, selectedModel == model else { return }
+        failureDiagnostic = failure
+    }
+
     private func reflectFailure(_ error: any Error, revision: Int) async {
         let snapshot = await auth.snapshot()
         guard revision == generation else { return }
+        if failureDiagnostic == nil { failureDiagnostic = ResponseFailureDiagnostic(error: error) }
         apply(snapshot)
         if error as? ResponsesClient.Failure == .quotaReached {
             if let job { preferences.set(job.id.uuidString, forKey: "quotaJobID") }
             inferenceState = .quotaReached; notice = .quota
         }
-        else if error as? ResponsesClient.Failure == .forbidden || error as? ResponsesClient.Failure == .usageUnavailable {
+        else if error as? ResponsesClient.Failure == .forbidden {
             pausePermission(snapshot)
             notice = .permission
         } else if error as? ResponsesClient.Failure == .unauthorized {

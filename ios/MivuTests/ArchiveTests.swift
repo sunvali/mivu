@@ -37,6 +37,83 @@ struct ArchiveTests {
         #expect(!json.contains("refreshToken"))
     }
 
+    @Test func versionThreeRoundTripKeepsProgressAndPendingCoachMedia() throws {
+        var snapshot = fixture()
+        let photo = MealPhoto(data: Data([5, 6, 7]), role: .before)
+        snapshot.coachTurns = [CoachTurn(capturedAt: snapshot.days[0].startAt, text: "Synthetic pending turn",
+                                         photos: [photo], captureTimeZoneID: snapshot.profile.timeZoneID, photoIDs: [photo.id])]
+        snapshot.goals = [GoalRecord(effectiveLocalDate: "2026-10-12", timeZoneID: "Asia/Jerusalem",
+                                     targets: NutritionValues(kcal: 2_000), goalWeightKg: 70, exerciseCreditEnabled: false)]
+        snapshot.weights = [WeightEntry(dayID: snapshot.days[0].id, measuredAt: snapshot.days[0].startAt,
+                                        value: 70, revision: 2, timePrecision: .dateOnly)]
+        snapshot.workouts = [WorkoutSession(dayID: snapshot.days[0].id, performedAt: snapshot.days[0].startAt,
+                                            timePrecision: .dateOnly, revision: 1, kind: .cardio,
+                                            durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil)]
+        let data = try DiaryArchive.encode(snapshot)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["version"] as? Int == 3)
+        #expect(try DiaryArchive.decode(data) == snapshot)
+    }
+
+    @Test(arguments: [1, 2]) func oldArchiveMissingProgressKeysDecodesWithEmptyDefaults(version: Int) throws {
+        var source = fixture()
+        source.weights = [WeightEntry(dayID: source.days[0].id, measuredAt: source.days[0].startAt, value: 70)]
+        var envelope = try #require(JSONSerialization.jsonObject(with: DiaryArchive.encode(source)) as? [String: Any])
+        envelope["version"] = version
+        var body = try #require(envelope["snapshot"] as? [String: Any])
+        for key in ["goals", "workouts", "deletedWeightIDs", "deletedWorkoutIDs"] { body.removeValue(forKey: key) }
+        var weights = try #require(body["weights"] as? [[String: Any]])
+        weights[0].removeValue(forKey: "revision"); weights[0].removeValue(forKey: "timePrecision")
+        body["weights"] = weights
+        envelope["snapshot"] = body
+        let decoded = try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope))
+        #expect(decoded == source)
+        #expect(decoded.goals.isEmpty && decoded.workouts.isEmpty)
+        #expect(decoded.deletedWeightIDs.isEmpty && decoded.deletedWorkoutIDs.isEmpty)
+        #expect(decoded.weights[0].revision == 1 && decoded.weights[0].timePrecision == .exact)
+        #expect(decoded.meals[0].photos[0].data == Data([1, 2, 3, 4]))
+    }
+
+    @Test func archiveRejectsTwoWeightIDsForOneDayButKeepsLegacyNilDayEntries() throws {
+        var source = fixture()
+        source.weights = [WeightEntry(dayID: source.days[0].id, measuredAt: source.days[0].startAt, value: 70)]
+        var envelope = try #require(JSONSerialization.jsonObject(with: DiaryArchive.encode(source)) as? [String: Any])
+        var body = try #require(envelope["snapshot"] as? [String: Any])
+        var weights = try #require(body["weights"] as? [[String: Any]])
+        var duplicate = weights[0]
+        duplicate["id"] = UUID().uuidString
+        weights.append(duplicate)
+        body["weights"] = weights; envelope["snapshot"] = body
+        #expect(throws: DiaryError.invalidData) {
+            try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope))
+        }
+
+        source.weights = [WeightEntry(dayID: nil, measuredAt: source.days[0].startAt, value: 70),
+                          WeightEntry(dayID: nil, measuredAt: source.days[0].startAt, value: 71)]
+        #expect(try DiaryArchive.decode(DiaryArchive.encode(source)) == source)
+    }
+
+    @Test func restoreRejectsDeletedWeightAndWorkoutResurrection() async throws {
+        let directory = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DiaryStore(directory: directory), initial = fixture()
+        _ = try await store.importProfile(initial)
+        let weight = try await store.setWeight(dayLocalDate: initial.days[0].localDate, value: 70, unit: "kg",
+                                               measuredAt: nil, expectedRevision: nil, expectedProfileID: initial.profile.id)
+        let workout = try await store.createWorkout(localDate: initial.days[0].localDate,
+            draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil),
+            performedAt: nil, expectedProfileID: initial.profile.id)
+        try await store.deleteWeight(id: weight.id, expectedRevision: weight.revision, expectedProfileID: initial.profile.id)
+        try await store.deleteWorkout(id: workout.id, expectedRevision: workout.revision, expectedProfileID: initial.profile.id)
+        let current = try await store.snapshot()
+        var forged = current
+        forged.revision += 1
+        forged.lineage = (current.lineage ?? []) + [UUID()]
+        forged.weights = [weight]; forged.workouts = [workout]
+        forged.deletedWeightIDs = []; forged.deletedWorkoutIDs = []
+        await #expect(throws: DiaryError.staleArchive) { try await store.restore(forged) }
+        #expect(try await store.snapshot() == current)
+    }
+
     @Test func malformedVersionOwnerAndReferencesAreRejected() throws {
         let snapshot = fixture()
         let encoded = try DiaryArchive.encode(snapshot)

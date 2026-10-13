@@ -104,6 +104,22 @@ struct TodayView: View {
                     }
                 }
                 Section {
+                    let progress = ProgressAnalytics.daily(snapshot: snapshot,
+                        localDate: model.activeDay?.localDate ?? ProgressDate.label(Date(), zone: snapshot.profile.timeZoneID))
+                    if progress.goal == nil {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Your goals").font(.headline)
+                            Text("Set your own dated goals in Settings.").foregroundStyle(Color.diarySecondary)
+                                .accessibilityIdentifier("todayGoalSummary")
+                            if let burn = progress.estimatedBurnKcal, burn > 0 {
+                                Text("Estimated workout burn: \(burn.formatted(.number.precision(.fractionLength(0)))) kcal")
+                            }
+                        }
+                    } else {
+                        GoalSummaryView(report: progress, identifier: "todayGoalSummary")
+                    }
+                }
+                Section {
                     Button("Start new day") { confirmDay = true }.frame(minHeight: 44).accessibilityIdentifier("startNewDay")
                     Button("Log morning weight") { showWeight = true }.frame(minHeight: 44).accessibilityIdentifier("logWeight")
                 }
