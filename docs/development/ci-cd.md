@@ -36,6 +36,12 @@ variable records verification, it does not enforce a spending limit. Recheck
 before additional hosted runs; maintain the owner's existing hard stop policy.
 Do not enable payment methods or raise budgets.
 
+On 2026-10-13, the post-merge run
+[38425072684](https://github.com/yakov103/mivu/actions/runs/38425072684) was blocked
+before any steps by GitHub's payment/spending-limit check. The earlier allowance
+is no longer established. Native scheduling remains blocked until the owner
+restores Actions availability and verifies the current included allowance.
+
 An existing dedicated self-hosted Mac would avoid hosted runner minute charges,
 according to GitHub's billing documentation, but registration and persistent
 runner security require an owner decision. No runner is installed automatically,
@@ -49,23 +55,36 @@ to the cost gate. There are no Apple/provider secrets in CI and no privileged
 are not persisted, and the token has `contents: read` only. New commits cancel
 obsolete CI runs. Each job has a bounded timeout.
 
-The pipeline checks its test-result verifier, runs the complete `Mivu` scheme
-with normal simulator signing so Keychain tests retain their entitlements, then
-builds the Release simulator application with normal ad-hoc simulator signing.
-This preserves Keychain entitlements without an owner distribution certificate. The verifier reads actual
-`xcresulttool` summary and named test-case JSON: at least one passing named case
-is required, zero-test wrappers and failures fail the job. Pass/fail/skip counts
-and named cases are in `test-report.txt`; XCTest's wrapper count alone is not used.
-`native-<source SHA>` preserves `Mivu.xcresult`, tool/provenance/count files and
-`Mivu-simulator.app.zip` even when a test step fails. The app runs in a simulator;
-it is not an iPhone installation artifact. A failure before result generation
-cannot produce passing evidence.
+The Linux `checks` job runs short CI-script tests and shell syntax checks. Edits
+limited to Markdown or `docs/` stop there. Unknown or empty changed-file lists
+select native verification. Source changes cannot pass by silently skipping an
+unverified native allowance: the selection step fails with a blocked message.
+
+Routine native checks build Debug and run the entire `MivuTests` unit target,
+with a ten-minute timeout and normal simulator signing for Keychain entitlements.
+They do not run UI journeys or package a Release app. Main uses the same quick
+checks rather than repeating the full UI suite after every merge. There is no
+new package/build cache or larger runner spending.
+
+Before merging screen/navigation changes, dispatch **Native CI** from Actions,
+select the PR's current branch, and enable **full_suite**. This runs the complete
+unit and UI scheme with a thirty-minute timeout. Verify the successful run's
+source SHA against the final PR head; a subsequent commit needs fresh evidence.
+This is a contributor merge rule, not an enforced branch-protection setting.
+
+Both modes retain actual `xcresulttool` summary and named-test verification:
+zero-test wrappers, failures and expected failures fail the job. The
+`native-<source SHA>` artifact preserves the result bundle and tool, provenance
+and count files. Unit evidence is not full UI acceptance. Release simulator
+packaging belongs to the release workflow; that app is not a phone installation
+artifact. The faster hosted duration must be measured after Actions is available.
 
 Equivalent hosted commands, from the repository root:
 
 ```sh
 python3 -m unittest discover -s scripts/ci -p 'test_*.py'
-bash scripts/ci/native.sh test
+bash scripts/ci/native.sh unit # routine Debug build and unit tests
+bash scripts/ci/native.sh test # manual full unit and UI suite
 ```
 
 Each invocation needs a fresh `build/ci` directory; scripts deliberately do not
@@ -74,6 +93,34 @@ overwrite a previous result bundle. For repeated local experiments set
 workstation through these CI scripts.
 
 ## Versioned unsigned delivery
+
+Google's pinned **release-please** action maintains a version/changelog PR after
+Conventional Commits reach `main`. Squash merges use the PR title:
+`fix: ...` bumps patch, `feat: ...` bumps minor, and `feat!: ...` or a breaking
+change bumps major. The separate **Commit title** check validates those titles
+and reruns on title edits without restarting native CI. Preserve a conventional
+title when squash-merging; the repository's default squash title is the PR title.
+
+The baseline is `1.0.0`, matching `version.txt`, the release manifest and the
+shared Xcode marketing version. Existing rehearsal tags are preserved. Bootstrap
+starts after `4f97261eb10d2af2a1301251c8e46748d7cc0dab`; release-please determines
+the next version from subsequent commits and updates the shared `.xcconfig`
+alongside its version file, manifest and changelog.
+
+Merging a reviewed version PR creates its tag and GitHub release. Explicit
+workflow dispatch starts full native verification and unsigned packaging for
+that tag. Token-created PRs and tags do not automatically start other workflows,
+so version PRs explicitly dispatch quick CI and title validation too. The action
+uses the built-in token; no personal access token or Apple credential is added.
+Bot PR creation must be allowed in repository Actions settings. The workflow
+creates version PRs; it never approves or merges them.
+
+Release notes/tag creation and successful binary packaging are separate outcomes.
+Packaging attaches products to an existing release while preserving its notes,
+or creates the earlier private draft release when the tag has no release. It
+never clobbers assets. A duplicate upload fails rather than replacing published
+files. The repository remains private; automatic packaging does not request
+signed delivery or TestFlight.
 
 Push an existing version tag, or dispatch `Native release` with `tag`, leaving
 `signed_delivery` and `upload_testflight` false. Accepted tags are `v1.0.0` and
@@ -92,7 +139,7 @@ publication. **`Mivu-unsigned.xcarchive.zip` is not installable on a physical
 phone.** It proves the device target can archive without purchasing membership.
 
 ```sh
-bash scripts/ci/native.sh test
+bash scripts/ci/native.sh release # full tests and Release simulator packaging
 bash scripts/ci/native.sh unsigned
 ```
 

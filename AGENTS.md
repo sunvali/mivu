@@ -32,3 +32,7 @@ for this native app. No web frontend is required.
   release claims tied to the exact merged revision and observed run.
 - Before merge, run Ponytail Review, fix blocking findings, and verify CI.
   Follow the owner's existing authorization for merging; do not add approval gates.
+- Use Conventional Commit PR/squash titles. Run quick native checks on updates;
+  dispatch full native verification for screen/navigation changes before merge.
+  Release packaging runs full tests against the immutable version tag. Do not
+  count unit-only checks, cost-gated skips or blocked jobs as full UI verification.

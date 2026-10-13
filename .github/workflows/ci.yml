@@ -4,26 +4,64 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_suite:
+        description: Run the full unit and UI suite before merging screen or navigation changes
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
   group: native-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      needs_native: ${{ steps.changes.outputs.needs_native }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check CI scripts
+        run: |
+          python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+          bash -n scripts/ci/native.sh scripts/ci/signed.sh
+      - name: Select native verification
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          NATIVE_ALLOWANCE_VERIFIED: ${{ vars.MIVU_ACTIONS_ALLOWANCE_VERIFIED }}
+        run: |
+          set -o pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ] || [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            native=true
+          else
+            native=$(git diff --name-only -z "$BASE_SHA" HEAD | python3 scripts/ci/needs_native.py)
+          fi
+          echo "needs_native=$native" >> "$GITHUB_OUTPUT"
+          if [ "$native" = true ] && [ "$NATIVE_ALLOWANCE_VERIFIED" != true ]; then
+            echo 'Native verification blocked: hosted allowance is not verified.' >&2
+            exit 1
+          fi
   native:
+    needs: checks
     # Remain NOT_RUN_BLOCKED until actual included minutes AND storage are verified.
-    if: vars.MIVU_ACTIONS_ALLOWANCE_VERIFIED == 'true'
+    if: vars.MIVU_ACTIONS_ALLOWANCE_VERIFIED == 'true' && needs.checks.outputs.needs_native == 'true'
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.full_suite && 30 || 10 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check CI result verifier
-        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
       - name: Build and test native iPhone app
-        run: bash scripts/ci/native.sh test
-      - name: Preserve results and simulator application
+        env:
+          TEST_MODE: ${{ inputs.full_suite && 'test' || 'unit' }}
+        run: bash scripts/ci/native.sh "$TEST_MODE"
+      - name: Preserve test evidence
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -32,6 +70,5 @@ jobs:
             build/ci/Mivu.xcresult
             build/ci/*.json
             build/ci/*.txt
-            build/ci/Mivu-simulator.app.zip
           retention-days: 1
           if-no-files-found: error
