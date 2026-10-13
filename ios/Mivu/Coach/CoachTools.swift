@@ -40,7 +40,14 @@ enum CoachTools {
     static let namespace = "mivu"
     static func declarations() throws -> Data {
         func object(_ properties: [String: Any], required: [String]) -> [String: Any] {
-            ["type": "object", "properties": properties, "required": required, "additionalProperties": false]
+            var normalized = properties
+            for (key, value) in properties where !required.contains(key) {
+                guard var field = value as? [String: Any] else { continue }
+                let types = (field["type"] as? [String]) ?? (field["type"] as? String).map { [$0] } ?? []
+                field["type"] = types.contains("null") ? types : types + ["null"]
+                normalized[key] = field
+            }
+            return ["type": "object", "properties": normalized, "required": properties.keys.sorted(), "additionalProperties": false]
         }
         let string: [String: Any] = ["type": "string"]
         let number: [String: Any] = ["type": ["number", "null"]]
@@ -48,12 +55,13 @@ enum CoachTools {
             "kcal": number, "carbs": number, "protein": number, "fat": number,
             "evidence_id": ["type":["integer", "null"]]], required: ["name", "quantity", "unit", "kcal", "carbs", "protein", "fat"])
         let integer: [String: Any] = ["type": "integer"]
+        let unconfirmedTime: [String: Any] = ["type": "string", "description": "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time."]
         let exercise = object(["name": string, "sets": ["type": "array", "items": object(["repetitions": integer, "load_kg": number], required: ["repetitions", "load_kg"])]], required: ["name", "sets"])
-        let workout: [String: Any] = ["kind": ["type": "string", "enum": ["strength", "cardio", "other"]], "duration_minutes": integer, "exercises": ["type": "array", "items": exercise], "estimated_burn_kcal": number, "burn_source": ["type": ["string", "null"], "enum": ["userEstimate", "modelEstimate", NSNull()]], "performed_at": string]
+        let workout: [String: Any] = ["kind": ["type": "string", "enum": ["strength", "cardio", "other"]], "duration_minutes": integer, "exercises": ["type": "array", "items": exercise], "estimated_burn_kcal": number, "burn_source": ["type": ["string", "null"], "enum": ["userEstimate", "modelEstimate", NSNull()]], "performed_at": unconfirmedTime]
         let schemas: [(String, String, [String: Any])] = [
             ("get_progress", "Read actual progress for an inclusive 1, 7 or 30 calendar-day window. Real record IDs/revisions and omitted counts support historical corrections. Food remaining and estimated burn are separate; adherence means Within 10% of target.", object(["ending_on": string, "days": ["type": "integer", "enum": [1, 7, 30]]], required: ["ending_on", "days"])),
             ("get_workout", "Read a complete owned workout before replacement/edit. Oversized records are refused; never replace unseen sets.", object(["workout_id": string], required: ["workout_id"])),
-            ("log_weight", "Log one weight per date. Corrections require expected_revision; historical correction after travel must use retrieved weight_id, preserving day and measured time. Model measured_at cannot confirm exact time. Current morning weight explicitly starts that waking day.", object(["local_date": string, "value": ["type": "number"], "unit": ["type": "string", "enum": ["kg", "lb"]], "weight_id": string, "expected_revision": integer, "measured_at": string], required: ["local_date", "value", "unit"])),
+            ("log_weight", "Log one weight per date. Corrections require expected_revision; historical correction after travel must use retrieved weight_id, preserving day and measured time. Model measured_at cannot confirm exact time. Current morning weight explicitly starts that waking day.", object(["local_date": string, "value": ["type": "number"], "unit": ["type": "string", "enum": ["kg", "lb"]], "weight_id": string, "expected_revision": integer, "measured_at": unconfirmedTime], required: ["local_date", "value", "unit"])),
             ("log_workout", "Log one new session per turn/date; another session needs another turn. Timestamps are unconfirmed date-only. Estimated burn stays separate from food.", object(workout.merging(["local_date": string]) { _, new in new }, required: ["local_date", "kind", "duration_minutes", "exercises"])),
             ("edit_workout", "Replace a complete retrieved workout using its real ID/revision. Preserve its day/time; include all existing sets that should remain.", object(workout.merging(["workout_id": string, "expected_revision": integer]) { _, new in new }, required: ["workout_id", "expected_revision", "kind", "duration_minutes", "exercises"])),
             ("delete_workout", "Delete an owned workout with its actual revision.", object(["workout_id": string, "expected_revision": integer], required: ["workout_id", "expected_revision"])),
@@ -61,11 +69,11 @@ enum CoachTools {
             ("get_context", "Read actual bounded diary and capture clock. truncated and omittedMeals explicitly mark details not included.", object([:], required: [])),
             ("get_meal", "Retrieve actual owner-scoped meal by UUID before correction. omittedItemCount marks unavailable details requiring manual review.", object(["meal_id": string], required: ["meal_id"])),
             ("lookup_nutrition", "Search retrieved nutrition evidence; unavailable means use clearly uncertain estimates.", object(["query":string], required: ["query"])),
-            ("log_food", "Log all new foods for this turn/date once. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":string], required: ["target_local_date", "items"])),
+            ("log_food", "Log all new foods for this turn/date once. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":unconfirmedTime], required: ["target_local_date", "items"])),
             ("correct_item", "Correct only quantity on a retrieved actual item, preserving its nutrition basis and sources.", object(["meal_id":string,"item_id":string,"expected_revision":["type":"integer"],"quantity":["type":"number"]], required: ["meal_id","item_id","expected_revision","quantity"])),
             ("close_day", "Explicitly close a local date as complete, partial, untracked or unknown; retain existing food.", object(["local_date":string,"completeness":["type":"string","enum":DayCompleteness.allCases.map(\.rawValue)]], required: ["local_date","completeness"]))
         ]
-        let tools = schemas.map { ["type":"function", "name":$0.0, "description":$0.1, "parameters":$0.2] as [String: Any] }
+        let tools = schemas.map { ["type":"function", "name":$0.0, "description":$0.1, "parameters":$0.2, "strict":true] as [String: Any] }
         return try JSONSerialization.data(withJSONObject: ["type":"namespace", "name":namespace, "description":"Private local diary and progress operations", "tools":tools])
     }
     static func parse(_ call: CoachToolCall, meals: [CoachContext.Meal], evidence: [Int: FoodEvidenceRecord], receipts: [CoachReceipt], workouts: [WorkoutSession] = []) throws -> CoachCommand {
@@ -87,7 +95,12 @@ enum CoachTools {
         }
         func revision() throws -> Int { try integer("expected_revision", 1...999_999) }
         func unconfirmedTime(_ name: String) throws {
-            if let value = args[name] { guard let value = value as? String, ISO8601DateFormatter().date(from: value) != nil else { throw CoachError.invalidArguments } }
+            guard let raw = args[name], !(raw is NSNull) else { return }
+            guard let value = raw as? String else { throw CoachError.invalidArguments }
+            let formatter = ISO8601DateFormatter()
+            if validLocalDate(value) || formatter.date(from: value) != nil { return }
+            formatter.formatOptions.insert(.withFractionalSeconds)
+            guard formatter.date(from: value) != nil else { throw CoachError.invalidArguments }
         }
         func draft() throws -> WorkoutDraft {
             guard let kind = WorkoutKind(rawValue: try string("kind")), let rows = args["exercises"] as? [[String: Any]], rows.count <= 100 else { throw CoachError.invalidArguments }
@@ -118,8 +131,9 @@ enum CoachTools {
             let label = try date("local_date"), unit = try string("unit")
             guard let value = number(args["value"]), value > 0, value <= 1500, ["kg", "lb"].contains(unit) else { throw CoachError.invalidArguments }
             try unconfirmedTime("measured_at")
-            if args["weight_id"] != nil { return .write(.correctWeight(id: try uuid("weight_id"), value: value, unit: unit, revision: try revision())) }
-            return .write(.weight(date: label, value: value, unit: unit, revision: args["expected_revision"] == nil ? nil : try revision()))
+            if let id = args["weight_id"], !(id is NSNull) { return .write(.correctWeight(id: try uuid("weight_id"), value: value, unit: unit, revision: try revision())) }
+            let expectedRevision = args["expected_revision"]
+            return .write(.weight(date: label, value: value, unit: unit, revision: expectedRevision == nil || expectedRevision is NSNull ? nil : try revision()))
         case "log_workout", "edit_workout":
             let fields: Set<String> = ["kind", "duration_minutes", "exercises", "estimated_burn_kcal", "burn_source", "performed_at"]
             if call.name == "log_workout" {
@@ -168,9 +182,7 @@ enum CoachTools {
                 try validateItems([item]); return item
             }
             // Validate legacy syntax without treating model output as owner-confirmed time.
-            if let value = args["eaten_at"] {
-                guard let value = value as? String, ISO8601DateFormatter().date(from: value) != nil else { throw CoachError.invalidArguments }
-            }
+            try unconfirmedTime("eaten_at")
             return .write(.food(date: try string("target_local_date"), items: items, eatenAt: nil))
         case "correct_item":
             try keys(["meal_id", "item_id", "expected_revision", "quantity"], ["meal_id", "item_id", "expected_revision", "quantity"])

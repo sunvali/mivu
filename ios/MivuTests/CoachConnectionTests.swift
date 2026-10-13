@@ -3,6 +3,47 @@ import Testing
 @testable import Mivu
 
 @Suite @MainActor struct CoachConnectionTests {
+    @Test(arguments: [false, true])
+    func clearsEarlierResponseDiagnosticAfterCatalogFailureOrDisconnect(disconnect: Bool) async throws {
+        let fixture = try CoachConnectionFixture(catalogStatusAfterResponse: 401, response: {
+            SessionReply(status: 400, data: Data(#"{"error":{"code":"subscription_sharing_unsupported_capability","param":"input"}}"#.utf8))
+        })
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        let infer = try fixture.connection.coachInference()
+        await #expect(throws: ResponsesClient.Failure.http(status: 400)) {
+            try await infer([.message(role: .user, text: "Synthetic lunch")], Self.namespace)
+        }
+        #expect(fixture.connection.failureDiagnostic?.providerCode == "subscription_sharing_unsupported_capability")
+        if disconnect {
+            await fixture.connection.disconnect()
+            #expect(fixture.connection.failureDiagnostic == nil)
+        } else {
+            await fixture.connection.loadModels()
+            #expect(fixture.connection.failureDiagnostic?.classification == "unauthorized")
+            #expect(fixture.connection.failureDiagnostic?.providerCode == nil)
+            #expect(fixture.connection.notice == .revoked)
+        }
+    }
+
+    @Test func providerDiagnosticPreservesAuthorizedSessionAndOriginalFailure() async throws {
+        let fixture = try CoachConnectionFixture(response: {
+            SessionReply(status: 400, data: Data(#"{"error":{"code":"subscription_sharing_unsupported_capability","param":"input","message":"private synthetic content"}}"#.utf8))
+        })
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        let infer = try fixture.connection.coachInference()
+        await #expect(throws: ResponsesClient.Failure.http(status: 400)) {
+            try await infer([.message(role: .user, text: "Synthetic lunch")], Self.namespace)
+        }
+        #expect(fixture.connection.planAuthorized)
+        #expect(fixture.connection.notice == .unavailable)
+        #expect(fixture.connection.failureDiagnostic?.httpStatus == 400)
+        #expect(fixture.connection.failureDiagnostic?.providerCode == "subscription_sharing_unsupported_capability")
+        #expect(fixture.connection.failureDiagnostic?.summary.contains("private") == false)
+        #expect(fixture.preferences.string(forKey: "pausedRegistrationID") == nil)
+    }
+
     @Test func disconnectedDoesNotCreateInferenceOrSendRequests() async throws {
         let fixture = try CoachConnectionFixture()
         defer { fixture.cleanup() }
@@ -184,14 +225,16 @@ private final class CoachCredentialStore: CredentialStoring, @unchecked Sendable
     let preferences: UserDefaults
     let requests = CoachConnectionRequests()
     let connection: ChatGPTConnection
-    init(usageFailures: Int? = nil, usageFailureStatus: Int = 200, response: @escaping @Sendable () throws -> SessionReply = coachConnectionCompletion) throws {
+    init(usageFailures: Int? = nil, usageFailureStatus: Int = 200, catalogStatusAfterResponse: Int? = nil, response: @escaping @Sendable () throws -> SessionReply = coachConnectionCompletion) throws {
         let store = CoachCredentialStore()
         preferences = UserDefaults(suiteName: preferencesName)!
         preferences.set(try store.registrations().first?.id, forKey: "selectedRegistrationID")
         let requests = requests
         let session = syntheticSession { request in
             switch request.url?.path {
-            case "/v1/models": return SessionReply(status: 200, data: Data(#"{"models":[{"slug":"fixture-model","display_name":"Synthetic","visibility":"list"},{"slug":"second-model","display_name":"Second synthetic","visibility":"list"}]}"#.utf8))
+            case "/v1/models":
+                if let catalogStatusAfterResponse, requests.count > 0 { return SessionReply(status: catalogStatusAfterResponse, data: Data()) }
+                return SessionReply(status: 200, data: Data(#"{"models":[{"slug":"fixture-model","display_name":"Synthetic","visibility":"list"},{"slug":"second-model","display_name":"Second synthetic","visibility":"list"}]}"#.utf8))
             case "/v1/responses":
                 requests.append()
                 let body = try #require(request.httpBody)

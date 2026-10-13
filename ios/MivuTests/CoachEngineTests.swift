@@ -33,6 +33,88 @@ private actor CoachInputFixture {
 }
 
 @Suite @MainActor struct CoachEngineTests {
+    @Test func toolSchemasRequireDeclaredPropertiesAndKeepOriginalOptionalsNullable() throws {
+        let declarations = try #require(JSONSerialization.jsonObject(with: CoachTools.declarations()) as? [String: Any])
+        let tools = try #require(declarations["tools"] as? [[String: Any]])
+        func checkObject(_ schema: [String: Any]) throws {
+            if schema["type"] as? String == "object" {
+                let properties = try #require(schema["properties"] as? [String: [String: Any]])
+                let required = try #require(schema["required"] as? [String])
+                #expect(Set(required) == Set(properties.keys))
+                #expect(schema["additionalProperties"] as? Bool == false)
+                for child in properties.values { try checkObject(child) }
+            }
+            if let item = schema["items"] as? [String: Any] { try checkObject(item) }
+        }
+        for tool in tools {
+            #expect(tool["strict"] as? Bool == true)
+            try checkObject(try #require(tool["parameters"] as? [String: Any]))
+        }
+        let expected: [String: [String]] = ["log_food": ["eaten_at"], "log_weight": ["weight_id", "expected_revision", "measured_at"], "log_workout": ["performed_at", "estimated_burn_kcal", "burn_source"]]
+        for (name, fields) in expected {
+            let tool = try #require(tools.first { $0["name"] as? String == name })
+            let parameters = try #require(tool["parameters"] as? [String: Any])
+            let properties = try #require(parameters["properties"] as? [String: [String: Any]])
+            for field in fields { #expect((properties[field]?["type"] as? [String])?.contains("null") == true) }
+        }
+    }
+
+    @Test func nullOptionalMealWeightAndWorkoutFieldsCommitWithoutInventingExactTimes() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let food = #"{"target_local_date":"2027-01-15","eaten_at":null,"items":[{"name":"Synthetic eggs","quantity":2,"unit":"egg","kcal":140,"carbs":1,"protein":12,"fat":10,"evidence_id":null}]}"#
+        let weight = #"{"local_date":"2027-01-15","value":70,"unit":"kg","weight_id":null,"expected_revision":null,"measured_at":null}"#
+        let workout = #"{"local_date":"2027-01-15","kind":"cardio","duration_minutes":30,"exercises":[],"performed_at":null,"estimated_burn_kcal":null,"burn_source":null}"#
+        let replies = CoachFixture([result([call("log_food", food, id: "food"), call("log_weight", weight, id: "weight"), call("log_workout", workout, id: "workout")]), result(text: "Done")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let snapshot = try await store.snapshot()
+        #expect(completed.state == .completed && completed.receipts.count == 3)
+        #expect(snapshot.meals.count == 1 && snapshot.weights.count == 1 && snapshot.workouts.count == 1)
+        #expect(snapshot.meals[0].timePrecision == .dateOnly)
+        #expect(snapshot.weights[0].timePrecision == .dateOnly)
+        #expect(snapshot.workouts[0].timePrecision == .dateOnly)
+    }
+
+    @Test(arguments: ["log_food", "log_weight", "log_workout"], ["2027-01-14T08:00:00.123Z", "2027-01-14"])
+    func modelTimeSyntaxKeepsDateOnlyPrecisionAndRequestedDay(operation: String, timestamp: String) async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let arguments = timestampArguments(operation: operation, timestamp: timestamp)
+        let replies = CoachFixture([result([call(operation, arguments)]), result(text: "Done")])
+        _ = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let snapshot = try await store.snapshot()
+        switch operation {
+        case "log_food":
+            #expect(snapshot.meals.first?.timePrecision == .dateOnly)
+            #expect(snapshot.days.first { $0.id == snapshot.meals.first?.dayID }?.localDate == "2027-01-15")
+        case "log_weight":
+            #expect(snapshot.weights.first?.timePrecision == .dateOnly)
+            #expect(snapshot.days.first { $0.id == snapshot.weights.first?.dayID }?.localDate == "2027-01-15")
+        default:
+            #expect(snapshot.workouts.first?.timePrecision == .dateOnly)
+            #expect(snapshot.days.first { $0.id == snapshot.workouts.first?.dayID }?.localDate == "2027-01-15")
+        }
+    }
+
+    @Test(arguments: ["log_food", "log_weight", "log_workout"], ["", "not-a-timestamp", "2027-02-30"])
+    func presentMalformedOptionalTimestampsStillReject(operation: String, timestamp: String) throws {
+        #expect(throws: CoachError.invalidArguments) {
+            try CoachTools.parse(call(operation, timestampArguments(operation: operation, timestamp: timestamp)), meals: [], evidence: [:], receipts: [])
+        }
+    }
+
+    @Test func correctionIDStillRequiresNonNullRevision() throws {
+        let id = UUID().uuidString
+        let args = "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\",\"weight_id\":\"\(id)\",\"expected_revision\":null,\"measured_at\":null}"
+        #expect(throws: CoachError.invalidArguments) { try CoachTools.parse(call("log_weight", args), meals: [], evidence: [:], receipts: []) }
+    }
+
+    private func timestampArguments(operation: String, timestamp: String) -> String {
+        switch operation {
+        case "log_food": "{\"target_local_date\":\"2027-01-15\",\"eaten_at\":\"\(timestamp)\",\"items\":[{\"name\":\"Synthetic eggs\",\"quantity\":2,\"unit\":\"egg\",\"kcal\":140}]}"
+        case "log_weight": "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\",\"measured_at\":\"\(timestamp)\"}"
+        default: "{\"local_date\":\"2027-01-15\",\"kind\":\"cardio\",\"duration_minutes\":30,\"exercises\":[],\"performed_at\":\"\(timestamp)\"}"
+        }
+    }
+
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     private func fixture() async throws -> (DiaryStore, DiaryProfile, CoachTurn, URL) {
         let root = URL.temporaryDirectory.appending(path: "CoachEngine-" + UUID().uuidString)

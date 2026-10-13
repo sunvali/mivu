@@ -35,6 +35,7 @@ final class ChatGPTConnection {
     var selectedModel = ""
     private(set) var job: ProbeJob?
     private(set) var notice: ConnectionNotice?
+    private(set) var failureDiagnostic: ResponseFailureDiagnostic?
     private(set) var isConnecting = false
     private(set) var isLoadingModels = false
     private(set) var isAnalyzing = false
@@ -102,6 +103,7 @@ final class ChatGPTConnection {
     func connect(openBrowser: @escaping @MainActor (URL) async throws -> Void) async {
         guard !isConnecting, !isDisconnecting, !isAnalyzing else { return }
         generation += 1
+        failureDiagnostic = nil
         let revision = generation
         isConnecting = true
         isLoadingModels = false
@@ -157,6 +159,7 @@ final class ChatGPTConnection {
     func cancelConnection() {
         let wasConnecting = isConnecting
         generation += 1
+        failureDiagnostic = nil
         connectionTask?.cancel()
         listener?.stop()
         connectionTask = nil; listener = nil; isConnecting = false; isLoadingModels = false
@@ -166,6 +169,7 @@ final class ChatGPTConnection {
     func loadModels() async {
         guard planAuthorized, let owner = activeRegistrationID, !isLoadingModels, !isDisconnecting else { return }
         let revision = generation
+        failureDiagnostic = nil
         isLoadingModels = true
         defer { if revision == generation { isLoadingModels = false } }
         do {
@@ -216,10 +220,14 @@ final class ChatGPTConnection {
         let revision = generation
         isAnalyzing = true
         inferenceState = .analyzing
+        failureDiagnostic = nil
         probeTask = Task {
             do {
-                _ = try await runner.run(pending)
+                _ = try await runner.run(pending, diagnostic: { [weak self] failure in
+                    await self?.recordDiagnostic(failure, revision: revision, model: pending.model)
+                })
                 guard revision == generation, job?.id == pending.id else { return }
+                failureDiagnostic = nil
                 _ = reloadSavedJob()
             } catch {
                 guard revision == generation, job?.id == pending.id else { return }
@@ -255,12 +263,16 @@ final class ChatGPTConnection {
                   models.contains(where: { $0.slug == model }) else { throw SessionError.sessionChanged }
         }
         try validate()
+        failureDiagnostic = nil
         do {
             let token = try await auth.accessToken(expectedRegistrationID: owner)
             try validate()
             let result = try await client.respond(model: model, input: input,
-                                                  toolNamespace: namespace, accessToken: token)
+                                                  toolNamespace: namespace, accessToken: token, diagnostic: { [weak self] failure in
+                await self?.recordDiagnostic(failure, revision: revision, model: model)
+            })
             try validate()
+            failureDiagnostic = nil
             return result
         } catch {
             try validate()
@@ -396,9 +408,15 @@ final class ChatGPTConnection {
         notice = .storageFailed
     }
 
+    private func recordDiagnostic(_ failure: ResponseFailureDiagnostic, revision: Int, model: String) {
+        guard revision == generation, selectedModel == model else { return }
+        failureDiagnostic = failure
+    }
+
     private func reflectFailure(_ error: any Error, revision: Int) async {
         let snapshot = await auth.snapshot()
         guard revision == generation else { return }
+        if failureDiagnostic == nil { failureDiagnostic = ResponseFailureDiagnostic(error: error) }
         apply(snapshot)
         if error as? ResponsesClient.Failure == .quotaReached {
             if let job { preferences.set(job.id.uuidString, forKey: "quotaJobID") }

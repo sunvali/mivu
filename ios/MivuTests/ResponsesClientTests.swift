@@ -5,6 +5,193 @@ import Testing
 
 @Suite(.serialized)
 struct ResponsesClientTests {
+    @Test func completesPhoneObservedDoneFunctionWithEmptyTerminalAndReplaysCall() async throws {
+        let call = toolCall(id: "phone-call", callID: "phone-call-id", arguments: #"{"quantity":2}"#)
+        let done = event(["type": "response.output_item.done", "output_index": 0, "item": call])
+        var stream = ResponseEventStream()
+        try stream.append(done + toolCompletion([]))
+        let result = try stream.finishInference()
+        #expect(result.calls == [CoachToolCall(id: "phone-call", callID: "phone-call-id", name: "record", namespace: "diary", arguments: #"{"quantity":2}"#)])
+        #expect(result.outputItems.count == 1)
+        #expect(try JSONSerialization.jsonObject(with: result.outputItems[0]) as! NSDictionary == call as NSDictionary)
+        let capture = RequestCapture()
+        _ = try await ResponsesClient(session: sessionReturning(status: 200, body: completed(), capture: capture)).respond(
+            model: "fixture-model", input: [.priorOutput(result.outputItems[0]), .functionOutput(callID: result.calls[0].callID, output: #"{"saved":true}"#)], toolNamespace: nil, accessToken: "fixture-token")
+        let body = try #require(capture.request?.httpBody)
+        let payload = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let input = try #require(payload["input"] as? [[String: Any]])
+        #expect(input[0] as NSDictionary == call as NSDictionary)
+        #expect(input[1]["call_id"] as? String == "phone-call-id")
+    }
+
+    @Test func completesDoneMessageReasoningInIndexOrderOnlyAfterTerminal() throws {
+        let items: [[String: Any]] = [
+            ["type": "reasoning", "id": "reason", "encrypted_content": "synthetic encrypted", "summary": []],
+            ["type": "message", "id": "message", "status": "completed", "role": "assistant", "content": [["type": "output_text", "text": "Synthetic full message"]]]
+        ]
+        var stream = ResponseEventStream()
+        try stream.append(event(["type": "response.output_item.done", "output_index": 1, "item": items[1]]))
+        try stream.append(event(["type": "response.output_item.done", "output_index": 0, "item": items[0]]))
+        #expect(throws: ResponsesClient.Failure.incompleteResponse) { try stream.finishInference() }
+        try stream.append(toolCompletion([]))
+        let result = try stream.finishInference()
+        #expect(result.text == "Synthetic full message")
+        #expect(try result.outputItems.map { try JSONSerialization.jsonObject(with: $0) as! NSDictionary } == items.map { $0 as NSDictionary })
+    }
+
+    @Test func doneItemsCannotCompleteInterruptedIncompleteOrFailedStreams() throws {
+        let done = event(["type": "response.output_item.done", "output_index": 0, "item": toolCall(id: "one", callID: "call", arguments: "{}")])
+        var interrupted = ResponseEventStream()
+        try interrupted.append(done)
+        #expect(throws: ResponsesClient.Failure.incompleteResponse) { try interrupted.finishInference() }
+        for terminal in [event(["type": "response.incomplete"]), event(["type": "response.failed", "response": ["error": ["code": "server_error"]]])] {
+            var stream = ResponseEventStream()
+            #expect(throws: (any Error).self) { try stream.append(done + terminal); try stream.finishInference() }
+        }
+    }
+
+    @Test func rejectsDuplicateConflictingOrInvalidDoneItems() throws {
+        let call = toolCall(id: "one", callID: "call", arguments: "{}")
+        let done = event(["type": "response.output_item.done", "output_index": 0, "item": call])
+        let terminal = toolCompletion([])
+        let conflictingIndex = event(["type": "response.output_item.done", "output_index": 0, "item": toolCall(id: "two", callID: "second", arguments: "{}")])
+        let duplicateID = event(["type": "response.output_item.done", "output_index": 1, "item": call])
+        var cases: [Data] = [done + done + terminal, done + conflictingIndex + terminal, done + duplicateID + terminal]
+        cases.append(done + toolCompletion([toolCall(id: "other", callID: "other", arguments: "{}")]))
+        let indices: [Any] = [1, -1, 128, true]
+        for index in indices {
+            cases.append(event(["type": "response.output_item.done", "output_index": index, "item": call]) + terminal)
+        }
+        let invalidCall = toolCall(id: "one", callID: "call", arguments: "[]")
+        cases.append(event(["type": "response.output_item.done", "output_index": 0, "item": invalidCall]) + terminal)
+        let hosted: [String: Any] = ["type": "web_search_call", "id": "hosted"]
+        cases.append(event(["type": "response.output_item.done", "output_index": 0, "item": hosted]) + terminal)
+        for body in cases {
+            var stream = ResponseEventStream()
+            #expect(throws: ResponsesClient.Failure.malformedResponse) { try stream.append(body); try stream.finishInference() }
+        }
+    }
+
+    @Test func matchingDoneAndFullTerminalItemsDoNotDuplicateOutput() throws {
+        let call = toolCall(id: "one", callID: "call", arguments: "{}")
+        var stream = ResponseEventStream()
+        try stream.append(event(["type": "response.output_item.done", "output_index": 0, "item": call]) + toolCompletion([call]))
+        #expect(try stream.finishInference().calls.count == 1)
+        #expect(try stream.finishInference().outputItems.count == 1)
+    }
+
+    @Test func emptyTerminalDiagnosticCountsReasoningWithoutAcceptingTextDeltas() throws {
+        let items: [[String: Any]] = [
+            ["type": "reasoning", "id": "reason", "encrypted_content": "private synthetic reasoning", "summary": []]
+        ]
+        var stream = ResponseEventStream()
+        for (index, item) in items.enumerated() {
+            try stream.append(event(["type": "response.output_item.done", "output_index": index, "item": item]))
+        }
+        try stream.append(event(["type": "response.output_text.delta", "delta": "private synthetic delta"]))
+        #expect(throws: ResponsesClient.Failure.malformedResponse) { try stream.append(toolCompletion([])) }
+        let diagnostic = try #require(stream.failureDiagnostic)
+        let counts = try #require(diagnostic.streamCounts)
+        #expect(diagnostic.parserReason == .emptyOutput)
+        #expect(counts.doneItems == 1 && counts.doneMessages == 0 && counts.doneFunctions == 0 && counts.doneReasoning == 1)
+        #expect(counts.textDeltas == 1 && counts.terminalItems == 0)
+        #expect(!diagnostic.summary.contains("private"))
+        #expect(throws: ResponsesClient.Failure.incompleteResponse) { try stream.finishInference() }
+    }
+
+    @Test func emptyOutputDiagnosticDistinguishesTerminalReasoningAndRefusal() throws {
+        let items: [[String: Any]] = [
+            ["type": "reasoning", "id": "reason", "encrypted_content": "private synthetic reasoning", "summary": []],
+            ["type": "message", "id": "message", "content": [["type": "refusal", "refusal": "private synthetic refusal"]]]
+        ]
+        var stream = ResponseEventStream()
+        #expect(throws: ResponsesClient.Failure.malformedResponse) { try stream.append(toolCompletion(items)) }
+        let diagnostic = try #require(stream.failureDiagnostic)
+        let counts = try #require(diagnostic.streamCounts)
+        #expect(counts.terminalItems == 2 && counts.terminalMessages == 1 && counts.terminalReasoning == 1)
+        #expect(counts.terminalFunctions == 0 && counts.terminalRefusals == 1 && counts.doneItems == 0)
+        #expect(!diagnostic.summary.contains("private"))
+    }
+
+    @Test func parserDiagnosticNamesTheRejectedGuardWithoutResponseText() throws {
+        let cases: [(Data, String)] = [
+            (Data("data: {private malformed\n\n".utf8), "eventJSON"),
+            (event(["private": "private provider text"]), "eventType"),
+            (Data("event: private provider event\n".utf8) + completed(), "eventNameMismatch"),
+            (completed() + event(["type": "private provider event"]), "trailingEvent"),
+            (event(["type": "response.output_text.delta", "delta": ["private": true]]), "deltaSchema"),
+            (event(["type": "response.completed"]), "completedEnvelope"),
+            (event(["type": "response.completed", "response": ["status": "private"]]), "completedStatus"),
+            (event(["type": "response.completed", "response": ["status": "completed", "error": "private"]]), "completedError"),
+            (event(["type": "response.completed", "response": ["status": "completed"]]), "completedModel"),
+            (event(["type": "response.completed", "response": ["status": "completed", "model": "private"]]), "completedOutput"),
+            (toolCompletion([["type": "private provider item"]]), "outputType"),
+            (toolCompletion([["type": "message", "content": "private"]]), "contentSchema"),
+            (toolCompletion([["type": "message", "content": [["type": "output_text", "text": 42]]]]), "contentSchema"),
+            (toolCompletion([["type": "function_call", "name": "private"]]), "functionSchema"),
+            (toolCompletion([]), "emptyOutput"),
+            (Data([0xFF, 0x0A]), "eventUTF8")
+        ]
+        for (body, reason) in cases {
+            var stream = ResponseEventStream()
+            #expect(throws: ResponsesClient.Failure.malformedResponse) { try stream.append(body) }
+            let diagnostic = try #require(stream.failureDiagnostic)
+            #expect(diagnostic.parserReason?.rawValue == reason)
+            #expect(diagnostic.classification == "malformedResponse")
+            #expect(!diagnostic.summary.contains("private"))
+        }
+    }
+
+    @Test func diagnosticPreservesHTTPFailureAndOnlyKnownMetadata() async throws {
+        let capture = FailureDiagnosticCapture()
+        let body = Data(#"{"error":{"code":"subscription_sharing_unsupported_capability","param":"input","message":"private synthetic prompt","account":"private account"}}"#.utf8)
+        await #expect(throws: ResponsesClient.Failure.http(status: 400)) {
+            try await ResponsesClient(session: sessionReturning(status: 400, body: body)).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token", diagnostic: { await capture.record($0) })
+        }
+        let diagnostic = try #require(await capture.value)
+        #expect(diagnostic.classification == "http")
+        #expect(diagnostic.httpStatus == 400)
+        #expect(diagnostic.providerCode == "subscription_sharing_unsupported_capability")
+        #expect(diagnostic.parameter == "input")
+        #expect(diagnostic.bodyShape == "error")
+        #expect(!diagnostic.summary.contains("private"))
+    }
+
+    @Test(arguments: [#"{"detail":"private synthetic admission detail"}"#, #"{"error":{"code":"private synthetic code","param":"private synthetic param","message":"private"}}"#, "{private malformed"])
+    func diagnosticNeverDisplaysUnrecognizedProviderText(body: String) async throws {
+        let capture = FailureDiagnosticCapture()
+        await #expect(throws: ResponsesClient.Failure.http(status: 400)) {
+            try await ResponsesClient(session: sessionReturning(status: 400, body: Data(body.utf8))).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token", diagnostic: { await capture.record($0) })
+        }
+        let diagnostic = try #require(await capture.value)
+        #expect(diagnostic.httpStatus == 400)
+        #expect(diagnostic.providerCode == nil && diagnostic.parameter == nil)
+        #expect(!diagnostic.summary.contains("private"))
+    }
+
+    @Test func diagnosticClassifiesStreamFailureWithoutChangingFailure() async throws {
+        let capture = FailureDiagnosticCapture()
+        let body = event(["type": "response.failed", "response": ["error": ["code": "subscription_sharing_unsupported_capability", "param": "tools", "message": "private synthetic prompt"]]])
+        await #expect(throws: ResponsesClient.Failure.responseFailed) {
+            try await ResponsesClient(session: sessionReturning(status: 200, body: body)).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token", diagnostic: { await capture.record($0) })
+        }
+        let diagnostic = try #require(await capture.value)
+        #expect(diagnostic.classification == "responseFailed" && diagnostic.httpStatus == 200)
+        #expect(diagnostic.providerCode == "subscription_sharing_unsupported_capability" && diagnostic.parameter == "tools")
+        #expect(!diagnostic.summary.contains("private"))
+    }
+
+    @Test func diagnosticClassifiesIncompleteStreamAndTransportWithoutRawText() async throws {
+        let capture = FailureDiagnosticCapture()
+        await #expect(throws: ResponsesClient.Failure.incompleteResponse) {
+            try await ResponsesClient(session: sessionReturning(status: 200, body: Data())).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token", diagnostic: { await capture.record($0) })
+        }
+        #expect(await capture.value?.classification == "incompleteResponse")
+        let diagnostic = ResponseFailureDiagnostic(error: URLError(.timedOut, userInfo: [NSLocalizedDescriptionKey: "private credential"]))
+        #expect(diagnostic.classification == "transportTimedOut" && diagnostic.httpStatus == nil)
+        #expect(!diagnostic.summary.contains("private"))
+    }
+
     @Test func acceptsJPEGInput() async throws {
         let capture = RequestCapture()
         let client = ResponsesClient(session: sessionReturning(status: 200, body: completed(), capture: capture))
@@ -274,6 +461,11 @@ struct ResponsesClientTests {
         var topLevel = ResponseEventStream()
         #expect(throws: ResponsesClient.Failure.quotaReached) { try topLevel.append(event(["type": "error", "code": "subscription_sharing_usage_limit_exceeded"])) }
     }
+}
+
+private actor FailureDiagnosticCapture {
+    private(set) var value: ResponseFailureDiagnostic?
+    func record(_ value: ResponseFailureDiagnostic) { self.value = value }
 }
 
 private func toolCall(id: String, callID: String, arguments: String) -> [String: Any] {

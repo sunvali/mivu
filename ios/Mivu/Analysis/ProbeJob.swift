@@ -125,7 +125,7 @@ actor ProbeRunner {
         self.sleep = sleep
     }
 
-    func run(_ job: ProbeJob) async throws -> ProbeResult {
+    func run(_ job: ProbeJob, diagnostic: (@Sendable (ResponseFailureDiagnostic) async -> Void)? = nil) async throws -> ProbeResult {
         guard !running else { throw Failure.alreadyRunning }
         guard try store.matches(job) else { throw Failure.staleJob }
         guard try store.load()?.state != .completed else { throw Failure.alreadyCompleted }
@@ -140,7 +140,7 @@ actor ProbeRunner {
                     try await checkOwnerAndJob(job)
                     let token = try await accessToken(job.registrationID)
                     try await checkOwnerAndJob(job)
-                    let result = try await client.run(model: job.model, text: job.text, image: job.image, accessToken: token)
+                    let result = try await client.run(model: job.model, text: job.text, image: job.image, accessToken: token, diagnostic: diagnostic)
                     try await checkOwnerAndJob(job)
                     guard try store.transition(job, to: .completed, result: result) else { throw Failure.staleJob }
                     return result
