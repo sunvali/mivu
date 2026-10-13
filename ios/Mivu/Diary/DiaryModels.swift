@@ -335,7 +335,8 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
                 guard receipt.turnID == turn.id, receipt.operationKey.utf8.count <= 500,
                       !receipt.operationKey.isEmpty, receipt.committedRevision > 0,
                       receipt.committedRevision <= revision, receipt.resultJSON.utf8.count <= 65_536,
-                      days.contains(where: { $0.id == receipt.dayID }),
+                      (receipt.dayID.map { id in days.contains { $0.id == id } } ??
+                       (receipt.goalID != nil || receipt.destination != nil || receipt.operationKey == "\(turn.id.uuidString)/update_preferences" || receipt.operationKey.hasPrefix("\(turn.id.uuidString)/update_preferences/"))),
                       let data = receipt.resultJSON.data(using: .utf8),
                       (try? JSONSerialization.jsonObject(with: data)) != nil else { throw DiaryError.invalidData }
             }

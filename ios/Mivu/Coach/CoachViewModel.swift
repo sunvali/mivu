@@ -10,6 +10,8 @@ import Network
     private(set) var captureReceipt: UUID?
     private(set) var isSending = false
     private(set) var isWorking = false
+    private(set) var activity: CoachActivity?
+    private(set) var activityTurnID: UUID?
     var errorMessage: String?
     @ObservationIgnored private let inference: () throws -> Inference
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
@@ -19,6 +21,7 @@ import Network
     @ObservationIgnored private let monitor = NWPathMonitor()
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var active = true
+    @ObservationIgnored private var presentationActive = true
 
     init(diary: DiaryViewModel, connection: ChatGPTConnection, inference: (() throws -> Inference)? = nil,
          lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured },
@@ -52,7 +55,7 @@ import Network
         guard active, worker == nil, !diary.isChangingProfile, let owner = diary.snapshot?.profile.id else { return }
         let id = UUID(); workerID = id; isWorking = true
         worker = Task {
-            defer { if workerID == id { worker = nil; workerID = nil; isWorking = false } }
+            defer { if workerID == id { worker = nil; workerID = nil; isWorking = false; activity = nil; activityTurnID = nil } }
             do {
                 try await recoverLegacyCaptures(owner: owner)
                 while !Task.isCancelled {
@@ -60,6 +63,7 @@ import Network
                     guard let turn = snapshot.coachTurns.first(where: {
                         [.captured, .analyzing, .waitingForNetwork].contains($0.state) || (connection.planAuthorized && $0.state == .waitingForConnection)
                     }) else { break }
+                    activity = nil; activityTurnID = nil
                     if turn.state == .analyzing {
                         try await diary.store.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: owner)
                     }
@@ -102,6 +106,8 @@ import Network
                     do {
                         _ = try await CoachEngine(store: diary.store, infer: resilient, lookup: lookup, prepareImages: { originals in
                             try PhotoImport.visionCopies(originals)
+                        }, onActivity: { phase in
+                            await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
                         }).run(turnID: turn.id, expectedProfileID: owner)
                     } catch {
                         guard !Task.isCancelled, diary.snapshot?.profile.id == owner else { break }
@@ -175,11 +181,17 @@ import Network
         }
         monitor.start(queue: DispatchQueue(label: "Mivu.CoachConnectivity"))
     }
-    func enterBackground() { active = false; cancel() }
-    func enterForeground() { active = true; resume() }
-    func cancel() { worker?.cancel() }
+    func pauseActivity() { presentationActive = false; activity = nil; activityTurnID = nil }
+    func enterBackground() { active = false; pauseActivity(); cancel() }
+    func enterForeground() { active = true; presentationActive = true; resume() }
+    func cancel() { activity = nil; activityTurnID = nil; worker?.cancel() }
     deinit { monitor.cancel() }
     func waitForWorker() async { await worker?.value }
+    private func reportActivity(_ phase: CoachActivity, workerID id: UUID, owner: UUID, turnID: UUID) async {
+        guard active, presentationActive, !Task.isCancelled, workerID == id, diary.snapshot?.profile.id == owner, !diary.isChangingProfile else { return }
+        activity = phase; activityTurnID = turnID
+        try? await diary.refresh(profileID: owner)
+    }
     func linkedMeals(_ turn: CoachTurn) -> [DiaryMeal] {
         let ids = Set(turn.receipts.compactMap(\.mealID) + (turn.pendingMealID.map { [$0] } ?? []))
         return diary.snapshot?.meals.filter { ids.contains($0.id) } ?? []

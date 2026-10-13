@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Bindable var connection: ChatGPTConnection
     @State private var window: UIWindow?
     let nutritionKeys: NutritionAPIKeyStore
+    let destination: CoachDestination?
     @State private var nutritionDraft = NutritionKeyDraft()
     @State private var nutritionConfigured = false
     @State private var profileName = ""
@@ -14,6 +15,7 @@ struct SettingsView: View {
     @State private var showGoals = false
     @State private var fields = DiaryPreferencesDraft()
     var body: some View {
+        ScrollViewReader { proxy in
         Form {
             Section("Private local profile") {
                 if let profile = model.snapshot?.profile { Text(profile.name).font(.headline) }
@@ -25,7 +27,7 @@ struct SettingsView: View {
                 }
                 Button("Create local profile") { creatingProfile = true }.frame(minHeight: 44)
                 if model.snapshot != nil { Button("Sign out of local profile") { Task { await model.signOut() } }.frame(minHeight: 44) }
-            }
+            }.id(CoachDestination.profiles)
             if let profile = model.snapshot?.profile {
                 Section("Goals") {
                     Button("Set dated goals") { showGoals = true }
@@ -38,14 +40,30 @@ struct SettingsView: View {
                     TextField("Dietary preferences and restrictions", text: $fields.preferences, axis: .vertical).lineLimit(3...6)
                     Text("A photo cannot prove that food meets a dietary restriction.").font(.caption).foregroundStyle(Color.diarySecondary)
                     Button("Save preferences") {
-                        let updated = fields.applying(to: profile)
-                        Task { await model.change { try await model.store.updateProfile(updated, expectedProfileID: profile.id) } }
-                    }.frame(minHeight: 44).disabled(TimeZone(identifier: fields.timezone) == nil || fields.preferences.count > 10_000)
+                        Task {
+                            do {
+                                let latest = try await model.store.snapshot(expectedProfileID: profile.id).profile
+                                guard !fields.conflicts(with: latest) else {
+                                    fields.synchronize(latest, restoreGeneration: model.restoreGeneration)
+                                    try await model.refresh(profileID: profile.id)
+                                    return
+                                }
+                                let updated = fields.applying(to: latest)
+                                await model.change { try await model.store.updateProfile(updated, expectedProfile: latest, expectedProfileID: profile.id) }
+                            } catch { model.errorMessage = "Could not load the latest profile settings. Try again." }
+                        }
+                    }.frame(minHeight: 44).disabled(TimeZone(identifier: fields.timezone) == nil || fields.preferences.count > 10_000 || fields.hasConflict)
+                    if fields.hasConflict {
+                        Text("These settings changed while you were editing. Your draft is preserved.")
+                            .font(.caption).foregroundStyle(Color.diarySecondary)
+                        Button("Use latest saved settings") { fields.useSaved(model.snapshot?.profile) }
+                            .frame(minHeight: 44)
+                    }
                     Text("Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use.").font(.caption).foregroundStyle(Color.diarySecondary)
                 }
                 Section("Backup and portability") {
                     DiaryBackupSettings(model: model)
-                }
+                }.id(CoachDestination.backup)
                 Section("Connection") {
                     Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle")
                     Text("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection.").font(.caption).foregroundStyle(Color.diarySecondary)
@@ -69,7 +87,7 @@ struct SettingsView: View {
                     if let notice = connection.notice { Text(notice.rawValue).font(.caption).foregroundStyle(Color.diarySecondary) }
                     Link("ChatGPT usage settings", destination: URL(string: "https://chatgpt.com/settings/usage")!).frame(minHeight: 44)
                     Button("ChatGPT connection diagnostic") { showDiagnostic = true }.frame(minHeight: 44)
-                }
+                }.id(CoachDestination.connection)
                 Section("Optional nutrition source") {
                     Label(nutritionConfigured ? "USDA lookup configured" : "USDA lookup not configured", systemImage: "leaf")
                     Text("Food estimates and capture work without a lookup key. Add your own USDA key for retrieved nutrition evidence.").font(.caption).foregroundStyle(Color.diarySecondary)
@@ -85,7 +103,7 @@ struct SettingsView: View {
                     }
                     if let message = nutritionDraft.message { Text(message).font(.caption).foregroundStyle(Color.diarySecondary) }
                     Text("This key stays in this iPhone's Keychain and is excluded from diary exports and backups.").font(.caption).foregroundStyle(Color.diarySecondary)
-                }
+                }.id(CoachDestination.nutritionSource)
                 Section("Delete local diary") {
                     Text("Deletion removes this profile's meals, photos, weights and preferences from this iPhone. Other profiles are preserved.").font(.caption).foregroundStyle(Color.diarySecondary)
                     Button("Delete this local profile", role: .destructive) { showDelete = true }.frame(minHeight: 44)
@@ -107,7 +125,7 @@ struct SettingsView: View {
             .environment(\.layoutDirection, .leftToRight)
         }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
-        .onChange(of: model.snapshot?.profile.id, initial: true) { _, _ in fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration) }
+        .onChange(of: model.snapshot?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration) }
         .alert("Create local profile", isPresented: $creatingProfile) {
             TextField("Profile name", text: $profileName)
@@ -122,5 +140,16 @@ struct SettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { Text("Export or save a backup first if you want to keep your records.") }
+        .onAppear { scroll(to: destination, with: proxy) }
+        .onChange(of: destination) { _, value in scroll(to: value, with: proxy) }
+        }
+    }
+
+    private func scroll(to destination: CoachDestination?, with proxy: ScrollViewProxy) {
+        guard let destination else { return }
+        Task { @MainActor in
+            await Task.yield()
+            proxy.scrollTo(destination == .settings ? .profiles : destination, anchor: .top)
+        }
     }
 }

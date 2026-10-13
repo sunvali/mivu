@@ -43,8 +43,11 @@ Dynamic Type, VoiceOver, reduced motion, and accessible touch targets. Hebrew RT
 is not an MVP acceptance requirement. Report verification with its actual
 environment, result, and remaining gates; workflow files alone are not evidence
 of a hosted run. The released baseline remains a sample diary; conversational food
-tracking is implemented on this branch, while progress tracking and broader
-coaching remain underway. See the [merged Coach foundation evidence](docs/verification/2026-10-12-coach-foundation.md), the [coach feature audit](docs/verification/2026-10-12-coach-feature-audit.md),
+tracking is implemented on this branch, and progress tracking plus manual Coach
+controls are present in the current branch. Live account-backed behavior and
+physical-iPhone acceptance remain pending; see [Coach edit parity and device
+acceptance](docs/development/coach-edit-parity.md) for the contract and unchecked
+device checklist. See the [merged Coach foundation evidence](docs/verification/2026-10-12-coach-foundation.md), the [coach feature audit](docs/verification/2026-10-12-coach-feature-audit.md),
 [conversational coach design](docs/superpowers/specs/2026-10-12-conversational-coach-design.md),
 and [P0 implementation plan](docs/superpowers/plans/2026-10-12-coach-p0.md) for
 the current scope and evidence.

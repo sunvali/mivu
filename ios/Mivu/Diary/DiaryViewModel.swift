@@ -325,14 +325,45 @@ struct DiaryPreferencesDraft {
     var preferences = ""
     private var profileID: UUID?
     private var synchronizedRestoreGeneration: Int?
+    private var savedTimezone = "Asia/Jerusalem"
+    private var savedPreferences = ""
+    private(set) var timezoneConflict = false
+    private(set) var preferencesConflict = false
+    var hasConflict: Bool { timezoneConflict || preferencesConflict }
+
     mutating func synchronize(_ profile: DiaryProfile?, restoreGeneration: Int) {
-        guard profileID != profile?.id || synchronizedRestoreGeneration != restoreGeneration else { return }
-        profileID = profile?.id; synchronizedRestoreGeneration = restoreGeneration
+        if profileID != profile?.id || synchronizedRestoreGeneration != restoreGeneration {
+            profileID = profile?.id; synchronizedRestoreGeneration = restoreGeneration
+            useSaved(profile)
+            return
+        }
+        let currentTimezone = profile?.timeZoneID ?? "Asia/Jerusalem"
+        let currentPreferences = profile?.preferences ?? ""
+        if currentTimezone != savedTimezone {
+            if timezone == savedTimezone || timezone == currentTimezone { timezone = currentTimezone; timezoneConflict = false }
+            else { timezoneConflict = true }
+            savedTimezone = currentTimezone
+        }
+        if currentPreferences != savedPreferences {
+            if preferences == savedPreferences || preferences == currentPreferences { preferences = currentPreferences; preferencesConflict = false }
+            else { preferencesConflict = true }
+            savedPreferences = currentPreferences
+        }
+    }
+    mutating func useSaved(_ profile: DiaryProfile?) {
         timezone = profile?.timeZoneID ?? "Asia/Jerusalem"
         preferences = profile?.preferences ?? ""
+        savedTimezone = timezone; savedPreferences = preferences
+        timezoneConflict = false; preferencesConflict = false
+    }
+    func conflicts(with profile: DiaryProfile) -> Bool {
+        hasConflict || (timezone != savedTimezone && profile.timeZoneID != savedTimezone && profile.timeZoneID != timezone)
+            || (preferences != savedPreferences && profile.preferences != savedPreferences && profile.preferences != preferences)
     }
     func applying(to profile: DiaryProfile) -> DiaryProfile {
-        var updated = profile; updated.timeZoneID = timezone; updated.preferences = preferences
+        var updated = profile
+        if !timezoneConflict && timezone != savedTimezone { updated.timeZoneID = timezone }
+        if !preferencesConflict && preferences != savedPreferences { updated.preferences = preferences }
         return updated
     }
 }

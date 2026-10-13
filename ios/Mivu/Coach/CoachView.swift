@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CoachView: View {
     @Bindable var coach: CoachViewModel
+    let openDestination: (CoachDestination) -> Void
     @State private var showPhotos = false
     @State private var preparation = PhotoPreparation()
     @State private var importFailed = false
@@ -116,7 +117,7 @@ struct CoachView: View {
         coach.turns.flatMap { turn in
             var rows = [ConversationRow(turn: turn, kind: .input)]
             if turn.assistantText != nil { rows.append(ConversationRow(turn: turn, kind: .reply)) }
-            if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil || $0.workoutID != nil }) {
+            if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil || $0.workoutID != nil || $0.destination != nil }) {
                 rows.append(ConversationRow(turn: turn, kind: .actions))
             }
             return rows
@@ -159,7 +160,11 @@ struct CoachView: View {
     private func turnActions(_ turn: CoachTurn) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if turn.state != .completed {
-                Label(status(turn.state), systemImage: turn.state == .analyzing ? "hourglass" : "clock").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                if let activity = coach.activity, coach.activityTurnID == turn.id {
+                    CoachActivityView(activity: activity)
+                } else {
+                    Label(status(turn.state), systemImage: turn.state == .analyzing ? "hourglass" : "clock").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                }
                 if turn.needsDayChoice == true {
                     if let date = coach.previousDayDate(turn) {
                         Button("Use previous waking day: " + date) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
@@ -175,6 +180,12 @@ struct CoachView: View {
             ForEach(coach.linkedWorkouts(turn)) { workout in
                 NavigationLink(value: WorkoutDestination(id: workout.id)) { Label("Open workout and corrections", systemImage: "figure.strengthtraining.traditional").frame(minHeight: 44) }.accessibilityIdentifier("coachWorkoutLink")
             }
+            ForEach(CoachDestination.allCases.filter { destination in turn.receipts.contains { $0.destination == destination } }, id: \.self) { destination in
+                Button { openDestination(destination) } label: {
+                    Label(destination.linkTitle, systemImage: "gearshape").frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("coachSettingsLink")
+            }
         }
     }
     private func status(_ state: CoachTurnState) -> String {
@@ -186,6 +197,18 @@ struct CoachView: View {
         case .needsRetry: "Analysis paused. Your input is saved."
         case .needsClarification: "More details are needed. Review the saved record or send a follow-up."
         case .completed: "Completed"
+        }
+    }
+}
+
+private extension CoachDestination {
+    var linkTitle: String {
+        switch self {
+        case .settings: "Open Settings"
+        case .profiles: "Open local profiles"
+        case .connection: "Open ChatGPT connection"
+        case .nutritionSource: "Open nutrition source"
+        case .backup: "Open backup and Files"
         }
     }
 }

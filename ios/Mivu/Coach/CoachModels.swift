@@ -2,15 +2,19 @@ import Foundation
 
 enum CoachTurnState: String, Codable, Sendable { case captured, analyzing, waitingForConnection, waitingForNetwork, needsRetry, needsClarification, completed }
 enum MealTimePrecision: String, Codable, Sendable { case exact, dateOnly }
+enum CoachActivity: String, Sendable { case preparingPhotos, thinking, reading, saving }
+enum CoachDestination: String, Codable, CaseIterable, Sendable { case settings, profiles, connection, nutritionSource, backup }
 
 struct CoachReceipt: Codable, Equatable, Sendable {
     var operationKey: String
     var turnID: UUID
-    var dayID: UUID
+    var dayID: UUID?
     var mealID: UUID? = nil
     var itemID: UUID? = nil
     var weightID: UUID? = nil
     var workoutID: UUID? = nil
+    var goalID: UUID? = nil
+    var destination: CoachDestination? = nil
     var committedRevision: Int
     var resultJSON: String
 }
@@ -46,6 +50,12 @@ struct CoachContext: Codable, Equatable, Sendable {
         var itemCount: Int
     }
     struct Meal: Codable, Equatable, Sendable {
+        struct Photo: Codable, Equatable, Sendable { var id: UUID; var role: PhotoRole }
+        struct Review: Codable, Equatable, Sendable {
+            var submissionID: UUID
+            var baseRevision: Int
+            var items: [FoodItem]
+        }
         var id: UUID
         var dayID: UUID
         var revision: Int
@@ -54,6 +64,9 @@ struct CoachContext: Codable, Equatable, Sendable {
         var items: [FoodItem]
         var state: SubmissionState = .saved
         var omittedItemCount = 0
+        var photos: [Photo]? = nil
+        var review: Review? = nil
+        var omittedPhotoCount: Int? = nil
     }
     var profile: DiaryProfile
     var capturedAt: Date
@@ -72,6 +85,9 @@ struct CoachContext: Codable, Equatable, Sendable {
     var additionalMealCount = 0
     var omittedMeals: [MealReference] = []
     var truncated = false
+    var diaryRevision: Int? = nil
+    var preferencesTruncated: Bool? = nil
+    var attachedPhotoIDs: [UUID]? = nil
 }
 
 enum CoachError: Error, Equatable { case invalidTool, invalidArguments, limitExceeded, ungroundedConfirmation, connectionRequired }
