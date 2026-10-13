@@ -23,9 +23,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   artifacts:
-    if: vars.MIVU_ACTIONS_ALLOWANCE_VERIFIED == 'true'
+    if: vars.MIVU_ACTIONS_USAGE_APPROVED == 'true'
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: 8
     outputs:
       sha: ${{ steps.source.outputs.sha }}
       tag: ${{ steps.source.outputs.tag }}
@@ -69,8 +69,8 @@ jobs:
           if-no-files-found: error
   publish:
     needs: artifacts
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    runs-on: ubuntu-slim
+    timeout-minutes: 2
     permissions:
       contents: write
       actions: read
@@ -97,7 +97,7 @@ jobs:
     needs: artifacts
     if: github.event_name == 'workflow_dispatch' && (inputs.signed_delivery || inputs.upload_testflight) && github.ref == 'refs/heads/main'
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -33,6 +33,8 @@ for this native app. No web frontend is required.
 - Before merge, run Ponytail Review, fix blocking findings, and verify CI.
   Follow the owner's existing authorization for merging; do not add approval gates.
 - Use Conventional Commit PR/squash titles. Run quick native checks on updates;
-  dispatch full native verification for screen/navigation changes before merge.
-  Release packaging runs full tests against the immutable version tag. Do not
+  record full native UI verification locally for screen/navigation changes.
+  Hosted jobs use Slim for scripts and standard macOS for short unit checks;
+  no hosted job exceeds eight minutes. Release packaging runs unit tests against
+  the immutable version tag and remains explicitly requested by default. Do not
   count unit-only checks, cost-gated skips or blocked jobs as full UI verification.

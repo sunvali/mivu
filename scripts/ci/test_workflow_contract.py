@@ -1,6 +1,7 @@
 """Protect the signed lane's trigger/source boundary without paid environments."""
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -9,6 +10,8 @@ from pathlib import Path
 
 def load_workflow(name):
     workflow = Path(__file__).resolve().parents[2] / '.github/workflows' / name
+    if shutil.which('yq'):
+        return json.loads(subprocess.check_output(['yq', '-o=json', '.', str(workflow)], text=True))
     return json.loads(subprocess.check_output([
         'ruby', '-r', 'yaml', '-r', 'json', '-e',
         'puts JSON.generate(YAML.load_file(ARGV.fetch(0)))', str(workflow)
@@ -17,12 +20,7 @@ def load_workflow(name):
 
 class SignedWorkflowContract(unittest.TestCase):
     def test_signed_lane_requires_manual_main_and_tested_source(self):
-        workflow = Path(__file__).resolve().parents[2] / '.github/workflows/release.yml'
-        parsed = subprocess.check_output([
-            'ruby', '-r', 'yaml', '-r', 'json', '-e',
-            'puts JSON.generate(YAML.load_file(ARGV.fetch(0)))', str(workflow)
-        ], text=True)
-        release = json.loads(parsed)
+        release = load_workflow('release.yml')
         signed = release['jobs']['signed']
         self.assertNotIn('environment', signed, 'Private GitHub Free must not require a paid environment.')
         self.assertEqual(signed['needs'], 'artifacts')
@@ -35,6 +33,19 @@ class SignedWorkflowContract(unittest.TestCase):
 
 
 class ReleaseAutomation(unittest.TestCase):
+    def test_hosted_jobs_use_cheapest_compatible_runners_and_short_limits(self):
+        for name in ('ci.yml', 'commit-title.yml', 'release-please.yml', 'release.yml'):
+            for job in load_workflow(name)['jobs'].values():
+                with self.subTest(workflow=name, job=job):
+                    self.assertIn(job['runs-on'], ('ubuntu-slim', 'macos-26'))
+                    self.assertIsInstance(job['timeout-minutes'], int)
+                    self.assertLessEqual(job['timeout-minutes'], 8)
+        ci = load_workflow('ci.yml')
+        triggers = ci.get('on', ci.get('true'))
+        self.assertNotIn('push', triggers, 'Merging an already-tested PR must not repeat paid native checks')
+        native = next(s for s in ci['jobs']['native']['steps'] if s.get('name') == 'Build and test native iPhone app')
+        self.assertEqual(native['run'], 'bash scripts/ci/native.sh unit')
+
     def test_title_edits_run_only_the_lightweight_title_check(self):
         path = Path(__file__).resolve().parents[2] / '.github/workflows/commit-title.yml'
         self.assertTrue(path.exists(), 'Title corrections need their own lightweight trigger')
@@ -43,14 +54,14 @@ class ReleaseAutomation(unittest.TestCase):
         self.assertIn('edited', triggers['pull_request']['types'])
         self.assertEqual(workflow['permissions'], {'contents': 'read'})
         self.assertEqual(set(workflow['jobs']), {'title'})
-        self.assertEqual(workflow['jobs']['title']['runs-on'], 'ubuntu-24.04')
+        self.assertEqual(workflow['jobs']['title']['runs-on'], 'ubuntu-slim')
 
     def test_unverified_native_allowance_cannot_pass_as_a_skipped_source_check(self):
         step = next(s for s in load_workflow('ci.yml')['jobs']['checks']['steps'] if s.get('id') == 'changes')
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output'
             env = dict(os.environ, EVENT_NAME='workflow_dispatch', BASE_SHA='',
-                       NATIVE_ALLOWANCE_VERIFIED='false', GITHUB_OUTPUT=str(output))
+                       NATIVE_USAGE_APPROVED='false', GITHUB_OUTPUT=str(output))
             result = subprocess.run(['bash', '-e', '-c', step['run']],
                                     env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
@@ -72,7 +83,7 @@ class ReleaseAutomation(unittest.TestCase):
         self.assertRegex(bot['uses'], r'^googleapis/release-please-action@[0-9a-f]{40}$')
         self.assertEqual(bot['with']['target-branch'], 'main')
         dispatch = next(step for step in steps if step.get('name') == 'Package the new release')
-        self.assertEqual(dispatch['if'], "steps.release.outputs.release_created == 'true'")
+        self.assertEqual(dispatch['if'], "vars.MIVU_AUTO_PACKAGE_RELEASES == 'true' && steps.release.outputs.release_created == 'true'")
         self.assertEqual(dispatch['env']['RELEASE_TAG'], '${{ steps.release.outputs.tag_name }}')
 
     def test_existing_release_receives_artifacts_without_recreation_or_overwrite(self):

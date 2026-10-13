@@ -73,11 +73,11 @@ elif name == 'ditto':
         self.assertFalse(any(a.startswith(('-only-testing:', '-skip-testing:')) for a in test))
         self.assertFalse(package)
 
-    def test_release_packages_only_after_verified_full_tests(self):
+    def test_release_packages_only_after_verified_unit_tests(self):
         result, commands, package = self.run_mode('release')
         self.assertEqual(result.returncode, 0, result.stderr)
         test = next(c for c in commands if c[:2] == ['xcodebuild', 'test'])
-        self.assertFalse(any(a.startswith(('-only-testing:', '-skip-testing:')) for a in test))
+        self.assertIn('-only-testing:MivuTests', test)
         self.assertTrue(package)
         self.assertTrue(any(c[:2] == ['xcodebuild', 'build'] for c in commands))
 

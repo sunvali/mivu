@@ -56,7 +56,7 @@ if not candidates: raise SystemExit("No available iPhone simulator with iOS 26 o
 print("platform=iOS Simulator,arch=" + platform.machine() + ",id=" + max(candidates)[2])')
   set +e
   test_scope=()
-  if [ "$mode" = unit ]; then test_scope=(-only-testing:MivuTests); fi
+  if [ "$mode" = unit ] || [ "$mode" = release ]; then test_scope=(-only-testing:MivuTests); fi
   xcodebuild test "${common[@]}" -configuration Debug -destination "$destination" \
     "${test_scope[@]}" -parallel-testing-enabled NO -resultBundlePath "$output/Mivu.xcresult" -quiet
   test_status=$?
