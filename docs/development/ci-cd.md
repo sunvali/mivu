@@ -53,6 +53,55 @@ for each rehearsal so a previous result bundle cannot be overwritten. Signing
 scripts are intended for an isolated controlled rehearsal, not ordinary workstation
 credential management. Use Xcode/Organizer for normal local signing and delivery.
 
+## Opt-in local Git hooks
+
+Enable the versioned hooks once per repository:
+
+```sh
+python3 scripts/ci/git_hooks.py install
+```
+
+The installer sets local `core.hooksPath=.githooks` and refuses to replace a
+custom hooks path or existing executable hooks. Integrate existing hooks manually
+if it reports a conflict. Clones need their own installation; linked worktrees
+share repository configuration. Older branches need these hook files to retain
+checks after checkout. Git hooks supplement reviewed PRs and are not remote
+branch protection.
+
+`pre-commit` checks staged whitespace/conflicts and parses staged Python and shell
+files. It runs no test suite or native build and ignores unstaged content.
+
+`pre-push` runs the same quick script tests and shell syntax checks as Linux CI.
+The committed check scripts must match the working copy. Deletions need no checks.
+Known remote commits are compared with each pushed commit; new branches use their
+merge base with `origin/main`. Documentation-only pushes skip native work when
+native inputs match that baseline. Missing baselines require native verification.
+
+Native inputs include the entire `ios/` tree and the hook's test helper/recipe.
+A native push must check the current `HEAD`, with no dirty or untracked native
+inputs. It runs all `MivuTests` units through XcodeBuildMCP in Debug, with parallel
+testing off and package versions bound to the committed lockfile. Native child
+processes clear Git's repository variables so package checkouts use their own
+repositories; SSH, askpass and proxy settings remain available. It chooses an
+available iPhone on iOS 26 or newer, preferring a booted device, then the latest
+runtime. Missing Xcode, tooling, simulators or valid test evidence blocks the push.
+
+A verified success is reused only for identical native inputs, recipe, selected
+Xcode path/version/build, host OS, Mac architecture, toolchain/SDK overrides,
+CLI path/version and simulator/runtime. Forwarded `TEST_RUNNER_*` and
+`SIMCTL_CHILD_*` names/values affect a digest in the key; raw values are not stored.
+A nonempty `XCODE_XCCONFIG_FILE` blocks native verification because it selects
+untracked build configuration.
+Failures, zero-test and malformed results never enter the cache. A lock prevents
+parallel native runs. Source, `HEAD` and environment are checked again after the
+run. Evidence, success records and reusable build output live under
+`mivu-checks/` in Git's common directory, outside tracked files; each run gets a
+fresh result-bundle path. The hook prints that evidence location.
+
+These unit checks do not replace manual full unit/UI verification for screen or
+navigation changes, physical-device checks, or independent Ponytail Review before
+merge. Report a blocked push as blocked, then resolve its cause and push again.
+
 ## Versioning, packaging and signing
 
 Squash merges use the Conventional Commit PR title: `fix: ...` bumps patch,
