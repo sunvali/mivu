@@ -98,7 +98,9 @@ import XCTest
         app.terminate(); app.launch()
         XCTAssertTrue(app.staticTexts["half bread"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.staticTexts.matching(identifier: "coachReply").count, 4)
-        XCTAssertTrue(app.staticTexts["coachFixtureBanner"].exists)
+        let banner = app.staticTexts["coachFixtureBanner"]
+        for _ in 0..<12 where !banner.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        XCTAssertTrue(banner.isHittable)
     }
 
     func testFixtureGoalsWeightWorkoutBudgetAndRelaunch() {

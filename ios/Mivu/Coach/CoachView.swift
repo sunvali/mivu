@@ -8,6 +8,7 @@ struct CoachView: View {
     @State private var importFailed = false
     @State private var followLatest = true
     @State private var userScrolling = false
+    @State private var pendingReplyID: UUID?
     @FocusState private var editing: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,7 +59,8 @@ struct CoachView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .onScrollPhaseChange { _, phase in
-                userScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
+                userScrolling = phase == .interacting || phase == .decelerating
+                if phase == .idle { followPendingReply(with: proxy) }
             }
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
@@ -67,21 +69,15 @@ struct CoachView: View {
                 if userScrolling, followLatest != nearBottom { followLatest = nearBottom }
             }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { oldHeight, newHeight in
-                guard newHeight > oldHeight, followLatest, !userScrolling,
-                      let turn = coach.turns.last, turn.assistantText != nil else { return }
-                Task { @MainActor in
-                    await Task.yield()
-                    if followLatest, !userScrolling { proxy.scrollTo("reply-" + turn.id.uuidString, anchor: .top) }
-                }
+                if newHeight > oldHeight { followPendingReply(with: proxy) }
             }
             .onChange(of: coach.turns.last?.assistantText) { _, _ in
-                guard followLatest, let id = coach.turns.last?.id, coach.turns.last?.assistantText != nil else { return }
-                Task { @MainActor in
-                    await Task.yield()
-                    if followLatest, !userScrolling { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("reply-" + id.uuidString, anchor: .top) } }
-                }
+                guard let id = coach.turns.last?.id, coach.turns.last?.assistantText != nil else { return }
+                pendingReplyID = id
+                followPendingReply(with: proxy)
             }
             .onChange(of: coach.turns.count) { _, _ in
+                pendingReplyID = nil
                 followLatest = true
                 if let id = coach.turns.last?.id { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("input-" + id.uuidString, anchor: .bottom) } }
             }
@@ -103,6 +99,17 @@ struct CoachView: View {
         .onChange(of: coach.diary.snapshot?.profile.id) { _, _ in
             preparation.cancel(); preparation = PhotoPreparation()
             showPhotos = false; editing = false
+        }
+    }
+    private func followPendingReply(with proxy: ScrollViewProxy) {
+        guard followLatest, !userScrolling, let id = pendingReplyID else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard followLatest, !userScrolling, pendingReplyID == id else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                proxy.scrollTo("reply-" + id.uuidString, anchor: .top)
+            }
+            pendingReplyID = nil
         }
     }
     private struct WorkoutDestination: Hashable { let id: UUID }
