@@ -221,7 +221,7 @@ final class ChatGPTConnection {
         isAnalyzing = true
         inferenceState = .analyzing
         failureDiagnostic = nil
-        probeTask = Task {
+        probeTask = Task { [self] in
             do {
                 _ = try await runner.run(pending, diagnostic: { [weak self] failure in
                     await self?.recordDiagnostic(failure, revision: revision, model: pending.model)

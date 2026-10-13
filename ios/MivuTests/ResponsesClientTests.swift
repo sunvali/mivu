@@ -46,7 +46,7 @@ struct ResponsesClientTests {
         #expect(throws: ResponsesClient.Failure.incompleteResponse) { try interrupted.finishInference() }
         for terminal in [event(["type": "response.incomplete"]), event(["type": "response.failed", "response": ["error": ["code": "server_error"]]])] {
             var stream = ResponseEventStream()
-            #expect(throws: (any Error).self) { try stream.append(done + terminal); try stream.finishInference() }
+            #expect(throws: (any Error).self) { try stream.append(done + terminal); _ = try stream.finishInference() }
         }
     }
 
@@ -68,7 +68,7 @@ struct ResponsesClientTests {
         cases.append(event(["type": "response.output_item.done", "output_index": 0, "item": hosted]) + terminal)
         for body in cases {
             var stream = ResponseEventStream()
-            #expect(throws: ResponsesClient.Failure.malformedResponse) { try stream.append(body); try stream.finishInference() }
+            #expect(throws: ResponsesClient.Failure.malformedResponse) { try stream.append(body); _ = try stream.finishInference() }
         }
     }
 
