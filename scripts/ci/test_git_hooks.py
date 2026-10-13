@@ -52,6 +52,11 @@ class GitHooks(unittest.TestCase):
 import json, os, sys
 from pathlib import Path
 args = sys.argv[1:]
+if os.environ.get('ASSERT_GIT_ENV_NAMES') and args != ['--version']:
+    assert not any(name in os.environ for name in json.loads(os.environ['ASSERT_GIT_ENV_NAMES']))
+    assert os.environ['GIT_ASKPASS'] == 'synthetic-askpass'
+    assert os.environ['GIT_SSH_COMMAND'] == 'synthetic-ssh'
+    assert os.environ['HTTPS_PROXY'] == 'http://synthetic.invalid'
 if args == ['--version']:
     print(os.environ.get('CLI_VERSION', '2.6.2')); sys.exit()
 if args[:2] == ['simulator-management', 'list']:
@@ -299,6 +304,21 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Another native check', result.stderr)
         self.assertEqual(self.calls(), [])
+
+    def test_real_push_clears_repository_git_environment_for_native_children(self):
+        self.native_commit()
+        remote = self.tools / 'remote.git'
+        self.git('init', '--bare', '-q', str(remote))
+        self.git('config', 'core.hooksPath', '.githooks')
+        names = self.git('rev-parse', '--local-env-vars').stdout.splitlines()
+        env = dict(self.env, GIT_DIR=str(self.root / '.git'),
+                   GIT_INDEX_FILE=str(self.root / '.git/index'), GIT_WORK_TREE=str(self.root),
+                   ASSERT_GIT_ENV_NAMES=json.dumps(names), GIT_ASKPASS='synthetic-askpass',
+                   GIT_SSH_COMMAND='synthetic-ssh', HTTPS_PROXY='http://synthetic.invalid')
+        result = subprocess.run(['git', 'push', str(remote), 'HEAD:refs/heads/test'],
+                                cwd=self.root, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.calls()), 1)
 
     def test_installer_is_opt_in_and_preserves_custom_hooks(self):
         command = ['python3', 'scripts/ci/git_hooks.py', 'install']

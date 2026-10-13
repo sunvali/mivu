@@ -54,6 +54,13 @@ def pre_commit():
                 raise ValueError('Invalid staged shell syntax: ' + name)
 
 
+def native_environment(developer):
+    env = dict(os.environ, DEVELOPER_DIR=str(developer))
+    for name in git('rev-parse', '--local-env-vars').splitlines():
+        env.pop(name, None)
+    return env
+
+
 def environment():
     if os.environ.get('XCODE_XCCONFIG_FILE'):
         raise ValueError('Unset XCODE_XCCONFIG_FILE; external build configuration is not tracked.')
@@ -69,7 +76,7 @@ def environment():
         xcode = [version['CFBundleShortVersionString'], version['ProductBuildVersion']]
     except (OSError, KeyError, plistlib.InvalidFileException) as error:
         raise ValueError('Select a complete Xcode installation before pushing native changes.') from error
-    env = dict(os.environ, DEVELOPER_DIR=str(developer))
+    env = native_environment(developer)
     listed = json.loads(run([cli, 'simulator-management', 'list', '--enabled', '--output', 'json'], env=env))
     if listed.get('didError') is not False:
         raise ValueError('Could not list available iPhone simulators.')
@@ -86,7 +93,7 @@ def environment():
                 hostOS=platform.mac_ver()[0] or platform.platform(),
                 toolchains=os.environ.get('TOOLCHAINS'), sdkRoot=os.environ.get('SDKROOT'),
                 testEnvironmentDigest=hashlib.sha256(json.dumps(forwarded, sort_keys=True).encode()).hexdigest(),
-                cli=str(Path(cli).resolve()), cliVersion=run([cli, '--version']).strip(),
+                cli=str(Path(cli).resolve()), cliVersion=run([cli, '--version'], env=env).strip(),
                 simulator=selected[3], runtime=selected[4])
 
 
@@ -148,7 +155,7 @@ def native_check(head):
         print('Running local MivuTests units; evidence: ' + str(output), flush=True)
         with (output / 'result.json').open('w') as stdout, (output / 'stderr.txt').open('w') as stderr:
             status = subprocess.run(command, stdout=stdout, stderr=stderr,
-                                    env=dict(os.environ, DEVELOPER_DIR=tools['developer'])).returncode
+                                    env=native_environment(tools['developer'])).returncode
         if status:
             raise ValueError('Native tool failed; inspect evidence at ' + str(output))
         result = json.loads((output / 'result.json').read_text())

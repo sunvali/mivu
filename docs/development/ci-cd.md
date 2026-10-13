@@ -80,7 +80,9 @@ native inputs match that baseline. Missing baselines require native verification
 Native inputs include the entire `ios/` tree and the hook's test helper/recipe.
 A native push must check the current `HEAD`, with no dirty or untracked native
 inputs. It runs all `MivuTests` units through XcodeBuildMCP in Debug, with parallel
-testing off and package versions bound to the committed lockfile. It chooses an
+testing off and package versions bound to the committed lockfile. Native child
+processes clear Git's repository variables so package checkouts use their own
+repositories; SSH, askpass and proxy settings remain available. It chooses an
 available iPhone on iOS 26 or newer, preferring a booted device, then the latest
 runtime. Missing Xcode, tooling, simulators or valid test evidence blocks the push.
 
