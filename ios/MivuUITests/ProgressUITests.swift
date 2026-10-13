@@ -196,7 +196,6 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Repetitions"].exists, "Filled workout input keeps its visible name and unit")
         replace(app.textFields["workoutLoad"], with: "40")
         XCTAssertTrue(app.staticTexts["Load (kg, blank for bodyweight)"].exists, "Filled workout input keeps its visible name and unit")
-        reveal(app.textFields["workoutBurn"], in: app)
         replace(app.textFields["workoutBurn"], with: "120")
         XCTAssertTrue(app.staticTexts["Estimated burn (kcal)"].exists, "Filled workout input keeps its visible name and unit")
         let labeled = XCTAttachment(screenshot: app.screenshot()); labeled.name = "Synthetic filled workout fields retain visible units"; labeled.lifetime = .keepAlways; add(labeled)
@@ -294,12 +293,10 @@ import XCTest
     private func replace(_ field: XCUIElement, with value: String) {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
-        let revealed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: field)
-        XCTAssertEqual(XCTWaiter.wait(for: [revealed], timeout: 5), .completed,
-                       "Native input tap must reveal the field before editing")
         if let existing = field.value as? String, !existing.isEmpty {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
         }
         field.typeText(value)
+        if !value.isEmpty { XCTAssertEqual(field.value as? String, value) }
     }
 }
