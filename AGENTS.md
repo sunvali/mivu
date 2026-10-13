@@ -42,3 +42,10 @@ for this native app. No web frontend is required.
   version tag locally with Xcode/Organizer; record local evidence separately.
   Keep Actions usage/auto-packaging gates false and never count blocked or
   skipped native work as passing evidence.
+- Local Git hooks are opt-in via `python3 scripts/ci/git_hooks.py install`.
+  Preserve custom hooks. Commits check staged syntax/whitespace only; pushes run
+  quick script checks and native units when native inputs changed or the baseline
+  is unknown. Native pushes require the checked-out commit and clean native inputs.
+- Reuse local native success only for identical inputs, recipe and environment;
+  never cache failed, zero-test or malformed evidence. Hook units do not replace
+  full local UI verification or independent Ponytail Review before merge.
