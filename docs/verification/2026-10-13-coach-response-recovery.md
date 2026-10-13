@@ -70,3 +70,17 @@ Final local native unit target, iPhone Air / iOS26.5, passed:388 named tests,0 f
 
 
 Warning cleanup retains both expected-throw assertions, makes the existing strong task capture explicit, and pins hosted simulator destination architecture to the runner architecture. Final local native verification remains388 passed/0 failed/1 skipped, with no compiler warnings reported and zero frozen-source drift. `bash -n scripts/ci/native.sh` passed and the CI result-verifier tests passed4/0/0. Independent review approved this three-file cleanup. Hosted completion is recorded separately; warnings in an unfinished log are not a failing test result.
+
+
+## Final hosted UI result and input readiness
+
+[Run 38413459508](https://github.com/yakov103/mivu/actions/runs/38413459508) completed on head `566e548f5d73498cdb21a680c3cd0cd59e49cb93`:401 named tests passed,1 failed,1 skipped (403 total). The native test step exited1; Release simulator packaging was therefore not run. The complete result bundle was preserved. Hosted environment:macOS26.6.2, stable Xcode26.6, Swift6.3.3, iPhoneAir/iOS26.5, arm64.
+
+The failure was the immediate post-tap `isHittable` assertion inside `ProgressUITests.replace`, during the first `mealText` edit at14:46:21UTC. Hosted activities show subsequent text entry and every later saved food, separate burn, second-set and removed-exercise assertion completed. The same unchanged focused journey passed locally1/0/0 on iPhoneAir/iOS26.5 with Xcode27 beta. This local pass does not reproduce the hosted timing failure.
+
+The readiness check now waits for the same XCTest predicate for at most five seconds. It retains the field tap, input editing and all persisted-value assertions. Independent delta review approved this change. Local affected-suite results and the next hosted result must be recorded separately before integration.
+
+
+The owner then requested stopping long test runs. The affected-suite native process was interrupted with SIGINT; it is not completed passing evidence. Its log recorded successful goal-clearing and largest-text journeys before interruption. No additional native suite is started for this test-only delta.
+
+The scroll helper now breaks as soon as the element is hittable. Previously a filtered `for` loop still queried simulator accessibility at each of all8up/12down iterations after visibility was achieved. The same gesture limits, direction guard and final existence/hittability assertions remain. Final local checks are source/diff checks plus independent review; hosted verification remains pending and integration requires a successful check.

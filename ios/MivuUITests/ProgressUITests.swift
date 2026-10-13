@@ -277,9 +277,15 @@ import XCTest
         let workoutForm = app.collectionViews["workoutForm"]
         let progress = app.collectionViews["progressList"]
         let scroller = workoutForm.exists ? workoutForm : (progress.exists ? progress : app.collectionViews.firstMatch)
-        for _ in 0..<8 where !element.isHittable { scroller.swipeUp() }
+        for _ in 0..<8 {
+            if element.isHittable { break }
+            scroller.swipeUp()
+        }
         if !workoutForm.exists {
-            for _ in 0..<12 where !element.isHittable { scroller.swipeDown() }
+            for _ in 0..<12 {
+                if element.isHittable { break }
+                scroller.swipeDown()
+            }
         }
         XCTAssertTrue(element.waitForExistence(timeout: 5))
         XCTAssertTrue(element.isHittable)
@@ -288,7 +294,9 @@ import XCTest
     private func replace(_ field: XCUIElement, with value: String) {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
-        XCTAssertTrue(field.isHittable, "Native input tap must reveal the field before editing")
+        let revealed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: field)
+        XCTAssertEqual(XCTWaiter.wait(for: [revealed], timeout: 5), .completed,
+                       "Native input tap must reveal the field before editing")
         if let existing = field.value as? String, !existing.isEmpty {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
         }
