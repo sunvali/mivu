@@ -243,6 +243,27 @@ struct ResponsesClientTests {
         #expect(input[3]["call_id"] as? String == "first")
     }
 
+    @Test func sendsTheCompleteCoachCatalogThroughTheRequestBoundary() async throws {
+        let capture = RequestCapture(), catalog = try CoachTools.declarations()
+        _ = try await ResponsesClient(session: sessionReturning(status: 200, body: completed(), capture: capture)).respond(
+            model: "fixture-model", input: [.message(role: .user, text: "Synthetic settings edit")], toolNamespace: catalog, accessToken: "fixture-token")
+        let body = try #require(capture.request?.httpBody)
+        let payload = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let sent = try #require((payload["tools"] as? [[String: Any]])?.first)
+        #expect(sent as NSDictionary == (try JSONSerialization.jsonObject(with: catalog) as! NSDictionary))
+    }
+
+    @Test func oversizedToolCatalogIsRejectedBeforeSending() async throws {
+        let tools: [[String: Any]] = (0..<33).map { ["type": "function", "name": "synthetic_\($0)", "parameters": ["type": "object", "properties": [:]] as [String: Any]] }
+        let namespace = try JSONSerialization.data(withJSONObject: ["type": "namespace", "name": "mivu", "tools": tools])
+        let capture = RequestCapture()
+        await #expect(throws: ResponsesClient.Failure.invalidInput) {
+            try await ResponsesClient(session: sessionReturning(status: 200, body: completed(), capture: capture)).respond(
+                model: "fixture-model", input: [.message(role: .user, text: "Synthetic")], toolNamespace: namespace, accessToken: "fixture-token")
+        }
+        #expect(capture.request == nil)
+    }
+
     @Test func rejectsInvalidArgumentsDuplicateCallsAndOversizedArguments() throws {
         for items in [
             [toolCall(id: "one", callID: "first", arguments: "[]")],
