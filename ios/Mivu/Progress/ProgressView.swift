@@ -62,7 +62,7 @@ struct DiaryProgressView: View {
         let value: Double
         var id: String { label }
     }
-    private struct WeightObservation: Identifiable {
+    struct WeightObservation: Identifiable {
         let label: String
         let date: Date
         let value: Double
@@ -94,17 +94,10 @@ struct DiaryProgressView: View {
             return Observation(label: label, value: value)
         }
     }
-    private var weights: [WeightObservation] {
+    var weights: [WeightObservation] {
         guard let snapshot else { return [] }
         let start = ProgressAnalytics.period(snapshot: snapshot, endingOn: today, days: 30).startLocalDate
-        let dayLabels = Dictionary(uniqueKeysWithValues: snapshot.days.map { ($0.id, $0.localDate) })
-        var latest: [String: WeightEntry] = [:]
-        for entry in snapshot.weights {
-            let label = entry.dayID.flatMap { dayLabels[$0] }
-                ?? ProgressDate.label(entry.measuredAt, zone: snapshot.profile.timeZoneID)
-            if let old = latest[label], old.measuredAt > entry.measuredAt { continue }
-            latest[label] = entry
-        }
+        let latest = ProgressAnalytics.latestWeightsByDate(snapshot: snapshot)
         return latest.keys.filter { $0 >= start && $0 <= today }.sorted().compactMap { label in
             guard let entry = latest[label], let date = ProgressDate.date(label, zone: snapshot.profile.timeZoneID) else { return nil }
             return WeightObservation(label: label, date: date,

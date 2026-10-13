@@ -127,7 +127,7 @@ enum ProgressAnalytics {
                               workoutCount: reports.reduce(0) { $0 + $1.workoutCount })
     }
 
-    static func weight(snapshot: DiarySnapshot, endingOn: String) -> WeightProgress {
+    static func latestWeightsByDate(snapshot: DiarySnapshot) -> [String: WeightEntry] {
         let daysByID = Dictionary(uniqueKeysWithValues: snapshot.days.map { ($0.id, $0.localDate) })
         var latest: [String: WeightEntry] = [:]
         for entry in snapshot.weights {
@@ -138,6 +138,11 @@ enum ProgressAnalytics {
                (prior.measuredAt == entry.measuredAt && prior.revision >= entry.revision) { continue }
             latest[label] = entry
         }
+        return latest
+    }
+
+    static func weight(snapshot: DiarySnapshot, endingOn: String) -> WeightProgress {
+        let latest = latestWeightsByDate(snapshot: snapshot)
         func summary(days: Int, offset: Int) -> (average: Double?, count: Int) {
             let entries = window(endingOn: endingOn, days: days, offset: offset,
                                  zone: snapshot.profile.timeZoneID).compactMap { latest[$0] }

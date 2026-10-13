@@ -44,3 +44,26 @@ Exact simulator selection, per-file hashes and local result bundles remain in th
 - [ ] Final-source hosted CI and PR integration. Previous PR7 run failed two test-interaction cases; their reviewed local fixes are in `d7b4241`.
 
 Simulator tests and review do not establish successful live inference. Manual tracking/Coach edit parity is a separate next slice, requested after the full live response succeeds.
+
+
+## Hosted CI stall and bounded handoff verification
+
+The first recovery run, [38400937339](https://github.com/yakov103/mivu/actions/runs/38400937339), tested `d6feabc1315a093a91bcb0b8f5e745249dfabe9c` and was canceled after approximately thirty minutes. Its partial result bundle did not finalize; it is not passing evidence. Preserved diagnostics show `CoachFlowTests.sendCommitsTextAndPhotoBeforeInferenceAndRelaunch()` started without a completion. The previously completed suites reported 116 parameter/test runs, one skip and zero failures; there is no complete named-test total for that run.
+
+The test's start wait could suspend indefinitely if the worker never reached the injected inference function. The replacement uses a ten-second monotonic deadline, cancellation-aware waiting and worker-exit detection. Failure cleanup releases the fixture once and joins the worker; a closed fixture cannot create a new suspension from a late response. All existing persistence, original-photo, relaunch and profile-fencing assertions remain.
+
+Local verification on iPhone Air / iOS 26.5 (the hosted runtime):
+
+- A first focused attempt was blocked by runner preflight (`Busy`) and executed no native cases. The simulator was then found shut down and explicitly booted.
+- The fresh focused Flow suite passed:14 named tests,0 failures,0 skips.
+- The full native unit target passed:386 named tests,0 failures,1 skip. The final small closed-fixture guard was added afterward and requires the subsequent final-source check.
+- Native high-entropy image preparation passed separately:one named test,0 failures,0 skips. A requested function-level PNG filter did not execute; selected/discovered names were not counted as passing tests.
+
+The isolated Flow test did not reproduce an early worker failure, so no production cause is claimed. The bounded test prevents this failure mode from silently consuming the whole CI job. A fresh hosted gate remains required. Phone testing stopped when the owner disconnected the device; image-based meal acceptance remains unverified.
+
+
+## Final reviewed local source
+
+Ponytail Review found and then verified a correction for tied-time historical weights: the chart previously chose the last entry while the numeric report chose the highest revision. Both consumers now use the existing report selection rule through one shared helper: newest measurement, then highest revision, then the first entry for an exact tie. Valid legacy and travel-day fixtures reproduced both mismatches (RED:3 passed,2 failed,0 skipped). The regressions inspect the actual chart projection and confirm stored date/timezone mapping, unit conversion and report agreement.
+
+Final local native unit target, iPhone Air / iOS26.5, passed:388 named tests,0 failures,1 skipped. The actual xcresult summary was read, and all tracked iOS files matched the frozen source manifest after the run. This run includes the closed-fixture cleanup guard and shared chart/report selection. The final independent Ponytail review verdict is Ship, with its one finding closed. Full hosted scheme and Release simulator validation remain the merge gate.

@@ -3,6 +3,54 @@ import Testing
 @testable import Mivu
 
 @Suite @MainActor struct ProgressEditorStateTests {
+    @Test(arguments: [false, true], [false, true])
+    func chartAndReportSelectHighestRevisionOnTiedMeasurementTime(legacy: Bool, reverse: Bool) throws {
+        var snapshot = tiedWeightSnapshot()
+        let measured = ISO8601DateFormatter().date(from: "2026-01-08T00:30:00Z")!
+        let higher = WeightEntry(dayID: legacy ? nil : snapshot.days[0].id, measuredAt: measured, value: 70, revision: 2)
+        let lower = WeightEntry(dayID: legacy ? nil : snapshot.days[1].id, measuredAt: measured, value: 80, revision: 1)
+        snapshot.weights = reverse ? [lower, higher] : [higher, lower]
+        try snapshot.validate()
+        try assertChartAndReport(snapshot, expectedKg: 70)
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func equalRevisionTieKeepsFirstEntryInChartAndReport(legacy: Bool, reverse: Bool) throws {
+        var snapshot = tiedWeightSnapshot()
+        let measured = ISO8601DateFormatter().date(from: "2026-01-08T00:30:00Z")!
+        let first = WeightEntry(dayID: legacy ? nil : snapshot.days[0].id, measuredAt: measured, value: 70, revision: 2)
+        let second = WeightEntry(dayID: legacy ? nil : snapshot.days[1].id, measuredAt: measured, value: 80, revision: 2)
+        snapshot.weights = reverse ? [second, first] : [first, second]
+        try snapshot.validate()
+        try assertChartAndReport(snapshot, expectedKg: reverse ? 80 : 70)
+    }
+
+    private func tiedWeightSnapshot() -> DiarySnapshot {
+        let measured = ISO8601DateFormatter().date(from: "2026-01-08T00:30:00Z")!
+        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic tied weights", timeZoneID: "America/Los_Angeles"))
+        // The linked travel date stays authoritative; legacy nil-day entries use the profile zone.
+        snapshot.days = [
+            TrackingDay(localDate: "2026-01-07", timeZoneID: "Asia/Jerusalem", startAt: measured, completeness: .unknown),
+            TrackingDay(localDate: "2026-01-07", timeZoneID: "America/Los_Angeles", startAt: measured, completeness: .unknown)
+        ]
+        snapshot.activeDayID = snapshot.days[1].id
+        return snapshot
+    }
+
+    private func assertChartAndReport(_ snapshot: DiarySnapshot, expectedKg: Double) throws {
+        let store = DiaryStore(directory: URL.temporaryDirectory.appending(path: "ProgressTie-" + UUID().uuidString))
+        let model = DiaryViewModel(store: store)
+        model.snapshot = snapshot
+        let chart = DiaryProgressView(model: model).weights
+        let report = ProgressAnalytics.weight(snapshot: snapshot, endingOn: "2026-01-07")
+        #expect(chart.count == 1)
+        #expect(chart.first?.label == "2026-01-07")
+        #expect(chart.first?.value == expectedKg)
+        #expect(report.currentSevenDayAverageKg == expectedKg)
+        #expect(report.currentSevenDayObservedCount == 1)
+        #expect(report.changeFromSevenDaysAgoKg == nil)
+    }
+
     @Test func savedWorkoutBoundsRemainEditable() {
         let savedSet = WorkoutSet(repetitions: 5_000, loadKg: 0)
         var fields = WorkoutEditorView.SetFields(savedSet)
