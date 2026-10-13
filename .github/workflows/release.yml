@@ -23,9 +23,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   artifacts:
-    if: vars.MIVU_ACTIONS_ALLOWANCE_VERIFIED == 'true'
+    if: vars.MIVU_ACTIONS_USAGE_APPROVED == 'true'
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: 8
     outputs:
       sha: ${{ steps.source.outputs.sha }}
       tag: ${{ steps.source.outputs.tag }}
@@ -52,7 +52,7 @@ jobs:
       - name: Check result verifier
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
       - name: Test and build exact release source
-        run: bash scripts/ci/native.sh test
+        run: bash scripts/ci/native.sh release
       - name: Build unsigned device archive
         run: bash scripts/ci/native.sh unsigned
       - name: Preserve release products and test evidence
@@ -69,8 +69,8 @@ jobs:
           if-no-files-found: error
   publish:
     needs: artifacts
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    runs-on: ubuntu-slim
+    timeout-minutes: 2
     permissions:
       contents: write
       actions: read
@@ -87,13 +87,17 @@ jobs:
           SOURCE_SHA: ${{ needs.artifacts.outputs.sha }}
         run: |
           printf 'Source commit: %s\n\nSimulator application only. The device archive is unsigned and cannot be installed on a physical iPhone. Test counts and named cases are in test-report.txt. Signed IPA and TestFlight are separate credential-gated outcomes.\n' "$SOURCE_SHA" > release-notes.txt
-          # Reruns do not overwrite existing versioned release assets.
-          gh release create "$RELEASE_TAG" --verify-tag --target "$SOURCE_SHA" --draft --title "Mivu $RELEASE_TAG" --notes-file release-notes.txt products/*.zip products/*-provenance.json products/test-report.txt
+          # Preserve release-please notes and never overwrite versioned assets.
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" products/*.zip products/*-provenance.json products/test-report.txt
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --target "$SOURCE_SHA" --draft --title "Mivu $RELEASE_TAG" --notes-file release-notes.txt products/*.zip products/*-provenance.json products/test-report.txt
+          fi
   signed:
     needs: artifacts
     if: github.event_name == 'workflow_dispatch' && (inputs.signed_delivery || inputs.upload_testflight) && github.ref == 'refs/heads/main'
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

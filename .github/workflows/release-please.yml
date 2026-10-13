@@ -1,0 +1,50 @@
+name: Release versions
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-versions
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-slim
+    timeout-minutes: 2
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      # Token-created PRs/tags do not automatically start other workflows.
+      - name: Check the version pull request
+        if: steps.release.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: |
+          branch=$(python3 -c 'import json, os; print(json.loads(os.environ["RELEASE_PR"])["headBranchName"])')
+          title=$(python3 -c 'import json, os; print(json.loads(os.environ["RELEASE_PR"])["title"])')
+          [ "$branch" = release-please--branches--main ] || { echo 'Unexpected release branch.' >&2; exit 1; }
+          gh workflow run commit-title.yml --repo "$GH_REPO" --ref "$branch" -f "title=$title"
+          gh workflow run ci.yml --repo "$GH_REPO" --ref "$branch"
+      - name: Package the new release
+        if: vars.MIVU_AUTO_PACKAGE_RELEASES == 'true' && steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid release tag.' >&2; exit 1; }
+          gh workflow run release.yml --repo "$GH_REPO" --ref main \
+            -f "tag=$RELEASE_TAG" -f signed_delivery=false -f upload_testflight=false

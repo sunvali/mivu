@@ -7,65 +7,74 @@ execution time and exit status. The committed JOSESwift 3.0.0 revision is enforc
 Local Apple builds/tests use XcodeBuildMCP; hosted jobs use Xcode's installed
 command-line tools directly, without another build wrapper dependency.
 
-## Cost gate: allowance verified
+## Cost and runner limits
 
-Before running hosted jobs, verify the owner's current included Actions minutes,
-remaining shared artifact/Packages storage, and spending stop settings in
-[GitHub billing settings](https://github.com/settings/billing/usage). Record that
-evidence without personal account details. Only then set repository Actions
-variable `MIVU_ACTIONS_ALLOWANCE_VERIFIED` to `true`. Clear it when allowance is
-no longer established. No job is scheduled while it is absent/false; a skipped
-workflow is **NOT_RUN_BLOCKED**, never native validation evidence.
+`MIVU_ACTIONS_USAGE_APPROVED=true` permits the short workflows after included
+allowance is verified or the owner explicitly approves paid Actions usage. The
+owner reported adding US$10 and authorized short verification on2026-10-13. This
+is spending authorization, not a claim that the account balance or remaining
+included minutes were inspected. Keep the older
+`MIVU_ACTIONS_ALLOWANCE_VERIFIED` gate false: old revisions use it to schedule
+long full-suite runs. Do not enable billing or raise budgets without approval.
 
-On 2026-10-12 at 05:51 UTC, the owner's authenticated GitHub billing dashboard
-verified GitHub Free: 9 / 2,000 included Actions minutes used, 0 / 0.5 GB artifact
-storage used, and $0 billable usage. The existing account Actions budget is $0
-with **Stop usage: Yes**. Repository variable
-`MIVU_ACTIONS_ALLOWANCE_VERIFIED=true` was set and verified after that evidence.
-The repository remains private with default branch `main`. No billing, budget,
-payment or visibility settings changed. Earlier read-only billing API calls
-returned HTTP 404; dashboard evidence resolved that access limitation. This
-allowance evidence is separate from the workflow results recorded below.
+All Linux jobs use `ubuntu-slim`, the lowest-priced hosted runner, with two-minute
+limits. Its image supplies Python, Node, yq and the GitHub CLI. Workflow tests use
+its existing yq parser; local machines without yq retain the Ruby fallback. No
+package install, cache upload, larger runner or extra service is added.
 
-GitHub's [billing documentation](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
-provides included minutes/storage for private repositories; excess can be billed.
-Larger runners are always paid, so these workflows use neither `large` nor
-`xlarge`. Artifact retention is one day, and no package cache is uploaded.
-Concurrent account usage and storage can exhaust an earlier allowance: the
-variable records verification, it does not enforce a spending limit. Recheck
-before additional hosted runs; maintain the owner's existing hard stop policy.
-Do not enable payment methods or raise budgets.
+Native jobs use standard `macos-26` for the Apple SDK and iOS simulator, with an
+eight-minute limit. GitHub's current rates are US$0.002/minute for Slim and
+US$0.062/minute for standard macOS. An eight-minute native job represents roughly
+US$0.50 in compute at that rate; GitHub rounds partial minutes per job, and
+storage/other account usage are separate. Timeouts are not an account spending
+cap. Preserve the owner's GitHub budget/stop controls.
 
-An existing dedicated self-hosted Mac would avoid hosted runner minute charges,
-according to GitHub's billing documentation, but registration and persistent
-runner security require an owner decision. No runner is installed automatically,
-no external build service is used, and making the repository public is excluded.
+Sources checked2026-10-13:
+[runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing),
+[Slim image](https://github.com/actions/runner-images/blob/main/images/ubuntu-slim/ubuntu-slim-Readme.md).
+
+`MIVU_AUTO_PACKAGE_RELEASES=false` disables automatic paid release packaging.
+Version PRs, tags and changelogs remain automated. An explicit manual release can
+still package an immutable main tag. No scheduled full-suite or packaging run is
+added. A skipped/blocked native job is not passing native evidence.
 
 ## Pull requests and main
 
-`Native CI` runs on `pull_request`, pushes to `main`, or manual dispatch, subject
+`Native CI` runs on `pull_request` or manual dispatch, subject
 to the cost gate. There are no Apple/provider secrets in CI and no privileged
 `pull_request_target` or downstream execution of fork code. Checkout credentials
 are not persisted, and the token has `contents: read` only. New commits cancel
 obsolete CI runs. Each job has a bounded timeout.
 
-The pipeline checks its test-result verifier, runs the complete `Mivu` scheme
-with normal simulator signing so Keychain tests retain their entitlements, then
-builds the Release simulator application with normal ad-hoc simulator signing.
-This preserves Keychain entitlements without an owner distribution certificate. The verifier reads actual
-`xcresulttool` summary and named test-case JSON: at least one passing named case
-is required, zero-test wrappers and failures fail the job. Pass/fail/skip counts
-and named cases are in `test-report.txt`; XCTest's wrapper count alone is not used.
-`native-<source SHA>` preserves `Mivu.xcresult`, tool/provenance/count files and
-`Mivu-simulator.app.zip` even when a test step fails. The app runs in a simulator;
-it is not an iPhone installation artifact. A failure before result generation
-cannot produce passing evidence.
+The Linux `checks` job runs short CI-script tests and shell syntax checks. Edits
+limited to Markdown or `docs/` stop there. Unknown or empty changed-file lists
+select native verification. Source changes cannot pass by silently skipping an
+unapproved native usage: the selection step fails with a blocked message.
+
+Routine native checks build Debug and run the entire `MivuTests` unit target,
+with an eight-minute timeout and normal simulator signing for Keychain entitlements.
+They do not run UI journeys or package a Release app. There is no second native
+run after merging an already-tested PR. There is no
+new package/build cache or larger runner spending.
+
+Before merging screen/navigation changes, run the complete native unit/UI scheme
+locally using XcodeBuildMCP and record its final source SHA and result. Full UI
+verification remains available; it is never scheduled on a paid hosted runner.
+A later source change needs appropriate fresh evidence. This is a contributor
+merge rule, not an enforced branch-protection setting.
+
+Hosted unit and release modes retain actual `xcresulttool` summary and named-test verification:
+zero-test wrappers, failures and expected failures fail the job. The
+`native-<source SHA>` artifact preserves the result bundle and tool, provenance
+and count files. Unit evidence is not full UI acceptance. Release simulator
+packaging belongs to the release workflow; that app is not a phone installation
+artifact. Hosted durations must be measured from completed runs, not inferred from timeout limits.
 
 Equivalent hosted commands, from the repository root:
 
 ```sh
 python3 -m unittest discover -s scripts/ci -p 'test_*.py'
-bash scripts/ci/native.sh test
+bash scripts/ci/native.sh unit # routine Debug build and unit tests
 ```
 
 Each invocation needs a fresh `build/ci` directory; scripts deliberately do not
@@ -75,11 +84,40 @@ workstation through these CI scripts.
 
 ## Versioned unsigned delivery
 
-Push an existing version tag, or dispatch `Native release` with `tag`, leaving
+Google's pinned **release-please** action maintains a version/changelog PR after
+Conventional Commits reach `main`. Squash merges use the PR title:
+`fix: ...` bumps patch, `feat: ...` bumps minor, and `feat!: ...` or a breaking
+change bumps major. The separate **Commit title** check validates those titles
+and reruns on title edits without restarting native CI. Preserve a conventional
+title when squash-merging; the repository's default squash title is the PR title.
+
+The baseline is `1.0.0`, matching `version.txt`, the release manifest and the
+shared Xcode marketing version. Existing rehearsal tags are preserved. Bootstrap
+starts after `4f97261eb10d2af2a1301251c8e46748d7cc0dab`; release-please determines
+the next version from subsequent commits and updates the shared `.xcconfig`
+alongside its version file, manifest and changelog.
+
+Merging a reviewed version PR creates its tag and GitHub release. Automatic
+packaging is disabled by default under the current cost policy. To produce
+binaries, explicitly dispatch **Native release** for that tag; hosted verification
+uses the full unit target, while full UI acceptance is recorded locally. Token-created PRs and tags do not automatically start other workflows,
+so version PRs explicitly dispatch quick CI and title validation too. The action
+uses the built-in token; no personal access token or Apple credential is added.
+Bot PR creation must be allowed in repository Actions settings. The workflow
+creates version PRs; it never approves or merges them.
+
+Release notes/tag creation and successful binary packaging are separate outcomes.
+Packaging attaches products to an existing release while preserving its notes,
+or creates the earlier private draft release when the tag has no release. It
+never clobbers assets. A duplicate upload fails rather than replacing published
+files. The repository remains private; the optional automatic packaging path never
+requests signed delivery or TestFlight.
+
+Explicitly dispatch `Native release` with `tag`, leaving
 `signed_delivery` and `upload_testflight` false. Accepted tags are `v1.0.0` and
 `v1.0.0-rehearsal.1` style versions. The tag must resolve to a commit already
 merged into `origin/main`. The job checks out that immutable SHA, reruns the
-native tests, builds the simulator app and archives the device app with signing
+native unit tests, builds the simulator app and archives the device app with signing
 disabled. Publishing runs separately with `contents: write`; it executes no
 repository code and downloads the current run's immutable artifact with digest
 verification. Release concurrency never cancels an active release.
@@ -92,7 +130,7 @@ publication. **`Mivu-unsigned.xcarchive.zip` is not installable on a physical
 phone.** It proves the device target can archive without purchasing membership.
 
 ```sh
-bash scripts/ci/native.sh test
+bash scripts/ci/native.sh release # unit tests and Release simulator packaging
 bash scripts/ci/native.sh unsigned
 ```
 

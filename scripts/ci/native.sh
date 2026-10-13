@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 mode=${1:-test}
-case "$mode" in test|unsigned) ;; *) echo 'Use native.sh test|unsigned' >&2; exit 2 ;; esac
+case "$mode" in unit|test|release|unsigned) ;; *) echo 'Use native.sh unit|test|release|unsigned' >&2; exit 2 ;; esac
 output=${MIVU_CI_OUTPUT:-$PWD/build/ci}
 mkdir -p "$output"
 record_provenance() {
@@ -14,7 +14,7 @@ record = dict(sourceCommit=subprocess.check_output(['git', 'rev-parse', 'HEAD'],
               utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
               environment=platform.platform(), mode=sys.argv[2],
               workflowRun=os.environ.get('GITHUB_RUN_ID'), exitStatus=int(sys.argv[3]),
-              installability='simulator only' if sys.argv[2]=='test' else 'unsigned; not installable on a physical iPhone')
+              installability='unsigned; not installable on a physical iPhone' if sys.argv[2]=='unsigned' else 'simulator only')
 (p / (sys.argv[2] + '-provenance.json')).write_text(json.dumps(record, indent=2)+'\n')
 PY
 }
@@ -42,7 +42,7 @@ common=(-project ios/Mivu.xcodeproj -scheme Mivu -derivedDataPath "$output/Deriv
   -onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution
   -skipPackageUpdates SWIFT_VERSION=6.0)
 xcodebuild -resolvePackageDependencies "${common[@]}" -quiet
-if [ "$mode" = test ]; then
+if [ "$mode" != unsigned ]; then
   destination=$(xcrun simctl list devices available --json | python3 -c '
 import json, platform, re, sys
 candidates = []
@@ -55,8 +55,10 @@ for runtime, devices in json.load(sys.stdin)["devices"].items():
 if not candidates: raise SystemExit("No available iPhone simulator with iOS 26 or newer.")
 print("platform=iOS Simulator,arch=" + platform.machine() + ",id=" + max(candidates)[2])')
   set +e
+  test_scope=()
+  if [ "$mode" = unit ] || [ "$mode" = release ]; then test_scope=(-only-testing:MivuTests); fi
   xcodebuild test "${common[@]}" -configuration Debug -destination "$destination" \
-    -parallel-testing-enabled NO -resultBundlePath "$output/Mivu.xcresult" -quiet
+    "${test_scope[@]}" -parallel-testing-enabled NO -resultBundlePath "$output/Mivu.xcresult" -quiet
   test_status=$?
   set -e
   if [ -d "$output/Mivu.xcresult" ]; then
@@ -68,9 +70,11 @@ print("platform=iOS Simulator,arch=" + platform.machine() + ",id=" + max(candida
     exit 1
   fi
   [ "$test_status" -eq 0 ] || exit "$test_status"
-  xcodebuild build "${common[@]}" -configuration Release -destination 'generic/platform=iOS Simulator' -quiet
-  ditto -c -k --keepParent "$output/DerivedData/Build/Products/Release-iphonesimulator/Mivu.app" \
-    "$output/Mivu-simulator.app.zip"
+  if [ "$mode" = release ]; then
+    xcodebuild build "${common[@]}" -configuration Release -destination 'generic/platform=iOS Simulator' -quiet
+    ditto -c -k --keepParent "$output/DerivedData/Build/Products/Release-iphonesimulator/Mivu.app" \
+      "$output/Mivu-simulator.app.zip"
+  fi
 else
   xcodebuild archive "${common[@]}" -configuration Release -destination 'generic/platform=iOS' \
     -archivePath "$output/Mivu-unsigned.xcarchive" CODE_SIGNING_ALLOWED=NO -quiet

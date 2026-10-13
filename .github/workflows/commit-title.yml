@@ -1,0 +1,27 @@
+name: Commit title
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      title:
+        description: Title of the version pull request
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: commit-title-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  title:
+    runs-on: ubuntu-slim
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check Conventional Commit title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title || inputs.title }}
+        run: printf '%s' "$PR_TITLE" | python3 scripts/ci/check_commit_title.py
