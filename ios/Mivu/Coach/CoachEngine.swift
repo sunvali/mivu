@@ -71,7 +71,7 @@ struct CoachEngine: Sendable {
                         var settings: [String] = []
                         for date in requestedGoals { settings.append(try await store.coachGoalSummary(localDate: date, expectedProfileID: expectedProfileID)) }
                         if requestedPreferences { settings.append(try await store.coachPreferenceSummary(expectedProfileID: expectedProfileID)) }
-                        text = ((stored.receipts.isEmpty ? [] : [text]) + settings).joined(separator: "\n")
+                        text = ((stored.receipts.isEmpty && requestedProgress.isEmpty && requestedWorkouts.isEmpty ? [] : [text]) + settings).joined(separator: "\n")
                     }
                     try await store.finishCoachTurn(turnID: turnID, assistantText: text, epoch: epoch, expectedProfileID: expectedProfileID)
                     return try await store.coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)

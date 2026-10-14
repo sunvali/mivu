@@ -468,6 +468,46 @@ private actor CoachInputFixture {
         #expect(finished.assistantText?.contains(otherCapture ? "pending: true" : "complete; pending: false") == true)
     }
 
+    @Test func combinedReadOnlySettingsPreserveWeightAndWorkoutFacts() async throws {
+        let (store, profile, existing, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        try await store.completeCoachTurn(turnID: existing.id, assistantText: "Synthetic previous turn", expectedProfileID: profile.id)
+        var preferences = profile
+        preferences.preferences = "Quick vegetarian meals"
+        try await store.updateProfile(preferences, expectedProfileID: profile.id)
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID,
+            targets: NutritionValues(kcal: 2000, carbs: 200, protein: 100, fat: 70), goalWeightKg: 68,
+            exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.recordWeight(value: 70, at: now, expectedProfileID: profile.id)
+        let workout = try await store.createWorkout(localDate: "2027-01-15",
+            draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 120,
+                burnSource: .userEstimate), performedAt: nil, expectedProfileID: profile.id)
+        let question = try await store.captureCoachTurn(text: "Show saved goals, preferences, weight and workouts. Read only.",
+            photos: [], at: now, expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        let replies = CoachFixture([result([
+            call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}", id: "progress"),
+            call("get_workout", "{\"workout_id\":\"\(workout.id)\"}", id: "workout"),
+            call("get_goals", "{\"local_date\":\"2027-01-15\"}", id: "goals"),
+            call("get_preferences", "{}", id: "preferences")
+        ]), result(text: "Read complete")])
+        let finished = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
+            .run(turnID: question.id, expectedProfileID: profile.id)
+        let persisted = try await DiaryStore(directory: root).selectProfile(profile.id)
+        let text = try #require(persisted.coachTurns.first { $0.id == question.id }?.assistantText)
+        #expect(finished.state == .completed && finished.receipts.isEmpty)
+        #expect(text == finished.assistantText)
+        #expect(text.contains("Calories: 2000 kcal"))
+        #expect(text.contains("Quick vegetarian meals"))
+        #expect(text.contains("Weight average: 70 kg"))
+        #expect(text.contains("recorded cardio, 30 minutes"))
+        #expect(text.contains("Estimated burn: 120 kcal"))
+        #expect(persisted.profile == before.profile)
+        #expect(persisted.days == before.days && persisted.meals == before.meals)
+        #expect(persisted.goals == before.goals && persisted.weights == before.weights)
+        #expect(persisted.workouts == before.workouts)
+        #expect(persisted.coachTurns.first { $0.id == question.id }?.receipts.isEmpty == true)
+    }
+
     @Test(arguments: [false, true], [false, true]) func correctionRetryCanonicalizesDateAndIDForms(idFirst: Bool, currentRevision: Bool) async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let weight = try await store.recordWeight(value: 70, at: now)
