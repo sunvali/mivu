@@ -5,6 +5,7 @@ struct DiaryRootView: View {
     @State private var connection: ChatGPTConnection
     @State private var coach: CoachViewModel
     @State private var selectedTab: String
+    @State private var settingsDestination: CoachDestination?
     private let nutritionKeys: NutritionAPIKeyStore
     init() {
         let diary = DiaryViewModel.local(), session = ChatGPTConnection()
@@ -12,7 +13,7 @@ struct DiaryRootView: View {
         nutritionKeys = keys
         let foodSource = FoodEvidenceClient()
         let fixture: (() throws -> CoachViewModel.Inference)? = DiaryLaunch.isCoachInferenceFixture
-            ? { { input, tools in try CoachUITestInference.respond(input, tools) } } : nil
+            ? { { input, tools in try await CoachUITestInference.respond(input, tools) } } : nil
         _model = State(initialValue: diary)
         _connection = State(initialValue: session)
         _coach = State(initialValue: CoachViewModel(diary: diary, connection: session, inference: fixture, lookup: { query in
@@ -25,10 +26,10 @@ struct DiaryRootView: View {
     @State private var backgroundGeneration: UUID?
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab("Coach", systemImage: "bubble.left.and.bubble.right", value: "coach") { NavigationStack { CoachView(coach: coach) } }
+            Tab("Coach", systemImage: "bubble.left.and.bubble.right", value: "coach") { NavigationStack { CoachView(coach: coach) { destination in settingsDestination = destination; selectedTab = "settings" } } }
             Tab("Today", systemImage: "sun.max", value: "today") { NavigationStack { TodayView(model: model) } }
             Tab("History", systemImage: "calendar", value: "history") { NavigationStack { HistoryView(model: model) } }
-            Tab("Settings", systemImage: "gearshape", value: "settings") { NavigationStack { SettingsView(model: model, connection: connection, nutritionKeys: nutritionKeys) } }
+            Tab("Settings", systemImage: "gearshape", value: "settings") { NavigationStack { SettingsView(model: model, connection: connection, nutritionKeys: nutritionKeys, destination: settingsDestination) } }
         }
         .tint(.diaryAccent)
         .foregroundStyle(Color.diaryText)
@@ -65,6 +66,7 @@ struct DiaryRootView: View {
         }
     }
     private func continueInBackground() {
+        coach.pauseActivity()
         guard (model.snapshot?.pendingCount ?? 0) > 0 || coach.hasPendingWork else { coach.enterBackground(); connection.enterBackground(); return }
         endBackgroundLease()
         let generation = UUID()

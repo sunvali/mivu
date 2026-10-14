@@ -285,7 +285,7 @@ import Testing
         let snapshot = try await store.snapshot(), meal = try #require(snapshot.meals.first { $0.id == receipt.mealID })
         #expect(snapshot.activeDayID == receipt.dayID)
         #expect(meal.timePrecision == .dateOnly)
-        #expect(snapshot.totals(dayID: receipt.dayID).kcal == 140)
+        #expect(snapshot.totals(dayID: try #require(receipt.dayID)).kcal == 140)
     }
 
     @Test func mixedManualAdditionAndCorrectionCommitTogetherAndReplay() async throws {

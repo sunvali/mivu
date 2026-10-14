@@ -2,7 +2,8 @@ import Foundation
 import CoreFoundation
 
 enum CoachWrite: Sendable {
-    case food(date: String, items: [FoodItem], eatenAt: Date?)
+    case manual(CoachManualEdit, patchKey: String? = nil)
+    case food(date: String, items: [FoodItem], eatenAt: Date?, reviewFirst: Bool = false)
     case correction(mealID: UUID, item: FoodItem, revision: Int)
     case close(date: String, completeness: DayCompleteness)
     case weight(date: String, value: Double, unit: String, revision: Int?)
@@ -13,7 +14,8 @@ enum CoachWrite: Sendable {
     case deleteWorkout(id: UUID, revision: Int)
     var target: String {
         switch self {
-        case .food(let date, _, _): "food/\(date)"
+        case .manual(let edit, let patchKey): edit.target + (patchKey.map { "/" + $0 } ?? "")
+        case .food(let date, _, _, _): "food/\(date)"
         case .correction(let meal, let item, _): "correct/\(meal.uuidString)/\(item.id.uuidString)"
         case .close(let date, _): "close/\(date)"
         case .weight(let date, _, _, _): "weight/\(date)"
@@ -26,7 +28,23 @@ enum CoachWrite: Sendable {
     }
 }
 
+enum CoachClarification: String, CaseIterable, Sendable {
+    case portion, food, day, meal, workout
+    var question: String {
+        switch self {
+        case .portion: "How much did you eat? Give grams, a serving size, or a container size."
+        case .food: "What food did you eat?"
+        case .day: "Which day should this be recorded on?"
+        case .meal: "Which meal do you mean?"
+        case .workout: "Which workout do you mean?"
+        }
+    }
+}
+
 enum CoachCommand: Sendable {
+    case clarification(CoachClarification)
+    case goals(String)
+    case preferences
     case context
     case meal(UUID)
     case lookup(String)
@@ -38,8 +56,7 @@ enum CoachCommand: Sendable {
 /// Only declared operations cross the model-to-diary boundary.
 enum CoachTools {
     static let namespace = "mivu"
-    static func declarations() throws -> Data {
-        func object(_ properties: [String: Any], required: [String]) -> [String: Any] {
+    static func object(_ properties: [String: Any], required: [String]) -> [String: Any] {
             var normalized = properties
             for (key, value) in properties where !required.contains(key) {
                 guard var field = value as? [String: Any] else { continue }
@@ -48,7 +65,8 @@ enum CoachTools {
                 normalized[key] = field
             }
             return ["type": "object", "properties": normalized, "required": properties.keys.sorted(), "additionalProperties": false]
-        }
+    }
+    static func declarations() throws -> Data {
         let string: [String: Any] = ["type": "string"]
         let number: [String: Any] = ["type": ["number", "null"]]
         let food = object(["name": string, "quantity": ["type":"number"], "unit": string,
@@ -59,6 +77,7 @@ enum CoachTools {
         let exercise = object(["name": string, "sets": ["type": "array", "items": object(["repetitions": integer, "load_kg": number], required: ["repetitions", "load_kg"])]], required: ["name", "sets"])
         let workout: [String: Any] = ["kind": ["type": "string", "enum": ["strength", "cardio", "other"]], "duration_minutes": integer, "exercises": ["type": "array", "items": exercise], "estimated_burn_kcal": number, "burn_source": ["type": ["string", "null"], "enum": ["userEstimate", "modelEstimate", NSNull()]], "performed_at": unconfirmedTime]
         let schemas: [(String, String, [String: Any])] = [
+            ("ask_clarification", "Ask for the missing detail before logging when context is insufficient. Choose portion for amount/serving size, food for food identity, day for the recording date, meal or workout for an ambiguous existing record. Use this tool alone, before any writes in this turn. The app displays its own question; the user answers in a new turn.", object(["kind": ["type": "string", "enum": CoachClarification.allCases.map(\.rawValue)]], required: ["kind"])),
             ("get_progress", "Read actual progress for an inclusive 1, 7 or 30 calendar-day window. Real record IDs/revisions and omitted counts support historical corrections. Food remaining and estimated burn are separate; adherence means Within 10% of target.", object(["ending_on": string, "days": ["type": "integer", "enum": [1, 7, 30]]], required: ["ending_on", "days"])),
             ("get_workout", "Read a complete owned workout before replacement/edit. Oversized records are refused; never replace unseen sets.", object(["workout_id": string], required: ["workout_id"])),
             ("log_weight", "Log one weight per date. Corrections require expected_revision; historical correction after travel must use retrieved weight_id, preserving day and measured time. Model measured_at cannot confirm exact time. Current morning weight explicitly starts that waking day.", object(["local_date": string, "value": ["type": "number"], "unit": ["type": "string", "enum": ["kg", "lb"]], "weight_id": string, "expected_revision": integer, "measured_at": unconfirmedTime], required: ["local_date", "value", "unit"])),
@@ -69,10 +88,10 @@ enum CoachTools {
             ("get_context", "Read actual bounded diary and capture clock. truncated and omittedMeals explicitly mark details not included.", object([:], required: [])),
             ("get_meal", "Retrieve actual owner-scoped meal by UUID before correction. omittedItemCount marks unavailable details requiring manual review.", object(["meal_id": string], required: ["meal_id"])),
             ("lookup_nutrition", "Search retrieved nutrition evidence; unavailable means use clearly uncertain estimates.", object(["query":string], required: ["query"])),
-            ("log_food", "Log all new foods for this turn/date once. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":unconfirmedTime], required: ["target_local_date", "items"])),
+            ("log_food", "Log all new foods for this turn/date once. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Set review_first true when the user wants a proposal before totals. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":unconfirmedTime, "review_first":["type":"boolean"]], required: ["target_local_date", "items"])),
             ("correct_item", "Correct only quantity on a retrieved actual item, preserving its nutrition basis and sources.", object(["meal_id":string,"item_id":string,"expected_revision":["type":"integer"],"quantity":["type":"number"]], required: ["meal_id","item_id","expected_revision","quantity"])),
             ("close_day", "Explicitly close a local date as complete, partial, untracked or unknown; retain existing food.", object(["local_date":string,"completeness":["type":"string","enum":DayCompleteness.allCases.map(\.rawValue)]], required: ["local_date","completeness"]))
-        ]
+        ] + manualSchemas(food: food)
         let tools = schemas.map { ["type":"function", "name":$0.0, "description":$0.1, "parameters":$0.2, "strict":true] as [String: Any] }
         return try JSONSerialization.data(withJSONObject: ["type":"namespace", "name":namespace, "description":"Private local diary and progress operations", "tools":tools])
     }
@@ -121,6 +140,10 @@ enum CoachTools {
             return WorkoutDraft(kind: kind, durationMinutes: try integer("duration_minutes", 1...1440), exercises: exercises, estimatedBurnKcal: burn, burnSource: source)
         }
         switch call.name {
+        case "ask_clarification":
+            try keys(["kind"], ["kind"])
+            guard let kind = CoachClarification(rawValue: try string("kind")) else { throw CoachError.invalidArguments }
+            return .clarification(kind)
         case "get_progress":
             try keys(["ending_on", "days"], ["ending_on", "days"])
             let days = try integer("days", 1...30); guard [1, 7, 30].contains(days) else { throw CoachError.invalidArguments }
@@ -156,9 +179,36 @@ enum CoachTools {
             try keys(["query"], ["query"]); let query = try string("query")
             guard query.utf8.count <= 200 else { throw CoachError.invalidArguments }; return .lookup(query)
         case "log_food":
-            try keys(["target_local_date", "items", "eaten_at"], ["target_local_date", "items"])
-            guard let rows = args["items"] as? [[String: Any]], !rows.isEmpty, rows.count <= 200 else { throw CoachError.invalidArguments }
-            let items = try rows.map { row -> FoodItem in
+            try keys(["target_local_date", "items", "eaten_at", "review_first"], ["target_local_date", "items"])
+            let items = try foodItems(args["items"], evidence: evidence)
+            // Validate legacy syntax without treating model output as owner-confirmed time.
+            try unconfirmedTime("eaten_at")
+            var reviewFirst = false
+            if let raw = args["review_first"], !(raw is NSNull) {
+                guard let value = raw as? NSNumber, CFGetTypeID(value) == CFBooleanGetTypeID() else { throw CoachError.invalidArguments }
+                reviewFirst = value.boolValue
+            }
+            return .write(.food(date: try string("target_local_date"), items: items, eatenAt: nil, reviewFirst: reviewFirst))
+        case "correct_item":
+            try keys(["meal_id", "item_id", "expected_revision", "quantity"], ["meal_id", "item_id", "expected_revision", "quantity"])
+            let mealID = try uuid("meal_id"), itemID = try uuid("item_id")
+            guard let revision = number(args["expected_revision"]), revision >= 0, revision < 1_000_000, revision.rounded() == revision,
+                  let meal = meals.first(where: { $0.id == mealID }),
+                  (meal.revision == Int(revision) || receipts.contains(where: { $0.mealID == mealID && $0.itemID == itemID })) ,
+                  var item = meal.items.first(where: { $0.id == itemID }), let quantity = number(args["quantity"]) else { throw CoachError.invalidArguments }
+            item.quantity = quantity; try validateItems([item])
+            return .write(.correction(mealID: mealID, item: item, revision: Int(revision)))
+        case "close_day":
+            try keys(["local_date","completeness"], ["local_date","completeness"])
+            guard let completeness = DayCompleteness(rawValue: try string("completeness")) else { throw CoachError.invalidArguments }
+            return .write(.close(date: try string("local_date"), completeness: completeness))
+        default: return try parseManual(call, args: args, meals: meals, evidence: evidence, receipts: receipts)
+        }
+    }
+
+    static func foodItems(_ raw: Any?, evidence: [Int: FoodEvidenceRecord]) throws -> [FoodItem] {
+            guard let rows = raw as? [[String: Any]], !rows.isEmpty, rows.count <= 200 else { throw CoachError.invalidArguments }
+            return try rows.map { row -> FoodItem in
                 guard Set(row.keys).isSubset(of: ["name","quantity","unit","kcal","carbs","protein","fat","evidence_id"]),
                       let name = row["name"] as? String, let quantity = number(row["quantity"]),
                       let unit = row["unit"] as? String else { throw CoachError.invalidArguments }
@@ -181,26 +231,8 @@ enum CoachTools {
                 }
                 try validateItems([item]); return item
             }
-            // Validate legacy syntax without treating model output as owner-confirmed time.
-            try unconfirmedTime("eaten_at")
-            return .write(.food(date: try string("target_local_date"), items: items, eatenAt: nil))
-        case "correct_item":
-            try keys(["meal_id", "item_id", "expected_revision", "quantity"], ["meal_id", "item_id", "expected_revision", "quantity"])
-            let mealID = try uuid("meal_id"), itemID = try uuid("item_id")
-            guard let revision = number(args["expected_revision"]), revision >= 0, revision < 1_000_000, revision.rounded() == revision,
-                  let meal = meals.first(where: { $0.id == mealID }),
-                  (meal.revision == Int(revision) || receipts.contains(where: { $0.mealID == mealID && $0.itemID == itemID })) ,
-                  var item = meal.items.first(where: { $0.id == itemID }), let quantity = number(args["quantity"]) else { throw CoachError.invalidArguments }
-            item.quantity = quantity; try validateItems([item])
-            return .write(.correction(mealID: mealID, item: item, revision: Int(revision)))
-        case "close_day":
-            try keys(["local_date","completeness"], ["local_date","completeness"])
-            guard let completeness = DayCompleteness(rawValue: try string("completeness")) else { throw CoachError.invalidArguments }
-            return .write(.close(date: try string("local_date"), completeness: completeness))
-        default: throw CoachError.invalidTool
-        }
     }
-    private static func number(_ value: Any?) -> Double? {
+    static func number(_ value: Any?) -> Double? {
         guard let value = value as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite else { return nil }
         return value.doubleValue
     }

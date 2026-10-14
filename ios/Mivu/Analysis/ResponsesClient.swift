@@ -158,7 +158,7 @@ struct ResponsesClient: Sendable {
                   Set(namespace.keys).isSubset(of: ["type", "name", "description", "tools"]),
                   let name = namespace["name"] as? String, !name.isEmpty, name.utf8.count <= 256,
                   namespace["description"] == nil || namespace["description"] is String,
-                  let tools = namespace["tools"] as? [[String: Any]], !tools.isEmpty, tools.count <= 16 else { throw Failure.invalidInput }
+                  let tools = namespace["tools"] as? [[String: Any]], !tools.isEmpty, tools.count <= 32 else { throw Failure.invalidInput }
             var names = Set<String>()
             for tool in tools {
                 guard tool["type"] as? String == "function",
