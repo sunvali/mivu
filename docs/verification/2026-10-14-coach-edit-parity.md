@@ -1,16 +1,27 @@
 # Coach edit parity: local acceptance
 
-Final native inputs: `72822ba8b73a8eee63bd3ef79048edfd94da5dee` on
+Baseline native inputs: `72822ba8b73a8eee63bd3ef79048edfd94da5dee` on
 `feature/coach-edit-parity`, based on main `8cf1e85e0920726638b987468260f35410d4fa53`.
 Later documentation-only commits do not change the tested native inputs.
-Production app source is unchanged from
+Production app source for that baseline is unchanged from
 `39066bf8dd5443bac0c2f7d66e11586def97a834`; `72822ba` corrects the UI harness only.
 
 Local result: **417 unit passes and passing coverage of all 15 simulator
-workflows**. The UI evidence is 13 full-target passes plus two corrected workflow
-reruns, not a fresh single all-target green run. Physical acceptance has started:
-live meal logging and correction passed as recorded below. The remaining device
-and Files-provider checks are incomplete. Keep the PR draft and unmerged.
+workflows** on the previously recorded inputs. The UI evidence is 13 full-target
+passes plus two corrected workflow reruns, not a fresh single all-target green
+run. Physical acceptance has started on installed source `be694ad`. The summary
+preservation fix is committed as `bae16bc8258c0a17cf11f166e147726e73b9e9e2`;
+its exact native source files have focused simulator coverage and were installed
+on the physical iPhone. The later live read returned stored progress and workout
+facts, as recorded below.
+Scroll-follow is committed as
+`d1dde4297bbb1811158e345b3fbde3674e911c94` and has focused UI coverage; it has
+been installed and relaunched on the phone. Automatic thinking/reply following
+was observed; history-position preservation is still pending. The latest native
+push check passed 418 tests,
+0 failures and 1 skip. The full 15-workflow UI gate has not been rerun on these
+latest patches. The earlier 417-unit and 15-workflow coverage does not establish
+verification of these latest patches. Keep the PR draft and unmerged.
 
 ## Delivered scope
 
@@ -207,28 +218,155 @@ synthetic inputs. No account tokens or personal diary records are included here.
 - The native thinking indicator was visible during live requests. Mouse-wheel
   scrolling revealed all corrected food items in the native meal screen.
 
-A combined dated-goal, preference, weight and workout request was submitted and
-its saved input and thinking indicator were visible. After reopening the installed
-app, native screens on the same QA profile established these saved results:
+A combined dated-goal, preference, weight and workout request was submitted on
+the same QA profile. Its complete Coach reply was later inspected. It reported
+the saved 2,000 kcal goal with 200 g carbohydrate, 100 g protein and 70 g fat;
+exercise credit was disabled. It also reported quick vegetarian meals, timezone
+`Asia/Jerusalem`, a recorded weight of 70 kg, and 30 minutes of cardio. The native
+Workout record shows cardio for 30 minutes with an estimated 120 kcal burn and
+unspecified time. Native Today had previously shown 1,752 kcal remaining after
+the original 248 kcal meal. The native goals/settings editor and morning-weight
+flag remain unverified.
 
-- Today: 2,000 kcal goal; carbohydrate 200 g, protein 100 g and fat 70 g targets;
-  1,752 kcal remaining after the recorded 248 kcal meal. Macro remaining values
-  were 182.1 g carbohydrate, 82.3 g protein and 58.2 g fat.
 - History: the 2026-10-14 tracking day displayed 70 kg.
-- Progress daily report: estimated workout burn was 120 kcal, separate from the
-  recorded 248 kcal food intake. Food remaining stayed 1,752 kcal, consistent
-  with the requested disabled exercise credit.
+- Progress daily report: estimated workout burn was 120 kcal, separate from
+  food intake. Food remaining stayed 1,752 kcal, consistent with disabled
+  exercise credit.
 
-The full combined reply, native goal-weight editor, preference text, morning
-weight flag and workout type/duration have **not yet been inspected**. Automated
-mouse-wheel scrolling did not move the Settings or Coach viewport during this
-attempt. This is an automation limitation, not evidence that owner scrolling is
-broken. Mirroring then disconnected because the iPhone was in use. Do not resend
-the combined write request: the native records already show committed changes.
+Two more live requests completed against the existing meal. First: “For the
+tomato in my existing meal, clear protein and set carbs to 2 g. Keep everything
+else unchanged.” The native tomato row showed 22 kcal, 2 g carbohydrate, blank
+protein, 0.2 g fat, and quantity one tomato. The eggs remained two and the bread
+one; the meal showed 248 kcal, 15.1 g carbohydrate, unknown protein and 11.8 g
+fat. Second: “Add one medium apple to the same existing meal. Keep the eggs,
+bread and tomato unchanged.” The reply completed and the native meal showed 343
+kcal, 40.1 g carbohydrate, unknown protein and 12.1 g fat. Its four rows were
+eggs quantity two, bread quantity one, tomato quantity one and apple quantity
+one. The food list ended at “Update meal,” with no duplicate rows. These checks
+pass the nutrient-clear/change and append-food checklist items.
+
+Mouse-wheel scrolling worked on the native Meal screen. Earlier attempts did not
+move the Settings or Coach automation viewport; those particular screens remain
+uninspected and this does not indicate whether owner scrolling works. Do not
+resend the combined write request: its records are already committed.
+
+## Focused verification of latest local patch
+
+The two-file patch in `CoachEngine.swift` and `CoachEngineTests.swift`, committed
+as `bae16bc8258c0a17cf11f166e147726e73b9e9e2`, fixes a summary bug: adding a
+read-only Settings operation to a turn no longer discards existing progress or
+workout facts from the combined reply. The focused regression first failed, then
+passed after the fix. Five selected regression functions, including the new
+regression, also passed. The same native source files were tested immediately
+before commit at parent
+`8a09645b81a7a74b9d7e4749643e5479b0922b08`.
+
+Evidence was recorded 2026-10-14 10:10 UTC in
+`/private/tmp/mivu-combined-read-evidence.json` on local macOS using the existing
+Mivu simulator and derived data. The focused RED command exited 1 with 0 passed,
+1 failed and 0 skipped. GREEN exited 0 with 1 passed, 0 failed and 0 skipped.
+Five selected regression functions, including the new regression, passed with
+exit 0, 5 passed, 0 failed and 0 skipped. Independent Ponytail review approved
+the source delta. That review did not cover patched physical-device acceptance.
+The complete native unit suite later passed on descendant source `d1dde42`; see
+the latest source verification below. The full UI workflow gate has not been
+rerun on these patches.
+
+The ordinary physical-iPhone build from `bae16bc` installed and launched with
+exit 0, `SUCCEEDED`, in 10.493 seconds, with zero diagnostics. Invocation reused
+the private local device/signing arguments and empty launch arguments; result:
+`/private/tmp/mivu-device-combined-reply-result.json`. The existing conversation
+and completed 343 kcal append reply were still visible after launch. The exact
+read-only prompt, “Show saved goals, preferences, weight and workouts. Read
+only.”, was submitted again. Its input saved successfully, but Mirroring paused
+because the iPhone was in use before the completed response could be inspected.
+The response was later inspected after reconnection: it included the stored
+343 kcal food intake, 1,657 kcal remaining, one workout, estimated burn of
+120 kcal, average weight 70 kg from one measured date, and cardio for 30 minutes.
+Unavailable longer-term weight changes were reported as insufficient data;
+protein remained unknown after the explicit nutrient clear. The displayed part
+of this reply did not establish that all four requested categories were returned.
+The deterministic combined-tool regression establishes summary preservation;
+live tool selection was not captured.
+
+## Scroll-follow correction
+
+The owner reported that arriving messages and thinking did not stay visible
+automatically. Commit `d1dde4297bbb1811158e345b3fbde3674e911c94` follows new
+activity while the reader is at the bottom, preserves history position during
+interaction, and provides a “New message” button to return. The two original
+product failures were a clipped thinking indicator and a missing new-message
+button. A source review also found a follow-state edge case: a resting finger
+should pause following without being treated as intentional history browsing.
+The test
+for a stationary finger passed on old code, so it is not evidence that this
+edge case reproduced before the fix.
+
+The ordinary `d1dde42` physical build installed and launched successfully in
+6.631 seconds with zero diagnostics, using the existing private device/signing
+arguments and no fixture launch flags. Result:
+`/private/tmp/mivu-device-scroll-follow-result.json`. A controlled Mivu-only stop
+and relaunch both returned exit 0; private results are
+`/private/tmp/mivu-scroll-relaunch-stop.json` and
+`/private/tmp/mivu-scroll-relaunch-launch.json`. The saved conversation and
+progress response remained visible.
+
+Two real requests automatically brought the thinking row fully above the
+composer, then followed their completed reply and review link. The historical
+request "Prepare a review-first meal of 100 g plain yogurt for 2026-10-13. Do not
+accept or count it yet." produced an Awaiting review meal dated 2026-10-13 with
+100 g yogurt and no saved food items. "Change the proposed yogurt quantity to
+50 g. Keep it awaiting review; do not accept it." changed the native proposal to
+50 g while preserving Awaiting review and no saved items. Explicit acceptance
+and duplicate-count verification remain pending.
+
+Automated mouse-wheel input did not move the Coach viewport into history. The
+owner was asked to scroll manually in Mirroring before a live arrival check.
+The physical “New message” affordance and history-position preservation remain
+unverified; the four focused simulator cases below cover this behavior locally.
+
+The final focused simulator UI run on `d1dde4297bbb1811158e345b3fbde3674e911c94`
+passed **4 cases, 0 failures and 0 skips** in 127.7 seconds with no warnings. It
+covered dark mode at the largest text size, latest actions while browsing
+history, a resting finger during thinking, and an incoming weekly-history
+response followed by returning to the latest activity. This targeted result does
+not establish a passing full 15-workflow UI gate. Two earlier selected cases
+passed in 135.7 seconds on an intermediate source: one covered the incoming
+weekly summary, and the other covered meal correction, historical review and
+conversation relaunch. That result included a known frame warning and is separate
+from the final four-case run. Independent Ponytail review approved the source
+change.
+
+## Latest source verification
+
+On 2026-10-14, the local push check for `d1dde4297bbb1811158e345b3fbde3674e911c94`
+completed successfully from `/private/tmp/mivu-local-hooks` on macOS. Exact entry
+command: `git push origin feature/coach-edit-parity`. Its local hook passed 31
+script checks in 23.432 seconds and the full Mivu native unit suite: **418
+passed, 0 failed, 1 skipped** in 54.209 seconds. The hook exited 0. Linux script
+checks (22 seconds) and the PR title check (7 seconds) also
+passed in [the script check run](https://github.com/yakov103/mivu/actions/runs/38551334922/job/115809744121)
+and [the title check run](https://github.com/yakov103/mivu/actions/runs/38551334858/job/115809741510).
+The native result is in `mivu-checks/native-eh0qwvu4/result.json` with
+`Mivu.xcresult` alongside it in the Git common directory. This is the first full
+native unit result for the latest source; the historical 417-test result above
+belongs to `72822ba`.
+
+The four focused UI cases were run with XcodeBuildMCP `simulator test` on the
+iPhone 18 Pro / iOS 27 simulator, scheme `Mivu`, serial execution. The selected
+tests were `testLatestFollowsActionsAndHistoryOffersNewMessage`,
+`testThinkingFollowsLatestThenReplyPreservesHistoryAndJumpResumesFollowing`,
+`testRestingFingerDuringThinkingDoesNotDisableFollowing`, and
+`testLargestDynamicTypeDarkCoachKeepsCaptureReachable`. The command and private
+arguments are recorded in `/private/tmp/mivu-scroll-follow-evidence.json`; the
+final result bundle is
+`test_sim_2026-10-14T10-35-37-531Z_pid87991_3526cded.xcresult`. Its evidence has
+no simulator identifier in this document. This focused UI result does not
+replace the full 15-workflow UI gate.
 
 ## Remaining acceptance
 
-Eligible-model inspection, the remaining manual-edit workflows, relaunch,
+Eligible-model inspection and the remaining manual-edit workflows,
 live image inference, interruption/retry and Files-provider actions are still
 unverified. No cloud-sync claim follows from a local save or file-provider write.
 Simulator inference uses synthetic fixtures; those tests establish local

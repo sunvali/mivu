@@ -78,10 +78,10 @@ Use synthetic food and profile content; do not capture personal data in evidence
 - [x] Ask Coach to change one field on an existing saved meal item. Confirm the
   reply reflects the committed value, then open the same meal in the manual UI
   and confirm unrelated fields and meal items remain unchanged.
-- [ ] Ask Coach to clear one nutrient total and change another nutrient. Confirm
+- [x] Ask Coach to clear one nutrient total and change another nutrient. Confirm
   the cleared value is absent, the changed value is saved, and omitted nutrient
   totals remain unchanged in the manual meal UI.
-- [ ] Ask Coach to append one new food to an existing meal. Confirm existing
+- [x] Ask Coach to append one new food to an existing meal. Confirm existing
   items are not duplicated and the new item appears in the manual meal UI.
 - [ ] Set and clear dated goals through Coach. Confirm the native goal editor,
   remaining budgets and historical dates agree.
@@ -107,7 +107,7 @@ Use synthetic food and profile content; do not capture personal data in evidence
   the user completes it.
 - [ ] Complete one Files backup-folder action and verify the app's local
   acknowledgement separately from any cloud-sync status.
-- [ ] Relaunch the app and confirm the edited meal, conversation, and committed
+- [x] Relaunch the app and confirm the edited meal, conversation, and committed
   receipt-backed result remain available in the same local profile.
 
 Simulator tests exercise local validation, persistence and fixture-driven tool
@@ -127,8 +127,16 @@ between those two commits. This is not a claim of a new single all-target green
 run after the harness correction. Exact commands, artifacts, review and remaining
 gates are in the [verification record](../verification/2026-10-14-coach-edit-parity.md).
 Physical installation and one original-meal correction are verified at
-`be694ad`; the other device items remain pending. See the verification record
-for exact synthetic inputs and observed native values.
+`be694ad`, including the later tomato nutrient correction and apple append. The
+`bae16bc` build was also installed; its later completed reply returned stored
+progress and workout facts. Scroll-follow at `d1dde42` has four focused UI passes
+and is installed on the phone. Automatic thinking/reply following was observed,
+along with a historical review proposal edited from 100 g to 50 g without
+acceptance. The physical history-arrival/button check and explicit proposal
+acceptance remain pending. The latest full native suite passed 418
+tests with one skip. The full 15-workflow UI gate has not been rerun on these
+latest inputs. See the verification record for exact synthetic inputs, observed
+native values and artifacts.
 
 For development guidance only, see [SwiftUI Agent Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill)
 and [Tool Design](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering/tree/main/skills/tool-design).
