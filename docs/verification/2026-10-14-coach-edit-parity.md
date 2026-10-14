@@ -482,7 +482,7 @@ with no “New message” button at the bottom. The answer “One 150 g containe
 plain yogurt today.” produced a saved native record dated 2026-10-14: plain
 yogurt, 150 g, estimated nutrition, 92 kcal, 7.0 g carbohydrate, 5.2 g protein and
 4.9 g fat. Analysis initially paused after that save. Retrying the same turn
-completed with “I logged Plain yogurt (estimated whole-milk). 92 kcal. Nutrition
+completed with “Logged Plain yogurt (estimated whole-milk). 92 kcal. Nutrition
 may be uncertain.” This establishes a saved record and a completed retry;
 complete diary-wide duplicate counting and post-retry relaunch remain unverified.
 The original failure category was not captured and is not inferred from the UI.
