@@ -169,6 +169,89 @@ import XCTest
         let persisted = XCTAttachment(screenshot: app.screenshot()); persisted.name = "Synthetic Coach workout persisted after relaunch"; persisted.lifetime = .keepAlways; add(persisted)
     }
 
+    func testLatestFollowsActionsAndHistoryOffersNewMessage() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        let history = (1...32).map { "Synthetic history line \($0)." }.joined(separator: " ")
+        enter(history, in: app); app.buttons["coachSend"].tap()
+        let status = app.staticTexts["Waiting for an authorized connection"].firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        let latest = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: status)
+        XCTAssertEqual(XCTWaiter.wait(for: [latest], timeout: 5), .completed)
+        XCTAssertLessThan(status.frame.maxY, app.textFields["coachInput"].frame.minY)
+        app.scrollViews.firstMatch.swipeDown()
+        let banner = app.staticTexts.matching(NSPredicate(format: "label == %@", history)).firstMatch
+        XCTAssertTrue(banner.isHittable)
+        enter("Synthetic new message", in: app); app.buttons["coachSend"].tap()
+        let jump = app.buttons["coachNewMessage"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 5))
+        XCTAssertTrue(banner.isHittable, "Sending while reading history must preserve the reading position")
+        XCTAssertGreaterThanOrEqual(jump.frame.height, 44)
+        jump.tap()
+        XCTAssertTrue(app.staticTexts["Synthetic new message"].isHittable)
+        XCTAssertFalse(jump.exists)
+        let arrival = XCTAttachment(screenshot: app.screenshot())
+        arrival.name = "Synthetic latest Coach message after history jump"; arrival.lifetime = .keepAlways; add(arrival)
+    }
+
+    func testThinkingFollowsLatestThenReplyPreservesHistoryAndJumpResumesFollowing() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        let history = (1...32).map { "Synthetic earlier line \($0)." }.joined(separator: " ")
+        enter(history, in: app); app.buttons["coachSend"].tap()
+        waitForReplies(1, in: app)
+        enter("Synthetic delayed weekly report", in: app); app.buttons["coachSend"].tap()
+        let activity = app.otherElements["coachActivity"]
+        XCTAssertTrue(activity.waitForExistence(timeout: 5))
+        XCTAssertTrue(activity.isHittable)
+        XCTAssertLessThanOrEqual(activity.frame.maxY, app.textFields["coachInput"].frame.minY)
+        let banner = app.staticTexts["coachFixtureBanner"]
+        for _ in 0..<4 where !banner.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        XCTAssertTrue(banner.isHittable)
+        let before = banner.frame.minY
+        let jump = app.buttons["coachNewMessage"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 15))
+        XCTAssertTrue(banner.isHittable)
+        XCTAssertEqual(banner.frame.minY, before, accuracy: 2)
+        jump.tap()
+        let reply = app.staticTexts.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "coachReply", "Period recorded workouts:")).firstMatch
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        let bottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            reply.frame.maxY <= app.textFields["coachInput"].frame.minY
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [bottom], timeout: 5), .completed)
+        XCTAssertFalse(jump.exists)
+        enter("Open backup settings", in: app); app.buttons["coachSend"].tap()
+        let link = app.buttons["coachSettingsLink"]
+        XCTAssertTrue(link.waitForExistence(timeout: 10))
+        XCTAssertTrue(link.isHittable)
+        XCTAssertLessThanOrEqual(link.frame.maxY, app.textFields["coachInput"].frame.minY)
+        let arrival = XCTAttachment(screenshot: app.screenshot())
+        arrival.name = "Synthetic incoming Coach reply preserves history and resumes latest"; arrival.lifetime = .keepAlways; add(arrival)
+    }
+
+    func testRestingFingerDuringThinkingDoesNotDisableFollowing() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-largest-text"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        enter("Synthetic delayed weekly report", in: app); app.buttons["coachSend"].tap()
+        XCTAssertTrue(app.otherElements["coachActivity"].waitForExistence(timeout: 5))
+        // Hold in the scroll view's empty gutter without dragging or selecting text.
+        app.scrollViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).press(forDuration: 9)
+        let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        XCTAssertTrue(reply.waitForExistence(timeout: 10))
+        let bottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            reply.frame.maxY <= app.textFields["coachInput"].frame.minY
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [bottom], timeout: 5), .completed)
+        XCTAssertFalse(app.buttons["coachNewMessage"].exists)
+    }
+
     private func revealCoachLink(_ link: XCUIElement, in app: XCUIApplication) {
         // Hittable can include a partially clipped link whose center is under the composer.
         for _ in 0..<8 {

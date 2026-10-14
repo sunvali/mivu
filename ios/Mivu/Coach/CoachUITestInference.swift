@@ -2,9 +2,15 @@ import Foundation
 
 // Explicit UI-test isolation is required by the caller; no provider request is made.
 enum CoachUITestInference {
-    static func respond(_ input: [CoachInferenceInput], _: Data) throws -> CoachInferenceResult {
+    static func respond(_ input: [CoachInferenceInput], _: Data) async throws -> CoachInferenceResult {
         if input.contains(where: { if case .functionOutput = $0 { return true }; return false }) {
             return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: [], outputItems: [])
+        }
+        if input.contains(where: {
+            if case .message(role: .user, let text, _) = $0 { return text == "Synthetic delayed weekly report" }
+            return false
+        }) {
+            try await Task.sleep(for: .seconds(8))
         }
         guard let developer = input.compactMap({ entry -> String? in
             if case .message(role: .developer, let text, _) = entry { return text }; return nil

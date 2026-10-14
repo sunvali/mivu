@@ -7,8 +7,8 @@ struct CoachView: View {
     @State private var preparation = PhotoPreparation()
     @State private var importFailed = false
     @State private var followLatest = true
-    @State private var userScrolling = false
-    @State private var pendingReplyID: UUID?
+    @State private var scrollPhase: ScrollPhase = .idle
+    @State private var hasNewMessage = false
     @FocusState private var editing: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,28 +58,41 @@ struct CoachView: View {
                 }.padding(16)
             }
             .scrollDismissesKeyboard(.interactively)
-            .onScrollPhaseChange { _, phase in
-                userScrolling = phase == .interacting || phase == .decelerating
-                if phase == .idle { followPendingReply(with: proxy) }
+            .onScrollPhaseChange { oldPhase, phase, context in
+                scrollPhase = phase
+                if phase == .idle {
+                    if oldPhase == .interacting || oldPhase == .decelerating {
+                        followLatest = isNearBottom(context.geometry)
+                        if followLatest { hasNewMessage = false }
+                    }
+                    followLatestRow(with: proxy)
+                }
             }
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
-            } action: { _, remaining in
-                let nearBottom = remaining <= 80
-                if userScrolling, followLatest != nearBottom { followLatest = nearBottom }
+            .onScrollGeometryChange(for: Bool.self) { isNearBottom($0) } action: { _, nearBottom in
+                if scrollPhase == .interacting || scrollPhase == .decelerating {
+                    followLatest = nearBottom
+                    if nearBottom { hasNewMessage = false }
+                }
             }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { oldHeight, newHeight in
-                if newHeight > oldHeight { followPendingReply(with: proxy) }
+                if newHeight > oldHeight { followLatestRow(with: proxy) }
             }
-            .onChange(of: coach.turns.last?.assistantText) { _, _ in
-                guard let id = coach.turns.last?.id, coach.turns.last?.assistantText != nil else { return }
-                pendingReplyID = id
-                followPendingReply(with: proxy)
-            }
-            .onChange(of: coach.turns.count) { _, _ in
-                pendingReplyID = nil
-                followLatest = true
-                if let id = coach.turns.last?.id { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("input-" + id.uuidString, anchor: .bottom) } }
+            .onChange(of: coach.turns) { _, _ in newContent(with: proxy) }
+            .onChange(of: coach.activity) { _, _ in newContent(with: proxy) }
+            .overlay(alignment: .bottom) {
+                if hasNewMessage && !followLatest {
+                    Button {
+                        followLatest = true; hasNewMessage = false
+                        followLatestRow(with: proxy)
+                    } label: {
+                        Label("New message", systemImage: "arrow.down").frame(minHeight: 44)
+                    }
+                    .buttonStyle(.bordered).tint(.diaryLeaf)
+                    .background(Color.diarySurface, in: Capsule())
+                    .accessibilityHint("Jump to the latest message and follow new replies")
+                    .accessibilityIdentifier("coachNewMessage")
+                    .padding(.bottom, 8)
+                }
             }
         }
         .background(Color.diaryCanvas)
@@ -99,17 +112,28 @@ struct CoachView: View {
         .onChange(of: coach.diary.snapshot?.profile.id) { _, _ in
             preparation.cancel(); preparation = PhotoPreparation()
             showPhotos = false; editing = false
+            followLatest = true; hasNewMessage = false
         }
     }
-    private func followPendingReply(with proxy: ScrollViewProxy) {
-        guard followLatest, !userScrolling, let id = pendingReplyID else { return }
+    private var userScrolling: Bool {
+        scrollPhase == .tracking || scrollPhase == .interacting || scrollPhase == .decelerating
+    }
+    private func isNearBottom(_ geometry: ScrollGeometry) -> Bool {
+        geometry.contentSize.height + geometry.contentInsets.bottom - geometry.contentOffset.y - geometry.containerSize.height <= 80
+    }
+    private func newContent(with proxy: ScrollViewProxy) {
+        hasNewMessage = true
+        followLatestRow(with: proxy)
+    }
+    private func followLatestRow(with proxy: ScrollViewProxy) {
+        guard followLatest, !userScrolling else { return }
         Task { @MainActor in
             await Task.yield()
-            guard followLatest, !userScrolling, pendingReplyID == id else { return }
+            guard followLatest, !userScrolling, let id = conversationRows.last?.id else { return }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                proxy.scrollTo("reply-" + id.uuidString, anchor: .top)
+                proxy.scrollTo(id, anchor: .bottom)
             }
-            pendingReplyID = nil
+            hasNewMessage = false
         }
     }
     private struct WorkoutDestination: Hashable { let id: UUID }

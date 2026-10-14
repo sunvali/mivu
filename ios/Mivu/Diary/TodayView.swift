@@ -13,7 +13,7 @@ struct DiaryRootView: View {
         nutritionKeys = keys
         let foodSource = FoodEvidenceClient()
         let fixture: (() throws -> CoachViewModel.Inference)? = DiaryLaunch.isCoachInferenceFixture
-            ? { { input, tools in try CoachUITestInference.respond(input, tools) } } : nil
+            ? { { input, tools in try await CoachUITestInference.respond(input, tools) } } : nil
         _model = State(initialValue: diary)
         _connection = State(initialValue: session)
         _coach = State(initialValue: CoachViewModel(diary: diary, connection: session, inference: fixture, lookup: { query in
