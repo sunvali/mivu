@@ -371,3 +371,93 @@ live image inference, interruption/retry and Files-provider actions are still
 unverified. No cloud-sync claim follows from a local save or file-provider write.
 Simulator inference uses synthetic fixtures; those tests establish local
 behavior only. Keep the PR draft and unmerged until device acceptance is complete.
+
+## Offline follow-up after owner-reported failures
+
+The owner reported that the “New message” button appeared while already viewing
+the newest message. The live QA conversation also showed “Are another yougurt”
+and the corrected “I ate another yougurt” each completing with “No new food was
+saved in this turn” and the unchanged 343 kcal daily summary. The exact provider
+tool choices and raw final prose were not captured, so the original cause of
+its choice cannot be asserted. Source inspection did confirm that the engine
+discarded a safe follow-up question when it appeared as final prose.
+
+The owner disconnected the iPhone for this work. No installation, Mirroring,
+or physical acceptance is claimed for this follow-up patch.
+
+The new `ask_clarification` tool chooses one of five fixed kinds: portion, food,
+day, meal or workout. The app owns the question text, persists the reply in the
+existing conversation, and makes no food change. The tool must be called alone
+before current-turn writes. The logging instructions distinguish later intake
+from a named unaccepted review. The native store and committed receipts remain
+the authority for save confirmations.
+
+Independent review rejected an earlier free-text question design: “Saved the
+yogurt. What portion did you eat?” and passive save claims could bypass the
+old prose guard. The typed-kind design rejects arbitrary question fields and
+renders only app-owned questions. On local macOS, the safety regressions first
+returned exit 1 with **1 passed, 4 failed, 0 skipped**; the final focused result
+returned exit 0 with **5 passed, 0 failed, 0 skipped**. Thirteen selected engine
+regressions then passed with **13 passed, 0 failed, 0 skipped** and no diagnostics.
+These runs used the uncommitted patch on parent `398ea63`, before its source
+commit. The evidence records exact file hashes and commands in
+`/private/tmp/mivu-clarification-kind-evidence.json`; argument and result files
+are retained beside it. The GREEN artifact is
+`/private/tmp/mivu-clarification-kind-green.xcresult`, and the regression artifact
+is `/private/tmp/mivu-clarification-kind-regressions.xcresult`.
+
+The regression leaves an earlier 50 g yogurt proposal unaccepted, persists a
+portion question, then saves one new 150 g yogurt after an answer. It interrupts
+and retries the save and verifies the same receipt and record are reused.
+This establishes local orchestration and persistence, not live provider choice.
+
+Scroll migration tests also exposed real failures. An edge-only target left a
+long reply below the composer, despite relaunch positioning passing. Registering
+lazy scroll targets and following the last row's identity corrected that case.
+An intermediate four-case gate then returned **2 passed, 2 failed**: latest/relaunch
+and large text passed, but history browsing moved and its arrival button was
+missing. Native user-position reporting alone did not replace direct touch-phase
+intent checks. These failed runs remain in
+`/private/tmp/mivu-scroll-badge-evidence.json`; they are not passing acceptance.
+The owner's transient badge trigger itself has not been reproduced.
+Restoring direct interacting/decelerating intent checks alongside the native
+user-position flag passed both affected history cases: **2 passed, 0 failed,
+0 skipped**, exit 0, 84.4 seconds. The result bundle is
+`test_sim_2026-10-14T11-56-48-894Z_pid35367_359f8572.xcresult`; exact commands and
+source hashes are in the same private evidence record.
+The latest-message/no-badge/relaunch case then passed **1 passed, 0 failed,
+0 skipped**, exit 0, 32.7 seconds, with result bundle
+`test_sim_2026-10-14T11-58-28-896Z_pid35805_cd658c3c.xcresult`. There are three
+distinct passing UI cases on the final source, across two invocations, with no
+diagnostics. This is not a four-case combined pass or a full UI-target pass.
+The final five code/test files were committed as
+`78498f2b6d336f0c411fa4a53cb92cc694a06df7`. Their exact hashes
+match the focused evidence. Independent cross-review of the engine and UI
+found no remaining source issue for a selected local profile with one serialized
+worker. Pointer input and real provider behavior remain outside this evidence.
+
+The required local pre-push gate on `78498f2b6d336f0c411fa4a53cb92cc694a06df7`
+returned exit **0** on 2026-10-14, local macOS / Xcode 27 / iOS 27 simulator:
+**31 script tests passed** in 24.251 seconds and **422 native unit tests passed,
+0 failed, 1 interactive-browser test skipped** in 52.466 seconds. Exact entry:
+
+```python
+head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+base = subprocess.check_output(
+    ['git', 'rev-parse', 'origin/feature/coach-edit-parity'], text=True).strip()
+ref = 'refs/heads/feature/coach-edit-parity'
+subprocess.run(['python3', 'scripts/ci/git_hooks.py', 'pre-push'],
+               input=f'{ref} {head} {ref} {base}\n', text=True, check=True)
+```
+
+The hook records its exact native invocation and environment in the Git common
+directory's `mivu-checks` evidence. The result is
+`mivu-checks/native-m2cxynoz/result.json`, with `Mivu.xcresult` alongside it.
+Later documentation-only commits reuse this success only when native inputs and
+the environment match. No hosted native job was run for this patch.
+
+Primary-source research and the exact chat interaction contract are documented
+in [chat behavior](../development/coach-chat-behavior.md). The next physical pass
+must test real yogurt intake/clarification, no badge at the bottom, mouse-wheel
+history preservation and jumping, and cold relaunch. The broader device checklist
+remains open and the PR remains draft.

@@ -12,6 +12,7 @@ and record types.
 | --- | --- |
 | Review or correct a saved/proposed meal item | `get_context`, `get_meal`, `edit_item`; `accept_review` accepts a proposal explicitly |
 | Add foods to a meal or log a new meal | `append_food` for new items on a retrieved saved meal; `log_food` for a new meal |
+| Answer a missing-detail question | `ask_clarification` selects an app-owned portion, food, date, meal or workout question; the answer starts a new conversational turn |
 | Review a new meal before counting it; retry paused input | `log_food` with `review_first: true`; `retry_meal` requeues the original capture |
 | Move or remove a meal | `move_meal`, `delete_meal` |
 | Attach or remove meal photos | `attach_photos`, `delete_photo` |
@@ -54,6 +55,13 @@ reading the diary, or saving changes. It exposes an accessible “In progress”
 value; reduced-motion settings use a static symbol. Waiting, retry, connection,
 and clarification states describe the persisted turn state. A successful
 assistant completion follows the store's successful write/receipt result.
+
+A clarification completes the conversational reply without changing food or
+claiming a save. Its question persists in the same conversation context. The
+tool accepts a fixed question kind rather than arbitrary generated text; it must
+be called alone before any writes in that turn. New intake and an earlier
+unaccepted review remain separate. See [chat behavior and primary-source
+research](coach-chat-behavior.md) for the scrolling and clarification contracts.
 
 `open_settings` only returns a link in the app. The user taps it and completes
 the native action. Destinations map to Settings, local profiles, ChatGPT
@@ -109,6 +117,14 @@ Use synthetic food and profile content; do not capture personal data in evidence
   acknowledgement separately from any cloud-sync status.
 - [x] Relaunch the app and confirm the edited meal, conversation, and committed
   receipt-backed result remain available in the same local profile.
+- [ ] On the updated build, say “I ate another yogurt” after leaving an earlier
+  yogurt review unaccepted. Confirm it logs new intake or asks for a portion;
+  answer the question and verify exactly one new meal in the native diary.
+- [ ] On the updated build, confirm no “New message” button appears at the
+  bottom during thinking or reply arrival. Mouse-wheel into history, verify
+  arrival preserves that position, then jump down and confirm following resumes.
+- [ ] Cold-launch the updated build with saved history and confirm the latest
+  message is visible above the composer.
 
 Simulator tests exercise local validation, persistence and fixture-driven tool
 responses. They cannot prove a real account authorization, live ChatGPT tool
@@ -134,9 +150,21 @@ and is installed on the phone. Automatic thinking/reply following was observed,
 along with a historical review proposal edited from 100 g to 50 g without
 acceptance. The physical history-arrival/button check and explicit proposal
 acceptance remain pending. The latest full native suite passed 418
-tests with one skip. The full 15-workflow UI gate has not been rerun on these
-latest inputs. See the verification record for exact synthetic inputs, observed
+tests with one skip at `d1dde42`. The owner subsequently reported a transient
+badge at the bottom and new yogurt intake completing without a food save or
+question. The next local patch uses native bottom positioning and explicit
+clarification tools; it has not been installed on the disconnected phone.
+The full 15-workflow UI gate has not been rerun on the new patch.
+See the verification record for exact synthetic inputs, observed
 native values and artifacts.
+
+The offline follow-up at `78498f2` passed **422 native unit tests, 0 failures,
+1 interactive-browser skip**, plus 31 script checks. Three distinct focused
+scroll cases passed on that final source across two invocations, and 13 focused
+engine regressions passed with matching source hashes. Independent Ponytail
+review found no remaining source finding. The next device pass is still required
+for real provider selection, yogurt logging/clarification, pointer scrolling and
+relaunch; the PR stays draft and unmerged.
 
 For development guidance only, see [SwiftUI Agent Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill)
 and [Tool Design](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering/tree/main/skills/tool-design).
