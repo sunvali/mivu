@@ -8,8 +8,9 @@ Production app source is unchanged from
 
 Local result: **417 unit passes and passing coverage of all 15 simulator
 workflows**. The UI evidence is 13 full-target passes plus two corrected workflow
-reruns, not a fresh single all-target green run. Physical iPhone, live ChatGPT
-and Files-provider acceptance remain unverified. Keep the PR draft and unmerged.
+reruns, not a fresh single all-target green run. Physical acceptance has started:
+live meal logging and correction passed as recorded below. The remaining device
+and Files-provider checks are incomplete. Keep the PR draft and unmerged.
 
 ## Delivered scope
 
@@ -180,10 +181,55 @@ fixes and passed afterward.
 
 Review does not authorize merging before the owner's device gate.
 
+## Physical acceptance in progress
+
+On 2026-10-14, the ordinary Debug build from clean source
+`be694adf922fbefd287e2e2f3413113d8568203a` was signed locally, installed and
+launched on the owner's physical iPhone running iOS 27.0.1. XcodeBuildMCP
+`device build-and-run` returned exit 0 and `SUCCEEDED` in 22.789 seconds, with
+empty launch arguments and no fixture mode. Device and signing identifiers stay
+in private local invocation files. Result:
+`/private/tmp/mivu-device-parity-result.json`.
+
+Live interaction used iPhone Mirroring and the existing ChatGPT sign-in. A new
+isolated local profile, `Coach acceptance Oct 14`, was selected before submitting
+synthetic inputs. No account tokens or personal diary records are included here.
+
+- Text logging: "Log two boiled eggs, two slices of whole-wheat bread, and one
+  tomato for today. This is synthetic test data." The completed response reported
+  318 kcal and uncertainty. The native saved meal agreed: 2026-10-14, 318 kcal,
+  29.9 g carbohydrate, 21.7 g protein and 12.8 g fat.
+- Correction: "Actually I only ate one slice of the bread. Update the existing
+  meal and keep the eggs and tomato unchanged." The completed response reported
+  248 kcal. The same native meal showed bread changed from two slices to one,
+  eggs still two and tomato still one. Totals were 248 kcal, 17.9 g carbohydrate,
+  17.7 g protein and 11.8 g fat; Today displayed the same values.
+- The native thinking indicator was visible during live requests. Mouse-wheel
+  scrolling revealed all corrected food items in the native meal screen.
+
+A combined dated-goal, preference, weight and workout request was submitted and
+its saved input and thinking indicator were visible. After reopening the installed
+app, native screens on the same QA profile established these saved results:
+
+- Today: 2,000 kcal goal; carbohydrate 200 g, protein 100 g and fat 70 g targets;
+  1,752 kcal remaining after the recorded 248 kcal meal. Macro remaining values
+  were 182.1 g carbohydrate, 82.3 g protein and 58.2 g fat.
+- History: the 2026-10-14 tracking day displayed 70 kg.
+- Progress daily report: estimated workout burn was 120 kcal, separate from the
+  recorded 248 kcal food intake. Food remaining stayed 1,752 kcal, consistent
+  with the requested disabled exercise credit.
+
+The full combined reply, native goal-weight editor, preference text, morning
+weight flag and workout type/duration have **not yet been inspected**. Automated
+mouse-wheel scrolling did not move the Settings or Coach viewport during this
+attempt. This is an automation limitation, not evidence that owner scrolling is
+broken. Mirroring then disconnected because the iPhone was in use. Do not resend
+the combined write request: the native records already show committed changes.
+
 ## Remaining acceptance
 
-No physical phone, real ChatGPT account, live provider inference, Files-provider
-action or cloud-sync behavior was tested in this slice. Simulator inference uses
-synthetic fixtures; passing tests establish local behavior only. Every physical
-device item in the linked checklist remains unchecked. Keep the PR draft and
-unmerged until that acceptance is recorded.
+Eligible-model inspection, the remaining manual-edit workflows, relaunch,
+live image inference, interruption/retry and Files-provider actions are still
+unverified. No cloud-sync claim follows from a local save or file-provider write.
+Simulator inference uses synthetic fixtures; those tests establish local
+behavior only. Keep the PR draft and unmerged until device acceptance is complete.

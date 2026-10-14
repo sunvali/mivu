@@ -67,15 +67,15 @@ completion.
 **Merge is blocked until the owner tests this branch on a real iPhone with a real
 ChatGPT subscription. Do not enable automatic merging.**
 
-All items below remain unchecked until an owner performs and records the test
-on a physical iPhone using a real ChatGPT account with an eligible subscription.
+Each item below requires recorded physical-iPhone evidence using the owner's
+real ChatGPT account. Partial checks do not establish the remaining workflows.
 Use synthetic food and profile content; do not capture personal data in evidence.
 
-- [ ] Install and launch the current branch build on the target iPhone; confirm
+- [x] Install and launch the current branch build on the target iPhone; confirm
   the expected local profile is selected.
 - [ ] Complete real ChatGPT account authorization in Settings and confirm the
   eligible model is available in the app.
-- [ ] Ask Coach to change one field on an existing saved meal item. Confirm the
+- [x] Ask Coach to change one field on an existing saved meal item. Confirm the
   reply reflects the committed value, then open the same meal in the manual UI
   and confirm unrelated fields and meal items remain unchanged.
 - [ ] Ask Coach to clear one nutrient total and change another nutrient. Confirm
@@ -126,7 +126,9 @@ keyboard-assertion correction in `72822ba`. The production app source is identic
 between those two commits. This is not a claim of a new single all-target green
 run after the harness correction. Exact commands, artifacts, review and remaining
 gates are in the [verification record](../verification/2026-10-14-coach-edit-parity.md).
-Every physical-device item above remains unchecked.
+Physical installation and one original-meal correction are verified at
+`be694ad`; the other device items remain pending. See the verification record
+for exact synthetic inputs and observed native values.
 
 For development guidance only, see [SwiftUI Agent Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill)
 and [Tool Design](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering/tree/main/skills/tool-design).
