@@ -252,6 +252,30 @@ import XCTest
         XCTAssertFalse(app.buttons["coachNewMessage"].exists)
     }
 
+    func testLatestActivityAndReplyNeverAdvertiseAnUnreadMessage() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-largest-text"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        enter("Synthetic delayed weekly report", in: app); app.buttons["coachSend"].tap()
+        XCTAssertTrue(app.otherElements["coachActivity"].waitForExistence(timeout: 5))
+        let unread = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: app.buttons["coachNewMessage"])
+        unread.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [unread], timeout: 10), .completed, "Capture, thinking, tools and completed reply at latest must not advertise unread content")
+        let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        XCTAssertTrue(reply.exists)
+        XCTAssertLessThanOrEqual(reply.frame.maxY, app.textFields["coachInput"].frame.minY)
+        XCTAssertFalse(app.buttons["coachNewMessage"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertTrue(reply.waitForExistence(timeout: 10))
+        let restoredLatest = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            reply.frame.maxY <= app.textFields["coachInput"].frame.minY
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredLatest], timeout: 5), .completed, "A reopened chat must restore the latest completed message")
+        XCTAssertFalse(app.buttons["coachNewMessage"].exists)
+    }
+
     private func revealCoachLink(_ link: XCUIElement, in app: XCUIApplication) {
         // Hittable can include a partially clipped link whose center is under the composer.
         for _ in 0..<8 {

@@ -28,7 +28,21 @@ enum CoachWrite: Sendable {
     }
 }
 
+enum CoachClarification: String, CaseIterable, Sendable {
+    case portion, food, day, meal, workout
+    var question: String {
+        switch self {
+        case .portion: "How much did you eat? Give grams, a serving size, or a container size."
+        case .food: "What food did you eat?"
+        case .day: "Which day should this be recorded on?"
+        case .meal: "Which meal do you mean?"
+        case .workout: "Which workout do you mean?"
+        }
+    }
+}
+
 enum CoachCommand: Sendable {
+    case clarification(CoachClarification)
     case goals(String)
     case preferences
     case context
@@ -63,6 +77,7 @@ enum CoachTools {
         let exercise = object(["name": string, "sets": ["type": "array", "items": object(["repetitions": integer, "load_kg": number], required: ["repetitions", "load_kg"])]], required: ["name", "sets"])
         let workout: [String: Any] = ["kind": ["type": "string", "enum": ["strength", "cardio", "other"]], "duration_minutes": integer, "exercises": ["type": "array", "items": exercise], "estimated_burn_kcal": number, "burn_source": ["type": ["string", "null"], "enum": ["userEstimate", "modelEstimate", NSNull()]], "performed_at": unconfirmedTime]
         let schemas: [(String, String, [String: Any])] = [
+            ("ask_clarification", "Ask for the missing detail before logging when context is insufficient. Choose portion for amount/serving size, food for food identity, day for the recording date, meal or workout for an ambiguous existing record. Use this tool alone, before any writes in this turn. The app displays its own question; the user answers in a new turn.", object(["kind": ["type": "string", "enum": CoachClarification.allCases.map(\.rawValue)]], required: ["kind"])),
             ("get_progress", "Read actual progress for an inclusive 1, 7 or 30 calendar-day window. Real record IDs/revisions and omitted counts support historical corrections. Food remaining and estimated burn are separate; adherence means Within 10% of target.", object(["ending_on": string, "days": ["type": "integer", "enum": [1, 7, 30]]], required: ["ending_on", "days"])),
             ("get_workout", "Read a complete owned workout before replacement/edit. Oversized records are refused; never replace unseen sets.", object(["workout_id": string], required: ["workout_id"])),
             ("log_weight", "Log one weight per date. Corrections require expected_revision; historical correction after travel must use retrieved weight_id, preserving day and measured time. Model measured_at cannot confirm exact time. Current morning weight explicitly starts that waking day.", object(["local_date": string, "value": ["type": "number"], "unit": ["type": "string", "enum": ["kg", "lb"]], "weight_id": string, "expected_revision": integer, "measured_at": unconfirmedTime], required: ["local_date", "value", "unit"])),
@@ -125,6 +140,10 @@ enum CoachTools {
             return WorkoutDraft(kind: kind, durationMinutes: try integer("duration_minutes", 1...1440), exercises: exercises, estimatedBurnKcal: burn, burnSource: source)
         }
         switch call.name {
+        case "ask_clarification":
+            try keys(["kind"], ["kind"])
+            guard let kind = CoachClarification(rawValue: try string("kind")) else { throw CoachError.invalidArguments }
+            return .clarification(kind)
         case "get_progress":
             try keys(["ending_on", "days"], ["ending_on", "days"])
             let days = try integer("days", 1...30); guard [1, 7, 30].contains(days) else { throw CoachError.invalidArguments }
@@ -186,6 +205,7 @@ enum CoachTools {
         default: return try parseManual(call, args: args, meals: meals, evidence: evidence, receipts: receipts)
         }
     }
+
     static func foodItems(_ raw: Any?, evidence: [Int: FoodEvidenceRecord]) throws -> [FoodItem] {
             guard let rows = raw as? [[String: Any]], !rows.isEmpty, rows.count <= 200 else { throw CoachError.invalidArguments }
             return try rows.map { row -> FoodItem in

@@ -36,6 +36,12 @@ private actor CoachInputFixture {
     @Test func toolSchemasRequireDeclaredPropertiesAndKeepOriginalOptionalsNullable() throws {
         let declarations = try #require(JSONSerialization.jsonObject(with: CoachTools.declarations()) as? [String: Any])
         let tools = try #require(declarations["tools"] as? [[String: Any]])
+        #expect(tools.count <= 32)
+        #expect(tools.contains { $0["name"] as? String == "ask_clarification" })
+        let clarification = try #require(tools.first { $0["name"] as? String == "ask_clarification" })
+        let clarificationParameters = try #require(clarification["parameters"] as? [String: Any])
+        let clarificationProperties = try #require(clarificationParameters["properties"] as? [String: [String: Any]])
+        #expect(clarificationProperties["kind"]?["enum"] as? [String] == ["portion", "food", "day", "meal", "workout"])
         func checkObject(_ schema: [String: Any]) throws {
             if schema["type"] as? String == "object" {
                 let properties = try #require(schema["properties"] as? [String: [String: Any]])
@@ -167,6 +173,87 @@ private actor CoachInputFixture {
         await #expect(throws: CoachError.ungroundedConfirmation) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
         let stored = try await store.coachTurn(turnID: turn.id, expectedProfileID: profile.id)
         #expect(stored.state == .needsClarification); #expect(stored.assistantText == nil)
+    }
+
+    @Test func explicitFoodClarificationPersistsAndFollowupLeavesEarlierReviewUnaccepted() async throws {
+        let (store, profile, previous, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let reviewArgs = "{\"target_local_date\":\"2027-01-14\",\"review_first\":true,\"items\":[{\"name\":\"Synthetic yogurt\",\"quantity\":50,\"unit\":\"g\",\"kcal\":30}]}"
+        let reviewReplies = CoachFixture([result([call("log_food", reviewArgs)]), result(text: "Review ready")])
+        _ = try await CoachEngine(store: store, infer: { try await reviewReplies.infer($0, $1) }).run(turnID: previous.id, expectedProfileID: profile.id)
+        let refusal = try await store.captureCoachTurn(text: "Do not accept that yogurt review", photos: [], at: now, expectedProfileID: profile.id)
+        try await store.completeCoachTurn(turnID: refusal.id, assistantText: "The earlier yogurt remains in review.", expectedProfileID: profile.id)
+        let turn = try await store.captureCoachTurn(text: "I ate another yogurt", photos: [], at: now, expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        let question = "How much did you eat? Give grams, a serving size, or a container size."
+        let clarification = CoachFixture([result([call("ask_clarification", "{\"kind\":\"portion\"}")], text: "I logged 9999 calories")])
+        let finished = try await CoachEngine(store: store, infer: { try await clarification.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let persisted = try await DiaryStore(directory: root).selectProfile(profile.id)
+        #expect(finished.state == .completed && finished.receipts.isEmpty)
+        #expect(finished.assistantText == question)
+        #expect(persisted.coachTurns.first { $0.id == turn.id }?.assistantText == question)
+        #expect(persisted.meals == before.meals && persisted.days == before.days)
+        #expect(persisted.goals == before.goals && persisted.weights == before.weights && persisted.workouts == before.workouts)
+        #expect(persisted.profile == before.profile)
+        let followup = try await store.captureCoachTurn(text: "One 150 g container today", photos: [], at: now, expectedProfileID: profile.id)
+        #expect(try await store.coachContext(turnID: followup.id, expectedProfileID: profile.id).recentTurns.contains { $0.id == turn.id && $0.assistantText == question })
+        let foodArgs = "{\"target_local_date\":\"2027-01-15\",\"items\":[{\"name\":\"Synthetic yogurt\",\"quantity\":150,\"unit\":\"g\",\"kcal\":90}]}"
+        let interrupted = CoachFixture([result([call("log_food", foodArgs)])])
+        await #expect(throws: CoachError.limitExceeded) {
+            try await CoachEngine(store: store, infer: { try await interrupted.infer($0, $1) }).run(turnID: followup.id, expectedProfileID: profile.id)
+        }
+        let committed = try await store.snapshot()
+        let retry = CoachFixture([result([call("log_food", foodArgs, id: "retry")]), result(text: "Saved")])
+        let saved = try await CoachEngine(store: store, infer: { try await retry.infer($0, $1) }).run(turnID: followup.id, expectedProfileID: profile.id)
+        let after = try await store.snapshot()
+        #expect(after.meals == committed.meals && after.meals.count == before.meals.count + 1)
+        #expect(after.meals.first { $0.id == before.meals[0].id } == before.meals[0])
+        #expect(before.meals[0].state == .awaitingReview)
+        let newMeal = try #require(after.meals.first { $0.id != before.meals[0].id })
+        #expect(newMeal.isSaved && newMeal.items[0].quantity == 150)
+        #expect(newMeal.items[0].uncertain && newMeal.items[0].provenance == .estimate)
+        #expect(saved.receipts.count == 1 && saved.receipts[0].mealID == newMeal.id)
+    }
+
+    @Test(arguments: [false, true]) func clarificationCannotMixWithOrFollowCurrentTurnWrites(earlierWrite: Bool) async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        if earlierWrite { _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic eggs", nutrition: NutritionValues(kcal: 140))], expectedProfileID: profile.id) }
+        let before = try await store.snapshot()
+        let question = call("ask_clarification", "{\"kind\":\"portion\"}", id: "question")
+        let replies = CoachFixture([result(earlierWrite ? [question] : [call("log_food", logArgs), question])])
+        await #expect(throws: CoachError.invalidArguments) {
+            try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        }
+        let after = try await store.snapshot()
+        #expect(after.meals == before.meals)
+        #expect(after.coachTurns[0].receipts == before.coachTurns[0].receipts)
+    }
+
+    @Test(arguments: [
+        #"{"question":"Saved the yogurt. What portion did you eat?"}"#,
+        #"{"question":"The yogurt was logged. How much?"}"#,
+        #"{"kind":"portion","question":"Saved 9999 calories."}"#,
+        #"{"kind":"unknown"}"#, #"{"kind":""}"#, #"{"kind":null}"#, #"{}"#
+    ]) func clarificationRejectsRawQuestionsAndInvalidKinds(_ arguments: String) throws {
+        #expect(throws: CoachError.invalidArguments) {
+            try CoachTools.parse(call("ask_clarification", arguments), meals: [], evidence: [:], receipts: [])
+        }
+    }
+
+    @Test func clarificationKindsRenderOnlyNativeQuestions() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let before = try await store.snapshot()
+        for (kind, question) in [
+            ("portion", "How much did you eat? Give grams, a serving size, or a container size."),
+            ("food", "What food did you eat?"), ("day", "Which day should this be recorded on?"),
+            ("meal", "Which meal do you mean?"), ("workout", "Which workout do you mean?")
+        ] {
+            let turn = try await store.captureCoachTurn(text: "Synthetic missing detail", photos: [], at: now, expectedProfileID: profile.id)
+            let replies = CoachFixture([result([call("ask_clarification", "{\"kind\":\"\(kind)\"}")], text: "Saved 9999 calories")])
+            let finished = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+            #expect(finished.state == .completed && finished.receipts.isEmpty)
+            #expect(finished.assistantText == question)
+        }
+        #expect(try await store.snapshot().meals == before.meals)
     }
     @Test(arguments: [false, true]) func profileSwitchAwayAndBackFencesSuspendedResult(progress: Bool) async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
