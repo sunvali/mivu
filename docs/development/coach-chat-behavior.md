@@ -81,8 +81,8 @@ preserves the approved manual-edit catalog; it does not add speculative intent
 routing or a tool-search subsystem. Validate natural intake and corrections with
 the owner's real account before changing that boundary.
 
-The owner has disconnected the iPhone. Finish targeted native tests, full local
-unit push checks and Ponytail review first. The next device pass must cover:
+The offline checks completed, and the owner reconnected the iPhone for a focused
+live pass. Remaining device acceptance must cover:
 
 1. One new yogurt statement after an unaccepted review: one new record or a
    visible question, then exactly one record after its answer.
@@ -93,5 +93,7 @@ unit push checks and Ponytail review first. The next device pass must cover:
 
 Exact sources, counts, artifacts and the broader device checklist belong in
 [the verification record](../verification/2026-10-14-coach-edit-parity.md) and
-[Coach edit parity](coach-edit-parity.md). Keep PR #12 draft and unmerged until
-real-device and real-provider acceptance is recorded.
+[Coach edit parity](coach-edit-parity.md). On 2026-10-14 the owner approved merging
+with the remaining fixes and device checks tracked in
+[#13](https://github.com/yakov103/mivu/issues/13). Integration does not establish
+those unchecked workflows as passed.

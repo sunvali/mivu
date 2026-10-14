@@ -72,8 +72,10 @@ completion.
 
 ## Device acceptance checklist
 
-**Merge is blocked until the owner tests this branch on a real iPhone with a real
-ChatGPT subscription. Do not enable automatic merging.**
+**On 2026-10-14 the owner explicitly approved merging this PR with the remaining
+fixes and device checks open. Follow-up [#13](https://github.com/yakov103/mivu/issues/13)
+tracks them. This supersedes the earlier merge gate; unchecked items remain
+unverified.**
 
 Each item below requires recorded physical-iPhone evidence using the owner's
 real ChatGPT account. Partial checks do not establish the remaining workflows.
@@ -164,7 +166,8 @@ scroll cases passed on that final source across two invocations, and 13 focused
 engine regressions passed with matching source hashes. Independent Ponytail
 review found no remaining source finding. The next device pass is still required
 for real provider selection, yogurt logging/clarification, pointer scrolling and
-relaunch; the PR stays draft and unmerged.
+relaunch. The owner subsequently approved integration with those remaining
+checks tracked in #13; see the latest physical follow-up in the verification record.
 
 For development guidance only, see [SwiftUI Agent Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill)
 and [Tool Design](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering/tree/main/skills/tool-design).

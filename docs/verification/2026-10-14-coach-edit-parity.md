@@ -460,4 +460,45 @@ Primary-source research and the exact chat interaction contract are documented
 in [chat behavior](../development/coach-chat-behavior.md). The next physical pass
 must test real yogurt intake/clarification, no badge at the bottom, mouse-wheel
 history preservation and jumping, and cold relaunch. The broader device checklist
-remains open and the PR remains draft.
+remained open at the end of offline verification and the PR was kept draft.
+
+## Live follow-up and owner-approved integration
+
+On 2026-10-14 the ordinary native source `78498f2` was built from documentation
+head `ee42abf3b2c5d516c754486d1bc22482d4a04410`. Compilation succeeded, but the
+combined build/install/launch command returned exit 1 because iOS denied launch
+on a locked phone. After Mirroring connected, explicit XcodeBuildMCP `device
+install` and `device launch` each returned exit 0 and `SUCCEEDED`, with no fixture
+or diagnostic launch arguments. Private invocation/result files are
+`/private/tmp/mivu-device-chat-fixes-result.json`,
+`/private/tmp/mivu-device-chat-fixes-install.json`, and
+`/private/tmp/mivu-device-chat-fixes-launch.json`. Device and signing identifiers
+remain private. Settings confirmed the selected synthetic profile was
+`Coach acceptance Oct 14`.
+
+The real request “I ate another yogurt.” completed with the app-owned portion
+question. Thinking and the completed question were followed above the composer,
+with no “New message” button at the bottom. The answer “One 150 g container of
+plain yogurt today.” produced a saved native record dated 2026-10-14: plain
+yogurt, 150 g, estimated nutrition, 92 kcal, 7.0 g carbohydrate, 5.2 g protein and
+4.9 g fat. Analysis initially paused after that save. Retrying the same turn
+completed with “I logged Plain yogurt (estimated whole-milk). 92 kcal. Nutrition
+may be uncertain.” This establishes a saved record and a completed retry;
+complete diary-wide duplicate counting and post-retry relaunch remain unverified.
+The original failure category was not captured and is not inferred from the UI.
+
+The owner's later “I ate one more yogurt” again asked for a portion. Source
+inspection shows the bounded context already carries committed quantities and
+units, but the instructions lack a clear repeat-food portion reuse rule. Why the
+live model asked again is unverified. Context meal packing admits older records
+first and can omit newer records when the 24 KB meal budget is full. No live
+context byte counts or omitted identifiers were captured. These are follow-up
+work, not fixes claimed by this PR.
+
+Mirroring disconnected during the pointer/history check because the phone was in
+use. Complete history-arrival, jump/resume, and the broader physical checklist
+remain unverified. On 2026-10-14 the owner explicitly requested an issue for what
+remains and approved merging now. [Follow-up #13](https://github.com/yakov103/mivu/issues/13)
+records the open fixes and acceptance criteria. That authorization supersedes
+the earlier draft/merge gate; integration does not mark unchecked items as passed.
+Final native inputs are unchanged from the reviewed 422-pass source.
