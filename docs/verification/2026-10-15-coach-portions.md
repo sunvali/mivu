@@ -106,10 +106,38 @@ owner, correction/deletion, provenance and retry paths for one local profile wit
 a serialized worker. No blocking source finding remained. The developer message
 stays below its 65,536-byte bound with a maximum-size diary projection.
 
-Real-provider acceptance is still required: save one 150 g yogurt, say “another
-yogurt,” verify a separate uncertain 150 g record and visible quantity without
-another portion question; test explicit portion overrides and ambiguous references;
-then submit the owner's vodka–Red Bull photo and description and inspect estimated
-amounts, assumptions and native totals. The original photo was not available in
-this session. Do not fabricate photo recognition from the synthetic transport
-fixture, duplicate the owner's earlier yogurt entries, or close all of #13.
+Live observations below establish repeat portion selection for yogurt and banana.
+Explicit overrides, ambiguous references, restart persistence and the owner's
+cocktail photo still require device acceptance. The owner explicitly requested
+merging this slice after the observed live results on 2026-10-15; those remaining
+checks and the post-save pause investigation stay open in #13.
+
+## Physical-device acceptance in progress
+
+On 2026-10-15, the build from HEAD
+`6ee2465f49a54c52195d99aae137113431ecf751` (native inputs unchanged from
+`87c53de0867a2772cd63e535e865eb357ce1be3b`) compiled locally. The initial
+combined install failed with a transient device connection reset; a separate
+install retry and ordinary launch both succeeded. Tests use the existing owner
+ChatGPT sign-in on iOS 27.0.1 and a new isolated synthetic profile,
+`Portion acceptance Oct 15`; the existing diaries were preserved.
+
+- Baseline request: “Log 150 g plain yogurt and 120 g banana for today.”
+  Completed successfully. The native saved meal screen showed yogurt 150 g and
+  banana 120 g on 2026-10-15: 199 kcal, 34.4 g carbs, 6.6 g protein, 5.3 g fat.
+- Repeat-yogurt request: the native input displayed “E ate another yogurt.”
+  (a typing artifact). Coach completed without asking for a portion. Its linked
+  native saved meal showed a separate 150 g whole-milk plain yogurt estimate:
+  92 kcal, 7.0 g carbs, 5.3 g protein, 4.9 g fat; uncertainty remained visible.
+- “I ate another banana.” initially remained an unsent draft after Mirroring
+  disconnected. After control recovered, it was submitted once. Coach completed
+  without a portion question and displayed its app-owned persisted-record receipt:
+  Banana (estimated), 120 g, 107 kcal, nutrition may be uncertain. Mirroring
+  failed again before the linked native detail screen could be opened, so that
+  additional screen inspection is not claimed.
+- Explicit 75 g override, relaunch persistence, ambiguous references, and the
+  owner cocktail photo remain unverified on this build.
+
+These observations establish the baseline and two repeated-food results, not
+completion of the full device checklist or all of issue #13. Private structured
+observations are retained in `/private/tmp/mivu-portion-evidence.json`.
