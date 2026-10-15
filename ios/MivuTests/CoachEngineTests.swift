@@ -214,6 +214,69 @@ private actor CoachInputFixture {
         #expect(saved.receipts.count == 1 && saved.receipts[0].mealID == newMeal.id)
     }
 
+    @Test func committedHistoricalPortionReachesInferenceAndRepeatRetryPreservesReview() async throws {
+        let (store, profile, original, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await store.applyCoachFood(turnID: original.id, targetLocalDate: "2027-01-10",
+            items: [FoodItem(name: "Synthetic yogurt", quantity: 150, unit: "g", nutrition: NutritionValues(kcal: 90), provenance: .estimate)], expectedProfileID: profile.id)
+        try await store.completeCoachTurn(turnID: original.id, assistantText: "Recorded synthetic yogurt", expectedProfileID: profile.id)
+        let proposal = try await store.captureCoachTurn(text: "Review a synthetic yogurt", photos: [], at: now, expectedProfileID: profile.id)
+        _ = try await store.applyCoachFood(turnID: proposal.id, targetLocalDate: "2027-01-14",
+            items: [FoodItem(name: "Synthetic yogurt", quantity: 50, unit: "g", nutrition: NutritionValues(kcal: 30), provenance: .estimate)], reviewFirst: true, expectedProfileID: profile.id)
+        try await store.completeCoachTurn(turnID: proposal.id, assistantText: "Review remains unaccepted", expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        let turn = try await store.captureCoachTurn(text: "I ate another synthetic yogurt", photos: [], at: now, expectedProfileID: profile.id)
+        let captured = CoachInputFixture()
+        _ = try await CoachEngine(store: store, infer: { try await captured.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let developer = try #require(await captured.input.compactMap { item -> String? in
+            if case .message(role: .developer, text: let text, images: _) = item { return text }; return nil
+        }.first)
+        let contextJSON = try #require(developer.components(separatedBy: "Context: ").last)
+        let context = try JSONDecoder().decode(CoachContext.self, from: Data(contextJSON.utf8))
+        #expect(context.meals.contains { $0.state == .saved && $0.items.contains { $0.name == "Synthetic yogurt" && $0.quantity == 150 && $0.unit == "g" } })
+        // Fixture tool selection checks persistence only; live inference must separately choose the historical portion.
+        let intake = try await store.captureCoachTurn(text: "One more synthetic yogurt", photos: [], at: now, expectedProfileID: profile.id)
+        let args = #"{"target_local_date":"2027-01-15","items":[{"name":"Synthetic yogurt","quantity":150,"unit":"g","kcal":90}]}"#
+        let interrupted = CoachFixture([result([call("log_food", args)])])
+        await #expect(throws: CoachError.limitExceeded) {
+            try await CoachEngine(store: store, infer: { try await interrupted.infer($0, $1) }).run(turnID: intake.id, expectedProfileID: profile.id)
+        }
+        let committed = try await store.snapshot()
+        let retry = CoachFixture([result([call("log_food", args, id: "retry")]), result(text: "Done")])
+        let finished = try await CoachEngine(store: store, infer: { try await retry.infer($0, $1) }).run(turnID: intake.id, expectedProfileID: profile.id)
+        let persisted = try await DiaryStore(directory: root).selectProfile(profile.id)
+        #expect(persisted.meals == committed.meals && persisted.meals.count == before.meals.count + 1)
+        #expect(before.meals.allSatisfy { old in persisted.meals.contains(old) })
+        let added = try #require(persisted.meals.first { meal in !before.meals.contains { $0.id == meal.id } })
+        #expect(added.isSaved && added.items[0].quantity == 150 && added.items[0].unit == "g")
+        #expect(added.items[0].uncertain && added.items[0].provenance == .estimate)
+        #expect(finished.receipts.count == 1 && finished.receipts[0].mealID == added.id)
+    }
+
+    @Test func photoAndDescriptionShareCaptureAndCocktailComponentsStayUncertain() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let photo = MealPhoto(data: Data([255, 216, 255, 0]))
+        let text = "Synthetic gin and tonic; estimate this visible glass. Mixer ratio is unknown."
+        let turn = try await store.captureCoachTurn(text: text, photos: [photo], at: now, expectedProfileID: profile.id)
+        let captured = CoachInputFixture()
+        let args = #"{"target_local_date":"2027-01-15","items":[{"name":"Synthetic gin, typical cocktail estimate","quantity":1,"unit":"estimated serving","kcal":100},{"name":"Synthetic tonic, typical cocktail estimate","quantity":1,"unit":"estimated mixer serving","kcal":80}]}"#
+        let replies = CoachFixture([result([call("log_food", args)]), result(text: "Verified ratio and 9999 calories")])
+        let finished = try await CoachEngine(store: store, infer: { inputs, tools in
+            _ = try await captured.infer(inputs, tools)
+            return try await replies.infer(inputs, tools)
+        }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(await captured.input.contains { item in
+            if case .message(role: .user, text: let sentText, images: let images) = item { return sentText == text && images == [photo.data] }; return false
+        })
+        let persisted = try await DiaryStore(directory: root).selectProfile(profile.id)
+        let meal = try #require(persisted.meals.first)
+        #expect(meal.items.count == 2 && meal.isSaved)
+        #expect(meal.items.allSatisfy { $0.uncertain && $0.provenance == .estimate })
+        #expect(meal.totals.kcal == 180 && finished.receipts.count == 1)
+        #expect(finished.assistantText?.contains("Verified ratio") == false)
+        #expect(finished.assistantText?.contains("9999") == false)
+        #expect(try await store.coachPhotos(turnID: turn.id, expectedProfileID: profile.id) == [photo])
+    }
+
     @Test(arguments: [false, true]) func clarificationCannotMixWithOrFollowCurrentTurnWrites(earlierWrite: Bool) async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         if earlierWrite { _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic eggs", nutrition: NutritionValues(kcal: 140))], expectedProfileID: profile.id) }

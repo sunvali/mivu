@@ -198,6 +198,50 @@ import Testing
         #expect(try await DiaryStore(directory: root).selectProfile(profile.id).meals.first?.eatenAt == now)
     }
 
+    @Test func boundedContextKeepsNewestSavedPortionAndOmissionReferencesWithoutMutation() async throws {
+        let (initial, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        var source = try await initial.snapshot(); let day = source.days[0]
+        source.meals = (0..<39).map { index in
+            let item = FoodItem(name: "Synthetic older food", quantity: 100, unit: "g", nutrition: NutritionValues(kcal: 100),
+                provenance: .estimate, reference: String(repeating: "x", count: 1800))
+            return DiaryMeal(dayID: day.id, capturedAt: now.addingTimeInterval(Double(index - 40)),
+                eatenAt: day.startAt, revision: 1, timePrecision: .dateOnly, items: [item])
+        }
+        let yogurt = FoodItem(name: "Synthetic plain yogurt", quantity: 150, unit: "g", nutrition: NutritionValues(kcal: 90), provenance: .estimate, reference: String(repeating: "x", count: 1800))
+        let newest = DiaryMeal(dayID: day.id, capturedAt: now, eatenAt: day.startAt, revision: 1, timePrecision: .dateOnly, items: [yogurt])
+        source.meals.append(newest)
+        let store = DiaryStore(directory: root.appendingPathComponent("bounded-portions")); _ = try await store.importProfile(source)
+        let turn = try await store.captureCoachTurn(text: "I ate another yogurt", photos: [], at: now, expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        let context = try await store.coachContext(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(context.meals.first { $0.id == newest.id }?.items == [yogurt])
+        #expect(!context.omittedMeals.isEmpty)
+        #expect(context.meals.count + context.omittedMeals.count == 40)
+        #expect(Set(context.meals.map(\.id)).isDisjoint(with: context.omittedMeals.map(\.id)))
+        #expect(context.omittedMeals.allSatisfy { reference in source.meals.contains { $0.id == reference.id && $0.dayID == reference.dayID && $0.revision == reference.revision && $0.items.count == reference.itemCount } })
+        #expect(context.meals.map(\.id) == source.meals.filter { meal in context.meals.contains { $0.id == meal.id } }.map(\.id))
+        #expect(try JSONEncoder().encode(context.meals).count <= 24_000)
+        #expect(try JSONEncoder().encode(context).count <= 60_000)
+        #expect(context.truncated)
+        #expect(try await store.snapshot() == before)
+    }
+
+    @Test func committedFoodSummaryIncludesSavedQuantitiesAndUnitsAfterCorrectionAndRelaunch() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await store.captureCoachTurn(text: "Synthetic yogurt and bread", photos: [], at: now, expectedProfileID: profile.id)
+        let yogurt = FoodItem(name: "Synthetic yogurt", quantity: 150, unit: "g", nutrition: NutritionValues(kcal: 90), provenance: .estimate)
+        let bread = food("Synthetic bread", 1.5, 120)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [yogurt, bread], expectedProfileID: profile.id)
+        let summary = try await store.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(summary.contains("150 g")); #expect(summary.contains("1.5 portion"))
+        var corrected = yogurt; corrected.quantity = 75
+        try await store.editItem(mealID: receipt.mealID!, item: corrected)
+        let restored = DiaryStore(directory: root); _ = try await restored.selectProfile(profile.id)
+        let updated = try await restored.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(updated.contains("75 g")); #expect(!updated.contains("150 g"))
+        #expect(updated.contains("1.5 portion"))
+    }
+
     @Test func validLargeUnicodeHistoryProjectsWithinTransportWithoutChangingDiary() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         var updatedProfile = profile; updatedProfile.preferences = String(repeating: "😀", count: 10_000)

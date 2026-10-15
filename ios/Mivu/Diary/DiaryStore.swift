@@ -689,13 +689,15 @@ actor DiaryStore {
         context.truncated = profile != snapshot.profile || recent.count != snapshot.coachTurns.filter { $0.id != turnID }.count ||
             recent.contains { projected in snapshot.coachTurns.contains { $0.id == projected.id && ($0.text != projected.text || $0.assistantText != projected.assistantText) } }
         context.additionalMealCount = max(0, eligibleMeals.count - 40)
-        for meal in eligibleMeals.suffix(40) {
+        for meal in eligibleMeals.suffix(40).reversed() {
             let projection = CoachContext.Meal(id: meal.id, dayID: meal.dayID, revision: meal.revision,
                 eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: meal.items, state: meal.state)
             let candidate = context.meals + [projection]
             if try JSONEncoder().encode(candidate).count <= 24_000 { context.meals.append(projection) }
             else { context.omittedMeals.append(CoachContext.MealReference(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count)) }
         }
+        context.meals.reverse()
+        context.omittedMeals.reverse()
         while try JSONEncoder().encode(context).count > 60_000, let meal = context.meals.first {
             context.meals.removeFirst()
             context.omittedMeals.append(CoachContext.MealReference(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count))
@@ -1026,7 +1028,7 @@ actor DiaryStore {
                     continue
                 }
                 if meal.state == .awaitingReview { facts.append("Estimate ready for review."); continue }
-                let names = meal.items.map(\.name).joined(separator: ", ")
+                let names = meal.items.map { "\($0.name) (\(coachNumber($0.quantity)) \($0.unit))" }.joined(separator: ", ")
                 let calories = meal.totals.kcal.map { " \(Int($0.rounded())) kcal." } ?? " Calories are incomplete."
                 facts.append("\(receipt.itemID == nil ? "Logged" : "Updated") \(names)." + calories + " Nutrition may be uncertain.")
             } else if let day = snapshot.days.first(where: { $0.id == receipt.dayID }) {
