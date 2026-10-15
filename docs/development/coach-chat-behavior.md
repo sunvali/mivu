@@ -53,8 +53,30 @@ stateDiagram-v2
 
 A new consumption statement refers to new intake. An earlier request to keep a
 named review unaccepted stays scoped to that review. When enough context is
-available, Coach can log an explicitly uncertain estimate. If the portion, food,
-day, meal reference or workout detail is missing, it asks a specific question.
+available, Coach can log an explicitly uncertain estimate. Unknown exact grams
+or milliliters alone should not block logging. Ask when the food, serving, day,
+meal reference or workout is genuinely ambiguous.
+
+For a clear “another,” “one more,” or “same again,” reuse the most recent matching
+committed food quantity and unit as an uncertain estimate. An unaccepted review
+is never a consumed-food default. Explicit current amounts or labels, or visible
+evidence of a different food/serving, override history. A new photo of the same
+food without a measurable amount does not by itself discard a clear saved portion.
+
+Interpret the current photos and description together. Estimate a visible
+serving first, then a labelled typical serving or mixture when identified but
+unmeasurable. A cocktail photo does not verify hidden alcohol or mixer quantities.
+Saved-food confirmations include the actual recorded quantities and units so
+the user can see and correct assumptions.
+
+The context projection keeps the same bounds: 14 stored tracking days, at most
+40 eligible meals within 24 KB, 12 recent turns within 8 KB, and 60 KB overall.
+When meals compete for space, recent entries get priority; retained entries are
+still presented in their original order. Omitted record references remain available
+for retrieval through existing tools. This adds no separate memory store or model
+request, and does not replay previous photos. These are byte limits on the diary
+projection, not a claim that the entire multimodal request uses 60 KB or a fixed
+number of tokens.
 
 `ask_clarification` accepts an allowed `kind`, not free-form question prose.
 Its app-owned response is persisted as a completed conversational reply through
