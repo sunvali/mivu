@@ -99,6 +99,11 @@ struct CompanionOutput: Equatable {
         let playback: MotionPolicy.Playback = profileID == nil || context.surface == nil
             ? .hidden : context.playback
 
+        if context.needsRecovery || context.isTyping {
+            clearReactions()
+            greetingAvailable = false
+        }
+
         guard playback != .hidden else {
             active = nil
             blinkDeadline = nil
@@ -118,8 +123,6 @@ struct CompanionOutput: Equatable {
         }
 
         if context.needsRecovery || context.isTyping {
-            clearReactions()
-            greetingAvailable = false
             return output(pose: semanticPose, playback: playback)
         }
 

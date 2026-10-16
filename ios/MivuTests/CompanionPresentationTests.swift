@@ -301,4 +301,34 @@ import Testing
         #expect(output.nextDeadline == late.addingTimeInterval(12))
     }
 
+    @Test(arguments: [CompanionEvent.Kind.saved, .reviewed])
+    func hiddenTypingPermanentlyCancelsPendingSuccess(kind: CompanionEvent.Kind) {
+        let presentation = attached()
+        presentation.receive(event(kind: kind), now: t)
+        let hidden = presentation.resolve(context: context(typing: true, playback: .hidden),
+            now: t.addingTimeInterval(0.1))
+        #expect(hidden.playback == .hidden)
+        #expect(hidden.pose == .attentive)
+        #expect(hidden.reactionID == nil)
+        #expect(hidden.nextDeadline == nil)
+        let visible = presentation.resolve(context: context(), now: t.addingTimeInterval(1))
+        #expect(visible.pose != .saved)
+        #expect(visible.pose != .reviewed)
+    }
+
+    @Test(arguments: [CompanionEvent.Kind.saved, .reviewed])
+    func hiddenRecoveryPermanentlyCancelsPendingSuccess(kind: CompanionEvent.Kind) {
+        let presentation = attached()
+        presentation.receive(event(kind: kind), now: t)
+        let hidden = presentation.resolve(context: context(recovery: true, playback: .hidden),
+            now: t.addingTimeInterval(0.1))
+        #expect(hidden.playback == .hidden)
+        #expect(hidden.pose == .recovery)
+        #expect(hidden.reactionID == nil)
+        #expect(hidden.nextDeadline == nil)
+        let visible = presentation.resolve(context: context(), now: t.addingTimeInterval(1))
+        #expect(visible.pose != .saved)
+        #expect(visible.pose != .reviewed)
+    }
+
 }
