@@ -30,7 +30,7 @@ struct CompanionView: View {
     }
 }
 
-private struct CompanionRiveView: UIViewRepresentable {
+struct CompanionRiveView: UIViewRepresentable {
     let player: RiveViewModel
     let paused: Bool
     let fps: Int
@@ -50,6 +50,7 @@ private struct CompanionRiveView: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ view: RiveView, coordinator: RiveViewModel) {
+        guard coordinator.riveView === view else { return }
         coordinator.pause()
         coordinator.deregisterView()
     }

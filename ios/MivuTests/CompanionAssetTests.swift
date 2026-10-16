@@ -311,6 +311,36 @@ extension CompanionAssetTests {
         #expect(binding.booleanProperty(fromPath: "darkMode")?.value == true)
     }
 
+    @Test func obsoleteViewTeardownPreservesReplacementAndFreshGesture() async throws {
+        let runtime = try await ready()
+        let player = try #require(runtime.player)
+        let oldWindow = try mount(player)
+        let oldView = try #require(player.riveView)
+        let newWindow = try mount(player)
+        let newView = try #require(player.riveView)
+        #expect(oldView !== newView)
+        defer {
+            CompanionRiveView.dismantleUIView(newView, coordinator: player)
+            oldWindow.isHidden = true
+            newWindow.isHidden = true
+        }
+
+        CompanionRiveView.dismantleUIView(oldView, coordinator: player)
+        #expect(player.riveView === newView)
+        let started = ContinuousClock.now
+        await runtime.apply(output(.saved, reaction: UUID()), darkMode: false)
+        #expect(player.isPlaying)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(player.isPlaying, "Replacement view must advance the actual fresh reaction")
+        let deadline = started.advanced(by: .seconds(2))
+        while player.isPlaying, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!player.isPlaying)
+        #expect(started.duration(to: .now) >= .seconds(MivuMotion.saved - 0.04))
+        #expect(player.riveView === newView)
+    }
+
     @Test func allFallbacksHaveBothAppearanceVariantsWithIdenticalBounds() throws {
         let runtime = CompanionRuntime()
         var size: CGSize?
