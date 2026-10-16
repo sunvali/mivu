@@ -300,6 +300,20 @@ import XCTest
         let title = id == "progressCoverage" ? "Coverage & averages" : "Recorded intake data"
         let disclosure = app.buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
         reveal(disclosure, in: app)
+        for _ in 0..<4 {
+            let top = app.navigationBars["Progress"].frame.maxY + 8
+            let bottom = app.tabBars.firstMatch.frame.minY - 8
+            let frame = disclosure.frame
+            if frame.minY >= top && frame.maxY <= bottom { break }
+            let maximumDrag = (bottom - top) / 3
+            let distance = frame.minY < top ? min(top - frame.minY + 8, maximumDrag)
+                : -min(frame.maxY - bottom + 8, maximumDrag)
+            let start = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: app.frame.midX, dy: (top + bottom) / 2))
+            start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)))
+        }
+        XCTAssertGreaterThanOrEqual(disclosure.frame.minY, app.navigationBars["Progress"].frame.maxY)
+        XCTAssertLessThanOrEqual(disclosure.frame.maxY, app.tabBars.firstMatch.frame.minY)
         let state = disclosure.staticTexts[id].firstMatch
         XCTAssertTrue(state.exists, "The disclosure header exposes its expansion state")
         let value = state.value as? String

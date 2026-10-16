@@ -49,10 +49,7 @@ struct CoachView: View {
                         switch row.kind {
                         case .input: inputBubble(row.turn)
                         case .reply:
-                            // Keep restored selectable replies exposed to VoiceOver.
                             Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(row.turn.assistantText ?? "")
                                 .accessibilityIdentifier("coachReply")
                         case .actions: turnActions(row.turn)
                         }
@@ -118,12 +115,13 @@ struct CoachView: View {
         }
         .alert("Could not import photo", isPresented: $importFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
         .sensoryFeedback(.success, trigger: coach.captureReceipt)
-        .onChange(of: coach.diary.snapshot?.profile.id) { _, _ in
+        .onChange(of: coach.diary.snapshot?.profile.id, initial: true) { _, _ in
             preparation.cancel(); preparation = PhotoPreparation()
             showPhotos = false; editing = false
             followLatest = true; hasNewMessage = false
             nearBottom = true; followRequested = false
             position = ScrollPosition(idType: String.self, edge: .bottom)
+            requestFollow()
         }
     }
     private var userScrolling: Bool {

@@ -298,7 +298,14 @@ import XCTest
         XCTAssertFalse(app.buttons["coachNewMessage"].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
-        XCTAssertTrue(reply.waitForExistence(timeout: 10))
+        let restoredReplyExists = reply.waitForExistence(timeout: 10)
+        let restoredScreen = XCTAttachment(screenshot: app.screenshot())
+        restoredScreen.name = "Restored latest Coach reply"; restoredScreen.lifetime = .keepAlways; add(restoredScreen)
+        if !restoredReplyExists {
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "Restored Coach accessibility"; hierarchy.lifetime = .keepAlways; add(hierarchy)
+        }
+        XCTAssertTrue(restoredReplyExists)
         let restoredLatest = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             reply.frame.maxY <= app.textFields["coachInput"].frame.minY
         }, object: app)
