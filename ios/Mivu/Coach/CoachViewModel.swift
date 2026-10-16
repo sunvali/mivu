@@ -8,6 +8,7 @@ import Network
     let connection: ChatGPTConnection
     var draft = MealDraft()
     private(set) var captureReceipt: UUID?
+    private(set) var companionCaptureEvent: CompanionEvent?
     private(set) var isSending = false
     private(set) var isWorking = false
     private(set) var activity: CoachActivity?
@@ -40,11 +41,16 @@ import Network
         isSending = true; diary.isSaving = true
         defer { isSending = false; diary.isSaving = false }
         let captured = draft
+        let isNewSubmission = !turns.contains { $0.id == captured.submissionID }
         do {
             _ = try await diary.store.captureCoachTurn(text: captured.text, photos: captured.photos.map { MealPhoto(data: $0) }, turnID: captured.submissionID, expectedProfileID: owner)
             try await diary.refresh(profileID: owner)
-            guard diary.snapshot?.profile.id == owner else { return false }
+            guard !Task.isCancelled, !diary.isChangingProfile, diary.snapshot?.profile.id == owner else { return false }
             captureReceipt = captured.submissionID
+            if isNewSubmission {
+                companionCaptureEvent = CompanionEvent(profileID: owner, operationID: captured.submissionID,
+                                                       kind: .saved, committedAt: Date())
+            }
             draft = MealDraft(); errorMessage = nil
             resume()
             return true

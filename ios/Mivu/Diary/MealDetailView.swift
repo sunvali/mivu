@@ -28,7 +28,7 @@ struct MealDetailView: View {
                                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
                             NutritionSummary(totals: nutritionTotals(proposal.items), title: "Estimated totals")
                             ForEach(proposal.items, id: \.id) { item in itemRow(item, editable: true, reviewSubmissionID: review.id) }
-                            Button { Task { await model.change { try await model.store.acceptReview(mealID: meal.id, submissionID: review.id, expectedProfileID: snapshot.profile.id) } } } label: {
+                            Button { Task { await model.acceptReview(mealID: meal.id, submissionID: review.id, expectedProfileID: snapshot.profile.id) } } label: {
                                 Label("Mark reviewed", systemImage: "checkmark.circle").frame(maxWidth: .infinity, minHeight: 52)
                             }
                             .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
