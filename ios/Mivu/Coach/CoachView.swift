@@ -93,7 +93,7 @@ struct CoachView: View {
             }
             .onScrollGeometryChange(for: Bool.self) { isNearBottom($0) } action: { _, nearBottom in
                 self.nearBottom = nearBottom
-                if nearBottom {
+                if nearBottom && (followLatest || position.isPositionedByUser) {
                     followLatest = true; hasNewMessage = false
                     if scrollPhase == .idle && position.isPositionedByUser { requestFollow() }
                 } else if scrollPhase == .interacting || scrollPhase == .decelerating || (position.isPositionedByUser && scrollPhase != .tracking) {

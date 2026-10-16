@@ -22,10 +22,11 @@ import XCTest
         XCTAssertTrue(first.isHittable, "Loading earlier should reveal the older page")
         XCTAssertFalse(earlier.exists)
         enter("History message 22", in: app); app.buttons["coachSend"].tap()
+        let newest = app.staticTexts["History message 22"]
+        XCTAssertTrue(newest.waitForExistence(timeout: 5))
         XCTAssertTrue(first.isHittable, "New input must preserve the history being read")
         let latest = app.buttons["coachNewMessage"]
         XCTAssertTrue(latest.waitForExistence(timeout: 5)); latest.tap()
-        let newest = app.staticTexts["History message 22"]
         let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: newest)
         XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
     }
