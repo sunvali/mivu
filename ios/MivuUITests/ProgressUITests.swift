@@ -358,7 +358,6 @@ import XCTest
         if !focused.evaluate(with: field) { field.tap() }
         let focus = XCTNSPredicateExpectation(predicate: focused, object: field)
         XCTAssertEqual(XCTWaiter.wait(for: [focus], timeout: 5), .completed, "The selected input must own keyboard focus before typing")
-        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         if let existing = field.value as? String, !existing.isEmpty, existing != field.placeholderValue {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
         }
