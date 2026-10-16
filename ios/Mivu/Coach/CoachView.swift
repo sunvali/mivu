@@ -26,7 +26,7 @@ struct CoachView: View {
                     if let day = coach.diary.activeDay {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(alignment: .firstTextBaseline) {
-                                Text(day.localDate).font(.subheadline)
+                                Text(day.localDate).font(.subheadline).accessibilityIdentifier("coachDate")
                                 Spacer()
                                 Text(snapshot.totals(dayID: day.id).kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal recorded" } ?? "Not estimated yet")
                                     .font(.subheadline.weight(.medium)).monospacedDigit()
@@ -105,6 +105,7 @@ struct CoachView: View {
         }
         .background(Color.diaryCanvas)
         .navigationTitle("Coach")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: UUID.self) { MealDetailView(model: coach.diary, mealID: $0) }
         .navigationDestination(for: WorkoutDestination.self) { WorkoutDetailView(model: coach.diary, sessionID: $0.id) }
         .safeAreaInset(edge: .bottom) { if coach.diary.snapshot != nil { composer } }
