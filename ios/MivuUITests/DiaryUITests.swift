@@ -1,6 +1,63 @@
 import XCTest
 
 @MainActor final class DiaryUITests: XCTestCase {
+    func testFirstRunCreatesNamedDiaryWithoutInventingRecords() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--proof-english"]
+        app.launch()
+        let name = app.textFields["newDiaryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["createDiary"].isEnabled)
+        XCTAssertTrue(app.buttons["Restore from diary archive"].exists)
+        name.tap(); name.typeText("Synthetic diary")
+        app.buttons["createDiary"].tap()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
+        XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, 0)
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.buttons["localProfiles"].label.contains("Synthetic diary"))
+    }
+    func testPrecisionGlassReferenceScreensInBothAppearances() {
+        for mode in ["light", "dark"] {
+            let app = launch(["--proof-" + mode])
+            app.buttons["logMeal"].tap()
+            let note = app.textFields["mealText"]
+            XCTAssertTrue(note.waitForExistence(timeout: 5))
+            note.tap(); note.typeText("Synthetic lunch")
+            if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
+            let capture = XCTAttachment(screenshot: app.screenshot())
+            capture.name = "Precision Glass Capture " + mode; capture.lifetime = .keepAlways; add(capture)
+            app.buttons["sendMeal"].tap()
+            XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
+            for tab in ["Today", "Diary", "Progress", "Coach"] {
+                app.tabBars.buttons[tab].tap()
+                XCTAssertTrue(app.buttons["profileSettings"].waitForExistence(timeout: 5))
+                let screen = XCTAttachment(screenshot: app.screenshot())
+                screen.name = "Precision Glass " + tab + " " + mode; screen.lifetime = .keepAlways; add(screen)
+            }
+            app.buttons["profileSettings"].tap()
+            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+            let settings = XCTAttachment(screenshot: app.screenshot())
+            settings.name = "Precision Glass Settings " + mode; settings.lifetime = .keepAlways; add(settings)
+            app.terminate()
+        }
+    }
+
+    func testPrecisionGlassNavigationAndSettingsReturn() {
+        let app = launch()
+        let expected = ["Today", "Diary", "Progress", "Coach"]
+        XCTAssertEqual(app.tabBars.buttons.allElementsBoundByIndex.map(\.label), expected)
+        for tab in expected {
+            app.tabBars.buttons[tab].tap()
+            let profile = app.buttons["profileSettings"]
+            XCTAssertTrue(profile.waitForExistence(timeout: 5))
+            profile.tap()
+            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+            app.buttons["doneSettings"].tap()
+            XCTAssertTrue(app.tabBars.buttons[tab].isSelected)
+        }
+    }
+
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"] + extra
@@ -9,17 +66,27 @@ import XCTest
         return app
     }
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        for index in 0..<9 where !element.isHittable {
-            if element.exists, element.frame.maxY < 120 { app.collectionViews.firstMatch.swipeDown() }
-            else if index < 3 { app.collectionViews.firstMatch.swipeUp() }
-            else { app.collectionViews.firstMatch.swipeDown() }
+        let collection = app.collectionViews.firstMatch
+        let list = collection.exists ? collection : app.tables.firstMatch
+        guard list.exists else { XCTFail("The destination must contain a native list"); return }
+        for _ in 0..<10 where !element.isHittable {
+            if element.exists, !element.frame.isEmpty,
+               element.frame.midY < app.navigationBars.firstMatch.frame.maxY {
+                list.swipeDown()
+            } else {
+                list.swipeUp()
+            }
         }
+        for _ in 0..<10 where !element.isHittable { list.swipeDown() }
         XCTAssertTrue(element.isHittable)
     }
     private func replace(_ field: XCUIElement, with value: String) {
         field.tap()
+        // A centered tap can place the caret before a short, trailing-aligned value.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
         if let text = field.value as? String, !text.isEmpty { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: text.count)) }
         field.typeText(value)
+        XCTAssertEqual(field.value as? String, value, "The edited amount must match the requested value before saving")
     }
 
     func testCapturePhotoReviewCorrectionEditingAndHistory() {
@@ -42,6 +109,7 @@ import XCTest
         app.buttons["sendMeal"].tap()
         let row = app.buttons["mealRow"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10)); reveal(row, in: app); row.tap()
+        XCTAssertFalse(app.tabBars.buttons["Today"].isHittable, "Focused meal details must hide the tab bar")
         let accept = app.buttons["acceptReview"]
         XCTAssertTrue(accept.waitForExistence(timeout: 10)); reveal(accept, in: app); accept.tap()
         let half = app.buttons["halfPortion"]
@@ -54,7 +122,8 @@ import XCTest
         let itemScreen = XCTAttachment(screenshot: app.screenshot()); itemScreen.name = "English item editor"; itemScreen.lifetime = .keepAlways; add(itemScreen)
         replace(quantity, with: "2")
         app.buttons["saveItem"].tap()
-        XCTAssertTrue(app.staticTexts["190"].waitForExistence(timeout: 10))
+        let energy = app.staticTexts["190"]
+        XCTAssertTrue(energy.waitForExistence(timeout: 10)); reveal(energy, in: app)
         app.navigationBars.buttons.firstMatch.tap()
         let weight = app.buttons["logWeight"]
         reveal(weight, in: app); weight.tap()
@@ -64,8 +133,13 @@ import XCTest
         let weightScreen = XCTAttachment(screenshot: app.screenshot()); weightScreen.name = "English weight sheet"; weightScreen.lifetime = .keepAlways; add(weightScreen)
         input.tap(); input.typeText("70")
         app.buttons["saveWeight"].tap()
-        app.tabBars.buttons["History"].tap()
-        XCTAssertTrue(app.staticTexts["70 kg"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Diary"].tap()
+        XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
+        let day = app.buttons["diaryDay"].firstMatch
+        XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap()
+        XCTAssertFalse(app.tabBars.buttons["Diary"].isHittable)
+        let savedWeight = app.staticTexts["Morning weight, 70 kg"]
+        XCTAssertTrue(savedWeight.waitForExistence(timeout: 5)); reveal(savedWeight, in: app)
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "Synthetic diary history"; attachment.lifetime = .keepAlways; add(attachment)
     }
 
@@ -74,18 +148,70 @@ import XCTest
         app.buttons["logMeal"].tap()
         let text = app.textFields["mealText"]; XCTAssertTrue(text.waitForExistence(timeout: 5)); text.tap(); text.typeText("Unsaved synthetic input")
         app.navigationBars.buttons["Cancel"].tap()
+        let keepEditing = app.buttons["Keep editing"]
+        XCTAssertTrue(keepEditing.waitForExistence(timeout: 5)); keepEditing.tap()
+        XCTAssertEqual(text.value as? String, "Unsaved synthetic input", "Keeping the editor must preserve the draft")
+        app.navigationBars.buttons["Cancel"].tap()
+        let discard = app.buttons["Discard changes"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 5)); discard.tap()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
-        let settings = app.tabBars.buttons["Settings"]
+        let settings = app.buttons["profileSettings"]
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: settings)
-        guard XCTWaiter.wait(for: [ready], timeout: 5) == .completed else { XCTFail("Settings must be reachable after composer dismissal"); return }
+        guard XCTWaiter.wait(for: [ready], timeout: 5) == .completed else { XCTFail("Profile and settings must be reachable after composer dismissal"); return }
         settings.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["localProfiles"].tap()
+        XCTAssertTrue(app.navigationBars["Local profiles"].waitForExistence(timeout: 5))
         let create = app.buttons["Create local profile"]
         XCTAssertTrue(create.waitForExistence(timeout: 5)); create.tap()
         let name = app.alerts.textFields.firstMatch; XCTAssertTrue(name.waitForExistence(timeout: 5)); name.typeText("Synthetic second profile")
         app.alerts.buttons["Create"].tap()
         XCTAssertTrue(app.staticTexts["Synthetic second profile"].firstMatch.waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["doneSettings"].tap()
         app.tabBars.buttons["Today"].tap()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
+    }
+
+    func testUnsavedSettingsRequireExplicitDiscard() {
+        let app = launch()
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["Diary preferences"].tap()
+        XCTAssertTrue(app.navigationBars["Diary preferences"].waitForExistence(timeout: 5))
+
+        let dietaryPreferences = app.textFields["dietaryPreferences"]
+        XCTAssertTrue(dietaryPreferences.waitForExistence(timeout: 5))
+        dietaryPreferences.tap()
+        dietaryPreferences.typeText("Synthetic dietary preference")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+
+        app.buttons["doneSettings"].tap()
+        let keepEditing = app.buttons["Keep editing"]
+        XCTAssertTrue(keepEditing.waitForExistence(timeout: 5))
+        keepEditing.tap()
+        app.buttons["Diary preferences"].tap()
+        let retainedDraft = app.textFields["dietaryPreferences"]
+        XCTAssertTrue(retainedDraft.waitForExistence(timeout: 5))
+        XCTAssertEqual(retainedDraft.value as? String, "Synthetic dietary preference")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["doneSettings"].tap()
+        let discard = app.buttons["Discard changes"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 5))
+        discard.tap()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 5))
+
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["Diary preferences"].tap()
+        let discardedDraft = app.textFields["dietaryPreferences"]
+        XCTAssertTrue(discardedDraft.waitForExistence(timeout: 5))
+        XCTAssertNotEqual(discardedDraft.value as? String, "Synthetic dietary preference")
     }
 
     private func capturePhotoOnlyReview(in app: XCUIApplication) -> XCUIElement {
@@ -108,6 +234,68 @@ import XCTest
         XCTAssertTrue(row.label.contains("Meal"), "Photo-only pending/review meals need a readable fallback title; actual label: " + row.label)
     }
 
+    func testMealPhotoViewerClosingAndCancelledDeletionPreserveRecord() {
+        let app = launch()
+        let row = capturePhotoOnlyReview(in: app)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "Awaiting review"), object: row)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        let originalLabel = row.label
+        reveal(row, in: app); row.tap()
+        let photo = app.buttons["viewMealPhoto"].firstMatch
+        reveal(photo, in: app); photo.tap()
+        XCTAssertTrue(app.navigationBars["Meal photo"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Photo timing: Unspecified"].exists)
+        app.buttons["zoomInPhoto"].tap()
+        XCTAssertEqual(app.staticTexts["photoZoomLevel"].label, "200%")
+        app.scrollViews["mealPhotoZoom"].doubleTap()
+        XCTAssertEqual(app.staticTexts["photoZoomLevel"].label, "100%")
+        app.buttons["deleteViewedPhoto"].tap()
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5)); cancel.tap()
+        XCTAssertTrue(app.buttons["closeMealPhoto"].isHittable)
+        app.buttons["closeMealPhoto"].tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+        XCTAssertTrue(photo.exists, "Closing or cancelling deletion must preserve the attachment")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, 1)
+        XCTAssertEqual(app.buttons["mealRow"].firstMatch.label, originalLabel, "Viewing a photo must not change its meal")
+    }
+
+    func testLogMealFromSelectedHistoricalDayKeepsTodaySeparate() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        let input = app.textFields["coachInput"]
+        input.tap(); input.typeText("Yesterday I had dessert"); app.buttons["coachSend"].tap()
+        let receipt = app.buttons["coachMealLink"].firstMatch
+        XCTAssertTrue(receipt.waitForExistence(timeout: 15))
+        app.tabBars.buttons["Diary"].tap()
+        let day = app.buttons["diaryDay"].firstMatch
+        XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap()
+        let selectedDate = app.navigationBars.firstMatch.identifier
+        let log = app.buttons["logMealForDay"]
+        XCTAssertTrue(log.waitForExistence(timeout: 5)); reveal(log, in: app); log.tap()
+        let note = app.textFields["mealText"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[selectedDate].exists, "The composer must show its selected destination")
+        note.tap(); note.typeText("Synthetic selected-day meal")
+        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
+        let review = app.switches["reviewFirst"].switches.firstMatch
+        reveal(review, in: app); review.tap()
+        app.buttons["sendMeal"].tap()
+        XCTAssertTrue(app.navigationBars[selectedDate].waitForExistence(timeout: 10))
+        let meal = app.buttons["savedDayMealReceipt"]
+        reveal(meal, in: app); meal.tap()
+        XCTAssertTrue(app.staticTexts["Time unspecified"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[selectedDate].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        app.tabBars.buttons["Today"].tap()
+        XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists, "Historical capture must not move records into Today")
+    }
+
     func testEnglishDarkLargeTextRendering() {
         let app = launch(["--proof-hebrew", "--proof-dark", "--proof-largest-text", "-AppleLanguages", "(he)", "-AppleLocale", "he_IL"])
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
@@ -121,13 +309,22 @@ import XCTest
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "English legacy Hebrew launch"; attachment.lifetime = .keepAlways; add(attachment)
         guard app.navigationBars["Today"].waitForExistence(timeout: 5) else { XCTFail("Legacy Hebrew settings must still open English Today"); return }
         XCTAssertTrue(app.staticTexts["Apple sample mode"].exists)
-        let today = app.tabBars.buttons["Today"], history = app.tabBars.buttons["History"], settings = app.tabBars.buttons["Settings"]
-        XCTAssertLessThan(today.frame.midX, history.frame.midX)
-        XCTAssertLessThan(history.frame.midX, settings.frame.midX)
-        settings.tap()
+        let today = app.tabBars.buttons["Today"], diary = app.tabBars.buttons["Diary"], progress = app.tabBars.buttons["Progress"], coach = app.tabBars.buttons["Coach"]
+        XCTAssertLessThan(today.frame.midX, diary.frame.midX)
+        XCTAssertLessThan(diary.frame.midX, progress.frame.midX)
+        XCTAssertLessThan(progress.frame.midX, coach.frame.midX)
+        app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.segmentedControls.count, 0)
         XCTAssertTrue(app.staticTexts["My diary"].exists)
+        app.buttons["Diary preferences"].tap()
+        XCTAssertTrue(app.navigationBars["Diary preferences"].waitForExistence(timeout: 5))
+        reveal(app.staticTexts["English"], in: app)
+        XCTAssertTrue(app.staticTexts["English"].isHittable)
+        XCTAssertEqual(app.segmentedControls.count, 0, "The unsupported language selector must remain hidden")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
         let diagnostic = app.buttons["ChatGPT connection diagnostic"]
         reveal(diagnostic, in: app); diagnostic.tap()
         XCTAssertTrue(app.staticTexts["Connection test"].waitForExistence(timeout: 5))

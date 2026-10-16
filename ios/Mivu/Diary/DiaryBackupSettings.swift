@@ -24,27 +24,31 @@ struct DiaryBackupSettings: View {
     @State private var exported = false
     var body: some View {
         Group {
+            if model.snapshot != nil {
             if model.backupStatus.configured {
                 if let date = model.backupStatus.savedAt {
-                    Label("Saved to backup folder", systemImage: "checkmark.circle")
-                    Text(date, format: .dateTime.day().month().hour().minute()).font(.caption).foregroundStyle(Color.diarySecondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Saved to backup folder", systemImage: "checkmark.circle").font(.headline)
+                        Text(date, format: .dateTime.day().month().hour().minute()).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    }.padding(.vertical, 8)
                 } else { Label("Backup pending", systemImage: "clock") }
                 if let error = model.backupStatus.pendingError {
                     Text(error == DiaryError.staleArchive.localizedDescription
                          ? "Backup copies conflict. Your local diary and existing backup are preserved. Export a copy and resolve the folder copy in Files before retrying."
                          : "Backup pending. Check that the folder is available, then retry. Your local diary is saved.")
-                        .font(.caption).foregroundStyle(Color.diarySecondary)
+                        .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
                 Button("Retry backup") { model.queueBackup() }.frame(minHeight: 44)
             } else { Text("No backup folder selected").foregroundStyle(Color.diarySecondary) }
             Button("Choose private backup folder") { folderPicker = true }.frame(minHeight: 44)
-            Text("Choose a private Files folder, including iCloud Drive when available. Folder acknowledgement does not confirm remote upload.").font(.caption).foregroundStyle(Color.diarySecondary)
+            Text("Choose a private Files folder, including iCloud Drive when available. Folder acknowledgement does not confirm remote upload.").font(.subheadline).foregroundStyle(Color.diarySecondary)
             Button("Export diary and photos") {
                 guard let snapshot = model.snapshot else { return }
                 do { exportDocument = DiaryExportDocument(data: try DiaryArchive.encode(snapshot)); exportPicker = true }
                 catch { model.errorMessage = "Could not prepare an export. Your local diary is preserved." }
             }.frame(minHeight: 44)
-            if exported { Label("Export saved", systemImage: "checkmark.circle").font(.caption) }
+            if exported { Label("Export saved", systemImage: "checkmark.circle").font(.subheadline) }
+            }
             Button("Restore from diary archive") { importPicker = true }.frame(minHeight: 44).disabled(importing)
             if importing { ProgressView("Reading archive") }
         }
@@ -77,12 +81,12 @@ struct DiaryBackupSettings: View {
             case .failure: model.errorMessage = "Export was not saved. Your local diary is preserved."
             }
         }
-        .confirmationDialog("Restore this private diary?", isPresented: $confirmRestore, titleVisibility: .visible) {
+        .confirmationDialog("Restore \(imported?.profile.name ?? "this private diary")?", isPresented: $confirmRestore, titleVisibility: .visible) {
             Button("Restore diary", role: .destructive) { if let archive = imported { Task { if await model.importArchive(archive) { imported = nil } } } }
             Button("Cancel", role: .cancel) { imported = nil }
         } message: {
-            if imported?.profile.id == model.snapshot?.profile.id { Text("This replaces the selected profile with the validated archive. Older or deleted records cannot overwrite newer changes.") }
-            else { Text("This imports the archived profile as a separate private local diary. The selected profile is preserved.") }
+            if imported?.profile.id == model.snapshot?.profile.id { Text("Replace \(model.snapshot?.profile.name ?? "the selected profile") with \(imported?.profile.name ?? "the validated archive") (\(imported?.meals.count ?? 0) meals). Older or deleted records cannot overwrite newer changes.") }
+            else { Text("Import \(imported?.profile.name ?? "the archived profile") (\(imported?.meals.count ?? 0) meals) as a separate private local diary. The selected profile is preserved.") }
         }
     }
 }

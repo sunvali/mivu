@@ -16,10 +16,16 @@ import XCTest
         XCTAssertTrue(handoff.label.contains("Open backup and Files"))
         XCTAssertFalse(app.descendants(matching: .any)["coachActivity"].exists)
         handoff.tap()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Backup & export"].waitForExistence(timeout: 5))
         let folder = app.buttons["Choose private backup folder"]
         XCTAssertTrue(folder.waitForExistence(timeout: 5))
         XCTAssertTrue(folder.isHittable)
         XCTAssertFalse(app.navigationBars["Browse"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["doneSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Coach"].isSelected)
+        XCTAssertTrue(app.textFields["coachInput"].isHittable)
     }
 }

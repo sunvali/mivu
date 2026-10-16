@@ -90,6 +90,79 @@ import Testing
         #expect(snapshot.days.first { $0.id == corrected.dayID }?.timeZoneID == "America/Los_Angeles")
     }
 
+    @Test(arguments: [false, true])
+    func weightIDCorrectionPreservesHistoricalRecordWhenDateAndRevisionCollide(exactTime: Bool) async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let measured = try #require(ISO8601DateFormatter().date(from: "2027-01-14T10:00:00Z"))
+        let original = try await store.setWeight(dayLocalDate: "2027-01-14", value: 70, unit: "kg", measuredAt: exactTime ? measured : nil, expectedRevision: nil, expectedProfileID: profile.id)
+        var shifted = profile; shifted.timeZoneID = "America/Los_Angeles"
+        try await store.updateProfile(shifted, expectedProfileID: profile.id)
+        let sameDate = try await store.setWeight(dayLocalDate: "2027-01-14", value: 80, unit: "kg", measuredAt: nil, expectedRevision: nil, expectedProfileID: profile.id)
+        #expect(original.revision == sameDate.revision && original.dayID != sameDate.dayID)
+        let before = try await store.snapshot()
+        let corrected = try await store.updateWeight(id: original.id, value: 71, expectedRevision: original.revision, expectedProfileID: profile.id)
+        var expected = original; expected.value = 71; expected.revision += 1
+        #expect(corrected == expected)
+        let saved = try await store.snapshot()
+        #expect(saved.weights.first { $0.id == sameDate.id } == sameDate)
+        #expect(saved.days == before.days && saved.activeDayID == before.activeDayID)
+        #expect(try await DiaryStore(directory: root).selectProfile(profile.id).weights.first { $0.id == original.id } == expected)
+        await #expect(throws: DiaryError.staleRevision) { try await store.updateWeight(id: original.id, value: 72, expectedRevision: original.revision, expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.wrongOwner) { try await store.updateWeight(id: original.id, value: 72, expectedRevision: corrected.revision, expectedProfileID: UUID()) }
+        await #expect(throws: DiaryError.notFound) { try await store.updateWeight(id: UUID(), value: 72, expectedRevision: corrected.revision, expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.invalidData) { try await store.updateWeight(id: original.id, value: .nan, expectedRevision: corrected.revision, expectedProfileID: profile.id) }
+        #expect(try await store.snapshot() == saved)
+        try await store.deleteWeight(id: original.id, expectedRevision: corrected.revision, expectedProfileID: profile.id)
+        let deleted = try await store.snapshot()
+        await #expect(throws: DiaryError.notFound) { try await store.updateWeight(id: original.id, value: 72, expectedRevision: corrected.revision, expectedProfileID: profile.id) }
+        #expect(try await store.snapshot() == deleted)
+    }
+
+    @Test func legacyWeightIDCorrectionKeepsUnlinkedMeasurement() async throws {
+        let root = URL.temporaryDirectory.appending(path: "LegacyWeightCorrection-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var original = DiarySnapshot(profile: DiaryProfile(name: "Synthetic legacy weight"))
+        let weight = WeightEntry(dayID: nil, measuredAt: morning, value: 154, unit: "lb")
+        original.weights = [weight]
+        let store = DiaryStore(directory: root)
+        _ = try await store.importProfile(original)
+        let corrected = try await store.updateWeight(id: weight.id, value: 153, expectedRevision: weight.revision, expectedProfileID: original.profile.id)
+        var expected = weight; expected.value = 153; expected.revision += 1
+        #expect(corrected == expected)
+        let saved = try await store.snapshot()
+        #expect(saved.days.isEmpty && saved.activeDayID == nil)
+        #expect(saved.weights == [expected])
+    }
+
+    @Test func selectedDayProgressWritesKeepStoredDayAndTimezoneAfterTravel() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let measured = try #require(ISO8601DateFormatter().date(from: "2027-01-14T10:00:00Z"))
+        let historical = try await store.startDay(at: measured, expectedProfileID: profile.id)
+        var shifted = profile; shifted.timeZoneID = "America/Los_Angeles"
+        try await store.updateProfile(shifted, expectedProfileID: profile.id)
+        let current = try await store.startDay(at: measured, expectedProfileID: profile.id)
+        let currentWeight = try await store.recordWeight(value: 80, at: measured, expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        #expect(historical.localDate == current.localDate && historical.id != current.id)
+        let weight = try await store.setWeight(dayID: historical.id, value: 70, expectedRevision: nil, expectedProfileID: profile.id)
+        let workout = try await store.createWorkout(dayID: historical.id, draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil), expectedProfileID: profile.id)
+        #expect(weight.dayID == historical.id && workout.dayID == historical.id)
+        #expect(weight.timePrecision == .dateOnly && workout.timePrecision == .dateOnly)
+        #expect(weight.measuredAt == ProgressDate.date(historical.localDate, zone: historical.timeZoneID))
+        #expect(workout.performedAt == weight.measuredAt)
+        let corrected = try await store.setWeight(dayID: historical.id, value: 71, expectedRevision: weight.revision, expectedProfileID: profile.id)
+        #expect(corrected.id == weight.id && corrected.measuredAt == weight.measuredAt && corrected.timePrecision == weight.timePrecision)
+        let saved = try await store.snapshot()
+        #expect(saved.days == before.days && saved.activeDayID == current.id)
+        #expect(saved.weights.first { $0.id == currentWeight.id } == currentWeight)
+        await #expect(throws: DiaryError.staleRevision) { try await store.setWeight(dayID: historical.id, value: 72, expectedRevision: weight.revision, expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.notFound) { try await store.setWeight(dayID: UUID(), value: 72, expectedRevision: nil, expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.notFound) { try await store.createWorkout(dayID: UUID(), draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil), expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.wrongOwner) { try await store.setWeight(dayID: historical.id, value: 72, expectedRevision: corrected.revision, expectedProfileID: UUID()) }
+        await #expect(throws: DiaryError.wrongOwner) { try await store.createWorkout(dayID: historical.id, draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil), expectedProfileID: UUID()) }
+        #expect(try await store.snapshot() == saved)
+    }
+
     @Test func workoutsUseCurrentTimeZoneDayAfterProfileChange() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let originalDay = try await store.startDay(at: morning, expectedProfileID: profile.id)

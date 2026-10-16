@@ -90,14 +90,15 @@ actor DiaryStore {
         }
     }
 
-    func capture(text: String, photos: [MealPhoto], reviewFirst: Bool, dayID: UUID, at: Date = Date(), submissionID: UUID = UUID(), forCoach: Bool = false, expectedProfileID: UUID? = nil) throws -> DiaryMeal {
+    func capture(text: String, photos: [MealPhoto], reviewFirst: Bool, dayID: UUID, at: Date = Date(), dateOnly: Bool = false, submissionID: UUID = UUID(), forCoach: Bool = false, expectedProfileID: UUID? = nil) throws -> DiaryMeal {
         let original = try snapshot(expectedProfileID: expectedProfileID)
         if let existing = original.meals.first(where: { $0.submissions.contains { $0.id == submissionID } }) { return existing }
         var meal = DiaryMeal(dayID: dayID, capturedAt: at, eatenAt: at, photos: photos,
             submissions: [MealSubmission(id: submissionID, baseRevision: 0, text: text, photoIDs: photos.map(\.id), reviewFirst: reviewFirst)])
         try transaction(expectedProfileID) { snapshot in
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty else { throw DiaryError.emptyCapture }
-            guard snapshot.days.contains(where: { $0.id == dayID }) else { throw DiaryError.notFound }
+            guard let day = snapshot.days.first(where: { $0.id == dayID }) else { throw DiaryError.notFound }
+            if dateOnly { meal.eatenAt = day.startAt; meal.timePrecision = .dateOnly }
             meal.items = []
             snapshot.meals.append(meal)
             if forCoach { appendManualCoachTurn(meal: meal, submissionID: submissionID, at: at, snapshot: &snapshot) }
@@ -276,10 +277,12 @@ actor DiaryStore {
         }
     }
 
-    func moveMeal(_ mealID: UUID, to dayID: UUID, eatenAt: Date? = nil, expectedProfileID: UUID? = nil) throws {
+    func moveMeal(_ mealID: UUID, to dayID: UUID, eatenAt: Date? = nil, expectedRevision: Int? = nil, expectedDayID: UUID? = nil, expectedProfileID: UUID? = nil) throws {
         try transaction(expectedProfileID) { snapshot in
             guard snapshot.days.contains(where: { $0.id == dayID }), let m = snapshot.meals.firstIndex(where: { $0.id == mealID })
             else { throw DiaryError.notFound }
+            if let expectedRevision, snapshot.meals[m].revision != expectedRevision { throw DiaryError.staleRevision }
+            if let expectedDayID, snapshot.meals[m].dayID != expectedDayID { throw DiaryError.staleRevision }
             snapshot.meals[m].dayID = dayID
             if let eatenAt {
                 let day = snapshot.days.first { $0.id == dayID }!
@@ -351,6 +354,31 @@ actor DiaryStore {
         return saved
     }
 
+    func updateWeight(id: UUID, value: Double, expectedRevision: Int, expectedProfileID: UUID) throws -> WeightEntry {
+        var saved: WeightEntry!
+        try transaction(expectedProfileID) { snapshot in
+            guard let index = snapshot.weights.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
+            guard snapshot.weights[index].revision == expectedRevision else { throw DiaryError.staleRevision }
+            snapshot.weights[index].value = value
+            snapshot.weights[index].revision += 1
+            saved = snapshot.weights[index]
+        }
+        return saved
+    }
+
+    func setWeight(dayID: UUID, value: Double, unit: String = "kg", expectedRevision: Int?, expectedProfileID: UUID) throws -> WeightEntry {
+        var saved: WeightEntry!
+        try transaction(expectedProfileID) { snapshot in
+            guard let day = snapshot.days.first(where: { $0.id == dayID }) else { throw DiaryError.notFound }
+            let previous = snapshot.weights.first { $0.dayID == dayID }
+            saved = try saveWeight(on: day, value: value, unit: unit,
+                                   at: previous?.measuredAt ?? dateOnlyInstant(day.localDate, zone: day.timeZoneID),
+                                   precision: previous?.timePrecision ?? .dateOnly,
+                                   expectedRevision: expectedRevision, snapshot: &snapshot)
+        }
+        return saved
+    }
+
     private func saveWeight(on day: TrackingDay, value: Double, unit: String, at time: Date, precision: MealTimePrecision, expectedRevision: Int?, snapshot: inout DiarySnapshot) throws -> WeightEntry {
         var saved: WeightEntry!
         if let index = snapshot.weights.firstIndex(where: { $0.dayID == day.id }) {
@@ -388,6 +416,15 @@ actor DiaryStore {
                       dateLabel(performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
             }
             saved = try appendWorkout(on: day, draft: draft, performedAt: performedAt, snapshot: &snapshot)
+        }
+        return saved
+    }
+
+    func createWorkout(dayID: UUID, draft: WorkoutDraft, expectedProfileID: UUID) throws -> WorkoutSession {
+        var saved: WorkoutSession!
+        try transaction(expectedProfileID) { snapshot in
+            guard let day = snapshot.days.first(where: { $0.id == dayID }) else { throw DiaryError.notFound }
+            saved = try appendWorkout(on: day, draft: draft, performedAt: nil, snapshot: &snapshot)
         }
         return saved
     }

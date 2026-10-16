@@ -6,7 +6,7 @@ import XCTest
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
-        for tab in ["Coach", "Today", "History", "Settings"] { XCTAssertTrue(app.tabBars.buttons[tab].exists) }
+        for tab in ["Today", "Diary", "Progress", "Coach"] { XCTAssertTrue(app.tabBars.buttons[tab].exists) }
         let input = app.textFields["coachInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Synthetic coach lunch")
         app.buttons["coachPhotos"].tap()
@@ -17,9 +17,15 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["Apple sample mode"].exists)
-        app.tabBars.buttons["Settings"].tap()
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
         revealList(app.buttons["Continue with ChatGPT"], in: app)
         XCTAssertTrue(app.buttons["Continue with ChatGPT"].isHittable)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["doneSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Today"].tap()
         XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
         app.terminate(); app.launch()
@@ -40,13 +46,20 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Two eggs, three bread slices and salad"].waitForExistence(timeout: 10))
         waitForReplies(1, in: app)
         let arrival = XCTAttachment(screenshot: app.screenshot()); arrival.name = "English dark accessibility5 latest reply arrival"; arrival.lifetime = .keepAlways; add(arrival)
-        for _ in 0..<5 where !app.staticTexts["Carbs"].isHittable { app.scrollViews.firstMatch.swipeDown() }
-        XCTAssertTrue(app.staticTexts["Carbs"].isHittable)
-        for label in ["Protein", "Fat"] {
-            for _ in 0..<8 where !app.staticTexts[label].isHittable { app.scrollViews.firstMatch.swipeUp() }
-            XCTAssertTrue(app.staticTexts[label].isHittable)
-        }
+        XCTAssertTrue(input.isHittable, "The composer must remain reachable after the latest reply")
+        XCTAssertTrue(send.isHittable)
+        let receipt = app.buttons["coachMealLink"].firstMatch
+        XCTAssertTrue(receipt.waitForExistence(timeout: 5))
+        revealCoachLink(receipt, in: app)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "English dark accessibility5 populated Coach"; screenshot.lifetime = .keepAlways; add(screenshot)
+        openLatestMeal(in: app)
+        XCTAssertFalse(app.tabBars.buttons["Coach"].isHittable)
+        for label in ["Protein", "Carbs", "Fat"] {
+            revealMealDetailItem(app.staticTexts[label], in: app)
+        }
+        let detail = XCTAttachment(screenshot: app.screenshot()); detail.name = "English dark accessibility5 meal nutrition"; detail.lifetime = .keepAlways; add(detail)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5)); XCTAssertTrue(input.isHittable)
     }
     func testFixtureMealCorrectionHistoricalReviewAndConversationRelaunch() {
         let app = XCUIApplication()
@@ -60,10 +73,10 @@ import XCTest
         app.navigationBars.buttons["Done"].tap(); app.buttons["coachSend"].tap()
         waitForReplies(1, in: app)
         openLatestMeal(in: app)
-        for food in ["Eggs", "Bread", "Salad"] { XCTAssertTrue(app.staticTexts[food].exists) }
-        XCTAssertTrue(app.staticTexts["3 slice"].exists)
-        revealList(app.images["Meal photo"], in: app)
-        XCTAssertTrue(app.images["Meal photo"].isHittable)
+        for food in ["Eggs", "Bread", "Salad"] { revealMealDetailItem(app.staticTexts[food].firstMatch, in: app) }
+        revealMealDetailItem(app.staticTexts["3 slice"], in: app)
+        revealList(app.buttons["viewMealPhoto"].firstMatch, in: app)
+        XCTAssertTrue(app.buttons["viewMealPhoto"].firstMatch.isHittable)
         app.navigationBars.buttons.firstMatch.tap()
         enter("half bread", in: app); app.buttons["coachSend"].tap()
         waitForReplies(2, in: app); openLatestMeal(in: app)
@@ -74,14 +87,27 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         enter("Yesterday I had dessert", in: app); app.buttons["coachSend"].tap()
         waitForReplies(3, in: app)
-        app.tabBars.buttons["History"].tap()
+        app.tabBars.buttons["Diary"].tap()
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Jerusalem")!
         let yesterday = calendar.date(byAdding: .day, value: -1, to: Date())!
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = calendar.timeZone; formatter.dateFormat = "yyyy-MM-dd"
         let date = formatter.string(from: yesterday)
-        let historical = app.buttons.containing(.staticText, identifier: date).firstMatch
+        formatter.dateFormat = "EEEE, d MMM"
+        let displayedDate = formatter.string(from: yesterday)
+        let historical = app.buttons.matching(identifier: "diaryDay").matching(NSPredicate(format: "label CONTAINS %@", displayedDate)).firstMatch
         XCTAssertTrue(historical.waitForExistence(timeout: 5)); historical.tap()
-        XCTAssertTrue(app.staticTexts["Time unspecified"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars[date].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.tabBars.buttons["Diary"].isHittable)
+        let historicalMeal = app.buttons["historyMeal"].firstMatch
+        revealList(historicalMeal, in: app)
+        XCTAssertTrue(historicalMeal.label.contains("Time unspecified"))
+        historicalMeal.tap()
+        revealMealDetailItem(app.staticTexts["Time unspecified"], in: app)
+        revealMealDetailItem(app.staticTexts[date], in: app)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars[date].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()
         let manual = app.textFields["mealText"]; XCTAssertTrue(manual.waitForExistence(timeout: 5)); manual.tap(); manual.typeText("Fixture review meal")
         if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
@@ -89,11 +115,11 @@ import XCTest
         for _ in 0..<5 where !review.isHittable { app.collectionViews.firstMatch.swipeUp() }
         XCTAssertTrue(review.isHittable); review.tap(); app.buttons["sendMeal"].tap()
         app.tabBars.buttons["Coach"].tap(); waitForReplies(4, in: app)
-        let reviewLink = app.buttons["Review meal estimate"]
+        let reviewLink = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
         revealCoachLink(reviewLink, in: app)
         XCTAssertTrue(reviewLink.waitForExistence(timeout: 5)); reviewLink.tap()
-        let accept = app.buttons["acceptReview"]; XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap()
-        XCTAssertTrue(app.staticTexts["Snack"].exists)
+        let accept = app.buttons["acceptReview"]; XCTAssertTrue(accept.waitForExistence(timeout: 5)); revealMealDetailItem(accept, in: app); accept.tap()
+        revealMealDetailItem(app.staticTexts["Snack"].firstMatch, in: app)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Synthetic fixture saved review record"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.terminate(); app.launch()
         XCTAssertTrue(app.staticTexts["half bread"].waitForExistence(timeout: 15))
@@ -109,16 +135,18 @@ import XCTest
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["coachFixtureBanner"].exists)
-        app.tabBars.buttons["Settings"].tap()
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         revealList(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
         let target = app.textFields["goalKcal"]
         XCTAssertTrue(target.waitForExistence(timeout: 5)); target.tap(); target.typeText("2000")
         app.buttons["saveGoals"].tap()
-        app.tabBars.buttons["Coach"].tap()
+        XCTAssertTrue(app.buttons["doneSettings"].waitForExistence(timeout: 5)); app.buttons["doneSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5))
         enter("Two eggs, three bread slices and salad", in: app); app.buttons["coachSend"].tap()
         waitForReplies(1, in: app)
         openLatestMeal(in: app)
-        XCTAssertTrue(app.staticTexts["Eggs"].exists)
+        XCTAssertTrue(app.staticTexts["Eggs"].firstMatch.exists)
         app.navigationBars.buttons.firstMatch.tap()
         enter("I weighed 70 kg this morning", in: app); app.buttons["coachSend"].tap()
         waitForReplies(2, in: app)
@@ -158,9 +186,11 @@ import XCTest
         for text in ["Two eggs, three bread slices and salad", "I weighed 70 kg this morning", "What is my remaining budget?", "Show my weekly report"] {
             revealCoach(app.staticTexts[text], in: app)
         }
-        app.tabBars.buttons["History"].tap()
-        revealList(app.buttons["openProgress"], in: app); app.buttons["openProgress"].tap()
+        app.tabBars.buttons["Progress"].tap()
         XCTAssertTrue(app.navigationBars["Progress"].waitForExistence(timeout: 5))
+        let workouts = app.buttons["openWorkouts"]
+        revealList(workouts, in: app); workouts.tap()
+        XCTAssertTrue(app.navigationBars["Workouts"].waitForExistence(timeout: 5))
         let savedWorkout = app.buttons["workoutRow"].firstMatch
         revealList(savedWorkout, in: app); savedWorkout.tap()
         XCTAssertTrue(app.navigationBars["Workout"].waitForExistence(timeout: 5))
@@ -315,18 +345,32 @@ import XCTest
         let link = links.element(boundBy: links.count - 1)
         revealCoachLink(link, in: app)
         XCTAssertTrue(link.isHittable); link.tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.tabBars.buttons["Coach"].isHittable, "Focused record details must hide the tab bar")
     }
     private func revealList(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<10 where !element.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        guard let list = nativeList(in: app) else { return }
+        for _ in 0..<10 where !element.isHittable {
+            if element.exists, !element.frame.isEmpty,
+               element.frame.midY < app.navigationBars.firstMatch.frame.maxY {
+                list.swipeDown()
+            } else {
+                list.swipeUp()
+            }
+        }
+        for _ in 0..<10 where !element.isHittable { list.swipeDown() }
         XCTAssertTrue(element.isHittable)
     }
+    private func nativeList(in app: XCUIApplication) -> XCUIElement? {
+        let collection = app.collectionViews.firstMatch
+        if collection.exists { return collection }
+        let table = app.tables.firstMatch
+        if table.exists { return table }
+        XCTFail("The destination must contain its native list")
+        return nil
+    }
     private func revealMealDetailItem(_ element: XCUIElement, in app: XCUIApplication) {
-        guard let list = app.collectionViews.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
-            XCTFail("Meal detail should have a visible list")
-            return
-        }
-        for _ in 0..<8 where !element.isHittable { list.swipeDown() }
-        for _ in 0..<8 where !element.isHittable { list.swipeUp() }
-        XCTAssertTrue(element.isHittable)
+        XCTAssertTrue(app.navigationBars["Meal"].exists, "Meal content checks require the actual record destination")
+        revealList(element, in: app)
     }
 }

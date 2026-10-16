@@ -84,6 +84,23 @@ import Testing
         #expect(!ProgressDate.validOptional("0"))
     }
 
+    @Test func editedGoalFieldsRequireConfirmationBeforeLoadingAnotherDate() {
+        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic goal date draft"))
+        snapshot.goals = [GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: snapshot.profile.timeZoneID, targets: NutritionValues(kcal: 1800), goalWeightKg: nil, exerciseCreditEnabled: false)]
+        var saved = GoalEditorValues(snapshot: snapshot, localDate: "2026-01-01")
+        #expect(!saved.hasEditedTargets)
+        saved.kcal = "1900"
+        #expect(saved.hasEditedTargets)
+        var blank = GoalEditorValues(snapshot: snapshot, localDate: "2026-02-01")
+        #expect(!blank.hasEditedTargets)
+        blank.protein = "100"
+        #expect(blank.hasEditedTargets)
+        blank.protein = ""
+        blank.exerciseCredit = true
+        #expect(blank.hasEditedTargets)
+        #expect(saved.kcal == "1900" && saved.localDate == "2026-01-01")
+    }
+
     @Test func clearingLastGoalAndLaterUnsetPreserveEarlierTargets() async throws {
         let root = URL.temporaryDirectory.appending(path: "ProgressEditorClear-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

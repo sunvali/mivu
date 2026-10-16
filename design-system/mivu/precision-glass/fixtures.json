@@ -1,0 +1,83 @@
+{
+  "synthetic": true,
+  "scenarios": {
+    "dailyDemo": {
+      "date": "2026-10-16",
+      "coverage": "partial",
+      "intakeKcal": 1280,
+      "goalKcal": 2000,
+      "remainingKcal": 720,
+      "macros": {
+        "protein": 76,
+        "carbs": 145,
+        "fat": 44
+      },
+      "meals": [
+        {
+          "name": "Breakfast",
+          "time": "08:30",
+          "kcal": 320
+        },
+        {
+          "name": "Lunch",
+          "time": "13:10",
+          "kcal": 640
+        },
+        {
+          "name": "Snack",
+          "time": "16:00",
+          "kcal": 320
+        }
+      ],
+      "weightKg": 74.2
+    },
+    "halfPortion": {
+      "baseMeal": "Lunch",
+      "beforeKcal": 640,
+      "afterKcal": 320,
+      "beforeGrams": {
+        "chicken": 150,
+        "rice": 180,
+        "vegetables": 100
+      },
+      "afterGrams": {
+        "chicken": 75,
+        "rice": 90,
+        "vegetables": 50
+      },
+      "sameRecord": true
+    },
+    "periodDemo": {
+      "separateFromDailyDemo": true,
+      "range": [
+        "2026-10-12",
+        "2026-10-18"
+      ],
+      "completeEligibleKcal": [
+        1800,
+        1900,
+        1750,
+        1920,
+        1880
+      ],
+      "remainingDates": "missing",
+      "eligibleCount": 5,
+      "averageKcal": 1850,
+      "goalKcal": 2000
+    },
+    "previousDay": {
+      "date": "2026-10-15",
+      "coverage": "complete",
+      "mealsKcal": [
+        420,
+        640,
+        160,
+        700
+      ],
+      "intakeKcal": 1920,
+      "weightKg": 74.3,
+      "workoutMinutes": 35,
+      "estimatedBurnKcal": 150
+    }
+  }
+}

@@ -25,26 +25,24 @@ struct CoachView: View {
                 if let snapshot = coach.diary.snapshot {
                     if let day = coach.diary.activeDay {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
-                            NutritionSummary(totals: snapshot.totals(dayID: day.id))
-                            if let goal = snapshot.goal(on: day.localDate) {
-                                let progress = ProgressAnalytics.daily(snapshot: snapshot, localDate: day.localDate)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Your goals").font(.subheadline.weight(.semibold))
-                                    if let target = goal.targets.kcal {
-                                        Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
-                                    }
-                                    Text("Remaining from recorded food: \(progress.remainingFromRecorded.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "unknown")")
-                                }
-                                .font(.subheadline)
-                                .accessibilityIdentifier("coachGoalSummary")
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(day.localDate).font(.subheadline)
+                                Spacer()
+                                Text(snapshot.totals(dayID: day.id).kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal recorded" } ?? "Not estimated yet")
+                                    .font(.subheadline.weight(.medium)).monospacedDigit()
                             }
-                        }.padding(16).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
+                            if let target = snapshot.goal(on: day.localDate)?.targets.kcal {
+                                Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
+                                    .font(.caption).accessibilityIdentifier("coachGoalSummary")
+                            }
+                            Divider()
+                        }.foregroundStyle(Color.diarySecondary)
                     }
                     if coach.turns.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("A little context, a clearer picture.").font(.title2.weight(.semibold))
-                            Text("Log meals, morning weigh-ins or workouts, add photos, or ask about your recorded progress. Estimates stay open to correction.").foregroundStyle(Color.diarySecondary)
+                            Text("What would you like to record?").font(.title2.weight(.semibold))
+                            Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate.")
+                                .foregroundStyle(Color.diarySecondary)
                         }.padding(.vertical, 24)
                     }
                     ForEach(conversationRows) { row in
@@ -57,7 +55,7 @@ struct CoachView: View {
                         }
                     }
                 } else { ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile.")) }
-            }.scrollTargetLayout().padding(16)
+            }.scrollTargetLayout().padding(20)
         }
         .scrollPosition($position)
         .scrollDismissesKeyboard(.interactively)
@@ -171,9 +169,9 @@ struct CoachView: View {
             if let error = coach.errorMessage { Text(error).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachError") }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture { Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.").font(.caption).foregroundStyle(Color.diarySecondary) }
             if !coach.draft.photos.isEmpty { Text("\(coach.draft.photos.count) photos attached").font(.caption).foregroundStyle(Color.diarySecondary) }
-            TextField("Meals, weigh-ins, workouts or a question?", text: $coach.draft.text, axis: .vertical)
+            TextField("Message Coach", text: $coach.draft.text, axis: .vertical)
                 .lineLimit(1...(typeSize.isAccessibilitySize ? 2 : 5)).focused($editing).accessibilityIdentifier("coachInput")
-                .padding(12).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16))
+                .padding(12).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16)).overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Color.diaryRule, lineWidth: 0.5) }
             HStack {
                 Button { editing = false; showPhotos = true } label: {
                     if typeSize.isAccessibilitySize { Image(systemName: "camera").font(.title2).frame(minWidth: 44, minHeight: 44) }
@@ -183,7 +181,7 @@ struct CoachView: View {
                 if reduceTransparency { send.buttonStyle(.borderedProminent) }
                 else { send.buttonStyle(.glassProminent) }
             }
-        }.padding(.horizontal, 16).padding(.vertical, 8).background(Color.diaryCanvas)
+        }.padding(.horizontal, 20).padding(.vertical, 8).background(Color.diaryCanvas)
             .disabled(coach.isSending || coach.diary.isChangingProfile)
     }
     private var send: some View {
@@ -198,7 +196,7 @@ struct CoachView: View {
                 if !turn.text.isEmpty { Text(turn.text).textSelection(.enabled) }
                 if !turn.photoIDs.isEmpty { Label("\(turn.photoIDs.count) attached photos", systemImage: "photo") .font(.caption) }
                 Label("Input saved on this iPhone", systemImage: "internaldrive").font(.caption).foregroundStyle(Color.diarySecondary)
-            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Color.diaryLeaf.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
+            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16))
     }
     private func turnActions(_ turn: CoachTurn) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -218,7 +216,14 @@ struct CoachView: View {
                 }
             }
             ForEach(coach.linkedMeals(turn)) { meal in
-                NavigationLink(value: meal.id) { Label(meal.state == .awaitingReview ? "Review meal estimate" : "Open meal and corrections", systemImage: "fork.knife").frame(minHeight: 44) }.accessibilityIdentifier("coachMealLink")
+                NavigationLink(value: meal.id) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(meal.state == .awaitingReview ? "Needs review" : meal.isSaved ? "Saved meal" : "Captured on this iPhone", systemImage: meal.state == .awaitingReview ? "checkmark.circle.badge.questionmark" : "checkmark.circle")
+                            .font(.subheadline.weight(.semibold))
+                        MealRow(meal: meal)
+                    }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 12))
+                }.accessibilityIdentifier("coachMealLink")
             }
             ForEach(coach.linkedWorkouts(turn)) { workout in
                 NavigationLink(value: WorkoutDestination(id: workout.id)) { Label("Open workout and corrections", systemImage: "figure.strengthtraining.traditional").frame(minHeight: 44) }.accessibilityIdentifier("coachWorkoutLink")
