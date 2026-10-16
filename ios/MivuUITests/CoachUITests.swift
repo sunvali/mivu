@@ -316,7 +316,7 @@ import XCTest
         XCTAssertLessThan(link.frame.maxY, app.textFields["coachInput"].frame.minY - 8)
     }
     private func replyElements(in app: XCUIApplication) -> XCUIElementQuery {
-        // Selectable reply text can restore as Other instead of StaticText.
+        // Find the reply independently of its platform accessibility role.
         app.descendants(matching: .any).matching(identifier: "coachReply")
     }
     private func progressReply(containing text: String, in app: XCUIApplication) -> XCUIElement {

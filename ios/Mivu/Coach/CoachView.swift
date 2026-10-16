@@ -49,7 +49,10 @@ struct CoachView: View {
                         switch row.kind {
                         case .input: inputBubble(row.turn)
                         case .reply:
+                            // Keep restored selectable replies exposed to VoiceOver.
                             Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(row.turn.assistantText ?? "")
                                 .accessibilityIdentifier("coachReply")
                         case .actions: turnActions(row.turn)
                         }
