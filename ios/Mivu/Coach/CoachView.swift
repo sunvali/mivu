@@ -17,96 +17,98 @@ struct CoachView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
-                if DiaryLaunch.isCoachInferenceFixture {
-                    Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner")
-                }
-                if let snapshot = coach.diary.snapshot {
-                    if let day = coach.diary.activeDay {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(day.localDate).font(.subheadline).accessibilityIdentifier("coachDate")
-                                Spacer()
-                                Text(snapshot.totals(dayID: day.id).kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal recorded" } ?? "Not estimated yet")
-                                    .font(.subheadline.weight(.medium)).monospacedDigit()
-                            }
-                            if let target = snapshot.goal(on: day.localDate)?.targets.kcal {
-                                Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
-                                    .font(.caption).accessibilityIdentifier("coachGoalSummary")
-                            }
-                            Divider()
-                        }.foregroundStyle(Color.diarySecondary)
+        VStack(spacing: 0) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 24) {
+                    if DiaryLaunch.isCoachInferenceFixture {
+                        Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner")
                     }
-                    if coach.turns.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("What would you like to record?").font(.title2.weight(.semibold))
-                            Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate.")
-                                .foregroundStyle(Color.diarySecondary)
-                        }.padding(.vertical, 24)
-                    }
-                    ForEach(conversationRows) { row in
-                        switch row.kind {
-                        case .input: inputBubble(row.turn)
-                        case .reply:
-                            Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
-                                .accessibilityIdentifier("coachReply")
-                        case .actions: turnActions(row.turn)
+                    if let snapshot = coach.diary.snapshot {
+                        if let day = coach.diary.activeDay {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(day.localDate).font(.subheadline).accessibilityIdentifier("coachDate")
+                                    Spacer()
+                                    Text(snapshot.totals(dayID: day.id).kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal recorded" } ?? "Not estimated yet")
+                                        .font(.subheadline.weight(.medium)).monospacedDigit()
+                                }
+                                if let target = snapshot.goal(on: day.localDate)?.targets.kcal {
+                                    Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
+                                        .font(.caption).accessibilityIdentifier("coachGoalSummary")
+                                }
+                                Divider()
+                            }.foregroundStyle(Color.diarySecondary)
                         }
+                        if coach.turns.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("What would you like to record?").font(.title2.weight(.semibold))
+                                Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate.")
+                                    .foregroundStyle(Color.diarySecondary)
+                            }.padding(.vertical, 24)
+                        }
+                        ForEach(conversationRows) { row in
+                            switch row.kind {
+                            case .input: inputBubble(row.turn)
+                            case .reply:
+                                Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
+                                    .accessibilityIdentifier("coachReply")
+                            case .actions: turnActions(row.turn)
+                            }
+                        }
+                    } else { ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile.")) }
+                }.scrollTargetLayout().padding(.vertical, 20)
+            }
+            .padding(.horizontal, 20)
+            .scrollPosition($position)
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .scrollDismissesKeyboard(.interactively)
+            .onScrollPhaseChange { oldPhase, phase, context in
+                scrollPhase = phase
+                if phase == .idle {
+                    if oldPhase == .interacting || oldPhase == .decelerating || (oldPhase != .tracking && position.isPositionedByUser) {
+                        followLatest = isNearBottom(context.geometry)
+                        if followLatest { hasNewMessage = false }
                     }
-                } else { ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile.")) }
-            }.scrollTargetLayout().padding(.vertical, 20)
-        }
-        .padding(.horizontal, 20)
-        .scrollPosition($position)
-        .defaultScrollAnchor(.bottom, for: .initialOffset)
-        .scrollDismissesKeyboard(.interactively)
-        .onScrollPhaseChange { oldPhase, phase, context in
-            scrollPhase = phase
-            if phase == .idle {
-                if oldPhase == .interacting || oldPhase == .decelerating || (oldPhase != .tracking && position.isPositionedByUser) {
-                    followLatest = isNearBottom(context.geometry)
-                    if followLatest { hasNewMessage = false }
+                    if followLatest && position.isPositionedByUser { followRequested = true }
+                    followLatestPosition()
                 }
-                if followLatest && position.isPositionedByUser { followRequested = true }
-                followLatestPosition()
             }
-        }
-        .onChange(of: position.isPositionedByUser) { _, byUser in
-            if byUser && scrollPhase != .tracking { followLatest = nearBottom }
-        }
-        .onScrollGeometryChange(for: Bool.self) { isNearBottom($0) } action: { _, nearBottom in
-            self.nearBottom = nearBottom
-            if nearBottom {
-                followLatest = true; hasNewMessage = false
-                if scrollPhase == .idle && position.isPositionedByUser { requestFollow() }
-            } else if scrollPhase == .interacting || scrollPhase == .decelerating || (position.isPositionedByUser && scrollPhase != .tracking) {
-                followLatest = false
+            .onChange(of: position.isPositionedByUser) { _, byUser in
+                if byUser && scrollPhase != .tracking { followLatest = nearBottom }
             }
-        }
-        .onChange(of: coach.turns) { _, _ in newContent() }
-        .onChange(of: coach.activity) { _, _ in newContent() }
-        .overlay(alignment: .bottom) {
-            if hasNewMessage && !nearBottom && !followLatest {
-                Button {
+            .onScrollGeometryChange(for: Bool.self) { isNearBottom($0) } action: { _, nearBottom in
+                self.nearBottom = nearBottom
+                if nearBottom {
                     followLatest = true; hasNewMessage = false
-                    requestFollow()
-                } label: {
-                    Label("New message", systemImage: "arrow.down").frame(minHeight: 44)
+                    if scrollPhase == .idle && position.isPositionedByUser { requestFollow() }
+                } else if scrollPhase == .interacting || scrollPhase == .decelerating || (position.isPositionedByUser && scrollPhase != .tracking) {
+                    followLatest = false
                 }
-                .buttonStyle(.bordered).tint(.diaryLeaf)
-                .background(Color.diarySurface, in: Capsule())
-                .accessibilityHint("Jump to the latest message and follow new replies")
-                .accessibilityIdentifier("coachNewMessage")
-                .padding(.bottom, 8)
             }
+            .onChange(of: coach.turns) { _, _ in newContent() }
+            .onChange(of: coach.activity) { _, _ in newContent() }
+            .overlay(alignment: .bottom) {
+                if hasNewMessage && !nearBottom && !followLatest {
+                    Button {
+                        followLatest = true; hasNewMessage = false
+                        requestFollow()
+                    } label: {
+                        Label("New message", systemImage: "arrow.down").frame(minHeight: 44)
+                    }
+                    .buttonStyle(.bordered).tint(.diaryLeaf)
+                    .background(Color.diarySurface, in: Capsule())
+                    .accessibilityHint("Jump to the latest message and follow new replies")
+                    .accessibilityIdentifier("coachNewMessage")
+                    .padding(.bottom, 8)
+                }
+            }
+            if coach.diary.snapshot != nil { composer }
         }
         .background(Color.diaryCanvas)
         .navigationTitle("Coach")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: UUID.self) { MealDetailView(model: coach.diary, mealID: $0) }
         .navigationDestination(for: WorkoutDestination.self) { WorkoutDetailView(model: coach.diary, sessionID: $0.id) }
-        .safeAreaInset(edge: .bottom) { if coach.diary.snapshot != nil { composer } }
         .sheet(isPresented: $showPhotos) {
             NavigationStack {
                 Form { PhotoInput(photos: $coach.draft.photos, preparation: preparation, importFailed: $importFailed) }
