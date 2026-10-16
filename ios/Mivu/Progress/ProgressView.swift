@@ -57,6 +57,8 @@ struct DiaryProgressView: View {
     @State private var showWorkout = false
     @State private var editingWeight: WeightEntry?
     @State private var selectedWeightDate: Date?
+    @State private var nutritionExpanded = false
+    @State private var coverageExpanded = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private enum Report { case daily, weekly, monthly }
@@ -198,7 +200,7 @@ struct DiaryProgressView: View {
                         Text("Lighter bars show days without complete coverage. Missing days have no bar.")
                             .font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }
-                    DisclosureGroup {
+                    DisclosureGroup(isExpanded: $nutritionExpanded) {
                         ForEach(nutrition) { point in
                             VStack(alignment: .leading, spacing: 4) {
                                 LabeledContent(point.label, value: "\(point.value.formatted(.number.precision(.fractionLength(0)))) kcal").monospacedDigit()
@@ -209,6 +211,7 @@ struct DiaryProgressView: View {
                             .accessibilityIdentifier("nutritionChartSummary")
                     } label: {
                         Text("Recorded intake data").accessibilityIdentifier("nutritionData")
+                            .accessibilityValue(nutritionExpanded ? "Expanded" : "Collapsed")
                     }
                 }
                 Section {
@@ -225,7 +228,7 @@ struct DiaryProgressView: View {
                 }
                 if report != .daily, let period {
                     Section {
-                        DisclosureGroup {
+                        DisclosureGroup(isExpanded: $coverageExpanded) {
                             LabeledContent("Complete", value: period.completeDayCount.formatted())
                             LabeledContent("Partial", value: period.partialDayCount.formatted())
                             LabeledContent("Unknown", value: period.unknownDayCount.formatted())
@@ -240,6 +243,7 @@ struct DiaryProgressView: View {
                             Text("Workout sessions: \(period.workoutCount)")
                         } label: {
                             Text("Coverage & averages").accessibilityIdentifier("progressCoverage")
+                                .accessibilityValue(coverageExpanded ? "Expanded" : "Collapsed")
                         }
                     }
                 }
@@ -255,7 +259,9 @@ struct DiaryProgressView: View {
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(item: $editingWeight) { WeightCorrectionView(model: model, entry: $0, localDate: weightDate($0)) }
-        .onChange(of: model.snapshot?.profile.id) { _, _ in selectedWeightDate = nil }
+        .onChange(of: model.snapshot?.profile.id) { _, _ in
+            selectedWeightDate = nil; nutritionExpanded = false; coverageExpanded = false
+        }
     }
 
     @ViewBuilder private var reportControls: some View {

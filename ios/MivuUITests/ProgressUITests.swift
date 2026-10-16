@@ -297,17 +297,25 @@ import XCTest
     private func logWorkout(in app: XCUIApplication) { open("logWorkout", in: app) }
 
     private func expand(_ id: String, toShow element: XCUIElement, in app: XCUIApplication) {
-        if !element.exists {
-            let title = id == "progressCoverage" ? "Coverage & averages" : "Recorded intake data"
-            let disclosure = app.buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
-            reveal(disclosure, in: app)
-            disclosure.tap()
+        let title = id == "progressCoverage" ? "Coverage & averages" : "Recorded intake data"
+        let disclosure = app.buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
+        reveal(disclosure, in: app)
+        let state = disclosure.staticTexts[id].firstMatch
+        XCTAssertTrue(state.exists, "The disclosure header exposes its expansion state")
+        let value = state.value as? String
+        XCTAssertTrue(value == "Expanded" || value == "Collapsed")
+        if value == "Collapsed" { disclosure.tap() }
+        let expanded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Expanded"), object: state)
+        let result = XCTWaiter.wait(for: [expanded], timeout: 5)
+        if result != .completed {
             let hierarchy = XCTAttachment(string: app.debugDescription)
-            hierarchy.name = "Progress immediately after expanding " + id
+            hierarchy.name = "Progress disclosure expansion failure"
             hierarchy.lifetime = .keepAlways
             add(hierarchy)
-            attachScreenshot("Progress immediately after expanding " + id, from: app)
+            attachScreenshot("Progress disclosure expansion failure", from: app)
         }
+        XCTAssertEqual(result, .completed)
+        reveal(element, in: app)
     }
 
     private func attachScreenshot(_ name: String, from app: XCUIApplication) {
@@ -326,13 +334,6 @@ import XCTest
         for _ in 0..<8 {
             if element.exists && element.isHittable { break }
             scroller.swipeUp()
-        }
-        if !element.exists {
-            let hierarchy = XCTAttachment(string: app.debugDescription)
-            hierarchy.name = "Progress after upward scrolling before fallback"
-            hierarchy.lifetime = .keepAlways
-            add(hierarchy)
-            attachScreenshot("Progress after upward scrolling before fallback", from: app)
         }
         for _ in 0..<8 {
             if element.exists && element.isHittable { break }
