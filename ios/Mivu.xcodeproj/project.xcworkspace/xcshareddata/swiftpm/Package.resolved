@@ -1,14 +1,24 @@
 {
-  "pins": [
+  "originHash" : "e70e669ed1f034d0988b74cb432818ce1fbdd4fa1effa10eb8f2cde7017c9e4e",
+  "pins" : [
     {
-      "identity": "joseswift",
-      "kind": "remoteSourceControl",
-      "location": "https://github.com/airsidemobile/JOSESwift.git",
-      "state": {
-        "revision": "c2664a902e75c0426a1d43132bd4babc6fd173d3",
-        "version": "3.0.0"
+      "identity" : "joseswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/airsidemobile/JOSESwift.git",
+      "state" : {
+        "revision" : "c2664a902e75c0426a1d43132bd4babc6fd173d3",
+        "version" : "3.0.0"
+      }
+    },
+    {
+      "identity" : "rive-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rive-app/rive-ios",
+      "state" : {
+        "revision" : "e04bb30881261a94643c9fede9be32ac620359d7",
+        "version" : "6.28.1"
       }
     }
   ],
-  "version": 2
+  "version" : 3
 }
