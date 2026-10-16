@@ -189,15 +189,21 @@ can reuse Pip bytes. Do not ship a placeholder second character.
 
 ## 7. Rive + Swift implementation policy
 
-Pin the official `RiveRuntime` package to 6.28.1 for the initial integration;
-record the resolved revision and test its exported asset. Use the new Swift
-concurrency API consistently, never mix its lifecycle with legacy RiveViewModel.
-One shared Worker, explicit file/artboard/state-machine creation and a retained
-bound ViewModelInstance form the adapter. Make Rive API calls on MainActor;
-background rendering support does not remove that requirement. Pause the actual
-player when hidden. Start with 60 fps for gestures and 30 fps for thinking,
-then measure on hardware. Avoid 3D GPU-canvas setup for this 2D asset. These
-choices follow the [official Apple integration guide](https://rive.app/docs/runtimes/apple/apple).
+Pin the official `RiveRuntime` package to 6.28.1 and retain one supported
+`RiveViewModel`/`RiveView` player with its exact typed bound model instance.
+Real sequential native testing exposed skipped alternate gestures in the
+concurrency renderer; the supported synchronous renderer passed repeated
+reactions and natural stopping. This verified compatibility decision supersedes
+the originally planned Worker API. Do not mix renderer lifecycles, fork the
+runtime or fire duplicate triggers to mask failures. See
+[verification](../../../../docs/verification/2026-10-17-pip-runtime.md).
+
+Make runtime calls on MainActor, with file reading off the main actor and a
+cancellation/generation check before parsing. Pause the actual player when
+hidden. A real pause edge resets its named artboard/machine and bound default
+instance to discard unrendered old triggers; repeated hidden updates do nothing.
+Use 60 fps for gestures and 30 fps for thinking, then measure on hardware.
+Avoid 3D GPU-canvas setup for this 2D asset.
 
 Settled state machines can stop advancing; use a still resting branch instead
 of an endless idle timeline. Pausing preserves state, so reattachment must reset
