@@ -187,7 +187,7 @@ struct DiaryProgressView: View {
                     } else {
                         Chart(nutrition) { point in
                             BarMark(x: .value("Date", point.date, unit: .day), y: .value("Recorded kcal", point.value))
-                                .foregroundStyle(point.complete ? Color.diaryEnergy : Color.diaryEnergy.opacity(0.45))
+                                .foregroundStyle(point.complete ? Color.diaryEnergy : Color.diaryEnergy.opacity(0.70))
                         }
                         .chartXScale(domain: nutritionDomain)
                         .chartXAxis {
@@ -242,18 +242,8 @@ struct DiaryProgressView: View {
                             LabeledContent("Pending analysis", value: period.pendingDayCount.formatted())
                             Text("\(period.missingDayCount) missing days were excluded; missing does not mean zero intake.")
                                 .font(.subheadline).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("missingDayCopy")
-                            (Text("Average recorded macros: ")
-                                + Text("carbs \(grams(period.averageIntake.carbs))").foregroundColor(.diaryCarbs)
-                                + Text(", ")
-                                + Text("protein \(grams(period.averageIntake.protein))").foregroundColor(.diaryProtein)
-                                + Text(", ")
-                                + Text("fat \(grams(period.averageIntake.fat))").foregroundColor(.diaryFat))
-                            (Text("Known samples of \(period.dayCount) dates: kcal \(period.knownIntakeSamples.kcal), ")
-                                + Text("carbs \(period.knownIntakeSamples.carbs)").foregroundColor(.diaryCarbs)
-                                + Text(", ")
-                                + Text("protein \(period.knownIntakeSamples.protein)").foregroundColor(.diaryProtein)
-                                + Text(", ")
-                                + Text("fat \(period.knownIntakeSamples.fat)").foregroundColor(.diaryFat))
+                            Text("Average recorded macros: \(Text("carbs \(grams(period.averageIntake.carbs))").foregroundColor(.diaryCarbs)), \(Text("protein \(grams(period.averageIntake.protein))").foregroundColor(.diaryProtein)), \(Text("fat \(grams(period.averageIntake.fat))").foregroundColor(.diaryFat))")
+                            Text("Known samples of \(period.dayCount) dates: kcal \(period.knownIntakeSamples.kcal), \(Text("carbs \(period.knownIntakeSamples.carbs)").foregroundColor(.diaryCarbs)), \(Text("protein \(period.knownIntakeSamples.protein)").foregroundColor(.diaryProtein)), \(Text("fat \(period.knownIntakeSamples.fat)").foregroundColor(.diaryFat))")
                             Text("Within 10% of target: \(period.adherenceNumerator) of \(period.adherenceDenominator) eligible dates")
                             Text("Workout sessions: \(period.workoutCount)")
                         } label: {
