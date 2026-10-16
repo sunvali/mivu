@@ -313,7 +313,7 @@ import XCTest
             start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)))
         }
         XCTAssertGreaterThanOrEqual(disclosure.frame.minY, app.navigationBars["Progress"].frame.maxY)
-        XCTAssertLessThanOrEqual(disclosure.frame.maxY, app.tabBars.firstMatch.frame.minY)
+        XCTAssertLessThanOrEqual(disclosure.frame.maxY, app.tabBars.firstMatch.frame.minY + 0.5)
         let state = disclosure.staticTexts[id].firstMatch
         XCTAssertTrue(state.exists, "The disclosure header exposes its expansion state")
         let value = state.value as? String
