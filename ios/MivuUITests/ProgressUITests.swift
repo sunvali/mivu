@@ -367,15 +367,19 @@ import XCTest
 
     private func dismissKeyboard(in app: XCUIApplication) {
         guard app.keyboards.firstMatch.exists else { return }
-        let toolbarDone = app.toolbars.buttons["Done"].firstMatch
-        let done = toolbarDone.exists && toolbarDone.isHittable ? toolbarDone
-            : app.buttons.matching(identifier: "Done").allElementsBoundByIndex.first {
-                $0.isHittable && $0.frame.midY > app.frame.height / 2
-            }
+        let done = app.buttons.matching(identifier: "progressKeyboardDone").allElementsBoundByIndex.first(where: \.isHittable)
         if let done {
             done.tap()
             let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.keyboards.firstMatch)
-            XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 5), .completed)
+            let result = XCTWaiter.wait(for: [hidden], timeout: 5)
+            if result != .completed {
+                let hierarchy = XCTAttachment(string: app.debugDescription)
+                hierarchy.name = "Progress keyboard after its Done action"
+                hierarchy.lifetime = .keepAlways
+                add(hierarchy)
+                attachScreenshot("Progress keyboard after its Done action", from: app)
+            }
+            XCTAssertEqual(result, .completed)
         } else {
             XCTFail("The visible numeric keyboard must expose its Done action")
         }

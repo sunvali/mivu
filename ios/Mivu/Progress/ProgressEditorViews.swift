@@ -162,7 +162,7 @@ struct GoalEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationTitle("Goals")
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() }.accessibilityIdentifier("progressKeyboardDone") }
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if isDirty { showDiscard = true } else { dismiss() } }.disabled(saving).frame(minHeight: 44)
                     .alert("Discard changes to goals?", isPresented: $showDiscard) {
                         Button("Discard changes", role: .destructive) { dismiss() }
@@ -288,7 +288,7 @@ struct WeightCorrectionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationTitle("Edit weight")
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() }.accessibilityIdentifier("progressKeyboardDone") }
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if isDirty { showDiscard = true } else { dismiss() } }.disabled(saving).frame(minHeight: 44)
                     .alert("Discard this weight correction?", isPresented: $showDiscard) {
                         Button("Discard changes", role: .destructive) { dismiss() }
@@ -495,7 +495,7 @@ struct WorkoutEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationTitle(session == nil ? "Log workout" : "Edit workout")
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() }.accessibilityIdentifier("progressKeyboardDone") }
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if isDirty { showDiscard = true } else { dismiss() } }.disabled(saving).frame(minHeight: 44)
                     .alert("Discard changes to this workout?", isPresented: $showDiscard) {
                         Button("Discard changes", role: .destructive) { dismiss() }
@@ -632,7 +632,7 @@ struct MorningWeightEditorView: View {
                     Button("Save") { save() }.disabled(!valid || saving || model.isChangingProfile)
                         .accessibilityIdentifier("saveWeight")
                 }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() }.accessibilityIdentifier("progressKeyboardDone") }
             }
         }
         .onChange(of: model.snapshot?.profile.id) { _, profileID in
