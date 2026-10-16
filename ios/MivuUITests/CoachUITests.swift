@@ -16,6 +16,10 @@ import XCTest
         XCTAssertFalse(app.staticTexts["History message 1"].exists, "Reopening should render only the latest twenty turns initially")
         let earlier = app.buttons["coachEarlierMessages"]
         revealCoach(earlier, in: app)
+        for _ in 0..<3 where earlier.frame.minY < app.navigationBars["Coach"].frame.maxY {
+            app.scrollViews.firstMatch.swipeDown()
+        }
+        XCTAssertGreaterThanOrEqual(earlier.frame.minY, app.navigationBars["Coach"].frame.maxY)
         earlier.tap()
         let first = app.staticTexts["History message 1"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
@@ -26,7 +30,11 @@ import XCTest
         XCTAssertTrue(newest.waitForExistence(timeout: 5))
         XCTAssertTrue(first.isHittable, "New input must preserve the history being read")
         let latest = app.buttons["coachNewMessage"]
-        XCTAssertTrue(latest.waitForExistence(timeout: 5)); latest.tap()
+        let found = latest.waitForExistence(timeout: 5)
+        if !found {
+            let diagnostic = XCTAttachment(string: app.debugDescription); diagnostic.name = "Paging failure"; diagnostic.lifetime = .keepAlways; add(diagnostic)
+        }
+        XCTAssertTrue(found); latest.tap()
         let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: newest)
         XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
     }

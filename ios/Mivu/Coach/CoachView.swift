@@ -103,7 +103,7 @@ struct CoachView: View {
             .onChange(of: coach.turns) { _, _ in newContent() }
             .onChange(of: coach.activity) { _, _ in newContent() }
             .overlay(alignment: .bottom) {
-                if hasNewMessage && !nearBottom && !followLatest {
+                if hasNewMessage && !followLatest {
                     Button {
                         followLatest = true; hasNewMessage = false
                         requestFollow()
@@ -138,7 +138,7 @@ struct CoachView: View {
             preparation.cancel(); preparation = PhotoPreparation()
             showPhotos = false; editing = false
             followLatest = true; hasNewMessage = false
-            nearBottom = true; followRequested = false
+            followRequested = false
             position = ScrollPosition(idType: String.self)
             requestFollow()
         }
