@@ -2,9 +2,12 @@
 
 Date: 2026-10-17, Asia/Jerusalem.
 
-Status: written specification for owner review. The owner approved the hybrid
-SwiftUI/Rive approach and the character/behavior direction in conversation.
-This document has not yet been approved for implementation planning.
+Status: approved for implementation planning by the owner on 2026-10-17.
+The hybrid SwiftUI/Rive approach and companion behavior remain approved.
+The owner selected original Pip and requested a complete body-language brief,
+with future bundled-character selection while shipping only Pip initially.
+A broader UX/UI redesign is permitted; replacement journeys still require
+concrete screen/flow design before implementation.
 
 ## 1. Intent and existing baseline
 
@@ -45,7 +48,9 @@ prerendered clips would make interruption and blending less flexible.
 This scope includes Today, Coach, successful review feedback, shared motion
 tokens, the animation asset, lifecycle/accessibility policies, and verification.
 Diary, Progress, Capture, and Settings retain their existing flows and receive
-only shared native motion where relevant. They do not get additional mascots.
+only shared native motion where relevant. Settings additionally shows a static
+Pip preview/name, and a native character chooser once two or more compatible
+characters are bundled. No additional animated mascot surfaces are introduced.
 
 No new gamification, streak penalties, reward currency, notification campaigns,
 voice/lip-sync, sound effects, background animation, or changes to food analysis.
@@ -53,21 +58,22 @@ No database migration, remote asset downloads, paid services, or new analytics.
 
 ## 3. Character and visual language
 
-Create an original rounded teal creature, with two expressive eyes, a small
-mouth, short arms, and a recognisable asymmetric silhouette: one soft peak on
-the head. Keep the design readable at 40 points. Avoid a generic glowing orb,
-medical claims, a Duolingo lookalike, or shiny glass effects on the character.
-Its personality is warm, curious, and playful; it never looks disappointed in
-the user or judges food, calorie intake, or body weight.
+Original Pip is selected: an expressive orange fox with large pointed ears,
+cream muzzle/chest/tail tip, dark brown paws and a short teal scarf. Preserve
+its face and silhouette from the selected reference. Its personality is curious,
+warm and playful; it never judges food, calorie intake or body weight.
 
-Use teal from the approved palette, a pale face detail, and dark expressive
-features; provide an authored dark palette rather than applying a global tint.
-The character is opaque vector artwork against existing content surfaces.
-Preserve neutral native glass navigation. Do not change the app icon or wordmark.
+The authoritative [Pip motion bible](../../../design-system/mivu/characters/pip/MOTION.md)
+contains the full-body rig, palette, seven pose scores, timings, interruptions,
+static fallbacks and versioned asset contract. Use the accompanying reference,
+context and storyboard images. The original identity sheet controls identity;
+the written limits control motion amplitude. These are concept assets, not a
+completed Rive rig or implemented screens.
 
-Before rigging, produce one character sheet covering front/three-quarter view,
-light/dark use, the seven poses below, and 40/64/80-point scale previews. Review
-the artwork against this brief before treating it as the production asset.
+Retain the interface's teal action color and neutral glass navigation. Pip stays
+orange in light and dark appearances with authored contrast adjustments; do not
+globally tint the character. Do not change the app icon or wordmark. Before
+rigging, verify front/three-quarter views and 40/64/80-point production previews.
 
 ### Placement
 
@@ -75,6 +81,7 @@ the artwork against this brief before treating it as the production asset.
 | --- | --- | --- |
 | Today | 64-point companion beside the existing date line, within the summary section | One greeting per foreground session, then resting; reactions reuse this slot |
 | Coach | 40-point companion in a reserved 48-point status strip above the composer | Remains available while reading; does not insert animated conversation rows |
+| Settings | Static preview and selected character name | One entry now; native chooser only when catalog contains at least two characters |
 | Empty Coach | Same status-strip companion; preserve existing empty-state text | Greeting uses the same character instance, not a second illustration |
 | Review detail | Existing success text/native feedback; no extra character | Returning to Today/Coach may show one fresh review reaction |
 
@@ -150,6 +157,20 @@ Keep persistence, inference, and analytics independent of animation:
    thermal state, scene phase, focus, and actual surface visibility. Keep it a
    small value/policy function rather than a new service framework.
 
+4. `CharacterCatalog` contains stable descriptor IDs, display names, schema
+   version and bundled rig/fallback/preview paths. `CompanionSelection` is a
+   root-owned value in SwiftUI `@State`, persisting only the device-local
+   `selectedCharacterID` preference in UserDefaults. Ship exactly `pip`. Unknown
+   or removed IDs normalize to Pip, including the stored value. Same-ID
+   selection is a no-op. No diary-schema, archive or provider changes.
+
+Future character selection cancels loads and deadlines, releases the old player
+and file, clears transient reactions and shows the new resting fallback. Retain
+one worker, and guard every async completion with a load generation so stale
+results cannot attach. At most one player may run. Test switching with a second
+test-only descriptor, never a shipped placeholder. Use the exact descriptor
+fields and selection interfaces defined in the plan and motion bible.
+
 Suggested home: `ios/Mivu/Design/` for these focused files and motion tokens.
 Root integration belongs in `Diary/TodayView.swift` (which owns the tab shell),
 with adapters in `Coach/CoachView.swift`, capture receipts in existing models,
@@ -165,12 +186,14 @@ No synchronous asset decoding, image preparation, or network work in `body`.
 
 ## 6. Rive delivery contract and failure handling
 
-Deliver a real editable character source plus `mivu-companion.riv`, with:
+Deliver real editable Pip source plus
+`ios/Mivu/Resources/Characters/pip/mivu-companion.riv`, with:
 
 - Artboard `MivuCompanion`, state machine `Companion`, and documented binding
-  schema: integer `pose` (0 resting, 1 attentive, 2 thinking, 3 saved,
+  schema version 1 on bound view model `CompanionModel`: Number `pose` with integral values (0 resting, 1 attentive, 2 thinking, 3 saved,
   4 reviewed, 5 recovery, 6 greeting), boolean `darkMode`, trigger `react`.
-  Repeated fresh events of the same kind fire `react`; a new pose cancels the
+  Repeated fresh events of the same kind fire `react`; resting `react`
+  performs the eligible 150 ms blink; a new pose cancels the
   current one-shot. One-shots return to their resting drawing; the host restores
   the current semantic pose at the specified duration.
 - Layered rig, reusable expressions, seven completed poses/transitions,
@@ -186,9 +209,9 @@ to the character asset. Confirm asset and runtime licensing before bundling.
 Do not accept new account terms, buy tooling, or substitute a stock character
 without authorization.
 
-Use the official Apple runtime through Swift Package Manager. Resolve and pin
-one stable compatible version during planning/implementation, record the exact
-version in `Package.resolved`, and test this asset against it. The current
+Use the official Apple runtime through Swift Package Manager, initially pinned
+to stable 6.28.1. Record its exact revision in `Package.resolved` and test the
+exported asset against it. Reverify compatibility when implementation begins. The current
 repository has no Rive dependency. Follow the selected version’s threading and
 playback APIs; new runtime API calls still require MainActor even when worker
 processing is concurrent.
@@ -296,7 +319,8 @@ the owner’s applicable authorization, not this design document alone.
 
 ## Review handoff
 
-Owner review of this written specification is the next stage. After approval,
-write the implementation plan with ordered asset, policy, integration, and
-verification tasks, then present execution choices. This document adds no app
-code, dependency, runtime asset, or claimed performance result.
+The owner approved writing the implementation plan. Review that plan and
+use the selected Pip motion bible before execution. The broader experience redesign begins
+with a concrete journey audit and complete screen/transition proposals; its
+new flows are not silently substituted for existing behavior. This document
+adds no app code, dependency, runtime asset, or claimed performance result.

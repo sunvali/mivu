@@ -1,0 +1,34 @@
+{
+  "characterID": "pip",
+  "displayName": "Pip",
+  "schemaVersion": 1,
+  "status": "selected concept; production rig not authored",
+  "created": "2026-10-17",
+  "source": "Original concept imagery generated for this project using the built-in image generation tool. Production rights and asset provenance to be recorded before bundling.",
+  "assets": [
+    {
+      "file": "reference.png",
+      "sha256": "5619a5abe6655768662e2f4b7b361b29770919bed67dbe129c32f1dc2b26ebf9",
+      "role": "concept reference, not runtime asset"
+    },
+    {
+      "file": "context.png",
+      "sha256": "1b3b0ec7ffdb43fa2993732ab836857c785b3f1a0da158f3f06dca1935345408",
+      "role": "concept reference, not runtime asset"
+    },
+    {
+      "file": "storyboard.png",
+      "sha256": "5bef0e0459bf52c26fde44170c4b9419d0d4e4154779f51b0d01fdd1fd9166e1",
+      "role": "concept reference, not runtime asset"
+    },
+    {
+      "file": "character-sheet.pdf",
+      "sha256": "d1f2def8b63f3bc2dc809054cd3feb93ddbac38dd638267fcfa0021357d0f07c",
+      "role": "11-page reviewed planning guide"
+    }
+  ],
+  "runtimeAsset": null,
+  "editableRiveSource": null,
+  "targetRuntime": "RiveRuntime 6.28.1; not installed",
+  "productionValidation": "pending"
+}
