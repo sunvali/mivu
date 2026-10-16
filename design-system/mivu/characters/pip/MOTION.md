@@ -1,8 +1,10 @@
 # Pip: character and motion bible
 
-Status: selected identity and implementation brief, 17 October 2026. Original
-Pip is the sole launch character. These drawings are concepts; an editable Rive
-rig, runtime export and measured device acceptance remain implementation work.
+Status: selected identity and motion contract, 17 October 2026. Original Pip is
+the sole launch character. The editable rig and runtime export are now in
+`source/` and the app bundle; see `AUTHORING.md`. Reference drawings remain
+concepts. Simulator integration and physical-device acceptance are tracked
+separately in the implementation evidence.
 
 ## 1. Identity and authority
 

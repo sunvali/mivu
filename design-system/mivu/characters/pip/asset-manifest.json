@@ -2,9 +2,9 @@
   "characterID": "pip",
   "displayName": "Pip",
   "schemaVersion": 1,
-  "status": "selected concept; production rig not authored",
+  "status": "authored original vector rig; app integration validation in progress",
   "created": "2026-10-17",
-  "source": "Original concept imagery generated for this project using the built-in image generation tool. Production rights and asset provenance to be recorded before bundling.",
+  "source": "Original concept imagery generated for this project using the built-in image generation tool; production vector curves and animation keys authored specifically for Mivu from the selected Pip reference. No imported third-party artwork.",
   "assets": [
     {
       "file": "reference.png",
@@ -27,8 +27,134 @@
       "role": "11-page reviewed planning guide"
     }
   ],
-  "runtimeAsset": null,
-  "editableRiveSource": null,
-  "targetRuntime": "RiveRuntime 6.28.1; not installed",
-  "productionValidation": "pending"
+  "runtimeAsset": {
+    "path": "ios/Mivu/Resources/Characters/pip/mivu-companion.riv",
+    "sha256": "767cc0656c5278d97a06e02aaa8b04e0d07a6b9a7d7af1da95110ffb1d7eee7e",
+    "bytes": 21259
+  },
+  "editableRiveSource": "source/scene.rml",
+  "targetRuntime": "RiveRuntime 6.28.1",
+  "productionValidation": {
+    "rml": "0 errors, 0 warnings; inspect problems empty",
+    "nativeRuntime": "pending focused asset suite",
+    "simulator": "pending integration",
+    "physicalDevice": "pending owner connection; no frame-time or power claims"
+  },
+  "authoring": {
+    "tool": "Official Rive CLI 1.6.0",
+    "generator": "source/build_pip.py",
+    "instructions": "AUTHORING.md",
+    "export": "local unsigned script-free --once",
+    "ownership": "Original project artwork; editable curves and animation keys retained in repository"
+  },
+  "contract": {
+    "artboard": "MivuCompanion",
+    "stateMachine": "Companion",
+    "viewModel": "CompanionModel",
+    "defaultInstance": "Default",
+    "bounds": [
+      512,
+      512
+    ],
+    "properties": {
+      "pose": {
+        "type": "Number",
+        "default": 0,
+        "integerRange": [
+          0,
+          6
+        ]
+      },
+      "darkMode": {
+        "type": "Boolean",
+        "default": false
+      },
+      "react": {
+        "type": "Trigger",
+        "queuedOnCreation": false
+      }
+    }
+  },
+  "fallbacks": [
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipAttentive.imageset/dark.pdf",
+      "sha256": "cb87725cfd02eb0f4f3f62c4814926a6cf25510e56f32310d9f23d9bc58fcdd7",
+      "bytes": 4489
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipAttentive.imageset/light.pdf",
+      "sha256": "5cdee3c3949f98fe2024832128c71e687bed8e1047e0442e459a720583c612b5",
+      "bytes": 4497
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipGreeting.imageset/dark.pdf",
+      "sha256": "731c44efa1f61c9052e497faef7a5935c4ae674c8b45a051491726667525ae25",
+      "bytes": 4594
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipGreeting.imageset/light.pdf",
+      "sha256": "58bbe7a6bc18ccd0b3d3494a6e098575145b8ae54dc04a3e240cc9d33475ff0a",
+      "bytes": 4602
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/dark.pdf",
+      "sha256": "eb26062b9cb928eaca3ff1d4c7723f19fd5a1f08cd719ed23ecf860a80f064d8",
+      "bytes": 4391
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/light.pdf",
+      "sha256": "5cbd200848a9f9eaa5057a5ce8c4fd10adf3131c19dbdf897da9e6821e7994ed",
+      "bytes": 4398
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipRecovery.imageset/dark.pdf",
+      "sha256": "44abe7d2ae3a226a9fa3b3bbededc32b235abeb560ed5384a988652fd5903b29",
+      "bytes": 4521
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipRecovery.imageset/light.pdf",
+      "sha256": "a476e14f16affe10a5d5d31c1230cc8aed586d7a43dc1ccf3d4ba5d11447cf1e",
+      "bytes": 4528
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipResting.imageset/dark.pdf",
+      "sha256": "8d7f18f7fed53ba0a6be8fd1fba5bd571bc5a8223926bbcbfd7f0e3c9ec1e9cc",
+      "bytes": 4391
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipResting.imageset/light.pdf",
+      "sha256": "a2f2a2d6e78f58cc45665c07965da7230cd11573c01725ae42d4b75e6d6ed3a5",
+      "bytes": 4398
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipReviewed.imageset/dark.pdf",
+      "sha256": "49e689d7bc6702b8390efe48cd688d3a520174c81a048f57d6858c6b5b23fa78",
+      "bytes": 4288
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipReviewed.imageset/light.pdf",
+      "sha256": "df81d883ce22c4bf786fd50e41cc3931464dc8221a45a093ccbc62c9ca365bad",
+      "bytes": 4303
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipSaved.imageset/dark.pdf",
+      "sha256": "249b3939b15ca5aae4468485dde786113c8055894ffdf8d8ac8e8fedac0ae909",
+      "bytes": 4572
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipSaved.imageset/light.pdf",
+      "sha256": "f3e5e631e1a6acbb038fb8c9dff89e1d87149f70e7306bd1631b6ed1997ac80e",
+      "bytes": 4576
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipThinking.imageset/dark.pdf",
+      "sha256": "90b7f7be4857942ea42ef324b1d960802df8392e3dcf29385ff85ea71ec485f7",
+      "bytes": 4524
+    },
+    {
+      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipThinking.imageset/light.pdf",
+      "sha256": "7b00ad59b32f68203840abbe80af012870f4633f93faca88b38b73a20bac330c",
+      "bytes": 4532
+    }
+  ]
 }

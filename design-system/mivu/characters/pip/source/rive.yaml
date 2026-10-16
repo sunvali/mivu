@@ -1,0 +1,4 @@
+name: mivu-companion
+main: MivuCompanion
+exclude:
+  - __pycache__
