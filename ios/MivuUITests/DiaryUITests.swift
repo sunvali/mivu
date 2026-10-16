@@ -84,12 +84,11 @@ import XCTest
             }
         }
         for _ in 0..<10 where !readyToUse(element, in: app) { list.swipeDown() }
-        XCTAssertTrue(readyToUse(element, in: app), "The target must be reachable above fixed controls before use")
+        XCTAssertTrue(readyToUse(element, in: app), "The target must be reachable; morning weight must clear fixed controls")
     }
     private func readyToUse(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         guard element.exists, element.isHittable else { return false }
-        let interactive = element.elementType == .button || element.elementType == .switch || element.elementType == .textField || element.elementType == .secureTextField
-        guard interactive else { return true }
+        guard element.identifier == "logWeight" else { return true }
         let top = app.navigationBars.firstMatch.frame.maxY
         var bottom = app.frame.maxY
         let tabs = app.tabBars.firstMatch

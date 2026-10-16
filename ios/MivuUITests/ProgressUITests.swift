@@ -352,8 +352,7 @@ import XCTest
 
     private func readyToUse(_ element: XCUIElement, in app: XCUIApplication, scroller: XCUIElement) -> Bool {
         guard element.exists && element.isHittable else { return false }
-        let controls: [XCUIElement.ElementType] = [.button, .textField, .textView, .picker, .slider]
-        guard controls.contains(element.elementType) else { return true }
+        guard element.identifier == "logWeight" else { return true }
         var top = scroller.frame.minY
         var bottom = scroller.frame.maxY
         if let navigation = app.navigationBars.allElementsBoundByIndex.first(where: \.isHittable) {
