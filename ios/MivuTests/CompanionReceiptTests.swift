@@ -21,6 +21,25 @@ private actor ReceiptRefreshGate {
     func release() { continuation?.resume(); continuation = nil }
 }
 
+private actor OrderedReceiptRefreshes {
+    private var started = 0
+    private var continuations: [Int: CheckedContinuation<Void, Never>] = [:]
+    private var waiters: [Int: CheckedContinuation<Void, Never>] = [:]
+
+    func pause() async {
+        started += 1
+        let index = started
+        await withCheckedContinuation { continuation in
+            continuations[index] = continuation
+            waiters.removeValue(forKey: index)?.resume()
+        }
+    }
+    func waitUntilPaused(_ index: Int) async {
+        if started < index { await withCheckedContinuation { waiters[index] = $0 } }
+    }
+    func release(_ index: Int) { continuations.removeValue(forKey: index)?.resume() }
+}
+
 @Suite @MainActor struct CompanionReceiptTests {
     private func fixture() async throws -> (URL, DiaryStore, DiaryProfile, TrackingDay) {
         let path = URL.temporaryDirectory.appending(path: "CompanionReceipt-" + UUID().uuidString)
@@ -37,7 +56,7 @@ private actor ReceiptRefreshGate {
         try await store.applyAnalysis(AnalysisOutput(profileID: profile.id, mealID: meal.id,
             submissionID: meal.submissions[0].id, baseRevision: 0,
             items: [FoodItem(name: "Synthetic apple", nutrition: NutritionValues(kcal: 95))]), expectedProfileID: profile.id)
-        return try #require(await store.snapshot().meals.first)
+        return try #require(await store.snapshot().meals.first { $0.id == meal.id })
     }
 
     @Test func capturePublishesCommittingOperationAndRepeatedSubmissionKeepsTimestamp() async throws {
@@ -325,6 +344,44 @@ private actor ReceiptRefreshGate {
         #expect(model.companionReviewEvent == nil && model.companionCaptureEvent == nil)
         let original = try await store.selectProfile(profile.id)
         #expect(original.meals.first?.state == .saved)
+    }
+
+    @Test func overlappingReviewCompletionsCannotRepeatAnEarlierOperation() async throws {
+        let (path, store, profile, day) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: path) }
+        let first = try await proposal(store, profile, day), second = try await proposal(store, profile, day)
+        let refreshes = OrderedReceiptRefreshes()
+        let model = DiaryViewModel(store: store, snapshotLoading: { id in
+            let updated = try await store.snapshot(expectedProfileID: id)
+            await refreshes.pause()
+            return updated
+        })
+        model.snapshot = try await store.snapshot()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let firstAccept = Task { await model.acceptReview(mealID: first.id, submissionID: first.submissions[0].id,
+            expectedProfileID: profile.id, currentTime: { now }) }
+        await refreshes.waitUntilPaused(1)
+        let secondAccept = Task { await model.acceptReview(mealID: second.id, submissionID: second.submissions[0].id,
+            expectedProfileID: profile.id, currentTime: { now.addingTimeInterval(1) }) }
+        await refreshes.waitUntilPaused(2)
+        var duplicateClockRead = false
+        let duplicateAccept = Task { await model.acceptReview(mealID: first.id, submissionID: first.submissions[0].id,
+            expectedProfileID: profile.id, currentTime: { duplicateClockRead = true; return now.addingTimeInterval(2) }) }
+        await refreshes.waitUntilPaused(3)
+        #expect(model.companionReviewEvent == nil)
+        await refreshes.release(1)
+        #expect(await firstAccept.value)
+        #expect(model.companionReviewEvent?.operationID == first.submissions[0].id)
+        await refreshes.release(2)
+        #expect(await secondAccept.value)
+        let secondEvent = try #require(model.companionReviewEvent)
+        #expect(secondEvent.operationID == second.submissions[0].id)
+        await refreshes.release(3)
+        #expect(await duplicateAccept.value)
+        #expect(model.companionReviewEvent == secondEvent)
+        #expect(!duplicateClockRead)
+        let durable = try await DiaryStore(directory: path).selectProfile(profile.id)
+        #expect(durable.meals.count == 2 && durable.meals.allSatisfy { $0.state == .saved && $0.revision == 1 })
     }
 
 }

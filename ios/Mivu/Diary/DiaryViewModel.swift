@@ -30,6 +30,7 @@ final class DiaryViewModel {
     private(set) var captureReceipt: UUID?
     private(set) var companionCaptureEvent: CompanionEvent?
     private(set) var companionReviewEvent: CompanionEvent?
+    private var companionReviewSubmissions: [UUID: Set<UUID>] = [:]
     var restoreGeneration = 0
     private var worker: Task<Void, Never>?
     private var workerID: UUID?
@@ -99,7 +100,7 @@ final class DiaryViewModel {
             try await store.acceptReview(mealID: mealID, submissionID: submissionID, expectedProfileID: expectedProfileID)
         }
         guard accepted, !Task.isCancelled, !isChangingProfile, snapshot?.profile.id == expectedProfileID else { return false }
-        if isNewReview, companionReviewEvent?.operationID != submissionID || companionReviewEvent?.profileID != expectedProfileID {
+        if isNewReview, companionReviewSubmissions[expectedProfileID, default: []].insert(submissionID).inserted {
             companionReviewEvent = CompanionEvent(profileID: expectedProfileID, operationID: submissionID,
                                                   kind: .reviewed, committedAt: currentTime())
         }
