@@ -20,7 +20,7 @@ struct MealDetailView: View {
             if let meal = model.meal(mealID), let snapshot = model.snapshot {
                 List {
                     Section {
-                        mealSummary(meal, snapshot: snapshot)
+                        mealSummary(meal, snapshot: snapshot).listRowBackground(Color.diarySummarySurface)
                     }.listRowBackground(Color.clear)
                     if let review = meal.submissions.last(where: { $0.state == .awaitingReview }), let proposal = review.proposal {
                         Section("Review estimate") {
@@ -86,7 +86,7 @@ struct MealDetailView: View {
                                     Text("Submission \(index + 1)").font(.subheadline.weight(.semibold))
                                     if !submission.text.isEmpty { Text(submission.text) }
                                     LabeledContent("Based on revision", value: submission.baseRevision.formatted()).monospacedDigit()
-                                    Text(submission.state.title).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                    Text(submission.state.title).font(.subheadline).foregroundStyle(submission.state.color)
                                     if let proposal = submission.proposal {
                                         DisclosureGroup("Stored proposal") {
                                             ForEach(proposal.items) { item in
@@ -105,7 +105,7 @@ struct MealDetailView: View {
                         }
                     }.listRowBackground(Color.clear)
                     if let message = model.errorMessage {
-                        Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                        Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
                             .listRowBackground(Color.clear)
                     }
                 }
@@ -205,10 +205,10 @@ struct MealDetailView: View {
                 Text(meal.eatenAt, format: .dateTime.day().month().hour().minute()).font(.subheadline).foregroundStyle(Color.diarySecondary)
             }
             Label("Saved on this iPhone", systemImage: "checkmark.circle.fill")
-                .font(.subheadline).foregroundStyle(Color.diaryAccent)
+                .font(.subheadline).foregroundStyle(Color.diarySuccess)
             if meal.state != .saved {
                 Label(meal.state.title, systemImage: meal.state == .needsRetry ? "exclamationmark.circle" : "clock")
-                    .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    .font(.subheadline).foregroundStyle(meal.state.color)
             }
             if model.sampleMode { Text("Apple sample estimate — not food recognition").font(.caption).foregroundStyle(Color.diarySecondary) }
             if meal.isSaved { NutritionSummary(totals: meal.totals) }
@@ -291,7 +291,7 @@ private struct MoveMealSheet: View {
                     Text("Only this meal will move. The destination changes when you tap Move.")
                 }
                 if let message = model.errorMessage {
-                    Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                    Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
                 }
             }
             .disabled(moving)
@@ -370,7 +370,7 @@ private struct FoodItemEditor: View {
                     if item.uncertain { Label("Portion or nutrients are uncertain", systemImage: "info.circle").font(.subheadline).foregroundStyle(Color.diarySecondary) }
                 }
                 if let message = errorMessage() {
-                    Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                    Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
                 }
             }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)

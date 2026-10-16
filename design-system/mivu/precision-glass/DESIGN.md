@@ -22,11 +22,13 @@ Native bars adapt to the content underneath. Do not hard-code reflection, blur r
 | Raised content | #FFFFFF | #1D2324 | grouped surface |
 | Primary text | #142023 | #F4F7F6 | primary label |
 | Secondary text | #53646B | #B7C4C8 | secondary label |
-| Interactive tint | #136875 | #81D5DB | dynamic accent asset |
+| Interactive tint | #006D75 | #63D5CD | dynamic accent asset |
 | On accent | #FFFFFF | #092126 | explicit contrast pair |
 | Rule | #D5DFE1 | #374346 | separator; strengthen for Increase Contrast |
 
-Hex values are reference tokens, not a substitute for semantic behavior. Destructive/error/warning roles use system semantic colors plus labels and symbols. Never use red/green to judge food or body weight. Chart series uses the accent; coverage is additionally encoded by labels/patterns.
+Hex values are reference tokens, not a substitute for semantic behavior. Saved, pending and retry states use adaptive green, amber and red with labels and symbols. Never use red/green to judge food or body weight. Energy charts use teal; weight charts use blue. Coverage remains encoded by labels and opacity as well. Protein is blue, carbs amber, and fat violet everywhere nutrients are named. See tokens.json for regular and Increase Contrast values.
+
+Summary areas use opaque pale mint (#EAF5F3) in light mode and deep teal (#142D2D) in dark mode. Chart surfaces use pale blue (#EDF3FC) and slate blue (#19283A). Glass navigation stays neutral. Colored section symbols provide wayfinding while section labels remain readable neutral text. Colors never replace units, labels, numbers or status icons.
 
 ## Typography
 Use SF Pro system styles. Large title for roots; inline title for deep detail. Body 17 pt at default size, secondary text generally 15 pt, metadata 13 pt. Respect Dynamic Type instead of freezing point sizes. Display metric starts around 48 pt with a scalable relative metric; tabular digits for values, not monospaced prose. Weight is semibold for titles and key values, regular for reading. No all-caps navigation or motivational headlines.
