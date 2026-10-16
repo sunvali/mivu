@@ -52,3 +52,20 @@ transaction that moves the meal. A newer ingredient edit or another move therefo
 rejects a stale sheet without changing that newer record. Moves preserve the meal’s
 nutrition revision, so moving pending input does not mark its nutrition as saved.
 A failed move keeps its destination selection and original stored meal for retry.
+
+## Accessible conversation history
+
+Coach lays out the latest 20 turns when opened. Show earlier messages expands the
+visible history backward in groups of 20 and reveals the older page. The starting
+turn ID stays stable when new input arrives, preserving history being read and the
+New message action. Scroll geometry owns the distance state; profile changes do
+not overwrite it. Unread navigation follows explicit reading intent. No stored
+turns are removed. Explicitly loaded history and new
+arrivals can increase the current session's rendered count; reopening starts with
+the latest page again. Explicit page layout avoids the reproduced native lazy-list
+defect where visibly restored rows were absent from the accessibility tree.
+
+## Visual review
+
+[Six-screen light/dark review](precision-glass-review.pdf) contains native simulator
+captures of Today, capture, Diary, Progress, Coach and Settings.
