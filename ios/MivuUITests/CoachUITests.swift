@@ -1,6 +1,35 @@
 import XCTest
 
 @MainActor final class CoachUITests: XCTestCase {
+    func testEarlierMessagesRemainReadableWhenNewInputArrives() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        for index in 1...21 {
+            enter("History message \(index)", in: app)
+            app.buttons["coachSend"].tap()
+            XCTAssertTrue(app.staticTexts["History message \(index)"].waitForExistence(timeout: 5))
+        }
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["History message 1"].exists, "Reopening should render only the latest twenty turns initially")
+        let earlier = app.buttons["coachEarlierMessages"]
+        revealCoach(earlier, in: app)
+        earlier.tap()
+        let first = app.staticTexts["History message 1"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertTrue(first.isHittable, "Loading earlier should reveal the older page")
+        XCTAssertFalse(earlier.exists)
+        enter("History message 22", in: app); app.buttons["coachSend"].tap()
+        XCTAssertTrue(first.isHittable, "New input must preserve the history being read")
+        let latest = app.buttons["coachNewMessage"]
+        XCTAssertTrue(latest.waitForExistence(timeout: 5)); latest.tap()
+        let newest = app.staticTexts["History message 22"]
+        let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: newest)
+        XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
+    }
+
     func testOfflineTextPhotoCapturePersistsAcrossRelaunchAndTabs() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
@@ -184,8 +213,7 @@ import XCTest
         XCTAssertTrue(weekly.label.contains("Weight average: 70 kg from 1 measured dates."))
         XCTAssertTrue(weekly.label.contains("Estimated exercise burn: 200 kcal."))
         for text in ["Two eggs, three bread slices and salad", "I weighed 70 kg this morning", "What is my remaining budget?", "Show my weekly report"] {
-            // Restored selectable inputs can expose a different native accessibility role.
-            let input = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", text)).firstMatch
+            let input = app.staticTexts[text]
             revealCoach(input, in: app)
             XCTAssertEqual(input.label, text)
         }
@@ -333,8 +361,13 @@ import XCTest
         replyElements(in: app).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
     private func revealCoach(_ element: XCUIElement, in app: XCUIApplication) {
-        // Long report replies virtualize earlier conversation rows.
-        for _ in 0..<12 where !element.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        for _ in 0..<12 where !element.isHittable {
+            if element.exists, element.frame.minY >= app.textFields["coachInput"].frame.minY {
+                app.scrollViews.firstMatch.swipeUp()
+            } else {
+                app.scrollViews.firstMatch.swipeDown()
+            }
+        }
         for _ in 0..<12 where !element.isHittable { app.scrollViews.firstMatch.swipeUp() }
         if !element.isHittable {
             let screenshot = XCTAttachment(screenshot: app.screenshot())

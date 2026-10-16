@@ -12,6 +12,7 @@ struct CoachView: View {
     @State private var hasNewMessage = false
     @State private var nearBottom = true
     @State private var followRequested = false
+    @State private var history = CoachHistoryWindow()
     @FocusState private var editing: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -19,11 +20,12 @@ struct CoachView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 24) {
-                    if DiaryLaunch.isCoachInferenceFixture {
-                        Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner")
-                    }
-                    if let snapshot = coach.diary.snapshot {
+                if let snapshot = coach.diary.snapshot {
+                    // Eager pages keep restored rows in the native accessibility tree.
+                    VStack(alignment: .leading, spacing: 24) {
+                        if DiaryLaunch.isCoachInferenceFixture {
+                            Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner")
+                        }
                         if let day = coach.diary.activeDay {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(alignment: .firstTextBaseline) {
@@ -38,6 +40,7 @@ struct CoachView: View {
                                 }
                                 Divider()
                             }.foregroundStyle(Color.diarySecondary)
+                                .accessibilityElement(children: .contain)
                         }
                         if coach.turns.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
@@ -46,21 +49,33 @@ struct CoachView: View {
                                     .foregroundStyle(Color.diarySecondary)
                             }.padding(.vertical, 24)
                         }
-                        ForEach(conversationRows) { row in
-                            switch row.kind {
-                            case .input: inputBubble(row.turn)
-                            case .reply:
-                                Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
-                                    .accessibilityIdentifier("coachReply")
-                            case .actions: turnActions(row.turn)
+                        if history.startIndex(in: turnIDs) > 0 {
+                            Button("Show earlier messages") {
+                                guard let first = history.showEarlier(ids: turnIDs) else { return }
+                                followLatest = false; followRequested = false
+                                position.scrollTo(id: "input-" + first.uuidString, anchor: .top)
                             }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("coachEarlierMessages")
                         }
-                    } else { ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile.")) }
-                }.scrollTargetLayout().padding(.vertical, 20)
+                        ForEach(conversationRows) { row in
+                            VStack(alignment: .leading, spacing: 0) {
+                                switch row.kind {
+                                case .input: inputBubble(row.turn)
+                                case .reply:
+                                    Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
+                                        .accessibilityIdentifier("coachReply")
+                                case .actions: turnActions(row.turn)
+                                }
+                            }
+                            .id(row.id)
+                            .accessibilityElement(children: .contain)
+                        }
+                    }.scrollTargetLayout().padding(.vertical, 20)
+                } else { ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile.")) }
             }
             .padding(.horizontal, 20)
             .scrollPosition($position)
-            .defaultScrollAnchor(.bottom, for: .initialOffset)
             .scrollDismissesKeyboard(.interactively)
             .onScrollPhaseChange { oldPhase, phase, context in
                 scrollPhase = phase
@@ -118,7 +133,8 @@ struct CoachView: View {
         }
         .alert("Could not import photo", isPresented: $importFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
         .sensoryFeedback(.success, trigger: coach.captureReceipt)
-        .onChange(of: coach.diary.snapshot?.profile.id) { _, _ in
+        .onChange(of: coach.diary.snapshot?.profile.id, initial: true) { _, _ in
+            history.reset(ids: turnIDs)
             preparation.cancel(); preparation = PhotoPreparation()
             showPhotos = false; editing = false
             followLatest = true; hasNewMessage = false
@@ -134,6 +150,7 @@ struct CoachView: View {
         geometry.contentSize.height + geometry.contentInsets.bottom - geometry.contentOffset.y - geometry.containerSize.height <= 80
     }
     private func newContent() {
+        history.reconcile(ids: turnIDs)
         hasNewMessage = true
         requestFollow()
     }
@@ -160,8 +177,9 @@ struct CoachView: View {
         let kind: Kind
         var id: String { kind.rawValue + "-" + turn.id.uuidString }
     }
+    private var turnIDs: [UUID] { coach.turns.map(\.id) }
     private var conversationRows: [ConversationRow] {
-        coach.turns.flatMap { turn in
+        coach.turns.dropFirst(history.startIndex(in: turnIDs)).flatMap { turn in
             var rows = [ConversationRow(turn: turn, kind: .input)]
             if turn.assistantText != nil { rows.append(ConversationRow(turn: turn, kind: .reply)) }
             if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil || $0.workoutID != nil || $0.destination != nil }) {
