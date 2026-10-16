@@ -123,7 +123,7 @@ import XCTest
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Synthetic fixture saved review record"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.terminate(); app.launch()
         XCTAssertTrue(app.staticTexts["half bread"].waitForExistence(timeout: 15))
-        XCTAssertEqual(app.staticTexts.matching(identifier: "coachReply").count, 4)
+        XCTAssertEqual(replyElements(in: app).count, 4)
         let banner = app.staticTexts["coachFixtureBanner"]
         for _ in 0..<12 where !banner.isHittable { app.scrollViews.firstMatch.swipeDown() }
         XCTAssertTrue(banner.isHittable)
@@ -150,7 +150,7 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         enter("I weighed 70 kg this morning", in: app); app.buttons["coachSend"].tap()
         waitForReplies(2, in: app)
-        guard app.staticTexts.matching(identifier: "coachReply").element(boundBy: 1).label.contains("Recorded weight: 70 kg.") else {
+        guard replyElements(in: app).element(boundBy: 1).label.contains("Recorded weight: 70 kg.") else {
             XCTFail("The morning weigh-in must be saved through the production tool and reported from its receipt")
             return
         }
@@ -248,7 +248,7 @@ import XCTest
         XCTAssertTrue(banner.isHittable)
         XCTAssertEqual(banner.frame.minY, before, accuracy: 2)
         jump.tap()
-        let reply = app.staticTexts.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "coachReply", "Period recorded workouts:")).firstMatch
+        let reply = progressReply(containing: "Period recorded workouts:", in: app)
         XCTAssertTrue(reply.waitForExistence(timeout: 5))
         let bottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             reply.frame.maxY <= app.textFields["coachInput"].frame.minY
@@ -315,8 +315,12 @@ import XCTest
         XCTAssertTrue(link.isHittable)
         XCTAssertLessThan(link.frame.maxY, app.textFields["coachInput"].frame.minY - 8)
     }
+    private func replyElements(in app: XCUIApplication) -> XCUIElementQuery {
+        // Selectable reply text can restore as Other instead of StaticText.
+        app.descendants(matching: .any).matching(identifier: "coachReply")
+    }
     private func progressReply(containing text: String, in app: XCUIApplication) -> XCUIElement {
-        app.staticTexts.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "coachReply", text)).firstMatch
+        replyElements(in: app).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
     private func revealCoach(_ element: XCUIElement, in app: XCUIApplication) {
         // Long report replies virtualize earlier conversation rows.
@@ -328,11 +332,11 @@ import XCTest
         let input = app.textFields["coachInput"]; XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText(text)
     }
     private func waitForReplies(_ count: Int, in app: XCUIApplication) {
+        let replies = replyElements(in: app)
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            app.staticTexts.matching(identifier: "coachReply").count >= count
+            replies.count >= count
         }, object: app)
         XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 15), .completed)
-        let replies = app.staticTexts.matching(identifier: "coachReply")
         if replies.count > 0 {
             let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: replies.element(boundBy: replies.count - 1))
             XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed, "Latest completed reply should remain visible after it arrives")

@@ -3,6 +3,21 @@ import Testing
 @testable import Mivu
 
 @Suite @MainActor struct ProgressEditorStateTests {
+    @Test(arguments: ["2026-03-08", "2026-11-01"])
+    func intakeChartDomainContainsWholeDaysAcrossDaylightSaving(endingOn: String) throws {
+        let zone = "America/Los_Angeles"
+        let day = TrackingDay(localDate: endingOn, timeZoneID: zone, startAt: try #require(ProgressDate.date(endingOn, zone: zone)), completeness: .unknown)
+        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic chart range", timeZoneID: zone))
+        snapshot.days = [day]; snapshot.activeDayID = day.id
+        let model = DiaryViewModel(store: DiaryStore(directory: URL.temporaryDirectory.appending(path: "ChartRange-" + UUID().uuidString)))
+        model.snapshot = snapshot
+        let domain = DiaryProgressView(model: model).nutritionDomain
+        let spring = endingOn == "2026-03-08"
+        let formatter = ISO8601DateFormatter()
+        #expect(domain.lowerBound == formatter.date(from: spring ? "2026-03-02T08:00:00Z" : "2026-10-26T07:00:00Z"))
+        #expect(domain.upperBound == formatter.date(from: spring ? "2026-03-09T07:00:00Z" : "2026-11-02T08:00:00Z"))
+    }
+
     @Test(arguments: [false, true], [false, true])
     func chartAndReportSelectHighestRevisionOnTiedMeasurementTime(legacy: Bool, reverse: Bool) throws {
         var snapshot = tiedWeightSnapshot()

@@ -104,12 +104,14 @@ struct DiaryProgressView: View {
             return Observation(label: label, value: value, date: date, complete: day.completeness == .complete, coverage: day.completeness?.rawValue.capitalized ?? "No tracking day")
         }
     }
-    private var nutritionDomain: ClosedRange<Date> {
+    var nutritionDomain: ClosedRange<Date> {
         let zone = snapshot?.profile.timeZoneID ?? TimeZone.current.identifier
-        let start = ProgressDate.date(report == .daily ? today : (period?.startLocalDate ?? today), zone: zone) ?? Date()
-        let last = ProgressDate.date(today, zone: zone) ?? start
+        let firstDate = ProgressDate.date(report == .daily ? today : (period?.startLocalDate ?? today), zone: zone) ?? Date()
+        let lastDate = ProgressDate.date(today, zone: zone) ?? firstDate
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
+        let start = calendar.startOfDay(for: firstDate)
+        let last = calendar.startOfDay(for: lastDate)
         let end = calendar.date(byAdding: .day, value: 1, to: last) ?? last.addingTimeInterval(86_400)
         return start...end
     }

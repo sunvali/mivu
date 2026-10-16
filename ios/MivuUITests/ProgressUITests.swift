@@ -332,14 +332,14 @@ import XCTest
             : (progress.exists && progress.isHittable ? progress
                : app.collectionViews.allElementsBoundByIndex.first(where: \.isHittable) ?? app.collectionViews.firstMatch)
         for _ in 0..<8 {
-            if element.exists && element.isHittable { break }
+            if readyToUse(element, in: app, scroller: scroller) { break }
             scroller.swipeUp()
         }
         for _ in 0..<8 {
-            if element.exists && element.isHittable { break }
+            if readyToUse(element, in: app, scroller: scroller) { break }
             scroller.swipeDown()
         }
-        if !element.exists || !element.isHittable {
+        if !readyToUse(element, in: app, scroller: scroller) {
             let hierarchy = XCTAttachment(string: app.debugDescription)
             hierarchy.name = "Progress lookup accessibility hierarchy"
             hierarchy.lifetime = .keepAlways
@@ -347,7 +347,28 @@ import XCTest
             attachScreenshot("Progress lookup failure", from: app)
         }
         XCTAssertTrue(element.waitForExistence(timeout: 5))
-        XCTAssertTrue(element.isHittable)
+        XCTAssertTrue(readyToUse(element, in: app, scroller: scroller), "Interactive rows must be fully clear of fixed bars before use")
+    }
+
+    private func readyToUse(_ element: XCUIElement, in app: XCUIApplication, scroller: XCUIElement) -> Bool {
+        guard element.exists && element.isHittable else { return false }
+        let controls: [XCUIElement.ElementType] = [.button, .textField, .textView, .picker, .slider]
+        guard controls.contains(element.elementType) else { return true }
+        var top = scroller.frame.minY
+        var bottom = scroller.frame.maxY
+        if let navigation = app.navigationBars.allElementsBoundByIndex.first(where: \.isHittable) {
+            top = max(top, navigation.frame.maxY)
+        }
+        if let tabs = app.tabBars.allElementsBoundByIndex.first(where: \.isHittable) {
+            bottom = min(bottom, tabs.frame.minY)
+        }
+        let capture = app.buttons["logMeal"]
+        if element.identifier != "logMeal", capture.exists && capture.isHittable {
+            bottom = min(bottom, capture.frame.minY - 12)
+        }
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists { bottom = min(bottom, keyboard.frame.minY) }
+        return element.frame.minY >= top && element.frame.maxY <= bottom
     }
 
     private func replace(_ field: XCUIElement, with value: String) {

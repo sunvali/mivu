@@ -32,6 +32,11 @@ import XCTest
             for tab in ["Today", "Diary", "Progress", "Coach"] {
                 app.tabBars.buttons[tab].tap()
                 XCTAssertTrue(app.buttons["profileSettings"].waitForExistence(timeout: 5))
+                if tab == "Coach" {
+                    let heading = app.staticTexts["What would you like to record?"]
+                    XCTAssertTrue(heading.waitForExistence(timeout: 5))
+                    XCTAssertGreaterThanOrEqual(heading.frame.minX, app.frame.minX + 16)
+                }
                 let screen = XCTAttachment(screenshot: app.screenshot())
                 screen.name = "Precision Glass " + tab + " " + mode; screen.lifetime = .keepAlways; add(screen)
             }
@@ -66,10 +71,11 @@ import XCTest
         return app
     }
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        let collection = app.collectionViews.firstMatch
-        let list = collection.exists ? collection : app.tables.firstMatch
-        guard list.exists else { XCTFail("The destination must contain a native list"); return }
-        for _ in 0..<10 where !element.isHittable {
+        let lists = app.collectionViews.allElementsBoundByIndex + app.tables.allElementsBoundByIndex
+        guard let list = lists.reversed().first(where: { list in
+            list.isHittable || (list.buttons.allElementsBoundByIndex + list.textFields.allElementsBoundByIndex + list.staticTexts.allElementsBoundByIndex).contains(where: { $0.isHittable })
+        }) else { XCTFail("The destination must contain a foreground native list"); return }
+        for _ in 0..<10 where !readyToUse(element, in: app) {
             if element.exists, !element.frame.isEmpty,
                element.frame.midY < app.navigationBars.firstMatch.frame.maxY {
                 list.swipeDown()
@@ -77,8 +83,25 @@ import XCTest
                 list.swipeUp()
             }
         }
-        for _ in 0..<10 where !element.isHittable { list.swipeDown() }
-        XCTAssertTrue(element.isHittable)
+        for _ in 0..<10 where !readyToUse(element, in: app) { list.swipeDown() }
+        XCTAssertTrue(readyToUse(element, in: app), "The target must be reachable above fixed controls before use")
+    }
+    private func readyToUse(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        guard element.exists, element.isHittable else { return false }
+        let interactive = element.elementType == .button || element.elementType == .switch || element.elementType == .textField || element.elementType == .secureTextField
+        guard interactive else { return true }
+        let top = app.navigationBars.firstMatch.frame.maxY
+        var bottom = app.frame.maxY
+        let tabs = app.tabBars.firstMatch
+        if tabs.exists { bottom = min(bottom, tabs.frame.minY) }
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists { bottom = min(bottom, keyboard.frame.minY) }
+        let capture = app.buttons["logMeal"]
+        if capture.exists, capture.isHittable { bottom = min(bottom, capture.frame.minY - 12) }
+        let frame = element.frame
+        guard bottom > top else { return false }
+        guard frame.height <= bottom - top else { return true }
+        return frame.minY >= top + 4 && frame.maxY <= bottom - 4
     }
     private func replace(_ field: XCUIElement, with value: String) {
         field.tap()
@@ -319,8 +342,12 @@ import XCTest
         XCTAssertTrue(app.staticTexts["My diary"].exists)
         app.buttons["Diary preferences"].tap()
         XCTAssertTrue(app.navigationBars["Diary preferences"].waitForExistence(timeout: 5))
-        reveal(app.staticTexts["English"], in: app)
-        XCTAssertTrue(app.staticTexts["English"].isHittable)
+        let language = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label == %@ OR (label == %@ AND value == %@)", "App language, English", "App language", "English"
+        )).firstMatch
+        reveal(language, in: app)
+        XCTAssertTrue(language.isHittable)
+        XCTAssertTrue(language.label == "App language, English" || (language.label == "App language" && language.value as? String == "English"))
         XCTAssertEqual(app.segmentedControls.count, 0, "The unsupported language selector must remain hidden")
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch.tap()

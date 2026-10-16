@@ -57,7 +57,7 @@ struct CoachView: View {
                 } else { ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile.")) }
             }.scrollTargetLayout().padding(.vertical, 20)
         }
-        .contentMargins(.horizontal, 20, for: .scrollContent)
+        .padding(.horizontal, 20)
         .scrollPosition($position)
         .scrollDismissesKeyboard(.interactively)
         .onScrollPhaseChange { oldPhase, phase, context in
