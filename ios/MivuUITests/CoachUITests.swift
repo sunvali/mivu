@@ -184,7 +184,10 @@ import XCTest
         XCTAssertTrue(weekly.label.contains("Weight average: 70 kg from 1 measured dates."))
         XCTAssertTrue(weekly.label.contains("Estimated exercise burn: 200 kcal."))
         for text in ["Two eggs, three bread slices and salad", "I weighed 70 kg this morning", "What is my remaining budget?", "Show my weekly report"] {
-            revealCoach(app.staticTexts[text], in: app)
+            // Restored selectable inputs can expose a different native accessibility role.
+            let input = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", text)).firstMatch
+            revealCoach(input, in: app)
+            XCTAssertEqual(input.label, text)
         }
         app.tabBars.buttons["Progress"].tap()
         XCTAssertTrue(app.navigationBars["Progress"].waitForExistence(timeout: 5))
@@ -333,6 +336,12 @@ import XCTest
         // Long report replies virtualize earlier conversation rows.
         for _ in 0..<12 where !element.isHittable { app.scrollViews.firstMatch.swipeDown() }
         for _ in 0..<12 where !element.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        if !element.isHittable {
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Coach history reveal failure"; screenshot.lifetime = .keepAlways; add(screenshot)
+            let hierarchy = XCTAttachment(string: "Requested element: \(element.description)\n\n\(app.debugDescription)")
+            hierarchy.name = "Coach history reveal accessibility"; hierarchy.lifetime = .keepAlways; add(hierarchy)
+        }
         XCTAssertTrue(element.isHittable)
     }
     private func enter(_ text: String, in app: XCUIApplication) {
