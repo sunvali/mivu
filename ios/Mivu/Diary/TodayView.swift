@@ -256,6 +256,7 @@ struct TodayView: View {
             if model.snapshot != nil {
                 DiaryCaptureAction { showComposer = true }
                     .padding(.horizontal, 20).padding(.vertical, 12)
+                    .background(Color.diaryCanvas)
             }
         }
         .navigationDestination(for: UUID.self) { MealDetailView(model: model, mealID: $0) }

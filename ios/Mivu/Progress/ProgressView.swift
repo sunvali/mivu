@@ -102,6 +102,15 @@ struct DiaryProgressView: View {
             return Observation(label: label, value: value, date: date, complete: day.completeness == .complete, coverage: day.completeness?.rawValue.capitalized ?? "No tracking day")
         }
     }
+    private var nutritionDomain: ClosedRange<Date> {
+        let zone = snapshot?.profile.timeZoneID ?? TimeZone.current.identifier
+        let start = ProgressDate.date(report == .daily ? today : (period?.startLocalDate ?? today), zone: zone) ?? Date()
+        let last = ProgressDate.date(today, zone: zone) ?? start
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
+        let end = calendar.date(byAdding: .day, value: 1, to: last) ?? last.addingTimeInterval(86_400)
+        return start...end
+    }
     var weights: [WeightObservation] {
         guard let snapshot else { return [] }
         let start = ProgressAnalytics.period(snapshot: snapshot, endingOn: today, days: 30).startLocalDate
@@ -176,7 +185,15 @@ struct DiaryProgressView: View {
                             BarMark(x: .value("Date", point.date, unit: .day), y: .value("Recorded kcal", point.value))
                                 .foregroundStyle(point.complete ? Color.diaryAccent : Color.diaryAccent.opacity(0.45))
                         }
+                        .chartXScale(domain: nutritionDomain)
+                        .chartXAxis {
+                            AxisMarks(values: .stride(by: .day, count: report == .monthly ? 7 : 1)) { _ in
+                                AxisGridLine()
+                                AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                            }
+                        }
                         .chartYScale(domain: .automatic(includesZero: true))
+                        .environment(\.timeZone, TimeZone(identifier: snapshot.profile.timeZoneID) ?? .gmt)
                         .frame(height: 200).accessibilityHidden(true)
                         Text("Lighter bars show days without complete coverage. Missing days have no bar.")
                             .font(.subheadline).foregroundStyle(Color.diarySecondary)
