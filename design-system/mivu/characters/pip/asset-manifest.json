@@ -36,7 +36,7 @@
   "targetRuntime": "RiveRuntime 6.28.1",
   "productionValidation": {
     "rml": "0 errors, 0 warnings; inspect problems empty",
-    "nativeRuntime": "pending focused asset suite",
+    "nativeRuntime": "16 focused actual-asset tests passed at c32ef262643120ed84f48c2f01835a3034e630f1; repeated gestures, natural stopping, cancellation and fallback verified",
     "simulator": "pending integration",
     "physicalDevice": "pending owner connection; no frame-time or power claims"
   },
@@ -156,5 +156,6 @@
       "sha256": "7b00ad59b32f68203840abbe80af012870f4633f93faca88b38b73a20bac330c",
       "bytes": 4532
     }
-  ]
+  ],
+  "renderer": "Supported RiveView synchronous renderer with retained typed data binding; concurrency renderer failed sequential reaction acceptance"
 }

@@ -21,7 +21,7 @@ Keep `build_pip.py` and `scene.rml` synchronized. To make direct RML edits perma
 
 ## Runtime contract
 
-- Runtime: official `RiveRuntime` **6.28.1**, pinned by Swift Package Manager; its MIT notice ships separately.
+- Runtime: official `RiveRuntime` **6.28.1**, pinned by Swift Package Manager; its MIT notice ships separately. The adapter uses the supported synchronous `RiveView` renderer and its exact bound typed model instance. Sequential native tests exposed skipped reactions in the concurrency renderer; the compatibility path preserves the same asset contract without a runtime fork or duplicate triggers. See `docs/verification/2026-10-17-pip-runtime.md`.
 - Artboard: `MivuCompanion`, 512 × 512, transparent, shared bounds for every pose.
 - State machine: `Companion`; default bound model: `CompanionModel`, exported instance `Default`.
 - Number `pose`: integer 0–6, default 0. Boolean `darkMode`: default false. Trigger `react`: initially un-fired.
