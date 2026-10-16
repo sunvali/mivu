@@ -3,6 +3,31 @@ import Testing
 @testable import Mivu
 
 @Suite struct DiaryPreferencesDraftTests {
+    @Test func isDirtyTracksEditsSaveSynchronizationConflictAndRevert() {
+        var profile = DiaryProfile(name: "Synthetic profile")
+        var draft = DiaryPreferencesDraft()
+        draft.synchronize(profile, restoreGeneration: 0)
+        #expect(!draft.isDirty)
+
+        draft.timezone = "Europe/London"
+        draft.preferences = "Synthetic preference"
+        #expect(draft.isDirty)
+
+        profile = draft.applying(to: profile)
+        draft.synchronize(profile, restoreGeneration: 0)
+        #expect(!draft.isDirty)
+
+        draft.preferences = "Unsaved synthetic preference"
+        profile.preferences = "Concurrent saved preference"
+        draft.synchronize(profile, restoreGeneration: 0)
+        #expect(draft.preferences == "Unsaved synthetic preference")
+        #expect(draft.hasConflict)
+        #expect(draft.isDirty)
+
+        draft.useSaved(profile)
+        #expect(!draft.isDirty)
+    }
+
     @Test func sameProfileRefreshMergesUntouchedFieldWithoutDiscardingUnsavedEdit() {
         var profile = DiaryProfile(name: "Synthetic profile")
         var draft = DiaryPreferencesDraft()

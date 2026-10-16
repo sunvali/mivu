@@ -1,19 +1,23 @@
 import SwiftUI
 
 extension Color {
-    private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
+    private static func adaptive(_ light: UInt32, _ dark: UInt32, highContrastLight: UInt32? = nil, highContrastDark: UInt32? = nil) -> Color {
         Color(uiColor: UIColor { traits in
-            let value = traits.userInterfaceStyle == .dark ? dark : light
+            let highContrast = traits.accessibilityContrast == .high
+            let value = traits.userInterfaceStyle == .dark
+                ? (highContrast ? highContrastDark ?? dark : dark)
+                : (highContrast ? highContrastLight ?? light : light)
             return UIColor(red: CGFloat((value >> 16) & 255) / 255, green: CGFloat((value >> 8) & 255) / 255, blue: CGFloat(value & 255) / 255, alpha: 1)
         })
     }
-    static let diaryCanvas = adaptive(0xFFF8EF, 0x1D211E)
-    static let diarySurface = adaptive(0xFFFDFA, 0x292D29)
-    static let diaryText = adaptive(0x2B231F, 0xFFF8EF)
-    static let diarySecondary = adaptive(0x78675B, 0xCABBAB)
-    static let diaryAccent = adaptive(0xBB432B, 0xFFA988)
-    static let diaryActionText = adaptive(0xFFFFFF, 0x261C18)
-    static let diaryLeaf = adaptive(0x4C695B, 0xADCDB9)
+    static let diaryCanvas = adaptive(0xF5F8F8, 0x111516)
+    static let diarySurface = adaptive(0xFFFFFF, 0x1D2324)
+    static let diaryText = adaptive(0x142023, 0xF4F7F6)
+    static let diarySecondary = adaptive(0x53646B, 0xB7C4C8, highContrastLight: 0x34474D, highContrastDark: 0xD5E0E3)
+    static let diaryAccent = adaptive(0x136875, 0x81D5DB, highContrastLight: 0x0B5864, highContrastDark: 0xA9EEF2)
+    static let diaryActionText = adaptive(0xFFFFFF, 0x092126)
+    static let diaryLeaf = diaryAccent
+    static let diaryRule = adaptive(0xD5DFE1, 0x374346, highContrastLight: 0x9BAEB2, highContrastDark: 0x68777B)
 }
 
 struct SampleBanner: View {
@@ -24,9 +28,8 @@ struct SampleBanner: View {
         } label: {
             Label("Apple sample mode", systemImage: "leaf").font(.subheadline.weight(.semibold))
         }
-        .tint(.diaryLeaf).foregroundStyle(Color.diaryLeaf)
-        .frame(minHeight: 44).padding(.horizontal, 16).padding(.vertical, 4)
-        .background(Color.diaryLeaf.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
+        .tint(.diaryAccent).foregroundStyle(Color.diaryText)
+        .frame(minHeight: 44).padding(.horizontal, 12).padding(.vertical, 4)
     }
 }
 
@@ -52,41 +55,62 @@ struct DiaryCaptureAction: View {
 
 struct NutritionSummary: View {
     let totals: NutritionTotals
+    let title: LocalizedStringKey
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .largeTitle) private var energySize = 48.0
+
+    init(totals: NutritionTotals, title: LocalizedStringKey = "Recorded intake") {
+        self.totals = totals
+        self.title = title
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Recorded totals").font(.subheadline.weight(.medium)).foregroundStyle(Color.diarySecondary)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
-                    .font(.system(.largeTitle, design: .rounded).weight(.semibold)).monospacedDigit()
-                    .contentTransition(.numericText()).animation(reduceMotion ? nil : .snappy(duration: 0.25), value: totals.kcal)
-                Text("kcal").foregroundStyle(Color.diarySecondary)
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(Color.diarySecondary)
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 0) {
+                    energyValue
+                    Text("kcal").font(.body).foregroundStyle(Color.diarySecondary)
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    energyValue
+                    Text("kcal").font(.title3.weight(.medium)).foregroundStyle(Color.diarySecondary)
+                }
             }
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 16) {
-                    metric("Carbs", totals.carbs)
                     metric("Protein", totals.protein)
+                    metric("Carbs", totals.carbs)
                     metric("Fat", totals.fat)
                 }
             } else {
-                HStack {
-                    metric("Carbs", totals.carbs)
-                    Spacer(minLength: 8)
-                    metric("Protein", totals.protein)
-                    Spacer(minLength: 8)
-                    metric("Fat", totals.fat)
+                HStack(spacing: 0) {
+                    metric("Protein", totals.protein).frame(maxWidth: .infinity, alignment: .leading)
+                    separator
+                    metric("Carbs", totals.carbs).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12)
+                    separator
+                    metric("Fat", totals.fat).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12)
                 }
             }
             if totals.unknownItemCount > 0 {
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.").font(.caption).foregroundStyle(Color.diarySecondary)
             }
-        }.accessibilityElement(children: .combine)
+        }
+    }
+    private var energyValue: some View {
+        Text(totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
+            .font(.system(size: energySize, weight: .semibold, design: .default)).monospacedDigit()
+            .contentTransition(.numericText()).animation(reduceMotion ? nil : .snappy(duration: 0.25), value: totals.kcal)
+    }
+    private var separator: some View {
+        Rectangle().fill(Color.diaryRule).frame(width: 1, height: 36).padding(.horizontal, 10).accessibilityHidden(true)
     }
     private func metric(_ label: LocalizedStringKey, _ value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.caption).foregroundStyle(Color.diarySecondary)
-            Text(value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "—").font(.body.weight(.medium))
+            Text(value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "—").font(.body.weight(.medium)).monospacedDigit()
         }
     }
 }
@@ -118,22 +142,49 @@ extension DayCompleteness {
 
 struct MealRow: View {
     let meal: DiaryMeal
+    @Environment(\.dynamicTypeSize) private var typeSize
     private var title: String {
         let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return meal.items.first.map { $0.provenance == .sample ? "Apple (sample)" : $0.name } ?? (text.isEmpty ? "Meal" : text)
     }
+    private var statusText: Text {
+        let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : Text(meal.eatenAt, style: .time)
+        if let provenance = meal.items.first?.provenance {
+            let label = provenance == .estimate ? "Estimated" : provenance == .sample ? "Sample estimate" : provenance.description
+            return Text("\(Text(meal.state.title)) · \(time) · \(label)")
+        }
+        return Text("\(Text(meal.state.title)) · \(time)")
+    }
+    @ViewBuilder private var calories: some View {
+        if meal.isSaved {
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(meal.totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—").font(.body.weight(.semibold)).monospacedDigit()
+                Text("kcal").font(.caption).foregroundStyle(Color.diarySecondary)
+            }.fixedSize(horizontal: true, vertical: false)
+        }
+    }
     var body: some View {
         HStack(spacing: 12) {
             if let data = meal.photos.first?.data, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill().frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 16)).accessibilityHidden(true)
-            } else { Image(systemName: "fork.knife").frame(width: 52, height: 52).background(.quaternary, in: RoundedRectangle(cornerRadius: 10)).accessibilityHidden(true) }
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title).lineLimit(2)
-                HStack { Text(meal.state.title); if meal.timePrecision == .dateOnly { Text("Time unspecified") } else { Text(meal.eatenAt, style: .time) } }.font(.caption).foregroundStyle(Color.diarySecondary)
+                Image(uiImage: image).resizable().scaledToFill().frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
+            } else { Image(systemName: "fork.knife").font(.body).foregroundStyle(Color.diarySecondary).frame(width: 24).accessibilityHidden(true) }
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title)
+                    statusText.font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    calories
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).lineLimit(2)
+                    statusText.font(.caption).foregroundStyle(Color.diarySecondary)
+                }
+                Spacer(minLength: 8)
+                calories
             }
-            Spacer(minLength: 4)
-            if meal.isSaved { Text(meal.totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—").font(.headline) }
-        }.frame(minHeight: 68)
+        }
+        .frame(minHeight: typeSize.isAccessibilitySize ? 72 : 56)
+        .accessibilityElement(children: .combine)
     }
 }
 

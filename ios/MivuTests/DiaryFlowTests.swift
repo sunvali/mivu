@@ -4,6 +4,20 @@ import Testing
 
 @Suite @MainActor struct DiaryFlowTests {
     private func directory() -> URL { URL.temporaryDirectory.appending(path: "MivuFlow-" + UUID().uuidString) }
+    @Test func firstLaunchWaitsForNamedDiaryAndExistingProfilesStillReopen() async throws {
+        let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
+        let store = DiaryStore(directory: path)
+        let model = DiaryViewModel(store: store)
+        await model.load(createDefaultProfile: false)
+        #expect(model.snapshot == nil)
+        #expect(try await store.profiles().isEmpty)
+        await model.createProfile(name: "Synthetic diary")
+        let id = try #require(model.snapshot?.profile.id)
+        let reopened = DiaryViewModel(store: DiaryStore(directory: path))
+        await reopened.load(createDefaultProfile: false)
+        #expect(reopened.snapshot?.profile.id == id)
+        #expect(reopened.snapshot?.profile.name == "Synthetic diary")
+    }
     @Test func legacyHebrewPreferenceKeepsEnglishLaunchAndPreservesStoredDiary() async throws {
         let previousLanguage = DiaryLaunch.defaults.object(forKey: "appLanguage")
         DiaryLaunch.defaults.set("he", forKey: "appLanguage")
@@ -72,6 +86,30 @@ import Testing
         #expect(model.snapshot?.meals.first?.state == .awaitingReview)
         #expect(model.snapshot?.totals(dayID: day.id).kcal == nil)
         #expect(model.captureReceipt == acknowledgedReceipt)
+    }
+    @Test func selectedDayCapturePreservesActiveDayAndActualCaptureTime() async throws {
+        let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
+        let store = DiaryStore(directory: path)
+        _ = try await store.createProfile(DiaryProfile(name: "Synthetic historical diary", timeZoneID: "UTC"))
+        let historicalTime = try #require(ISO8601DateFormatter().date(from: "2026-10-10T10:00:00Z"))
+        let capturedAt = try #require(ISO8601DateFormatter().date(from: "2026-10-16T14:00:00Z"))
+        let historical = try await store.startDay(at: historicalTime)
+        let current = try await store.startDay(at: capturedAt)
+        let model = DiaryViewModel(store: store, sampleMode: true)
+        model.snapshot = try await store.snapshot()
+        var draft = MealDraft(); draft.text = "Synthetic historical lunch"; draft.reviewFirst = true
+        #expect(await model.capture(draft, dayID: historical.id, at: capturedAt, dateOnly: true))
+        await model.waitForWorker()
+        let snapshot = try await store.snapshot()
+        let meal = try #require(snapshot.meals.first)
+        #expect(snapshot.activeDayID == current.id)
+        #expect(snapshot.days.count == 2)
+        #expect(meal.dayID == historical.id)
+        #expect(meal.capturedAt == capturedAt)
+        #expect(meal.eatenAt == historical.startAt)
+        #expect(meal.timePrecision == .dateOnly)
+        #expect(meal.state == .awaitingReview)
+        model.enterBackground()
     }
     @Test func profileSwitchAndSignOutHideOtherPrivateRecords() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }

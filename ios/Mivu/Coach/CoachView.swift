@@ -8,104 +8,122 @@ struct CoachView: View {
     @State private var importFailed = false
     @State private var followLatest = true
     @State private var scrollPhase: ScrollPhase = .idle
-    @State private var position = ScrollPosition(idType: String.self, edge: .bottom)
+    @State private var position = ScrollPosition(idType: String.self)
     @State private var hasNewMessage = false
     @State private var nearBottom = true
     @State private var followRequested = false
+    @State private var history = CoachHistoryWindow()
     @FocusState private var editing: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
-                if DiaryLaunch.isCoachInferenceFixture {
-                    Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner")
-                }
+        VStack(spacing: 0) {
+            ScrollView {
                 if let snapshot = coach.diary.snapshot {
-                    if let day = coach.diary.activeDay {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
-                            NutritionSummary(totals: snapshot.totals(dayID: day.id))
-                            if let goal = snapshot.goal(on: day.localDate) {
-                                let progress = ProgressAnalytics.daily(snapshot: snapshot, localDate: day.localDate)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Your goals").font(.subheadline.weight(.semibold))
-                                    if let target = goal.targets.kcal {
-                                        Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
-                                    }
-                                    Text("Remaining from recorded food: \(progress.remainingFromRecorded.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "unknown")")
-                                }
-                                .font(.subheadline)
-                                .accessibilityIdentifier("coachGoalSummary")
-                            }
-                        }.padding(16).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
-                    }
-                    if coach.turns.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("A little context, a clearer picture.").font(.title2.weight(.semibold))
-                            Text("Log meals, morning weigh-ins or workouts, add photos, or ask about your recorded progress. Estimates stay open to correction.").foregroundStyle(Color.diarySecondary)
-                        }.padding(.vertical, 24)
-                    }
-                    ForEach(conversationRows) { row in
-                        switch row.kind {
-                        case .input: inputBubble(row.turn)
-                        case .reply:
-                            Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
-                                .accessibilityIdentifier("coachReply")
-                        case .actions: turnActions(row.turn)
+                    // Eager pages keep restored rows in the native accessibility tree.
+                    VStack(alignment: .leading, spacing: 24) {
+                        if DiaryLaunch.isCoachInferenceFixture {
+                            Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner")
                         }
-                    }
+                        if let day = coach.diary.activeDay {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(day.localDate).font(.subheadline).accessibilityIdentifier("coachDate")
+                                    Spacer()
+                                    Text(snapshot.totals(dayID: day.id).kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal recorded" } ?? "Not estimated yet")
+                                        .font(.subheadline.weight(.medium)).monospacedDigit()
+                                }
+                                if let target = snapshot.goal(on: day.localDate)?.targets.kcal {
+                                    Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
+                                        .font(.caption).accessibilityIdentifier("coachGoalSummary")
+                                }
+                                Divider()
+                            }.foregroundStyle(Color.diarySecondary)
+                                .accessibilityElement(children: .contain)
+                        }
+                        if coach.turns.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("What would you like to record?").font(.title2.weight(.semibold))
+                                Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate.")
+                                    .foregroundStyle(Color.diarySecondary)
+                            }.padding(.vertical, 24)
+                        }
+                        if history.startIndex(in: turnIDs) > 0 {
+                            Button("Show earlier messages") {
+                                guard let first = history.showEarlier(ids: turnIDs) else { return }
+                                followLatest = false; followRequested = false
+                                position.scrollTo(id: "input-" + first.uuidString, anchor: .top)
+                            }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("coachEarlierMessages")
+                        }
+                        ForEach(conversationRows) { row in
+                            VStack(alignment: .leading, spacing: 0) {
+                                switch row.kind {
+                                case .input: inputBubble(row.turn)
+                                case .reply:
+                                    Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
+                                        .accessibilityIdentifier("coachReply")
+                                case .actions: turnActions(row.turn)
+                                }
+                            }
+                            .id(row.id)
+                            .accessibilityElement(children: .contain)
+                        }
+                    }.scrollTargetLayout().padding(.vertical, 20)
                 } else { ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile.")) }
-            }.scrollTargetLayout().padding(16)
-        }
-        .scrollPosition($position)
-        .scrollDismissesKeyboard(.interactively)
-        .onScrollPhaseChange { oldPhase, phase, context in
-            scrollPhase = phase
-            if phase == .idle {
-                if oldPhase == .interacting || oldPhase == .decelerating || (oldPhase != .tracking && position.isPositionedByUser) {
-                    followLatest = isNearBottom(context.geometry)
-                    if followLatest { hasNewMessage = false }
+            }
+            .padding(.horizontal, 20)
+            .scrollPosition($position)
+            .scrollDismissesKeyboard(.interactively)
+            .onScrollPhaseChange { oldPhase, phase, context in
+                scrollPhase = phase
+                if phase == .idle {
+                    if oldPhase == .interacting || oldPhase == .decelerating || (oldPhase != .tracking && position.isPositionedByUser) {
+                        followLatest = isNearBottom(context.geometry)
+                        if followLatest { hasNewMessage = false }
+                    }
+                    if followLatest && position.isPositionedByUser { followRequested = true }
+                    followLatestPosition()
                 }
-                if followLatest && position.isPositionedByUser { followRequested = true }
-                followLatestPosition()
             }
-        }
-        .onChange(of: position.isPositionedByUser) { _, byUser in
-            if byUser && scrollPhase != .tracking { followLatest = nearBottom }
-        }
-        .onScrollGeometryChange(for: Bool.self) { isNearBottom($0) } action: { _, nearBottom in
-            self.nearBottom = nearBottom
-            if nearBottom {
-                followLatest = true; hasNewMessage = false
-                if scrollPhase == .idle && position.isPositionedByUser { requestFollow() }
-            } else if scrollPhase == .interacting || scrollPhase == .decelerating || (position.isPositionedByUser && scrollPhase != .tracking) {
-                followLatest = false
+            .onChange(of: position.isPositionedByUser) { _, byUser in
+                if byUser && scrollPhase != .tracking { followLatest = nearBottom }
             }
-        }
-        .onChange(of: coach.turns) { _, _ in newContent() }
-        .onChange(of: coach.activity) { _, _ in newContent() }
-        .overlay(alignment: .bottom) {
-            if hasNewMessage && !nearBottom && !followLatest {
-                Button {
+            .onScrollGeometryChange(for: Bool.self) { isNearBottom($0) } action: { _, nearBottom in
+                self.nearBottom = nearBottom
+                if nearBottom && (followLatest || position.isPositionedByUser) {
                     followLatest = true; hasNewMessage = false
-                    requestFollow()
-                } label: {
-                    Label("New message", systemImage: "arrow.down").frame(minHeight: 44)
+                    if scrollPhase == .idle && position.isPositionedByUser { requestFollow() }
+                } else if scrollPhase == .interacting || scrollPhase == .decelerating || (position.isPositionedByUser && scrollPhase != .tracking) {
+                    followLatest = false
                 }
-                .buttonStyle(.bordered).tint(.diaryLeaf)
-                .background(Color.diarySurface, in: Capsule())
-                .accessibilityHint("Jump to the latest message and follow new replies")
-                .accessibilityIdentifier("coachNewMessage")
-                .padding(.bottom, 8)
             }
+            .onChange(of: coach.turns) { _, _ in newContent() }
+            .onChange(of: coach.activity) { _, _ in newContent() }
+            .overlay(alignment: .bottom) {
+                if hasNewMessage && !followLatest {
+                    Button {
+                        followLatest = true; hasNewMessage = false
+                        requestFollow()
+                    } label: {
+                        Label("New message", systemImage: "arrow.down").frame(minHeight: 44)
+                    }
+                    .buttonStyle(.bordered).tint(.diaryLeaf)
+                    .background(Color.diarySurface, in: Capsule())
+                    .accessibilityHint("Jump to the latest message and follow new replies")
+                    .accessibilityIdentifier("coachNewMessage")
+                    .padding(.bottom, 8)
+                }
+            }
+            if coach.diary.snapshot != nil { composer }
         }
         .background(Color.diaryCanvas)
         .navigationTitle("Coach")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: UUID.self) { MealDetailView(model: coach.diary, mealID: $0) }
         .navigationDestination(for: WorkoutDestination.self) { WorkoutDetailView(model: coach.diary, sessionID: $0.id) }
-        .safeAreaInset(edge: .bottom) { if coach.diary.snapshot != nil { composer } }
         .sheet(isPresented: $showPhotos) {
             NavigationStack {
                 Form { PhotoInput(photos: $coach.draft.photos, preparation: preparation, importFailed: $importFailed) }
@@ -115,12 +133,14 @@ struct CoachView: View {
         }
         .alert("Could not import photo", isPresented: $importFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
         .sensoryFeedback(.success, trigger: coach.captureReceipt)
-        .onChange(of: coach.diary.snapshot?.profile.id) { _, _ in
+        .onChange(of: coach.diary.snapshot?.profile.id, initial: true) { _, _ in
+            history.reset(ids: turnIDs)
             preparation.cancel(); preparation = PhotoPreparation()
             showPhotos = false; editing = false
             followLatest = true; hasNewMessage = false
-            nearBottom = true; followRequested = false
-            position = ScrollPosition(idType: String.self, edge: .bottom)
+            followRequested = false
+            position = ScrollPosition(idType: String.self)
+            requestFollow()
         }
     }
     private var userScrolling: Bool {
@@ -130,6 +150,7 @@ struct CoachView: View {
         geometry.contentSize.height + geometry.contentInsets.bottom - geometry.contentOffset.y - geometry.containerSize.height <= 80
     }
     private func newContent() {
+        history.reconcile(ids: turnIDs)
         hasNewMessage = true
         requestFollow()
     }
@@ -156,8 +177,9 @@ struct CoachView: View {
         let kind: Kind
         var id: String { kind.rawValue + "-" + turn.id.uuidString }
     }
+    private var turnIDs: [UUID] { coach.turns.map(\.id) }
     private var conversationRows: [ConversationRow] {
-        coach.turns.flatMap { turn in
+        coach.turns.dropFirst(history.startIndex(in: turnIDs)).flatMap { turn in
             var rows = [ConversationRow(turn: turn, kind: .input)]
             if turn.assistantText != nil { rows.append(ConversationRow(turn: turn, kind: .reply)) }
             if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil || $0.workoutID != nil || $0.destination != nil }) {
@@ -171,9 +193,9 @@ struct CoachView: View {
             if let error = coach.errorMessage { Text(error).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachError") }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture { Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.").font(.caption).foregroundStyle(Color.diarySecondary) }
             if !coach.draft.photos.isEmpty { Text("\(coach.draft.photos.count) photos attached").font(.caption).foregroundStyle(Color.diarySecondary) }
-            TextField("Meals, weigh-ins, workouts or a question?", text: $coach.draft.text, axis: .vertical)
+            TextField("Message Coach", text: $coach.draft.text, axis: .vertical)
                 .lineLimit(1...(typeSize.isAccessibilitySize ? 2 : 5)).focused($editing).accessibilityIdentifier("coachInput")
-                .padding(12).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16))
+                .padding(12).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16)).overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Color.diaryRule, lineWidth: 0.5) }
             HStack {
                 Button { editing = false; showPhotos = true } label: {
                     if typeSize.isAccessibilitySize { Image(systemName: "camera").font(.title2).frame(minWidth: 44, minHeight: 44) }
@@ -183,7 +205,7 @@ struct CoachView: View {
                 if reduceTransparency { send.buttonStyle(.borderedProminent) }
                 else { send.buttonStyle(.glassProminent) }
             }
-        }.padding(.horizontal, 16).padding(.vertical, 8).background(Color.diaryCanvas)
+        }.padding(.horizontal, 20).padding(.vertical, 8).background(Color.diaryCanvas)
             .disabled(coach.isSending || coach.diary.isChangingProfile)
     }
     private var send: some View {
@@ -198,7 +220,7 @@ struct CoachView: View {
                 if !turn.text.isEmpty { Text(turn.text).textSelection(.enabled) }
                 if !turn.photoIDs.isEmpty { Label("\(turn.photoIDs.count) attached photos", systemImage: "photo") .font(.caption) }
                 Label("Input saved on this iPhone", systemImage: "internaldrive").font(.caption).foregroundStyle(Color.diarySecondary)
-            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Color.diaryLeaf.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
+            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16))
     }
     private func turnActions(_ turn: CoachTurn) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -218,7 +240,14 @@ struct CoachView: View {
                 }
             }
             ForEach(coach.linkedMeals(turn)) { meal in
-                NavigationLink(value: meal.id) { Label(meal.state == .awaitingReview ? "Review meal estimate" : "Open meal and corrections", systemImage: "fork.knife").frame(minHeight: 44) }.accessibilityIdentifier("coachMealLink")
+                NavigationLink(value: meal.id) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(meal.state == .awaitingReview ? "Needs review" : meal.isSaved ? "Saved meal" : "Captured on this iPhone", systemImage: meal.state == .awaitingReview ? "checkmark.circle.badge.questionmark" : "checkmark.circle")
+                            .font(.subheadline.weight(.semibold))
+                        MealRow(meal: meal)
+                    }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 12))
+                }.accessibilityIdentifier("coachMealLink")
             }
             ForEach(coach.linkedWorkouts(turn)) { workout in
                 NavigationLink(value: WorkoutDestination(id: workout.id)) { Label("Open workout and corrections", systemImage: "figure.strengthtraining.traditional").frame(minHeight: 44) }.accessibilityIdentifier("coachWorkoutLink")

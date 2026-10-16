@@ -83,6 +83,41 @@ struct DiaryTests {
         #expect(try await store.snapshot().totals(dayID: day.id).kcal == 123)
         #expect(try await store.snapshot().meals[0].items[0].provenance == .user)
     }
+    @Test func staleMovePreservesDayAndNewerIngredientEdit() async throws {
+        let (store, profile, originalDay) = try await Self.ready()
+        let captured = try await store.capture(text: "Synthetic apple", photos: [], reviewFirst: false, dayID: originalDay.id)
+        try await store.processPending()
+        let originalMeal = try #require(try await store.snapshot().meals.first)
+        let destination = try await store.startDay(at: originalDay.startAt.addingTimeInterval(86_400))
+        var item = try #require(originalMeal.items.first); item.nutrition.kcal = 123
+        try await store.editItem(mealID: captured.id, item: item, expectedRevision: originalMeal.revision, expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        await #expect(throws: DiaryError.staleRevision) {
+            try await store.moveMeal(captured.id, to: destination.id, expectedRevision: originalMeal.revision,
+                                     expectedDayID: originalDay.id, expectedProfileID: profile.id)
+        }
+        let after = try await store.snapshot()
+        #expect(after == before)
+        #expect(after.meals.first?.dayID == originalDay.id)
+        #expect(after.meals.first?.totals.kcal == 123)
+    }
+    @Test func staleMoveCannotOverrideAnotherMoveOrMarkPendingNutritionSaved() async throws {
+        let (store, profile, originalDay) = try await Self.ready()
+        let meal = try await store.capture(text: "Synthetic pending meal", photos: [], reviewFirst: true, dayID: originalDay.id)
+        let firstDestination = try await store.startDay(at: originalDay.startAt.addingTimeInterval(86_400))
+        let secondDestination = try await store.startDay(at: originalDay.startAt.addingTimeInterval(172_800))
+        try await store.moveMeal(meal.id, to: firstDestination.id, expectedRevision: meal.revision,
+                                 expectedDayID: originalDay.id, expectedProfileID: profile.id)
+        let before = try await store.snapshot()
+        #expect(before.meals.first?.dayID == firstDestination.id)
+        #expect(before.meals.first?.revision == 0)
+        #expect(before.meals.first?.isSaved == false)
+        await #expect(throws: DiaryError.staleRevision) {
+            try await store.moveMeal(meal.id, to: secondDestination.id, expectedRevision: meal.revision,
+                                     expectedDayID: originalDay.id, expectedProfileID: profile.id)
+        }
+        #expect(try await store.snapshot() == before)
+    }
     @Test func deleteRejectsLateResultAndOlderRestore() async throws {
         let (store, profile, day) = try await Self.ready()
         let meal = try await store.capture(text: "apple", photos: [], reviewFirst: false, dayID: day.id)

@@ -3,6 +3,8 @@ import SwiftUI
 struct MealComposerView: View {
     @Bindable var model: DiaryViewModel
     var correctingMealID: UUID? = nil
+    var dayID: UUID? = nil
+    var onSaved: ((UUID) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var draft = MealDraft()
     @State private var photoPreparation = PhotoPreparation()
@@ -11,11 +13,21 @@ struct MealComposerView: View {
     @State private var showDayQuestion = false
     @State private var photoRole = PhotoRole.unspecified
     @State private var submitting = false
+    @State private var showDiscard = false
     @FocusState private var editingText: Bool
     var body: some View {
         NavigationStack {
             Form {
                 if model.sampleMode { Section { SampleBanner() } }
+                Section {
+                    TextField("Write what you ate or what changed", text: $draft.text, axis: .vertical)
+                        .lineLimit(4...10).focused($editingText).accessibilityIdentifier("mealText")
+                        .padding(.vertical, 8)
+                } header: {
+                    Text(correctingMealID == nil ? "Meal details" : "Correction or extra details")
+                } footer: {
+                    Text("Add a note, a photo, or both.")
+                }
                 Section("Photos") {
                     PhotoInput(photos: $draft.photos, preparation: photoPreparation, importFailed: $photoImportFailed).disabled(submitting)
                     if correctingMealID != nil {
@@ -26,22 +38,48 @@ struct MealComposerView: View {
                         }
                     }
                 }
-                Section(correctingMealID == nil ? "Meal details" : "Correction or extra details") {
-                    TextField("Write what you ate or what changed", text: $draft.text, axis: .vertical).lineLimit(4...10).focused($editingText).accessibilityIdentifier("mealText")
+                Section {
+                    if let mealID = correctingMealID, let meal = model.meal(mealID) {
+                        LabeledContent("Waking day", value: model.snapshot?.days.first(where: { $0.id == meal.dayID })?.localDate ?? "Original meal day")
+                    } else if let dayID, let day = model.snapshot?.days.first(where: { $0.id == dayID }) {
+                        LabeledContent("Waking day", value: day.localDate)
+                        Text("The meal will be recorded on this day. Time will be unspecified.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    } else if let snapshot = model.snapshot, let day = snapshot.days.first(where: { $0.id == snapshot.activeDayID }) {
+                        LabeledContent("Waking day", value: day.localDate)
+                    } else {
+                        Label("A waking day will be started when you save.", systemImage: "sun.horizon")
+                            .foregroundStyle(Color.diarySecondary)
+                    }
                     Toggle("Review before saving totals", isOn: $draft.reviewFirst).accessibilityIdentifier("reviewFirst")
-                    Text("Send saves your input on this iPhone first. Pending or unreviewed results do not count in totals.").font(.caption).foregroundStyle(Color.diarySecondary)
+                } header: {
+                    Text(correctingMealID == nil ? "Waking day" : "This meal")
+                } footer: {
+                    Text("Saved on this iPhone before analysis. Pending or unreviewed results do not count in totals. We’ll ask if the waking day needs confirming.")
                 }
                 if let message = model.errorMessage { Section { Text(LocalizedStringKey(message)).foregroundStyle(.red) } }
             }
             .onDisappear { photoPreparation.cancel() }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(correctingMealID == nil ? "Log meal" : "Update meal")
+            .foregroundStyle(Color.diaryText)
+            .tint(.diaryAccent)
+            .navigationTitle(correctingMealID == nil ? "Log meal" : "Add to meal")
+            .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(draft.isValid || submitting || photoPreparation.isPreparing)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editingText = false }.accessibilityIdentifier("doneMealText") }
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(submitting) }
-                ToolbarItem(placement: .confirmationAction) { Button { Task { await send() } } label: { if submitting { ProgressView() } else { Text("Send") } }.disabled(!draft.isValid || submitting || !photoPreparation.canCapture).accessibilityIdentifier("sendMeal") }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        editingText = false
+                        if draft.isValid || photoPreparation.isPreparing { showDiscard = true } else { dismiss() }
+                    }
+                    .disabled(submitting)
+                    .alert("Discard changes?", isPresented: $showDiscard) {
+                        Button("Discard changes", role: .destructive) { photoPreparation.cancel(); dismiss() }
+                        Button("Keep editing", role: .cancel) {}
+                    } message: { Text("Your unsaved note and photos will be discarded.") }
+                }
+                ToolbarItem(placement: .confirmationAction) { Button { Task { await send() } } label: { if submitting { ProgressView() } else { Text("Save") } }.disabled(!draft.isValid || submitting || !photoPreparation.canCapture).accessibilityIdentifier("sendMeal") }
             }
             .alert("Could not import photo", isPresented: $photoImportFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
             .confirmationDialog("Which waking day?", isPresented: $showDayQuestion, titleVisibility: .visible) {
@@ -71,9 +109,10 @@ struct MealComposerView: View {
             defer { submitting = false }
             if await model.change({
                 _ = try await model.store.correctMeal(mealID: mealID, text: draft.text, photos: draft.photos.map { MealPhoto(data: $0, role: photoRole) }, reviewFirst: draft.reviewFirst, submissionID: draft.submissionID, forCoach: !model.sampleMode, expectedProfileID: owner)
-            }) { model.resumeWorker(); dismiss() }
+            }) { model.resumeWorker(); onSaved?(mealID); dismiss() }
             return
         }
+        if let dayID { await save(dayID: dayID); return }
         do {
             switch try await model.store.dayAssignment(expectedProfileID: owner) {
             case .existing(let dayID): await save(dayID: dayID)
@@ -86,6 +125,11 @@ struct MealComposerView: View {
         guard photoPreparation.canCapture, !submitting else { return }
         submitting = true
         defer { submitting = false }
-        if await model.capture(draft, dayID: dayID, photoPreparation: photoPreparation) { dismiss() }
+        if await model.capture(draft, dayID: dayID, dateOnly: self.dayID != nil, photoPreparation: photoPreparation) {
+            if let mealID = model.snapshot?.meals.first(where: { $0.submissions.contains(where: { $0.id == draft.submissionID }) })?.id {
+                onSaved?(mealID)
+            }
+            dismiss()
+        }
     }
 }

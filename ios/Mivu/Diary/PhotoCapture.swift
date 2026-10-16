@@ -75,16 +75,16 @@ struct PhotoInput: View {
     @Binding var importFailed: Bool
     @State private var selected: [PhotosPickerItem] = []
     @State private var showCamera = false
-    @State private var cameraDenied = false
+    private enum Notice { case cameraDenied, importFailure([Int]) }
+    @State private var notice: Notice?
     @State private var importTask: Task<Void, Never>?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Button { Task { await openCamera() } } label: { Label("Camera", systemImage: "camera") }.buttonStyle(.glass).tint(.diaryLeaf).frame(minHeight: 44)
-                    .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera) || photos.count >= 8 || preparation.isPreparing)
-                Spacer()
-                PhotosPicker(selection: $selected, maxSelectionCount: max(1, 8 - photos.count), matching: .images) { Label("Photos", systemImage: "photo.on.rectangle") }.buttonStyle(.glass).tint(.diaryLeaf).frame(minHeight: 44).disabled(photos.count >= 8 || preparation.isPreparing)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) { cameraButton; libraryButton }
+                VStack(alignment: .leading, spacing: 12) { cameraButton; libraryButton }
             }
+            Text("\(photos.count) of 8 photos").font(.caption).foregroundStyle(Color.diarySecondary)
             if !UIImagePickerController.isSourceTypeAvailable(.camera) {
                 Text(DiaryLaunch.isSampleMode ? "Camera is unavailable here. Choose Photos or use the synthetic sample." : "Camera is unavailable here. Choose Photos instead.").font(.caption).foregroundStyle(Color.diarySecondary)
                 if DiaryLaunch.isSampleMode || DiaryLaunch.isCoachUITest { Button(DiaryLaunch.isSampleMode ? "Add synthetic apple photo" : "Add synthetic test photo") { if let data = PhotoImport.syntheticApple() { photos.append(data) } }.frame(minHeight: 44).disabled(photos.count >= 8 || preparation.isPreparing).accessibilityIdentifier("syntheticPhoto") }
@@ -92,11 +92,11 @@ struct PhotoInput: View {
             if preparation.isPreparing { ProgressView("Importing photo") }
             if !photos.isEmpty {
                 ScrollView(.horizontal) {
-                    HStack {
+                    HStack(alignment: .top, spacing: 16) {
                         ForEach(Array(photos.enumerated()), id: \.offset) { index, data in
-                            VStack {
-                                if let image = UIImage(data: data) { Image(uiImage: image).resizable().scaledToFill().frame(width: 90, height: 90).clipped().clipShape(RoundedRectangle(cornerRadius: 10)) }
-                                Button("Remove", role: .destructive) { photos.remove(at: index) }.frame(minHeight: 44)
+                            VStack(spacing: 4) {
+                                if let image = UIImage(data: data) { Image(uiImage: image).resizable().scaledToFill().frame(width: 112, height: 112).clipped().clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityLabel("Attached meal photo \(index + 1)") }
+                                Button("Remove", role: .destructive) { photos.remove(at: index) }.frame(minWidth: 44, minHeight: 44).accessibilityLabel("Remove photo \(index + 1)")
                             }
                         }
                     }
@@ -104,42 +104,77 @@ struct PhotoInput: View {
             }
         }
         .buttonStyle(.borderless)
+        .tint(.diaryAccent)
         .sheet(isPresented: $showCamera) { CameraCapture(onPhoto: { photos.append($0) }, onFailure: { importFailed = true }).ignoresSafeArea() }
-        .alert("Camera access is off", isPresented: $cameraDenied) {
-            Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("Allow camera access in Settings, or choose a photo instead.") }
+        .alert(noticeTitle, isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } }), presenting: notice) { value in
+            switch value {
+            case .cameraDenied:
+                Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+                Button("Cancel", role: .cancel) {}
+            case .importFailure:
+                Button("OK", role: .cancel) {}
+            }
+        } message: { value in
+            switch value {
+            case .cameraDenied:
+                Text("Allow camera access in Settings, or choose a photo instead.")
+            case .importFailure(let positions):
+                Text("\(positions.map { "Photo \($0)" }.joined(separator: ", ")) from this selection could not be imported. Your other photos and note are preserved. Choose a smaller image or another photo.")
+            }
+        }
         .onChange(of: selected) { _, selection in
             guard !selection.isEmpty else { return }
             importTask?.cancel()
             let generation = preparation.begin()
             importTask = Task {
+                var failedPositions: [Int] = []
                 defer {
                     if preparation.isCurrent(generation) {
                         preparation.finish(generation); selected = []; importTask = nil
+                        if !failedPositions.isEmpty { notice = .importFailure(failedPositions) }
                     }
                 }
-                for item in selection {
+                for (position, item) in selection.enumerated() {
                     do {
                         guard let jpeg = try await preparation.load(generation, using: {
                             guard let data = try await item.loadTransferable(type: Data.self), let jpeg = PhotoImport.jpeg(data) else { throw DiaryError.invalidData }
                             return jpeg
                         }) else { return }
-                        guard photos.count < 8 else { importFailed = true; continue }
+                        guard photos.count < 8 else { failedPositions.append(position + 1); continue }
                         photos.append(jpeg)
                     } catch {
                         guard preparation.isCurrent(generation), !Task.isCancelled else { return }
-                        importFailed = true
+                        failedPositions.append(position + 1)
                     }
                 }
             }
         }
     }
 
+    private var cameraButton: some View {
+        Button { Task { await openCamera() } } label: {
+            Label("Camera", systemImage: "camera").frame(minHeight: 44)
+        }
+        .buttonStyle(.glass).tint(.diaryAccent)
+        .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera) || photos.count >= 8 || preparation.isPreparing)
+    }
+    private var libraryButton: some View {
+        PhotosPicker(selection: $selected, maxSelectionCount: max(1, 8 - photos.count), matching: .images) {
+            Label("Photo library", systemImage: "photo.on.rectangle").frame(minHeight: 44)
+        }
+        .buttonStyle(.glass).tint(.diaryAccent)
+        .disabled(photos.count >= 8 || preparation.isPreparing)
+    }
+
+    private var noticeTitle: String {
+        if case .some(.cameraDenied) = notice { "Camera access is off" } else { "Could not import selected photos" }
+    }
     private func openCamera() async {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .authorized { showCamera = true }
-        else if status == .notDetermined { showCamera = await AVCaptureDevice.requestAccess(for: .video); cameraDenied = !showCamera }
-        else { cameraDenied = true }
+        else if status == .notDetermined {
+            if await AVCaptureDevice.requestAccess(for: .video) { showCamera = true }
+            else { notice = .cameraDenied }
+        } else { notice = .cameraDenied }
     }
 }

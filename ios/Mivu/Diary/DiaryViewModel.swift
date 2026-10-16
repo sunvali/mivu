@@ -45,7 +45,7 @@ final class DiaryViewModel {
     var todaysMeals: [DiaryMeal] { snapshot?.meals.filter { $0.dayID == activeDay?.id }.sorted { $0.capturedAt > $1.capturedAt } ?? [] }
     func meal(_ id: UUID) -> DiaryMeal? { snapshot?.meals.first { $0.id == id } }
 
-    func load() async {
+    func load(createDefaultProfile: Bool = true) async {
         guard beginProfileTransition() else { return }
         let previous = snapshot
         defer { finishProfileTransition() }
@@ -58,6 +58,7 @@ final class DiaryViewModel {
             } else if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 selected = try await profileSelection(profile.id)
             } else {
+                guard createDefaultProfile else { return }
                 selected = try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language))
                 profiles = try await store.profiles()
             }
@@ -86,13 +87,13 @@ final class DiaryViewModel {
         } catch { if snapshot?.profile.id == owner { present(error) }; return false }
     }
 
-    func capture(_ draft: MealDraft, dayID: UUID, at: Date = Date(), photoPreparation: PhotoPreparation? = nil) async -> Bool {
+    func capture(_ draft: MealDraft, dayID: UUID, at: Date = Date(), dateOnly: Bool = false, photoPreparation: PhotoPreparation? = nil) async -> Bool {
         guard draft.isValid, photoPreparation?.canCapture != false, !isSaving, !isChangingProfile, let owner = snapshot?.profile.id else { return false }
         let isNewSubmission = snapshot?.meals.contains { $0.submissions.contains { $0.id == draft.submissionID } } != true
         isSaving = true
         defer { isSaving = false }
         do {
-            _ = try await store.capture(text: draft.text, photos: draft.photos.map { MealPhoto(data: $0) }, reviewFirst: draft.reviewFirst, dayID: dayID, at: at, submissionID: draft.submissionID, forCoach: !sampleMode, expectedProfileID: owner)
+            _ = try await store.capture(text: draft.text, photos: draft.photos.map { MealPhoto(data: $0) }, reviewFirst: draft.reviewFirst, dayID: dayID, at: at, dateOnly: dateOnly, submissionID: draft.submissionID, forCoach: !sampleMode, expectedProfileID: owner)
             try await refresh(profileID: owner)
             guard snapshot?.profile.id == owner else { return false }
             if isNewSubmission { captureReceipt = draft.submissionID }
@@ -330,6 +331,7 @@ struct DiaryPreferencesDraft {
     private(set) var timezoneConflict = false
     private(set) var preferencesConflict = false
     var hasConflict: Bool { timezoneConflict || preferencesConflict }
+    var isDirty: Bool { timezone != savedTimezone || preferences != savedPreferences }
 
     mutating func synchronize(_ profile: DiaryProfile?, restoreGeneration: Int) {
         if profileID != profile?.id || synchronizedRestoreGeneration != restoreGeneration {

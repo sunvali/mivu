@@ -1,0 +1,51 @@
+{
+  "library": "SF Symbols",
+  "rendering": "monochrome default; selected destination uses tint",
+  "weight": "regular or semibold matching adjacent text",
+  "minTouchTargetPt": 44,
+  "verifySymbolsAgainstTargetSDK": true,
+  "symbols": {
+    "Today": "sun.max",
+    "Diary": "calendar",
+    "Progress": "chart.bar",
+    "Coach": "bubble.left.and.bubble.right",
+    "Profile": "person.crop.circle",
+    "Capture": "plus",
+    "Camera": "camera",
+    "PhotoLibrary": "photo.on.rectangle",
+    "Edit": "pencil",
+    "Saved": "checkmark.circle",
+    "Pending": "clock",
+    "Retry": "arrow.clockwise",
+    "Backup": "folder",
+    "Export": "square.and.arrow.up",
+    "Restore": "clock.arrow.circlepath",
+    "Delete": "trash",
+    "Settings": "gearshape",
+    "More": "ellipsis",
+    "Weight": "scalemass",
+    "Workout": "figure.walk",
+    "Goals": "target",
+    "Source": "info.circle",
+    "Warning": "exclamationmark.triangle"
+  },
+  "appIcon": {
+    "conceptAsset": "assets/19-identity.png",
+    "mark": "three vertical bars short/tall/medium over shared baseline",
+    "normalizedCanvas": 1024,
+    "clearSpacePercent": 18,
+    "layers": [
+      "opaque adaptive background",
+      "three-bar foreground",
+      "baseline foreground"
+    ],
+    "appearances": [
+      "default",
+      "dark",
+      "tinted",
+      "clear"
+    ],
+    "production": "Recreate separate vector layers in Icon Composer; use platform masks/materials. Do not crop the presentation board or bake in a screenshot shadow.",
+    "exportAcceptance": "Recognizable at small home-screen size, centered optical weight, no text, clean silhouette in all supported appearances."
+  }
+}

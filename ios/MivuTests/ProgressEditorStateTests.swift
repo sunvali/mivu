@@ -3,6 +3,21 @@ import Testing
 @testable import Mivu
 
 @Suite @MainActor struct ProgressEditorStateTests {
+    @Test(arguments: ["2026-03-08", "2026-11-01"])
+    func intakeChartDomainContainsWholeDaysAcrossDaylightSaving(endingOn: String) throws {
+        let zone = "America/Los_Angeles"
+        let day = TrackingDay(localDate: endingOn, timeZoneID: zone, startAt: try #require(ProgressDate.date(endingOn, zone: zone)), completeness: .unknown)
+        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic chart range", timeZoneID: zone))
+        snapshot.days = [day]; snapshot.activeDayID = day.id
+        let model = DiaryViewModel(store: DiaryStore(directory: URL.temporaryDirectory.appending(path: "ChartRange-" + UUID().uuidString)))
+        model.snapshot = snapshot
+        let domain = DiaryProgressView(model: model).nutritionDomain
+        let spring = endingOn == "2026-03-08"
+        let formatter = ISO8601DateFormatter()
+        #expect(domain.lowerBound == formatter.date(from: spring ? "2026-03-02T08:00:00Z" : "2026-10-26T07:00:00Z"))
+        #expect(domain.upperBound == formatter.date(from: spring ? "2026-03-09T07:00:00Z" : "2026-11-02T08:00:00Z"))
+    }
+
     @Test(arguments: [false, true], [false, true])
     func chartAndReportSelectHighestRevisionOnTiedMeasurementTime(legacy: Bool, reverse: Bool) throws {
         var snapshot = tiedWeightSnapshot()
@@ -82,6 +97,23 @@ import Testing
         #expect(!ProgressDate.validOptionalNonnegative("100000.1"))
         #expect(!ProgressDate.validOptionalNonnegative("inf"))
         #expect(!ProgressDate.validOptional("0"))
+    }
+
+    @Test func editedGoalFieldsRequireConfirmationBeforeLoadingAnotherDate() {
+        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic goal date draft"))
+        snapshot.goals = [GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: snapshot.profile.timeZoneID, targets: NutritionValues(kcal: 1800), goalWeightKg: nil, exerciseCreditEnabled: false)]
+        var saved = GoalEditorValues(snapshot: snapshot, localDate: "2026-01-01")
+        #expect(!saved.hasEditedTargets)
+        saved.kcal = "1900"
+        #expect(saved.hasEditedTargets)
+        var blank = GoalEditorValues(snapshot: snapshot, localDate: "2026-02-01")
+        #expect(!blank.hasEditedTargets)
+        blank.protein = "100"
+        #expect(blank.hasEditedTargets)
+        blank.protein = ""
+        blank.exerciseCredit = true
+        #expect(blank.hasEditedTargets)
+        #expect(saved.kcal == "1900" && saved.localDate == "2026-01-01")
     }
 
     @Test func clearingLastGoalAndLaterUnsetPreserveEarlierTargets() async throws {
