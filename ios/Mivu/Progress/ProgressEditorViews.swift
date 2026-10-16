@@ -83,6 +83,7 @@ struct GoalEditorValues: Equatable {
 struct GoalEditorView: View {
     @Bindable var model: DiaryViewModel
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var focusedField: String?
     @State private var date: Date
     @State private var values: GoalEditorValues
     @State private var saving = false
@@ -159,11 +160,20 @@ struct GoalEditorView: View {
             }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
+            // A keyboard accessory here can leave a stale height after this sheet closes.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if focusedField != nil {
+                    HStack {
+                        Spacer()
+                        Button { focusedField = nil } label: { Text("Done").frame(minWidth: 44, minHeight: 44) }
+                            .accessibilityIdentifier("progressKeyboardDone")
+                    }.padding(.horizontal, 20).background(.bar)
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .navigationTitle("Goals")
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() }.accessibilityIdentifier("progressKeyboardDone") }
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if isDirty { showDiscard = true } else { dismiss() } }.disabled(saving).frame(minHeight: 44)
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { focusedField = nil; if isDirty { showDiscard = true } else { dismiss() } }.disabled(saving).frame(minHeight: 44)
                     .alert("Discard changes to goals?", isPresented: $showDiscard) {
                         Button("Discard changes", role: .destructive) { dismiss() }
                         Button("Keep editing", role: .cancel) {}
@@ -180,6 +190,7 @@ struct GoalEditorView: View {
         .onChange(of: model.snapshot?.profile.id) { _, profileID in
             if profileID != ownerID { dismiss() }
         }
+        .onDisappear { focusedField = nil }
         .interactiveDismissDisabled(isDirty || saving)
         .confirmationDialog("Change the effective date?", isPresented: $showDateChange, titleVisibility: .visible) {
             Button("Discard draft and change date", role: .destructive) {
@@ -197,7 +208,7 @@ struct GoalEditorView: View {
 
     private func field(_ title: String, text: Binding<String>, id: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            progressNumberField(title, text: text, id: id)
+            progressNumberField(title, text: text, id: id, focus: $focusedField)
             if !ProgressDate.validOptional(text.wrappedValue) {
                 Text("Enter a positive number, or leave this blank.").font(.subheadline).foregroundStyle(.red)
             }
@@ -238,6 +249,7 @@ struct GoalEditorView: View {
         guard values.localDate == label else { return }
         let goal = values.record(zone: zone)
         let expectedRevision = values.expectedRevision
+        focusedField = nil
         saving = true
         Task {
             let success = await model.change { _ = try await model.store.setGoals(goal, expectedRevision: expectedRevision, expectedProfileID: ownerID) }
@@ -561,10 +573,13 @@ struct WorkoutEditorView: View {
 }
 
 @MainActor private func progressNumberField(_ title: String, text: Binding<String>, id: String,
-                                          keyboard: UIKeyboardType = .decimalPad) -> some View {
+                                          keyboard: UIKeyboardType = .decimalPad,
+                                          focus: FocusState<String?>.Binding? = nil) -> some View {
     VStack(alignment: .leading, spacing: 4) {
         Text(title).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-        TextField(title, text: text).keyboardType(keyboard).frame(minHeight: 44).accessibilityIdentifier(id)
+        let input = TextField(title, text: text).keyboardType(keyboard).frame(minHeight: 44).accessibilityIdentifier(id)
+        if let focus { input.focused(focus, equals: id) }
+        else { input }
     }
 }
 
