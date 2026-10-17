@@ -35,12 +35,21 @@ struct CompanionSubmission: Equatable {
     let profileID: UUID
     let operationID: UUID
     let acceptedAt: Date
+    let attemptID: UUID
+
+    init(profileID: UUID, operationID: UUID, acceptedAt: Date, attemptID: UUID = UUID()) {
+        self.profileID = profileID
+        self.operationID = operationID
+        self.acceptedAt = acceptedAt
+        self.attemptID = attemptID
+    }
 
     fileprivate struct Key: Hashable {
         let profileID: UUID
         let operationID: UUID
+        let attemptID: UUID
     }
-    fileprivate var key: Key { Key(profileID: profileID, operationID: operationID) }
+    fileprivate var key: Key { Key(profileID: profileID, operationID: operationID, attemptID: attemptID) }
 }
 
 struct CompanionContext {

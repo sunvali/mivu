@@ -40,6 +40,14 @@ private actor OrderedReceiptRefreshes {
     func release(_ index: Int) { continuations.removeValue(forKey: index)?.resume() }
 }
 
+private actor ReceiptRefreshFailureOnce {
+    private var shouldFail = true
+    func snapshot(_ store: DiaryStore, owner: UUID) async throws -> DiarySnapshot {
+        if shouldFail { shouldFail = false; throw DiaryError.persistenceFailed }
+        return try await store.snapshot(expectedProfileID: owner)
+    }
+}
+
 @Suite @MainActor struct CompanionReceiptTests {
     private func fixture() async throws -> (URL, DiaryStore, DiaryProfile, TrackingDay) {
         let path = URL.temporaryDirectory.appending(path: "CompanionReceipt-" + UUID().uuidString)
@@ -144,6 +152,31 @@ private actor OrderedReceiptRefreshes {
         #expect(coach.companionSubmission?.operationID == coach.draft.submissionID)
         #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
         #expect(coach.companionNeedsRecovery && !coach.companionIsProcessing)
+    }
+
+    @Test func acceptedRetryAfterRefreshFailurePublishesANewGestureWithoutDuplicatingCapture() async throws {
+        let (path, store, profile, _) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: path) }
+        let refresh = ReceiptRefreshFailureOnce()
+        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+            try await refresh.snapshot(store, owner: id)
+        })
+        diary.snapshot = try await store.snapshot()
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
+        coach.enterBackground()
+        coach.draft.text = "Synthetic capture retried after refresh failure"
+        let operation = coach.draft.submissionID
+        #expect(!(await coach.send()))
+        let first = try #require(coach.companionSubmission)
+        #expect(coach.draft.submissionID == operation && coach.canSend)
+        #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
+        #expect(coach.companionNeedsRecovery)
+        #expect(await coach.send())
+        let retried = try #require(coach.companionSubmission)
+        #expect(retried != first, "A separately accepted retry needs a new gesture identity")
+        #expect(retried.profileID == profile.id && retried.operationID == operation)
+        #expect(coach.companionCaptureEvent?.operationID == operation)
+        #expect(try await store.snapshot().coachTurns.map(\.id) == [operation])
     }
 
     @Test(arguments: [false, true])

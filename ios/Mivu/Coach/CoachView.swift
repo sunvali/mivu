@@ -177,11 +177,13 @@ struct CoachView: View {
                        height: editing || typeSize.isAccessibilitySize ? 66 : 108, alignment: .top)
                 .clipped()
             VStack(alignment: .leading, spacing: 4) {
-                if let error = coach.errorMessage {
+                if let error = coach.errorMessage, companionRecovery {
                     Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
+                        .transaction { $0.animation = nil }
                 } else {
                     Text(typeSize.isAccessibilitySize ? (companionRecovery ? "Input saved" : companionProcessing ? "Working…" : "Ready") : (companionRecovery ? "Your input is safe here" : companionProcessing ? "Working on your request…" : editing ? "Take your time" : "Ready when you are"))
                         .foregroundStyle(Color.diaryText)
+                        .transaction { $0.animation = nil }
                 }
             }
             .font(typeSize.isAccessibilitySize ? .caption : .subheadline)

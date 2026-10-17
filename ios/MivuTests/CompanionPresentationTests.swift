@@ -165,14 +165,33 @@ import Testing
     @Test func acceptedSubmissionReturnsToThinkingAndNeverReplaysDuplicate() {
         let presentation = attached()
         let operation = UUID()
-        presentation.receive(CompanionSubmission(profileID: owner, operationID: operation, acceptedAt: t), now: t)
+        let submission = CompanionSubmission(profileID: owner, operationID: operation, acceptedAt: t)
+        presentation.receive(submission, now: t)
         let first = presentation.resolve(context: context(processing: true), now: t)
         #expect(first.pose == .submitted && first.reactionID != nil)
         #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.8)).pose == .thinking)
         presentation.receive(CompanionSubmission(profileID: owner, operationID: operation,
-            acceptedAt: t.addingTimeInterval(1)), now: t.addingTimeInterval(1))
+            acceptedAt: t.addingTimeInterval(1), attemptID: submission.attemptID), now: t.addingTimeInterval(1))
         let duplicate = presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(1))
         #expect(duplicate.pose == .thinking && duplicate.reactionID == nil)
+    }
+
+    @Test func acceptedRetryAfterRecoveryAcknowledgesTheSameDurableOperationAgain() {
+        let presentation = attached()
+        let operation = UUID()
+        let first = CompanionSubmission(profileID: owner, operationID: operation, acceptedAt: t)
+        presentation.receive(first, now: t)
+        let accepted = presentation.resolve(context: context(processing: true), now: t)
+        #expect(accepted.pose == .submitted)
+        #expect(presentation.resolve(context: context(recovery: true), now: t.addingTimeInterval(0.1)).pose == .recovery)
+        let retryAt = t.addingTimeInterval(0.2)
+        let retry = CompanionSubmission(profileID: owner, operationID: operation, acceptedAt: retryAt)
+        #expect(presentation.receive(retry, now: retryAt), "A fresh accepted attempt must survive operation deduplication")
+        let acknowledged = presentation.resolve(context: context(processing: true), now: retryAt)
+        #expect(acknowledged.pose == .submitted)
+        #expect(acknowledged.reactionID != nil && acknowledged.reactionID != accepted.reactionID)
+        presentation.receive(retry, now: retryAt.addingTimeInterval(0.1))
+        #expect(presentation.resolve(context: context(processing: true), now: retryAt.addingTimeInterval(0.1)) == acknowledged)
     }
 
     @Test(arguments: ["typing", "recovery", "hidden", "static", "background", "profile"])

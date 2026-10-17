@@ -62,9 +62,7 @@ import Network
         defer { isSending = false; diary.isSaving = false }
         let captured = draft
         let isNewSubmission = !turns.contains { $0.id == captured.submissionID }
-        if isNewSubmission && (companionSubmission?.profileID != owner || companionSubmission?.operationID != captured.submissionID) {
-            companionSubmission = CompanionSubmission(profileID: owner, operationID: captured.submissionID, acceptedAt: Date())
-        }
+        companionSubmission = CompanionSubmission(profileID: owner, operationID: captured.submissionID, acceptedAt: Date())
         do {
             _ = try await diary.store.captureCoachTurn(text: captured.text, photos: captured.photos.map { MealPhoto(data: $0) }, turnID: captured.submissionID, expectedProfileID: owner)
             try await diary.refresh(profileID: owner)
