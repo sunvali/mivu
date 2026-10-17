@@ -19,7 +19,7 @@ struct CompanionView: View {
                     .id(ObjectIdentifier(player))
                     .task { await runtime.reconcileMount(player) }
             } else {
-                Image(surface == .coach && [.resting, .attentive].contains(fallbackPose) ? runtime.character.fallbackAssetPrefix + "Coach" : runtime.fallbackAssetName(for: fallbackPose)).resizable().scaledToFit()
+                Image(surface == .coach ? runtime.character.fallbackAssetPrefix + "Coach" : runtime.fallbackAssetName(for: fallbackPose)).resizable().scaledToFit()
             }
         }
         .frame(width: size, height: size)

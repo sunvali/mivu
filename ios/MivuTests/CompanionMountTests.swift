@@ -33,7 +33,7 @@ import UIKit
             } else {
                 #expect(runtime.displayedPose == .resting, "Remount must discard a canceled success rather than resume it")
                 #expect(runtime.triggerCount == 1)
-                #expect(runtime.player?.isAnimationPlaying == false)
+                #expect(runtime.player?.isAnimationPlaying == true, "A canceled success returns to living idle")
             }
         }
     }

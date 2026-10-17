@@ -92,7 +92,7 @@ import UIKit
         let pose = oneShot && !freshReaction && (displayedPose != output.pose || !player.isAnimationPlaying) ? .resting : output.pose
         let changed = pose != displayedPose || surface != displayedSurface
         isPaused = false
-        if changed || freshReaction || pose == .thinking && !player.isAnimationPlaying {
+        if changed || freshReaction || !player.isAnimationPlaying {
             playbackGeneration += 1
             let token = playbackGeneration
             player.pause()
@@ -102,14 +102,13 @@ import UIKit
             if freshReaction && (oneShot || pose == .resting) { triggerCount += 1 }
             let render = { [self] in
                 guard eligible, token == playbackGeneration else { return }
-                if pose == .resting && !freshReaction {
-                    player.currentFrame = player.animation?.frameTime(forMarker: Self.marker(for: .resting, surface: surface)) ?? 0
-                } else {
-                    player.play(marker: marker, loopMode: pose == .thinking ? .loop : .playOnce) { [weak self] finished in
-                        guard let self, let player = self.player, finished, self.eligible, token == self.playbackGeneration else { return }
-                        if oneShot || marker == "blink" {
-                            self.displayedPose = .resting
-                            self.transition(player) { player.currentFrame = player.animation?.frameTime(forMarker: Self.marker(for: .resting, surface: self.latestSurface)) ?? 0 }
+                let loops = [.resting, .attentive, .thinking, .recovery].contains(pose) && !freshReaction
+                player.play(marker: marker, loopMode: loops ? .loop : .playOnce) { [weak self] finished in
+                    guard let self, let player = self.player, finished, self.eligible, token == self.playbackGeneration else { return }
+                    if oneShot || pose == .resting {
+                        self.displayedPose = .resting
+                        self.transition(player) {
+                            player.play(marker: Self.marker(for: .resting, surface: self.latestSurface), loopMode: .loop)
                         }
                     }
                 }
@@ -150,13 +149,13 @@ import UIKit
 
     private func transition(_ player: LottieAnimationView, _ changes: @escaping () -> Void) {
         guard player.window != nil else { changes(); return }
-        UIView.transition(with: player, duration: 0.1,
+        UIView.transition(with: player, duration: MivuMotion.companionTransition,
             options: [.transitionCrossDissolve, .beginFromCurrentState, .allowAnimatedContent], animations: changes)
     }
 
     private static func marker(for pose: CompanionPose, surface: CompanionSurface = .today) -> String {
-        if surface == .coach && (pose == .resting || pose == .attentive) { return "coach-resting" }
-        return ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"][pose.rawValue]
+        let name = ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"][pose.rawValue]
+        return surface == .coach ? "coach-" + name : name
     }
 
     private func check(_ descriptor: CharacterDescriptor, _ token: Int) throws {
@@ -180,7 +179,7 @@ import UIKit
                 return PreparedArtwork(animation: animation, images: images)
             }.value
             try check(descriptor, token)
-            for marker in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "coach-resting", "coach-blink"] {
+            for marker in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"].flatMap({ [$0, "coach-" + $0] }) {
                 guard prepared.animation.frameTime(forMarker: marker) != nil,
                       let duration = prepared.animation.durationFrameTime(forMarker: marker), duration > 0 else { throw AssetError.schema }
             }

@@ -59,7 +59,6 @@ struct CompanionOutput: Equatable {
     private var pending: CompanionEvent?
     private var latestCommit: Date?
     private var active: Reaction?
-    private var blinkDeadline: Date?
     private var greetingAvailable = true
     private var showRestAfterCharacterChange = false
 
@@ -106,14 +105,12 @@ struct CompanionOutput: Equatable {
 
         guard playback != .hidden else {
             active = nil
-            blinkDeadline = nil
             return output(pose: semanticPose, playback: .hidden)
         }
 
         if showRestAfterCharacterChange {
             showRestAfterCharacterChange = false
-            if playback == .animated { blinkDeadline = now.addingTimeInterval(MivuMotion.blinkInterval) }
-            return output(pose: .resting, playback: playback, deadline: blinkDeadline)
+            return output(pose: .resting, playback: playback)
         }
 
         guard playback == .animated else {
@@ -132,7 +129,6 @@ struct CompanionOutput: Equatable {
             let pose: CompanionPose = pending.kind == .saved ? .saved : .reviewed
             let duration = pending.kind == .saved ? MivuMotion.saved : MivuMotion.reviewed
             active = Reaction(pose: pose, deadline: now.addingTimeInterval(duration))
-            blinkDeadline = nil
         }
 
         if context.isProcessing, let active, active.pose == .greeting || active.pose == .resting {
@@ -144,11 +140,9 @@ struct CompanionOutput: Equatable {
                 return output(pose: active.pose, playback: playback, reaction: active)
             }
             self.active = nil
-            blinkDeadline = nil
         }
 
         if context.isProcessing {
-            blinkDeadline = nil
             greetingAvailable = false
             return output(pose: .thinking, playback: playback)
         }
@@ -157,22 +151,10 @@ struct CompanionOutput: Equatable {
             greetingAvailable = false
             let greeting = Reaction(pose: .greeting, deadline: now.addingTimeInterval(MivuMotion.greeting))
             active = greeting
-            blinkDeadline = nil
             return output(pose: .greeting, playback: playback, reaction: greeting)
         }
 
-        if let deadline = blinkDeadline, now >= deadline {
-            // A delayed callback starts a new interval instead of catching up a missed blink.
-            if now.timeIntervalSince(deadline) < MivuMotion.blink {
-                let blink = Reaction(pose: .resting, deadline: now.addingTimeInterval(MivuMotion.blink))
-                active = blink
-                blinkDeadline = nil
-                return output(pose: .resting, playback: playback, reaction: blink)
-            }
-            blinkDeadline = nil
-        }
-        if blinkDeadline == nil { blinkDeadline = now.addingTimeInterval(MivuMotion.blinkInterval) }
-        return output(pose: .resting, playback: playback, deadline: blinkDeadline)
+        return output(pose: .resting, playback: playback)
     }
 
     func enterBackground() {
@@ -194,7 +176,6 @@ struct CompanionOutput: Equatable {
     private func clearReactions() {
         pending = nil
         active = nil
-        blinkDeadline = nil
     }
 
     private func output(

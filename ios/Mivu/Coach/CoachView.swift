@@ -190,11 +190,11 @@ struct CoachView: View {
                 if let error = coach.errorMessage {
                     Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
                 } else {
-                    Text(companionRecovery ? "Your input is safe here" : companionProcessing ? "Working on your request…" : editing ? "Take your time" : "Ready when you are")
+                    Text(typeSize.isAccessibilitySize ? (companionRecovery ? "Input saved" : companionProcessing ? "Working…" : "Ready") : (companionRecovery ? "Your input is safe here" : companionProcessing ? "Working on your request…" : editing ? "Take your time" : "Ready when you are"))
                         .foregroundStyle(Color.diaryText)
                 }
             }
-            .font(.subheadline)
+            .font(typeSize.isAccessibilitySize ? .caption : .subheadline)
             .padding(.horizontal, 16).padding(.vertical, 12)
             .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -225,8 +225,11 @@ struct CoachView: View {
             await Task.yield()
             guard followRequested, followLatest, !userScrolling, let id = conversationRows.last?.id else { return }
             followRequested = false
+            // At large text sizes the linked actions can exceed the viewport; begin at the reply.
+            let replyID = typeSize.isAccessibilitySize && coach.turns.last?.assistantText != nil
+                ? coach.turns.last.map { "reply-" + $0.id.uuidString } : nil
             withAnimation(reduceMotion ? nil : .easeOut(duration: MivuMotion.coachFollow)) {
-                position.scrollTo(id: id, anchor: .bottom)
+                position.scrollTo(id: replyID ?? id, anchor: replyID == nil ? .bottom : .top)
             }
             hasNewMessage = false
         }

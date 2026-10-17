@@ -32,3 +32,19 @@ SwiftUI owns native controls, text, keyboard and navigation. Saving never waits 
 3. Retain a usable native recording and inspect gesture frames and interruptions. Component tests and binding/marker checks do not establish visual fidelity or smoothness.
 4. Run affected native regression checks and complete scheme coverage; preserve failed evidence and identify exact corrected-source results. No zero-test pass. Use XcodeBuildMCP. Physical Release frame, energy and memory budgets remain a separate pending gate until the owner's phone test.
 5. Complete independent review and open a private draft PR only when the Lottie asset and simulator fidelity checks are reviewable. No merge.
+
+## Owner motion revision — 17 October
+
+The owner found the first illustrated Lottie pass too fast, jumpy and frozen
+between reactions. This supersedes the held-rest / short-gesture timing in the
+original motion guide. Preserve the exact original painting and composition,
+but use an 8-second living rest loop, 6-second quiet typing loop, 4-second
+thinking/recovery loops, 1.5-second saved acknowledgment, 1.8-second review and
+2.2-second greeting. Pose changes dissolve over 350 ms. Feet and seated paws
+remain grounded; independent head, torso, ears, scarf and tail carry motion.
+Coach keeps its original seated painting for every semantic state, avoiding
+switches into the differently framed full-body atlas. Painted blinking belongs
+to the Lottie loop, with no periodic presentation-layer wakeup. Repeat rendering
+and appearance updates do not reset the current loop. Hidden, covered,
+background, Reduce Motion, low power and serious thermal conditions still stop
+all decorative playback. User actions never wait for a gesture.

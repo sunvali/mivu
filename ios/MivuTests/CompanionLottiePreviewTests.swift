@@ -44,7 +44,7 @@ import XCTest
         player.currentFrame = blink
         try await Task.sleep(for: .milliseconds(40))
         let openEyes = snapshot(player).cgImage?.cropping(to: CGRect(x: 350, y: 175, width: 180, height: 100))
-        player.currentFrame = blink + 4
+        player.currentFrame = blink + 8
         try await Task.sleep(for: .milliseconds(40))
         let closedEyes = snapshot(player)
         XCTAssertNotEqual(openEyes.flatMap { UIImage(cgImage: $0).pngData() },
@@ -65,13 +65,55 @@ import XCTest
             try await Task.sleep(for: .milliseconds(250))
             XCTAssertTrue(player.isAnimationPlaying)
             XCTAssertNotEqual(snapshot(player).pngData(), first, "Greeting \(iteration) must visibly advance")
-            while !finished && Date().timeIntervalSince(began) < 2 {
+            while !finished && Date().timeIntervalSince(began) < 3.2 {
                 try await Task.sleep(for: .milliseconds(20))
             }
             XCTAssertTrue(finished, "Greeting \(iteration) must complete without a host timer")
             XCTAssertFalse(player.isAnimationPlaying)
-            XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(began), 0.65)
+            XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(began), 2.15)
         }
+    }
+
+    func testRestAndQuietTypingKeepMovingWithoutRestartingAndStopWhenHidden() async throws {
+        let runtime = CompanionRuntime()
+        await runtime.select(CharacterCatalog.bundled.resolve("pip"))
+        await runtime.attach(eligible: true)
+        let player = try XCTUnwrap(runtime.player)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 240, height: 240)
+        window.rootViewController = UIViewController()
+        player.frame = window.bounds
+        window.rootViewController?.view.addSubview(player)
+        window.isHidden = false
+        defer { runtime.stop(); window.isHidden = true }
+        player.layoutIfNeeded()
+        for surface in [CompanionSurface.today, .coach] {
+            for pose in [CompanionPose.resting, .attentive] {
+                let output = CompanionOutput(pose: pose, playback: .animated, reactionID: nil, nextDeadline: nil)
+                await runtime.apply(output, darkMode: false, surface: surface)
+                try await Task.sleep(for: .milliseconds(450))
+                XCTAssertTrue(player.isAnimationPlaying, "Eligible idle and quiet typing must stay alive")
+                let before = player.realtimeAnimationFrame
+                let image = snapshot(player).pngData()
+                await runtime.apply(output, darkMode: true, surface: surface)
+                try await Task.sleep(for: .milliseconds(650))
+                XCTAssertGreaterThan(player.realtimeAnimationFrame, before, "Appearance updates must not restart the living loop")
+                XCTAssertNotEqual(snapshot(player).pngData(), image, "Breathing must move painted parts, not only the timeline")
+                XCTAssertEqual(runtime.displayedPose, pose)
+            }
+        }
+        await runtime.apply(CompanionOutput(pose: .resting, playback: .animated, reactionID: nil, nextDeadline: nil), darkMode: true, surface: .coach)
+        try await Task.sleep(for: .seconds(8.4))
+        XCTAssertTrue(player.isAnimationPlaying, "Living idle must continue beyond a complete eight-second cycle")
+        let loopFrame = player.realtimeAnimationFrame
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertGreaterThan(player.realtimeAnimationFrame, loopFrame)
+        await runtime.attach(eligible: false)
+        let stopped = player.realtimeAnimationFrame
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertFalse(player.isAnimationPlaying)
+        XCTAssertEqual(player.realtimeAnimationFrame, stopped)
     }
 
     private func snapshot(_ view: UIView) -> UIImage {

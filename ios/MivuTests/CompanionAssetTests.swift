@@ -243,17 +243,19 @@ extension CompanionAssetTests {
             try await Task.sleep(for: .milliseconds(50))
             #expect(player.isAnimationPlaying)
             #expect(player.realtimeAnimationFrame != frame)
-            while player.isAnimationPlaying, began.duration(to: .now) < .seconds(2) {
+            let restStart = try #require(player.animation?.frameTime(forMarker: "resting"))
+            let restEnd = restStart + (try #require(player.animation?.durationFrameTime(forMarker: "resting")))
+            while !(player.realtimeAnimationFrame >= restStart && player.realtimeAnimationFrame < restEnd), began.duration(to: .now) < .seconds(3.5) {
                 try await Task.sleep(for: .milliseconds(10))
             }
-            #expect(!player.isAnimationPlaying)
+            #expect(player.isAnimationPlaying, "Completed gestures must settle into living idle")
             #expect(began.duration(to: .now) >= .seconds(duration - 0.04))
             #expect(runtime.displayedPose == .resting)
         }
         #expect(runtime.triggerCount == 5)
     }
 
-    @Test func restUpdatesDoNotFireReactBeforeFreshBlinkDeadline() async throws {
+    @Test func ordinaryPoseUpdatesDoNotCreateReactions() async throws {
         let runtime = try await ready()
         for _ in 0..<5 {
             await runtime.apply(output(), darkMode: false)
@@ -281,7 +283,8 @@ extension CompanionAssetTests {
         let window = try mount(player)
         defer { runtime.stop(); window.isHidden = true }
         try await Task.sleep(for: .milliseconds(80))
-        #expect(!player.isAnimationPlaying, "Reattachment must not play a queued old reaction or blink")
+        #expect(player.isAnimationPlaying, "Reattachment resumes living idle without replaying the consumed reaction")
+        #expect(runtime.displayedPose == .resting)
     }
 
     @Test func appearanceChangeDoesNotRetriggerActiveAction() async throws {
@@ -319,7 +322,8 @@ extension CompanionAssetTests {
         defer { runtime.stop(); window.isHidden = true }
         try await Task.sleep(for: .milliseconds(500))
         #expect(runtime.displayedPose == .attentive)
-        #expect(!player.isAnimationPlaying)
+        await runtime.reconcileMount(player)
+        #expect(player.isAnimationPlaying, "Quiet typing keeps gentle breathing instead of freezing")
     }
 
     @Test func allFallbacksHaveBothAppearanceVariantsWithIdenticalBounds() throws {

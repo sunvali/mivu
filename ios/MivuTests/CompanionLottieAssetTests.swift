@@ -15,7 +15,14 @@ import Testing
         #expect(digest == expected, "The animation must use the unchanged approved illustration")
         let markers = try #require(json["markers"] as? [[String: Any]])
         let names = Set(markers.compactMap { $0["cm"] as? String })
-        #expect(names == ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "coach-resting", "coach-blink"])
+        let base = ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"]
+        #expect(names == Set(base.flatMap { [$0, "coach-" + $0] }))
+        let durations = ["resting": MivuMotion.resting, "blink": MivuMotion.blink, "attentive": MivuMotion.attentive, "thinking": MivuMotion.thinking, "saved": MivuMotion.saved, "reviewed": MivuMotion.reviewed, "recovery": MivuMotion.recovery, "greeting": MivuMotion.greeting]
+        for marker in markers {
+            let name = try #require(marker["cm"] as? String)
+            let seconds = try #require(marker["dr"] as? Double) / 60
+            #expect(seconds == durations[name.replacingOccurrences(of: "coach-", with: "")], "Presenter and authored playback must share the same duration")
+        }
         #expect((json["fr"] as? Double) == 60)
         let layers = try #require(json["layers"] as? [[String: Any]])
         let layerNames = Set(layers.compactMap { $0["nm"] as? String })

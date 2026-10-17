@@ -2,7 +2,7 @@
   "characterID": "pip",
   "displayName": "Pip",
   "schemaVersion": 1,
-  "status": "original illustrated Lottie rig integrated; native unit suite passed; full UI validation and physical-device acceptance pending",
+  "status": "original illustrated continuous Lottie motion integrated; latest motion verification pending; prior 520-test native baseline predates latest changes",
   "created": "2026-10-17",
   "source": "Approved original Pip storyboard illustration with authored Lottie image layers, vector masks, joint transforms and eyelid patches. The separate Coach pose uses an exact crop of the approved context illustration. Preserve the selected fox identity and original painted pixels. No imported third-party character artwork.",
   "assets": [
@@ -34,11 +34,14 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip.json",
-    "sha256": "c8c73028ac921bb4ca5ad72680591673f91ef1ec00fa28cc889384bb578f8fd1",
-    "bytes": 561658,
+    "sha256": "04feb486741ccf56f807b30a65cb0a31678c70e14570d8baf61e04c71388f086",
+    "bytes": 976470,
     "formatVersion": "5.12.2",
-    "canvas": [512, 512],
-    "layers": 81,
+    "canvas": [
+      512,
+      512
+    ],
+    "layers": 162,
     "markers": [
       "resting",
       "blink",
@@ -49,7 +52,13 @@
       "recovery",
       "greeting",
       "coach-resting",
-      "coach-blink"
+      "coach-blink",
+      "coach-attentive",
+      "coach-thinking",
+      "coach-saved",
+      "coach-reviewed",
+      "coach-recovery",
+      "coach-greeting"
     ]
   },
   "sourceArtwork": {
@@ -91,11 +100,12 @@
   },
   "targetRuntime": "Lottie iOS 4.6.1, Core Animation renderer",
   "productionValidation": {
-    "nativeUnitTests": "520 passed, 0 failed; 1 expected interactive-authentication skip",
+    "nativeUnitTests": "520 passed, 0 failed; 1 expected interactive-authentication skip (baseline before latest motion changes)",
     "targetedUISimulatorChecks": "Prior runs passed the new Coach composition and largest-text checks",
     "fullUITestSuite": "pending",
     "visualAndAccessibilityReview": "pending broader validation",
-    "physicalDevice": "pending owner acceptance; no frame-time, energy or thermal claim"
+    "physicalDevice": "pending owner acceptance; no frame-time, energy or thermal claim",
+    "latestMotionVerification": "pending"
   },
   "fallbacks": [
     {
@@ -173,13 +183,33 @@
     "patches": [
       {
         "eye": "left",
-        "source": [954, 654, 1007, 696],
-        "target": [918, 676, 946, 702]
+        "source": [
+          954,
+          654,
+          1007,
+          696
+        ],
+        "target": [
+          918,
+          676,
+          946,
+          702
+        ]
       },
       {
         "eye": "right",
-        "source": [1030, 642, 1072, 676],
-        "target": [954, 668, 975, 692]
+        "source": [
+          1030,
+          642,
+          1072,
+          676
+        ],
+        "target": [
+          954,
+          668,
+          975,
+          692
+        ]
       }
     ],
     "preservation": "All Coach body and face pixels outside those eye patches are from the original context crop."
@@ -187,8 +217,8 @@
   "authoringSources": [
     {
       "path": "design-system/mivu/characters/pip/lottie-source/coach_pose.py",
-      "sha256": "9e53f5c69ce7c23271a5486aa25f37cd060be0b092afde9e1a7e9080c2ba956f",
-      "bytes": 4508,
+      "sha256": "d28dcc4f5516465eb851393f61561d011ab670a204d10739e7de853ee6a4a810",
+      "bytes": 7947,
       "role": "Coach crop, matte, eyelid registration and Lottie marker recipe"
     },
     {
@@ -196,6 +226,24 @@
       "sha256": "900fe57a47d1ee2d7919d7d9b100335c4d244718cc07aca11220266976ed41ce",
       "bytes": 718738,
       "role": "generated eye-edit source; changed layout, scale and body are rejected"
+    },
+    {
+      "path": "design-system/mivu/characters/pip/lottie-source/build.py",
+      "sha256": "1814f2eccbf5acd31a9148b2076ef4b9442a4d51182309ef89c41ed1f644c52a",
+      "bytes": 17843,
+      "role": "Lottie rig builder"
+    },
+    {
+      "path": "design-system/mivu/characters/pip/lottie-source/fallbacks.py",
+      "sha256": "1225408b3f5f10908e016038af6d946c9477b3d307e5a917f461c967718c14f1",
+      "bytes": 4798,
+      "role": "Static fallback generator"
+    },
+    {
+      "path": "design-system/mivu/characters/pip/lottie-source/README.md",
+      "sha256": "4918a37b11b1155588d8a12cb377aec3740481a6afbc256ef61022e4062a7678",
+      "bytes": 3808,
+      "role": "Rig authoring and runtime documentation"
     }
   ]
 }

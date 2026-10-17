@@ -36,19 +36,19 @@ import Testing
         let presentation = attached()
         presentation.receive(event(), now: t)
         #expect(presentation.resolve(context: context(playback: .hidden), now: t).nextDeadline == nil)
-        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(10)).pose != .saved)
+        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(MivuMotion.feedbackLifetime)).pose != .saved)
     }
 
     @Test func freshHiddenSuccessPlaysOnceJustBeforeExpiry() {
         let presentation = attached()
         presentation.receive(event(), now: t)
         _ = presentation.resolve(context: context(playback: .hidden), now: t)
-        let start = t.addingTimeInterval(9.999)
+        let start = t.addingTimeInterval(MivuMotion.feedbackLifetime - 0.001)
         let success = presentation.resolve(context: context(), now: start)
         #expect(success.pose == .saved)
         #expect(success.reactionID != nil)
-        #expect(success.nextDeadline == start.addingTimeInterval(0.45))
-        #expect(presentation.resolve(context: context(), now: start.addingTimeInterval(0.45)).pose != .saved)
+        #expect(success.nextDeadline == start.addingTimeInterval(MivuMotion.saved))
+        #expect(presentation.resolve(context: context(), now: start.addingTimeInterval(MivuMotion.saved)).pose != .saved)
     }
 
     @Test func initialAttachmentNeverReplaysExistingReceipts() {
@@ -64,12 +64,14 @@ import Testing
         let receipt = event()
         presentation.receive(receipt, now: t)
         let first = presentation.resolve(context: context(), now: t)
-        _ = presentation.resolve(context: context(), now: t.addingTimeInterval(0.45))
+        let duplicateAt = t.addingTimeInterval(MivuMotion.saved + 0.1)
+        _ = presentation.resolve(context: context(), now: duplicateAt)
         presentation.receive(CompanionEvent(profileID: owner, operationID: receipt.operationID,
-            kind: .saved, committedAt: t.addingTimeInterval(1)), now: t.addingTimeInterval(1))
-        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(1)).pose != .saved)
-        presentation.receive(event(at: t.addingTimeInterval(2)), now: t.addingTimeInterval(2))
-        let second = presentation.resolve(context: context(), now: t.addingTimeInterval(2))
+            kind: .saved, committedAt: duplicateAt), now: duplicateAt)
+        #expect(presentation.resolve(context: context(), now: duplicateAt).pose != .saved)
+        let secondAt = duplicateAt.addingTimeInterval(1)
+        presentation.receive(event(at: secondAt), now: secondAt)
+        let second = presentation.resolve(context: context(), now: secondAt)
         #expect(second.pose == .saved)
         #expect(second.reactionID != nil)
         #expect(second.reactionID != first.reactionID)
@@ -128,22 +130,22 @@ import Testing
         #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(0.1)).pose != .saved)
     }
 
-    @Test func savedFinishesAt450MillisecondsAndProcessingResumes() {
+    @Test func savedFinishesAtConfiguredDurationAndProcessingResumes() {
         let presentation = attached()
         presentation.receive(event(), now: t)
         #expect(presentation.resolve(context: context(processing: true), now: t).pose == .saved)
-        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.449)).pose == .saved)
-        let resumed = presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.45))
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(MivuMotion.saved - 0.001)).pose == .saved)
+        let resumed = presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(MivuMotion.saved))
         #expect(resumed.pose == .thinking)
         #expect(resumed.nextDeadline == nil)
     }
 
-    @Test func reviewedFinishesAt650Milliseconds() {
+    @Test func reviewedFinishesAtConfiguredDuration() {
         let presentation = attached()
         presentation.receive(event(kind: .reviewed), now: t)
         #expect(presentation.resolve(context: context(), now: t).pose == .reviewed)
-        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(0.649)).pose == .reviewed)
-        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(0.65)).pose == .resting)
+        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(MivuMotion.reviewed - 0.001)).pose == .reviewed)
+        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(MivuMotion.reviewed)).pose == .resting)
     }
 
     @Test func foregroundGreetingIsSharedAcrossRoots() {
@@ -151,13 +153,14 @@ import Testing
         let greeting = presentation.resolve(context: context(), now: t)
         #expect(greeting.pose == .greeting)
         #expect(greeting.reactionID != nil)
-        #expect(greeting.nextDeadline == t.addingTimeInterval(0.7))
+        #expect(greeting.nextDeadline == t.addingTimeInterval(MivuMotion.greeting))
         #expect(presentation.resolve(context: context(surface: .coach), now: t.addingTimeInterval(0.3)) == greeting)
-        #expect(presentation.resolve(context: context(surface: .coach), now: t.addingTimeInterval(0.7)).pose == .resting)
-        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(1)).pose == .resting)
+        #expect(presentation.resolve(context: context(surface: .coach), now: t.addingTimeInterval(MivuMotion.greeting)).pose == .resting)
+        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(MivuMotion.greeting + 0.1)).pose == .resting)
         presentation.enterBackground()
-        presentation.attach(profileID: owner, existingEvents: [], now: t.addingTimeInterval(2))
-        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(2)).pose == .greeting)
+        let foregroundAt = t.addingTimeInterval(MivuMotion.greeting + 0.2)
+        presentation.attach(profileID: owner, existingEvents: [], now: foregroundAt)
+        #expect(presentation.resolve(context: context(), now: foregroundAt).pose == .greeting)
     }
 
     @Test(arguments: [true, false])
@@ -169,26 +172,30 @@ import Testing
         #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(0.1)) == first)
     }
 
-    @Test func restBlinkUsesTwelveSecondDeadlineAndLasts150Milliseconds() {
+    @Test func restingAndAttentiveOutputsHaveNoPresentationDeadline() {
         let presentation = resting()
         let rest = presentation.resolve(context: context(), now: t)
-        #expect(rest.nextDeadline == t.addingTimeInterval(12))
+        #expect(rest.pose == .resting)
+        #expect(rest.nextDeadline == nil)
         #expect(rest.reactionID == nil)
-        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(11.999)).reactionID == nil)
-        let blink = presentation.resolve(context: context(), now: t.addingTimeInterval(12))
-        #expect(blink.pose == .resting)
-        #expect(blink.reactionID != nil)
-        #expect(blink.nextDeadline == t.addingTimeInterval(12.15))
-        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(12.1)) == blink)
-        let settled = presentation.resolve(context: context(), now: t.addingTimeInterval(12.15))
-        #expect(settled.reactionID == nil)
-        #expect(settled.nextDeadline == t.addingTimeInterval(24.15))
+        let restingLater = presentation.resolve(context: context(), now: t.addingTimeInterval(120))
+        #expect(restingLater.pose == .resting)
+        #expect(restingLater.nextDeadline == nil)
+        #expect(restingLater.reactionID == nil)
+        let attentive = presentation.resolve(context: context(typing: true), now: t.addingTimeInterval(121))
+        #expect(attentive.pose == .attentive)
+        #expect(attentive.nextDeadline == nil)
+        #expect(attentive.reactionID == nil)
+        let resumed = presentation.resolve(context: context(), now: t.addingTimeInterval(130))
+        #expect(resumed.pose == .resting)
+        #expect(resumed.nextDeadline == nil)
+        #expect(resumed.reactionID == nil)
     }
 
-    @Test(arguments: ["focus", "processing", "hidden", "covered", "background", "reducedMotion", "lowPower", "thermal", "character"])
-    func interruptedRestStartsNewFullBlinkIntervalWithoutCatchUp(interruption: String) {
+    @Test(arguments: ["focus", "processing", "hidden", "background", "reducedMotion", "lowPower", "thermal", "character"])
+    func interruptedRestResumesWithoutDeadlineOrStaleReaction(interruption: String) {
         let presentation = resting()
-        let interruptedAt = t.addingTimeInterval(11.9)
+        let interruptedAt = t.addingTimeInterval(1)
         switch interruption {
         case "focus": _ = presentation.resolve(context: context(typing: true), now: interruptedAt)
         case "processing": _ = presentation.resolve(context: context(processing: true), now: interruptedAt)
@@ -206,9 +213,8 @@ import Testing
         let renewed = presentation.resolve(context: context(), now: renewedAt)
         #expect(renewed.pose == .resting)
         #expect(renewed.reactionID == nil)
-        #expect(renewed.nextDeadline == renewedAt.addingTimeInterval(12))
-        #expect(presentation.resolve(context: context(), now: renewedAt.addingTimeInterval(11.999)).reactionID == nil)
-        #expect(presentation.resolve(context: context(), now: renewedAt.addingTimeInterval(12)).reactionID != nil)
+        #expect(renewed.nextDeadline == nil)
+        #expect(presentation.resolve(context: context(), now: renewedAt.addingTimeInterval(120)) == renewed)
     }
 
     @Test func hidingActiveReactionCancelsItWithoutReplay() {
@@ -266,10 +272,9 @@ import Testing
         #expect(hidden.nextDeadline == nil)
         #expect(hidden.reactionID == nil)
     }
-    @Test(arguments: [true, false])
-    func processingInterruptsGreetingOrBlink(greeting: Bool) {
-        let presentation = greeting ? attached() : resting()
-        let start = greeting ? t : t.addingTimeInterval(12)
+    @Test func processingInterruptsGreetingWithoutDeadline() {
+        let presentation = attached()
+        let start = t
         #expect(presentation.resolve(context: context(), now: start).reactionID != nil)
         let interrupted = presentation.resolve(context: context(processing: true), now: start.addingTimeInterval(0.05))
         #expect(interrupted.pose == .thinking)
@@ -290,15 +295,6 @@ import Testing
         presentation.attach(profileID: owner, existingEvents: [], now: attachedAt)
         presentation.receive(receipt, now: attachedAt)
         #expect(presentation.resolve(context: context(), now: attachedAt).pose != .saved)
-    }
-
-    @Test func missedBlinkDeadlineDoesNotCatchUp() {
-        let presentation = resting()
-        let late = t.addingTimeInterval(30)
-        let output = presentation.resolve(context: context(), now: late)
-        #expect(output.pose == .resting)
-        #expect(output.reactionID == nil)
-        #expect(output.nextDeadline == late.addingTimeInterval(12))
     }
 
     @Test(arguments: [CompanionEvent.Kind.saved, .reviewed])

@@ -57,6 +57,31 @@ import XCTest
         }
     }
 
+    func testLivingIdleAndQuietTypingKeepCaptureResponsive() async throws {
+        for appearance in ["--proof-light", "--proof-dark"] {
+            let app = launch([appearance])
+            app.tabBars.buttons["Today"].tap()
+            // Observation windows include a complete authored loop for the native motion recording.
+            try await Task.sleep(for: .seconds(8.5))
+            XCTAssertTrue(app.buttons["logMeal"].isHittable)
+            app.tabBars.buttons["Coach"].tap()
+            enter("Two eggs, three bread slices and salad", in: app)
+            try await Task.sleep(for: .seconds(6.5))
+            XCTAssertEqual(app.textFields["coachInput"].value as? String, "Two eggs, three bread slices and salad")
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            XCTAssertTrue(app.buttons["coachSend"].isHittable)
+            app.buttons["coachSend"].tap()
+            XCTAssertTrue(app.buttons["coachMealLink"].firstMatch.waitForExistence(timeout: 15))
+            try await Task.sleep(for: .seconds(2.5))
+            let coach = XCTAttachment(screenshot: app.screenshot())
+            coach.name = "Living Pip Coach " + appearance; coach.lifetime = .keepAlways; add(coach)
+            app.tabBars.buttons["Today"].tap()
+            let today = XCTAttachment(screenshot: app.screenshot())
+            today.name = "Living Pip Today " + appearance; today.lifetime = .keepAlways; add(today)
+            app.terminate()
+        }
+    }
+
     func testFallbackKeepsCaptureAndReviewUsable() {
         let app = launch(["--companion-load-failure"])
         app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()

@@ -47,8 +47,14 @@ POSES = {
         ears=[[(118,6),(154,21),(171,69),(145,91),(116,82)], [(179,68),(274,60),(264,101),(218,131),(195,107)]],
         paw=[(65,98),(103,98),(108,128),(133,140),(144,149),(128,170),(108,165),(83,146),(71,129)], pivot=(132,150)),
 }
-CLIPS = [("resting",0,1),("blink",10,9),("attentive",30,9),("thinking",60,84),
-         ("saved",160,27),("reviewed",200,39),("recovery",260,12),("greeting",300,42)]
+# Long living loops and unhurried gestures. Every loop closes at its neutral pose.
+CLIPS = []
+frame = 0
+for clip, duration in [("resting",480),("blink",18),("attentive",360),("thinking",240),
+                       ("saved",90),("reviewed",108),("recovery",240),("greeting",132)]:
+    CLIPS.append((clip,frame,duration))
+    frame += duration + 1
+TODAY_END = frame
 
 
 def polygon(points):
@@ -183,31 +189,46 @@ def split_parts(rgb, whole, pose):
 
 
 def rotations(name, duration):
-    midpoint = duration/2
-    settle = [(0,0),(duration,0)]
+    def keys(*values): return [(round(t*duration,3),v) for t,v in values]
+    neutral = keys((0,0),(1,0))
+    if name in ["resting","attentive"]:
+        quiet = .45 if name == "attentive" else 1
+        return {"head":keys((0,0),(.25,-.45*quiet),(.5,0),(.75,.35*quiet),(1,0)),
+                "tail":keys((0,0),(.25,1.1*quiet),(.5,0),(.75,-.8*quiet),(1,0)),
+                "scarf":keys((0,0),(.3,-.7*quiet),(.6,.55*quiet),(1,0)),
+                "left-ear":keys((0,0),(.64,0),(.72,-.8*quiet),(.85,0),(1,0)),
+                "right-ear":keys((0,0),(.18,0),(.28,.65*quiet),(.4,0),(1,0))}
     if name == "greeting":
-        return {"left-paw":[(0,-8),(8,-4),(17,8),(24,-8),(30,5),(duration,0)],
-                "head":[(0,-3),(12,1),(24,-1),(duration,0)],
-                "tail":[(0,-4),(12,6),(26,-3),(duration,0)],
-                "scarf":[(0,0),(15,-4),(29,2),(duration,0)]}
+        return {"left-paw":keys((0,0),(.2,-4),(.44,4),(.66,-3),(.86,0),(1,0)),
+                "head":keys((0,0),(.3,-1.2),(.65,.5),(1,0)),
+                "tail":keys((0,0),(.35,2.5),(.7,-1.5),(1,0)),
+                "scarf":keys((0,0),(.4,-1.5),(.75,.7),(1,0))}
     if name == "saved":
-        return {"head":[(0,0),(5,6),(12,-1),(duration,0)],
-                "left-paw":[(0,-7),(10,3),(17,-2),(duration,0)],
-                "tail":[(0,0),(12,5),(duration,0)],"scarf":[(0,0),(9,3),(duration,0)]}
+        return {"head":keys((0,0),(.35,2.5),(.7,-.5),(1,0)),
+                "left-paw":keys((0,0),(.4,-2.5),(.75,.7),(1,0)),
+                "tail":keys((0,0),(.5,2),(1,0)),"scarf":keys((0,0),(.45,1),(1,0))}
     if name == "reviewed":
-        return {"left-paw":[(0,-6),(10,4),(22,1),(duration,0)],
-                "right-paw":[(0,6),(10,-4),(22,-1),(duration,0)],
-                "head":[(0,3),(10,-3),(24,0),(duration,0)],
-                "tail":[(0,0),(15,-7),(29,3),(duration,0)],"scarf":[(0,0),(17,4),(duration,0)]}
+        return {"left-paw":keys((0,0),(.35,-3),(.7,1),(1,0)),
+                "right-paw":keys((0,0),(.35,3),(.7,-1),(1,0)),
+                "head":keys((0,0),(.4,-1.4),(.75,.4),(1,0)),
+                "tail":keys((0,0),(.4,-2.5),(.75,1),(1,0)),"scarf":keys((0,0),(.5,1.5),(1,0))}
     if name == "thinking":
-        return {"head":[(0,0),(21,-3),(42,0),(63,2),(duration,0)],
-                "left-paw":[(0,0),(28,3),(56,-2),(duration,0)],
-                "left-ear":[(0,0),(12,2),(25,0),(duration,0)],
-                "right-ear":[(0,0),(45,-3),(59,0),(duration,0)],
-                "tail":[(0,0),(42,3),(duration,0)]}
-    if name == "attentive": return {"head":[(0,-2),(duration,0)],"left-ear":[(0,2),(duration,0)]}
-    if name == "recovery": return {"head":[(0,6),(duration,0)],"left-paw":[(0,-5),(duration,0)]}
-    return {"head":settle}
+        return {"head":keys((0,0),(.25,-1),(.5,0),(.75,.7),(1,0)),
+                "left-paw":keys((0,0),(.35,1.2),(.7,-.6),(1,0)),
+                "left-ear":keys((0,0),(.15,1),(.3,0),(1,0)),
+                "right-ear":keys((0,0),(.55,-1),(.75,0),(1,0)),
+                "tail":keys((0,0),(.5,1.3),(1,0))}
+    if name == "recovery":
+        return {"head":keys((0,0),(.4,1.5),(1,0)),"left-paw":keys((0,0),(.45,-2),(1,0))}
+    return {"head":neutral}
+
+
+def breathe(ks, pivot, duration, start, quiet=1):
+    # Only the torso stretches toward a fixed ground anchor; the feet never translate.
+    ks["a"] = fixed([*pivot,0]); ks["p"] = fixed([*pivot,0])
+    ks["s"] = {"a":1,"k":[{"t":start+t*duration,"s":[100,100+v*quiet,100],
+        "i":{"x":[.58],"y":[1]},"o":{"x":[.32],"y":[0]}}
+        for t,v in [(0,0),(.25,.7),(.5,0),(.75,.6),(1,0)]]}
 
 
 def build():
@@ -225,7 +246,7 @@ def build():
         except AssertionError as error: raise AssertionError(f"{name}: {error}") from error
         ys,xs = np.where(whole); center=(float(xs.min()+xs.max())/2,float(ys.max()+1))
         scale=440/(ys.max()+1-ys.min())
-        end = CLIPS[clip_index+1][1] if clip_index+1 < len(CLIPS) else 400
+        end = CLIPS[clip_index+1][1] if clip_index+1 < len(CLIPS) else TODAY_END
         root_id=next_index; next_index+=1; head_id=next_index; next_index+=1
         root_transform=transform()
         root_transform.update({"a":fixed([center[0]+offset[0],center[1]+offset[1],0]),
@@ -250,21 +271,26 @@ def build():
             else: pivot=pose["neck"]
             pivot=(pivot[0]+offset[0],pivot[1]+48+offset[1])
             rotation=animated(motion[part],start) if part in motion and part!="head" else None
+            part_transform=transform(pivot,rotation)
+            if part == "torso" and name in ["resting","attentive"]:
+                breathe(part_transform,(center[0]+offset[0],center[1]+offset[1]),duration,start,
+                        .4 if name == "attentive" else 1)
             layers.append({"ddd":0,"ind":next_index,"ty":2,"nm":part,"refId":"approved-artwork",
                            "parent":head_id if part in ["head","left-ear","right-ear"] else root_id,
-                           "ks":transform(pivot,rotation),"masksProperties":masks_for(parts[part],offset),
+                           "ks":part_transform,"masksProperties":masks_for(parts[part],offset),
                            "ip":start,"op":end,"st":0,"sr":1,"bm":0})
             next_index+=1
-        if name == "blink":
+        if name in ["resting","blink"]:
             lid_transform=transform()
             lid_transform["p"]=fixed([230,70,0])
-            lid_transform["o"]=animated([(0,0),(4,100),(5,100),(9,0)],start)
+            blink_keys = [(0,0),(300,0),(306,100),(310,100),(318,0),(duration,0)] if name == "resting" else [(0,0),(6,100),(10,100),(18,0)]
+            lid_transform["o"]=animated(blink_keys,start)
             layers.insert(0,{"ddd":0,"ind":next_index,"ty":2,"nm":"blink-painted-eyelids",
                 "refId":"painted-eyelids","parent":head_id,"ks":lid_transform,
                 "ip":start,"op":end,"st":0})
             next_index+=1
         manifests[name]={"cell":pose["cell"],"ground":center[1],"bounds":[int(xs.min()),int(ys.min()),int(xs.max()),int(ys.max())],"scale":scale}
-    animation={"v":"5.12.2","fr":60,"ip":0,"op":400,"w":512,"h":512,"nm":"Pip approved illustration",
+    animation={"v":"5.12.2","fr":60,"ip":0,"op":TODAY_END,"w":512,"h":512,"nm":"Pip approved illustration",
                "ddd":0,"assets":[{"id":"approved-artwork","w":1536,"h":1024,"u":"","p":"pip-artwork.png","e":0}],
                "layers":layers,"markers":[{"cm":n,"tm":s,"dr":d} for n,s,d in CLIPS],
                "meta":{"sourceSHA256":EXPECTED,"authoring":"Original illustration pixels, authored joint transforms and vector masks"}}
@@ -280,7 +306,7 @@ def build():
     DEST.mkdir(parents=True,exist_ok=True)
     lids.save(DEST/"pip-eyelids.png")
     shutil.copy2(SOURCE,DEST/"pip-artwork.png")
-    authored_peek(animation,next_index)
+    authored_peek(animation,next_index,TODAY_END,animated,masks_for,transform,breathe)
     (DEST/"pip.json").write_text(json.dumps(animation,separators=(",",":"))+"\n")
     (Path(__file__).parent/"pose-registration.json").write_text(json.dumps(manifests,indent=2)+"\n")
     print(json.dumps({"layers":len(layers),"animationBytes":(DEST/"pip.json").stat().st_size,

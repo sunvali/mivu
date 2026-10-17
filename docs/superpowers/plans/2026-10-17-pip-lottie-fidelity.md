@@ -71,3 +71,13 @@
 - [ ] Inspect default/system-largest, light/dark, reduced motion, contrast/transparency, cover/offscreen/background behavior and interrupted/repeated reactions. Save a usable native recording and visual comparisons.
 - [ ] Obtain independent whole-branch review, fix blocking findings and verify changes. Keep physical-device performance, haptics, VoiceOver/camera/provider acceptance explicit.
 - [ ] Commit evidence, push through required hooks, create/attach a private draft against the correct live base, verify hosted checks, and leave the simulator preview open for review. Tell the owner it is ready for the iPhone test.
+
+## Motion revision acceptance
+
+- Replace held frames with seamlessly closing, restrained body-part loops.
+- Slow actions and synchronize presentation expiry with authored marker lengths.
+- Keep all Coach reactions on its seated rig; smooth source-pose transitions.
+- Verify actual native pixels and frames advance during rest and quiet typing,
+  remain uninterrupted by appearance updates, and stop while hidden/static.
+- Record and inspect real simulator motion, including a complete idle cycle and
+  repeat gestures, before publishing the draft review.

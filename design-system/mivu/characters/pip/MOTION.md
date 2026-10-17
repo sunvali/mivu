@@ -1,71 +1,68 @@
 # Pip: character and motion bible
 
-Status: approved original illustration and Lottie motion contract, 17 October
-2026. Pip is the only launch companion. The approved source atlas is
-`storyboard.png`; the editable rig and render details are documented in
-[`lottie-source/README.md`](lottie-source/README.md). The approved PDF motion
+Status: original illustration and continuously living Lottie motion contract,
+17 October 2026. Pip is the only launch companion. Preserve the approved painted
+identity in `storyboard.png`; the editable rig and render details are documented
+in [`lottie-source/README.md`](lottie-source/README.md). The approved PDF motion
 guide remains the visual authority for acting and composition.
 
 ## Identity and composition
 
-Preserve the original shaded illustration: orange fox, cream muzzle/chest/tail
-tip, brown eyes and paws, and short teal scarf. Keep its face construction,
-proportions, silhouette, scarf knot and direction consistent in all poses and
-appearances. Do not redraw the character or flatten the full body into a
-single moving image.
+Keep the original shaded orange fox, cream muzzle, chest and tail tip, brown
+eyes and paws, and teal scarf. Preserve its face, proportions, silhouette,
+scarf knot and direction in every pose. Animate the painted source with authored
+image layers and masks; do not redraw the character or replace it with a
+simplified design.
 
 Today places a prominent full-body Pip beside intake below the date. Coach
-places a seated companion above its compact horizontal composer. Native text,
-keyboard, controls and navigation remain SwiftUI-owned. Keep feet grounded and
-the illustration subordinate to meal content and readable controls. At larger
-accessibility text sizes, preserve native text and scrolling instead of
-shrinking labels or hiding actions.
+places the original seated Pip above its compact horizontal composer. Native
+text, keyboard, controls and navigation remain SwiftUI-owned. Keep feet grounded
+and the illustration subordinate to meal content and readable controls. At
+larger accessibility text sizes, preserve native text and scrolling.
 
-Coach's seated figure comes from the exact original illustration crop in
-`context.png`. It has its own resting and blink markers and static asset. Its
-body, face, framing and scale stay sourced from that approved crop; only the two
-registered eyelid patches come from the separate blink edit.
+Coach uses the same seated original painting in every semantic state, including
+its static fallback. It does not use Today poses or a separately animated
+character design.
 
-## Rig and acting
+## Motion contract
 
-The 512×512 Lottie composition uses the original atlas through authored image
-layers and vector masks. Head, ears, torso, paws, tail and scarf have separate
-transforms where the source pose supports them. Core Animation renders motion;
-SwiftUI does not publish frame-by-frame state. Static detailed PNGs provide
-matching semantic poses for reduced motion and unavailable playback.
+The 512×512 Lottie composition uses the illustrated source atlas through
+independent image layers, masks and authored transforms. Head, ears, torso,
+paws, tail and scarf move gently around grounded feet. Continuous motion keeps
+Pip visibly alive without abrupt gestures: slow breathing, small ear and scarf
+settles, a restrained tail movement and an occasional embedded painted blink.
+The blink is part of the resting loop; the presenter does not schedule a
+separate idle blink timer.
 
-| Pose | Duration | Acting and meaning |
+| State | Duration | Acting and meaning |
 | --- | ---: | --- |
-| Resting | held | Original open-eyed, four-foot stance; no idle bobbing |
-| Blink | 150 ms | Close and reopen the painted eyelids after 12 eligible resting seconds |
-| Attentive | 150 ms | Small head and ear settle; quiet while typing |
-| Thinking | 1,400 ms | Restrained head, ear, paw and tail movement during actual processing |
-| Saved | 450 ms | Small nod and open-paw acknowledgment for durable local capture |
-| Reviewed | 650 ms | Brief grounded celebration after an explicit successful review |
-| Recovery | 200 ms | Calm explanatory open paw while native text explains the issue |
-| Greeting | 700 ms | One restrained wave with head, tail and scarf follow-through |
-| Coach resting | held | Original seated Coach composition, still |
-| Coach blink | 150 ms | Small registered eyelid patches close and reopen |
+| Resting | 8 s loop | Continuous quiet breathing, ear/scarf/tail motion and embedded painted blink |
+| Attentive | 6 s loop | Quieter continuous motion while the user types |
+| Thinking | 4 s loop | Slow, restrained movement while processing |
+| Recovery | 4 s loop | Calm, explanatory movement; never a frozen frame or success signal |
+| Saved | 1.5 s | Gentle acknowledgment after durable local capture, then resting |
+| Reviewed | 1.8 s | Gentle review acknowledgment, then resting |
+| Greeting | 2.2 s | Unhurried welcome, then resting |
+| Coach | Same state timings | Seated original painting throughout; static fallback uses that same pose |
 
-Use interruptible 100 ms pose transitions. Feet remain grounded, and secondary
-motion settles within the action. Saving and navigation never wait for
-animation. Saved feedback means local capture only; it does not imply analysis
-or backup completion. Recovery is not a success state.
+Cross-dissolve semantic pose changes over 350 ms. The continuous loops have
+closed, gradual movement so transitions do not feel jumpy. Saving and navigation
+never wait for animation. Saved feedback means local capture only; it does not
+imply analysis or backup completion. Recovery is not a success state.
 
 ## Lifecycle and accessibility
 
-Only one visible root may play. Hidden, covered, background, reduced-motion,
-low-power and serious or critical thermal states stop decorative playback and
-show the matching detailed static pose. Quiet typing remains still. VoiceOver
-ignores decorative art; native status text carries meaning. Preserve native
-controls, keyboard behavior and scrolling, and never communicate saved or
-error status through color or motion alone.
+Only an eligible visible root may play. Stop playback when hidden, covered, in
+the background, under Reduce Motion, in Low Power Mode, or at serious or critical
+thermal state. Show the matching static pose when animation is stopped or
+unavailable. VoiceOver ignores decorative art; native status text carries
+meaning. Preserve native controls, keyboard behavior and scrolling, and never
+communicate saved or error status through color or motion alone.
 
 ## Validation status
 
-The native unit suite passed 520 tests with 0 failures and 1 expected
-interactive-authentication skip. Prior UI runs passed the new Coach composition
-and largest-text checks. Full UI validation and broader visual/accessibility
-review remain pending, as does physical-device performance acceptance. Do not
-treat simulator results as evidence of device frame time, energy use or thermal
-behavior.
+The 520-test native unit result is a baseline from before the latest continuous
+motion changes. Verification of the latest motion source and runtime asset is
+pending. Full UI validation, broader visual/accessibility review and
+device-performance acceptance also remain pending. Do not treat simulator
+results as evidence of device frame time, energy use or thermal behavior.

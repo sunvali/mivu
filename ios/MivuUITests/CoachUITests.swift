@@ -370,14 +370,13 @@ import XCTest
         replyElements(in: app).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
     private func revealCoach(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<12 where !element.isHittable {
-            if element.exists, element.frame.minY >= app.textFields["coachInput"].frame.minY {
-                app.scrollViews.firstMatch.swipeUp()
-            } else {
-                app.scrollViews.firstMatch.swipeDown()
-            }
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<24 where !element.isHittable {
+            let above = !element.exists || element.frame.midY < scroll.frame.midY
+            let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: above ? 0.3 : 0.7))
+            let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: above ? 0.7 : 0.3))
+            start.press(forDuration: 0.05, thenDragTo: end)
         }
-        for _ in 0..<12 where !element.isHittable { app.scrollViews.firstMatch.swipeUp() }
         if !element.isHittable {
             let screenshot = XCTAttachment(screenshot: app.screenshot())
             screenshot.name = "Coach history reveal failure"; screenshot.lifetime = .keepAlways; add(screenshot)
