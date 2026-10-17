@@ -2,7 +2,7 @@
   "characterID": "pip",
   "displayName": "Pip",
   "schemaVersion": 1,
-  "status": "original illustrated continuous Lottie motion integrated; latest Coach rendering fix verification pending; prior 521-test native baseline includes 1 expected interactive-authentication skip",
+  "status": "original illustrated living Lottie companion verified on simulator; private draft #17 open; physical-device acceptance pending",
   "created": "2026-10-17",
   "source": "Approved original Pip storyboard illustration with authored Lottie image layers, vector masks, joint transforms and eyelid patches. The separate Coach pose uses an exact crop of the approved context illustration. Preserve the selected fox identity and original painted pixels. No imported third-party character artwork.",
   "assets": [
@@ -100,13 +100,14 @@
   },
   "targetRuntime": "Lottie iOS 4.6.1, Core Animation renderer",
   "productionValidation": {
-    "nativeUnitTests": "521 passed; 1 expected interactive-authentication skip (baseline before latest Coach ghosting fix)",
-    "targetedUISimulatorChecks": "Prior runs passed the new Coach composition and largest-text checks",
-    "fullUITestSuite": "pending",
-    "visualAndAccessibilityReview": "pending broader validation",
-    "physicalDevice": "pending owner acceptance; no frame-time, energy or thermal claim",
-    "latestMotionVerification": "pending after Coach rendering fix",
-    "renderingContract": "Timeline updates use no UIKit view transition. Coach uses one registered seated rig with neutral joins and no artwork dissolve. Today snapshot overlay may fade for 350 ms; surface changes use native tab transition without cross-surface artwork fading."
+    "nativeUnitSuite": "c0623c3: 523 passed, 0 failed, 1 expected interactive sign-in skip",
+    "completeUISuite": "6707440: 37 passed, 0 failed, 0 skipped, before isolated cold-load fix",
+    "coldLoadAndLifecycle": "c0623c3: 47 targeted checks passed, 0 failed",
+    "finalLightDarkCapture": "c0623c3: 1 passed, 0 failed after cold-load fix",
+    "actualRenderer": "Core Animation verified with actual rendered pixels and full-loop playback",
+    "visualReview": "original art, light/dark screens and dense native transition frames inspected; unrelated-atlas-pose flash corrected",
+    "draftPullRequest": "https://github.com/yakov103/mivu/pull/17",
+    "physicalDevice": "pending owner phone acceptance; no frame-time, energy or thermal claim"
   },
   "fallbacks": [
     {
@@ -242,8 +243,8 @@
     },
     {
       "path": "design-system/mivu/characters/pip/lottie-source/README.md",
-      "sha256": "d9f6d116a4d186de8997610053287ad82c57c976dc9b5b253f325cb1288c65dd",
-      "bytes": 4294,
+      "sha256": "a880ba4e9ab820b5e19ed55e1f3b192d9601e8ba4d2cf29d7e117696a7cc4d84",
+      "bytes": 4542,
       "role": "Rig authoring and runtime documentation"
     }
   ]

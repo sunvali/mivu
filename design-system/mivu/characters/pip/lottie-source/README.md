@@ -72,7 +72,10 @@ poses provide detailed artwork when motion is unavailable or disabled.
 
 ## Verification status
 
-The 521-test native unit result with 1 expected interactive-authentication skip
-is the baseline before the latest Coach ghosting fix. Verification of the current
-animation and rendering changes is pending. Full native UI, visual/accessibility
-and device performance acceptance also remain pending.
+Simulator motion and reference checks passed. Final native source `c0623c3`
+passed 523 tests with 0 failures and 1 expected interactive sign-in skip;
+the isolated cold-load regression/lifecycle run passed 47 checks, and the final
+light/dark capture journey passed after that fix. The complete UI suite passed
+37 tests with 0 failures/skips at `6707440`, before the isolated cold-load change.
+The private draft is [#17](https://github.com/yakov103/mivu/pull/17). Physical
+frame pacing, energy, thermals and manual phone acceptance remain pending.

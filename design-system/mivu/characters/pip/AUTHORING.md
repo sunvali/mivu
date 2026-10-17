@@ -50,12 +50,13 @@ bytes, has 162 layers on a 512×512 canvas, and stays below the 1 MiB runtime ca
 Coach uses the same seated source painting for every semantic state and its
 static fallback.
 
-The 521-test native unit result with 1 expected interactive-authentication
-skip is the baseline before the latest Coach ghosting fix. Verification of the
-latest motion and rendering changes is pending, as are full UI validation,
-broader visual/accessibility review and physical-device performance acceptance.
-Simulator results do not establish device frame time, power use or thermal
-behavior.
+Simulator motion and reference checks passed. Final native source `c0623c3`
+passed 523 tests with 0 failures and 1 expected interactive sign-in skip;
+the isolated cold-load regression/lifecycle run passed 47 checks, and the final
+light/dark capture journey passed after that fix. The complete UI suite passed
+37 tests with 0 failures/skips at `6707440`, before the isolated cold-load change.
+The private draft is [#17](https://github.com/yakov103/mivu/pull/17). Physical
+frame pacing, energy, thermals and manual phone acceptance remain pending.
 
 `asset-manifest.json` records available source and generated asset provenance,
 file sizes and hashes, along with the current Lottie layer count and markers.

@@ -1,6 +1,6 @@
 # Pip runtime verification — 17 October 2026
 
-Status: implementation and simulator acceptance in progress. This document does not establish physical-device performance or release readiness.
+Historical Rive investigation, superseded by the Lottie implementation. See `2026-10-17-pip-lottie.md` for current source and simulator evidence. The assets and renderer described below are not shipped.
 
 ## Environment and baseline
 
