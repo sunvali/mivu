@@ -2,7 +2,7 @@
   "characterID": "pip",
   "displayName": "Pip",
   "schemaVersion": 1,
-  "status": "illustrated Lottie Pip; Today semantic idle correction and stronger Coach acting; final verification in progress",
+  "status": "Today passive-refresh pose flash corrected; Coach acting strengthened; complete native and targeted UI checks passed; Release installed and launched on connected iPhone",
   "created": "2026-10-17",
   "source": "Approved original Pip storyboard illustration with authored Lottie image layers, vector masks, joint transforms and eyelid patches. The separate Coach pose uses an exact crop of the approved context illustration. Preserve the selected fox identity and original painted pixels. No imported third-party character artwork.",
   "assets": [
@@ -252,13 +252,16 @@
     "physicalDevice": "pending owner phone acceptance; no frame-time, energy or thermal claim"
   },
   "productionValidation": {
-    "status": "Today passive-refresh regression reproduced and corrected; final native/UI/device verification in progress",
+    "status": "complete native and targeted UI checks passed",
     "targetedNative": "64 passed, 0 failed, 0 skipped before final scarf-component mask correction",
     "generator": "11 passed including compact acting, neutral/grounded joins and lower scarf fragment regression",
     "actualRenderer": "Core Animation; 88pt/148pt dense acting samples and full Today idle/greeting display-frame samples",
     "verification": "docs/verification/2026-10-17-pip-idle-and-coach.md",
     "draftPullRequest": "https://github.com/yakov103/mivu/pull/17",
-    "physicalDevice": "Updated deployment pending; no frame-time, energy or thermal measurement"
+    "physicalDevice": "65bd63b Release installed and launched on iPhone iOS27.0.1 after owner unlocked; process 13387; no physical performance measurement",
+    "sourceCommit": "65bd63b850ad8378966fd9d38f3cf695fd5e32fc",
+    "completeNative": "540 passed, 0 failed, 1 expected interactive sign-in skip",
+    "finalNativeAndUI": "4 passed: one 88pt/148pt renderer check plus three light/dark, largest-text and focus UI journeys; 0 failed/skipped"
   },
   "expressivePassValidation": {
     "focusedMotion": "35dfa4a: 60 passed, 0 failed, 0 skipped; 102c773 retry suites: 50 passed, 0 failed, 0 skipped",

@@ -1,5 +1,9 @@
 # Pip expressive motion verification
 
+Historical device-review record. The owner subsequently reported an idle Today
+pose flash and insufficient Coach acting. See [the next correction](2026-10-17-pip-idle-and-coach.md)
+for the reproduced background-refresh trigger and stronger Coach choreography.
+
 Motion/artwork source: `35dfa4a39a69724b5bfed29ff9e63c31d9f2a733`.
 Retry integration: `102c7733e5d6d2136bb7e27657c4eaa078b263e1`.
 Final caption layout and recorded screens: `b7e0642979c58f93ee36fa7a83906fbba85f4eda`.
