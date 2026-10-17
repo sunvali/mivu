@@ -179,11 +179,9 @@ struct CoachView: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let error = coach.errorMessage, companionRecovery {
                     Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
-                        .transaction { $0.animation = nil }
                 } else {
                     Text(typeSize.isAccessibilitySize ? (companionRecovery ? "Input saved" : companionProcessing ? "Working…" : "Ready") : (companionRecovery ? "Your input is safe here" : companionProcessing ? "Working on your request…" : editing ? "Take your time" : "Ready when you are"))
                         .foregroundStyle(Color.diaryText)
-                        .transaction { $0.animation = nil }
                 }
             }
             .font(typeSize.isAccessibilitySize ? .caption : .subheadline)
@@ -191,6 +189,7 @@ struct CoachView: View {
             .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, 14)
+            .transaction { $0.animation = nil }
         }
         .padding(.horizontal, 20)
         .animation(reduceMotion ? nil : .easeOut(duration: MivuMotion.status), value: coach.errorMessage)
