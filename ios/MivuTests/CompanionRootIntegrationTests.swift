@@ -17,6 +17,24 @@ import Lottie
     func release() { continuation?.resume(); continuation = nil }
 }
 
+@MainActor private final class CompanionBackgroundRefreshGate {
+    var armed = false
+    private(set) var waiting = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func pauseIfArmed() async {
+        guard armed else { return }
+        armed = false
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            waiting = true
+        }
+        waiting = false
+    }
+
+    func release() { continuation?.resume(); continuation = nil }
+}
+
 @Suite(.serialized) @MainActor struct CompanionRootIntegrationTests {
     private func eventually(_ condition: () -> Bool, timeout: TimeInterval = 5) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
@@ -151,6 +169,71 @@ import Lottie
         #expect(await eventually { runtime.isReady }, "The real Today surface must load the companion before the first meal")
         #expect(diary.snapshot?.meals.isEmpty == true)
         #expect(diary.snapshot?.days.isEmpty == true, "Showing the companion must not create a recorded day")
+    }
+
+    @Test func untouchedTodayKeepsBreathingDuringAnEmptyBackgroundCoachRefresh() async throws {
+        let directory = URL.temporaryDirectory.appendingPathComponent("PipQuietToday-" + UUID().uuidString)
+        let store = DiaryStore(directory: directory)
+        _ = try await store.createProfile(DiaryProfile(name: "Synthetic quiet Today", timeZoneID: "UTC"))
+        let gate = CompanionBackgroundRefreshGate()
+        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+            await gate.pauseIfArmed()
+            return try await store.snapshot(expectedProfileID: id)
+        })
+        diary.snapshot = try await store.snapshot()
+        let suite = "PipQuietToday-" + UUID().uuidString
+        let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: suite)))
+        let coach = CoachViewModel(diary: diary, connection: connection)
+        let runtime = CompanionRuntime()
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        var outputs: [CompanionOutput] = []
+        let root = DiaryRootView(testDiary: diary, testCoach: coach, testRuntime: runtime,
+            testTab: "today", testDefaults: defaults, observeCompanionOutput: { outputs.append($0) })
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.effectiveGeometry.coordinateSpace.bounds
+        window.rootViewController = UIHostingController(rootView: root.environment(\.scenePhase, .active))
+        window.isHidden = false
+        defer {
+            gate.release(); coach.enterBackground(); runtime.stop(); window.isHidden = true
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        // Startup recovery and the initial greeting must finish before the passive check is armed.
+        try #require(await eventually {
+            runtime.isReady && !coach.isWorking && !diary.isSaving
+                && outputs.last?.pose == .resting && outputs.last?.playback == .animated
+                && outputs.last?.reactionID == nil && runtime.displayedPose == .resting
+        })
+        let player = try #require(runtime.player)
+        let restStart = try #require(player.animation?.frameTime(forMarker: "resting"))
+        let restEnd = restStart + (try #require(player.animation?.durationFrameTime(forMarker: "resting")))
+        let triggers = runtime.triggerCount
+        let firstOutput = outputs.count
+        gate.armed = true
+        coach.resume()
+        try #require(await eventually { gate.waiting }, "Exercise the real worker's legacy-capture refresh")
+        try #require(diary.isSaving && coach.isWorking,
+                     "The shared save lock must be held while the empty background refresh is suspended")
+        #expect(coach.turns.isEmpty && diary.snapshot?.meals.isEmpty == true)
+
+        // Hold the real await point across several SwiftUI updates. A transient thinking output
+        // is still a failure even if a later render returns to idle before this check finishes.
+        let changedPose = await eventually({
+            outputs.dropFirst(firstOutput).contains {
+                $0.pose != .resting || $0.playback != .animated || $0.reactionID != nil
+            } || runtime.displayedPose != .resting || runtime.triggerCount != triggers
+        }, timeout: 0.25)
+        #expect(!changedPose, "A background check with no input must not make untouched Today flash another pose")
+        #expect(outputs.last?.pose == .resting && outputs.last?.reactionID == nil)
+        #expect(player.isAnimationPlaying && player.realtimeAnimationFrame >= restStart
+                && player.realtimeAnimationFrame < restEnd,
+                "The warm production player must keep its existing breathing loop")
+
+        gate.release()
+        await coach.waitForWorker()
+        #expect(!diary.isSaving && !coach.isWorking)
+        #expect(coach.turns.isEmpty && diary.snapshot?.meals.isEmpty == true)
     }
 
     @Test(arguments: [false, true])

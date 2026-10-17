@@ -2,7 +2,7 @@
   "characterID": "pip",
   "displayName": "Pip",
   "schemaVersion": 1,
-  "status": "expressive illustrated Lottie companion; full native checks and final light/dark motion journey passed; Release installed and launched on connected iPhone",
+  "status": "illustrated Lottie Pip; Today semantic idle correction and stronger Coach acting; final verification in progress",
   "created": "2026-10-17",
   "source": "Approved original Pip storyboard illustration with authored Lottie image layers, vector masks, joint transforms and eyelid patches. The separate Coach pose uses an exact crop of the approved context illustration. Preserve the selected fox identity and original painted pixels. No imported third-party character artwork.",
   "assets": [
@@ -34,8 +34,8 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip.json",
-    "sha256": "57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0",
-    "bytes": 709146,
+    "sha256": "5a39809af6996b9a4c8eb6dc6a21776c90bf192de3071b35eeb75ac4dd54b06d",
+    "bytes": 710323,
     "formatVersion": "5.12.2",
     "canvas": [
       512,
@@ -212,8 +212,8 @@
   "authoringSources": [
     {
       "path": "design-system/mivu/characters/pip/lottie-source/coach_pose.py",
-      "sha256": "13384c21cc52eefd1919ad96460c27b86de8c1a60d1074e92d19fd66a1631283",
-      "bytes": 8167,
+      "sha256": "2b13e1a81475a2e2ec5e936a6508b449f66b66e55f160a13ea5bcfcc03e986ac",
+      "bytes": 10708,
       "role": "Coach crop, matte, eyelid registration and Lottie marker recipe"
     },
     {
@@ -236,8 +236,8 @@
     },
     {
       "path": "design-system/mivu/characters/pip/lottie-source/README.md",
-      "sha256": "24003afe694464b7eefda20da9474cf3d7212cd17b562a8941c4eec9cc2bd758",
-      "bytes": 5678,
+      "sha256": "16fcd7f7a0f5e9157193218cf0719a9c009001170d70daae5e6c4e7da71f89b1",
+      "bytes": 5737,
       "role": "Rig authoring and runtime documentation"
     }
   ],
@@ -252,6 +252,15 @@
     "physicalDevice": "pending owner phone acceptance; no frame-time, energy or thermal claim"
   },
   "productionValidation": {
+    "status": "Today passive-refresh regression reproduced and corrected; final native/UI/device verification in progress",
+    "targetedNative": "64 passed, 0 failed, 0 skipped before final scarf-component mask correction",
+    "generator": "11 passed including compact acting, neutral/grounded joins and lower scarf fragment regression",
+    "actualRenderer": "Core Animation; 88pt/148pt dense acting samples and full Today idle/greeting display-frame samples",
+    "verification": "docs/verification/2026-10-17-pip-idle-and-coach.md",
+    "draftPullRequest": "https://github.com/yakov103/mivu/pull/17",
+    "physicalDevice": "Updated deployment pending; no frame-time, energy or thermal measurement"
+  },
+  "expressivePassValidation": {
     "focusedMotion": "35dfa4a: 60 passed, 0 failed, 0 skipped; 102c773 retry suites: 50 passed, 0 failed, 0 skipped",
     "actualRenderer": "Core Animation; phone-size body regions and presentation-layer playback verified",
     "draftPullRequest": "https://github.com/yakov103/mivu/pull/17",

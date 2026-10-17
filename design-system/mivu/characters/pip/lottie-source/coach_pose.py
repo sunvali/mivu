@@ -1,4 +1,5 @@
 """Register the exact seated peek from the approved context, without its interface."""
+from collections import deque
 import hashlib
 import json
 from pathlib import Path
@@ -61,7 +62,20 @@ def authored_peek(animation, index, first_frame, animated, masks_for, transform,
     def take(name,region):
         part=remaining & region;remaining[part]=False;parts[name]=part
     teal=(rgb[:,:,1]-rgb[:,:,0]>12)&(rgb[:,:,2]-rgb[:,:,0]>5)
-    take('scarf',teal)
+    seen=np.zeros_like(whole); scarf=np.zeros_like(whole)
+    for sy,sx in zip(*np.where(teal & whole)):
+        if seen[sy,sx]: continue
+        queue=deque([(int(sx),int(sy))]); seen[sy,sx]=True; component=[]
+        while queue:
+            x,y=queue.popleft(); component.append((y,x))
+            for nx,ny in [(x-1,y),(x+1,y),(x,y-1),(x,y+1)]:
+                if 0<=nx<art.width and 0<=ny<art.height and teal[ny,nx] and whole[ny,nx] and not seen[ny,nx]:
+                    seen[ny,nx]=True; queue.append((nx,ny))
+        if len(component)>scarf.sum():
+            scarf[:]=False
+            for y,x in component: scarf[y,x]=True
+    grounded_teal=teal & whole & ~scarf
+    take('scarf',scarf)
     take('left-paw',polygon([(76,119),(94,119),(102,139),(72,142),(69,129)]))
     take('right-paw',polygon([(107,120),(120,120),(126,139),(99,142),(99,129)]))
     take('tail',polygon([(0,92),(35,90),(37,113),(65,142),(0,142)]))
@@ -71,9 +85,11 @@ def authored_peek(animation, index, first_frame, animated, masks_for, transform,
     take('right-ear',head & polygon([(80,-1),(145,-1),(145,42),(119,42),(108,40),(89,42),(80,39)]))
     take('head',head)
     parts['torso']=remaining
+    # The six-pixel teal patch under the wrists is ground paint, not hanging scarf.
+    for name,part in parts.items(): part[grounded_teal]=name=='torso'
     assert np.array_equal(np.logical_or.reduce(list(parts.values())),whole)
     parts={name:(np.asarray(Image.fromarray(part.astype('uint8')*255).filter(
-                ImageFilter.MaxFilter(3 if name.endswith('ear') else 5)))>0)&whole
+                ImageFilter.MaxFilter(3 if name.endswith('ear') else 5)))>0)&whole&(~grounded_teal if name!='torso' else True)
            for name,part in parts.items()}
     # One rig shares its painted masks across all clips, keeping the JSON below 1 MiB.
     timeline=[]; start=first_frame
@@ -93,14 +109,39 @@ def authored_peek(animation, index, first_frame, animated, masks_for, transform,
     animation['layers'].append(layer(root,'root',root_transform))
     chest_keys=[]; paw_keys=[]; rotation_keys={name:[] for name in parts}; blink_keys=[]
     for name,start,duration in timeline:
-        chest_keys.extend((start+t,y) for t,y in chest_motion(name,duration,3.2))
-        paw_keys.extend((start+t,y) for t,y in (chest_motion(name,duration,3.) if name=='submitted'
-                                               else [(0,0),(duration,0)]))
         motion=rotations(name,duration)
+        strength=.78 if name in ['resting','attentive'] else .65
+        motion={part:[(t,v*strength) for t,v in keys] for part,keys in motion.items()}
+        chest=chest_motion(name,duration,3.84 if name in ['resting','attentive'] else 3.2)
+        paw=[(0,0),(duration,0)]
+        def keys(*values): return [(round(t*duration,3),v) for t,v in values]
+        if name=='submitted':
+            chest=[(0,0),(6,-5.2),(13,-5.5),(25,1.3),(38,-.35),(duration,0)]
+            paw=[(0,0),(6,-3.2),(13,-3.6),(25,.5),(38,0),(duration,0)]
+            motion={'head':keys((0,0),(.125,-3.8),(.27,-4),(.52,4),(.79,-.6),(1,0)),
+                    'left-ear':keys((0,0),(.125,-6),(.27,-6.5),(.6,1.2),(1,0)),
+                    'right-ear':keys((0,0),(.125,5),(.32,5.5),(.68,-.8),(1,0)),
+                    'left-paw':keys((0,0),(.125,-4.5),(.27,-6),(.52,2),(.79,-.3),(1,0)),
+                    'tail':keys((0,0),(.16,0),(.42,2.6),(.72,-.9),(1,0)),
+                    'scarf':keys((0,0),(.14,0),(.4,-2),(.7,1.3),(1,0))}
+        if name=='saved':
+            chest=keys((0,0),(.27,5.2),(.58,-2.6),(.82,.4),(1,0))
+            paw=keys((0,0),(.27,.5),(.58,-.4),(1,0))
+            motion={'head':keys((0,0),(.27,4.4),(.58,-2),(.82,.35),(1,0)),
+                    'left-paw':keys((0,0),(.27,5.5),(.58,-1.5),(1,0)),
+                    'left-ear':keys((0,0),(.32,1.2),(.68,-.4),(1,0)),
+                    'right-ear':keys((0,0),(.37,-.8),(.72,.25),(1,0)),
+                    'tail':keys((0,0),(.18,0),(.48,1.8),(.78,-.5),(1,0)),
+                    'scarf':keys((0,0),(.15,0),(.42,1.5),(.73,-.6),(1,0))}
+        if name=='reviewed':
+            chest=keys((0,0),(.32,-3.8),(.66,.8),(1,0))
+            motion['head']=keys((0,0),(.32,-3),(.66,.7),(1,0))
+        # The supporting paw stays planted while the other wrist supplies the gesture.
+        motion['right-paw']=[(0,0),(duration,0)]
+        chest_keys.extend((start+t,y) for t,y in chest)
+        paw_keys.extend((start+t,y) for t,y in paw)
         for part in parts:
             authored=motion.get(part,[(0,0),(duration,0)])
-            if name!='submitted':
-                authored=[(t,v*.65) for t,v in authored]
             rotation_keys[part].extend((start+t,v) for t,v in authored)
         blink=[(0,0),(duration,0)]
         if name in ['resting','attentive']:

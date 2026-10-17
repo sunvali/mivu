@@ -76,12 +76,12 @@ communicate saved or error status through color or motion alone.
 
 ## Current source QA and validation status
 
-At 148 pt Coach, source QA measured resting head 2.325 pt/chest 2.292 pt and
-submitted head 2.412 pt/paw tip 2.289 pt. These are not measured iPhone FPS. Coach
+At 88 pt Coach, source QA measured submitted face 2.507 pt/paw tip 1.687 pt
+and saved face 2.474 pt/chest 2.214 pt. Today breathing is unchanged. These are not measured iPhone FPS. Coach
 shares one painted rig; JSON fell from 162 layers / 976,470 bytes to 110 /
-709,146 bytes (SHA-256 `57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0`).
+710,323 bytes (SHA-256 `5a39809af6996b9a4c8eb6dc6a21776c90bf192de3071b35eeb75ac4dd54b06d`).
 Original PNG and fallback bytes are unchanged. Current motion-pass counts and revision boundaries are recorded in
-`docs/verification/2026-10-17-pip-expressive-motion.md`. The following results are historical baseline
+`docs/verification/2026-10-17-pip-idle-and-coach.md`. The following results are historical baseline
 evidence only.
 
 ## Historical baseline validation

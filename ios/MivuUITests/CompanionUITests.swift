@@ -61,8 +61,8 @@ import XCTest
         for appearance in ["--proof-light", "--proof-dark"] {
             let app = launch([appearance])
             app.tabBars.buttons["Today"].tap()
-            // Observation windows include a complete authored loop for the native motion recording.
-            try await Task.sleep(for: .seconds(8.5))
+            // Leave Today untouched across three full loops, including blinks and loop boundaries.
+            try await Task.sleep(for: .seconds(24.5))
             XCTAssertTrue(app.buttons["logMeal"].isHittable)
             app.tabBars.buttons["Coach"].tap()
             enter("Two eggs, three bread slices and salad", in: app)

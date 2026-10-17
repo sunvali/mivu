@@ -485,13 +485,14 @@ struct TodayView: View {
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .onAppear { surfaceVisible = true; reportCompanionContext() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
-        .onChange(of: [companionVisible, showComposer, showWeight, showGoals, confirmDay, showingDetail, model.isSaving]) { _, _ in reportCompanionContext() }
+        .onChange(of: [companionVisible, showComposer, showWeight, showGoals, confirmDay, showingDetail]) { _, _ in reportCompanionContext() }
     }
 
     private var covered: Bool { showComposer || showWeight || showGoals || confirmDay || showingDetail }
     private func reportCompanionContext() {
+        // Foreground capture is covered by its sheet. Background persistence is not a character action.
         onCompanionContextChanged(CompanionContext(surface: .today, isTyping: false,
-            isProcessing: model.isSaving, needsRecovery: false,
+            isProcessing: false, needsRecovery: false,
             playback: surfaceVisible && companionVisible && !covered ? .animated : .hidden))
     }
     private var summaryDate: some View {

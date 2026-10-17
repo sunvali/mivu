@@ -8,7 +8,7 @@ composition. The approved PDF remains the authority for acting and composition.
 `build.py` authors image-layer joints and masks over the original illustration.
 It retains the painted fox identity and atlas, while moving the head, ears,
 paws, tail and scarf gently around grounded feet. The Lottie composition is
-512×512 with 110 layers. Its JSON is 709,146 bytes, within the app's exact
+512×512 with 110 layers. Its JSON is 710,323 bytes, within the app's exact
 1 MiB (1,048,576 byte) cap.
 
 | Marker | Duration | Acting |
@@ -75,17 +75,17 @@ poses provide detailed artwork when motion is unavailable or disabled.
 
 ## Current verification notes
 
-Coach shares one painted rig. JSON is now 110 layers / 709,146 bytes (SHA-256
-`57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0`), reduced
+Coach shares one painted rig. JSON is now 110 layers / 710,323 bytes (SHA-256
+`5a39809af6996b9a4c8eb6dc6a21776c90bf192de3071b35eeb75ac4dd54b06d`), reduced
 from 162 / 976,470 bytes; original PNG and fallback bytes are unchanged. Source QA
-at 148 pt Coach: resting head 2.325 pt/chest 2.292 pt; submitted head 2.412
-pt/paw tip 2.289 pt. These are not measured iPhone frame rates. Native submit
-feedback starts before its first await in a separate companion/operation/date
-profile; saved feedback waits for durable capture without delaying data work.
+at 88 pt Coach: submitted face 2.507 pt/paw tip 1.687 pt; saved face 2.474
+pt/chest 2.214 pt. Today breathing is unchanged. These are not measured iPhone frame rates. Native submit
+feedback starts before its first await in a separate profile/operation/attempt
+signal; saved feedback waits for durable capture without delaying data work.
 Submitted uses an explicit 80 ms snapshot bridge on both surfaces; other Today pose
 changes use 350 ms. Cold load can take about one second, outlasting the 800 ms
-submitted marker; expired feedback does not replay. Current motion-pass counts are
-pending the root evidence record.
+submitted marker; expired feedback does not replay. Current motion-pass counts are recorded in
+`docs/verification/2026-10-17-pip-idle-and-coach.md`.
 
 ## Historical baseline verification status
 

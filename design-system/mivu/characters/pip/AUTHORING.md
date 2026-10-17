@@ -55,14 +55,14 @@ and masks are bundled locally; there are no network images.
 
 ## Runtime and validation status
 
-Current source QA at 148 pt Coach: resting head 2.325 pt/chest 2.292 pt; submitted
-head 2.412 pt/paw tip 2.289 pt. These do not measure iPhone FPS. Coach shares one
-painted rig; JSON changed from 162 layers / 976,470 bytes to 110 / 709,146 bytes
-(SHA-256 `57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0`).
-Original PNG and fallback bytes are unchanged. Current motion-pass counts are
-pending the root evidence record; results below are historical baseline only.
+Coach-specific source QA at 88 pt: submitted face 2.507 pt and paw 1.687 pt;
+saved face 2.474 pt and chest 2.214 pt. Today breathing is unchanged. These do not measure iPhone FPS. Coach shares one
+painted rig; JSON changed from 162 layers / 976,470 bytes to 110 / 710,323 bytes
+(SHA-256 `5a39809af6996b9a4c8eb6dc6a21776c90bf192de3071b35eeb75ac4dd54b06d`).
+Original PNG and fallback bytes are unchanged. Current motion-pass counts and revision boundaries are recorded in
+`docs/verification/2026-10-17-pip-idle-and-coach.md`; results below are historical.
 
-The app uses Lottie iOS 4.6.1 with Core Animation. The current JSON is 709,146
+The app uses Lottie iOS 4.6.1 with Core Animation. The current JSON is 710,323
 bytes, has 110 layers on a 512×512 canvas, and stays below the 1 MiB runtime cap.
 Coach uses the same seated source painting for every semantic state and its
 static fallback.

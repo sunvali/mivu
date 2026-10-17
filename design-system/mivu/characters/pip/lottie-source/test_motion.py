@@ -76,6 +76,19 @@ class PaintedMotionTests(unittest.TestCase):
         head = coverage(self.layer("coach-head", "coach-resting"))
         self.assertFalse(head[:30,80:].any(), "All upper ear paint must travel with the ear")
 
+    def test_coach_scarf_does_not_pull_isolated_paint_below_ground(self):
+        scarf = coverage(self.layer("coach-scarf", "coach-saved"))
+        torso = coverage(self.layer("coach-torso", "coach-saved"))
+        self.assertFalse(scarf[136:138,98:102].any(),
+                         "The isolated lower teal patch must not follow the nodding scarf")
+        self.assertTrue(torso[136:138,98:102].all(),
+                        "Original lower paint must stay on the ground-anchored torso")
+        start = self.markers["coach-saved"]["tm"]
+        ground = self.world("coach-right-paw","coach-saved",start,(111,140))[1]
+        for frame in [0,6,12,18,24,36,48]:
+            self.assertLessEqual(self.world("coach-torso","coach-saved",start+frame,(101,137))[1],ground,
+                                 "The retained patch must stay above the planted paw sole")
+
     def test_coach_breath_is_readable_at_phone_scale_with_grounded_paws(self):
         marker = self.markers["coach-resting"]
         start = marker["tm"]
@@ -113,6 +126,49 @@ class PaintedMotionTests(unittest.TestCase):
             paw0 = self.world(prefix+"left-paw",marker,start,point)
             paw_peak = self.world(prefix+"left-paw",marker,start+13,point)
             self.assertGreater(paw0[1]-paw_peak[1], .8, "Small submit paw lift must read at 100pt")
+
+    def test_coach_submit_face_reads_as_a_gesture_at_compact_88pt_size(self):
+        marker = "coach-submitted"
+        start = self.markers[marker]["tm"]
+        origin = self.world("coach-head",marker,start,(95,78)) * .88
+        movement = [np.linalg.norm(self.world("coach-head",marker,start+t,(95,78))*.88-origin)
+                    for t in range(49)]
+        self.assertGreaterEqual(max(movement),2.5,"Compact submit must be a visible head/chest action")
+
+    def test_coach_saved_has_a_distinct_readable_nod_and_chest_action_at_88pt(self):
+        marker = "coach-saved"
+        start = self.markers[marker]["tm"]
+        for layer, point in [("coach-head",(102,82)),("coach-scarf",(96,113))]:
+            origin = self.world(layer,marker,start,point) * .88
+            movement = [np.linalg.norm(self.world(layer,marker,start+t,point)*.88-origin)
+                        for t in range(49)]
+            self.assertGreaterEqual(max(movement),2.,"Saved needs a visible acknowledgment at 88pt")
+
+    def test_coach_supporting_paw_stays_grounded_through_each_gesture(self):
+        for marker, clip in self.markers.items():
+            if not marker.startswith("coach-"): continue
+            origin = self.world("coach-right-paw",marker,clip["tm"],(111,137))
+            for frame in range(0,clip["dr"]+1,6):
+                np.testing.assert_allclose(self.world("coach-right-paw",marker,clip["tm"]+frame,(111,137)),
+                                           origin,atol=.001)
+
+    def test_coach_painted_joints_keep_contact_during_larger_gestures(self):
+        names = ["head","left-ear","right-ear","scarf","torso","left-paw","right-paw"]
+        parts = {name:self.layer("coach-"+name,"coach-submitted") for name in names}
+        masks = {name:Image.fromarray((coverage(layer)*255).astype("uint8")) for name,layer in parts.items()}
+        contacts = [("head","left-ear"),("head","right-ear"),("head","scarf"),
+                    ("scarf","torso"),("left-paw","torso"),("right-paw","torso")]
+        for marker in ["coach-submitted","coach-saved","coach-reviewed"]:
+            start = self.markers[marker]["tm"]
+            for frame in range(0,self.markers[marker]["dr"]+1,3):
+                rendered = {}
+                for name,layer in parts.items():
+                    inverse = np.linalg.inv(matrix(layer,start+frame,self.layers))
+                    rendered[name] = np.asarray(masks[name].transform((512,512),Image.Transform.AFFINE,
+                        tuple(inverse[:2].ravel()),Image.Resampling.NEAREST)) > 0
+                for first,second in contacts:
+                    self.assertGreater((rendered[first]&rendered[second]).sum(),400,
+                                       f"{marker} frame{frame}: {first}/{second} must remain joined")
 
     def test_artifact_fits_runtime_and_all_coach_joins_are_neutral(self):
         self.assertLessEqual((build.DEST/"pip.json").stat().st_size, 1_048_576)
