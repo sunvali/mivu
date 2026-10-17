@@ -1,9 +1,9 @@
 # Coach: camera-first capture and a continuous, paged conversation
 
-Date: 18 October 2026. Status: written design awaiting owner review.
+Date: 18 October 2026. Status: design approved; implementation plan awaiting review.
 Baseline: `6fca93d99802367553da13b17c3b43b91d4dde7e` on main.
 The owner approved the behaviour below and requested this researched specification.
-Implementation and its plan have not started. This specification supersedes the
+Implementation has not started. This specification supersedes the
 earlier suggestion of separate daily conversation threads.
 
 Related contracts: [conversational Coach](2026-10-12-conversational-coach-design.md),
@@ -370,7 +370,9 @@ database or image processing is introduced.
 
 Use a versioned, idempotent SQLite migration within the existing profile format.
 Current database setup is additive and has no explicit user-version contract;
-introduce one without changing archive schema 1 just for page metadata.
+introduce one without changing the portable archive format just for page metadata.
+The current snapshot schema is 1; the current archive envelope is version 3 and
+its decoder accepts envelope versions 1, 2 and 3. Keep those contracts distinct.
 
 1. Preserve stable turn, meal, submission, receipt and photo IDs and their bytes.
 2. Backfill immutable conversation order from the existing ordinal, with stable ID
