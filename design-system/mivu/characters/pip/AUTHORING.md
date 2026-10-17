@@ -27,7 +27,9 @@ the character. Coach uses one registered seated rig with neutral joins and no
 artwork dissolve. Submitted uses an explicit 80 ms snapshot bridge on both
 surfaces. Other Today pose changes use 350 ms; surface changes use the native tab
 transition without cross-surface artwork fading. Accepted submit feedback begins
-before its first await using a separate companion/operation/date profile. Saved
+before its first await using a separate profile/operation/attempt signal. A fresh
+accepted retry receives a new transient attempt ID without changing durable
+capture identity. Re-observing the same attempt does not replay it. Saved
 feedback queues behind durable capture without delaying data work. Errors, typing,
 hidden or background state, and Reduce Motion cancel stale feedback. An
 approximately one-second cold load can outlast the 800 ms submitted reaction,

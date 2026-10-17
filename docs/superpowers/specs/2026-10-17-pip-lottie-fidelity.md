@@ -69,13 +69,14 @@ resting head 2.325 pt, chest 2.292 pt, submitted head 2.412 pt and paw tip
 2.289 pt. These are source QA values, not measured iPhone FPS.
 
 Native accepted submission starts feedback before its first await using a
-separate signal containing profile ID, operation ID and acceptance time. Saved feedback queues
-behind durable capture and never delays data work. Submitted uses an explicit
+separate signal containing profile ID, operation ID, transient attempt ID and
+acceptance time. Fresh accepted retries are acknowledged without duplicating
+durable records. Saved feedback queues behind durable capture and never delays data work. Submitted uses an explicit
 80 ms snapshot bridge on both surfaces; other Today pose changes use 350 ms.
 Error, typing, hidden/background and Reduce Motion cancel stale feedback. Cold
 load can take about one second, longer than the submitted 800 ms marker, so an
-expired reaction does not replay. Current motion-pass counts and final evidence
-remain pending the root task's record.
+expired reaction does not replay. Current motion-pass counts and revision boundaries are recorded in
+`docs/verification/2026-10-17-pip-expressive-motion.md`.
 
 Acting references: [Adobe animation principles](https://www.adobe.com/creativecloud/animation/discover/principles-of-animation.html),
 [Duolingo character motion](https://blog.duolingo.com/world-character-visemes/),

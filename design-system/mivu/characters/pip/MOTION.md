@@ -57,8 +57,9 @@ changes use the native tab transition and do not fade artwork across surfaces.
 The 350 ms native focus and keyboard sizing animation remains separate from
 character rendering. Saving and navigation never wait for character animation.
 Accepted submit feedback begins before its first await using a separate signal
-with profile ID, operation ID and acceptance time. Saved feedback is emitted
-after durable capture and queues behind the submit gesture; data work never waits.
+with profile ID, operation ID, transient attempt ID and acceptance time. A fresh
+accepted retry gets its own attempt; re-observing an attempt does not replay it.
+Saved feedback is emitted after durable capture and queues behind the submit gesture; data work never waits.
 Error, typing, hidden/background and Reduce
 Motion cancel stale feedback. Saved means durable local capture only. Cold load
 can outlast the 800 ms submitted marker; expired reactions do not replay. Recovery
@@ -79,8 +80,8 @@ At 148 pt Coach, source QA measured resting head 2.325 pt/chest 2.292 pt and
 submitted head 2.412 pt/paw tip 2.289 pt. These are not measured iPhone FPS. Coach
 shares one painted rig; JSON fell from 162 layers / 976,470 bytes to 110 /
 709,146 bytes (SHA-256 `57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0`).
-Original PNG and fallback bytes are unchanged. Current motion-pass counts are
-pending the root evidence record. The following results are historical baseline
+Original PNG and fallback bytes are unchanged. Current motion-pass counts and revision boundaries are recorded in
+`docs/verification/2026-10-17-pip-expressive-motion.md`. The following results are historical baseline
 evidence only.
 
 ## Historical baseline validation

@@ -2,7 +2,7 @@
   "characterID": "pip",
   "displayName": "Pip",
   "schemaVersion": 1,
-  "status": "expressive illustrated Lottie companion; focused native motion checks passed; complete native and UI verification pending",
+  "status": "expressive illustrated Lottie companion; full native checks and final light/dark motion journey passed; Release installed and launched on connected iPhone",
   "created": "2026-10-17",
   "source": "Approved original Pip storyboard illustration with authored Lottie image layers, vector masks, joint transforms and eyelid patches. The separate Coach pose uses an exact crop of the approved context illustration. Preserve the selected fox identity and original painted pixels. No imported third-party character artwork.",
   "assets": [
@@ -252,9 +252,12 @@
     "physicalDevice": "pending owner phone acceptance; no frame-time, energy or thermal claim"
   },
   "productionValidation": {
-    "focusedMotion": "60 selected native checks passed, 0 failed, 0 skipped; complete native/UI verification pending",
+    "focusedMotion": "35dfa4a: 60 passed, 0 failed, 0 skipped; 102c773 retry suites: 50 passed, 0 failed, 0 skipped",
     "actualRenderer": "Core Animation; phone-size body regions and presentation-layer playback verified",
     "draftPullRequest": "https://github.com/yakov103/mivu/pull/17",
-    "physicalDevice": "pending updated Release deployment and owner acceptance; no measured frame-time, energy or thermal claim"
+    "physicalDevice": "b7e0642 Release installed and launched on connected iPhone iOS27.0.1 after owner unlocked; process13252. No measured frame-time, energy or thermal claim.",
+    "nativeUnitSuite": "b7e0642: 536 passed, 0 failed, 1 expected interactive sign-in skip",
+    "uiSuite": "Initial full UI at 35dfa4a: 34 passed, 3 failed; all five Progress journeys passed in isolation on iOS27.0; original Goals flow passed on iOS26.5 at 102c773; final light/dark motion journey passed at b7e0642. Initial failure cause unresolved.",
+    "verification": "docs/verification/2026-10-17-pip-expressive-motion.md"
   }
 }

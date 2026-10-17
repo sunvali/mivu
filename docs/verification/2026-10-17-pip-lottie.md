@@ -1,5 +1,9 @@
 # Illustrated Pip with Lottie — simulator evidence
 
+Historical acceptance record. The owner requested a further expressive motion
+pass after testing this build. See [the current follow-up](2026-10-17-pip-expressive-motion.md)
+for revised timings, submit acknowledgment, and current verification boundaries.
+
 The current implementation uses the approved shaded fox painting, not the
 superseded simplified Rive asset. The owner’s later request for continuously
 living, slower motion supersedes the original guide’s held idle and short

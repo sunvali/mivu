@@ -85,8 +85,8 @@
 
 ## Owner-approved expressive motion follow-up
 
-- [ ] Recheck painted identity and unchanged original PNG/fallback bytes against the refreshed manifest.
-- [ ] Capture and inspect both submitted markers, confirming the first visible response targets the first 100 ms and the 80 ms snapshot bridge does not animate the Lottie layer tree.
-- [ ] Verify saved feedback begins only after durable capture and is queued without delaying submission data work.
-- [ ] Recheck cancellation on error, typing, hidden/background and Reduce Motion, plus the cold-load case where an expired 800 ms submitted reaction must not replay.
-- [ ] Record current pass counts and any device-only gaps in the root evidence record; do not treat source point-motion QA as iPhone FPS.
+- [x] Recheck painted identity and unchanged original PNG/fallback bytes against the refreshed manifest.
+- [x] Capture and inspect both submitted markers, confirming the first visible response targets the first 100 ms and the 80 ms snapshot bridge does not animate the Lottie layer tree.
+- [x] Verify saved feedback begins only after durable capture and is queued without delaying submission data work.
+- [x] Recheck cancellation on error, typing, hidden/background and Reduce Motion, plus the cold-load case where an expired 800 ms submitted reaction must not replay.
+- [x] Record current pass counts and any device-only gaps in the root evidence record; do not treat source point-motion QA as iPhone FPS.
