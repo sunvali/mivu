@@ -1,5 +1,9 @@
 # Pip: stable Today idle and readable Coach acting
 
+A later [complete premerge native run](2026-10-17-merge-validation.md) passed
+577 tests, including all 37 UI cases, on iOS 26.5. The revision boundaries and
+results below remain the evidence from this earlier motion correction.
+
 Implementation source: `65bd63b850ad8378966fd9d38f3cf695fd5e32fc`.
 This correction follows real-device review of `6e9d0f8`. Today breathing was
 accepted; the owner reported an occasional other-pose flash while untouched,
