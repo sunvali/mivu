@@ -2,6 +2,12 @@ import SwiftUI
 
 struct CoachView: View {
     @Bindable var coach: CoachViewModel
+    let companionOutput: CompanionOutput
+    let companionRuntime: CompanionRuntime
+    let onCompanionContextChanged: (CompanionContext) -> Void
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var surfaceVisible = false
+    @State private var showingDetail = false
     let openDestination: (CoachDestination) -> Void
     @State private var showPhotos = false
     @State private var preparation = PhotoPreparation()
@@ -63,7 +69,9 @@ struct CoachView: View {
                                 switch row.kind {
                                 case .input: inputBubble(row.turn)
                                 case .reply:
-                                    Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(.horizontal, 8)
+                                    Text(row.turn.assistantText ?? "").textSelection(.enabled).padding(16)
+                                        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                         .accessibilityIdentifier("coachReply")
                                 case .actions: turnActions(row.turn)
                                 }
@@ -117,13 +125,21 @@ struct CoachView: View {
                     .padding(.bottom, 8)
                 }
             }
-            if coach.diary.snapshot != nil { composer }
+            if coach.diary.snapshot != nil { companionStrip; composer }
         }
         .background(Color.diaryCanvas)
         .navigationTitle("Coach")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: UUID.self) { MealDetailView(model: coach.diary, mealID: $0) }
-        .navigationDestination(for: WorkoutDestination.self) { WorkoutDetailView(model: coach.diary, sessionID: $0.id) }
+        .toolbarTitleDisplayMode(.inlineLarge)
+        .navigationDestination(for: UUID.self) {
+            MealDetailView(model: coach.diary, mealID: $0)
+                .onAppear { showingDetail = true; reportCompanionContext() }
+                .onDisappear { showingDetail = false; reportCompanionContext() }
+        }
+        .navigationDestination(for: WorkoutDestination.self) {
+            WorkoutDetailView(model: coach.diary, sessionID: $0.id)
+                .onAppear { showingDetail = true; reportCompanionContext() }
+                .onDisappear { showingDetail = false; reportCompanionContext() }
+        }
         .sheet(isPresented: $showPhotos) {
             NavigationStack {
                 Form { PhotoInput(photos: $coach.draft.photos, preparation: preparation, importFailed: $importFailed) }
@@ -133,6 +149,9 @@ struct CoachView: View {
         }
         .alert("Could not import photo", isPresented: $importFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
         .sensoryFeedback(.success, trigger: coach.captureReceipt)
+        .onAppear { surfaceVisible = true; reportCompanionContext() }
+        .onDisappear { surfaceVisible = false; reportCompanionContext() }
+        .onChange(of: [editing, showPhotos, importFailed, showingDetail, companionProcessing, companionRecovery]) { _, _ in reportCompanionContext() }
         .onChange(of: coach.diary.snapshot?.profile.id, initial: true) { _, _ in
             history.reset(ids: turnIDs)
             preparation.cancel(); preparation = PhotoPreparation()
@@ -142,6 +161,39 @@ struct CoachView: View {
             position = ScrollPosition(idType: String.self)
             requestFollow()
         }
+    }
+    private var companionRecovery: Bool { coach.companionNeedsRecovery }
+    private var companionProcessing: Bool { coach.companionIsProcessing }
+    private func reportCompanionContext() {
+        onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: editing && !coach.isSending,
+            isProcessing: companionProcessing, needsRecovery: companionRecovery,
+            playback: surfaceVisible && !showPhotos && !importFailed && !showingDetail ? .animated : .hidden))
+    }
+    private var companionStrip: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
+                          size: editing || typeSize.isAccessibilitySize ? 88 : 148, runtime: companionRuntime, surface: .coach)
+                .frame(width: editing || typeSize.isAccessibilitySize ? 76 : 120,
+                       height: editing || typeSize.isAccessibilitySize ? 66 : 108, alignment: .top)
+                .clipped()
+            VStack(alignment: .leading, spacing: 4) {
+                if let error = coach.errorMessage, companionRecovery {
+                    Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
+                } else {
+                    Text(typeSize.isAccessibilitySize ? (companionRecovery ? "Input saved" : companionProcessing ? "Working…" : "Ready") : (companionRecovery ? "Your input is safe here" : companionProcessing ? "Working on your request…" : editing ? "Take your time" : "Ready when you are"))
+                        .foregroundStyle(Color.diaryText)
+                }
+            }
+            .font(typeSize.isAccessibilitySize ? .caption : .subheadline)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 14)
+            .transaction { $0.animation = nil }
+        }
+        .padding(.horizontal, 20)
+        .animation(reduceMotion ? nil : .easeOut(duration: MivuMotion.status), value: coach.errorMessage)
+        .animation(reduceMotion ? nil : .easeInOut(duration: MivuMotion.companionTransition), value: editing)
     }
     private var userScrolling: Bool {
         scrollPhase == .tracking || scrollPhase == .interacting || scrollPhase == .decelerating
@@ -164,8 +216,11 @@ struct CoachView: View {
             await Task.yield()
             guard followRequested, followLatest, !userScrolling, let id = conversationRows.last?.id else { return }
             followRequested = false
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                position.scrollTo(id: id, anchor: .bottom)
+            // At large text sizes the linked actions can exceed the viewport; begin at the reply.
+            let replyID = typeSize.isAccessibilitySize && coach.turns.last?.assistantText != nil
+                ? coach.turns.last.map { "reply-" + $0.id.uuidString } : nil
+            withAnimation(reduceMotion ? nil : .easeOut(duration: MivuMotion.coachFollow)) {
+                position.scrollTo(id: replyID ?? id, anchor: replyID == nil ? .bottom : .top)
             }
             hasNewMessage = false
         }
@@ -190,37 +245,78 @@ struct CoachView: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let error = coach.errorMessage { Text(error).font(.caption).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError") }
-            if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture { Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.").font(.caption).foregroundStyle(Color.diarySecondary) }
             if !coach.draft.photos.isEmpty { Text("\(coach.draft.photos.count) photos attached").font(.caption).foregroundStyle(Color.diarySecondary) }
-            TextField("Message Coach", text: $coach.draft.text, axis: .vertical)
-                .lineLimit(1...(typeSize.isAccessibilitySize ? 2 : 5)).focused($editing).accessibilityIdentifier("coachInput")
-                .padding(12).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16)).overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Color.diaryRule, lineWidth: 0.5) }
-            HStack {
-                Button { editing = false; showPhotos = true } label: {
-                    if typeSize.isAccessibilitySize { Image(systemName: "camera").font(.title2).frame(minWidth: 44, minHeight: 44) }
-                    else { Label("Add photos", systemImage: "camera") }
-                }.accessibilityLabel("Add photos").frame(minHeight: 44).accessibilityIdentifier("coachPhotos")
-                Spacer(minLength: 8)
-                if reduceTransparency { send.buttonStyle(.borderedProminent) }
-                else { send.buttonStyle(.glassProminent) }
+            if typeSize.isAccessibilitySize {
+                composerInput
+                HStack {
+                    photoAction
+                    Spacer(minLength: 8)
+                    send
+                }
+            } else {
+                HStack(alignment: .bottom, spacing: 8) {
+                    composerInput
+                    photoAction
+                    send
+                }
             }
-        }.padding(.horizontal, 20).padding(.vertical, 8).background(Color.diaryCanvas)
-            .disabled(coach.isSending || coach.diary.isChangingProfile)
+            if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture {
+                Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.")
+                    .font(.caption).foregroundStyle(Color.diarySecondary)
+            }
+        }
+        .padding(12)
+        .background {
+            if reduceTransparency { RoundedRectangle(cornerRadius: 28).fill(Color.diarySurface) }
+            else { RoundedRectangle(cornerRadius: 28).fill(.ultraThinMaterial) }
+        }
+        .overlay { RoundedRectangle(cornerRadius: 28).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
+        .padding(.horizontal, 16).padding(.bottom, 8)
+        .disabled(coach.isSending || coach.diary.isChangingProfile)
+    }
+    private var composerInput: some View {
+        TextField("Message Coach", text: $coach.draft.text, axis: .vertical)
+            .lineLimit(1...(typeSize.isAccessibilitySize ? 2 : 5)).focused($editing)
+            .accessibilityIdentifier("coachInput")
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .frame(minHeight: 48)
+            .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
+            .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
+    }
+    private var photoAction: some View {
+        Button { editing = false; showPhotos = true } label: {
+            Image(systemName: "camera.fill").font(.system(size: 19, weight: .medium))
+                .frame(width: 48, height: 48)
+                .foregroundStyle(Color.diaryText)
+                .background(Color.diarySurface, in: Circle())
+        }.accessibilityLabel("Add photos").accessibilityIdentifier("coachPhotos")
     }
     private var send: some View {
         Button { editing = false; Task { _ = await coach.send() } } label: {
-            if coach.isSending { ProgressView().frame(minWidth: 60, minHeight: 44) }
-            else if typeSize.isAccessibilitySize { Text("Send").font(.headline).fixedSize().frame(minHeight: 44) }
-            else { Label("Send", systemImage: "arrow.up").frame(minHeight: 44) }
-        }.tint(.diaryAccent).foregroundStyle(Color.diaryActionText).disabled(!coach.canSend || !preparation.canCapture).accessibilityIdentifier("coachSend")
+            Group {
+                if coach.isSending { ProgressView() }
+                else if typeSize.isAccessibilitySize { Text("Send").font(.headline).fixedSize() }
+                else { Image(systemName: "arrow.up").font(.system(size: 22, weight: .semibold)) }
+            }
+            .frame(minWidth: 48, minHeight: 48)
+            .padding(.horizontal, typeSize.isAccessibilitySize ? 12 : 0)
+            .background(coach.canSend && preparation.canCapture ? Color.diaryAccent : Color.diaryRule, in: Capsule())
+        }
+        .foregroundStyle(coach.canSend && preparation.canCapture ? Color.diaryActionText : Color.diarySecondary)
+        .disabled(!coach.canSend || !preparation.canCapture)
+        .accessibilityLabel("Send").accessibilityIdentifier("coachSend")
     }
     private func inputBubble(_ turn: CoachTurn) -> some View {
+        VStack(alignment: .trailing, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
                 if !turn.text.isEmpty { Text(turn.text).textSelection(.enabled) }
-                if !turn.photoIDs.isEmpty { Label("\(turn.photoIDs.count) attached photos", systemImage: "photo") .font(.caption) }
-                Label("Input saved on this iPhone", systemImage: "internaldrive").font(.caption).foregroundStyle(Color.diarySuccess)
-            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Color.diarySummarySurface, in: RoundedRectangle(cornerRadius: 16))
+                if !turn.photoIDs.isEmpty { Label("\(turn.photoIDs.count) attached photos", systemImage: "photo").font(.caption) }
+            }
+            .padding(16).foregroundStyle(Color.white)
+            .background(Color.diaryMessage, in: RoundedRectangle(cornerRadius: 20))
+            Label("Input saved on this iPhone", systemImage: "internaldrive")
+                .font(.caption).foregroundStyle(Color.diarySecondary)
+        }.frame(maxWidth: .infinity, alignment: .trailing)
     }
     private func turnActions(_ turn: CoachTurn) -> some View {
         VStack(alignment: .leading, spacing: 12) {

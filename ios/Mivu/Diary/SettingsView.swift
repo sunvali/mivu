@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var window: UIWindow?
     let nutritionKeys: NutritionAPIKeyStore
     let destination: CoachDestination?
+    @Binding var companionSelection: CompanionSelection
     @State private var nutritionDraft = NutritionKeyDraft()
     @State private var nutritionConfigured = false
     @State private var profileName = ""
@@ -38,6 +39,7 @@ struct SettingsView: View {
                     }.frame(minHeight: 72)
                 }.accessibilityIdentifier("localProfiles")
             }
+            companionSection
             if model.snapshot != nil {
                 Section("Setup") {
                     Button { showGoals = true } label: { settingsRow("Goals", symbol: "scope", color: .diaryAccent) }
@@ -106,6 +108,35 @@ struct SettingsView: View {
         .navigationDestination(isPresented: Binding(get: { linkedSection != nil }, set: { if !$0 { linkedSection = nil } })) {
             if let section = linkedSection { settingsDetail(section) }
         }
+    }
+
+    private var companionSection: some View {
+        Section("Companion") {
+            if companionSelection.catalog.showsChooser {
+                ForEach(companionSelection.catalog.characters) { character in
+                    Button { companionSelection.select(character.id) } label: {
+                        HStack(spacing: 12) {
+                            companionPreview(character)
+                            Text(character.displayName).foregroundStyle(Color.diaryText)
+                            Spacer()
+                            if character.id == companionSelection.selectedCharacterID {
+                                Image(systemName: "checkmark").accessibilityLabel("Selected companion")
+                            }
+                        }.frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("companionChoice-" + character.id)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    companionPreview(companionSelection.selectedCharacter)
+                    Text(companionSelection.selectedCharacter.displayName).accessibilityIdentifier("companionName")
+                }.frame(minHeight: 44)
+            }
+        }
+    }
+    private func companionPreview(_ character: CharacterDescriptor) -> some View {
+        Image(character.previewAssetName).resizable().scaledToFit().frame(width: 40, height: 40)
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder private func settingsDetail(_ section: SettingsSection) -> some View {

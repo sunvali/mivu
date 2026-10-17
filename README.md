@@ -56,3 +56,6 @@ the current scope and evidence.
 
 See [repository instructions](AGENTS.md) and the concise
 [Copilot instructions](.github/copilot-instructions.md).
+For companion animation work, use the repository-local
+[Mivu animation skill](.agents/skills/mivu-animation/SKILL.md), including its
+source map, regeneration commands and native verification recipe.

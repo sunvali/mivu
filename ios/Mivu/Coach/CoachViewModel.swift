@@ -8,11 +8,17 @@ import Network
     let connection: ChatGPTConnection
     var draft = MealDraft()
     private(set) var captureReceipt: UUID?
+    private(set) var companionCaptureEvent: CompanionEvent?
+    private(set) var companionSubmission: CompanionSubmission?
     private(set) var isSending = false
     private(set) var isWorking = false
     private(set) var activity: CoachActivity?
     private(set) var activityTurnID: UUID?
-    var errorMessage: String?
+    var errorMessage: String? {
+        didSet { if errorMessage != nil { errorRevision += 1 } }
+    }
+    private var errorRevision = 0
+    private var sendingErrorRevision = 0
     @ObservationIgnored private let inference: () throws -> Inference
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let lookup: @Sendable (String) async throws -> [FoodEvidenceRecord]
@@ -34,21 +40,48 @@ import Network
     var turns: [CoachTurn] { diary.snapshot?.coachTurns ?? [] }
     var canSend: Bool { draft.isValid && !isSending && !diary.isSaving && !diary.isChangingProfile && diary.snapshot != nil }
     var hasPendingWork: Bool { turns.contains { [.captured, .analyzing, .waitingForNetwork].contains($0.state) } }
+    private var companionTurn: CoachTurn? {
+        if let latest = turns.last, latest.id == companionSubmission?.operationID { return latest }
+        return turns.first { $0.id == activityTurnID } ?? turns.last
+    }
+    var companionNeedsRecovery: Bool {
+        if isSending { return errorMessage != nil && errorRevision != sendingErrorRevision }
+        return errorMessage != nil || companionTurn.map {
+            [.waitingForConnection, .waitingForNetwork, .needsRetry, .needsClarification].contains($0.state)
+        } == true
+    }
+    var companionIsProcessing: Bool {
+        !companionNeedsRecovery && (isSending || (isWorking &&
+            (activity != nil || companionTurn?.state == .analyzing || companionTurn?.state == .captured)))
+    }
 
     @discardableResult func send() async -> Bool {
         guard canSend, let owner = diary.snapshot?.profile.id else { return false }
+        sendingErrorRevision = errorRevision
         isSending = true; diary.isSaving = true
         defer { isSending = false; diary.isSaving = false }
         let captured = draft
+        let isNewSubmission = !turns.contains { $0.id == captured.submissionID }
+        companionSubmission = CompanionSubmission(profileID: owner, operationID: captured.submissionID, acceptedAt: Date())
         do {
             _ = try await diary.store.captureCoachTurn(text: captured.text, photos: captured.photos.map { MealPhoto(data: $0) }, turnID: captured.submissionID, expectedProfileID: owner)
             try await diary.refresh(profileID: owner)
-            guard diary.snapshot?.profile.id == owner else { return false }
+            guard !Task.isCancelled, !diary.isChangingProfile, diary.snapshot?.profile.id == owner else { return false }
             captureReceipt = captured.submissionID
-            draft = MealDraft(); errorMessage = nil
+            if isNewSubmission {
+                companionCaptureEvent = CompanionEvent(profileID: owner, operationID: captured.submissionID,
+                                                       kind: .saved, committedAt: Date())
+            }
+            draft = MealDraft()
+            if errorRevision == sendingErrorRevision { errorMessage = nil }
             resume()
             return true
-        } catch { errorMessage = "Could not save on this iPhone. Your input is still here."; return false }
+        } catch {
+            if !diary.isChangingProfile, diary.snapshot?.profile.id == owner {
+                errorMessage = "Could not save on this iPhone. Your input is still here."
+            }
+            return false
+        }
     }
 
     func resume() {

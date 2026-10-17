@@ -22,6 +22,7 @@ extension Color {
     static let diarySuccess = adaptive(0x237448, 0x80D5A4, highContrastLight: 0x175A34, highContrastDark: 0xB0EBC6)
     static let diaryWarning = diaryCarbs
     static let diaryError = adaptive(0xB33143, 0xFF9BA6, highContrastLight: 0x8C2030, highContrastDark: 0xFFC2C9)
+    static let diaryMessage = adaptive(0x007987, 0x006778)
     static let diarySummarySurface = adaptive(0xEAF5F3, 0x142D2D)
     static let diaryChartSurface = adaptive(0xEDF3FC, 0x19283A)
     static let diaryEnergy = diaryAccent
@@ -113,7 +114,7 @@ struct NutritionSummary: View {
     private var energyValue: some View {
         Text(totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
             .font(.system(size: energySize, weight: .semibold, design: .default)).monospacedDigit().foregroundStyle(Color.diaryEnergy)
-            .contentTransition(.numericText()).animation(reduceMotion ? nil : .snappy(duration: 0.25), value: totals.kcal)
+            .contentTransition(.numericText()).animation(reduceMotion ? nil : .snappy(duration: MivuMotion.numeric), value: totals.kcal)
     }
     private var separator: some View {
         Rectangle().fill(Color.diaryRule).frame(width: 1, height: 36).padding(.horizontal, 10).accessibilityHidden(true)
@@ -174,6 +175,7 @@ extension DayCompleteness {
 
 struct MealRow: View {
     let meal: DiaryMeal
+    var prominent = false
     @Environment(\.dynamicTypeSize) private var typeSize
     private var title: String {
         let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -198,7 +200,7 @@ struct MealRow: View {
     var body: some View {
         HStack(spacing: 12) {
             if let data = meal.photos.first?.data, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill().frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
+                Image(uiImage: image).resizable().scaledToFill().frame(width: prominent ? 72 : 40, height: prominent ? 72 : 40).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
             } else { Image(systemName: "fork.knife").font(.body).foregroundStyle(Color.diaryCarbs).frame(width: 24).accessibilityHidden(true) }
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 8) {
@@ -208,11 +210,11 @@ struct MealRow: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title).lineLimit(2)
+                    Text(title).font(prominent ? .subheadline.weight(.semibold) : .body).lineLimit(2)
                     statusText.font(.caption).foregroundStyle(meal.state.color)
                 }
                 Spacer(minLength: 8)
-                calories
+                if !prominent { calories }
             }
         }
         .frame(minHeight: typeSize.isAccessibilitySize ? 72 : 56)

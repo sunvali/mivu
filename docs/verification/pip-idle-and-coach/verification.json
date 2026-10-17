@@ -1,0 +1,161 @@
+{
+  "date": "2026-10-17",
+  "sourceCommit": "65bd63b850ad8378966fd9d38f3cf695fd5e32fc",
+  "baselineCommit": "6e9d0f88f04295dd0082733a3cb217691d2c2f19",
+  "rootCause": "Passive Coach recovery holds shared diary.isSaving; Today previously mapped that lock to thinking while untouched. Today now uses explicit user feedback rather than background lock state.",
+  "rootRed": {
+    "counts": {
+      "passed": 5,
+      "failed": 1,
+      "skipped": 0
+    },
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T13-03-24-872Z_pid25885_8a337e2f.xcresult",
+    "note": "Three failures in one real-root test reproduce the unwanted processing pose before Today correction"
+  },
+  "isolatedRenderer": {
+    "counts": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T12-59-40-104Z_pid24559_45b2a72f.xcresult",
+    "note": "Supporting PASS before Today correction; not the RED reproduction"
+  },
+  "targetedNativeGreen": {
+    "counts": {
+      "passed": 64,
+      "failed": 0,
+      "skipped": 0
+    },
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T13-04-24-295Z_pid26124_83504a36.xcresult",
+    "note": "Before final lower scarf component correction"
+  },
+  "finalNativeAndUI": {
+    "counts": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T13-08-22-171Z_pid26966_4addd9e2.xcresult",
+    "simulator": "iPhone 17 Pro iOS26.5",
+    "nativeRenderChecks": 1,
+    "uiJourneys": 3,
+    "note": "Three untouched eight-second Today cycles per appearance; Coach food entry; largest text; focus interruption"
+  },
+  "completeNativeSuite": {
+    "counts": {
+      "passed": 540,
+      "failed": 0,
+      "skipped": 1
+    },
+    "xcresult": "/Users/yaakovkhodorkovski/.codex/visualizations/2026/10/11/01a12c05-f44a-7fc2-8449-d10fdbe43d21/mivu/.git/mivu-checks/native-su9a_ezh/Mivu.xcresult",
+    "evidenceDirectory": "/Users/yaakovkhodorkovski/.codex/visualizations/2026/10/11/01a12c05-f44a-7fc2-8449-d10fdbe43d21/mivu/.git/mivu-checks/native-su9a_ezh",
+    "sourceCommit": "65bd63b850ad8378966fd9d38f3cf695fd5e32fc",
+    "simulator": "iPhone 18 Pro iOS27.0"
+  },
+  "pythonRegressions": {
+    "passed": 11,
+    "failed": 0
+  },
+  "unchangedIdentity": {
+    "todayLayers": 98,
+    "todayMarkers": 9,
+    "byteIdenticalRuntimeAndFallbackPNGs": 14
+  },
+  "runtime": {
+    "sha256": "5a39809af6996b9a4c8eb6dc6a21776c90bf192de3071b35eeb75ac4dd54b06d",
+    "bytes": 710323,
+    "layers": 110,
+    "markers": 18
+  },
+  "physicalDevice": {
+    "status": "Release installed and successfully launched after owner unlocked the phone",
+    "sourceCommit": "65bd63b850ad8378966fd9d38f3cf695fd5e32fc",
+    "deviceName": "Yaakov\u2019s IPhone",
+    "deviceID": "E730F643-A1FB-50CC-819B-4060C5F10A74",
+    "osVersion": "27.0.1",
+    "configuration": "Release",
+    "launchArguments": [],
+    "installed": true,
+    "launched": true,
+    "runtimeJSONSHA256": "5a39809af6996b9a4c8eb6dc6a21776c90bf192de3071b35eeb75ac4dd54b06d",
+    "performance": "Frame pacing, energy and thermals unmeasured",
+    "processID": 13387,
+    "launchEvidence": "device-launch-result.json"
+  },
+  "recording": {
+    "rawSeconds": 173.33833333333334,
+    "reviewSeconds": 86.59833333333333,
+    "coachPreviewSeconds": 8,
+    "originalSpeed": true,
+    "trimRanges": [
+      [
+        44.9,
+        88.2
+      ],
+      [
+        94.9,
+        138.2
+      ]
+    ],
+    "coachTrimRanges": [
+      [
+        81.8,
+        85.8
+      ],
+      [
+        131.8,
+        135.8
+      ]
+    ],
+    "note": "Variable screenshot-recorder capture rate is not application frame rate"
+  },
+  "artifacts": [
+    {
+      "file": "Coach-Acting-Frames.png",
+      "bytes": 400747,
+      "sha256": "ef6a1795ea5aa6a1b824a36c7d6368200326ee4f3c8f224f5b73d40a9c6da4db"
+    },
+    {
+      "file": "Coach-Dark.png",
+      "bytes": 359716,
+      "sha256": "d5589587409b2bbe12671491b9d89d4b9194df98785922b9a6177b14c13a0653"
+    },
+    {
+      "file": "Coach-Light.png",
+      "bytes": 374414,
+      "sha256": "520ee9912392f60d67ae31fd7ef927dbf1800ba44e4391882d7ac9b300533b19"
+    },
+    {
+      "file": "Pip-Coach-Food-Entry.mp4",
+      "bytes": 4939718,
+      "sha256": "38c3351966d03b048fb835b400504c92fd2ec078de63c446d32227dfdc90acb1"
+    },
+    {
+      "file": "Pip-Today-Coach-Light-Dark.mp4",
+      "bytes": 43563721,
+      "sha256": "ee4111a885fc55a05bdf701204b705e46c78835ee21171f8162b69c784b8a3d7"
+    },
+    {
+      "file": "Pip-Today-Coach-Raw.mp4",
+      "bytes": 87540976,
+      "sha256": "ab3c961d42a497c5c546057966969b7ab55dda7f0111db8c77fb95bb023b9acc"
+    },
+    {
+      "file": "Today-Dark.png",
+      "bytes": 375493,
+      "sha256": "d6db5f0e82be4be8d8a0d0b8d98ed9ddd6b593e42fca4e1b6eca3158316694f1"
+    },
+    {
+      "file": "Today-Light.png",
+      "bytes": 405357,
+      "sha256": "00e87e432fb62ba4dc588cae3883b2e365ccb8318a7043bc712a11cb61da761d"
+    }
+  ],
+  "simulatorPreview": {
+    "status": "Build and launch succeeded",
+    "simulator": "iPhone 17 Pro iOS26.5",
+    "processID": 31631,
+    "note": "Isolated fixture profile; fixture arguments used only on simulator"
+  }
+}

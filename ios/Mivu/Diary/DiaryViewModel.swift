@@ -16,6 +16,7 @@ final class DiaryViewModel {
     var resumeCoach: (() -> Void)?
     var retryCoachMeal: ((UUID) -> Void)?
     private let profileSelection: @Sendable (UUID) async throws -> DiarySnapshot
+    private let snapshotLoading: @Sendable (UUID) async throws -> DiarySnapshot
     private let preferences: UserDefaults?
     let backup: FolderBackup?
     var backupStatus = FolderBackupStatus()
@@ -27,13 +28,17 @@ final class DiaryViewModel {
     var isSaving = false
     private(set) var isChangingProfile = false
     private(set) var captureReceipt: UUID?
+    private(set) var companionCaptureEvent: CompanionEvent?
+    private(set) var companionReviewEvent: CompanionEvent?
+    private var companionReviewSubmissions: [UUID: Set<UUID>] = [:]
     var restoreGeneration = 0
     private var worker: Task<Void, Never>?
     private var workerID: UUID?
 
-    init(store: DiaryStore, sampleMode: Bool = false, preferences: UserDefaults? = nil, backup: FolderBackup? = nil, profileSelection: (@Sendable (UUID) async throws -> DiarySnapshot)? = nil) {
+    init(store: DiaryStore, sampleMode: Bool = false, preferences: UserDefaults? = nil, backup: FolderBackup? = nil, profileSelection: (@Sendable (UUID) async throws -> DiarySnapshot)? = nil, snapshotLoading: (@Sendable (UUID) async throws -> DiarySnapshot)? = nil) {
         self.store = store; self.sampleMode = sampleMode; self.preferences = preferences; self.backup = backup
         self.profileSelection = profileSelection ?? { try await store.selectProfile($0) }
+        self.snapshotLoading = snapshotLoading ?? { try await store.snapshot(expectedProfileID: $0) }
     }
 
     static func local() -> DiaryViewModel {
@@ -69,7 +74,7 @@ final class DiaryViewModel {
     }
 
     func refresh(profileID: UUID) async throws {
-        let updated = try await store.snapshot(expectedProfileID: profileID)
+        let updated = try await snapshotLoading(profileID)
         guard !isChangingProfile, snapshot?.profile.id == profileID else { return }
         snapshot = updated
         if let index = profiles.firstIndex(where: { $0.id == profileID }) { profiles[index] = updated.profile }
@@ -87,6 +92,21 @@ final class DiaryViewModel {
         } catch { if snapshot?.profile.id == owner { present(error) }; return false }
     }
 
+    @discardableResult
+    func acceptReview(mealID: UUID, submissionID: UUID, expectedProfileID: UUID, currentTime: () -> Date = Date.init) async -> Bool {
+        guard !Task.isCancelled, !isChangingProfile, snapshot?.profile.id == expectedProfileID else { return false }
+        let isNewReview = meal(mealID)?.submissions.contains { $0.id == submissionID && $0.state == .awaitingReview } == true
+        let accepted = await change {
+            try await store.acceptReview(mealID: mealID, submissionID: submissionID, expectedProfileID: expectedProfileID)
+        }
+        guard accepted, !Task.isCancelled, !isChangingProfile, snapshot?.profile.id == expectedProfileID else { return false }
+        if isNewReview, companionReviewSubmissions[expectedProfileID, default: []].insert(submissionID).inserted {
+            companionReviewEvent = CompanionEvent(profileID: expectedProfileID, operationID: submissionID,
+                                                  kind: .reviewed, committedAt: currentTime())
+        }
+        return true
+    }
+
     func capture(_ draft: MealDraft, dayID: UUID, at: Date = Date(), dateOnly: Bool = false, photoPreparation: PhotoPreparation? = nil) async -> Bool {
         guard draft.isValid, photoPreparation?.canCapture != false, !isSaving, !isChangingProfile, let owner = snapshot?.profile.id else { return false }
         let isNewSubmission = snapshot?.meals.contains { $0.submissions.contains { $0.id == draft.submissionID } } != true
@@ -95,8 +115,12 @@ final class DiaryViewModel {
         do {
             _ = try await store.capture(text: draft.text, photos: draft.photos.map { MealPhoto(data: $0) }, reviewFirst: draft.reviewFirst, dayID: dayID, at: at, dateOnly: dateOnly, submissionID: draft.submissionID, forCoach: !sampleMode, expectedProfileID: owner)
             try await refresh(profileID: owner)
-            guard snapshot?.profile.id == owner else { return false }
-            if isNewSubmission { captureReceipt = draft.submissionID }
+            guard !Task.isCancelled, !isChangingProfile, snapshot?.profile.id == owner else { return false }
+            if isNewSubmission {
+                captureReceipt = draft.submissionID
+                companionCaptureEvent = CompanionEvent(profileID: owner, operationID: draft.submissionID,
+                                                       kind: .saved, committedAt: Date())
+            }
             resumeWorker()
             return true
         } catch { if snapshot?.profile.id == owner { present(error) }; return false }

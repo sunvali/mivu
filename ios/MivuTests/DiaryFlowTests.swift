@@ -62,6 +62,7 @@ import Testing
         #expect(draft.photos == [Data([1, 2, 3])])
         #expect(model.snapshot?.meals.isEmpty == true)
         #expect(model.captureReceipt == nil)
+        #expect(model.companionCaptureEvent == nil)
     }
     @Test func repeatedSendUsesStableSubmissionAndReviewDoesNotCount() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
@@ -75,9 +76,11 @@ import Testing
         #expect(await model.capture(draft, dayID: day.id))
         #expect(model.captureReceipt == draft.submissionID)
         let acknowledgedReceipt = model.captureReceipt
+        let companionEvent = try #require(model.companionCaptureEvent)
         model.enterBackground()
         #expect(await model.capture(draft, dayID: day.id))
         #expect(model.captureReceipt == acknowledgedReceipt)
+        #expect(model.companionCaptureEvent == companionEvent)
         model.enterBackground()
         try await store.processPending(expectedProfileID: profile.id)
         try await model.refresh(profileID: profile.id)
@@ -86,6 +89,7 @@ import Testing
         #expect(model.snapshot?.meals.first?.state == .awaitingReview)
         #expect(model.snapshot?.totals(dayID: day.id).kcal == nil)
         #expect(model.captureReceipt == acknowledgedReceipt)
+        #expect(model.companionCaptureEvent == companionEvent)
     }
     @Test func selectedDayCapturePreservesActiveDayAndActualCaptureTime() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }

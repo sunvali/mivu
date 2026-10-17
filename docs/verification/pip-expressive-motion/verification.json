@@ -1,0 +1,157 @@
+{
+  "sourceCommit": "b7e0642979c58f93ee36fa7a83906fbba85f4eda",
+  "date": "2026-10-17",
+  "nativeUnits": {
+    "passed": 536,
+    "failed": 0,
+    "skipped": 1,
+    "simulator": "iPhone 18 Pro iOS 27.0",
+    "evidenceDirectory": "/Users/yaakovkhodorkovski/.codex/visualizations/2026/10/11/01a12c05-f44a-7fc2-8449-d10fdbe43d21/mivu/.git/mivu-checks/native-vr_2ntgn",
+    "sourceCommit": "b7e0642979c58f93ee36fa7a83906fbba85f4eda"
+  },
+  "focusedNative": {
+    "passed": 60,
+    "failed": 0,
+    "skipped": 0,
+    "simulator": "iPhone 17 Pro iOS 26.5",
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T11-39-57-311Z_pid97547_914ed2ed.xcresult",
+    "sourceCommit": "35dfa4a39a69724b5bfed29ff9e63c31d9f2a733"
+  },
+  "lightDarkMotionJourney": {
+    "counts": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T12-40-43-532Z_pid15176_fc8a71d4.xcresult",
+    "sourceCommit": "b7e0642979c58f93ee36fa7a83906fbba85f4eda",
+    "caseDurationSeconds": 68.457
+  },
+  "fullUISuite": {
+    "status": "failed initial run; all five Progress journeys passed in isolation on iOS27; original Goals flow passed on iOS26.5 repeat; root cause unresolved",
+    "passed": 34,
+    "failed": 3,
+    "skipped": 0,
+    "simulator": "iPhone 17 Pro iOS 26.5",
+    "sourceCommit": "35dfa4a39a69724b5bfed29ff9e63c31d9f2a733",
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T11-51-06-529Z_pid2756_be453c75.xcresult",
+    "note": "Goal-edit helper connection lost; subsequent launch/navigation failures. Root cause unresolved; no new app crash found."
+  },
+  "physicalDevice": {
+    "status": "Release installed and launched after owner unlocked the iPhone",
+    "sourceCommit": "b7e0642979c58f93ee36fa7a83906fbba85f4eda",
+    "deviceName": "Yaakov\u2019s IPhone",
+    "deviceID": "E730F643-A1FB-50CC-819B-4060C5F10A74",
+    "osVersion": "27.0.1",
+    "configuration": "Release",
+    "launchArguments": [],
+    "installed": true,
+    "launched": true,
+    "installResult": "device-install-result.json",
+    "launchResult": "device-launch-result.json",
+    "runtimeJSONSHA256": "57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0",
+    "performance": "Frame pacing, energy and thermals unmeasured",
+    "processID": 13252
+  },
+  "recording": {
+    "rawSeconds": 96.67333333333333,
+    "reviewSeconds": 58.4,
+    "originalSpeed": true,
+    "trimRanges": [
+      [
+        13.4,
+        42.2
+      ],
+      [
+        46.9,
+        76.5
+      ]
+    ],
+    "note": "Native screenshot-based recorder captured variable frame rate; this proves visible choreography only, not device FPS.",
+    "sourceCommit": "b7e0642979c58f93ee36fa7a83906fbba85f4eda",
+    "historicalCaptures": [
+      {
+        "sourceCommit": "35dfa4a",
+        "rawSeconds": 100.675,
+        "reviewSeconds": 58.1,
+        "suffix": "-35dfa4a"
+      },
+      {
+        "sourceCommit": "102c773",
+        "rawSeconds": 90.67666666666666,
+        "suffix": "-102c773"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "file": "Coach-Dark.png",
+      "bytes": 358975,
+      "sha256": "c48b9172bb0d0d304ecabe50b213b24e8232993623f4450db477bdc1925f4459"
+    },
+    {
+      "file": "Coach-Light.png",
+      "bytes": 371619,
+      "sha256": "c43c2104b78bdb4af6c9f87a41c7dc3f748ba35015606db6d91d4744ed2c4ab9"
+    },
+    {
+      "file": "Pip-Expressive-Light-Dark-Raw.mp4",
+      "bytes": 45171684,
+      "sha256": "a3c030b35a0aac2f50bac4879ce3dafe4a27ce6eb440cd7e2ff8afc6d257dc9c"
+    },
+    {
+      "file": "Pip-Expressive-Light-Dark.mp4",
+      "bytes": 30066697,
+      "sha256": "1bcd1a839377dd34cdd7e0600f14e56cf0e1c2b091724ab0f8c695585f42bb49"
+    },
+    {
+      "file": "Today-Dark.png",
+      "bytes": 374265,
+      "sha256": "b121f777e57ebd1f8acb0000596f63792120d950b536107aeecea88522e527bd"
+    },
+    {
+      "file": "Today-Light.png",
+      "bytes": 403629,
+      "sha256": "6eaf7365ac64bc47f9d71374e96d3ab3cfcf6548a4aad338647c24c56242029e"
+    }
+  ],
+  "progressIsolation27": {
+    "counts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T12-23-11-446Z_pid9049_fd3dba26.xcresult",
+    "source": "35dfa4a plus Coach caption suppression, built before attempt-ID follow-up",
+    "simulator": "iPhone 18 Pro iOS 27.0"
+  },
+  "originalMotionSource": "35dfa4a39a69724b5bfed29ff9e63c31d9f2a733",
+  "retryRegression": {
+    "counts": {
+      "passed": 50,
+      "failed": 0,
+      "skipped": 0
+    },
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T12-34-04-833Z_pid11809_99a154e8.xcresult",
+    "sourceCommit": "102c7733e5d6d2136bb7e27657c4eaa078b263e1"
+  },
+  "originalGoalsRepeat26": {
+    "counts": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "durationSeconds": 117.6,
+    "xcresult": "/Users/yaakovkhodorkovski/Library/Developer/XcodeBuildMCP/workspaces/mivu-local-hooks-b9c7ae5548f8/result-bundles/test_sim_2026-10-17T12-37-09-799Z_pid14496_7ab4dcf8.xcresult",
+    "sourceCommit": "102c7733e5d6d2136bb7e27657c4eaa078b263e1",
+    "simulator": "iPhone 17 Pro iOS 26.5"
+  },
+  "retryIntegrationSource": "102c7733e5d6d2136bb7e27657c4eaa078b263e1",
+  "simulatorPreview": {
+    "status": "SUCCEEDED",
+    "processID": 19218,
+    "simulatorID": "42CE2315-9339-4EF1-A5B4-064444D0FA44",
+    "fixtureProfile": "21F451DE-1762-41F3-91D1-8175EA9FC8ED",
+    "sourceCommit": "b7e0642979c58f93ee36fa7a83906fbba85f4eda"
+  }
+}

@@ -51,3 +51,13 @@ Glass behind every food row; glowing neon; decorative gradient backgrounds; rand
 
 ## Image interpretation
 All screenshots are generated concept illustrations. Native control geometry, SF Symbol glyphs and exact chart plotting must be verified in the real build. Use fixture data to render charts; never trace the generated chart pixels. Support screens documented in specs/SCREENS.md use the same reusable components even when no separate board is supplied.
+
+## Approved motion integration — 2026-10-17
+
+The approved motion companion spec takes precedence over older `numericCountUp:false` and 150 ms inline crossfade guidance. Existing numeric changes use the shared 250 ms token; Coach follows use 200 ms; new status content uses 180 ms opacity. System controls keep system transitions and capture haptics.
+
+The owner’s Lottie fidelity correction supersedes the early 64/40 pt interpretation: Today uses a prominent full-body companion beside intake (200 pt artboard trimmed to a 144 × 186 pt layout frame), and Coach uses its original seated illustration above the composer (148 pt artboard trimmed to 120 × 108 pt, quieter 88 pt artboard while typing or at accessibility sizes). Actual scroll visibility is reported. Settings shows a static bundled preview; a native chooser appears only for two or more validated bundled descriptors. Only Pip ships. The DEBUG/UI-test alias reuses Pip's validated rig to exercise switching without adding a character asset.
+
+The diary root owns selection, presentation and the single runtime. Selected tab, actual surface visibility, covering sheets/dialogs/alerts/details, scene phase and resource policy gate playback. Background/profile transitions cancel reactions and deadlines; historical receipts are baselined on attachment. Reduce Motion, Low Power Mode and serious/critical thermal state use the current static semantic pose. Decorative artwork is hidden from VoiceOver; existing status and recovery text remains the announcement source.
+
+The current character and motion authority is `../characters/pip/MOTION.md` and `docs/superpowers/specs/2026-10-17-pip-lottie-fidelity.md`: original shaded artwork, native Core Animation Lottie playback, continuously living restrained loops, slower gestures and interruption-safe transitions. Historical Rive timing/asset documents do not describe the shipping pack.

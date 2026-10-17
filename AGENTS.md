@@ -8,6 +8,7 @@ for this native app. No web frontend is required.
 - Preserve unrelated changes; use feature branches and pull requests.
 - Do not mention codex or ai in commit messages or pull requests.
 - Use rtk for verbose shell output when available.
+- Use Headroom when available to compress or retrieve large context.
 - Write the smallest meaningful failing test before behavioral implementation.
 - Use XcodeBuildMCP for Apple builds, tests, and simulator operations.
 - Report blocked checks honestly; never accept legal terms for the owner.
@@ -49,3 +50,12 @@ for this native app. No web frontend is required.
 - Reuse local native success only for identical inputs, recipe and environment;
   never cache failed, zero-test or malformed evidence. Hook units do not replace
   full local UI verification or independent Ponytail Review before merge.
+
+## Companion animation work
+
+For Pip artwork, Lottie, motion, pose transitions, lifecycle, character selection,
+or animation verification, read the repository skill
+[mivu-animation](.agents/skills/mivu-animation/SKILL.md) first. It maps editable
+sources to generated assets and native owners, and links the verification recipe.
+The shipping runtime is Lottie; older Rive plans are historical context. Keep
+animation changes tied to the approved painted references and explicit user intent.
