@@ -21,6 +21,7 @@ import UIKit
     @ObservationIgnored private var selected = false
     @ObservationIgnored private var consumedReaction: UUID?
     @ObservationIgnored private var latestOutput: CompanionOutput?
+    @ObservationIgnored private var transitionSnapshot: UIView?
     @ObservationIgnored private let bundle: Bundle
     @ObservationIgnored private let load: @MainActor (CharacterDescriptor) async throws -> Data
 
@@ -90,7 +91,8 @@ import UIKit
         let freshReaction = output.reactionID != nil && output.reactionID != consumedReaction
         let oneShot = [.saved, .reviewed, .greeting].contains(output.pose)
         let pose = oneShot && !freshReaction && (displayedPose != output.pose || !player.isAnimationPlaying) ? .resting : output.pose
-        let changed = pose != displayedPose || surface != displayedSurface
+        let surfaceChanged = surface != displayedSurface
+        let changed = pose != displayedPose || surfaceChanged
         isPaused = false
         if changed || freshReaction || !player.isAnimationPlaying {
             playbackGeneration += 1
@@ -113,7 +115,7 @@ import UIKit
                     }
                 }
             }
-            if changed { transition(player, render) } else { render() }
+            if changed { transition(player, crossfade: !surfaceChanged, render) } else { UIView.performWithoutAnimation(render) }
         }
         if let reaction = output.reactionID { consumedReaction = reaction }
     }
@@ -139,6 +141,8 @@ import UIKit
     private func pauseAndReset() {
         playbackGeneration += 1
         isPaused = true
+        transitionSnapshot?.removeFromSuperview()
+        transitionSnapshot = nil
         player?.layer.removeAllAnimations()
         player?.pause()
         player?.currentFrame = player?.animation?.frameTime(forMarker: Self.marker(for: .resting, surface: latestSurface)) ?? 0
@@ -147,10 +151,28 @@ import UIKit
         if let reaction = latestOutput?.reactionID { consumedReaction = reaction }
     }
 
-    private func transition(_ player: LottieAnimationView, _ changes: @escaping () -> Void) {
-        guard player.window != nil else { changes(); return }
-        UIView.transition(with: player, duration: MivuMotion.companionTransition,
-            options: [.transitionCrossDissolve, .beginFromCurrentState, .allowAnimatedContent], animations: changes)
+    private func transition(_ player: LottieAnimationView, crossfade: Bool = true, _ changes: @escaping () -> Void) {
+        transitionSnapshot?.removeFromSuperview()
+        transitionSnapshot = nil
+        // Coach's registered rig joins at neutral; screen changes use the native tab transition.
+        guard crossfade, latestSurface == .today, player.window != nil,
+              let snapshot = player.snapshotView(afterScreenUpdates: false) else {
+            UIView.performWithoutAnimation(changes)
+            return
+        }
+        snapshot.frame = player.bounds
+        snapshot.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        snapshot.isUserInteractionEnabled = false
+        snapshot.accessibilityElementsHidden = true
+        // Never implicitly interpolate the Lottie layer tree: it contains every atlas scene.
+        UIView.performWithoutAnimation(changes)
+        player.addSubview(snapshot)
+        transitionSnapshot = snapshot
+        UIView.animate(withDuration: MivuMotion.companionTransition, delay: 0,
+            options: [.curveEaseInOut, .beginFromCurrentState], animations: { snapshot.alpha = 0 }) { [weak self] _ in
+                snapshot.removeFromSuperview()
+                if self?.transitionSnapshot === snapshot { self?.transitionSnapshot = nil }
+            }
     }
 
     private static func marker(for pose: CompanionPose, surface: CompanionSurface = .today) -> String {

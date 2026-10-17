@@ -20,8 +20,9 @@ text, keyboard, controls and navigation remain SwiftUI-owned. Keep feet grounded
 and the illustration subordinate to meal content and readable controls. At
 larger accessibility text sizes, preserve native text and scrolling.
 
-Coach uses the same seated original painting in every semantic state, including
-its static fallback. It does not use Today poses or a separately animated
+Coach uses one registered seated rig from the original painting in every
+semantic state, including its static fallback. Neutral joins preserve the same
+seated silhouette. It does not use Today poses or a separately animated
 character design.
 
 ## Motion contract
@@ -45,9 +46,14 @@ separate idle blink timer.
 | Greeting | 2.2 s | Unhurried welcome, then resting |
 | Coach | Same state timings | Seated original painting throughout; static fallback uses that same pose |
 
-Cross-dissolve semantic pose changes over 350 ms. The continuous loops have
-closed, gradual movement so transitions do not feel jumpy. Saving and navigation
-never wait for animation. Saved feedback means local capture only; it does not
+Do not animate the Lottie layer tree through UIKit view transitions: that can
+blend unrelated atlas poses and flash other Pip scenes. Apply every timeline
+update without UIKit view animation. Coach keeps the same seated rig through
+neutral joins, with no artwork dissolve. Today may fade an explicit snapshot
+overlay over 350 ms. Surface changes use the native tab transition and do not
+fade artwork across surfaces. The 350 ms native focus and keyboard sizing
+animation remains separate from character rendering. Saving and navigation never
+wait for character animation. Saved feedback means local capture only; it does not
 imply analysis or backup completion. Recovery is not a success state.
 
 ## Lifecycle and accessibility
@@ -61,8 +67,8 @@ communicate saved or error status through color or motion alone.
 
 ## Validation status
 
-The 520-test native unit result is a baseline from before the latest continuous
-motion changes. Verification of the latest motion source and runtime asset is
-pending. Full UI validation, broader visual/accessibility review and
+The 521-test native unit result with 1 expected interactive-authentication
+skip is the baseline before the latest Coach ghosting fix. Verification of the
+latest motion and rendering changes is pending. Full UI validation, broader visual/accessibility review and
 device-performance acceptance also remain pending. Do not treat simulator
 results as evidence of device frame time, energy use or thermal behavior.

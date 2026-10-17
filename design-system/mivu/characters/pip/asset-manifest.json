@@ -2,7 +2,7 @@
   "characterID": "pip",
   "displayName": "Pip",
   "schemaVersion": 1,
-  "status": "original illustrated continuous Lottie motion integrated; latest motion verification pending; prior 520-test native baseline predates latest changes",
+  "status": "original illustrated continuous Lottie motion integrated; latest Coach rendering fix verification pending; prior 521-test native baseline includes 1 expected interactive-authentication skip",
   "created": "2026-10-17",
   "source": "Approved original Pip storyboard illustration with authored Lottie image layers, vector masks, joint transforms and eyelid patches. The separate Coach pose uses an exact crop of the approved context illustration. Preserve the selected fox identity and original painted pixels. No imported third-party character artwork.",
   "assets": [
@@ -100,12 +100,13 @@
   },
   "targetRuntime": "Lottie iOS 4.6.1, Core Animation renderer",
   "productionValidation": {
-    "nativeUnitTests": "520 passed, 0 failed; 1 expected interactive-authentication skip (baseline before latest motion changes)",
+    "nativeUnitTests": "521 passed; 1 expected interactive-authentication skip (baseline before latest Coach ghosting fix)",
     "targetedUISimulatorChecks": "Prior runs passed the new Coach composition and largest-text checks",
     "fullUITestSuite": "pending",
     "visualAndAccessibilityReview": "pending broader validation",
     "physicalDevice": "pending owner acceptance; no frame-time, energy or thermal claim",
-    "latestMotionVerification": "pending"
+    "latestMotionVerification": "pending after Coach rendering fix",
+    "renderingContract": "Timeline updates use no UIKit view transition. Coach uses one registered seated rig with neutral joins and no artwork dissolve. Today snapshot overlay may fade for 350 ms; surface changes use native tab transition without cross-surface artwork fading."
   },
   "fallbacks": [
     {
@@ -241,8 +242,8 @@
     },
     {
       "path": "design-system/mivu/characters/pip/lottie-source/README.md",
-      "sha256": "4918a37b11b1155588d8a12cb377aec3740481a6afbc256ef61022e4062a7678",
-      "bytes": 3808,
+      "sha256": "d9f6d116a4d186de8997610053287ad82c57c976dc9b5b253f325cb1288c65dd",
+      "bytes": 4294,
       "role": "Rig authoring and runtime documentation"
     }
   ]

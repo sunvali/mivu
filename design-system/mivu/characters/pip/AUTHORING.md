@@ -18,8 +18,13 @@ The runtime uses slow, continuous breathing and restrained ear, scarf and tail
 movement. Resting loops over 8 seconds and includes the painted blink. Attentive
 loops over 6 seconds with quieter movement; thinking and recovery loop over 4
 seconds. Saved, reviewed and greeting resolve after 1.5, 1.8 and 2.2 seconds.
-Semantic pose changes cross-dissolve over 350 ms. There is no separate idle
-blink timer in the presenter.
+The presenter has no separate idle blink timer. Apply all timeline updates
+without UIKit view animation so unrelated atlas scenes cannot blend through
+the character. Coach uses one registered seated rig with neutral joins and no
+artwork dissolve. Today alone may fade an explicit snapshot overlay over 350 ms.
+Surface changes use the native tab transition without cross-surface artwork
+fading. The separate 350 ms native focus and keyboard sizing animation does not
+animate the Lottie layer tree.
 
 Coach keeps the seated composition from the original `context.png` crop in all
 states, including static fallback. Coach pose preparation and eye-patch source
@@ -45,8 +50,9 @@ bytes, has 162 layers on a 512×512 canvas, and stays below the 1 MiB runtime ca
 Coach uses the same seated source painting for every semantic state and its
 static fallback.
 
-The 520-test native unit result predates the latest motion changes. Verification
-of the latest source and runtime asset is pending, as are full UI validation,
+The 521-test native unit result with 1 expected interactive-authentication
+skip is the baseline before the latest Coach ghosting fix. Verification of the
+latest motion and rendering changes is pending, as are full UI validation,
 broader visual/accessibility review and physical-device performance acceptance.
 Simulator results do not establish device frame time, power use or thermal
 behavior.

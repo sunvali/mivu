@@ -22,9 +22,14 @@ paws, tail and scarf gently around grounded feet. The Lottie composition is
 | greeting | 2.2 s | Unhurried welcome, then resting |
 | Coach states | Same timings | Original seated painting remains the pose in every state and fallback |
 
-Semantic changes cross-dissolve over 350 ms. The resting blink is authored into
-the continuous loop; there is no presenter idle blink timer. Keep motion gradual
-and readable, with grounded feet and no abrupt movement.
+Apply Lottie timeline updates without UIKit view animation. UIKit view transitions
+can interpolate unrelated atlas scenes and flash other Pip poses. Coach uses one
+registered seated rig with neutral joins and no artwork dissolve. Today may fade
+an explicit snapshot overlay over 350 ms; surface changes use the native tab
+transition without cross-surface artwork fading. Native focus and keyboard sizing
+may animate over 350 ms independently of the Lottie layer tree. The resting blink
+is authored into the continuous loop; there is no presenter idle blink timer.
+Keep motion gradual and readable, with grounded feet and no abrupt movement.
 
 Playback stops while Pip is hidden, covered, in the background, under Reduce
 Motion or Low Power Mode, or at serious or critical thermal state. Static
@@ -67,6 +72,7 @@ poses provide detailed artwork when motion is unavailable or disabled.
 
 ## Verification status
 
-The 520-test native unit result predates the latest motion changes. Verification
-of the current animation source and runtime asset is pending. Full native UI,
-visual/accessibility and device performance acceptance also remain pending.
+The 521-test native unit result with 1 expected interactive-authentication skip
+is the baseline before the latest Coach ghosting fix. Verification of the current
+animation and rendering changes is pending. Full native UI, visual/accessibility
+and device performance acceptance also remain pending.

@@ -202,7 +202,7 @@ struct CoachView: View {
         }
         .padding(.horizontal, 20)
         .animation(reduceMotion ? nil : .easeOut(duration: MivuMotion.status), value: coach.errorMessage)
-        .animation(reduceMotion ? nil : .easeOut(duration: MivuMotion.status), value: editing)
+        .animation(reduceMotion ? nil : .easeInOut(duration: MivuMotion.companionTransition), value: editing)
     }
     private var userScrolling: Bool {
         scrollPhase == .tracking || scrollPhase == .interacting || scrollPhase == .decelerating

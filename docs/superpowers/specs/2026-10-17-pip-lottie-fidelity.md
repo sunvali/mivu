@@ -40,7 +40,9 @@ between reactions. This supersedes the held-rest / short-gesture timing in the
 original motion guide. Preserve the exact original painting and composition,
 but use an 8-second living rest loop, 6-second quiet typing loop, 4-second
 thinking/recovery loops, 1.5-second saved acknowledgment, 1.8-second review and
-2.2-second greeting. Pose changes dissolve over 350 ms. Feet and seated paws
+2.2-second greeting. Today pose changes fade a snapshot over 350 ms; Coach
+joins the same seated rig at neutral, with 350 ms native focus resizing.
+Timeline changes never animate the internal Lottie layer tree. Feet and seated paws
 remain grounded; independent head, torso, ears, scarf and tail carry motion.
 Coach keeps its original seated painting for every semantic state, avoiding
 switches into the differently framed full-body atlas. Painted blinking belongs

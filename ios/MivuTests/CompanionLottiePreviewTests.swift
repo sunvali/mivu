@@ -116,6 +116,58 @@ import XCTest
         XCTAssertEqual(player.realtimeAnimationFrame, stopped)
     }
 
+    func testCoachTransitionsNeverExposeUnrelatedAtlasPoses() async throws {
+        let runtime = CompanionRuntime()
+        await runtime.select(CharacterCatalog.bundled.resolve("pip"))
+        await runtime.attach(eligible: true)
+        let player = try XCTUnwrap(runtime.player)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 320, height: 320)
+        window.rootViewController = UIViewController()
+        player.frame = window.bounds
+        player.backgroundColor = .black
+        window.rootViewController?.view.addSubview(player)
+        window.isHidden = false
+        defer { runtime.stop(); window.isHidden = true }
+        player.layoutIfNeeded()
+        let mask = pixels(try XCTUnwrap(UIImage(named: "PipCoach")))
+        for pose in [CompanionPose.greeting, .resting, .attentive, .resting, .saved, .resting] {
+            let output = CompanionOutput(pose: pose, playback: .animated,
+                reactionID: [.greeting, .saved].contains(pose) ? UUID() : nil, nextDeadline: nil)
+            await runtime.apply(output, darkMode: true, surface: .coach)
+            for _ in 0..<4 {
+                try await Task.sleep(for: .milliseconds(65))
+                let image = snapshot(player)
+                let actual = pixels(image)
+                var leaked = 0
+                for y in 0..<128 { for x in 0..<128 {
+                    let p = (y * 128 + x) * 4
+                    guard Int(actual[p]) - Int(actual[p + 2]) > 35 else { continue }
+                    let covered = (max(0,y-3)...min(127,y+3)).contains { yy in
+                        (max(0,x-3)...min(127,x+3)).contains { xx in mask[(yy*128+xx)*4+3] > 20 }
+                    }
+                    if !covered { leaked += 1 }
+                }}
+                if leaked > 12 {
+                    let attachment = XCTAttachment(image: image); attachment.name = "Unrelated pose leaked during Coach transition"
+                    attachment.lifetime = .keepAlways; add(attachment)
+                }
+                XCTAssertLessThanOrEqual(leaked, 12, "A view transition must not reveal other paintings from the source atlas")
+            }
+        }
+    }
+
+    private func pixels(_ image: UIImage) -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: 128 * 128 * 4)
+        bytes.withUnsafeMutableBytes { memory in
+            let context = CGContext(data: memory.baseAddress, width: 128, height: 128, bitsPerComponent: 8,
+                bytesPerRow: 128*4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            context?.draw(image.cgImage!, in: CGRect(x: 0, y: 0, width: 128, height: 128))
+        }
+        return bytes
+    }
+
     private func snapshot(_ view: UIView) -> UIImage {
         let format = UIGraphicsImageRendererFormat(); format.scale = 2
         return UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { _ in
