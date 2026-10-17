@@ -15,9 +15,9 @@ import Testing
         #expect(digest == expected, "The animation must use the unchanged approved illustration")
         let markers = try #require(json["markers"] as? [[String: Any]])
         let names = Set(markers.compactMap { $0["cm"] as? String })
-        let base = ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"]
+        let base = ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"]
         #expect(names == Set(base.flatMap { [$0, "coach-" + $0] }))
-        let durations = ["resting": MivuMotion.resting, "blink": MivuMotion.blink, "attentive": MivuMotion.attentive, "thinking": MivuMotion.thinking, "saved": MivuMotion.saved, "reviewed": MivuMotion.reviewed, "recovery": MivuMotion.recovery, "greeting": MivuMotion.greeting]
+        let durations = ["resting": MivuMotion.resting, "blink": MivuMotion.blink, "attentive": MivuMotion.attentive, "thinking": MivuMotion.thinking, "saved": MivuMotion.saved, "reviewed": MivuMotion.reviewed, "recovery": MivuMotion.recovery, "greeting": MivuMotion.greeting, "submitted": MivuMotion.submitted]
         for marker in markers {
             let name = try #require(marker["cm"] as? String)
             let seconds = try #require(marker["dr"] as? Double) / 60

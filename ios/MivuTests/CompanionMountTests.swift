@@ -6,12 +6,12 @@ import UIKit
 
 @Suite(.serialized) @MainActor struct CompanionMountTests {
     @Test func currentSurfaceRemountResumesThinkingWithoutReplayingCanceledSuccess() async throws {
-        for pose in [CompanionPose.thinking, .saved] {
+        for pose in [CompanionPose.thinking, .saved, .submitted] {
             let runtime = CompanionRuntime()
             await runtime.select(CharacterCatalog.bundled.resolve("pip"))
             await runtime.attach(eligible: true)
             let output = CompanionOutput(pose: pose, playback: .animated,
-                reactionID: pose == .saved ? UUID() : nil, nextDeadline: nil)
+                reactionID: pose == .thinking ? nil : UUID(), nextDeadline: nil)
             let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
             let window = UIWindow(windowScene: scene)
             window.frame = CGRect(x: 0, y: 0, width: 180, height: 180)

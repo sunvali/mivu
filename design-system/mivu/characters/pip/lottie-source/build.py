@@ -50,8 +50,8 @@ POSES = {
 # Long living loops and unhurried gestures. Every loop closes at its neutral pose.
 CLIPS = []
 frame = 0
-for clip, duration in [("resting",480),("blink",18),("attentive",360),("thinking",240),
-                       ("saved",90),("reviewed",108),("recovery",240),("greeting",132)]:
+for clip, duration in [("resting",480),("blink",18),("attentive",480),("submitted",48),("thinking",240),
+                       ("saved",48),("reviewed",60),("recovery",240),("greeting",72)]:
     CLIPS.append((clip,frame,duration))
     frame += duration + 1
 TODAY_END = frame
@@ -135,6 +135,22 @@ def animated(keys, start):
                         for i,(t,value) in enumerate(keys)]}
 
 
+def translated(keys, pivot, start):
+    return {"a":1,"k":[{"t":start+t,"s":[pivot[0],pivot[1]+y,0],
+        "i":{"x":[.58],"y":[1]},"o":{"x":[.32],"y":[0]}} for t,y in keys]}
+
+
+def chest_motion(name, duration, rise):
+    if name in ["resting","attentive"]:
+        quiet = .75 if name == "attentive" else 1
+        return [(t*duration,-v*rise*quiet) for t,v in [(0,0),(.25,1),(.5,0),(.75,.92),(1,0)]]
+    if name in ["thinking","recovery"]:
+        return [(0,0),(.5*duration,-rise*.55),(duration,0)]
+    if name == "submitted":
+        return [(0,0),(6,-rise*.85),(13,-rise),(25,rise*.18),(38,-rise*.08),(duration,0)]
+    return [(0,0),(duration,0)]
+
+
 def transform(pivot=(0,0), rotation=None):
     return {"a":fixed([*pivot,0]),"p":fixed([*pivot,0]),"s":fixed([100,100,100]),
             "r":rotation or fixed(0),"o":fixed(100)}
@@ -191,13 +207,20 @@ def split_parts(rgb, whole, pose):
 def rotations(name, duration):
     def keys(*values): return [(round(t*duration,3),v) for t,v in values]
     neutral = keys((0,0),(1,0))
+    if name == "submitted":
+        return {"head":keys((0,0),(.125,-1.4),(.27,-1.8),(.52,1.2),(.79,-.25),(1,0)),
+                "left-ear":keys((0,0),(.125,-3),(.29,-3.4),(.6,.5),(1,0)),
+                "right-ear":keys((0,0),(.125,2.4),(.32,2.8),(.68,-.3),(1,0)),
+                "left-paw":keys((0,0),(.125,-2.7),(.3,-4),(.58,.6),(.85,0),(1,0)),
+                "tail":keys((0,0),(.16,0),(.42,2),(.72,-.6),(1,0)),
+                "scarf":keys((0,0),(.14,0),(.4,-1.2),(.7,.4),(1,0))}
     if name in ["resting","attentive"]:
-        quiet = .45 if name == "attentive" else 1
+        quiet = .75 if name == "attentive" else 1
         return {"head":keys((0,0),(.25,-.45*quiet),(.5,0),(.75,.35*quiet),(1,0)),
                 "tail":keys((0,0),(.25,1.1*quiet),(.5,0),(.75,-.8*quiet),(1,0)),
                 "scarf":keys((0,0),(.3,-.7*quiet),(.6,.55*quiet),(1,0)),
-                "left-ear":keys((0,0),(.64,0),(.72,-.8*quiet),(.85,0),(1,0)),
-                "right-ear":keys((0,0),(.18,0),(.28,.65*quiet),(.4,0),(1,0))}
+                "left-ear":keys((0,0),(.64,0),(.69,-2*quiet),(.77,.35*quiet),(.85,0),(1,0)),
+                "right-ear":keys((0,0),(.18,0),(.23,1.6*quiet),(.32,-.25*quiet),(.4,0),(1,0))}
     if name == "greeting":
         return {"left-paw":keys((0,0),(.2,-4),(.44,4),(.66,-3),(.86,0),(1,0)),
                 "head":keys((0,0),(.3,-1.2),(.65,.5),(1,0)),
@@ -223,12 +246,12 @@ def rotations(name, duration):
     return {"head":neutral}
 
 
-def breathe(ks, pivot, duration, start, quiet=1):
+def breathe(ks, pivot, motion, neck_y, start):
     # Only the torso stretches toward a fixed ground anchor; the feet never translate.
     ks["a"] = fixed([*pivot,0]); ks["p"] = fixed([*pivot,0])
-    ks["s"] = {"a":1,"k":[{"t":start+t*duration,"s":[100,100+v*quiet,100],
+    ks["s"] = {"a":1,"k":[{"t":start+t,"s":[100,100-y/(pivot[1]-neck_y)*100,100],
         "i":{"x":[.58],"y":[1]},"o":{"x":[.32],"y":[0]}}
-        for t,v in [(0,0),(.25,.7),(.5,0),(.75,.6),(1,0)]]}
+        for t,y in motion]}
 
 
 def build():
@@ -236,7 +259,7 @@ def build():
     atlas = Image.open(SOURCE).convert("RGB"); rgb_atlas = np.asarray(atlas)
     layers = []; manifests = {}; next_index = 1
     for clip_index,(name,start,duration) in enumerate(CLIPS):
-        pose = POSES["resting" if name == "blink" else name]
+        pose = POSES["resting" if name in ["blink","submitted"] else name]
         col,row = pose["cell"]; offset = (col*384,row*256-48)
         rgb=np.full((352,384,3),255,dtype=np.uint8)
         low=max(0,offset[1]); high=min(1024,offset[1]+352)
@@ -247,14 +270,18 @@ def build():
         ys,xs = np.where(whole); center=(float(xs.min()+xs.max())/2,float(ys.max()+1))
         scale=440/(ys.max()+1-ys.min())
         end = CLIPS[clip_index+1][1] if clip_index+1 < len(CLIPS) else TODAY_END
-        root_id=next_index; next_index+=1; head_id=next_index; next_index+=1
+        root_id=next_index; chest_id=next_index+1; head_id=next_index+2; next_index+=3
         root_transform=transform()
         root_transform.update({"a":fixed([center[0]+offset[0],center[1]+offset[1],0]),
                                "p":fixed([256,472,0]),"s":fixed([scale*100]*2+[100])})
         layers.append({"ddd":0,"ind":root_id,"ty":3,"nm":name+"-root","ks":root_transform,"ip":start,"op":end,"st":0})
         motion=rotations(name,duration)
         neck=(pose["neck"][0]+offset[0],pose["neck"][1]+48+offset[1])
-        layers.append({"ddd":0,"ind":head_id,"ty":3,"nm":name+"-head-joint","parent":root_id,
+        chest=chest_motion(name,duration,4.)
+        chest_transform=transform(neck); chest_transform["p"]=translated(chest,neck,start)
+        layers.append({"ddd":0,"ind":chest_id,"ty":3,"nm":name+"-chest-joint","parent":root_id,
+                       "ks":chest_transform,"ip":start,"op":end,"st":0})
+        layers.append({"ddd":0,"ind":head_id,"ty":3,"nm":name+"-head-joint","parent":chest_id,
                        "ks":transform(neck,animated(motion["head"],start) if "head" in motion else None),
                        "ip":start,"op":end,"st":0})
         for part in ["scarf","head","left-ear","right-ear","left-paw","right-paw","torso","tail"]:
@@ -266,17 +293,18 @@ def build():
             elif part=="right-paw": pivot=pose.get("other_pivot",(pose["neck"][0]+30,pose["neck"][1]+45))
             elif part=="tail":
                 pivots={"resting":(219,186),"blink":(219,186),"attentive":(218,151),"thinking":(211,183),
-                        "saved":(205,183),"reviewed":(222,184),"recovery":(209,177),"greeting":(188,188)}
+                        "submitted":(219,186),"saved":(205,183),"reviewed":(222,184),"recovery":(209,177),"greeting":(188,188)}
                 pivot=pivots[name]
             else: pivot=pose["neck"]
             pivot=(pivot[0]+offset[0],pivot[1]+48+offset[1])
             rotation=animated(motion[part],start) if part in motion and part!="head" else None
             part_transform=transform(pivot,rotation)
-            if part == "torso" and name in ["resting","attentive"]:
-                breathe(part_transform,(center[0]+offset[0],center[1]+offset[1]),duration,start,
-                        .4 if name == "attentive" else 1)
+            if part == "left-paw" and name == "submitted":
+                part_transform["p"]=translated(chest_motion(name,duration,3.),pivot,start)
+            if part == "torso":
+                breathe(part_transform,(center[0]+offset[0],center[1]+offset[1]),chest,neck[1],start)
             layers.append({"ddd":0,"ind":next_index,"ty":2,"nm":part,"refId":"approved-artwork",
-                           "parent":head_id if part in ["head","left-ear","right-ear"] else root_id,
+                           "parent":head_id if part in ["head","left-ear","right-ear"] else chest_id if part=="scarf" else root_id,
                            "ks":part_transform,"masksProperties":masks_for(parts[part],offset),
                            "ip":start,"op":end,"st":0,"sr":1,"bm":0})
             next_index+=1
@@ -306,7 +334,8 @@ def build():
     DEST.mkdir(parents=True,exist_ok=True)
     lids.save(DEST/"pip-eyelids.png")
     shutil.copy2(SOURCE,DEST/"pip-artwork.png")
-    authored_peek(animation,next_index,TODAY_END,animated,masks_for,transform,breathe)
+    authored_peek(animation,next_index,TODAY_END,animated,masks_for,transform,breathe,
+                  translated,chest_motion,rotations,[(n,d) for n,_,d in CLIPS])
     (DEST/"pip.json").write_text(json.dumps(animation,separators=(",",":"))+"\n")
     (Path(__file__).parent/"pose-registration.json").write_text(json.dumps(manifests,indent=2)+"\n")
     print(json.dumps({"layers":len(layers),"animationBytes":(DEST/"pip.json").stat().st_size,

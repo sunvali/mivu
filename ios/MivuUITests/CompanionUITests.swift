@@ -66,7 +66,7 @@ import XCTest
             XCTAssertTrue(app.buttons["logMeal"].isHittable)
             app.tabBars.buttons["Coach"].tap()
             enter("Two eggs, three bread slices and salad", in: app)
-            try await Task.sleep(for: .seconds(6.5))
+            try await Task.sleep(for: .seconds(8.5))
             XCTAssertEqual(app.textFields["coachInput"].value as? String, "Two eggs, three bread slices and salad")
             XCTAssertTrue(app.keyboards.firstMatch.exists)
             XCTAssertTrue(app.buttons["coachSend"].isHittable)

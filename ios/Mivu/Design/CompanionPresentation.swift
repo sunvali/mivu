@@ -3,7 +3,7 @@ import Observation
 
 enum CompanionPose: Int, CaseIterable {
     case resting = 0, attentive = 1, thinking = 2, saved = 3
-    case reviewed = 4, recovery = 5, greeting = 6
+    case reviewed = 4, recovery = 5, greeting = 6, submitted = 7
 }
 
 enum CompanionSurface: Hashable {
@@ -31,6 +31,18 @@ struct CompanionEvent: Equatable {
     }
 }
 
+struct CompanionSubmission: Equatable {
+    let profileID: UUID
+    let operationID: UUID
+    let acceptedAt: Date
+
+    fileprivate struct Key: Hashable {
+        let profileID: UUID
+        let operationID: UUID
+    }
+    fileprivate var key: Key { Key(profileID: profileID, operationID: operationID) }
+}
+
 struct CompanionContext {
     var surface: CompanionSurface?
     var isTyping: Bool
@@ -56,6 +68,8 @@ struct CompanionOutput: Equatable {
     private var profileID: UUID?
     private var attachedAt: Date?
     private var received: Set<CompanionEvent.Key> = []
+    private var receivedSubmissions: Set<CompanionSubmission.Key> = []
+    private var pendingSubmission: CompanionSubmission?
     private var pending: CompanionEvent?
     private var latestCommit: Date?
     private var active: Reaction?
@@ -64,7 +78,8 @@ struct CompanionOutput: Equatable {
 
     init() {}
 
-    func attach(profileID: UUID?, existingEvents: [CompanionEvent], now: Date) {
+    func attach(profileID: UUID?, existingEvents: [CompanionEvent],
+                existingSubmissions: [CompanionSubmission] = [], now: Date) {
         if self.profileID != profileID {
             clearReactions()
             attachedAt = profileID == nil ? nil : now
@@ -75,7 +90,23 @@ struct CompanionOutput: Equatable {
         for event in existingEvents where event.profileID == profileID {
             received.insert(event.key)
         }
+        for submission in existingSubmissions where submission.profileID == profileID {
+            receivedSubmissions.insert(submission.key)
+        }
         if profileID == nil { clearReactions() }
+    }
+
+    @discardableResult func receive(_ submission: CompanionSubmission, now: Date) -> Bool {
+        guard submission.profileID == profileID,
+              receivedSubmissions.insert(submission.key).inserted else { return false }
+        let age = now.timeIntervalSince(submission.acceptedAt)
+        guard age >= 0, age < MivuMotion.feedbackLifetime else { return false }
+        if let attachedAt, submission.acceptedAt < attachedAt { return false }
+        if let latestCommit, submission.acceptedAt < latestCommit { return false }
+        clearReactions()
+        pendingSubmission = submission
+        showRestAfterCharacterChange = false
+        return true
     }
 
     func receive(_ event: CompanionEvent, now: Date) {
@@ -90,6 +121,9 @@ struct CompanionOutput: Equatable {
     }
 
     func resolve(context: CompanionContext, now: Date) -> CompanionOutput {
+        if let pendingSubmission, now.timeIntervalSince(pendingSubmission.acceptedAt) >= MivuMotion.feedbackLifetime {
+            self.pendingSubmission = nil
+        }
         if let pending, now.timeIntervalSince(pending.committedAt) >= MivuMotion.feedbackLifetime {
             self.pending = nil
         }
@@ -104,6 +138,7 @@ struct CompanionOutput: Equatable {
         }
 
         guard playback != .hidden else {
+            if pendingSubmission != nil || active?.pose == .submitted { clearReactions() }
             active = nil
             return output(pose: semanticPose, playback: .hidden)
         }
@@ -121,6 +156,16 @@ struct CompanionOutput: Equatable {
 
         if context.needsRecovery || context.isTyping {
             return output(pose: semanticPose, playback: playback)
+        }
+
+        if pendingSubmission != nil {
+            pendingSubmission = nil
+            greetingAvailable = false
+            active = Reaction(pose: .submitted, deadline: now.addingTimeInterval(MivuMotion.submitted))
+        }
+
+        if let active, active.pose == .submitted, now < active.deadline {
+            return output(pose: .submitted, playback: playback, reaction: active)
         }
 
         if let pending {
@@ -161,6 +206,7 @@ struct CompanionOutput: Equatable {
         profileID = nil
         attachedAt = nil
         received.removeAll()
+        receivedSubmissions.removeAll()
         latestCommit = nil
         clearReactions()
         greetingAvailable = true
@@ -174,6 +220,7 @@ struct CompanionOutput: Equatable {
     }
 
     private func clearReactions() {
+        pendingSubmission = nil
         pending = nil
         active = nil
     }

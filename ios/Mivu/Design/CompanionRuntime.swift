@@ -90,7 +90,7 @@ import UIKit
         }
         guard let player else { isPaused = true; return }
         let freshReaction = output.reactionID != nil && output.reactionID != consumedReaction
-        let oneShot = [.saved, .reviewed, .greeting].contains(output.pose)
+        let oneShot = [.submitted, .saved, .reviewed, .greeting].contains(output.pose)
         let pose = oneShot && !freshReaction && (displayedPose != output.pose || !player.isAnimationPlaying) ? .resting : output.pose
         let surfaceChanged = surface != displayedSurface
         let changed = pose != displayedPose || surfaceChanged
@@ -116,7 +116,10 @@ import UIKit
                     }
                 }
             }
-            if changed { transition(player, crossfade: !surfaceChanged, render) } else { UIView.performWithoutAnimation(render) }
+            if changed {
+                transition(player, crossfade: !surfaceChanged,
+                    duration: pose == .submitted ? MivuMotion.submissionTransition : MivuMotion.companionTransition, render)
+            } else { UIView.performWithoutAnimation(render) }
         }
         if let reaction = output.reactionID { consumedReaction = reaction }
     }
@@ -136,7 +139,7 @@ import UIKit
 
     func fallbackAssetName(for pose: CompanionPose) -> String {
         let names = ["Resting", "Attentive", "Thinking", "Saved", "Reviewed", "Recovery", "Greeting"]
-        return character.fallbackAssetPrefix + names[pose.rawValue]
+        return character.fallbackAssetPrefix + names[pose == .submitted ? CompanionPose.attentive.rawValue : pose.rawValue]
     }
 
     private func pauseAndReset() {
@@ -152,11 +155,12 @@ import UIKit
         if let reaction = latestOutput?.reactionID { consumedReaction = reaction }
     }
 
-    private func transition(_ player: LottieAnimationView, crossfade: Bool = true, _ changes: @escaping () -> Void) {
+    private func transition(_ player: LottieAnimationView, crossfade: Bool = true,
+                            duration: TimeInterval = MivuMotion.companionTransition, _ changes: @escaping () -> Void) {
         transitionSnapshot?.removeFromSuperview()
         transitionSnapshot = nil
-        // Coach's registered rig joins at neutral; screen changes use the native tab transition.
-        guard crossfade, latestSurface == .today, player.window != nil,
+        // The brief submit bridge smooths any breathing phase without delaying playback.
+        guard crossfade, latestSurface == .today || displayedPose == .submitted, player.window != nil,
               let snapshot = player.snapshotView(afterScreenUpdates: false) else {
             UIView.performWithoutAnimation(changes)
             return
@@ -169,7 +173,7 @@ import UIKit
         UIView.performWithoutAnimation(changes)
         player.addSubview(snapshot)
         transitionSnapshot = snapshot
-        UIView.animate(withDuration: MivuMotion.companionTransition, delay: 0,
+        UIView.animate(withDuration: duration, delay: 0,
             options: [.curveEaseInOut, .beginFromCurrentState], animations: { snapshot.alpha = 0 }) { [weak self] _ in
                 snapshot.removeFromSuperview()
                 if self?.transitionSnapshot === snapshot { self?.transitionSnapshot = nil }
@@ -177,7 +181,7 @@ import UIKit
     }
 
     private static func marker(for pose: CompanionPose, surface: CompanionSurface = .today) -> String {
-        let name = ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"][pose.rawValue]
+        let name = ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"][pose.rawValue]
         return surface == .coach ? "coach-" + name : name
     }
 
@@ -202,7 +206,7 @@ import UIKit
                 return PreparedArtwork(animation: animation, images: images)
             }.value
             try check(descriptor, token)
-            for marker in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"].flatMap({ [$0, "coach-" + $0] }) {
+            for marker in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"].flatMap({ [$0, "coach-" + $0] }) {
                 guard prepared.animation.frameTime(forMarker: marker) != nil,
                       let duration = prepared.animation.durationFrameTime(forMarker: marker), duration > 0 else { throw AssetError.schema }
             }

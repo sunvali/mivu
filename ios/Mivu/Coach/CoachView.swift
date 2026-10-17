@@ -162,20 +162,10 @@ struct CoachView: View {
             requestFollow()
         }
     }
-    private var companionTurn: CoachTurn? {
-        coach.turns.first { $0.id == coach.activityTurnID } ?? coach.turns.last
-    }
-    private var companionRecovery: Bool {
-        coach.errorMessage != nil || companionTurn.map {
-            [.waitingForConnection, .waitingForNetwork, .needsRetry, .needsClarification].contains($0.state)
-        } == true
-    }
-    private var companionProcessing: Bool {
-        !companionRecovery && (coach.isSending || (coach.isWorking &&
-            (coach.activity != nil || companionTurn?.state == .analyzing || companionTurn?.state == .captured)))
-    }
+    private var companionRecovery: Bool { coach.companionNeedsRecovery }
+    private var companionProcessing: Bool { coach.companionIsProcessing }
     private func reportCompanionContext() {
-        onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: editing,
+        onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: editing && !coach.isSending,
             isProcessing: companionProcessing, needsRecovery: companionRecovery,
             playback: surfaceVisible && !showPhotos && !importFailed && !showingDetail ? .animated : .hidden))
     }

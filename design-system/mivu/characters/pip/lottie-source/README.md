@@ -8,18 +8,19 @@ composition. The approved PDF remains the authority for acting and composition.
 `build.py` authors image-layer joints and masks over the original illustration.
 It retains the painted fox identity and atlas, while moving the head, ears,
 paws, tail and scarf gently around grounded feet. The Lottie composition is
-512×512 with 162 layers. Its JSON is 976,470 bytes, within the app's exact
+512×512 with 110 layers. Its JSON is 709,146 bytes, within the app's exact
 1 MiB (1,048,576 byte) cap.
 
 | Marker | Duration | Acting |
 |---|---:|---|
 | resting | 8 s loop | Slow breathing, small ear/scarf/tail movement and embedded painted blink |
-| attentive | 6 s loop | Quieter continuous movement while typing |
+| attentive | 8 s loop | Quieter continuous movement while typing |
 | thinking | 4 s loop | Restrained continuous movement while processing |
 | recovery | 4 s loop | Calm, explanatory continuous movement so Pip stays alive |
-| saved | 1.5 s | Gentle acknowledgment, then resting |
-| reviewed | 1.8 s | Gentle review acknowledgment, then resting |
-| greeting | 2.2 s | Unhurried welcome, then resting |
+| submitted / coach-submitted | 800 ms | Immediate ear perk, nod and paw lift; visible response targets the first 100 ms |
+| saved | 800 ms | Gentle acknowledgment after durable capture, then resting |
+| reviewed | 1 s | Gentle review acknowledgment, then resting |
+| greeting | 1.2 s | Unhurried welcome, then resting |
 | Coach states | Same timings | Original seated painting remains the pose in every state and fallback |
 
 Apply Lottie timeline updates without UIKit view animation. UIKit view transitions
@@ -29,7 +30,9 @@ an explicit snapshot overlay over 350 ms; surface changes use the native tab
 transition without cross-surface artwork fading. Native focus and keyboard sizing
 may animate over 350 ms independently of the Lottie layer tree. The resting blink
 is authored into the continuous loop; there is no presenter idle blink timer.
-Keep motion gradual and readable, with grounded feet and no abrupt movement.
+Use 4–5 second chest/head breaths, grounded idle/typing paws, asymmetric ears,
+and tail/scarf follow-through. Keep motion gradual and readable, with grounded
+feet and no abrupt movement.
 
 Playback stops while Pip is hidden, covered, in the background, under Reduce
 Motion or Low Power Mode, or at serious or critical thermal state. Static
@@ -70,7 +73,21 @@ The source scripts and references are kept locally; runtime resources include
 the original atlas, coverage matte, eyelid patches and authored JSON. Static
 poses provide detailed artwork when motion is unavailable or disabled.
 
-## Verification status
+## Current verification notes
+
+Coach shares one painted rig. JSON is now 110 layers / 709,146 bytes (SHA-256
+`57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0`), reduced
+from 162 / 976,470 bytes; original PNG and fallback bytes are unchanged. Source QA
+at 148 pt Coach: resting head 2.325 pt/chest 2.292 pt; submitted head 2.412
+pt/paw tip 2.289 pt. These are not measured iPhone frame rates. Native submit
+feedback starts before its first await in a separate companion/operation/date
+profile; saved feedback waits for durable capture without delaying data work.
+Submitted uses an explicit 80 ms snapshot bridge on both surfaces; other Today pose
+changes use 350 ms. Cold load can take about one second, outlasting the 800 ms
+submitted marker; expired feedback does not replay. Current motion-pass counts are
+pending the root evidence record.
+
+## Historical baseline verification status
 
 Simulator motion and reference checks passed. Final native source `c0623c3`
 passed 523 tests with 0 failures and 1 expected interactive sign-in skip;

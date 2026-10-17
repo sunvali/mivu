@@ -140,6 +140,79 @@ import Testing
         #expect(resumed.nextDeadline == nil)
     }
 
+    @Test func savedAcknowledgementReturnsToQuietProcessingAfterEightTenths() {
+        let presentation = attached()
+        presentation.receive(event(), now: t)
+        #expect(presentation.resolve(context: context(processing: true), now: t).pose == .saved)
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.799)).pose == .saved)
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.8)).pose == .thinking)
+    }
+
+    @Test func acceptedSubmissionPrecedesACoalescedDurableReceipt() {
+        let presentation = attached()
+        let submission = CompanionSubmission(profileID: owner, operationID: UUID(), acceptedAt: t)
+        presentation.receive(submission, now: t)
+        presentation.receive(CompanionEvent(profileID: owner, operationID: submission.operationID,
+            kind: .saved, committedAt: t), now: t)
+        let accepted = presentation.resolve(context: context(processing: true), now: t)
+        #expect(accepted.pose == .submitted)
+        #expect(accepted.nextDeadline == t.addingTimeInterval(0.8))
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.799)) == accepted)
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.8)).pose == .saved)
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(1.6)).pose == .thinking)
+    }
+
+    @Test func acceptedSubmissionReturnsToThinkingAndNeverReplaysDuplicate() {
+        let presentation = attached()
+        let operation = UUID()
+        presentation.receive(CompanionSubmission(profileID: owner, operationID: operation, acceptedAt: t), now: t)
+        let first = presentation.resolve(context: context(processing: true), now: t)
+        #expect(first.pose == .submitted && first.reactionID != nil)
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.8)).pose == .thinking)
+        presentation.receive(CompanionSubmission(profileID: owner, operationID: operation,
+            acceptedAt: t.addingTimeInterval(1)), now: t.addingTimeInterval(1))
+        let duplicate = presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(1))
+        #expect(duplicate.pose == .thinking && duplicate.reactionID == nil)
+    }
+
+    @Test(arguments: ["typing", "recovery", "hidden", "static", "background", "profile"])
+    func interruptedSubmissionDropsItsQueuedReceipt(interruption: String) {
+        let presentation = attached()
+        let submission = CompanionSubmission(profileID: owner, operationID: UUID(), acceptedAt: t)
+        presentation.receive(submission, now: t)
+        presentation.receive(CompanionEvent(profileID: owner, operationID: submission.operationID,
+            kind: .saved, committedAt: t), now: t)
+        #expect(presentation.resolve(context: context(processing: true), now: t).pose == .submitted)
+        let at = t.addingTimeInterval(0.1)
+        switch interruption {
+        case "typing": _ = presentation.resolve(context: context(typing: true), now: at)
+        case "recovery":
+            #expect(presentation.resolve(context: context(recovery: true), now: at).pose == .recovery)
+        case "hidden": _ = presentation.resolve(context: context(playback: .hidden), now: at)
+        case "static": _ = presentation.resolve(context: context(playback: .staticPose), now: at)
+        case "background": presentation.enterBackground()
+        default: presentation.attach(profileID: UUID(), existingEvents: [], now: at)
+        }
+        presentation.attach(profileID: owner, existingEvents: [], existingSubmissions: [submission], now: at)
+        presentation.receive(submission, now: at)
+        let resumed = presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(1))
+        #expect(resumed.pose == .thinking)
+        #expect(resumed.reactionID == nil && resumed.nextDeadline == nil)
+    }
+
+    @Test func existingStaleFutureAndOtherProfileSubmissionsNeverReplay() {
+        let presentation = CompanionPresentation()
+        let existing = CompanionSubmission(profileID: owner, operationID: UUID(), acceptedAt: t)
+        presentation.attach(profileID: owner, existingEvents: [], existingSubmissions: [existing], now: t)
+        for submission in [existing,
+            CompanionSubmission(profileID: owner, operationID: UUID(), acceptedAt: t.addingTimeInterval(-1)),
+            CompanionSubmission(profileID: owner, operationID: UUID(), acceptedAt: t.addingTimeInterval(1)),
+            CompanionSubmission(profileID: UUID(), operationID: UUID(), acceptedAt: t)] {
+            presentation.receive(submission, now: t)
+            #expect(presentation.resolve(context: context(processing: true), now: t).pose == .thinking)
+        }
+    }
+
     @Test func reviewedFinishesAtConfiguredDuration() {
         let presentation = attached()
         presentation.receive(event(kind: .reviewed), now: t)

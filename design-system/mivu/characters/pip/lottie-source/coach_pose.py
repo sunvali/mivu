@@ -10,7 +10,8 @@ SOURCE=ROOT/'design-system/mivu/characters/pip/context.png'
 DEST=ROOT/'ios/Mivu/Resources/Characters/pip'
 SHA='1b3b0ec7ffdb43fa2993732ab836857c785b3f1a0da158f3f06dca1935345408'
 
-def authored_peek(animation, index, first_frame, animated, masks_for, transform, breathe):
+def authored_peek(animation, index, first_frame, animated, masks_for, transform, breathe,
+                  translated, chest_motion, rotations, clips):
     assert hashlib.sha256(SOURCE.read_bytes()).hexdigest()==SHA
     crop=(845,612,990,754)
     rgb=np.asarray(Image.open(SOURCE).convert('RGB').crop(crop)).astype(float)
@@ -64,58 +65,66 @@ def authored_peek(animation, index, first_frame, animated, masks_for, transform,
     take('left-paw',polygon([(76,119),(94,119),(102,139),(72,142),(69,129)]))
     take('right-paw',polygon([(107,120),(120,120),(126,139),(99,142),(99,129)]))
     take('tail',polygon([(0,92),(35,90),(37,113),(65,142),(0,142)]))
-    head=remaining & polygon([(0,0),(145,0),(145,109),(54,109),(0,84)])
-    take('left-ear',head & polygon([(21,25),(69,39),(59,82),(29,82)]))
-    take('right-ear',head & polygon([(87,41),(111,0),(127,0),(133,55),(116,65)]))
+    head=remaining & polygon([(0,0),(145,0),(145,99),(118,103),(79,107),(56,105),(43,98),(0,84)])
+    take('left-ear',head & polygon([(23,28),(48,31),(61,37),(63,52),(58,65),(50,78),(49,85),(38,80),(28,65)]))
+    # The painted eyebrow starts at y=46 and belongs to the rigid face, not this ear.
+    take('right-ear',head & polygon([(80,-1),(145,-1),(145,42),(119,42),(108,40),(89,42),(80,39)]))
     take('head',head)
     parts['torso']=remaining
     assert np.array_equal(np.logical_or.reduce(list(parts.values())),whole)
-    parts={name:(np.asarray(Image.fromarray(part.astype('uint8')*255).filter(ImageFilter.MaxFilter(3)))>0)&whole
+    parts={name:(np.asarray(Image.fromarray(part.astype('uint8')*255).filter(
+                ImageFilter.MaxFilter(3 if name.endswith('ear') else 5)))>0)&whole
            for name,part in parts.items()}
-    clips=[('resting',480),('blink',18),('attentive',360),('thinking',240),
-           ('saved',90),('reviewed',108),('recovery',240),('greeting',132)]
-    start=first_frame
+    # One rig shares its painted masks across all clips, keeping the JSON below 1 MiB.
+    timeline=[]; start=first_frame
     for name,duration in clips:
-        end=start+duration+1
-        root=index;head_joint=index+1;index+=2
-        root_transform=transform()
-        root_transform.update(p=fixed(position),s=fixed([scale*100,scale*100,100]))
-        animation['layers'].append(dict(ddd=0,ind=root,ty=3,nm='coach-'+name+'-root',ks=root_transform,ip=start,op=end,st=0))
-        def keys(*values):return [(round(t*duration,3),v) for t,v in values]
-        quiet=.4 if name=='attentive' else 1
-        head_motion=keys((0,0),(.25,-.4*quiet),(.5,0),(.75,.3*quiet),(1,0))
-        if name=='saved': head_motion=keys((0,0),(.35,1.6),(.7,-.4),(1,0))
-        if name=='reviewed': head_motion=keys((0,0),(.4,-1.3),(.75,.4),(1,0))
-        if name=='greeting': head_motion=keys((0,0),(.35,-1.2),(.7,.4),(1,0))
-        if name=='recovery': head_motion=keys((0,0),(.4,1),(1,0))
-        animation['layers'].append(dict(ddd=0,ind=head_joint,ty=3,nm='coach-head-joint',parent=root,
-            ks=transform((94,105),animated(head_motion,start)),ip=start,op=end,st=0))
-        pivots={'head':(94,105),'left-ear':(53,65),'right-ear':(113,52),
-                'tail':(55,138),'scarf':(101,112),'left-paw':(88,138),'right-paw':(111,138),'torso':(98,141)}
-        for part in ['scarf','left-paw','right-paw','head','left-ear','right-ear','torso','tail']:
-            motion=None
-            if part=='tail':motion=keys((0,0),(.25,.7*quiet),(.5,0),(.75,-.5*quiet),(1,0))
-            if part=='scarf':motion=keys((0,0),(.3,-.6*quiet),(.6,.4*quiet),(1,0))
-            if part=='left-ear':motion=keys((0,0),(.63,0),(.72,-.7*quiet),(.86,0),(1,0))
-            if part=='right-ear':motion=keys((0,0),(.18,0),(.28,.6*quiet),(.4,0),(1,0))
-            if part=='left-paw' and name=='greeting':motion=keys((0,0),(.25,-3),(.48,1.5),(.7,-2),(1,0))
-            ks=transform(pivots[part],animated(motion,start) if motion else None)
-            if part=='torso':breathe(ks,pivots[part],duration,start,.45*quiet)
-            animation['layers'].append(dict(ddd=0,ind=index,ty=2,nm='coach-'+part,refId='coach-peek',
-                parent=head_joint if part in ['head','left-ear','right-ear'] else root,
-                ks=ks,masksProperties=masks_for(parts[part],(0,0)),ip=start,op=end,st=0))
-            index+=1
-        blink_keys=None
-        if name=='resting':blink_keys=[(0,0),(300,0),(306,100),(310,100),(318,0),(duration,0)]
-        if name=='attentive':blink_keys=[(0,0),(240,0),(246,100),(250,100),(258,0),(duration,0)]
-        if name=='blink':blink_keys=[(0,0),(6,100),(10,100),(18,0)]
-        if blink_keys:
-            ks=transform();ks['o']=animated(blink_keys,start)
-            animation['layers'].insert(0,dict(ddd=0,ind=index,ty=2,nm='coach-painted-eyelids',refId='coach-eyelids',
-                parent=head_joint,ks=ks,ip=start,op=end,st=0));index+=1
+        timeline.append((name,start,duration))
         animation['markers'].append(dict(cm='coach-'+name,tm=start,dr=duration))
-        start=end
-    animation['op']=start
+        start+=duration+1
+    end=start
+    root=index; chest_joint=index+1; head_joint=index+2; index+=3
+    def layer(identifier,name,ks,parent=None,**extra):
+        result=dict(ddd=0,ind=identifier,ty=3,nm='coach-'+name,ks=ks,ip=first_frame,op=end,st=0)
+        if parent is not None: result['parent']=parent
+        result.update(extra)
+        return result
+    root_transform=transform()
+    root_transform.update(p=fixed(position),s=fixed([scale*100,scale*100,100]))
+    animation['layers'].append(layer(root,'root',root_transform))
+    chest_keys=[]; paw_keys=[]; rotation_keys={name:[] for name in parts}; blink_keys=[]
+    for name,start,duration in timeline:
+        chest_keys.extend((start+t,y) for t,y in chest_motion(name,duration,3.2))
+        paw_keys.extend((start+t,y) for t,y in (chest_motion(name,duration,3.) if name=='submitted'
+                                               else [(0,0),(duration,0)]))
+        motion=rotations(name,duration)
+        for part in parts:
+            authored=motion.get(part,[(0,0),(duration,0)])
+            if name!='submitted':
+                authored=[(t,v*.65) for t,v in authored]
+            rotation_keys[part].extend((start+t,v) for t,v in authored)
+        blink=[(0,0),(duration,0)]
+        if name in ['resting','attentive']:
+            blink=[(0,0),(300,0),(306,100),(310,100),(318,0),(duration,0)]
+        if name=='blink': blink=[(0,0),(6,100),(10,100),(18,0)]
+        blink_keys.extend((start+t,v) for t,v in blink)
+    chest_transform=transform((94,105))
+    chest_transform['p']=translated(chest_keys,(94,105),0)
+    animation['layers'].append(layer(chest_joint,'chest-joint',chest_transform,root))
+    animation['layers'].append(layer(head_joint,'head-joint',
+        transform((94,105),animated(rotation_keys['head'],0)),chest_joint))
+    pivots={'head':(94,105),'left-ear':(53,70),'right-ear':(110,40),
+            'tail':(55,138),'scarf':(101,112),'left-paw':(88,124),'right-paw':(111,124),'torso':(98,141)}
+    for part in ['scarf','left-paw','right-paw','head','left-ear','right-ear','torso','tail']:
+        ks=transform(pivots[part],animated(rotation_keys[part],0) if part!='head' else None)
+        if part=='left-paw': ks['p']=translated(paw_keys,pivots[part],0)
+        if part=='torso': breathe(ks,pivots[part],chest_keys,105,0)
+        parent=head_joint if part in ['head','left-ear','right-ear'] else chest_joint if part=='scarf' else root
+        animation['layers'].append(layer(index,part,ks,parent,ty=2,refId='coach-peek',
+            masksProperties=masks_for(parts[part],(0,0))))
+        index+=1
+    ks=transform();ks['o']=animated(blink_keys,0)
+    animation['layers'].insert(0,layer(index,'painted-eyelids',ks,head_joint,ty=2,refId='coach-eyelids'))
+    animation['op']=end
     animation['meta']['contextSHA256']=SHA
     fallback=Image.new('RGBA',(512,512))
     resized=art.resize((round(art.width*scale),356),Image.Resampling.LANCZOS)

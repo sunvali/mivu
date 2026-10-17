@@ -50,3 +50,34 @@ to the Lottie loop, with no periodic presentation-layer wakeup. Repeat rendering
 and appearance updates do not reset the current loop. Hidden, covered,
 background, Reduce Motion, low power and serious thermal conditions still stop
 all decorative playback. User actions never wait for a gesture.
+
+## Owner-approved expressive motion revision — 17 October
+
+Keep the exact painted Pip and original Lottie artwork unchanged. The approved
+expressive pass uses grounded idle/typing paws, asymmetric ears, tail/scarf
+follow-through and 4–5 second chest/head breathing cycles. Timings are: resting
+8 seconds, attentive 8 seconds, thinking/recovery 4 seconds, submitted 800 ms,
+saved 800 ms after durable capture, reviewed 1 second and greeting 1.2 seconds.
+Submitted and coach-submitted begin an ear perk, nod and paw-lift response
+immediately, targeting the first visible motion within 100 ms.
+
+Coach uses one shared painted rig. The Lottie JSON went from 162 layers /
+976,470 bytes to 110 / 709,146 bytes (SHA-256
+`57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0`); original
+PNG and fallback bytes remain unchanged. At 148 pt Coach source QA measured
+resting head 2.325 pt, chest 2.292 pt, submitted head 2.412 pt and paw tip
+2.289 pt. These are source QA values, not measured iPhone FPS.
+
+Native accepted submission starts feedback before its first await using a
+separate signal containing profile ID, operation ID and acceptance time. Saved feedback queues
+behind durable capture and never delays data work. Submitted uses an explicit
+80 ms snapshot bridge on both surfaces; other Today pose changes use 350 ms.
+Error, typing, hidden/background and Reduce Motion cancel stale feedback. Cold
+load can take about one second, longer than the submitted 800 ms marker, so an
+expired reaction does not replay. Current motion-pass counts and final evidence
+remain pending the root task's record.
+
+Acting references: [Adobe animation principles](https://www.adobe.com/creativecloud/animation/discover/principles-of-animation.html),
+[Duolingo character motion](https://blog.duolingo.com/world-character-visemes/),
+[Apple motion guidance](https://developer.apple.com/design/human-interface-guidelines/motion),
+and [Lottie iOS rendering guidance](https://github.com/airbnb/lottie/blob/master/ios.md).

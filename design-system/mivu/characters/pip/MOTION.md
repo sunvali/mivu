@@ -30,31 +30,39 @@ character design.
 The 512×512 Lottie composition uses the illustrated source atlas through
 independent image layers, masks and authored transforms. Head, ears, torso,
 paws, tail and scarf move gently around grounded feet. Continuous motion keeps
-Pip visibly alive without abrupt gestures: slow breathing, small ear and scarf
-settles, a restrained tail movement and an occasional embedded painted blink.
+Pip visibly alive without abrupt gestures: 4–5 second chest/head breathing,
+grounded idle and typing paws, asymmetric ear motion, tail/scarf follow-through,
+and an occasional embedded painted blink.
 The blink is part of the resting loop; the presenter does not schedule a
 separate idle blink timer.
 
 | State | Duration | Acting and meaning |
 | --- | ---: | --- |
 | Resting | 8 s loop | Continuous quiet breathing, ear/scarf/tail motion and embedded painted blink |
-| Attentive | 6 s loop | Quieter continuous motion while the user types |
+| Attentive | 8 s loop | Quieter continuous motion while the user types |
 | Thinking | 4 s loop | Slow, restrained movement while processing |
 | Recovery | 4 s loop | Calm, explanatory movement; never a frozen frame or success signal |
-| Saved | 1.5 s | Gentle acknowledgment after durable local capture, then resting |
-| Reviewed | 1.8 s | Gentle review acknowledgment, then resting |
-| Greeting | 2.2 s | Unhurried welcome, then resting |
+| Submitted | 800 ms | Immediate ear perk, nod and paw lift; visible response targets the first 100 ms |
+| Saved | 800 ms | Gentle acknowledgment after durable local capture, then resting |
+| Reviewed | 1 s | Gentle review acknowledgment, then resting |
+| Greeting | 1.2 s | Unhurried welcome, then resting |
 | Coach | Same state timings | Seated original painting throughout; static fallback uses that same pose |
 
 Do not animate the Lottie layer tree through UIKit view transitions: that can
 blend unrelated atlas poses and flash other Pip scenes. Apply every timeline
 update without UIKit view animation. Coach keeps the same seated rig through
-neutral joins, with no artwork dissolve. Today may fade an explicit snapshot
-overlay over 350 ms. Surface changes use the native tab transition and do not
-fade artwork across surfaces. The 350 ms native focus and keyboard sizing
-animation remains separate from character rendering. Saving and navigation never
-wait for character animation. Saved feedback means local capture only; it does not
-imply analysis or backup completion. Recovery is not a success state.
+neutral joins, with no artwork dissolve. Submitted uses an explicit 80 ms
+snapshot bridge on both surfaces; other Today pose changes use 350 ms. Surface
+changes use the native tab transition and do not fade artwork across surfaces.
+The 350 ms native focus and keyboard sizing animation remains separate from
+character rendering. Saving and navigation never wait for character animation.
+Accepted submit feedback begins before its first await using a separate signal
+with profile ID, operation ID and acceptance time. Saved feedback is emitted
+after durable capture and queues behind the submit gesture; data work never waits.
+Error, typing, hidden/background and Reduce
+Motion cancel stale feedback. Saved means durable local capture only. Cold load
+can outlast the 800 ms submitted marker; expired reactions do not replay. Recovery
+is not a success state.
 
 ## Lifecycle and accessibility
 
@@ -65,7 +73,17 @@ unavailable. VoiceOver ignores decorative art; native status text carries
 meaning. Preserve native controls, keyboard behavior and scrolling, and never
 communicate saved or error status through color or motion alone.
 
-## Validation status
+## Current source QA and validation status
+
+At 148 pt Coach, source QA measured resting head 2.325 pt/chest 2.292 pt and
+submitted head 2.412 pt/paw tip 2.289 pt. These are not measured iPhone FPS. Coach
+shares one painted rig; JSON fell from 162 layers / 976,470 bytes to 110 /
+709,146 bytes (SHA-256 `57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0`).
+Original PNG and fallback bytes are unchanged. Current motion-pass counts are
+pending the root evidence record. The following results are historical baseline
+evidence only.
+
+## Historical baseline validation
 
 Simulator motion and reference checks passed. Final native source `c0623c3`
 passed 523 tests with 0 failures and 1 expected interactive sign-in skip;

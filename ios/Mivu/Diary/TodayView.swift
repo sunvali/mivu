@@ -184,7 +184,9 @@ struct DiaryRootView: View {
         }
         .onChange(of: model.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: model.companionReviewEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: coach.companionSubmission) { _, _ in receiveCompanionSubmission() }
         .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: [coach.isSending, coach.companionNeedsRecovery, coach.companionIsProcessing]) { _, _ in refreshCompanion() }
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
@@ -247,7 +249,7 @@ struct DiaryRootView: View {
             if value == .background { continueInBackground() }
             if value == .active {
                 companion.attach(profileID: model.isChangingProfile ? nil : model.snapshot?.profile.id,
-                                 existingEvents: companionEvents, now: Date())
+                                 existingEvents: companionEvents, existingSubmissions: companionSubmissions, now: Date())
                 refreshCompanion()
             }
             if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(); model.queueBackup() }
@@ -265,6 +267,7 @@ struct DiaryRootView: View {
     private var companionEvents: [CompanionEvent] {
         [model.companionCaptureEvent, model.companionReviewEvent, coach.companionCaptureEvent].compactMap { $0 }
     }
+    private var companionSubmissions: [CompanionSubmission] { [coach.companionSubmission].compactMap { $0 } }
     private var selectedCompanionSurface: CompanionSurface? {
         selectedTab == "today" ? .today : selectedTab == "coach" ? .coach : nil
     }
@@ -283,16 +286,32 @@ struct DiaryRootView: View {
         companionRuntime.stop()
         companion.enterBackground()
         companion.attach(profileID: model.isChangingProfile ? nil : model.snapshot?.profile.id,
-                         existingEvents: companionEvents, now: Date())
+                         existingEvents: companionEvents, existingSubmissions: companionSubmissions, now: Date())
         refreshCompanion()
     }
     private func receiveCompanionEvent(_ event: CompanionEvent?) {
         guard phase == .active, !model.isChangingProfile, let event, event.profileID == model.snapshot?.profile.id else { return }
+        // Observation may coalesce a fast write; acceptance must reach the presenter first.
+        receiveCompanionSubmission()
         companion.receive(event, now: Date())
+        refreshCompanion()
+    }
+    private func receiveCompanionSubmission() {
+        guard phase == .active, !model.isChangingProfile, let submission = coach.companionSubmission,
+              submission.profileID == model.snapshot?.profile.id else { return }
+        guard companion.receive(submission, now: Date()) else { return }
+        if companionContext.surface == .coach, coach.isSending || !coach.draft.isValid {
+            companionContext.isTyping = false
+        }
         refreshCompanion()
     }
     private func refreshCompanion() {
         var context = companionContext
+        if context.surface == .coach {
+            context.needsRecovery = coach.companionNeedsRecovery
+            context.isProcessing = coach.companionIsProcessing
+            if coach.isSending { context.isTyping = false }
+        }
         context.playback = MotionPolicy.playback(
             reduceMotion: reduceMotion, lowPower: lowPower, thermalState: thermalState,
             sceneActive: phase == .active && hasLoaded && model.snapshot != nil && !model.isChangingProfile,

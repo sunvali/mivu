@@ -99,6 +99,81 @@ private actor OrderedReceiptRefreshes {
         #expect(try await store.snapshot().coachTurns.map(\.id) == [draft.submissionID])
     }
 
+    @Test func acceptedSendSignalsBeforeRefreshAndRetainsPriorErrorUntilSaved() async throws {
+        let (path, store, profile, _) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: path) }
+        let gate = ReceiptRefreshGate()
+        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+            await gate.pause()
+            return try await store.snapshot(expectedProfileID: id)
+        })
+        diary.snapshot = try await store.snapshot()
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
+        coach.enterBackground()
+        coach.errorMessage = "Synthetic prior failure"
+        coach.draft.text = "Synthetic submit"
+        let operation = coach.draft.submissionID
+        let before = Date()
+        let sending = Task { await coach.send() }
+        await gate.waitUntilPaused()
+        let submission = try #require(coach.companionSubmission)
+        #expect(submission.profileID == profile.id && submission.operationID == operation)
+        #expect(submission.acceptedAt >= before && submission.acceptedAt <= Date())
+        #expect(coach.isSending && coach.companionIsProcessing && !coach.companionNeedsRecovery)
+        #expect(coach.errorMessage == "Synthetic prior failure")
+        #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
+        #expect(!(await coach.send()))
+        #expect(coach.companionSubmission == submission)
+        await gate.release()
+        #expect(await sending.value)
+        #expect(coach.companionCaptureEvent?.operationID == operation)
+        #expect(coach.errorMessage == nil)
+    }
+
+    @Test func invalidSendNeverSignalsAndFailedSaveImmediatelyNeedsRecovery() async throws {
+        let (path, store, _, _) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: path) }
+        let diary = DiaryViewModel(store: store); diary.snapshot = try await store.snapshot()
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
+        coach.enterBackground()
+        #expect(!(await coach.send()))
+        #expect(coach.companionSubmission == nil)
+        coach.draft.text = "Synthetic failed capture"
+        try FileManager.default.removeItem(at: path); try Data([1]).write(to: path)
+        #expect(!(await coach.send()))
+        #expect(coach.companionSubmission?.operationID == coach.draft.submissionID)
+        #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
+        #expect(coach.companionNeedsRecovery && !coach.companionIsProcessing)
+    }
+
+    @Test(arguments: [false, true])
+    func newlyReportedErrorInterruptsSubmissionAndSurvivesItsSuccessfulSave(repeatsPriorText: Bool) async throws {
+        let (path, store, _, _) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: path) }
+        let gate = ReceiptRefreshGate()
+        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+            await gate.pause()
+            return try await store.snapshot(expectedProfileID: id)
+        })
+        diary.snapshot = try await store.snapshot()
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
+        coach.enterBackground()
+        coach.errorMessage = "Synthetic prior worker error"
+        coach.draft.text = "Synthetic next capture"
+        let sending = Task { await coach.send() }
+        await gate.waitUntilPaused()
+        #expect(!coach.companionNeedsRecovery)
+        let newerError = repeatsPriorText ? "Synthetic prior worker error" : "Synthetic newly reported worker error"
+        coach.errorMessage = newerError
+        #expect(coach.companionNeedsRecovery, "A new error must interrupt acceptance even when its text repeats")
+        #expect(!coach.companionIsProcessing)
+        await gate.release()
+        #expect(await sending.value)
+        #expect(coach.errorMessage == newerError, "Saving newer input must not erase another operation's newly reported error")
+        #expect(coach.companionNeedsRecovery)
+        #expect(coach.captureReceipt != nil)
+    }
+
     @Test func failedCapturePreservesDraftAndEmitsNothing() async throws {
         let (path, store, _, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }

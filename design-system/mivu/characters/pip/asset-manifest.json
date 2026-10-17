@@ -2,7 +2,7 @@
   "characterID": "pip",
   "displayName": "Pip",
   "schemaVersion": 1,
-  "status": "original illustrated living Lottie companion verified on simulator; private draft #17 open; physical-device acceptance pending",
+  "status": "expressive illustrated Lottie companion; focused native motion checks passed; complete native and UI verification pending",
   "created": "2026-10-17",
   "source": "Approved original Pip storyboard illustration with authored Lottie image layers, vector masks, joint transforms and eyelid patches. The separate Coach pose uses an exact crop of the approved context illustration. Preserve the selected fox identity and original painted pixels. No imported third-party character artwork.",
   "assets": [
@@ -34,18 +34,19 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip.json",
-    "sha256": "04feb486741ccf56f807b30a65cb0a31678c70e14570d8baf61e04c71388f086",
-    "bytes": 976470,
+    "sha256": "57adc8d26d0a02c40fe737f6fffec39355c05fdfe112e3628ae87094686978f0",
+    "bytes": 709146,
     "formatVersion": "5.12.2",
     "canvas": [
       512,
       512
     ],
-    "layers": 162,
+    "layers": 110,
     "markers": [
       "resting",
       "blink",
       "attentive",
+      "submitted",
       "thinking",
       "saved",
       "reviewed",
@@ -54,6 +55,7 @@
       "coach-resting",
       "coach-blink",
       "coach-attentive",
+      "coach-submitted",
       "coach-thinking",
       "coach-saved",
       "coach-reviewed",
@@ -96,19 +98,10 @@
     "fallbackGenerator": "design-system/mivu/characters/pip/lottie-source/fallbacks.py",
     "instructions": "design-system/mivu/characters/pip/lottie-source/README.md",
     "registration": "design-system/mivu/characters/pip/lottie-source/pose-registration.json",
-    "coachPoseRecipe": "design-system/mivu/characters/pip/lottie-source/coach_pose.py"
+    "coachPoseRecipe": "design-system/mivu/characters/pip/lottie-source/coach_pose.py",
+    "motionRegressionTests": "design-system/mivu/characters/pip/lottie-source/test_motion.py"
   },
   "targetRuntime": "Lottie iOS 4.6.1, Core Animation renderer",
-  "productionValidation": {
-    "nativeUnitSuite": "c0623c3: 523 passed, 0 failed, 1 expected interactive sign-in skip",
-    "completeUISuite": "6707440: 37 passed, 0 failed, 0 skipped, before isolated cold-load fix",
-    "coldLoadAndLifecycle": "c0623c3: 47 targeted checks passed, 0 failed",
-    "finalLightDarkCapture": "c0623c3: 1 passed, 0 failed after cold-load fix",
-    "actualRenderer": "Core Animation verified with actual rendered pixels and full-loop playback",
-    "visualReview": "original art, light/dark screens and dense native transition frames inspected; unrelated-atlas-pose flash corrected",
-    "draftPullRequest": "https://github.com/yakov103/mivu/pull/17",
-    "physicalDevice": "pending owner phone acceptance; no frame-time, energy or thermal claim"
-  },
   "fallbacks": [
     {
       "name": "PipResting",
@@ -219,8 +212,8 @@
   "authoringSources": [
     {
       "path": "design-system/mivu/characters/pip/lottie-source/coach_pose.py",
-      "sha256": "d28dcc4f5516465eb851393f61561d011ab670a204d10739e7de853ee6a4a810",
-      "bytes": 7947,
+      "sha256": "13384c21cc52eefd1919ad96460c27b86de8c1a60d1074e92d19fd66a1631283",
+      "bytes": 8167,
       "role": "Coach crop, matte, eyelid registration and Lottie marker recipe"
     },
     {
@@ -231,8 +224,8 @@
     },
     {
       "path": "design-system/mivu/characters/pip/lottie-source/build.py",
-      "sha256": "1814f2eccbf5acd31a9148b2076ef4b9442a4d51182309ef89c41ed1f644c52a",
-      "bytes": 17843,
+      "sha256": "c59f790f50aca570b9dd6c145b3b2d70ae32629a37c708124376b52265b4e64f",
+      "bytes": 19527,
       "role": "Lottie rig builder"
     },
     {
@@ -243,9 +236,25 @@
     },
     {
       "path": "design-system/mivu/characters/pip/lottie-source/README.md",
-      "sha256": "a880ba4e9ab820b5e19ed55e1f3b192d9601e8ba4d2cf29d7e117696a7cc4d84",
-      "bytes": 4542,
+      "sha256": "24003afe694464b7eefda20da9474cf3d7212cd17b562a8941c4eec9cc2bd758",
+      "bytes": 5678,
       "role": "Rig authoring and runtime documentation"
     }
-  ]
+  ],
+  "historicalValidation": {
+    "nativeUnitSuite": "c0623c3: 523 passed, 0 failed, 1 expected interactive sign-in skip",
+    "completeUISuite": "6707440: 37 passed, 0 failed, 0 skipped, before isolated cold-load fix",
+    "coldLoadAndLifecycle": "c0623c3: 47 targeted checks passed, 0 failed",
+    "finalLightDarkCapture": "c0623c3: 1 passed, 0 failed after cold-load fix",
+    "actualRenderer": "Core Animation verified with actual rendered pixels and full-loop playback",
+    "visualReview": "original art, light/dark screens and dense native transition frames inspected; unrelated-atlas-pose flash corrected",
+    "draftPullRequest": "https://github.com/yakov103/mivu/pull/17",
+    "physicalDevice": "pending owner phone acceptance; no frame-time, energy or thermal claim"
+  },
+  "productionValidation": {
+    "focusedMotion": "60 selected native checks passed, 0 failed, 0 skipped; complete native/UI verification pending",
+    "actualRenderer": "Core Animation; phone-size body regions and presentation-layer playback verified",
+    "draftPullRequest": "https://github.com/yakov103/mivu/pull/17",
+    "physicalDevice": "pending updated Release deployment and owner acceptance; no measured frame-time, energy or thermal claim"
+  }
 }

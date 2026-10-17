@@ -11,7 +11,7 @@ import Lottie
         #expect(player.animation != nil)
         #expect(runtime.displayedPose == .resting)
         #expect(player.currentRenderingEngine == .coreAnimation)
-        for name in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"] {
+        for name in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"] {
             #expect(player.animation?.frameTime(forMarker: name) != nil)
         }
     }
@@ -62,10 +62,10 @@ extension CompanionAssetTests {
         return window
     }
 
-    @Test func allSevenPosesAndRepeatedReactCanBeApplied() async throws {
+    @Test func allPosesAndRepeatedReactCanBeApplied() async throws {
         let runtime = try await ready()
         for pose in CompanionPose.allCases {
-            let reaction = [.saved, .reviewed, .greeting].contains(pose) ? UUID() : nil
+            let reaction = [.submitted, .saved, .reviewed, .greeting].contains(pose) ? UUID() : nil
             await runtime.apply(output(pose, reaction: reaction), darkMode: true)
             #expect(runtime.displayedPose == pose)
         }
@@ -233,8 +233,8 @@ extension CompanionAssetTests {
         let player = try #require(runtime.player)
         let window = try mount(player)
         defer { runtime.stop(); window.isHidden = true }
-        for pose in [CompanionPose.saved, .saved, .reviewed, .greeting, .resting] {
-            let duration: Double = pose == .saved ? MivuMotion.saved : pose == .reviewed
+        for pose in [CompanionPose.submitted, .saved, .saved, .reviewed, .greeting, .resting] {
+            let duration: Double = pose == .submitted ? MivuMotion.submitted : pose == .saved ? MivuMotion.saved : pose == .reviewed
                 ? MivuMotion.reviewed : pose == .greeting ? MivuMotion.greeting : MivuMotion.blink
             let began = ContinuousClock.now
             await runtime.apply(output(pose, reaction: UUID()), darkMode: false)
@@ -252,7 +252,7 @@ extension CompanionAssetTests {
             #expect(began.duration(to: .now) >= .seconds(duration - 0.04))
             #expect(runtime.displayedPose == .resting)
         }
-        #expect(runtime.triggerCount == 5)
+        #expect(runtime.triggerCount == 6)
     }
 
     @Test func ordinaryPoseUpdatesDoNotCreateReactions() async throws {
