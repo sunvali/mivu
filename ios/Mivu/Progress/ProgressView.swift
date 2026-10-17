@@ -7,7 +7,7 @@ struct GoalSummaryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Your goals").font(.headline)
+            Label { Text("Your goals") } icon: { Image(systemName: "target").foregroundStyle(Color.diaryEnergy) }.font(.headline)
             if let goal = report.goal {
                 if let target = goal.targets.kcal {
                     Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
@@ -16,9 +16,9 @@ struct GoalSummaryView: View {
                     Text("No energy target set").foregroundStyle(Color.diarySecondary)
                         .accessibilityIdentifier(identifier)
                 }
-                if let target = goal.targets.carbs { nutrient("Carbs", target: target, recorded: report.foodTotals?.carbs, remaining: report.remainingFromRecorded.carbs) }
-                if let target = goal.targets.protein { nutrient("Protein", target: target, recorded: report.foodTotals?.protein, remaining: report.remainingFromRecorded.protein) }
-                if let target = goal.targets.fat { nutrient("Fat", target: target, recorded: report.foodTotals?.fat, remaining: report.remainingFromRecorded.fat) }
+                if let target = goal.targets.carbs { nutrient("Carbs", color: .diaryCarbs, target: target, recorded: report.foodTotals?.carbs, remaining: report.remainingFromRecorded.carbs) }
+                if let target = goal.targets.protein { nutrient("Protein", color: .diaryProtein, target: target, recorded: report.foodTotals?.protein, remaining: report.remainingFromRecorded.protein) }
+                if let target = goal.targets.fat { nutrient("Fat", color: .diaryFat, target: target, recorded: report.foodTotals?.fat, remaining: report.remainingFromRecorded.fat) }
                 if goal.exerciseCreditEnabled {
                     Text("Exercise-adjusted remaining: \(amount(report.exerciseAdjustedKcalRemaining))")
                 }
@@ -39,9 +39,9 @@ struct GoalSummaryView: View {
     private func amount(_ value: Double?) -> String {
         value.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "unknown"
     }
-    private func nutrient(_ name: String, target: Double, recorded: Double?, remaining: Double?) -> some View {
+    private func nutrient(_ name: String, color: Color, target: Double, recorded: Double?, remaining: Double?) -> some View {
         Text("\(name) goal \(grams(target)); recorded \(grams(recorded)); remaining \(grams(remaining))")
-            .font(.subheadline)
+            .font(.subheadline).foregroundStyle(color)
     }
     private func grams(_ value: Double?) -> String {
         value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "unknown"
@@ -162,7 +162,7 @@ struct DiaryProgressView: View {
                                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
                             Text("\(period.completeDayCount) of \(period.dayCount) days complete")
                                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                            Text("Recorded intake").font(.headline).padding(.top, 12)
+                            Label { Text("Recorded intake") } icon: { Image(systemName: "flame").foregroundStyle(Color.diaryEnergy) }.font(.headline).padding(.top, 12)
                             if typeSize.isAccessibilitySize {
                                 VStack(alignment: .leading, spacing: 0) { averageValue(period); Text("kcal").foregroundStyle(Color.diarySecondary) }
                             } else {
@@ -180,14 +180,14 @@ struct DiaryProgressView: View {
                             }
                         }.padding(.vertical, 8)
                     }
-                }.listRowSeparator(.hidden)
-                Section("Nutrition trend") {
+                }.listRowSeparator(.hidden).listRowBackground(Color.diarySummarySurface)
+                Section {
                     if nutrition.isEmpty {
                         Text("No saved food samples in this period.").foregroundStyle(Color.diarySecondary)
                     } else {
                         Chart(nutrition) { point in
                             BarMark(x: .value("Date", point.date, unit: .day), y: .value("Recorded kcal", point.value))
-                                .foregroundStyle(point.complete ? Color.diaryAccent : Color.diaryAccent.opacity(0.45))
+                                .foregroundStyle(point.complete ? Color.diaryEnergy : Color.diaryEnergy.opacity(0.70))
                         }
                         .chartXScale(domain: nutritionDomain)
                         .chartXAxis {
@@ -215,7 +215,10 @@ struct DiaryProgressView: View {
                         Text("Recorded intake data").accessibilityIdentifier("nutritionData")
                             .accessibilityValue(nutritionExpanded ? "Expanded" : "Collapsed")
                     }
+                } header: {
+                    Label { Text("Nutrition trend") } icon: { Image(systemName: "chart.bar").foregroundStyle(Color.diaryEnergy) }
                 }
+                .listRowBackground(Color.diaryChartSurface)
                 Section {
                     NavigationLink { weightDetail } label: {
                         LabeledContent("Weight", value: snapshot.weights.max(by: { $0.measuredAt < $1.measuredAt }).map { "\($0.value.formatted()) \($0.unit)" } ?? "No measurements")
@@ -239,12 +242,12 @@ struct DiaryProgressView: View {
                             LabeledContent("Pending analysis", value: period.pendingDayCount.formatted())
                             Text("\(period.missingDayCount) missing days were excluded; missing does not mean zero intake.")
                                 .font(.subheadline).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("missingDayCopy")
-                            Text("Average recorded macros: carbs \(grams(period.averageIntake.carbs)), protein \(grams(period.averageIntake.protein)), fat \(grams(period.averageIntake.fat))")
-                            Text("Known samples of \(period.dayCount) dates: kcal \(period.knownIntakeSamples.kcal), carbs \(period.knownIntakeSamples.carbs), protein \(period.knownIntakeSamples.protein), fat \(period.knownIntakeSamples.fat)")
+                            Text("Average recorded macros: \(Text("carbs \(grams(period.averageIntake.carbs))").foregroundColor(.diaryCarbs)), \(Text("protein \(grams(period.averageIntake.protein))").foregroundColor(.diaryProtein)), \(Text("fat \(grams(period.averageIntake.fat))").foregroundColor(.diaryFat))")
+                            Text("Known samples of \(period.dayCount) dates: kcal \(period.knownIntakeSamples.kcal), \(Text("carbs \(period.knownIntakeSamples.carbs)").foregroundColor(.diaryCarbs)), \(Text("protein \(period.knownIntakeSamples.protein)").foregroundColor(.diaryProtein)), \(Text("fat \(period.knownIntakeSamples.fat)").foregroundColor(.diaryFat))")
                             Text("Within 10% of target: \(period.adherenceNumerator) of \(period.adherenceDenominator) eligible dates")
                             Text("Workout sessions: \(period.workoutCount)")
                         } label: {
-                            Text("Coverage & averages").accessibilityIdentifier("progressCoverage")
+                            Label { Text("Coverage & averages") } icon: { Image(systemName: "checkmark.circle").foregroundStyle(Color.diaryEnergy) }.accessibilityIdentifier("progressCoverage")
                                 .accessibilityValue(coverageExpanded ? "Expanded" : "Collapsed")
                         }
                     }
@@ -274,7 +277,7 @@ struct DiaryProgressView: View {
 
     private func averageValue(_ period: PeriodProgress) -> some View {
         Text(period.averageIntake.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
-            .font(.system(size: metricSize, weight: .semibold)).monospacedDigit()
+            .font(.system(size: metricSize, weight: .semibold)).monospacedDigit().foregroundStyle(Color.diaryEnergy)
     }
 
     private var weightDetail: some View {
@@ -283,22 +286,22 @@ struct DiaryProgressView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Latest measurement").font(.subheadline).foregroundStyle(Color.diarySecondary)
-                        Text("\(latest.value.formatted()) \(latest.unit)").font(.largeTitle.weight(.semibold)).monospacedDigit()
+                        Text("\(latest.value.formatted()) \(latest.unit)").font(.largeTitle.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diaryWeight)
                         Text(weightDate(latest)).font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }.padding(.vertical, 8)
-                }
+                }.listRowBackground(Color.diarySummarySurface)
             }
-                Section("Measurements · last 30 days") {
+                Section {
                     if weights.isEmpty {
                         Text("Insufficient measurements for a weight trend.")
                     } else {
                         Chart(weights) { point in
                             if weights.count >= 2 {
                                 LineMark(x: .value("Date", point.date, unit: .day), y: .value("Weight kg", point.value))
-                                    .foregroundStyle(Color.diaryAccent)
+                                    .foregroundStyle(Color.diaryWeight)
                             }
                             PointMark(x: .value("Date", point.date, unit: .day), y: .value("Weight kg", point.value))
-                                .foregroundStyle(Color.diaryAccent)
+                                .foregroundStyle(Color.diaryWeight)
                         }
                         .chartXSelection(value: $selectedWeightDate)
                         .chartGesture { proxy in
@@ -327,7 +330,10 @@ struct DiaryProgressView: View {
                     Text(weightSummary).font(.subheadline).foregroundStyle(Color.diarySecondary)
                         .accessibilityIdentifier("weightChartSummary")
 
+                } header: {
+                    Label { Text("Measurements · last 30 days") } icon: { Image(systemName: "chart.xyaxis.line").foregroundStyle(Color.diaryWeight) }
                 }
+                .listRowBackground(Color.diaryChartSurface)
 
             if let snapshot {
                 Section("Measurement ledger") {
@@ -352,7 +358,7 @@ struct DiaryProgressView: View {
 
     private func workoutList(_ snapshot: DiarySnapshot) -> some View {
         List {
-                Section("Workouts") {
+                Section {
                     Button("Log workout") { showWorkout = true }
                         .frame(minHeight: 44).accessibilityIdentifier("logWorkout")
                     if snapshot.workouts.isEmpty {
@@ -371,6 +377,8 @@ struct DiaryProgressView: View {
                         }
                         .accessibilityIdentifier("workoutRow")
                     }
+                } header: {
+                    Label { Text("Workouts") } icon: { Image(systemName: "figure.run").foregroundStyle(Color.diaryWorkout) }
                 }
 
         }
@@ -433,7 +441,7 @@ struct WorkoutDetailView: View {
                     Text(session.timePrecision == .dateOnly ? "Time unspecified" : session.performedAt.formatted(date: .omitted, time: .shortened))
                     Text(session.estimatedBurnKcal.map { "Estimated burn: \($0.formatted()) kcal" } ?? "Estimated burn: unknown")
                 }
-                Section("Exercises") {
+                Section {
                     if session.exercises.isEmpty { Text("No exercise details recorded.") }
                     ForEach(session.exercises.indices, id: \.self) { exerciseIndex in
                         let exercise = session.exercises[exerciseIndex]
@@ -445,6 +453,8 @@ struct WorkoutDetailView: View {
                             }
                         }
                     }
+                } header: {
+                    Label { Text("Exercises") } icon: { Image(systemName: "dumbbell").foregroundStyle(Color.diaryWorkout) }
                 }
                 Section {
                     Button("Edit workout") { editing = true }.frame(minHeight: 44)
@@ -455,7 +465,7 @@ struct WorkoutDetailView: View {
                     }.frame(minHeight: 44).accessibilityIdentifier("deleteWorkout")
                 }
                 if let message = model.errorMessage {
-                    Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                    Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
                 }
             }
         }

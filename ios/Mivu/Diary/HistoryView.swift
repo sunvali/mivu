@@ -42,7 +42,7 @@ struct HistoryView: View {
                             .accessibilityElement(children: .combine)
                         }.accessibilityIdentifier("diaryDay")
                     }
-                } header: { Text("Recorded days").font(.headline).foregroundStyle(Color.diaryText).textCase(nil) }
+                } header: { DiarySectionLabel(title: "Recorded days", symbol: "calendar", color: .diaryProtein) }
                 Section {
                     DisclosureGroup("Day coverage") {
                         ForEach(DayCompleteness.allCases, id: \.self) { status in
@@ -136,12 +136,12 @@ struct DayHistoryView: View {
                 if let savedMealID, model.meal(savedMealID) != nil {
                     Section {
                         NavigationLink { MealDetailView(model: model, mealID: savedMealID) } label: {
-                            Label("Saved on this iPhone", systemImage: "checkmark.circle").frame(minHeight: 44)
+                            Label("Saved on this iPhone", systemImage: "checkmark.circle").foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
                         }.accessibilityIdentifier("savedDayMealReceipt")
                         Text("Open the saved meal to review its analysis state.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }
                 }
-                Section { NutritionSummary(totals: snapshot.totals(dayID: dayID)).padding(.vertical, 12) }
+                Section { NutritionSummary(totals: snapshot.totals(dayID: dayID)).padding(.vertical, 12).listRowBackground(Color.diarySummarySurface) }
                 Section {
                     Button { showMeal = true } label: { Label("Log meal", systemImage: "plus.circle").frame(minHeight: 44) }
                         .accessibilityIdentifier("logMealForDay")

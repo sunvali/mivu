@@ -192,7 +192,7 @@ struct TodayView: View {
                     Section {
                         NavigationLink(value: savedMealID) {
                             Label("Saved on this iPhone", systemImage: "checkmark.circle")
-                                .font(.subheadline).frame(minHeight: 44)
+                                .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
                         }.accessibilityIdentifier("savedMealReceipt")
                     }
                 }
@@ -208,12 +208,12 @@ struct TodayView: View {
                         }
                         if snapshot.pendingCount > 0 {
                             Label("\(snapshot.pendingCount) pending", systemImage: "clock")
-                                .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                .font(.subheadline).foregroundStyle(Color.diaryWarning)
                                 .accessibilityIdentifier("pendingCount")
                         }
-                    }.padding(.vertical, 8)
+                    }.padding(.vertical, 8).listRowBackground(Color.diarySummarySurface)
                 }
-                Section("Meals") {
+                Section {
                     if model.todaysMeals.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("Your first meal starts here", systemImage: "fork.knife").font(.headline)
@@ -223,11 +223,11 @@ struct TodayView: View {
                     ForEach(model.todaysMeals, id: \.id) { meal in
                         NavigationLink(value: meal.id) { MealRow(meal: meal) }.accessibilityIdentifier("mealRow")
                     }
-                }
+                } header: { DiarySectionLabel(title: "Meals", symbol: "fork.knife", color: .diaryCarbs) }
                 Section {
                     Button { showWeight = true } label: {
                         HStack {
-                            Label("Morning weight", systemImage: "scalemass")
+                            Label { Text("Morning weight") } icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
                             Spacer()
                             if let entry = snapshot.weights.first(where: { $0.dayID == model.activeDay?.id }) {
                                 Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()

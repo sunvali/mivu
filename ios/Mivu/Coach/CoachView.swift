@@ -190,7 +190,7 @@ struct CoachView: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let error = coach.errorMessage { Text(error).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachError") }
+            if let error = coach.errorMessage { Text(error).font(.caption).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError") }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture { Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.").font(.caption).foregroundStyle(Color.diarySecondary) }
             if !coach.draft.photos.isEmpty { Text("\(coach.draft.photos.count) photos attached").font(.caption).foregroundStyle(Color.diarySecondary) }
             TextField("Message Coach", text: $coach.draft.text, axis: .vertical)
@@ -219,8 +219,8 @@ struct CoachView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if !turn.text.isEmpty { Text(turn.text).textSelection(.enabled) }
                 if !turn.photoIDs.isEmpty { Label("\(turn.photoIDs.count) attached photos", systemImage: "photo") .font(.caption) }
-                Label("Input saved on this iPhone", systemImage: "internaldrive").font(.caption).foregroundStyle(Color.diarySecondary)
-            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16))
+                Label("Input saved on this iPhone", systemImage: "internaldrive").font(.caption).foregroundStyle(Color.diarySuccess)
+            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Color.diarySummarySurface, in: RoundedRectangle(cornerRadius: 16))
     }
     private func turnActions(_ turn: CoachTurn) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -228,7 +228,7 @@ struct CoachView: View {
                 if let activity = coach.activity, coach.activityTurnID == turn.id {
                     CoachActivityView(activity: activity)
                 } else {
-                    Label(status(turn.state), systemImage: turn.state == .analyzing ? "hourglass" : "clock").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    Label(status(turn.state), systemImage: turn.state == .analyzing ? "hourglass" : "clock").font(.subheadline).foregroundStyle(turn.state == .needsRetry ? Color.diaryError : turn.state == .analyzing ? Color.diaryAccent : Color.diaryWarning)
                 }
                 if turn.needsDayChoice == true {
                     if let date = coach.previousDayDate(turn) {
@@ -243,7 +243,7 @@ struct CoachView: View {
                 NavigationLink(value: meal.id) {
                     VStack(alignment: .leading, spacing: 8) {
                         Label(meal.state == .awaitingReview ? "Needs review" : meal.isSaved ? "Saved meal" : "Captured on this iPhone", systemImage: meal.state == .awaitingReview ? "checkmark.circle.badge.questionmark" : "checkmark.circle")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(meal.state.color)
                         MealRow(meal: meal)
                     }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 12))

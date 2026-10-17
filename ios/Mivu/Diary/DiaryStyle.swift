@@ -14,8 +14,19 @@ extension Color {
     static let diarySurface = adaptive(0xFFFFFF, 0x1D2324)
     static let diaryText = adaptive(0x142023, 0xF4F7F6)
     static let diarySecondary = adaptive(0x53646B, 0xB7C4C8, highContrastLight: 0x34474D, highContrastDark: 0xD5E0E3)
-    static let diaryAccent = adaptive(0x136875, 0x81D5DB, highContrastLight: 0x0B5864, highContrastDark: 0xA9EEF2)
+    static let diaryAccent = adaptive(0x006D75, 0x63D5CD, highContrastLight: 0x00545C, highContrastDark: 0x9CEDE6)
     static let diaryActionText = adaptive(0xFFFFFF, 0x092126)
+    static let diaryProtein = adaptive(0x195DC2, 0x91BCFF, highContrastLight: 0x124994, highContrastDark: 0xBAD5FF)
+    static let diaryCarbs = adaptive(0x925000, 0xF4BC62, highContrastLight: 0x713D00, highContrastDark: 0xFFDBA0)
+    static let diaryFat = adaptive(0x7740AD, 0xCCA5F8, highContrastLight: 0x5E2E8E, highContrastDark: 0xE2CAFF)
+    static let diarySuccess = adaptive(0x237448, 0x80D5A4, highContrastLight: 0x175A34, highContrastDark: 0xB0EBC6)
+    static let diaryWarning = diaryCarbs
+    static let diaryError = adaptive(0xB33143, 0xFF9BA6, highContrastLight: 0x8C2030, highContrastDark: 0xFFC2C9)
+    static let diarySummarySurface = adaptive(0xEAF5F3, 0x142D2D)
+    static let diaryChartSurface = adaptive(0xEDF3FC, 0x19283A)
+    static let diaryEnergy = diaryAccent
+    static let diaryWeight = diaryProtein
+    static let diaryWorkout = diaryFat
     static let diaryLeaf = diaryAccent
     static let diaryRule = adaptive(0xD5DFE1, 0x374346, highContrastLight: 0x9BAEB2, highContrastDark: 0x68777B)
 }
@@ -81,17 +92,17 @@ struct NutritionSummary: View {
             }
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 16) {
-                    metric("Protein", totals.protein)
-                    metric("Carbs", totals.carbs)
-                    metric("Fat", totals.fat)
+                    metric("Protein", totals.protein, color: .diaryProtein)
+                    metric("Carbs", totals.carbs, color: .diaryCarbs)
+                    metric("Fat", totals.fat, color: .diaryFat)
                 }
             } else {
                 HStack(spacing: 0) {
-                    metric("Protein", totals.protein).frame(maxWidth: .infinity, alignment: .leading)
+                    metric("Protein", totals.protein, color: .diaryProtein).frame(maxWidth: .infinity, alignment: .leading)
                     separator
-                    metric("Carbs", totals.carbs).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12)
+                    metric("Carbs", totals.carbs, color: .diaryCarbs).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12)
                     separator
-                    metric("Fat", totals.fat).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12)
+                    metric("Fat", totals.fat, color: .diaryFat).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12)
                 }
             }
             if totals.unknownItemCount > 0 {
@@ -101,21 +112,42 @@ struct NutritionSummary: View {
     }
     private var energyValue: some View {
         Text(totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
-            .font(.system(size: energySize, weight: .semibold, design: .default)).monospacedDigit()
+            .font(.system(size: energySize, weight: .semibold, design: .default)).monospacedDigit().foregroundStyle(Color.diaryEnergy)
             .contentTransition(.numericText()).animation(reduceMotion ? nil : .snappy(duration: 0.25), value: totals.kcal)
     }
     private var separator: some View {
         Rectangle().fill(Color.diaryRule).frame(width: 1, height: 36).padding(.horizontal, 10).accessibilityHidden(true)
     }
-    private func metric(_ label: LocalizedStringKey, _ value: Double?) -> some View {
+    private func metric(_ label: LocalizedStringKey, _ value: Double?, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.caption).foregroundStyle(Color.diarySecondary)
-            Text(value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "—").font(.body.weight(.medium)).monospacedDigit()
+            Capsule().fill(color).frame(width: 24, height: 3).accessibilityHidden(true)
+            Text(label).font(.caption).foregroundStyle(color)
+            Text(value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "—").font(.body.weight(.medium)).monospacedDigit().foregroundStyle(color)
         }
     }
 }
 
+struct DiarySectionLabel: View {
+    let title: LocalizedStringKey
+    let symbol: String
+    let color: Color
+    var body: some View {
+        Label { Text(title).foregroundStyle(Color.diaryText) } icon: {
+            Image(systemName: symbol).foregroundStyle(color).accessibilityHidden(true)
+        }.font(.headline).textCase(nil)
+    }
+}
+
 extension SubmissionState {
+    var color: Color {
+        switch self {
+        case .saved: .diarySuccess
+        case .needsRetry: .diaryError
+        case .captured, .waitingForConnection, .awaitingReview: .diaryWarning
+        case .analyzing: .diaryAccent
+        case .cancelled: .diarySecondary
+        }
+    }
     var title: LocalizedStringKey {
         switch self {
         case .captured: "Captured"
@@ -167,17 +199,17 @@ struct MealRow: View {
         HStack(spacing: 12) {
             if let data = meal.photos.first?.data, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFill().frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
-            } else { Image(systemName: "fork.knife").font(.body).foregroundStyle(Color.diarySecondary).frame(width: 24).accessibilityHidden(true) }
+            } else { Image(systemName: "fork.knife").font(.body).foregroundStyle(Color.diaryCarbs).frame(width: 24).accessibilityHidden(true) }
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(title)
-                    statusText.font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    statusText.font(.subheadline).foregroundStyle(meal.state.color)
                     calories
                 }.frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).lineLimit(2)
-                    statusText.font(.caption).foregroundStyle(Color.diarySecondary)
+                    statusText.font(.caption).foregroundStyle(meal.state.color)
                 }
                 Spacer(minLength: 8)
                 calories

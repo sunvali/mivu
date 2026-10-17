@@ -30,7 +30,7 @@ struct SettingsView: View {
                 NavigationLink(value: SettingsSection.profiles) {
                     HStack(spacing: 16) {
                         Image(systemName: "person.crop.circle.fill")
-                            .font(.largeTitle).foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
+                            .font(.largeTitle).foregroundStyle(Color.diaryProtein).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(model.snapshot?.profile.name ?? "Local profiles").font(.title3.weight(.semibold))
                             Text("Private diary on this iPhone").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -40,19 +40,19 @@ struct SettingsView: View {
             }
             if model.snapshot != nil {
                 Section("Setup") {
-                    Button { showGoals = true } label: { settingsRow("Goals", symbol: "scope") }
+                    Button { showGoals = true } label: { settingsRow("Goals", symbol: "scope", color: .diaryAccent) }
                         .accessibilityIdentifier("editGoals")
-                    NavigationLink(value: SettingsSection.preferences) { settingsRow("Diary preferences", symbol: "list.bullet.rectangle") }
-                    NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up") }
+                    NavigationLink(value: SettingsSection.preferences) { settingsRow("Diary preferences", symbol: "list.bullet.rectangle", color: .diaryCarbs) }
+                    NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
-                        settingsRow("ChatGPT connection", symbol: "person.crop.circle", value: connection.planAuthorized ? "Connected" : "Connect")
+                        settingsRow("ChatGPT connection", symbol: "person.crop.circle", color: .diaryFat, value: connection.planAuthorized ? "Connected" : "Connect")
                     }
                     NavigationLink(value: SettingsSection.nutritionSource) {
-                        settingsRow("Nutrition source", symbol: "fork.knife", value: nutritionConfigured ? "Configured" : "Optional")
+                        settingsRow("Nutrition source", symbol: "fork.knife", color: .diaryCarbs, value: nutritionConfigured ? "Configured" : "Optional")
                     }
                 }
                 Section {
-                    Button { showDiagnostic = true } label: { settingsRow("Diagnostics", symbol: "stethoscope") }
+                    Button { showDiagnostic = true } label: { settingsRow("Diagnostics", symbol: "stethoscope", color: .diarySuccess) }
                     Text("Keep a backup or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 } header: { Text("Support") }
                 Section {
@@ -245,9 +245,9 @@ struct SettingsView: View {
         .toolbar(.hidden, for: .tabBar)
     }
 
-    private func settingsRow(_ title: String, symbol: String, value: String? = nil) -> some View {
+    private func settingsRow(_ title: String, symbol: String, color: Color, value: String? = nil) -> some View {
         HStack(spacing: 16) {
-            Image(systemName: symbol).foregroundStyle(Color.diaryAccent).frame(width: 28).accessibilityHidden(true)
+            Image(systemName: symbol).foregroundStyle(color).frame(width: 28).accessibilityHidden(true)
             Text(title).foregroundStyle(Color.diaryText)
             Spacer(minLength: 8)
             if let value { Text(value).font(.subheadline).foregroundStyle(Color.diarySecondary) }
