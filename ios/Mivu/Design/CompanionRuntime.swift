@@ -83,11 +83,12 @@ import UIKit
     func apply(_ output: CompanionOutput, darkMode: Bool, surface: CompanionSurface = .today) async {
         latestOutput = output
         latestSurface = surface
-        guard eligible, output.playback == .animated, let player else {
+        guard eligible, output.playback == .animated else {
             if let reaction = output.reactionID { consumedReaction = reaction }
             pauseAndReset()
             return
         }
+        guard let player else { isPaused = true; return }
         let freshReaction = output.reactionID != nil && output.reactionID != consumedReaction
         let oneShot = [.saved, .reviewed, .greeting].contains(output.pose)
         let pose = oneShot && !freshReaction && (displayedPose != output.pose || !player.isAnimationPlaying) ? .resting : output.pose
@@ -211,7 +212,6 @@ import UIKit
             player.backgroundBehavior = .pause
             player.currentFrame = prepared.animation.frameTime(forMarker: "resting") ?? 0
             self.player = player
-            if let reaction = latestOutput?.reactionID { consumedReaction = reaction }
             displayedPose = .resting
             displayedSurface = .today
             isReady = true
