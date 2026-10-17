@@ -1,31 +1,35 @@
 import Foundation
+import Lottie
 import Observation
 import OSLog
-@preconcurrency import RiveRuntime
+import UIKit
 
 @MainActor @Observable final class CompanionRuntime {
     private(set) var isReady = false
     private(set) var loadFailed = false
     private(set) var isPaused = true
     private(set) var character = CharacterCatalog.bundled.resolve("pip")
-    private(set) var player: RiveViewModel?
-    @ObservationIgnored private(set) var binding: RiveDataBindingViewModel.Instance?
+    private(set) var player: LottieAnimationView?
+    private(set) var displayedPose: CompanionPose = .resting
+    private(set) var triggerCount = 0
+    @ObservationIgnored private var latestSurface: CompanionSurface = .today
+    @ObservationIgnored private var displayedSurface: CompanionSurface = .today
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var playbackGeneration = 0
     @ObservationIgnored private var eligible = false
     @ObservationIgnored private var selected = false
     @ObservationIgnored private var consumedReaction: UUID?
     @ObservationIgnored private var latestOutput: CompanionOutput?
-    @ObservationIgnored private var currentPose: CompanionPose = .resting
-    @ObservationIgnored private var appearance = false
+    @ObservationIgnored private let bundle: Bundle
     @ObservationIgnored private let load: @MainActor (CharacterDescriptor) async throws -> Data
-    private(set) var triggerCount = 0
 
     private static let logger = Logger(subsystem: "com.yakov103.mivu", category: "Companion")
 
     init(bundle: Bundle = .main) {
+        self.bundle = bundle
         load = { character in
-            guard let url = bundle.url(forResource: character.riveResourcePath, withExtension: nil) else {
+            guard let url = bundle.url(forResource: character.animationResourcePath, withExtension: nil) else {
                 throw AssetError.missing
             }
             return try await Task.detached(priority: .utility) {
@@ -35,6 +39,7 @@ import OSLog
     }
 
     init(load: @escaping @MainActor (CharacterDescriptor) async throws -> Data) {
+        bundle = .main
         self.load = load
     }
 
@@ -42,15 +47,16 @@ import OSLog
         guard !selected || self.character.id != character.id else { return }
         stop()
         player = nil
-        binding = nil
         isReady = false
         loadFailed = false
         self.character = character
         selected = true
         latestOutput = nil
         consumedReaction = nil
-        currentPose = .resting
+        displayedPose = .resting
         triggerCount = 0
+        latestSurface = .today
+        displayedSurface = .today
     }
 
     func attach(eligible: Bool) async {
@@ -59,17 +65,9 @@ import OSLog
         generation += 1
         loadTask?.cancel()
         loadTask = nil
-        guard eligible else {
-            pauseAndReset()
-            return
-        }
+        guard eligible else { pauseAndReset(); return }
         if let reaction = latestOutput?.reactionID { consumedReaction = reaction }
-        if isReady {
-            resetToRest()
-            isPaused = false
-            player?.play()
-            return
-        }
+        if isReady { pauseAndReset(); isPaused = false; return }
         let token = generation
         let descriptor = character
         let task = Task { @MainActor [weak self] in
@@ -81,32 +79,49 @@ import OSLog
         if generation == token { loadTask = nil }
     }
 
-    func apply(_ output: CompanionOutput, darkMode: Bool) async {
+    func apply(_ output: CompanionOutput, darkMode: Bool, surface: CompanionSurface = .today) async {
         latestOutput = output
-        let appearanceChanged = appearance != darkMode
-        appearance = darkMode
-        guard let binding else { return }
-        binding.booleanProperty(fromPath: "darkMode")?.value = darkMode
-        guard eligible, output.playback == .animated else {
+        latestSurface = surface
+        guard eligible, output.playback == .animated, let player else {
             if let reaction = output.reactionID { consumedReaction = reaction }
             pauseAndReset()
             return
         }
         let freshReaction = output.reactionID != nil && output.reactionID != consumedReaction
         let oneShot = [.saved, .reviewed, .greeting].contains(output.pose)
-        let pose = oneShot && !freshReaction && currentPose != output.pose ? .resting : output.pose
-        let poseChanged = pose != currentPose
-        if poseChanged || freshReaction && (oneShot || pose == .resting) {
-            binding.numberProperty(fromPath: "pose")?.value = Float(pose.rawValue)
-            currentPose = pose
-        }
-        if freshReaction && (oneShot || output.pose == .resting) {
-            binding.triggerProperty(fromPath: "react")?.trigger()
-            triggerCount += 1
+        let pose = oneShot && !freshReaction && (displayedPose != output.pose || !player.isAnimationPlaying) ? .resting : output.pose
+        let changed = pose != displayedPose || surface != displayedSurface
+        isPaused = false
+        if changed || freshReaction || pose == .thinking && !player.isAnimationPlaying {
+            playbackGeneration += 1
+            let token = playbackGeneration
+            player.pause()
+            displayedPose = pose
+            displayedSurface = surface
+            let marker = pose == .resting && freshReaction ? (surface == .coach ? "coach-blink" : "blink") : Self.marker(for: pose, surface: surface)
+            if freshReaction && (oneShot || pose == .resting) { triggerCount += 1 }
+            let render = { [self] in
+                guard eligible, token == playbackGeneration else { return }
+                if pose == .resting && !freshReaction {
+                    player.currentFrame = player.animation?.frameTime(forMarker: Self.marker(for: .resting, surface: surface)) ?? 0
+                } else {
+                    player.play(marker: marker, loopMode: pose == .thinking ? .loop : .playOnce) { [weak self] finished in
+                        guard let self, let player = self.player, finished, self.eligible, token == self.playbackGeneration else { return }
+                        if oneShot || marker == "blink" {
+                            self.displayedPose = .resting
+                            self.transition(player) { player.currentFrame = player.animation?.frameTime(forMarker: Self.marker(for: .resting, surface: self.latestSurface)) ?? 0 }
+                        }
+                    }
+                }
+            }
+            if changed { transition(player, render) } else { render() }
         }
         if let reaction = output.reactionID { consumedReaction = reaction }
-        isPaused = false
-        if poseChanged || freshReaction || appearanceChanged { player?.play() }
+    }
+
+    func reconcileMount(_ mountedPlayer: LottieAnimationView) async {
+        guard player === mountedPlayer, eligible, let latestOutput else { return }
+        await apply(latestOutput, darkMode: false, surface: latestSurface)
     }
 
     func stop() {
@@ -123,38 +138,29 @@ import OSLog
     }
 
     private func pauseAndReset() {
-        let needsReset = !isPaused
+        playbackGeneration += 1
         isPaused = true
+        player?.layer.removeAllAnimations()
         player?.pause()
+        player?.currentFrame = player?.animation?.frameTime(forMarker: Self.marker(for: .resting, surface: latestSurface)) ?? 0
+        displayedSurface = latestSurface
+        displayedPose = .resting
         if let reaction = latestOutput?.reactionID { consumedReaction = reaction }
-        guard needsReset, let player else { return }
-        do {
-            // A fresh bound instance drops a trigger canceled before its first rendered frame.
-            try player.configureModel(artboardName: "MivuCompanion", stateMachineName: "Companion")
-            guard let binding = player.riveModel?.riveFile.viewModelNamed("CompanionModel")?.createDefaultInstance()
-            else { throw AssetError.schema }
-            binding.booleanProperty(fromPath: "darkMode")?.value = appearance
-            player.riveModel?.stateMachine?.bind(viewModelInstance: binding)
-            self.binding = binding
-            currentPose = .resting
-        } catch {
-            self.player = nil
-            binding = nil
-            isReady = false
-            loadFailed = true
-            Self.logger.error("Companion asset unavailable: reset failed")
-        }
     }
 
-    private func resetToRest() {
-        binding?.numberProperty(fromPath: "pose")?.value = 0
-        currentPose = .resting
+    private func transition(_ player: LottieAnimationView, _ changes: @escaping () -> Void) {
+        guard player.window != nil else { changes(); return }
+        UIView.transition(with: player, duration: 0.1,
+            options: [.transitionCrossDissolve, .beginFromCurrentState, .allowAnimatedContent], animations: changes)
+    }
+
+    private static func marker(for pose: CompanionPose, surface: CompanionSurface = .today) -> String {
+        if surface == .coach && (pose == .resting || pose == .attentive) { return "coach-resting" }
+        return ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"][pose.rawValue]
     }
 
     private func check(_ descriptor: CharacterDescriptor, _ token: Int) throws {
-        guard !Task.isCancelled, eligible, token == generation, descriptor.id == character.id else {
-            throw CancellationError()
-        }
+        guard !Task.isCancelled, eligible, token == generation, descriptor.id == character.id else { throw CancellationError() }
     }
 
     private func loadCharacter(_ descriptor: CharacterDescriptor, generation token: Int) async {
@@ -162,36 +168,31 @@ import OSLog
             guard descriptor.schemaVersion == 1 else { throw AssetError.schema }
             let data = try await load(descriptor)
             try check(descriptor, token)
-            guard data.count <= 1_048_576, data.starts(with: [0x52, 0x49, 0x56, 0x45]) else {
-                throw AssetError.corrupt
+            guard data.count <= 1_048_576 else { throw AssetError.corrupt }
+            guard let url = bundle.url(forResource: descriptor.animationResourcePath, withExtension: nil) else { throw AssetError.missing }
+            let directory = url.deletingLastPathComponent()
+            let name = url.deletingPathExtension().lastPathComponent
+            let prepared = try await Task.detached(priority: .utility) {
+                let animation = try LottieAnimation.from(data: data)
+                let images = try CompanionArtworkImageProvider(
+                    artworkURL: directory.appendingPathComponent(name + "-artwork.png"),
+                    matteURL: directory.appendingPathComponent(name + "-artwork-alpha.png"))
+                return PreparedArtwork(animation: animation, images: images)
+            }.value
+            try check(descriptor, token)
+            for marker in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "coach-resting", "coach-blink"] {
+                guard prepared.animation.frameTime(forMarker: marker) != nil,
+                      let duration = prepared.animation.durationFrameTime(forMarker: marker), duration > 0 else { throw AssetError.schema }
             }
-            let file = try RiveFile(data: data, loadCdn: false)
-            let model = RiveModel(riveFile: file)
-            try model.setArtboard("MivuCompanion")
-            try model.setStateMachine("Companion")
-            guard let viewModel = file.viewModelNamed("CompanionModel"),
-                  file.defaultViewModel(for: model.artboard)?.name == "CompanionModel" else {
-                throw AssetError.schema
-            }
-            let properties = viewModel.properties
-            guard properties.count == 3,
-                  properties.contains(where: { $0.name == "pose" && $0.type == .number }),
-                  properties.contains(where: { $0.name == "darkMode" && $0.type == .boolean }),
-                  properties.contains(where: { $0.name == "react" && $0.type == .trigger }),
-                  let binding = viewModel.createDefaultInstance(),
-                  let pose = binding.numberProperty(fromPath: "pose"), pose.value == 0,
-                  let darkMode = binding.booleanProperty(fromPath: "darkMode"), !darkMode.value,
-                  binding.triggerProperty(fromPath: "react") != nil else { throw AssetError.schema }
-            // The supported synchronous renderer avoids stale asynchronous settled callbacks.
-            let player = RiveViewModel(model, stateMachineName: "Companion", autoPlay: false,
-                                       artboardName: "MivuCompanion")
-            player.riveModel?.stateMachine?.bind(viewModelInstance: binding)
-            darkMode.value = appearance
-            pose.value = 0
-            self.binding = binding
+            let player = LottieAnimationView(animation: prepared.animation, imageProvider: prepared.images,
+                configuration: LottieConfiguration(renderingEngine: .specific(.coreAnimation)))
+            player.contentMode = .scaleAspectFit
+            player.backgroundBehavior = .pause
+            player.currentFrame = prepared.animation.frameTime(forMarker: "resting") ?? 0
             self.player = player
             if let reaction = latestOutput?.reactionID { consumedReaction = reaction }
-            currentPose = .resting
+            displayedPose = .resting
+            displayedSurface = .today
             isReady = true
             loadFailed = false
             isPaused = false
@@ -205,5 +206,9 @@ import OSLog
         }
     }
 
+    private struct PreparedArtwork: @unchecked Sendable {
+        let animation: LottieAnimation
+        let images: CompanionArtworkImageProvider
+    }
     private enum AssetError: Error { case missing, corrupt, schema }
 }

@@ -7,9 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		630001000000000000000001 /* RiveRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 630001000000000000000003 /* RiveRuntime */; };
-		630001000000000000000002 /* RiveRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 630001000000000000000004 /* RiveRuntime */; };
 		610001000000000000000001 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 610001000000000000000003 /* JOSESwift */; };
+		640001000000000000000001 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 640001000000000000000003 /* Lottie */; };
 		610001000000000000000002 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 610001000000000000000004 /* JOSESwift */; };
 /* End PBXBuildFile section */
 
@@ -89,7 +88,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				610001000000000000000001 /* JOSESwift in Frameworks */,
-				630001000000000000000001 /* RiveRuntime in Frameworks */,
+				640001000000000000000001 /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -98,7 +97,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				610001000000000000000002 /* JOSESwift in Frameworks */,
-				630001000000000000000002 /* RiveRuntime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -177,7 +175,7 @@
 			name = Mivu;
 			packageProductDependencies = (
 				610001000000000000000003 /* JOSESwift */,
-				630001000000000000000003 /* RiveRuntime */,
+				640001000000000000000003 /* Lottie */,
 			);
 			productName = Mivu;
 			productReference = 8B41F6452DEDD0D5001A66F9 /* Mivu.app */;
@@ -202,7 +200,6 @@
 			name = MivuTests;
 			packageProductDependencies = (
 				610001000000000000000004 /* JOSESwift */,
-				630001000000000000000004 /* RiveRuntime */,
 			);
 			productName = MivuTests;
 			productReference = 8B41F65C2DEDD0D6001A66F9 /* MivuTests.xctest */;
@@ -239,7 +236,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */,
-				630001000000000000000005 /* XCRemoteSwiftPackageReference "rive-ios" */,
+				640001000000000000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8B41F6462DEDD0D5001A66F9 /* Products */;
@@ -584,10 +581,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		630001000000000000000005 /* XCRemoteSwiftPackageReference "rive-ios" */ = {
+		640001000000000000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/rive-app/rive-ios";
-			requirement = {kind = exactVersion; version = 6.28.1; };
+			repositoryURL = "https://github.com/airbnb/lottie-spm.git";
+			requirement = {kind = exactVersion; version = 4.6.1; };
 		};
 		610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -600,8 +597,7 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		630001000000000000000003 /* RiveRuntime */ = {isa = XCSwiftPackageProductDependency; package = 630001000000000000000005 /* XCRemoteSwiftPackageReference "rive-ios" */; productName = RiveRuntime; };
-		630001000000000000000004 /* RiveRuntime */ = {isa = XCSwiftPackageProductDependency; package = 630001000000000000000005 /* XCRemoteSwiftPackageReference "rive-ios" */; productName = RiveRuntime; };
+		640001000000000000000003 /* Lottie */ = {isa = XCSwiftPackageProductDependency; package = 640001000000000000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */; productName = Lottie; };
 		610001000000000000000003 /* JOSESwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */;

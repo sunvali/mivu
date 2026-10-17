@@ -1,11 +1,11 @@
 {
   "images": [
     {
-      "filename": "light.pdf",
+      "filename": "pip.png",
       "idiom": "universal"
     },
     {
-      "filename": "dark.pdf",
+      "filename": "pip.png",
       "idiom": "universal",
       "appearances": [
         {
@@ -18,8 +18,5 @@
   "info": {
     "author": "Mivu",
     "version": 1
-  },
-  "properties": {
-    "preserves-vector-representation": true
   }
 }

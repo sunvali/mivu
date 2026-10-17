@@ -25,6 +25,38 @@ import XCTest
         XCTAssertTrue(element.isHittable)
     }
 
+    func testLottieReferenceCompositionsAndHorizontalComposerInBothAppearances() {
+        for appearance in ["--proof-light", "--proof-dark"] {
+            let app = launch([appearance])
+            let input = app.textFields["coachInput"]
+            let camera = app.buttons["coachPhotos"]
+            let send = app.buttons["coachSend"]
+            XCTAssertEqual(input.frame.midY, camera.frame.midY, accuracy: 12, "Normal composer must follow the reference's single horizontal row")
+            XCTAssertEqual(input.frame.midY, send.frame.midY, accuracy: 12)
+            XCTAssertGreaterThanOrEqual(camera.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(send.frame.height, 44)
+            enter("Two eggs, three bread slices and salad", in: app)
+            XCTAssertTrue(send.isHittable); send.tap()
+            let link = app.buttons["coachMealLink"].firstMatch
+            XCTAssertTrue(link.waitForExistence(timeout: 15))
+            let coach = XCTAttachment(screenshot: app.screenshot())
+            coach.name = "Pip Lottie Coach " + appearance; coach.lifetime = .keepAlways; add(coach)
+            app.tabBars.buttons["Today"].tap()
+            let row = app.buttons["mealRow"].firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 5))
+            let today = XCTAttachment(screenshot: app.screenshot())
+            today.name = "Pip Lottie Today " + appearance; today.lifetime = .keepAlways; add(today)
+            XCTAssertTrue(app.buttons["logMeal"].isHittable)
+            let list = app.collectionViews.firstMatch
+            for _ in 0..<6 where row.frame.maxY >= app.buttons["logMeal"].frame.minY - 12 { list.swipeUp() }
+            XCTAssertTrue(row.isHittable)
+            XCTAssertLessThan(row.frame.maxY, app.buttons["logMeal"].frame.minY - 8)
+            row.tap()
+            XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+            app.terminate()
+        }
+    }
+
     func testFallbackKeepsCaptureAndReviewUsable() {
         let app = launch(["--companion-load-failure"])
         app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()

@@ -9,7 +9,7 @@ import Testing
         #expect(Set(catalog.characters.map(\.id)).count == catalog.characters.count)
         #expect(catalog.characters.allSatisfy { $0.schemaVersion == 1 })
         #expect(catalog.resolve("pip").displayName == "Pip")
-        #expect(catalog.resolve("pip").riveResourcePath == "Characters/pip/mivu-companion.riv")
+        #expect(catalog.resolve("pip").animationResourcePath == "Characters/pip/pip.json")
         #expect(catalog.resolve(nil).id == "pip")
         #expect(catalog.resolve("removed-character").id == "pip")
         #expect(catalog.resolve("pip").fallbackAssetPrefix == "Pip")
@@ -23,7 +23,7 @@ import Testing
             id: "test-companion",
             displayName: "Test Companion",
             schemaVersion: 1,
-            riveResourcePath: pip.riveResourcePath,
+            animationResourcePath: pip.animationResourcePath,
             fallbackAssetPrefix: pip.fallbackAssetPrefix,
             previewAssetName: pip.previewAssetName
         )

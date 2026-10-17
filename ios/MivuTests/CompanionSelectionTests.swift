@@ -13,7 +13,7 @@ import Testing
             id: "test-companion",
             displayName: "Test Companion",
             schemaVersion: 1,
-            riveResourcePath: pip.riveResourcePath,
+            animationResourcePath: pip.animationResourcePath,
             fallbackAssetPrefix: pip.fallbackAssetPrefix,
             previewAssetName: pip.previewAssetName
         )

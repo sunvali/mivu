@@ -88,7 +88,7 @@ struct DiaryRootView: View {
             let pip = catalog.resolve("pip")
             catalog = CharacterCatalog(characters: [pip, CharacterDescriptor(
                 id: "pip-test-alias", displayName: "Pip test fixture", schemaVersion: pip.schemaVersion,
-                riveResourcePath: pip.riveResourcePath, fallbackAssetPrefix: pip.fallbackAssetPrefix,
+                animationResourcePath: pip.animationResourcePath, fallbackAssetPrefix: pip.fallbackAssetPrefix,
                 previewAssetName: pip.previewAssetName)])
         }
         if DiaryLaunch.isUITest && ProcessInfo.processInfo.arguments.contains("--companion-unknown-selection") {
@@ -138,19 +138,19 @@ struct DiaryRootView: View {
                 NavigationStack { DiarySetupView(model: model) { selectedTab = "today" } }
             } else {
                 TabView(selection: $selectedTab) {
-                    Tab("Today", systemImage: "sun.max", value: "today") {
+                    Tab("Today", systemImage: "fork.knife", value: "today") {
                         NavigationStack {
                             TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
                                       onCompanionContextChanged: updateCompanionContext).toolbar { profileControl }
                         }
                     }
-                    Tab("Diary", systemImage: "calendar", value: "diary") {
+                    Tab("Diary", systemImage: "text.document", value: "diary") {
                         NavigationStack { HistoryView(model: model).toolbar { profileControl } }
                     }
-                    Tab("Progress", systemImage: "chart.bar", value: "progress") {
+                    Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
                         NavigationStack { DiaryProgressView(model: model).toolbar { profileControl } }
                     }
-                    Tab("Coach", systemImage: "bubble.left.and.bubble.right", value: "coach") {
+                    Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                         NavigationStack {
                             CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
                                       onCompanionContextChanged: updateCompanionContext) { destination in
@@ -201,7 +201,7 @@ struct DiaryRootView: View {
             guard !Task.isCancelled, update == runtimeUpdate else { return }
             await companionRuntime.attach(eligible: companionOutput.playback == .animated)
             guard !Task.isCancelled, update == runtimeUpdate else { return }
-            await companionRuntime.apply(companionOutput, darkMode: colorScheme == .dark)
+            await companionRuntime.apply(companionOutput, darkMode: colorScheme == .dark, surface: selectedCompanionSurface ?? .today)
             #if DEBUG
             observeCompanionApplication?(companionOutput)
             #endif
@@ -306,6 +306,7 @@ struct DiaryRootView: View {
         #endif
     }
     private struct RuntimeUpdate: Hashable {
+        let surface: CompanionSurface?
         let characterID: String
         let pose: Int
         let animated: Bool
@@ -316,7 +317,7 @@ struct DiaryRootView: View {
         let ready: Bool
     }
     private var runtimeUpdate: RuntimeUpdate {
-        RuntimeUpdate(characterID: companionSelection.selectedCharacterID, pose: companionOutput.pose.rawValue,
+        RuntimeUpdate(surface: selectedCompanionSurface, characterID: companionSelection.selectedCharacterID, pose: companionOutput.pose.rawValue,
                       animated: companionOutput.playback == .animated, reactionID: companionOutput.reactionID,
                       darkMode: colorScheme == .dark, loaded: hasLoaded, ready: companionRuntime.isReady)
     }
@@ -376,20 +377,22 @@ struct TodayView: View {
                     }
                 }
                 Section {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: typeSize.isAccessibilitySize ? 16 : 4) {
                         summaryDate
                         if let day = model.activeDay {
-                            NutritionSummary(totals: snapshot.totals(dayID: day.id))
-                            todayGoal(snapshot: snapshot, day: day)
+                            intakeHero(totals: snapshot.totals(dayID: day.id), day: day)
+                            if snapshot.goal(on: day.localDate) != nil {
+                                todayGoal(snapshot: snapshot, day: day, showCompleteness: typeSize.isAccessibilitySize)
+                            }
                         } else {
-                            Text("No recorded meals yet").foregroundStyle(Color.diarySecondary)
+                            intakeHero(totals: nutritionTotals([]), day: nil)
                         }
                         if snapshot.pendingCount > 0 {
                             Label("\(snapshot.pendingCount) pending", systemImage: "clock")
                                 .font(.subheadline).foregroundStyle(Color.diaryWarning)
                                 .accessibilityIdentifier("pendingCount")
                         }
-                    }.padding(.vertical, 8).listRowBackground(Color.diarySummarySurface)
+                    }.padding(.vertical, 4).listRowBackground(Color.clear).listRowSeparator(.hidden)
                 }
                 Section {
                     if model.todaysMeals.isEmpty {
@@ -399,9 +402,16 @@ struct TodayView: View {
                         }.padding(.vertical, 16)
                     }
                     ForEach(model.todaysMeals, id: \.id) { meal in
-                        NavigationLink(value: meal.id) { MealRow(meal: meal) }.accessibilityIdentifier("mealRow")
+                        NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true) }
+                            .padding(.horizontal, 12).padding(.vertical, 4)
+                            .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 18))
+                            .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                            .accessibilityIdentifier("mealRow")
                     }
-                } header: { DiarySectionLabel(title: "Meals", symbol: "fork.knife", color: .diaryCarbs) }
+                } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
+                if let day = model.activeDay, snapshot.goal(on: day.localDate) == nil {
+                    Section { todayGoal(snapshot: snapshot, day: day, showCompleteness: false) }
+                }
                 Section {
                     Button { showWeight = true } label: {
                         HStack {
@@ -427,6 +437,8 @@ struct TodayView: View {
         }
         .listStyle(.plain)
         .listRowSpacing(0)
+        .listSectionSpacing(4)
+        .contentMargins(.top, 0, for: .scrollContent)
         .environment(\.defaultMinListRowHeight, 56)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
@@ -443,15 +455,7 @@ struct TodayView: View {
                 .onDisappear { showingDetail = false; reportCompanionContext() }
         }
         .navigationTitle("Today")
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Menu {
-                    Button("Start new day", systemImage: "sunrise") { confirmDay = true }
-                        .accessibilityIdentifier("startNewDay")
-                } label: { Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44) }
-                .accessibilityLabel("Day actions")
-            }
-        }
+        .toolbarTitleDisplayMode(.inlineLarge)
         .sheet(isPresented: $showComposer) { MealComposerView(model: model, onSaved: { savedMealID = $0 }) }
         .onChange(of: model.snapshot?.profile.id) { _, _ in savedMealID = nil }
         .confirmationDialog("Start a waking day?", isPresented: $confirmDay, titleVisibility: .visible) {
@@ -472,23 +476,76 @@ struct TodayView: View {
             playback: surfaceVisible && companionVisible && !covered ? .animated : .hidden))
     }
     private var summaryDate: some View {
-        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
-        return layout {
-            if typeSize.isAccessibilitySize { companionArt }
-            Text(model.activeDay?.localDate ?? "Your waking day")
-                .font(.subheadline).foregroundStyle(Color.diarySecondary)
-            if !typeSize.isAccessibilitySize { Spacer(minLength: 0); companionArt }
-        }
+        Menu {
+            Button("Start new day", systemImage: "sunrise") { confirmDay = true }.accessibilityIdentifier("startNewDay")
+        } label: {
+            HStack(spacing: 6) {
+                Text(displayDate).font(.subheadline)
+                Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+            }.foregroundStyle(Color.diarySecondary).frame(minHeight: 44)
+        }.accessibilityLabel("Day actions, " + displayDate)
+    }
+    private var displayDate: String {
+        guard let value = model.activeDay?.localDate else { return "Your waking day" }
+        let parts = value.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, let date = Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)) else { return value }
+        return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
     private var companionArt: some View {
-        CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark, size: 64, runtime: companionRuntime)
+        CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
+                      size: typeSize.isAccessibilitySize ? 144 : 200, runtime: companionRuntime)
+            .frame(width: 144, height: typeSize.isAccessibilitySize ? 144 : 186, alignment: .top)
             .onScrollVisibilityChange(threshold: 0.5) { visible in
                 companionVisible = visible; reportCompanionContext()
             }
     }
+    @ViewBuilder private func intakeHero(totals: NutritionTotals, day: TrackingDay?) -> some View {
+        if typeSize.isAccessibilitySize {
+            companionArt
+            NutritionSummary(totals: totals)
+        } else {
+            HStack(alignment: .center, spacing: 8) {
+                companionArt
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
+                            .font(.system(size: 52, weight: .bold)).tracking(-2).monospacedDigit().lineLimit(1).minimumScaleFactor(0.75)
+                            .foregroundStyle(Color.diaryText)
+                            .contentTransition(.numericText())
+                            .animation(companionOutput.playback == .animated ? .snappy(duration: MivuMotion.numeric) : nil, value: totals.kcal)
+                        Text("kcal recorded").font(.subheadline).foregroundStyle(Color.diaryText)
+                    }
+                    HStack(spacing: 8) {
+                        heroMetric("Protein", value: totals.protein, color: .diaryProtein)
+                        Divider().frame(height: 32)
+                        heroMetric("Carbs", value: totals.carbs, color: .diaryCarbs)
+                        Divider().frame(height: 32)
+                        heroMetric("Fat", value: totals.fat, color: .diaryFat)
+                    }
+                    Group {
+                        if let day { Text("\(Text(day.completeness.title)) day") }
+                        else { Text("No meals recorded") }
+                    }.font(.caption).foregroundStyle(Color.diarySecondary)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if totals.unknownItemCount > 0 {
+                Text("Some nutrients are unknown. Recorded totals may be incomplete.")
+                    .font(.caption).foregroundStyle(Color.diarySecondary)
+            }
+        }
+    }
+    private func heroMetric(_ title: LocalizedStringKey, value: Double?, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 3) {
+                Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
+                Text(title).font(.caption2)
+            }
+            Text(value.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" } ?? "—")
+                .font(.system(size: 17, weight: .medium)).monospacedDigit()
+        }.foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-    @ViewBuilder private func todayGoal(snapshot: DiarySnapshot, day: TrackingDay) -> some View {
+    @ViewBuilder private func todayGoal(snapshot: DiarySnapshot, day: TrackingDay, showCompleteness: Bool = true) -> some View {
         let report = ProgressAnalytics.daily(snapshot: snapshot, localDate: day.localDate)
         if let target = report.goal?.targets.kcal {
             VStack(alignment: .leading, spacing: 8) {
@@ -518,11 +575,11 @@ struct TodayView: View {
                 Label(report.goal == nil ? "Set a goal" : "Edit goals", systemImage: "target").font(.subheadline).frame(minHeight: 44)
             }.accessibilityIdentifier("todayGoalSummary")
         }
-        HStack {
+        if showCompleteness { HStack {
             Image(systemName: day.completeness == .complete ? "checkmark.circle" : "circle.lefthalf.filled")
             Text(day.completeness.title)
             Text("day")
-        }.font(.caption).foregroundStyle(Color.diarySecondary)
+        }.font(.caption).foregroundStyle(Color.diarySecondary) }
     }
 
     @ViewBuilder private func remaining(_ value: Double?) -> some View {

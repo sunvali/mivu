@@ -1,23 +1,19 @@
 import Foundation
 import Testing
 import UIKit
-@preconcurrency import RiveRuntime
+import Lottie
 @testable import Mivu
 
 @Suite(.serialized) @MainActor struct CompanionAssetTests {
-    @Test func bundledAssetLoadsNamedArtboardMachineAndTypedBindings() async throws {
-        let runtime = CompanionRuntime()
-        await runtime.select(CharacterCatalog.bundled.resolve("pip"))
-        await runtime.attach(eligible: true)
-        #expect(runtime.isReady)
-        #expect(!runtime.loadFailed)
-        let rive = try #require(runtime.player)
-        #expect(rive.artboardNames() == ["MivuCompanion"])
-        #expect(rive.riveModel?.artboard.stateMachineNames() == ["Companion"])
-        let binding = try #require(runtime.binding)
-        #expect(rive.riveModel?.riveFile.viewModelNamed("CompanionModel")?.name == "CompanionModel")
-        #expect(binding.numberProperty(fromPath: "pose")?.value == 0)
-        #expect(binding.booleanProperty(fromPath: "darkMode")?.value == false)
+    @Test func bundledAssetLoadsSupportedCoreAnimationAndApprovedSegments() async throws {
+        let runtime = try await ready()
+        let player = try #require(runtime.player)
+        #expect(player.animation != nil)
+        #expect(runtime.displayedPose == .resting)
+        #expect(player.currentRenderingEngine == .coreAnimation)
+        for name in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting"] {
+            #expect(player.animation?.frameTime(forMarker: name) != nil)
+        }
     }
 }
 
@@ -25,15 +21,15 @@ extension CompanionAssetTests {
     private var pip: CharacterDescriptor { CharacterCatalog.bundled.resolve("pip") }
     private var second: CharacterDescriptor {
         CharacterDescriptor(id: "test-second", displayName: "Test Second", schemaVersion: 1,
-                            riveResourcePath: pip.riveResourcePath, fallbackAssetPrefix: "Second",
+                            animationResourcePath: pip.animationResourcePath, fallbackAssetPrefix: "Second",
                             previewAssetName: "TestPreview")
     }
 
     private func bytes() throws -> Data {
-        let url = try #require(Bundle.main.url(forResource: pip.riveResourcePath, withExtension: nil))
+        let url = try #require(Bundle.main.url(forResource: pip.animationResourcePath, withExtension: nil))
         let data = try Data(contentsOf: url)
         #expect(data.count > 32 && data.count <= 1_048_576)
-        #expect(data.starts(with: [0x52, 0x49, 0x56, 0x45]))
+        #expect(data.first == Character("{").asciiValue)
         return data
     }
 
@@ -51,27 +47,27 @@ extension CompanionAssetTests {
         return runtime
     }
 
-    private func mount(_ player: RiveViewModel) throws -> UIWindow {
+    private func mount(_ player: LottieAnimationView) throws -> UIWindow {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 160, height: 160)
         let controller = UIViewController()
-        let view = player.createRiveView()
+        let view = UIView()
+        CompanionLottieView.install(player, in: view)
         view.frame = CGRect(x: 0, y: 0, width: 160, height: 160)
         window.rootViewController = controller
         controller.view.addSubview(view)
-        window.makeKeyAndVisible()
+        window.isHidden = false
+        controller.view.layoutIfNeeded()
         return window
     }
 
     @Test func allSevenPosesAndRepeatedReactCanBeApplied() async throws {
         let runtime = try await ready()
-        let binding = try #require(runtime.binding)
         for pose in CompanionPose.allCases {
             let reaction = [.saved, .reviewed, .greeting].contains(pose) ? UUID() : nil
             await runtime.apply(output(pose, reaction: reaction), darkMode: true)
-            #expect(binding.numberProperty(fromPath: "pose")?.value == Float(pose.rawValue))
-            #expect(binding.booleanProperty(fromPath: "darkMode")?.value == true)
+            #expect(runtime.displayedPose == pose)
         }
         let before = runtime.triggerCount
         await runtime.apply(output(.saved, reaction: UUID()), darkMode: false)
@@ -89,8 +85,8 @@ extension CompanionAssetTests {
             #expect(runtime.fallbackAssetName(for: .recovery) == "PipRecovery")
         }
         var wrongBindings = try bytes()
-        let nameRange = try #require(wrongBindings.range(of: Data("darkMode".utf8)))
-        wrongBindings.replaceSubrange(nameRange, with: Data("darkMood".utf8))
+        let nameRange = try #require(wrongBindings.range(of: Data("\"cm\":\"saved\"".utf8)))
+        wrongBindings.replaceSubrange(nameRange, with: Data("\"cm\":\"wrong\"".utf8))
         let wrongModel = CompanionRuntime(load: { _ in wrongBindings })
         await wrongModel.select(pip)
         await wrongModel.attach(eligible: true)
@@ -99,7 +95,7 @@ extension CompanionAssetTests {
         var calls = 0
         let runtime = CompanionRuntime(load: { _ in calls += 1; return try bytes() })
         let incompatible = CharacterDescriptor(id: "bad-schema", displayName: "Bad Schema", schemaVersion: 2,
-                                             riveResourcePath: pip.riveResourcePath,
+                                             animationResourcePath: pip.animationResourcePath,
                                              fallbackAssetPrefix: "Bad", previewAssetName: "BadPreview")
         await runtime.select(incompatible)
         await runtime.attach(eligible: true)
@@ -112,10 +108,9 @@ extension CompanionAssetTests {
         await runtime.apply(output(.saved, reaction: UUID()), darkMode: false)
         await runtime.apply(output(.thinking, playback: .hidden), darkMode: false)
         #expect(runtime.isPaused)
-        let binding = try #require(runtime.binding)
-        #expect(binding.numberProperty(fromPath: "pose")?.value == 0)
+        #expect(runtime.displayedPose == .resting)
         await runtime.apply(output(.thinking, playback: .hidden), darkMode: false)
-        #expect(runtime.binding === binding, "Repeated hidden output must preserve the already reset binding")
+        #expect(runtime.player?.isAnimationPlaying == false)
     }
 
     @Test func rapidLoadCancellationCannotAttachStalePlayer() async throws {
@@ -161,12 +156,11 @@ extension CompanionAssetTests {
         await runtime.apply(output(.reviewed, reaction: UUID()), darkMode: false)
         weak let oldPlayer = runtime.player
         await runtime.select(second)
-        #expect(runtime.player == nil && runtime.binding == nil && runtime.isPaused)
+        #expect(runtime.player == nil && runtime.isPaused)
         #expect(oldPlayer == nil)
         await runtime.attach(eligible: true)
         #expect(runtime.triggerCount == 0)
-        let binding = try #require(runtime.binding)
-        #expect(binding.numberProperty(fromPath: "pose")?.value == 0)
+        #expect(runtime.displayedPose == .resting)
     }
 
     @Test func failedSecondFixtureUsesSelectedStaticFallbackWithoutResurrectingOldPlayer() async throws {
@@ -234,37 +228,29 @@ extension CompanionAssetTests {
         #expect(runtime.player == nil && !runtime.isReady && runtime.isPaused)
     }
 
-    @Test func oneShotsSettleAtRestWithoutHostCompletionCallback() async throws {
+    @Test func actualRepeatedGesturesAdvanceAndSettleWithoutHostTimer() async throws {
         let runtime = try await ready()
         let player = try #require(runtime.player)
         let window = try mount(player)
-        defer { player.pause(); player.deregisterView(); window.isHidden = true }
-        player.play()
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(!player.isPlaying)
-        let binding = try #require(runtime.binding)
-        let trigger = try #require(binding.triggerProperty(fromPath: "react"))
-        let triggerProbe = SettleProbe()
-        let observation = trigger.addListener { triggerProbe.count += 1 }
-        defer { trigger.removeListener(observation) }
-        for (index, pose) in [CompanionPose.saved, .saved, .reviewed, .greeting, .resting].enumerated() {
-            let started = ContinuousClock.now
+        defer { runtime.stop(); window.isHidden = true }
+        for pose in [CompanionPose.saved, .saved, .reviewed, .greeting, .resting] {
             let duration: Double = pose == .saved ? MivuMotion.saved : pose == .reviewed
                 ? MivuMotion.reviewed : pose == .greeting ? MivuMotion.greeting : MivuMotion.blink
+            let began = ContinuousClock.now
             await runtime.apply(output(pose, reaction: UUID()), darkMode: false)
-            #expect(player.isPlaying)
+            #expect(player.isAnimationPlaying)
+            let frame = player.realtimeAnimationFrame
             try await Task.sleep(for: .milliseconds(50))
-            #expect(player.isPlaying, "Real gesture must still be advancing after 50ms")
-            let deadline = started.advanced(by: .seconds(2))
-            while player.isPlaying, ContinuousClock.now < deadline {
+            #expect(player.isAnimationPlaying)
+            #expect(player.realtimeAnimationFrame != frame)
+            while player.isAnimationPlaying, began.duration(to: .now) < .seconds(2) {
                 try await Task.sleep(for: .milliseconds(10))
             }
-            let elapsed = started.duration(to: .now)
-            print("Real gesture \(index) \(pose) stopped after \(elapsed)")
-            #expect(!player.isPlaying, "Authored reaction must naturally stop without a host callback")
-            #expect(elapsed >= .seconds(duration - 0.04))
-            #expect(triggerProbe.count == index + 1)
+            #expect(!player.isAnimationPlaying)
+            #expect(began.duration(to: .now) >= .seconds(duration - 0.04))
+            #expect(runtime.displayedPose == .resting)
         }
+        #expect(runtime.triggerCount == 5)
     }
 
     @Test func restUpdatesDoNotFireReactBeforeFreshBlinkDeadline() async throws {
@@ -290,14 +276,12 @@ extension CompanionAssetTests {
         await runtime.attach(eligible: true)
         await runtime.apply(action, darkMode: false)
         #expect(runtime.triggerCount == 1)
-        let binding = try #require(runtime.binding)
-        #expect(binding.numberProperty(fromPath: "pose")?.value == 0)
+        #expect(runtime.displayedPose == .resting)
         let player = try #require(runtime.player)
         let window = try mount(player)
-        defer { player.pause(); player.deregisterView(); window.isHidden = true }
-        player.play()
+        defer { runtime.stop(); window.isHidden = true }
         try await Task.sleep(for: .milliseconds(80))
-        #expect(!player.isPlaying, "Reattachment must not play a queued old reaction or blink")
+        #expect(!player.isAnimationPlaying, "Reattachment must not play a queued old reaction or blink")
     }
 
     @Test func appearanceChangeDoesNotRetriggerActiveAction() async throws {
@@ -306,39 +290,36 @@ extension CompanionAssetTests {
         await runtime.apply(action, darkMode: false)
         await runtime.apply(action, darkMode: true)
         #expect(runtime.triggerCount == 1)
-        let binding = try #require(runtime.binding)
-        #expect(binding.numberProperty(fromPath: "pose")?.value == 4)
-        #expect(binding.booleanProperty(fromPath: "darkMode")?.value == true)
+        #expect(runtime.displayedPose == .reviewed)
     }
 
     @Test func obsoleteViewTeardownPreservesReplacementAndFreshGesture() async throws {
         let runtime = try await ready()
         let player = try #require(runtime.player)
         let oldWindow = try mount(player)
-        let oldView = try #require(player.riveView)
+        let oldContainer = try #require(player.superview)
         let newWindow = try mount(player)
-        let newView = try #require(player.riveView)
-        #expect(oldView !== newView)
-        defer {
-            CompanionRiveView.dismantleUIView(newView, coordinator: player)
-            oldWindow.isHidden = true
-            newWindow.isHidden = true
-        }
-
-        CompanionRiveView.dismantleUIView(oldView, coordinator: player)
-        #expect(player.riveView === newView)
-        let started = ContinuousClock.now
+        let newContainer = try #require(player.superview)
+        #expect(oldContainer !== newContainer)
+        defer { runtime.stop(); oldWindow.isHidden = true; newWindow.isHidden = true }
+        CompanionLottieView.dismantleUIView(oldContainer, coordinator: player)
+        #expect(player.superview === newContainer)
         await runtime.apply(output(.saved, reaction: UUID()), darkMode: false)
-        #expect(player.isPlaying)
         try await Task.sleep(for: .milliseconds(50))
-        #expect(player.isPlaying, "Replacement view must advance the actual fresh reaction")
-        let deadline = started.advanced(by: .seconds(2))
-        while player.isPlaying, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(!player.isPlaying)
-        #expect(started.duration(to: .now) >= .seconds(MivuMotion.saved - 0.04))
-        #expect(player.riveView === newView)
+        #expect(player.isAnimationPlaying)
+        #expect(player.superview === newContainer)
+    }
+
+    @Test func interruptionBeforeFirstFrameDropsTheCanceledReaction() async throws {
+        let runtime = try await ready()
+        await runtime.apply(output(.saved, reaction: UUID()), darkMode: false)
+        await runtime.apply(output(.attentive), darkMode: false)
+        let player = try #require(runtime.player)
+        let window = try mount(player)
+        defer { runtime.stop(); window.isHidden = true }
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(runtime.displayedPose == .attentive)
+        #expect(!player.isAnimationPlaying)
     }
 
     @Test func allFallbacksHaveBothAppearanceVariantsWithIdenticalBounds() throws {

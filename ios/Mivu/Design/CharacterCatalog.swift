@@ -4,7 +4,7 @@ struct CharacterDescriptor: Identifiable, Equatable {
     let id: String
     let displayName: String
     let schemaVersion: Int
-    let riveResourcePath: String
+    let animationResourcePath: String
     let fallbackAssetPrefix: String
     let previewAssetName: String
 }
@@ -15,7 +15,7 @@ struct CharacterCatalog {
             id: "pip",
             displayName: "Pip",
             schemaVersion: 1,
-            riveResourcePath: "Characters/pip/mivu-companion.riv",
+            animationResourcePath: "Characters/pip/pip.json",
             fallbackAssetPrefix: "Pip",
             previewAssetName: "PipPreview"
         )
@@ -30,7 +30,7 @@ struct CharacterCatalog {
         precondition(
             characters.contains {
                 $0.id == "pip" && $0.displayName == "Pip" && $0.schemaVersion == 1 &&
-                    $0.riveResourcePath == "Characters/pip/mivu-companion.riv" &&
+                    $0.animationResourcePath == "Characters/pip/pip.json" &&
                     $0.fallbackAssetPrefix == "Pip" && $0.previewAssetName == "PipPreview"
             },
             "The catalog must include Pip fallback assets"

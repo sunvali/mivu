@@ -6,7 +6,7 @@ enum CompanionPose: Int, CaseIterable {
     case reviewed = 4, recovery = 5, greeting = 6
 }
 
-enum CompanionSurface {
+enum CompanionSurface: Hashable {
     case today, coach
 }
 

@@ -1,27 +1,25 @@
 import SwiftUI
-@preconcurrency import RiveRuntime
+import Lottie
 
 struct CompanionView: View {
     let presentation: CompanionOutput
     let darkMode: Bool
     let size: CGFloat
     let runtime: CompanionRuntime
+    var surface: CompanionSurface = .today
 
     private var fallbackPose: CompanionPose {
-        presentation.playback == .animated && !runtime.isReady && !runtime.loadFailed
-            ? .resting : presentation.pose
+        presentation.playback == .animated && !runtime.isReady && !runtime.loadFailed ? .resting : presentation.pose
     }
 
     var body: some View {
         Group {
             if presentation.playback == .animated, let player = runtime.player {
-                CompanionRiveView(player: player, paused: runtime.isPaused,
-                                  fps: presentation.pose == .thinking ? 30 : 60)
+                CompanionLottieView(player: player, paused: runtime.isPaused)
                     .id(ObjectIdentifier(player))
+                    .task { await runtime.reconcileMount(player) }
             } else {
-                Image(runtime.fallbackAssetName(for: fallbackPose))
-                    .resizable()
-                    .scaledToFit()
+                Image(surface == .coach && [.resting, .attentive].contains(fallbackPose) ? runtime.character.fallbackAssetPrefix + "Coach" : runtime.fallbackAssetName(for: fallbackPose)).resizable().scaledToFit()
             }
         }
         .frame(width: size, height: size)
@@ -30,28 +28,33 @@ struct CompanionView: View {
     }
 }
 
-struct CompanionRiveView: UIViewRepresentable {
-    let player: RiveViewModel
+struct CompanionLottieView: UIViewRepresentable {
+    let player: LottieAnimationView
     let paused: Bool
-    let fps: Int
 
-    func makeCoordinator() -> RiveViewModel { player }
-
-    func makeUIView(context: Context) -> RiveView {
-        let view = player.createRiveView()
-        if !paused { player.play() }
-        return view
+    func makeCoordinator() -> LottieAnimationView { player }
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView()
+        Self.install(player, in: container)
+        return container
     }
-
-    func updateUIView(_ view: RiveView, context: Context) {
-        player.update(view: view)
-        player.setPreferredFramesPerSecond(preferredFramesPerSecond: fps)
+    func updateUIView(_ view: UIView, context: Context) {
+        Self.install(player, in: view)
         if paused { player.pause() }
     }
-
-    static func dismantleUIView(_ view: RiveView, coordinator: RiveViewModel) {
-        guard coordinator.riveView === view else { return }
+    static func install(_ player: LottieAnimationView, in container: UIView) {
+        guard player.superview !== container else { return }
+        player.removeFromSuperview()
+        player.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(player)
+        NSLayoutConstraint.activate([
+            player.leadingAnchor.constraint(equalTo: container.leadingAnchor), player.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            player.topAnchor.constraint(equalTo: container.topAnchor), player.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+    }
+    static func dismantleUIView(_ view: UIView, coordinator: LottieAnimationView) {
+        guard coordinator.superview === view else { return }
         coordinator.pause()
-        coordinator.deregisterView()
+        coordinator.removeFromSuperview()
     }
 }
