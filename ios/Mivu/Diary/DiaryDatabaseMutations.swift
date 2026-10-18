@@ -240,7 +240,7 @@ final class DiaryTransaction {
         changes.turnIDs.insert(turn.id)
     }
 
-    func appendCapture(_ payload: CoachSubmissionPayload) throws {
+    func appendCapture(_ payload: CoachSubmissionPayload, legacyMeal: DiaryMeal? = nil, legacyPhotoIDs: [UUID] = []) throws {
         let sequence = try database.mutationInteger("SELECT nextSequence FROM storage_head WHERE id = 1")
         guard sequence > 0, sequence < Int.max else { throw DiaryError.invalidData }
         let ordinal = try database.mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = 'coach_turn'")
@@ -263,7 +263,9 @@ final class DiaryTransaction {
         } else { segmentID = UUID() }
         let turn = CoachTurn(id: payload.submissionID, capturedAt: payload.context.capturedAt, text: payload.text,
             captureTimeZoneID: payload.context.timeZoneID, activeDayID: payload.context.activeDayID,
-            photoIDs: payload.attachments.map(\.id), submissionManifest: payload.manifest, captureSegmentID: segmentID)
+            photoIDs: legacyMeal == nil ? payload.attachments.map(\.id) : legacyPhotoIDs,
+            resolvedDayID: legacyMeal?.dayID, pendingMealID: legacyMeal?.id, pendingMealRevision: legacyMeal?.revision,
+            submissionManifest: legacyMeal == nil ? payload.manifest : nil, captureSegmentID: segmentID)
         try validateCoachTurnFields(turn)
         let encoded = try JSONEncoder().encode(turn)
         try database.execute("INSERT INTO coach_turn(id, ordinal, payload) VALUES (?, ?, ?)",

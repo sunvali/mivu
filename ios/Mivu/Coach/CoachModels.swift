@@ -6,6 +6,80 @@ enum MealTimePrecision: String, Codable, Sendable { case exact, dateOnly }
 enum CoachActivity: String, Sendable { case preparingPhotos, thinking, reading, saving }
 enum CoachDestination: String, Codable, CaseIterable, Sendable { case settings, profiles, connection, nutritionSource, backup }
 
+/// Engine acknowledgement contains no original photo payloads.
+struct CoachTurnResult: Equatable, Sendable {
+    var id: UUID
+    var text: String
+    var state: CoachTurnState
+    var assistantText: String?
+    var receipts: [CoachReceipt]
+    var pendingMealID: UUID?
+    init(_ turn: CoachTurn) {
+        id = turn.id; text = turn.text; state = turn.state; assistantText = turn.assistantText; receipts = turn.receipts; pendingMealID = turn.pendingMealID
+    }
+    init(_ work: CoachWorkItem) {
+        id = work.id; text = work.text; state = work.state; assistantText = work.assistantText; receipts = work.receipts; pendingMealID = work.pendingMealID
+    }
+}
+
+/// Durable worker metadata; originals are fetched separately for the selected job.
+struct CoachWorkItem: Equatable, Sendable, Identifiable {
+    var id: UUID
+    var sequence: Int64
+    var capturedAt: Date
+    var text: String
+    var state: CoachTurnState
+    var assistantText: String?
+    var receipts: [CoachReceipt]
+    var captureTimeZoneID: String
+    var activeDayID: UUID?
+    var resolvedDayID: UUID?
+    var needsDayChoice: Bool?
+    var pendingMealID: UUID?
+    var pendingMealRevision: Int?
+    var photos: [DiaryPhotoReference]
+}
+
+struct PendingSubmissionReference: Equatable, Sendable {
+    var mealID: UUID
+    var submissionID: UUID
+    var mealRevision: Int
+    var baseRevision: Int
+    var capturedAt: Date
+    var text: String
+    var state: SubmissionState
+    var dayID: UUID
+    var timeZoneID: String
+    var photos: [DiaryPhotoReference]
+}
+
+struct CoachMealCandidate: Codable, Equatable, Sendable, Identifiable {
+    struct Item: Codable, Equatable, Sendable {
+        var id: UUID
+        var name: String
+        var quantity: Double
+        var unit: String
+    }
+    var id: UUID
+    var dayID: UUID
+    var localDate: String
+    var timeZoneID: String
+    var revision: Int
+    var eatenAt: Date
+    var timePrecision: MealTimePrecision?
+    var items: [Item]
+    var omittedItemCount: Int
+    var capturedDescription: String
+    var descriptionTruncated: Bool
+}
+
+struct CoachMealCandidatePage: Codable, Equatable, Sendable {
+    var localDate: String
+    var meals: [CoachMealCandidate]
+    var hasMore: Bool
+    var nextAfterMealID: UUID?
+}
+
 struct CoachReceipt: Codable, Equatable, Sendable {
     var operationKey: String
     var turnID: UUID
@@ -144,6 +218,8 @@ struct CoachContext: Codable, Equatable, Sendable {
     var diaryRevision: Int? = nil
     var preferencesTruncated: Bool? = nil
     var attachedPhotoIDs: [UUID]? = nil
+    var committedReceipts: [CoachCommittedReceipt]? = nil
+    var omittedReceiptCount: Int? = nil
 }
 
 enum CoachError: Error, Equatable { case invalidTool, invalidArguments, limitExceeded, ungroundedConfirmation, connectionRequired }

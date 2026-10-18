@@ -94,6 +94,7 @@ final class DiaryQueryDiagnostics: Sendable {
         var maximumPhotoReadChunkBytes = 0
         var completeReads = 0
         var completeReconciles = 0
+        var coachPageReads = 0
         var queryPlans: [String] = []
     }
     private let state = OSAllocatedUnfairLock(initialState: Counters())
@@ -105,6 +106,7 @@ final class DiaryQueryDiagnostics: Sendable {
     }
     func recordCompleteRead() { state.withLock { $0.completeReads += 1 } }
     func recordCompleteReconcile() { state.withLock { $0.completeReconciles += 1 } }
+    func recordCoachPageRead() { state.withLock { $0.coachPageReads += 1 } }
     func recordQueryPlan(_ plan: String) { state.withLock { $0.queryPlans.append(plan) } }
 }
 

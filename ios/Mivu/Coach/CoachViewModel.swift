@@ -92,10 +92,7 @@ import Network
             do {
                 try await recoverLegacyCaptures(owner: owner)
                 while !Task.isCancelled {
-                    let snapshot = try await diary.store.snapshot(expectedProfileID: owner)
-                    guard let turn = snapshot.coachTurns.first(where: {
-                        [.captured, .analyzing, .waitingForNetwork].contains($0.state) || (connection.planAuthorized && $0.state == .waitingForConnection)
-                    }) else { break }
+                    guard let turn = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, expectedProfileID: owner) else { break }
                     activity = nil; activityTurnID = nil
                     if turn.state == .analyzing {
                         try await diary.store.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: owner)
@@ -184,13 +181,9 @@ import Network
         guard !diary.isSaving, !diary.isChangingProfile else { return }
         diary.isSaving = true
         defer { diary.isSaving = false }
-        let snapshot = try await diary.store.snapshot(expectedProfileID: owner)
-        let associated = Set(snapshot.coachTurns.map(\.id))
-        for meal in snapshot.meals {
-            for submission in meal.submissions where !associated.contains(submission.id) && [.captured, .waitingForConnection, .analyzing, .needsRetry].contains(submission.state) {
-                try Task.checkCancellation()
-                _ = try await diary.store.preparePendingCoachTurn(turnID: submission.id, expectedProfileID: owner)
-            }
+        while let submissionID = try await diary.store.nextLegacyCaptureID(expectedProfileID: owner) {
+            try Task.checkCancellation()
+            _ = try await diary.store.preparePendingCoachTurn(turnID: submissionID, expectedProfileID: owner)
         }
         try await diary.refresh(profileID: owner)
     }

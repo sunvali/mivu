@@ -76,6 +76,76 @@ enum ChatHistoryFixture {
         return value
     }
 
+    /// Shared historical-correction seed; source lunch is outside both recent windows.
+    static func lunchCorrectionSnapshot(capturedAt: Date = ISO8601DateFormatter().date(from: "2027-01-16T10:00:00Z")!,
+                                        zone: String = "UTC", ambiguity: String = "none") -> DiarySnapshot {
+        var generator = Generator(seed: 6006)
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: capturedAt)!
+        let formatter = DateFormatter(); formatter.calendar = calendar; formatter.timeZone = calendar.timeZone
+        formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"
+        let lunch = TrackingDay(id: generator.uuid(), localDate: formatter.string(from: yesterday), timeZoneID: zone,
+                                startAt: calendar.startOfDay(for: yesterday))
+        let basis = NutritionValues(kcal: 100, carbs: nil, protein: 20, fat: 3)
+        let chicken = FoodItem(id: generator.uuid(), name: "Chicken", quantity: ambiguity == "quantity" ? 200 : 2,
+                               unit: ambiguity == "quantity" ? "g" : "piece", nutrition: basis.scaled(by: 2),
+                               provenance: .estimate, reference: "Synthetic committed portion", uncertain: true,
+                               nutrientSources: ["kcal": .estimate, "protein": .estimate], nutritionBasis: basis)
+        let photo = MealPhoto(id: generator.uuid(), data: Data([255, 0, 255, 1]), createdAt: yesterday)
+        let originID = generator.uuid()
+        let description = ambiguity == "description" ? String(repeating: "Synthetic 🍎 ", count: 180) + "lunch" : "Synthetic lunch: chicken, rice and salad."
+        var items = [chicken, FoodItem(id: generator.uuid(), name: "Rice", quantity: 1, unit: "cup", nutrition: NutritionValues(kcal: 200)),
+                     FoodItem(id: generator.uuid(), name: "Salad", quantity: 1, unit: "bowl", nutrition: NutritionValues(kcal: 50))]
+        if ambiguity == "item" { var second = chicken; second.id = generator.uuid(); items.append(second) }
+        if ambiguity == "itemsOmitted" {
+            for _ in 0..<196 {
+                items.append(FoodItem(id: generator.uuid(), name: String(repeating: "Synthetic food ", count: 30),
+                    quantity: 1, unit: "piece", nutrition: NutritionValues(kcal: 1), reference: String(repeating: "Source ", count: 250)))
+            }
+            var hidden = chicken; hidden.id = generator.uuid(); items.append(hidden)
+        }
+        let meal = DiaryMeal(id: generator.uuid(), dayID: lunch.id, capturedAt: yesterday,
+                             eatenAt: calendar.date(bySettingHour: 12, minute: 0, second: 0, of: yesterday)!,
+                             revision: 1, timePrecision: .dateOnly, items: items, photos: [photo],
+                             submissions: [MealSubmission(id: originID, baseRevision: 0, text: description,
+                                                          photoIDs: [photo.id], reviewFirst: false, state: .saved)])
+        var source = DiarySnapshot(revision: 9, profile: DiaryProfile(id: generator.uuid(), name: "Synthetic correction", timeZoneID: zone),
+                                   days: [lunch], meals: [meal])
+        source.coachTurns = [CoachTurn(id: originID, capturedAt: yesterday, text: description, state: .completed,
+                                      assistantText: "Recorded synthetic lunch.",
+                                      receipts: [CoachReceipt(operationKey: "\(originID)/food/\(lunch.localDate)", turnID: originID,
+                                                              dayID: lunch.id, mealID: meal.id, committedRevision: 1, resultJSON: "{}")],
+                                      captureTimeZoneID: zone, activeDayID: lunch.id, photoIDs: [photo.id])]
+        // Repeated date labels are real distinct days; noon alone never proves lunch.
+        let repeated = TrackingDay(id: generator.uuid(), localDate: lunch.localDate,
+                                   timeZoneID: zone == "Pacific/Honolulu" ? "UTC" : "Pacific/Honolulu", startAt: lunch.startAt)
+        source.days.append(repeated)
+        var other = meal; other.id = generator.uuid(); other.dayID = repeated.id
+        other.photos = []; other.submissions = [MealSubmission(id: generator.uuid(), baseRevision: 0,
+            text: ambiguity == "meal" ? "Another synthetic lunch" : "Synthetic dinner", photoIDs: [], reviewFirst: false, state: .saved)]
+        other.items = other.items.map { item in var value = item; value.id = generator.uuid(); return value }
+        source.meals.append(other)
+        if ambiguity == "page" {
+            for _ in 0..<21 {
+                var extra = other; extra.id = generator.uuid(); extra.submissions[0].id = generator.uuid()
+                source.meals.append(extra)
+            }
+        }
+        for index in 1...30 {
+            let instant = calendar.date(byAdding: .day, value: index, to: capturedAt)!
+            let day = TrackingDay(id: generator.uuid(), localDate: formatter.string(from: instant), timeZoneID: zone, startAt: instant)
+            source.days.append(day)
+            for _ in 0..<4 {
+                source.coachTurns.append(CoachTurn(id: generator.uuid(), capturedAt: instant,
+                    text: "Synthetic newer completed exchange \(index)", state: .completed, assistantText: "Recorded.",
+                    captureTimeZoneID: zone, activeDayID: day.id))
+            }
+        }
+        source.activeDayID = source.days.last!.id
+        source.previousDayConfirmedAt = source.days.last!.startAt
+        return source
+    }
+
     static func makeDatabase(_ snapshot: DiarySnapshot) throws -> URL {
         let directory = URL.temporaryDirectory.appending(path: "ChatHistory-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

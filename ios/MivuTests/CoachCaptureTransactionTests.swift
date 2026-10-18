@@ -260,7 +260,7 @@ import Testing
 
 private final class CaptureCommitProbe { var attempted = false }
 
-struct CaptureFixture {
+struct CaptureFixture: Sendable {
     let root: URL
     let url: URL
     let before: DiarySnapshot

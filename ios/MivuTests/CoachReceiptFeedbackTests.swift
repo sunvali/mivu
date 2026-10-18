@@ -36,7 +36,7 @@ private actor CoachFeedbackReplies {
     }
 
     private func run(_ store: DiaryStore, _ profile: DiaryProfile, _ turn: CoachTurn,
-                     replies: [CoachInferenceResult]) async throws -> CoachTurn {
+                     replies: [CoachInferenceResult]) async throws -> CoachTurnResult {
         let script = CoachFeedbackReplies(replies)
         return try await CoachEngine(store: store, infer: { try await script.next($0, $1) })
             .run(turnID: turn.id, expectedProfileID: profile.id)

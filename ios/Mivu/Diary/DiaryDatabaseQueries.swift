@@ -10,7 +10,8 @@ extension DiaryDatabase {
     }
 
     func coachPage(_ request: CoachPageRequest, expectedProfileID: UUID) throws -> CoachPage {
-        try coachRead {
+        diagnostics?.recordCoachPageRead()
+        return try coachRead {
             let context = try coachContext(expectedProfileID: expectedProfileID)
             var rows: [CoachIndexRow]
             switch request {
@@ -325,5 +326,47 @@ extension DiaryDatabase {
     private func coachBlob(_ statement: OpaquePointer, _ column: Int32) throws -> Data {
         guard let bytes = sqlite3_column_blob(statement, column) else { throw DiaryError.invalidData }
         return Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, column)))
+    }
+}
+
+extension DiaryDatabase {
+    func coachReceiptSummary(turnID: UUID, expectedProfileID: UUID) throws -> String {
+        try domainRead(expectedProfileID: expectedProfileID) { head in
+            let transaction = DiaryTransaction(database: self, head: head)
+            guard let turn = try transaction.turn(id: turnID) else { throw DiaryError.notFound }
+            var summaries: [String] = []
+            func number(_ value: Double) -> String { value.formatted(.number.grouping(.never).locale(Locale(identifier: "en_US"))) }
+            for receipt in turn.receipts {
+                let facts = coachCommittedReceipt(receipt)
+                if let id = receipt.mealID {
+                    guard let meal = try? transaction.mealProjection(id: id) else { summaries.append("This meal was deleted. Its prior receipt is retained."); continue }
+                    if let itemID = receipt.itemID, !meal.items.contains(where: { $0.id == itemID }) {
+                        summaries.append("This item was deleted. Its prior receipt is retained."); continue
+                    }
+                    if !facts.items.isEmpty {
+                        let items = facts.items.map { "\($0.name) (\(number($0.quantity)) \($0.unit))" }.joined(separator: ", ")
+                        let date = facts.targetLocalDate.map { " on " + $0 } ?? ""
+                        summaries.append("\(receipt.itemID == nil ? "Logged" : "Updated") \(items)\(date). Nutrition may be uncertain.")
+                    } else if meal.state == .awaitingReview { summaries.append("Estimate ready for review.") }
+                    else if receipt.operationKey.contains("/retry_meal/") { summaries.append("Queued the original saved meal input for analysis.") }
+                    else { summaries.append("The requested meal change was recorded.") }
+                } else if let id = receipt.weightID {
+                    if let weight = try? transaction.weight(id: id) { summaries.append("Recorded weight: \(number(weight.value)) \(weight.unit).") }
+                    else { summaries.append("This weight was deleted.") }
+                } else if let id = receipt.workoutID {
+                    if let workout = try? transaction.workout(id: id) { summaries.append("Recorded \(workout.kind.rawValue): \(workout.durationMinutes) minutes.") }
+                    else { summaries.append("This workout was deleted.") }
+                } else if let id = receipt.goalID {
+                    guard try transaction.records("goal", clause: "id = ?", values: [.text(id.uuidString)], limit: 1).first != nil else { throw DiaryError.notFound }
+                    summaries.append("Saved your requested goals.")
+                } else if receipt.destination != nil { summaries.append("Use the Settings link to continue.") }
+                else if receipt.operationKey.contains("/update_preferences") { summaries.append("Saved your diary preferences. Timezone: \(head.profile.timeZoneID).") }
+                else if let id = receipt.dayID {
+                    let day = try trackingDay(id: id)
+                    summaries.append("\(day.localDate): \(day.completeness.rawValue).")
+                }
+            }
+            return summaries.joined(separator: "\n")
+        }
     }
 }

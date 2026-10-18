@@ -609,7 +609,13 @@ private func diaryPhotoScope(_ owner: DiaryPhotoOwner) -> (table: String, kind: 
 func diaryCorrectedItem(_ item: FoodItem, previous: FoodItem) throws -> FoodItem {
     var edited = item; edited.nutrientSources = previous.nutrientSources
     let nutrients: [(String, KeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("carbs", \.carbs), ("protein", \.protein), ("fat", \.fat)]
-    for (name, field) in nutrients { edited.nutrientSources[name] = item.nutrition[keyPath: field] == previous.nutrition[keyPath: field] ? previous.nutrientSources[name] ?? previous.provenance : .user }
+    let quantityOnly = item.quantity != previous.quantity && item.nutrition == previous.nutrition && item.name == previous.name && item.unit == previous.unit
+    for (name, field) in nutrients {
+        if item.nutrition[keyPath: field] != previous.nutrition[keyPath: field] { edited.nutrientSources[name] = .user }
+        else if previous.nutrition[keyPath: field] != nil && !(quantityOnly && !previous.nutrientSources.isEmpty) {
+            edited.nutrientSources[name] = previous.nutrientSources[name] ?? previous.provenance
+        }
+    }
     if edited.quantity != previous.quantity && edited.nutrition == previous.nutrition {
         let basis = previous.nutritionBasis ?? (previous.quantity > 0 ? previous.nutrition.scaled(by: 1 / previous.quantity) : nil)
         guard let basis else { throw DiaryError.invalidData }; edited.nutrition = basis.scaled(by: edited.quantity); edited.nutritionBasis = basis

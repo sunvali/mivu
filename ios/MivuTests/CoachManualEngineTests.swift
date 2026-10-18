@@ -58,7 +58,7 @@ private actor RevisionCoachReplies {
         CoachInferenceResult(model: "fixture", text: text, calls: calls, outputItems: [])
     }
 
-    private func run(_ store: DiaryStore, _ profile: DiaryProfile, _ turn: CoachTurn, _ calls: [CoachToolCall]) async throws -> CoachTurn {
+    private func run(_ store: DiaryStore, _ profile: DiaryProfile, _ turn: CoachTurn, _ calls: [CoachToolCall]) async throws -> CoachTurnResult {
         let reads = try calls.compactMap { edit -> CoachToolCall? in
             guard ["edit_item", "accept_review", "attach_photos", "delete_photo"].contains(edit.name) else { return nil }
             guard let args = try JSONSerialization.jsonObject(with: Data(edit.arguments.utf8)) as? [String: Any],

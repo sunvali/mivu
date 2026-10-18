@@ -18,6 +18,59 @@ actor DiaryStore {
     }
     private let maximumFileBytes: Int
 
+    func nextPendingCoachTurn(includeWaitingForConnection: Bool, expectedProfileID: UUID) throws -> CoachWorkItem? {
+        if pagedHead != nil { return try pagedConnection(expectedProfileID: expectedProfileID).database.nextPendingCoachTurn(includeWaitingForConnection: includeWaitingForConnection, expectedProfileID: expectedProfileID) }
+        throw DiaryError.invalidData
+    }
+    func nextUnlinkedPendingSubmission(expectedProfileID: UUID) throws -> PendingSubmissionReference? {
+        if pagedHead != nil { return try pagedConnection(expectedProfileID: expectedProfileID).database.nextUnlinkedPendingSubmission(expectedProfileID: expectedProfileID) }
+        throw DiaryError.invalidData
+    }
+    func coachWorkItem(turnID: UUID, expectedProfileID: UUID) throws -> CoachWorkItem {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.coachWorkItem(turnID: turnID, expectedProfileID: expectedProfileID)
+    }
+    func coachMeals(on date: String, afterMealID: UUID? = nil, expectedProfileID: UUID) throws -> CoachMealCandidatePage {
+        if pagedHead != nil { return try pagedConnection(expectedProfileID: expectedProfileID).database.coachMeals(on: date, afterMealID: afterMealID, expectedProfileID: expectedProfileID) }
+        guard validLocalDate(date) else { throw DiaryError.invalidData }
+        let value = try snapshot(expectedProfileID: expectedProfileID)
+        let days = Dictionary(uniqueKeysWithValues: value.days.filter { $0.localDate == date }.map { ($0.id, $0) })
+        if let cursor = afterMealID { guard value.meals.contains(where: { $0.id == cursor && days[$0.dayID] != nil }) else { throw DiaryError.invalidData } }
+        let selected = value.meals.filter { days[$0.dayID] != nil && $0.id.uuidString > (afterMealID?.uuidString ?? "") }.sorted { $0.id.uuidString < $1.id.uuidString }
+        let meals = selected.prefix(20).map { meal in
+            let day = days[meal.dayID]!, text = meal.submissions.first?.text ?? value.coachTurns.first { $0.receipts.contains { $0.mealID == meal.id } }?.text ?? ""
+            let preview = meal.items.prefix(4).map { CoachMealCandidate.Item(id: $0.id, name: $0.name, quantity: $0.quantity, unit: $0.unit) }
+            return CoachMealCandidate(id: meal.id, dayID: day.id, localDate: date, timeZoneID: day.timeZoneID,
+                revision: meal.revision, eatenAt: meal.eatenAt, timePrecision: meal.timePrecision,
+                items: preview, omittedItemCount: meal.items.count - preview.count, capturedDescription: coachBoundedText(text, bytes: 512), descriptionTruncated: text.utf8.count > 512)
+        }
+        return CoachMealCandidatePage(localDate: date, meals: meals, hasMore: selected.count > 20, nextAfterMealID: selected.count > 20 ? meals.last?.id : nil)
+    }
+
+    func nextCoachResult(includeWaitingForConnection: Bool, expectedProfileID: UUID) throws -> CoachTurnResult? {
+        if pagedHead != nil { return try nextPendingCoachTurn(includeWaitingForConnection: includeWaitingForConnection, expectedProfileID: expectedProfileID).map(CoachTurnResult.init) }
+        return try snapshot(expectedProfileID: expectedProfileID).coachTurns.first {
+            [.captured, .analyzing, .waitingForNetwork].contains($0.state) || (includeWaitingForConnection && $0.state == .waitingForConnection)
+        }.map(CoachTurnResult.init)
+    }
+    func nextLegacyCaptureID(expectedProfileID: UUID) throws -> UUID? {
+        if pagedHead != nil { return try nextUnlinkedPendingSubmission(expectedProfileID: expectedProfileID)?.submissionID }
+        let value = try snapshot(expectedProfileID: expectedProfileID), ids = Set(value.coachTurns.map(\.id))
+        return value.meals.lazy.flatMap(\.submissions).first {
+            !ids.contains($0.id) && [.captured, .waitingForConnection, .analyzing, .needsRetry].contains($0.state)
+        }?.id
+    }
+
+    private func refreshCoachHead(expectedProfileID: UUID) throws {
+        guard let selected = pagedHead else { return }
+        let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+        let current = try database.readHead(expectedProfileID: expectedProfileID)
+        guard current.timelineGeneration == selected.timelineGeneration, current.revision >= selected.revision else { throw DiaryError.staleRevision }
+        if current.revision != selected.revision, let token = selected.lineage?.last {
+            guard current.lineage?.contains(token) == true else { throw DiaryError.staleRevision }
+        }
+        pagedHead = current
+    }
+
     /// Component-only selection; automatic migration and shipping selection activate together later.
     func selectPagedProfile(_ id: UUID) throws -> DiaryHead {
         let identity = try fileIdentity(file(id))
@@ -809,17 +862,21 @@ actor DiaryStore {
         return turn
     }
     /// Called by the serialized worker only before starting a fresh analysis attempt.
-    func preparePendingCoachTurn(turnID: UUID, expectedProfileID: UUID) throws -> CoachTurn {
+    func preparePendingCoachTurn(turnID: UUID, expectedProfileID: UUID) throws -> CoachTurnResult {
+        if pagedHead != nil {
+            try pagedMutation(expectedProfileID) { try $0.prepareCoachWork(turnID: turnID, at: currentTime(), expected: $1, maximumBytes: maximumFileBytes) }
+            return try coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
+        }
         let original = try snapshot(expectedProfileID: expectedProfileID)
         let existing = original.coachTurns.first { $0.id == turnID }
-        if let existing, existing.pendingMealID == nil { return existing }
+        if let existing, existing.pendingMealID == nil { return CoachTurnResult(existing) }
         guard existing == nil || (existing!.state != .analyzing && existing!.state != .completed && existing!.receipts.isEmpty),
               let meal = original.meals.first(where: { $0.submissions.contains { $0.id == turnID } }),
               existing == nil || existing!.pendingMealID == meal.id,
               let submission = meal.submissions.first(where: { $0.id == turnID }),
               [.captured, .waitingForConnection, .analyzing, .needsRetry].contains(submission.state)
         else { throw DiaryError.staleRevision }
-        if let existing, submission.baseRevision == meal.revision && existing.pendingMealRevision == meal.revision { return existing }
+        if let existing, submission.baseRevision == meal.revision && existing.pendingMealRevision == meal.revision { return CoachTurnResult(existing) }
         var prepared: CoachTurn!
         try transaction(expectedProfileID) { snapshot in
             let m = snapshot.meals.firstIndex { $0.id == meal.id }!, s = snapshot.meals[m].submissions.firstIndex { $0.id == turnID }!
@@ -837,9 +894,23 @@ actor DiaryStore {
                 snapshot.coachTurns.append(prepared)
             }
         }
-        return prepared
+        return CoachTurnResult(prepared)
+    }
+    func coachResult(turnID: UUID, expectedProfileID: UUID) throws -> CoachTurnResult {
+        if pagedHead != nil { return CoachTurnResult(try coachWorkItem(turnID: turnID, expectedProfileID: expectedProfileID)) }
+        return CoachTurnResult(try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID))
+    }
+    func coachInferencePhotos(turnID: UUID, expectedProfileID: UUID) throws -> [Data] {
+        if pagedHead != nil {
+            let work = try coachWorkItem(turnID: turnID, expectedProfileID: expectedProfileID)
+            guard work.receipts.isEmpty else { return [] }
+            guard work.photos.count <= 30 else { throw CoachError.limitExceeded }
+            return try work.photos.map { try photoContent($0, expectedProfileID: expectedProfileID) }
+        }
+        return try coachPhotos(turnID: turnID, expectedProfileID: expectedProfileID).map(\.data)
     }
     func coachTurn(turnID: UUID, expectedProfileID: UUID) throws -> CoachTurn {
+        if pagedHead != nil { throw DiaryError.invalidData }
         guard let turn = try snapshot(expectedProfileID: expectedProfileID).coachTurns.first(where: { $0.id == turnID }) else { throw DiaryError.notFound }
         return turn
     }
@@ -850,6 +921,7 @@ actor DiaryStore {
         return turn.photoIDs.compactMap { id in turn.photos.first { $0.id == id } ?? snapshot.meals.filter { linkedMeals.contains($0.id) }.lazy.flatMap(\.photos).first { $0.id == id } }
     }
     func coachContext(turnID: UUID, expectedProfileID: UUID) throws -> CoachContext {
+        if pagedHead != nil { return try pagedConnection(expectedProfileID: expectedProfileID).database.coachInferenceContext(turnID: turnID, expectedProfileID: expectedProfileID) }
         let snapshot = try snapshot(expectedProfileID: expectedProfileID)
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         let days = Array(snapshot.days.suffix(14)), ids = Set(snapshot.days.suffix(14).map(\.id))
@@ -1051,6 +1123,7 @@ actor DiaryStore {
     }
 
     func coachMeal(id: UUID, expectedProfileID: UUID) throws -> CoachContext.Meal {
+        if pagedHead != nil { return try pagedConnection(expectedProfileID: expectedProfileID).database.coachMealDetail(id: id, expectedProfileID: expectedProfileID) }
         guard let meal = try snapshot(expectedProfileID: expectedProfileID).meals.first(where: { $0.id == id }) else { throw DiaryError.notFound }
         var projection = CoachContext.Meal(id: meal.id, dayID: meal.dayID, revision: meal.revision,
             eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: [], state: meal.state, omittedItemCount: meal.items.count)
@@ -1096,6 +1169,7 @@ actor DiaryStore {
     func validateCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID, mode: CoachWriteMode = .uninterrupted) throws {
         if pagedHead != nil {
             try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
+            try refreshCoachHead(expectedProfileID: expectedProfileID)
             try pagedConnection(expectedProfileID: expectedProfileID).database.validateCoachWrites(writes, turnID: turnID, mode: mode, at: currentTime(), expectedProfileID: expectedProfileID)
             return
         }
@@ -1164,6 +1238,7 @@ actor DiaryStore {
     func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID, mode: CoachWriteMode = .uninterrupted) throws -> [CoachReceipt] {
         if pagedHead != nil {
             try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
+            try refreshCoachHead(expectedProfileID: expectedProfileID)
             return try pagedMutation(expectedProfileID) { try $0.applyCoachWrites(writes, turnID: turnID, mode: mode, at: currentTime(), expected: $1, maximumBytes: maximumFileBytes) }
         }
         try validateCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID, mode: mode)
@@ -1213,6 +1288,7 @@ actor DiaryStore {
         try setCoachTurnState(turnID: turnID, state: state, needsDayChoice: needsDayChoice, expectedProfileID: expectedProfileID)
     }
     func coachCommittedSummary(turnID: UUID, expectedProfileID: UUID) throws -> String {
+        if pagedHead != nil { return try pagedConnection(expectedProfileID: expectedProfileID).database.coachReceiptSummary(turnID: turnID, expectedProfileID: expectedProfileID) }
         let snapshot = try snapshot(expectedProfileID: expectedProfileID)
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         var facts: [String] = []
@@ -1267,11 +1343,16 @@ actor DiaryStore {
         return parts.joined(separator: " ")
     }
     func coachGoalSummary(localDate: String, expectedProfileID: UUID) throws -> String {
+        if pagedHead != nil {
+            struct Goals: Decodable { var effective: GoalRecord? }
+            let facts = try JSONDecoder().decode(Goals.self, from: Data(coachGoals(localDate: localDate, expectedProfileID: expectedProfileID).utf8))
+            return facts.effective.map(coachGoalDescription) ?? "No goals are set for \(localDate)."
+        }
         guard validLocalDate(localDate) else { throw DiaryError.invalidData }
         return try snapshot(expectedProfileID: expectedProfileID).goal(on: localDate).map(coachGoalDescription) ?? "No goals are set for \(localDate)."
     }
     func coachPreferenceSummary(expectedProfileID: UUID) throws -> String {
-        let profile = try snapshot(expectedProfileID: expectedProfileID).profile
+        let profile = try pagedHead != nil ? diaryHead(expectedProfileID: expectedProfileID).profile : snapshot(expectedProfileID: expectedProfileID).profile
         return "Timezone: \(profile.timeZoneID). Dietary preferences: \(profile.preferences.isEmpty ? "not set" : profile.preferences)."
     }
 
@@ -1571,10 +1652,17 @@ actor DiaryStore {
     }
 
     func coachWorkoutSummary(id: UUID, expectedProfileID: UUID) throws -> String {
-        let snapshot = try snapshot(expectedProfileID: expectedProfileID)
-        if snapshot.deletedWorkoutIDs.contains(id) { return "This workout was deleted." }
-        let workout = try coachWorkout(id: id, expectedProfileID: expectedProfileID)
-        let day = snapshot.days.first { $0.id == workout.dayID }!
+        let workout: WorkoutSession, day: TrackingDay
+        if pagedHead != nil {
+            let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+            do { workout = try coachWorkout(id: id, expectedProfileID: expectedProfileID); day = try database.trackingDay(id: workout.dayID) }
+            catch DiaryError.notFound { return "This workout was deleted." }
+        } else {
+            let snapshot = try snapshot(expectedProfileID: expectedProfileID)
+            if snapshot.deletedWorkoutIDs.contains(id) { return "This workout was deleted." }
+            workout = try coachWorkout(id: id, expectedProfileID: expectedProfileID)
+            day = snapshot.days.first { $0.id == workout.dayID }!
+        }
         var facts = ["\(day.localDate): recorded \(workout.kind.rawValue), \(workout.durationMinutes) minutes; revision \(workout.revision)."]
         for exercise in workout.exercises {
             facts.append(exercise.name + ": " + exercise.sets.map { "\($0.repetitions) reps" + ($0.loadKg.map { " at \(coachNumber($0)) kg" } ?? " (load unset)") }.joined(separator: ", "))

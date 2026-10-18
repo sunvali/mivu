@@ -3,9 +3,6 @@ import Foundation
 // Explicit UI-test isolation is required by the caller; no provider request is made.
 enum CoachUITestInference {
     static func respond(_ input: [CoachInferenceInput], _: Data) async throws -> CoachInferenceResult {
-        if input.contains(where: { if case .functionOutput = $0 { return true }; return false }) {
-            return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: [], outputItems: [])
-        }
         if input.contains(where: {
             if case .message(role: .user, let text, _) = $0 { return text == "Synthetic delayed weekly report" }
             return false
@@ -20,6 +17,12 @@ enum CoachUITestInference {
         let text = input.compactMap { entry -> String? in
             if case .message(role: .user, let text, _) = entry { return text }; return nil
         }.joined(separator: " ").lowercased()
+        if text.contains("edit yesterday’s lunch"), text.contains("one more chicken") {
+            return try correction(input, context: context)
+        }
+        if input.contains(where: { if case .functionOutput = $0 { return true }; return false }) {
+            return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: [], outputItems: [])
+        }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: context.captureTimeZoneID) ?? .gmt
         let date = text.contains("yesterday") ? calendar.date(byAdding: .day, value: -1, to: context.capturedAt)! : context.capturedAt
@@ -61,6 +64,40 @@ enum CoachUITestInference {
         let id = UUID().uuidString
         return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: name, namespace: "mivu", arguments: argumentsJSON)], outputItems: [])
     }
+    private static func correction(_ input: [CoachInferenceInput], context: CoachContext) throws -> CoachInferenceResult {
+        func reply(_ name: String? = nil, _ args: [String: Any] = [:]) throws -> CoachInferenceResult {
+            let id = UUID().uuidString
+            let calls = try name.map { [CoachToolCall(id: id, callID: id, name: $0, namespace: "mivu",
+                arguments: String(decoding: try JSONSerialization.data(withJSONObject: args, options: .sortedKeys), as: UTF8.self))] } ?? []
+            return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: calls, outputItems: [])
+        }
+        // A prior committed increment is a result, never a new serving calculation.
+        if !(context.committedReceipts ?? []).isEmpty || (context.omittedReceiptCount ?? 0) > 0 { return try reply() }
+        let outputs = input.compactMap { value -> String? in if case .functionOutput(_, let text) = value { return text }; return nil }
+        if outputs.isEmpty {
+            var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: context.captureTimeZoneID)!
+            let date = calendar.date(byAdding: .day, value: -1, to: context.capturedAt)!
+            return try reply("get_meals_for_date", ["target_local_date": diaryDateLabel(date, zone: context.captureTimeZoneID)])
+        }
+        if outputs.count == 1 {
+            let page = try JSONDecoder().decode(CoachMealCandidatePage.self, from: Data(outputs[0].utf8))
+            let lunches = page.meals.filter { $0.capturedDescription.lowercased().contains("lunch") }
+            guard !page.hasMore, !page.meals.contains(where: { $0.descriptionTruncated }), lunches.count == 1 else {
+                return try reply("ask_clarification", ["kind": "meal"])
+            }
+            return try reply("get_meal", ["meal_id": lunches[0].id.uuidString])
+        }
+        if outputs.count == 2 {
+            let meal = try JSONDecoder().decode(CoachContext.Meal.self, from: Data(outputs[1].utf8))
+            let chicken = meal.items.filter { $0.name.lowercased() == "chicken" }
+            guard meal.omittedItemCount == 0, chicken.count == 1 else { return try reply("ask_clarification", ["kind": "food"]) }
+            guard chicken[0].unit == "piece", chicken[0].quantity > 0 else { return try reply("ask_clarification", ["kind": "portion"]) }
+            return try reply("correct_item", ["meal_id": meal.id.uuidString, "item_id": chicken[0].id.uuidString,
+                "expected_revision": meal.revision, "quantity": chicken[0].quantity + 1])
+        }
+        return try reply()
+    }
+
 }
 
 #if DEBUG
