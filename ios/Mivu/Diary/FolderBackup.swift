@@ -212,15 +212,27 @@ actor FolderBackup {
         }
     }
 
+    private func acknowledgedConfiguration(_ intent: Intent) throws -> Configuration {
+        try metadata {
+            let current = try selectedConfiguration(intent.snapshot.profile.id, generation: intent.configuration.generation!)
+            let key = intent.configuration.bookmark!.base64EncodedString()
+            guard fence.version == intent.version &+ 1,
+                  current.bookmark == intent.configuration.bookmark,
+                  current.revision == intent.snapshot.revision,
+                  current.savedAt != nil, current.acknowledgedBookmark == current.bookmark,
+                  current.acknowledgedHeads?[key] == intent.snapshot.lineage?.last else { throw DiaryError.wrongOwner }
+            return current
+        }
+    }
+
     private func cleanFormerDestinations(_ intent: Intent) throws {
         let profileID = intent.snapshot.profile.id
-        let current = try metadata { try configuration(profileID)! }
+        let current = try acknowledgedConfiguration(intent)
         for bookmark in current.previousBookmarks ?? [] {
             try delete(profileID: profileID, folder: resolve(bookmark), expectedHead: current.acknowledgedHeads?[bookmark.base64EncodedString()])
         }
         try metadata {
-            var latest = try selectedConfiguration(profileID, generation: intent.configuration.generation!)
-            guard latest.bookmark == intent.configuration.bookmark, latest.revision == intent.snapshot.revision else { throw DiaryError.wrongOwner }
+            var latest = try acknowledgedConfiguration(intent)
             latest.previousBookmarks = nil
             let key = latest.bookmark!.base64EncodedString()
             latest.acknowledgedHeads = latest.acknowledgedHeads?.filter { $0.key == key }
@@ -266,6 +278,7 @@ actor FolderBackup {
             try Task.checkCancellation()
             let pending = try acknowledgement(intent)
             try await coordinator.store.acknowledgeExport(request, cloneHead: cloned.head, acknowledgement: pending)
+            try await coordinator.checkpoint(.acknowledged, target)
             try cleanFormerDestinations(intent)
             try await coordinator.release(cloned); ticket = nil
         } catch {

@@ -29,7 +29,7 @@ struct DiaryPreparedReplacement: Sendable {
 
 enum DiaryExportStage: Equatable, Sendable {
     case cloneCreated, cloneStep, cloneReady, serialization, serialized
-    case providerWrite, providerWritten, acknowledgement, replacementBuild, replacementValidated
+    case providerWrite, providerWritten, acknowledgement, acknowledged, replacementBuild, replacementValidated
 }
 
 /// Owns explicit interchange work away from the live diary writer.

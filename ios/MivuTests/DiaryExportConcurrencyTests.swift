@@ -409,6 +409,38 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: f.root.appending(path: "diary-export-" + request.operationID.uuidString).path))
     }
 
+    @Test func folderChangeAfterAcknowledgementPreservesOnlyCompletedBackupUntilNewDestinationSucceeds() async throws {
+        let f = try CaptureFixture(); defer { f.remove() }
+        let store = DiaryStore(directory: f.root), gate = ExportStageGate(.acknowledged)
+        _ = try await store.selectPagedProfile(f.profileID)
+        let (backup, generation, folderA) = try await configuredBackup(f)
+        let coordinator = DiaryExportCoordinator(store: store, temporaryDirectory: f.root,
+            checkpoint: { stage, url in try await gate.checkpoint(stage, url: url) })
+        let requestA = try await store.exportRequest(expectedProfileID: f.profileID, backupGeneration: generation)
+        let operationA = Task { try await gate.observe { try await backup.save(requestA, coordinator: coordinator) } }
+        try await gate.waitUntilReached()
+        #expect(await backup.status(profileID: f.profileID).savedAt != nil)
+        let outputA = folderA.appending(path: FolderBackup.filename(profileID: f.profileID))
+        let completedA = try Data(contentsOf: outputA)
+        #expect(try DiaryArchive.decode(completedA) == f.before)
+        let folderB = try exportFolder(in: f.root, name: "pending-provider-B")
+        let outputB = folderB.appending(path: FolderBackup.filename(profileID: f.profileID))
+        try await backup.selectFolder(folderB, profileID: f.profileID)
+        await gate.release()
+        await #expect(throws: DiaryError.wrongOwner) { try await operationA.value }
+        #expect(FileManager.default.fileExists(atPath: outputA.path))
+        #expect(try Data(contentsOf: outputA) == completedA)
+        #expect(!FileManager.default.fileExists(atPath: outputB.path))
+        let pendingB = await backup.status(profileID: f.profileID)
+        #expect(pendingB.configured && pendingB.savedAt == nil && pendingB.pendingError != nil)
+        let requestB = try await store.exportRequest(expectedProfileID: f.profileID, backupGeneration: generation)
+        try await backup.save(requestB, coordinator: coordinator)
+        #expect(try DiaryArchive.readContents(outputB) == f.before)
+        #expect(!FileManager.default.fileExists(atPath: outputA.path))
+        let savedB = await backup.status(profileID: f.profileID)
+        #expect(savedB.savedAt != nil && savedB.pendingError == nil)
+    }
+
     @Test(arguments: ["reselection", "restore", "delete", "replacement", "generation", "folder", "retired"])
     func deleteRestoreOrReplacementRejectsDelayedAcknowledgement(change: String) async throws {
         let f = try CaptureFixture(); defer { f.remove() }
