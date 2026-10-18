@@ -417,6 +417,17 @@ actor DiaryStore {
     }
 
     func recordWeight(value: Double, unit: String = "kg", at: Date = Date(), startNewDay: Bool = true, expectedProfileID: UUID? = nil) throws -> WeightEntry {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { database, head in
+            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+                let dayID = try startNewDay ? transaction.startDay(at: at).id : transaction.head.activeDayID
+                if let dayID {
+                    let previous = try transaction.weight(on: dayID)
+                    return try transaction.setWeight(dayID: dayID, value: value, unit: unit, expectedRevision: previous?.revision, measuredAt: at, precision: .exact)
+                }
+                let weight = WeightEntry(dayID: nil, measuredAt: at, value: value, unit: unit)
+                try transaction.saveWeight(weight); return weight
+            }
+        } }
         var weight: WeightEntry!
         try transaction(expectedProfileID) { snapshot in
             let dayID = startNewDay ? startDay(in: &snapshot, at: at).id : snapshot.activeDayID
@@ -436,6 +447,7 @@ actor DiaryStore {
     }
 
     func setGoals(_ goal: GoalRecord, expectedRevision: Int?, expectedProfileID: UUID) throws -> GoalRecord {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.setGoals(goal, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) } }
         var saved: GoalRecord!
         try transaction(expectedProfileID) { snapshot in
             guard validLocalDate(goal.effectiveLocalDate) else { throw DiaryError.invalidData }
@@ -456,6 +468,13 @@ actor DiaryStore {
     }
 
     func setWeight(dayLocalDate: String, value: Double, unit: String, measuredAt: Date?, expectedRevision: Int?, expectedProfileID: UUID) throws -> WeightEntry {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { database, head in
+            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+                let day = try transaction.resolveDay(localDate: dayLocalDate, timeZoneID: head.profile.timeZoneID, at: diaryDateOnlyInstant(dayLocalDate, zone: head.profile.timeZoneID))
+                if let measuredAt { guard measuredAt.timeIntervalSince1970.isFinite, diaryDateLabel(measuredAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData } }
+                return try transaction.setWeight(dayID: day.id, value: value, unit: unit, expectedRevision: expectedRevision, measuredAt: measuredAt ?? diaryDateOnlyInstant(day.localDate, zone: day.timeZoneID), precision: measuredAt == nil ? .dateOnly : .exact)
+            }
+        } }
         var saved: WeightEntry!
         try transaction(expectedProfileID) { snapshot in
             let day = try progressDay(dayLocalDate, in: &snapshot)
@@ -472,6 +491,7 @@ actor DiaryStore {
     }
 
     func updateWeight(id: UUID, value: Double, expectedRevision: Int, expectedProfileID: UUID) throws -> WeightEntry {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.updateWeight(id: id, value: value, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) } }
         var saved: WeightEntry!
         try transaction(expectedProfileID) { snapshot in
             guard let index = snapshot.weights.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
@@ -484,6 +504,7 @@ actor DiaryStore {
     }
 
     func setWeight(dayID: UUID, value: Double, unit: String = "kg", expectedRevision: Int?, expectedProfileID: UUID) throws -> WeightEntry {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.setWeight(dayID: dayID, value: value, unit: unit, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) } }
         var saved: WeightEntry!
         try transaction(expectedProfileID) { snapshot in
             guard let day = snapshot.days.first(where: { $0.id == dayID }) else { throw DiaryError.notFound }
@@ -516,6 +537,7 @@ actor DiaryStore {
     }
 
     func deleteWeight(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.deleteWeight(id: id, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard let index = snapshot.weights.firstIndex(where: { $0.id == id }) else { throw DiaryError.notFound }
             guard snapshot.weights[index].revision == expectedRevision else { throw DiaryError.staleRevision }
@@ -525,6 +547,12 @@ actor DiaryStore {
     }
 
     func createWorkout(localDate: String, draft: WorkoutDraft, performedAt: Date?, expectedProfileID: UUID) throws -> WorkoutSession {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { database, head in
+            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+                let day = try transaction.resolveDay(localDate: localDate, timeZoneID: head.profile.timeZoneID, at: diaryDateOnlyInstant(localDate, zone: head.profile.timeZoneID))
+                return try transaction.createWorkout(dayID: day.id, draft: draft, performedAt: performedAt)
+            }
+        } }
         var saved: WorkoutSession!
         try transaction(expectedProfileID) { snapshot in
             let day = try progressDay(localDate, in: &snapshot)
@@ -538,6 +566,7 @@ actor DiaryStore {
     }
 
     func createWorkout(dayID: UUID, draft: WorkoutDraft, expectedProfileID: UUID) throws -> WorkoutSession {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.createWorkout(dayID: dayID, draft: draft, expected: $1, maximumBytes: maximumFileBytes) } }
         var saved: WorkoutSession!
         try transaction(expectedProfileID) { snapshot in
             guard let day = snapshot.days.first(where: { $0.id == dayID }) else { throw DiaryError.notFound }
@@ -556,6 +585,7 @@ actor DiaryStore {
     }
 
     func updateWorkout(_ session: WorkoutSession, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.updateWorkout(session, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) } }
         var saved: WorkoutSession!
         try transaction(expectedProfileID) { snapshot in
             guard let index = snapshot.workouts.firstIndex(where: { $0.id == session.id }) else { throw DiaryError.notFound }
@@ -572,12 +602,14 @@ actor DiaryStore {
     }
 
     func deleteWorkout(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.deleteWorkout(id: id, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             try removeWorkout(id: id, expectedRevision: expectedRevision, snapshot: &snapshot)
         }
     }
 
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile? = nil, expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.updateProfile(profile, expectedProfile: expectedProfile, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard snapshot.profile.id == profile.id else { throw DiaryError.wrongOwner }
             guard expectedProfile == nil || snapshot.profile == expectedProfile else { throw DiaryError.staleRevision }
@@ -898,6 +930,7 @@ actor DiaryStore {
         }
     }
     func applyCoachFood(turnID: UUID, targetLocalDate: String, items: [FoodItem], eatenAt: Date? = nil, reviewFirst: Bool = false, expectedProfileID: UUID) throws -> CoachReceipt {
+        if pagedHead != nil { return try applyCoachWrites([.food(date: targetLocalDate, items: items, eatenAt: eatenAt, reviewFirst: reviewFirst)], turnID: turnID, epoch: selectionEpoch(expectedProfileID: expectedProfileID), expectedProfileID: expectedProfileID)[0] }
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         let key = "\(turnID.uuidString)/food/\(targetLocalDate)"
         if let receipt = turn.receipts.first(where: { $0.operationKey == key }) {
@@ -946,6 +979,7 @@ actor DiaryStore {
         return receipt
     }
     func applyCoachItemCorrection(turnID: UUID, mealID: UUID, item: FoodItem, expectedRevision: Int, expectedProfileID: UUID) throws -> CoachReceipt {
+        if pagedHead != nil { return try applyCoachWrites([.correction(mealID: mealID, item: item, revision: expectedRevision)], turnID: turnID, epoch: selectionEpoch(expectedProfileID: expectedProfileID), expectedProfileID: expectedProfileID)[0] }
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         guard turn.pendingMealID == nil || turn.pendingMealID == mealID else { throw DiaryError.invalidData }
         let key = "\(turnID.uuidString)/correct/\(mealID.uuidString)/\(item.id.uuidString)"
@@ -972,12 +1006,13 @@ actor DiaryStore {
             if turn.pendingMealID != nil { snapshot.coachTurns[t].pendingMealRevision = snapshot.meals[m].revision }
             receipt = CoachReceipt(operationKey: key, turnID: turnID, dayID: meal.dayID, mealID: mealID, itemID: item.id,
                 committedRevision: snapshot.revision + 1, resultJSON: try coachJSON(CoachItemResult(mealID: mealID, revision: snapshot.meals[m].revision,
-                    state: snapshot.meals[m].state, item: edited)))
+                    state: snapshot.meals[m].state, item: edited, targetLocalDate: original.days.first { $0.id == meal.dayID }!.localDate)))
             snapshot.coachTurns[t].receipts.append(receipt)
         }
         return receipt
     }
     func closeCoachDay(turnID: UUID, localDate: String, completeness: DayCompleteness, expectedProfileID: UUID) throws -> CoachReceipt {
+        if pagedHead != nil { return try applyCoachWrites([.close(date: localDate, completeness: completeness)], turnID: turnID, epoch: selectionEpoch(expectedProfileID: expectedProfileID), expectedProfileID: expectedProfileID)[0] }
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         let key = "\(turnID.uuidString)/close/\(localDate)"
         if let receipt = turn.receipts.first(where: { $0.operationKey == key }) { return receipt }
@@ -1034,23 +1069,48 @@ actor DiaryStore {
         return projection
     }
     func coachGoals(localDate: String, expectedProfileID: UUID) throws -> String {
+        if pagedHead != nil {
+            let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+            return try database.domainRead(expectedProfileID: expectedProfileID) { head in
+                let transaction = DiaryTransaction(database: database, head: head)
+                struct Goals: Encodable { var exact: GoalRecord?; var effective: GoalRecord?; var diaryRevision: Int }
+                return try coachJSON(Goals(exact: transaction.exactGoal(on: localDate), effective: transaction.goal(on: localDate), diaryRevision: head.revision))
+            }
+        }
         let snapshot = try snapshot(expectedProfileID: expectedProfileID)
         guard validLocalDate(localDate) else { throw DiaryError.invalidData }
         struct Goals: Encodable { var exact: GoalRecord?; var effective: GoalRecord?; var diaryRevision: Int }
         return try coachJSON(Goals(exact: snapshot.goals.first { $0.effectiveLocalDate == localDate }, effective: snapshot.goal(on: localDate), diaryRevision: snapshot.revision))
     }
     func coachPreferences(expectedProfileID: UUID) throws -> String {
+        if pagedHead != nil {
+            return try pagedConnection(expectedProfileID: expectedProfileID).database.domainRead(expectedProfileID: expectedProfileID) { head in
+                struct Preferences: Encodable { var profile: DiaryProfile; var diaryRevision: Int }
+                return try coachJSON(Preferences(profile: head.profile, diaryRevision: head.revision))
+            }
+        }
         let snapshot = try snapshot(expectedProfileID: expectedProfileID)
         struct Preferences: Encodable { var profile: DiaryProfile; var diaryRevision: Int }
         return try coachJSON(Preferences(profile: snapshot.profile, diaryRevision: snapshot.revision))
     }
-    func validateCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID) throws {
+    func validateCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID, mode: CoachWriteMode = .uninterrupted) throws {
+        if pagedHead != nil {
+            try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
+            try pagedConnection(expectedProfileID: expectedProfileID).database.validateCoachWrites(writes, turnID: turnID, mode: mode, at: currentTime(), expectedProfileID: expectedProfileID)
+            return
+        }
         try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
         guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         var snapshot = try snapshot(expectedProfileID: expectedProfileID)
         let writes = try writes.map { try resolvedCoachWrite($0, turn: turn, snapshot: snapshot) }
         guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
+        if mode == .replayOnly {
+            for write in writes {
+                guard let receipt = turn.receipts.first(where: { $0.operationKey == "\(turnID)/\(write.target)" }) else { throw CoachError.invalidArguments }
+                if let fingerprint = receipt.commandFingerprint { guard try fingerprint == write.commandFingerprint() else { throw CoachError.invalidArguments } }
+            }
+        }
         let progressTargets = writes.compactMap { write -> String? in
             switch write {
             case .weight(let date, _, _, _):
@@ -1101,8 +1161,12 @@ actor DiaryStore {
         }
         guard turn.receipts.count + writes.filter({ write in !turn.receipts.contains { $0.operationKey == "\(turnID.uuidString)/\(write.target)" } }).count <= 16 else { throw CoachError.limitExceeded }
     }
-    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID) throws -> [CoachReceipt] {
-        try validateCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID)
+    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID, mode: CoachWriteMode = .uninterrupted) throws -> [CoachReceipt] {
+        if pagedHead != nil {
+            try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
+            return try pagedMutation(expectedProfileID) { try $0.applyCoachWrites(writes, turnID: turnID, mode: mode, at: currentTime(), expected: $1, maximumBytes: maximumFileBytes) }
+        }
+        try validateCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID, mode: mode)
         guard !writes.isEmpty else { return [] }
         let original = try snapshot(expectedProfileID: expectedProfileID)
         let priorKeys = Set(original.coachTurns.first { $0.id == turnID }!.receipts.map(\.operationKey))
@@ -1462,6 +1526,13 @@ actor DiaryStore {
     private struct CoachDeletedRecord: Codable { var id: UUID; var deleted: Bool }
 
     func coachWorkout(id: UUID, expectedProfileID: UUID) throws -> WorkoutSession {
+        if pagedHead != nil {
+            let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+            return try database.domainRead(expectedProfileID: expectedProfileID) { head in
+                let workout = try DiaryTransaction(database: database, head: head).workout(id: id)
+                guard try JSONEncoder().encode(workout).count <= 48_000 else { throw CoachError.limitExceeded }; return workout
+            }
+        }
         guard let workout = try snapshot(expectedProfileID: expectedProfileID).workouts.first(where: { $0.id == id }) else { throw DiaryError.notFound }
         // Full replacement must never be based on unseen sets.
         guard try JSONEncoder().encode(workout).count <= 48_000 else { throw CoachError.limitExceeded }
@@ -1469,6 +1540,7 @@ actor DiaryStore {
     }
 
     func coachProgress(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, expectedProfileID: UUID) throws -> CoachProgress {
+        if pagedHead != nil { return try pagedConnection(expectedProfileID: expectedProfileID).database.progressRange(endingOn: endingOn, days: days, finalizingTurnID: finalizingTurnID, expectedProfileID: expectedProfileID) }
         guard validLocalDate(endingOn), [1, 7, 30].contains(days) else { throw CoachError.invalidArguments }
         var snapshot = try snapshot(expectedProfileID: expectedProfileID)
         if let finalizingTurnID {
@@ -1559,6 +1631,7 @@ actor DiaryStore {
         var revision: Int
         var state: SubmissionState
         var item: FoodItem
+        var targetLocalDate: String? = nil
     }
     private func coachFoodItems(_ additions: [FoodItem], in meal: DiaryMeal, turnID: UUID) throws -> [FoodItem] {
         guard meal.revision > 0 else { return additions }

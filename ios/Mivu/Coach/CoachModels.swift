@@ -18,6 +18,7 @@ struct CoachReceipt: Codable, Equatable, Sendable {
     var destination: CoachDestination? = nil
     var committedRevision: Int
     var resultJSON: String
+    var commandFingerprint: String? = nil
 }
 
 struct CoachTurn: Codable, Equatable, Sendable, Identifiable {

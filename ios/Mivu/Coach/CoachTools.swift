@@ -1,6 +1,8 @@
 import Foundation
 import CoreFoundation
 
+enum CoachWriteMode: Equatable, Sendable { case uninterrupted, replayOnly }
+
 enum CoachWrite: Sendable {
     case manual(CoachManualEdit, patchKey: String? = nil)
     case food(date: String, items: [FoodItem], eatenAt: Date?, reviewFirst: Bool = false)

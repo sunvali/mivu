@@ -82,6 +82,9 @@ extension DiaryDatabase {
         try execute("CREATE INDEX coach_turn_day_choice ON coach_turn(json_extract(CAST(payload AS TEXT), '$.needsDayChoice'), json_extract(CAST(payload AS TEXT), '$.state'), ordinal, id)")
         try execute("CREATE INDEX submission_state_ordinal ON submission(json_extract(CAST(payload AS TEXT), '$.state'), ordinal, id)")
         try execute("CREATE INDEX submission_pending_ordinal ON submission(ordinal, id) WHERE json_extract(CAST(payload AS TEXT), '$.state') IN ('captured','waitingForConnection','analyzing','needsRetry')")
+        try execute("CREATE INDEX coach_turn_pending_day ON coach_turn(COALESCE(json_extract(CAST(payload AS TEXT), '$.resolvedDayID'), json_extract(CAST(payload AS TEXT), '$.activeDayID')), json_extract(CAST(payload AS TEXT), '$.state'), ordinal, id)")
+        try execute("CREATE INDEX coach_index_display_date ON coach_index(displayLocalDate, state, sequence)")
+        try execute("CREATE INDEX weight_unlinked_time ON weight(json_extract(CAST(payload AS TEXT), '$.measuredAt'), ordinal, id) WHERE parent IS NULL")
     }
 
     private struct StorageRow {

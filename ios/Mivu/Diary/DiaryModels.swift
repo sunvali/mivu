@@ -421,6 +421,9 @@ func validateCoachTurnFields(_ turn: CoachTurn) throws -> TimeZone {
 }
 
 func validateCoachReceiptFields(_ receipt: CoachReceipt, turnID: UUID, revision: Int) throws {
+    if let fingerprint = receipt.commandFingerprint {
+        guard fingerprint.utf8.count == 64, fingerprint.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else { throw DiaryError.invalidData }
+    }
     guard receipt.turnID == turnID, receipt.operationKey.utf8.count <= 500, !receipt.operationKey.isEmpty,
           receipt.committedRevision > 0, receipt.committedRevision <= revision, receipt.resultJSON.utf8.count <= 65_536,
           receipt.dayID != nil || receipt.goalID != nil || receipt.destination != nil ||

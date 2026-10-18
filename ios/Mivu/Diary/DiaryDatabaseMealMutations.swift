@@ -559,6 +559,7 @@ extension DiaryTransaction {
         changes.mealIDs.insert(mealID); changes.dayIDs.insert(meal.dayID)
     }
     func hasSurvivingProgress(_ turn: CoachTurn) throws -> Bool {
+        if try database.mutationInteger("SELECT EXISTS(SELECT 1 FROM record_source r WHERE r.turnID = ? AND ((r.kind = 'weight' AND EXISTS(SELECT 1 FROM weight w WHERE w.id = r.recordID)) OR (r.kind = 'workout' AND EXISTS(SELECT 1 FROM workout w WHERE w.id = r.recordID))))", [.text(turn.id.uuidString)]) == 1 { return true }
         for receipt in turn.receipts {
             if let id = receipt.weightID, try database.mutationInteger("SELECT COUNT(*) FROM weight WHERE id = ?", [.text(id.uuidString)]) == 1 { return true }
             if let id = receipt.workoutID, try database.mutationInteger("SELECT COUNT(*) FROM workout WHERE id = ?", [.text(id.uuidString)]) == 1 { return true }
