@@ -781,6 +781,36 @@ import Testing
         }
     }
 
+    @Test func successfulIndependentDayLoadCannotStarveCurrentHistoricalMeal() async throws {
+        let f = try ProjectionIntegrationFixture(exchanges: 100); defer { f.remove() }
+        let store = f.store(), gate = ProjectionDetailReadGate()
+        let model = exactDetailModel(store: store, gate: gate, kind: "mealDay", outcome: "value")
+        defer { model.enterBackground() }
+        await model.load(createDefaultProfile: false)
+        let expectedMeal = try await store.meal(id: f.mealID, expectedProfileID: f.owner)
+        let dayID = expectedMeal.dayID
+        #expect(model.activeDay?.id != dayID && model.meal(f.mealID) == nil)
+        #expect(model.errorMessage == nil)
+        let generation = model.changeGeneration
+        f.metrics.reset(); await gate.arm()
+        let mealLoad = Task { await model.loadMeal(f.mealID) }
+        do {
+            try await boundedWait { try await gate.waitUntilReached() }
+            await model.loadDay(dayID)
+            let currentDay = try #require(model.dayDetail(dayID))
+            #expect(currentDay == (try await store.diaryDay(id: dayID, expectedProfileID: f.owner)))
+            await gate.release(); await mealLoad.value
+            #expect(model.meal(f.mealID) == expectedMeal)
+            #expect(model.dayDetail(dayID) == currentDay)
+            #expect(model.changeGeneration == generation && model.errorMessage == nil)
+            f.assertHotReads()
+            #expect(f.metrics.counters.originalPhotoBytes == 0)
+        } catch {
+            mealLoad.cancel(); await gate.release(); await mealLoad.value
+            throw error
+        }
+    }
+
     private func exactDetailModel(store: DiaryStore, gate: ProjectionDetailReadGate, kind: String, outcome: String) -> DiaryViewModel {
         DiaryViewModel(store: store, mealDetailLoading: { id, owner in
             let value = try await store.meal(id: id, expectedProfileID: owner)

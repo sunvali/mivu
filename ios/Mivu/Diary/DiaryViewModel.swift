@@ -92,26 +92,15 @@ struct MealDraft: Equatable {
         let generation = changeGeneration, request = UUID()
         if mealDetailRequests[id] == nil, mealDetailRequests.count >= 30 { mealDetailRequests = [:] }
         mealDetailRequests[id] = request
-        var dayRequest: (id: UUID, request: UUID)?
         func isCurrent() -> Bool {
-            !Task.isCancelled && !isChangingProfile && selection == token && changeGeneration == generation
-                && mealDetailRequests[id] == request
-                && (dayRequest.map { dayDetailRequests[$0.id] == $0.request } ?? true)
+            !Task.isCancelled && !isChangingProfile && selection == token && changeGeneration == generation && mealDetailRequests[id] == request
         }
-        defer {
-            if mealDetailRequests[id] == request { mealDetailRequests[id] = nil }
-            if let dayRequest, dayDetailRequests[dayRequest.id] == dayRequest.request { dayDetailRequests[dayRequest.id] = nil }
-        }
+        defer { if mealDetailRequests[id] == request { mealDetailRequests[id] = nil } }
         do {
             let value = try await mealDetailLoading(id, token.identity.profileID)
             guard isCurrent() else { return }
-            let nextDayRequest = UUID()
-            if dayDetailRequests[value.dayID] == nil, dayDetailRequests.count >= 30 { dayDetailRequests = [:] }
-            dayDetailRequests[value.dayID] = nextDayRequest; dayRequest = (value.dayID, nextDayRequest)
-            let day = try await dayDetailLoading(value.dayID, token.identity.profileID)
-            guard isCurrent() else { return }
-            if exactMeals.count >= 30 { exactMeals = [:] }; if exactDays.count >= 30 { exactDays = [:] }
-            exactMeals[id] = value; exactDays[day.day.id] = day
+            if exactMeals.count >= 30 { exactMeals = [:] }; exactMeals[id] = value
+            await loadDay(value.dayID)
         } catch DiaryError.notFound { if isCurrent() { exactMeals[id] = nil } }
         catch { if isCurrent() { present(error) } }
     }
