@@ -617,6 +617,246 @@ import Testing
         }
         #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0 && metrics.counters.originalPhotoBytes == 0)
     }
+    @Test(arguments: ["empty", "cancelled", "partial", "captured", "analyzing", "waitingForConnection", "needsRetry", "awaitingReview", "savedAndPending", "nilDayCoach"])
+    func projectionTotalsPreserveConfirmedZeroAndUnresolvedUnknown(scenario: String) async throws {
+        let instant = DayTests.date("2027-01-15T12:00:00Z")
+        let day = TrackingDay(localDate: "2027-01-15", timeZoneID: "UTC", startAt: instant,
+            completeness: scenario == "partial" ? .partial : .complete)
+        var source = DiarySnapshot(profile: DiaryProfile(name: "Synthetic totals parity", timeZoneID: "UTC"), days: [day], activeDayID: day.id)
+        if let state = SubmissionState(rawValue: scenario == "savedAndPending" ? "needsRetry" : scenario) {
+            var meal = DiaryMeal(dayID: day.id, capturedAt: instant, eatenAt: instant,
+                revision: scenario == "savedAndPending" ? 1 : 0,
+                items: scenario == "savedAndPending" ? [FoodItem(name: "Known saved food", nutrition: NutritionValues(kcal: 80, carbs: 10, protein: 5, fat: 2))] : [])
+            var submission = MealSubmission(baseRevision: meal.revision, text: "Synthetic unresolved input", photoIDs: [], reviewFirst: true, state: state)
+            if state == .awaitingReview {
+                submission.proposal = AnalysisOutput(profileID: source.profile.id, mealID: meal.id, submissionID: submission.id,
+                    baseRevision: meal.revision, items: [FoodItem(name: "Unaccepted food", nutrition: NutritionValues(kcal: 80))])
+            }
+            meal.submissions = [submission]; source.meals = [meal]
+        }
+        if scenario == "nilDayCoach" {
+            source.coachTurns = [CoachTurn(capturedAt: instant, text: "Synthetic unassigned same-date input", state: .needsRetry, captureTimeZoneID: "UTC")]
+        }
+        let f = try CaptureFixture(snapshot: source); defer { f.remove() }
+        let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: f.root, diagnostics: metrics)
+        _ = try await store.selectProfile(f.profileID); metrics.reset()
+        let active = try await store.diaryReadModel(expectedProfileID: f.profileID)
+        let detail = try await store.diaryDay(id: day.id, expectedProfileID: f.profileID)
+        let report = ProgressAnalytics.daily(readModel: active)
+        let reference = ProgressAnalytics.daily(snapshot: source, localDate: day.localDate)
+        #expect(detail.totals == source.totals(dayID: day.id))
+        #expect(active.totals == reference.foodTotals)
+        #expect(report == reference)
+        #expect(active.hasPendingOnActiveDay == reference.hasPending)
+        #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0 && metrics.counters.originalPhotoBytes == 0)
+    }
+
+    @Test(arguments: ["olderPending", "reference"])
+    func mealRetryUsesCurrentDurableSubmissionInsteadOfUUIDOrReferences(winner: String) async throws {
+        var source = ChatHistoryFixture.snapshot(exchanges: 0)
+        let mealID = source.meals[0].id, dayID = source.meals[0].dayID, instant = source.meals[0].capturedAt
+        let oldID = UUID(uuidString: winner == "olderPending" ? "FFFFFFFF-FFFF-4FFF-AFFF-FFFFFFFFFFFF" : "88888888-8888-4888-A888-888888888888")!
+        let currentID = UUID(uuidString: "00000000-0000-4000-A000-000000000001")!
+        let referenceID = UUID(uuidString: winner == "reference" ? "FFFFFFFF-FFFF-4FFF-AFFF-FFFFFFFFFFFF" : "88888888-8888-4888-A888-888888888888")!
+        source.meals[0].photos = []
+        source.meals[0].submissions = [
+            MealSubmission(id: oldID, baseRevision: 0, text: "Original saved input", photoIDs: [], reviewFirst: false, state: .saved),
+            MealSubmission(id: currentID, baseRevision: 1, text: "Latest failed correction", photoIDs: [], reviewFirst: false, state: .needsRetry)]
+        let oldReceipt = CoachReceipt(operationKey: "\(oldID)/food/original", turnID: oldID, dayID: dayID, mealID: mealID, committedRevision: 1, resultJSON: "{}")
+        let linkedReceipt = CoachReceipt(operationKey: "\(referenceID)/reference/meal", turnID: referenceID, dayID: dayID, mealID: mealID, committedRevision: 1, resultJSON: "{}")
+        source.coachTurns = [
+            CoachTurn(id: oldID, capturedAt: instant, text: "Original saved input", state: .completed, receipts: [oldReceipt], captureTimeZoneID: "UTC", activeDayID: dayID, pendingMealID: mealID, pendingMealRevision: 1),
+            CoachTurn(id: currentID, capturedAt: instant.addingTimeInterval(-100), text: "Latest failed correction", state: .needsRetry, captureTimeZoneID: "UTC", activeDayID: dayID, pendingMealID: mealID, pendingMealRevision: 1),
+            CoachTurn(id: referenceID, capturedAt: instant.addingTimeInterval(100), text: "Later unrelated receipt reference", state: .completed, receipts: [linkedReceipt], captureTimeZoneID: "UTC", activeDayID: dayID)]
+        let f = try CaptureFixture(snapshot: source); defer { f.remove() }
+        let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: f.root, diagnostics: metrics), transport = ProjectionRetryInference(date: source.days.first { $0.id == dayID }!.localDate)
+        let model = DiaryViewModel(store: store)
+        let coach = CoachViewModel(diary: model, connection: ChatGPTConnection(), inference: { { _, _ in await transport.respond() } })
+        defer { coach.enterBackground(); model.enterBackground() }
+        await model.load(createDefaultProfile: false); metrics.reset()
+        #expect(try await store.coachTurnForMeal(mealID, expectedProfileID: f.profileID) == currentID)
+        await coach.retryMeal(mealID); await coach.waitForWorker()
+        let current = try await store.coachWorkItem(turnID: currentID, expectedProfileID: f.profileID)
+        let meal = try await store.meal(id: mealID, expectedProfileID: f.profileID)
+        #expect(current.state == .completed)
+        #expect(meal.submissions.last?.id == currentID && meal.submissions.last?.state == .saved)
+        // log_food adds to an existing meal; retry must retain its original accepted food.
+        #expect(meal.items.count == source.meals[0].items.count + 1)
+        #expect(Array(meal.items.dropLast()) == source.meals[0].items)
+        let appended = try #require(meal.items.last)
+        #expect(appended.name == "Retried current input" && appended.quantity == 1 && appended.unit == "serving")
+        #expect(appended.nutrition == NutritionValues(kcal: 80, carbs: 10, protein: 5, fat: 2))
+        #expect(meal.revision == source.meals[0].revision + 1)
+        #expect(meal.submissions.last?.proposal?.items == meal.items)
+        #expect(current.receipts.count == 1 && current.receipts.first?.mealID == mealID)
+        #expect(await transport.calls == 2)
+        #expect(try await store.coachWorkItem(turnID: oldID, expectedProfileID: f.profileID).state == .completed)
+        #expect(try await store.coachWorkItem(turnID: oldID, expectedProfileID: f.profileID).receipts == [oldReceipt])
+        #expect(try await store.coachWorkItem(turnID: referenceID, expectedProfileID: f.profileID).state == .completed)
+        #expect(try await store.coachWorkItem(turnID: referenceID, expectedProfileID: f.profileID).receipts == [linkedReceipt])
+        #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0 && metrics.counters.originalPhotoBytes == 0)
+        let complete = try await store.snapshotForExport(expectedProfileID: f.profileID)
+        #expect(complete.meals.count == 1 && complete.coachTurns.count == 3)
+        #expect(complete.coachTurns[0] == source.coachTurns[0] && complete.coachTurns[2] == source.coachTurns[2])
+    }
+
+    @Test(arguments: ["meal", "day"], ["value", "notFound", "error"])
+    func oldExactDetailCannotReplaceCommittedFreshCache(kind: String, outcome: String) async throws {
+        let f = try ProjectionIntegrationFixture(exchanges: 100); defer { f.remove() }
+        let store = f.store(), gate = ProjectionDetailReadGate()
+        let model = exactDetailModel(store: store, gate: gate, kind: kind, outcome: outcome)
+        defer { model.enterBackground() }
+        await model.load(createDefaultProfile: false)
+        let dayID = f.source.meals[0].dayID
+        await model.loadMeal(f.mealID); await model.loadDay(dayID)
+        await gate.arm()
+        let old = Task { if kind == "meal" { await model.loadMeal(f.mealID) } else { await model.loadDay(dayID) } }
+        do {
+        try await boundedWait { try await gate.waitUntilReached() }
+        if kind == "meal" {
+            var item = f.source.meals[0].items[0]; item.name = "Committed newer detail"
+            try await store.editItem(mealID: f.mealID, item: item, expectedRevision: 1, expectedProfileID: f.owner)
+        } else { try await store.setCompleteness(dayID: dayID, .complete, expectedProfileID: f.owner) }
+        try await model.refresh(profileID: f.owner)
+        await model.loadMeal(f.mealID); await model.loadDay(dayID)
+        let freshMeal = model.meal(f.mealID), freshDay = model.dayDetail(dayID), generation = model.changeGeneration
+        model.errorMessage = "Current error remains owned"
+        await gate.release(); await old.value
+        #expect(model.changeGeneration == generation)
+        #expect(model.meal(f.mealID) == freshMeal && model.dayDetail(dayID) == freshDay)
+        #expect(model.errorMessage == "Current error remains owned")
+        f.assertHotReads()
+        } catch {
+            old.cancel(); await gate.release(); await old.value
+            throw error
+        }
+    }
+
+    @Test(arguments: ["meal", "day", "mealDay"], ["notFound", "error"])
+    func replacedExactRequestCannotEraseNewerCacheOrPublishError(kind: String, outcome: String) async throws {
+        let f = try ProjectionIntegrationFixture(exchanges: 100); defer { f.remove() }
+        let store = f.store(), gate = ProjectionDetailReadGate()
+        let model = exactDetailModel(store: store, gate: gate, kind: kind, outcome: outcome)
+        defer { model.enterBackground() }
+        await model.load(createDefaultProfile: false)
+        let dayID = f.source.meals[0].dayID
+        await gate.arm()
+        let old = Task { if kind == "day" { await model.loadDay(dayID) } else { await model.loadMeal(f.mealID) } }
+        do {
+        try await boundedWait { try await gate.waitUntilReached() }
+        if kind == "meal" { await model.loadMeal(f.mealID) } else { await model.loadDay(dayID) }
+        let meal = model.meal(f.mealID), day = model.dayDetail(dayID), generation = model.changeGeneration
+        model.errorMessage = "New request owns this error"
+        await gate.release(); await old.value
+        #expect(model.changeGeneration == generation)
+        #expect(model.meal(f.mealID) == meal && model.dayDetail(dayID) == day)
+        #expect(model.errorMessage == "New request owns this error")
+        } catch {
+            old.cancel(); await gate.release(); await old.value
+            throw error
+        }
+    }
+
+    @Test(arguments: ["meal", "day"], ["value", "notFound", "error"])
+    func cancelledExactRequestCannotPublishValueRemovalOrError(kind: String, outcome: String) async throws {
+        let f = try ProjectionIntegrationFixture(exchanges: 100); defer { f.remove() }
+        let store = f.store(), gate = ProjectionDetailReadGate()
+        let model = exactDetailModel(store: store, gate: gate, kind: kind, outcome: outcome)
+        defer { model.enterBackground() }
+        await model.load(createDefaultProfile: false)
+        let dayID = f.source.meals[0].dayID
+        if outcome != "value" { await model.loadMeal(f.mealID); await model.loadDay(dayID) }
+        let meal = model.meal(f.mealID), day = model.dayDetail(dayID)
+        await gate.arm()
+        let old = Task { if kind == "meal" { await model.loadMeal(f.mealID) } else { await model.loadDay(dayID) } }
+        do {
+        try await boundedWait { try await gate.waitUntilReached() }
+        model.errorMessage = "Cancellation preserves current error"
+        old.cancel(); await gate.release(); await old.value
+        #expect(model.meal(f.mealID) == meal && model.dayDetail(dayID) == day)
+        #expect(model.errorMessage == "Cancellation preserves current error")
+        } catch {
+            old.cancel(); await gate.release(); await old.value
+            throw error
+        }
+    }
+
+    private func exactDetailModel(store: DiaryStore, gate: ProjectionDetailReadGate, kind: String, outcome: String) -> DiaryViewModel {
+        DiaryViewModel(store: store, mealDetailLoading: { id, owner in
+            let value = try await store.meal(id: id, expectedProfileID: owner)
+            if kind == "meal", await gate.holdIfArmed() {
+                if outcome == "notFound" { throw DiaryError.notFound }; if outcome == "error" { throw DiaryError.persistenceFailed }
+            }
+            return value
+        }, dayDetailLoading: { id, owner in
+            let value = try await store.diaryDay(id: id, expectedProfileID: owner)
+            if kind != "meal", await gate.holdIfArmed() {
+                if outcome == "notFound" { throw DiaryError.notFound }; if outcome == "error" { throw DiaryError.persistenceFailed }
+            }
+            return value
+        })
+    }
+
+    @Test func storeCoachPreviewRoutesKeepBoundedProducerCursorAndDateScope() async throws {
+        let source = ChatHistoryFixture.pagingSnapshot(), f = try CaptureFixture(snapshot: source); defer { f.remove() }
+        let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: f.root, diagnostics: metrics)
+        _ = try await store.selectProfile(f.profileID)
+        let token = try await store.selectionOwnership(expectedProfileID: f.profileID); metrics.reset()
+        let first = try await store.coachDays(expectedSelection: token, expectedProfileID: f.profileID)
+        #expect(first.segments.count == 30 && first.hasMore)
+        #expect(first.segments.map(\.firstExchangeID) == source.coachTurns.suffix(30).reversed().map(\.id))
+        let cursor = try #require(first.cursor)
+        let next = try await store.coachDays(before: cursor, expectedSelection: token, expectedProfileID: f.profileID)
+        #expect(next.segments.count == 30 && next.hasMore)
+        #expect(Set(first.segments.map(\.segmentID)).isDisjoint(with: next.segments.map(\.segmentID)))
+        #expect(next.segments.map(\.firstExchangeID) == source.coachTurns[40..<70].reversed().map(\.id))
+        let date = source.days[0].localDate
+        let filtered = try await store.coachSegments(displayLocalDate: date, expectedSelection: token, expectedProfileID: f.profileID)
+        #expect(filtered.segments.count == 30 && filtered.hasMore)
+        #expect(filtered.segments.allSatisfy { $0.displayLocalDate == date })
+        let filteredCursor = try #require(filtered.cursor)
+        let older = try await store.coachSegments(displayLocalDate: date, before: filteredCursor, expectedSelection: token, expectedProfileID: f.profileID)
+        #expect(older.segments.count == 20 && !older.hasMore)
+        #expect(Set(filtered.segments.map(\.segmentID)).isDisjoint(with: older.segments.map(\.segmentID)))
+        await #expect(throws: CoachQueryError.invalidCursor) { try await store.coachDays(before: filteredCursor, expectedSelection: token, expectedProfileID: f.profileID) }
+        await #expect(throws: CoachQueryError.invalidCursor) { try await store.coachSegments(displayLocalDate: date, before: cursor, expectedSelection: token, expectedProfileID: f.profileID) }
+        await #expect(throws: CoachQueryError.invalidDateFilter) { try await store.coachSegments(displayLocalDate: "2027-02-30", expectedSelection: token, expectedProfileID: f.profileID) }
+        var invalid = cursor; invalid.lastSequence = 0
+        await #expect(throws: CoachQueryError.invalidCursor) { try await store.coachDays(before: invalid, expectedSelection: token, expectedProfileID: f.profileID) }
+        var wrongTimeline = cursor; wrongTimeline.identity.timelineGeneration = UUID()
+        await #expect(throws: CoachQueryError.wrongTimeline) { try await store.coachDays(before: wrongTimeline, expectedSelection: token, expectedProfileID: f.profileID) }
+        var wrongFilteredTimeline = filteredCursor; wrongFilteredTimeline.identity.timelineGeneration = UUID()
+        await #expect(throws: CoachQueryError.wrongTimeline) { try await store.coachSegments(displayLocalDate: date, before: wrongFilteredTimeline, expectedSelection: token, expectedProfileID: f.profileID) }
+        #expect(metrics.counters.decodedTurnPayloads == 0 && metrics.counters.originalPhotoBytes == 0)
+        #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0)
+    }
+
+    @Test(arguments: ["reselect", "restore"], ["days", "segments"])
+    func storeCoachPreviewRejectsObsoleteSelectionAndTimeline(transition: String, route: String) async throws {
+        let source = ChatHistoryFixture.pagingSnapshot(), f = try CaptureFixture(snapshot: source); defer { f.remove() }
+        let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: f.root, diagnostics: metrics)
+        _ = try await store.selectProfile(f.profileID)
+        let old = try await store.selectionOwnership(expectedProfileID: f.profileID)
+        let oldPage = try { let db = try DiaryDatabase(url: f.url); return try db.coachDays(before: nil, expectedProfileID: f.profileID) }()
+        let cursor = try #require(oldPage.cursor)
+        if transition == "reselect" {
+            _ = try await store.createProfile(DiaryProfile(name: "Synthetic replacement selection"))
+            _ = try await store.selectProfile(f.profileID)
+        } else {
+            let complete = try await store.snapshotForExport(expectedProfileID: f.profileID)
+            try await store.restore(complete, expectedProfileID: f.profileID)
+        }
+        metrics.reset()
+        await #expect(throws: DiaryError.wrongOwner) {
+            if route == "days" { _ = try await store.coachDays(before: cursor, expectedSelection: old, expectedProfileID: f.profileID) }
+            else { _ = try await store.coachSegments(displayLocalDate: source.days[0].localDate, expectedSelection: old, expectedProfileID: f.profileID) }
+        }
+        let current = try await store.selectionOwnership(expectedProfileID: f.profileID)
+        if transition == "restore" {
+            await #expect(throws: CoachQueryError.wrongTimeline) { try await store.coachDays(before: cursor, expectedSelection: current, expectedProfileID: f.profileID) }
+        }
+        #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0 && metrics.counters.originalPhotoBytes == 0)
+    }
 }
 
 private struct ProjectionIntegrationFixture: Sendable {
@@ -797,4 +1037,40 @@ private struct AutomaticMigrationFixture {
         originalBytes = try Data(contentsOf: original)
     }
     func remove() { try? FileManager.default.removeItem(at: root) }
+}
+
+private actor ProjectionRetryInference {
+    let date: String
+    private(set) var calls = 0
+    init(date: String) { self.date = date }
+    func respond() -> CoachInferenceResult {
+        calls += 1
+        if calls > 1 { return CoachInferenceResult(model: "synthetic", text: "Fixture finished.", calls: [], outputItems: []) }
+        let arguments = "{\"target_local_date\":\"\(date)\",\"items\":[{\"name\":\"Retried current input\",\"quantity\":1,\"unit\":\"serving\",\"kcal\":80,\"carbs\":10,\"protein\":5,\"fat\":2}]}"
+        return CoachInferenceResult(model: "synthetic", text: "", calls: [CoachToolCall(id: "retry-current", callID: "retry-current", name: "log_food", namespace: "mivu", arguments: arguments)], outputItems: [])
+    }
+}
+
+// The old dependency deliberately ignores cancellation to exercise the final publication guard.
+private actor ProjectionDetailReadGate {
+    private var armed = false
+    private var reached = false
+    private let entered = AsyncStream<Void>.makeStream()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var deadline: Task<Void, Never>?
+    func arm() { armed = true }
+    func holdIfArmed() async -> Bool {
+        guard armed else { return false }; armed = false; reached = true
+        entered.continuation.yield(())
+        await withCheckedContinuation { continuation = $0
+            deadline = Task { try? await Task.sleep(for: .seconds(10)); if !Task.isCancelled { Issue.record("Exact-detail test gate exceeded ten seconds"); release() } }
+        }
+        return true
+    }
+    func waitUntilReached() async throws {
+        if reached { return }
+        for await _ in entered.stream { return }
+        throw CancellationError()
+    }
+    func release() { deadline?.cancel(); deadline = nil; continuation?.resume(); continuation = nil }
 }

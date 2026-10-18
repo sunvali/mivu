@@ -148,16 +148,20 @@ extension DiaryReadModel {
     var previousDayConfirmedAt: Date? { head.previousDayConfirmedAt }
     var pendingCount: Int { pendingAnalysisCount }
     var totals: NutritionTotals {
-        let saved = meals.filter(\.isSaved)
-        if saved.isEmpty, activeDay?.completeness != .complete { return NutritionTotals(kcal: nil, carbs: nil, protein: nil, fat: nil, unknownItemCount: 0) }
-        return nutritionTotals(saved.flatMap(\.items))
+        dayNutritionTotals(meals: meals, complete: activeDay?.completeness == .complete, hasPending: hasPendingOnActiveDay)
     }
 }
 
 extension DiaryDayReadModel {
     var totals: NutritionTotals {
-        let saved = meals.filter(\.isSaved)
-        if saved.isEmpty, day.completeness != .complete { return NutritionTotals(kcal: nil, carbs: nil, protein: nil, fat: nil, unknownItemCount: 0) }
-        return nutritionTotals(saved.flatMap(\.items))
+        dayNutritionTotals(meals: meals, complete: day.completeness == .complete, hasPending: false)
     }
+}
+
+private func dayNutritionTotals(meals: [MealReadModel], complete: Bool, hasPending: Bool) -> NutritionTotals {
+    let items = meals.filter(\.isSaved).flatMap(\.items)
+    if items.isEmpty, complete, !hasPending, !meals.contains(where: \.hasUnresolvedInput) {
+        return NutritionTotals(kcal: 0, carbs: 0, protein: 0, fat: 0, unknownItemCount: 0)
+    }
+    return nutritionTotals(items)
 }

@@ -18,6 +18,8 @@ struct MealDraft: Equatable {
     private let profileSelection: @Sendable (UUID) async throws -> DiaryReadModel
     // Foreground actions have their own load boundary; subscriber loads are independent.
     private let actionReadModelLoading: @Sendable (UUID) async throws -> DiaryReadModel
+    private let mealDetailLoading: @Sendable (UUID, UUID) async throws -> MealReadModel
+    private let dayDetailLoading: @Sendable (UUID, UUID) async throws -> DiaryDayReadModel
     private let preferences: UserDefaults?
     let backup: FolderBackup?
     private(set) var readModel: DiaryReadModel?
@@ -31,6 +33,8 @@ struct MealDraft: Equatable {
     private var manualCaptureAttempt: (selection: DiarySelectionOwnership, draft: MealDraft, photos: [MealPhoto], isNew: Bool)?
     private var exactMeals: [UUID: MealReadModel] = [:]
     private var exactDays: [UUID: DiaryDayReadModel] = [:]
+    private var mealDetailRequests: [UUID: UUID] = [:]
+    private var dayDetailRequests: [UUID: UUID] = [:]
     var resumeCoach: (() -> Void)?
     var retryCoachMeal: ((UUID) -> Void)?
     var profiles: [DiaryProfile] = []
@@ -56,10 +60,14 @@ struct MealDraft: Equatable {
     init(store: DiaryStore, sampleMode: Bool = false, preferences: UserDefaults? = nil, backup: FolderBackup? = nil,
          profileSelection: (@Sendable (UUID) async throws -> DiaryReadModel)? = nil,
          actionReadModelLoading: (@Sendable (UUID) async throws -> DiaryReadModel)? = nil,
+         mealDetailLoading: (@Sendable (UUID, UUID) async throws -> MealReadModel)? = nil,
+         dayDetailLoading: (@Sendable (UUID, UUID) async throws -> DiaryDayReadModel)? = nil,
          photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil) {
         self.store = store; self.sampleMode = sampleMode; self.preferences = preferences; self.backup = backup
         self.profileSelection = profileSelection ?? { try await store.selectProfile($0) }
         self.actionReadModelLoading = actionReadModelLoading ?? { try await store.diaryReadModel(expectedProfileID: $0) }
+        self.mealDetailLoading = mealDetailLoading ?? { try await store.meal(id: $0, expectedProfileID: $1) }
+        self.dayDetailLoading = dayDetailLoading ?? { try await store.diaryDay(id: $0, expectedProfileID: $1) }
         self.photoWorkLimiter = photoWorkLimiter; self.exportCoordinator = exportCoordinator ?? DiaryExportCoordinator(store: store)
         memoryTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: UIApplication.didReceiveMemoryWarningNotification) {
@@ -80,21 +88,46 @@ struct MealDraft: Equatable {
     func day(_ id: UUID) -> TrackingDay? { activeDay?.id == id ? activeDay : exactDays[id]?.day }
     func dayDetail(_ id: UUID) -> DiaryDayReadModel? { exactDays[id] }
     func loadMeal(_ id: UUID) async {
-        guard let token = selection else { return }
+        guard let token = selection, !Task.isCancelled else { return }
+        let generation = changeGeneration, request = UUID()
+        if mealDetailRequests[id] == nil, mealDetailRequests.count >= 30 { mealDetailRequests = [:] }
+        mealDetailRequests[id] = request
+        var dayRequest: (id: UUID, request: UUID)?
+        func isCurrent() -> Bool {
+            !Task.isCancelled && !isChangingProfile && selection == token && changeGeneration == generation
+                && mealDetailRequests[id] == request
+                && (dayRequest.map { dayDetailRequests[$0.id] == $0.request } ?? true)
+        }
+        defer {
+            if mealDetailRequests[id] == request { mealDetailRequests[id] = nil }
+            if let dayRequest, dayDetailRequests[dayRequest.id] == dayRequest.request { dayDetailRequests[dayRequest.id] = nil }
+        }
         do {
-            let value = try await store.meal(id: id, expectedProfileID: token.identity.profileID)
-            let day = try await store.diaryDay(id: value.dayID, expectedProfileID: token.identity.profileID)
-            guard selection == token else { return }
+            let value = try await mealDetailLoading(id, token.identity.profileID)
+            guard isCurrent() else { return }
+            let nextDayRequest = UUID()
+            if dayDetailRequests[value.dayID] == nil, dayDetailRequests.count >= 30 { dayDetailRequests = [:] }
+            dayDetailRequests[value.dayID] = nextDayRequest; dayRequest = (value.dayID, nextDayRequest)
+            let day = try await dayDetailLoading(value.dayID, token.identity.profileID)
+            guard isCurrent() else { return }
             if exactMeals.count >= 30 { exactMeals = [:] }; if exactDays.count >= 30 { exactDays = [:] }
             exactMeals[id] = value; exactDays[day.day.id] = day
-        } catch DiaryError.notFound { if selection == token { exactMeals[id] = nil } }
-        catch { if selection == token { present(error) } }
+        } catch DiaryError.notFound { if isCurrent() { exactMeals[id] = nil } }
+        catch { if isCurrent() { present(error) } }
     }
     func loadDay(_ id: UUID) async {
-        guard let token = selection else { return }
-        do { let value = try await store.diaryDay(id: id, expectedProfileID: token.identity.profileID)
-            guard selection == token else { return }; if exactDays.count >= 30 { exactDays = [:] }; exactDays[id] = value
-        } catch { if selection == token { present(error) } }
+        guard let token = selection, !Task.isCancelled else { return }
+        let generation = changeGeneration, request = UUID()
+        if dayDetailRequests[id] == nil, dayDetailRequests.count >= 30 { dayDetailRequests = [:] }
+        dayDetailRequests[id] = request
+        func isCurrent() -> Bool {
+            !Task.isCancelled && !isChangingProfile && selection == token && changeGeneration == generation && dayDetailRequests[id] == request
+        }
+        defer { if dayDetailRequests[id] == request { dayDetailRequests[id] = nil } }
+        do {
+            let value = try await dayDetailLoading(id, token.identity.profileID)
+            guard isCurrent() else { return }; if exactDays.count >= 30 { exactDays = [:] }; exactDays[id] = value
+        } catch { if isCurrent() { present(error) } }
     }
     func load(createDefaultProfile: Bool = true) async {
         guard beginProfileTransition() else { return }

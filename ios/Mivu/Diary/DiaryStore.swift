@@ -138,6 +138,14 @@ actor DiaryStore {
     func meal(id: UUID, expectedProfileID: UUID) throws -> MealReadModel { try pagedConnection(expectedProfileID: expectedProfileID).database.meal(id: id, expectedProfileID: expectedProfileID) }
     func photoContent(_ reference: DiaryPhotoReference, expectedProfileID: UUID) throws -> Data { try pagedConnection(expectedProfileID: expectedProfileID).database.photoContent(reference, expectedProfileID: expectedProfileID) }
     func coachPage(_ request: CoachPageRequest, expectedProfileID: UUID) throws -> CoachPage { try pagedConnection(expectedProfileID: expectedProfileID).database.coachPage(request, expectedProfileID: expectedProfileID) }
+    func coachDays(before: CoachDayCursor? = nil, expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws -> CoachDayPage {
+        try validateOwnership(expectedSelection, profileID: expectedProfileID)
+        return try pagedConnection(expectedProfileID: expectedProfileID).database.coachDays(before: before, expectedProfileID: expectedProfileID)
+    }
+    func coachSegments(displayLocalDate: String, before: CoachDayCursor? = nil, expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws -> CoachDayPage {
+        try validateOwnership(expectedSelection, profileID: expectedProfileID)
+        return try pagedConnection(expectedProfileID: expectedProfileID).database.coachSegments(displayLocalDate: displayLocalDate, before: before, expectedIdentity: expectedSelection.identity)
+    }
     func diaryHistory(before: DiaryHistoryCursor? = nil, limit: Int = 30, recordedOnly: Bool = false, localDate: String? = nil, expectedProfileID: UUID) throws -> DiaryHistoryPage { try pagedConnection(expectedProfileID: expectedProfileID).database.diaryHistory(before: before, limit: limit, recordedOnly: recordedOnly, localDate: localDate, expectedProfileID: expectedProfileID) }
     func nextPendingCoachTurn(includeWaitingForConnection: Bool, expectedProfileID: UUID) throws -> CoachWorkItem? { try pagedConnection(expectedProfileID: expectedProfileID).database.nextPendingCoachTurn(includeWaitingForConnection: includeWaitingForConnection, expectedProfileID: expectedProfileID) }
     func nextUnlinkedPendingSubmission(expectedProfileID: UUID) throws -> PendingSubmissionReference? { try pagedConnection(expectedProfileID: expectedProfileID).database.nextUnlinkedPendingSubmission(expectedProfileID: expectedProfileID) }

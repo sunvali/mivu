@@ -34,7 +34,7 @@ extension DiaryDatabase {
     }
     func coachTurnForMeal(_ mealID: UUID, expectedProfileID: UUID) throws -> UUID? {
         try domainRead(expectedProfileID: expectedProfileID) { _ in
-            let query = try domainStatement("SELECT turnID FROM coach_index WHERE pendingMealID = ? UNION SELECT i.turnID FROM record_source r JOIN coach_index i ON i.turnID = r.turnID WHERE r.kind = 'meal' AND r.recordID = ? ORDER BY turnID DESC LIMIT 1", [.text(mealID.uuidString), .text(mealID.uuidString)])
+            let query = try domainStatement("SELECT i.turnID FROM coach_index i JOIN submission s ON s.id = i.turnID AND s.parent = i.pendingMealID WHERE i.pendingMealID = ? ORDER BY i.sequence DESC LIMIT 1", [.text(mealID.uuidString)])
             defer { sqlite3_finalize(query) }
             guard try mutationStep(query) else { return nil }; return try mutationOptionalUUID(query, 0)
         }
