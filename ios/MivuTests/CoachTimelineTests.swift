@@ -354,7 +354,8 @@ private actor SuspendedCoachTimelineSource {
             await task.value
         }
         model.setViewport(.latest)
-        model.apply(DiaryChanges(turnIDs: [Data.id(999)]))
+        let refresh = try #require(model.apply(DiaryChanges(turnIDs: [Data.id(999)])))
+        #expect(await source.refreshRequest(0) == [])
         // No source call can start until the renderer supplies a measured anchor.
         await model.jumpToLatest()
         #expect(model.isLoadDeferred)
@@ -369,6 +370,9 @@ private actor SuspendedCoachTimelineSource {
         await jump.value
         #expect(!model.isLoadDeferred)
         #expect(!model.showsJumpToLatest)
+        // Replacement cancels the metadata refresh, but its source still owns a held read.
+        await source.finishRefresh(0, CoachTimelineRefresh(identity: Data.identity, exchanges: [], latestCursor: Data.cursor(160), latestEmptySegment: nil))
+        await refresh.value
     }
 
     @Test func requestDiagnosticsRemainBounded() async {
@@ -478,6 +482,47 @@ private actor SuspendedCoachTimelineSource {
         #expect(model.exchanges.count == (firstTurnDeleted ? 19 : 20))
         #expect(model.refreshTask == nil)
         #expect(model.error == nil)
+    }
+
+    @Test func rebindingKeepsOldSourcesChargedAndNeverRebindsTheirOwnership() async throws {
+        let oldSource = SuspendedCoachTimelineSource(), newSource = SuspendedCoachTimelineSource()
+        let model = model(oldSource)
+        await open(model, source: oldSource, page: Data.page(141...160))
+        let oldTaskResult = model.loadEarlier(anchor: Data.anchor(150))
+        let oldTask = try #require(oldTaskResult)
+        let oldRequest = await oldSource.request(1)
+        let newIdentity = CoachTimelineIdentity(profileID: Data.id(990), timelineGeneration: Data.id(991))
+        model.rebind(identity: newIdentity, source: { try await newSource.page($0, $1) },
+            refreshSource: { try await newSource.refresh($0, $1, $2) })
+        #expect(model.window.reservedCapacity == 20)
+        #expect(model.window.residentCount == 0)
+        func page(_ range: ClosedRange<Int>) -> CoachPage {
+            var page = Data.page(range); page.identity = newIdentity
+            page.before?.identity = newIdentity; page.after?.identity = newIdentity
+            return page
+        }
+        let latest = model.beginReplacement(.latest)
+        _ = await newSource.request(0)
+        #expect(model.window.reservedCapacity == 40)
+        await newSource.finish(0, page(141...160)); await latest.value
+        for (index, upper) in [140, 120, 100, 80].enumerated() {
+            let anchor = Data.anchor(upper + 1)
+            model.setViewport(.history(anchor), measuredAnchor: anchor)
+            let result = model.loadEarlier(anchor: anchor), task = try #require(result)
+            _ = await newSource.request(index + 1)
+            #expect(model.window.residentCount + model.window.reservedCapacity <= 100)
+            #expect(model.window.occupiedPageSlots <= 5)
+            await newSource.finish(index + 1, page((upper - 19)...upper)); await task.value
+        }
+        let enteredOld = await oldSource.pageReadCounts()
+        #expect(enteredOld.entered == 2 && enteredOld.outstanding == 1)
+        #expect(oldRequest.request == .before(Data.cursor(141)))
+        #expect(model.window.reservedCapacity == 20)
+        let before = model.exchanges
+        await oldSource.finish(1, Data.page(121...140)); await oldTask.value
+        #expect(model.window.reservedCapacity == 0)
+        #expect(model.exchanges == before && model.window.identity == newIdentity)
+        #expect(model.error == nil && model.queryError == nil)
     }
 
 }

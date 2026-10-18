@@ -129,6 +129,7 @@ struct DiaryHistoryCursor: Equatable, Sendable {
     var localDate: String? = nil
 }
 struct DiaryDaySummary: Equatable, Sendable {
+    var mealCount: Int
     var day: TrackingDay
     var totals: NutritionTotals
     var savedMealCount: Int

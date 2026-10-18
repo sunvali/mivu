@@ -17,13 +17,14 @@ import XCTest
         let earlier = app.buttons["coachEarlierMessages"]
         revealCoach(earlier, in: app)
         for _ in 0..<3 where earlier.frame.minY < app.navigationBars["Coach"].frame.maxY {
-            app.scrollViews.firstMatch.swipeDown()
+            coachViewport(in: app).swipeDown()
         }
         XCTAssertGreaterThanOrEqual(earlier.frame.minY, app.navigationBars["Coach"].frame.maxY)
         earlier.tap()
         let first = app.staticTexts["History message 1"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
-        XCTAssertTrue(first.isHittable, "Loading earlier should reveal the older page")
+        revealCoach(first, in: app)
+        XCTAssertTrue(first.isHittable, "An explicitly loaded older page must remain reachable")
         XCTAssertFalse(earlier.exists)
         enter("History message 22", in: app); app.buttons["coachSend"].tap()
         let newest = app.staticTexts["History message 22"]
@@ -49,7 +50,6 @@ import XCTest
         XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Synthetic coach lunch")
         app.buttons["coachPhotos"].tap()
         XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
-        app.navigationBars.buttons["Done"].tap()
         let send = app.buttons["coachSend"]
         XCTAssertTrue(send.isHittable); XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 10))
@@ -108,7 +108,7 @@ import XCTest
         enter("Two eggs, three bread slices and salad", in: app)
         app.buttons["coachPhotos"].tap()
         XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
-        app.navigationBars.buttons["Done"].tap(); app.buttons["coachSend"].tap()
+        app.buttons["coachSend"].tap()
         waitForReplies(1, in: app)
         openLatestMeal(in: app)
         for food in ["Eggs", "Bread", "Salad"] { revealMealDetailItem(app.staticTexts[food].firstMatch, in: app) }
@@ -163,7 +163,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["half bread"].waitForExistence(timeout: 15))
         XCTAssertEqual(replyElements(in: app).count, 4)
         let banner = app.staticTexts["coachFixtureBanner"]
-        for _ in 0..<12 where !banner.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        for _ in 0..<12 where !banner.isHittable { coachViewport(in: app).swipeDown() }
         XCTAssertTrue(banner.isHittable)
     }
 
@@ -251,7 +251,7 @@ import XCTest
         let latest = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: status)
         XCTAssertEqual(XCTWaiter.wait(for: [latest], timeout: 5), .completed)
         XCTAssertLessThan(status.frame.maxY, app.textFields["coachInput"].frame.minY)
-        app.scrollViews.firstMatch.swipeDown()
+        coachViewport(in: app).swipeDown()
         let banner = app.staticTexts.matching(NSPredicate(format: "label == %@", history)).firstMatch
         XCTAssertTrue(banner.isHittable)
         enter("Synthetic new message", in: app); app.buttons["coachSend"].tap()
@@ -280,7 +280,7 @@ import XCTest
         XCTAssertTrue(activity.isHittable)
         XCTAssertLessThanOrEqual(activity.frame.maxY, app.textFields["coachInput"].frame.minY)
         let banner = app.staticTexts["coachFixtureBanner"]
-        for _ in 0..<4 where !banner.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        for _ in 0..<4 where !banner.isHittable { coachViewport(in: app).swipeDown() }
         XCTAssertTrue(banner.isHittable)
         let before = banner.frame.minY
         let jump = app.buttons["coachNewMessage"]
@@ -312,7 +312,7 @@ import XCTest
         enter("Synthetic delayed weekly report", in: app); app.buttons["coachSend"].tap()
         XCTAssertTrue(app.otherElements["coachActivity"].waitForExistence(timeout: 5))
         // Hold in the scroll view's empty gutter without dragging or selecting text.
-        app.scrollViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).press(forDuration: 9)
+        coachViewport(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).press(forDuration: 9)
         let reply = progressReply(containing: "Period recorded workouts:", in: app)
         XCTAssertTrue(reply.waitForExistence(timeout: 10))
         let bottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -353,11 +353,15 @@ import XCTest
         XCTAssertFalse(app.buttons["coachNewMessage"].exists)
     }
 
+    private func coachViewport(in app: XCUIApplication) -> XCUIElement {
+        let table = app.tables["coachViewport"]
+        return table.exists ? table : app.scrollViews.firstMatch
+    }
     private func revealCoachLink(_ link: XCUIElement, in app: XCUIApplication) {
         // Hittable can include a partially clipped link whose center is under the composer.
         for _ in 0..<8 {
             if link.isHittable && link.frame.maxY < app.textFields["coachInput"].frame.minY - 8 { break }
-            app.scrollViews.firstMatch.swipeUp()
+            coachViewport(in: app).swipeUp()
         }
         XCTAssertTrue(link.isHittable)
         XCTAssertLessThan(link.frame.maxY, app.textFields["coachInput"].frame.minY - 8)
@@ -370,7 +374,7 @@ import XCTest
         replyElements(in: app).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
     private func revealCoach(_ element: XCUIElement, in app: XCUIApplication) {
-        let scroll = app.scrollViews.firstMatch
+        let scroll = coachViewport(in: app)
         for _ in 0..<24 where !element.isHittable {
             let above = !element.exists || element.frame.midY < scroll.frame.midY
             let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: above ? 0.3 : 0.7))

@@ -59,3 +59,27 @@ or animation verification, read the repository skill
 sources to generated assets and native owners, and links the verification recipe.
 The shipping runtime is Lottie; older Rive plans are historical context. Keep
 animation changes tied to the approved painted references and explicit user intent.
+
+## Coach chat history
+
+Follow the approved [Coach chat history plan](docs/superpowers/plans/2026-10-18-coach-chat-history.md),
+[behavior contract](docs/development/coach-chat-behavior.md), and
+[verification record](docs/verification/2026-10-18-coach-chat-history.md).
+Ordinary Coach paths use bounded owner queries; do not rebuild a complete
+`DiarySnapshot`. Each request captures its source and ownership at request time.
+Keep one persistent 100-exchange window accounting for resident, reserved and
+retired page work. Retain reservations for retired requests until their
+underlying work actually exits, including after invalidation. Treat accepted
+capture identity/context and committed receipts as immutable; reconcile uncertain
+capture with the same payload, and never reapply a committed correction. Focused
+Coach tests live in `ios/MivuTests` and `ios/MivuUITests`; run them with
+XcodeBuildMCP and record the exact source SHA and result bundle.
+
+Keep the floating **Jump to latest** as the native glass `UIButton` owned by
+`CoachTimelineTable`, so drags on the control reach the table's native pan
+gesture. Preserve the table's default accessibility-element prefix and append
+the button through its
+[`UIAccessibilityContainer`](https://developer.apple.com/documentation/uikit/uiaccessibilitycontainer)
+methods. Keep focus away from the underlying exchange, preserve natural text
+sizing and a 44-point minimum target, and verify an actual button drag and tap,
+row/focus routing, text fit, and viewport restoration within 2 points.

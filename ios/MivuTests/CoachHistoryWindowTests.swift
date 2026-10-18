@@ -5,17 +5,6 @@ import Testing
 @Suite struct CoachHistoryWindowTests {
     private typealias Data = CoachTimelineTestData
 
-    @Test func legacySliceRemainsCompatibleUntilProductionRendererMigration() {
-        let ids = (1...61).map(Data.id)
-        var legacy = CoachHistoryWindow()
-        legacy.reset(ids: ids)
-        #expect(legacy.startIndex(in: ids) == 41)
-        let showEarlierResult1 = legacy.showEarlier(ids: ids)
-        #expect(showEarlierResult1 == ids[21])
-        legacy.reconcile(ids: [])
-        #expect(legacy.firstVisibleTurnID == nil)
-    }
-
     private func fullWindow() throws -> CoachPagedHistoryWindow {
         var window = CoachPagedHistoryWindow()
         let resetResult2 = window.reset(Data.page(141...160))

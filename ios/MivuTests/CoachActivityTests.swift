@@ -43,7 +43,8 @@ private actor ActivityInference {
         }
 
         #expect(coach.activity == .thinking)
-        #expect(coach.activityTurnID == coach.turns.last?.id)
+        #expect(coach.activityTurnID == coach.captureReceipt)
+        #expect(coach.captureReceipt != nil)
         coach.cancel()
         #expect(coach.activity == nil)
         await suspended.finish()

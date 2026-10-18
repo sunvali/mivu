@@ -16,6 +16,9 @@ struct CoachCommittedItem: Codable, Equatable, Sendable {
     var name: String
     var quantity: Double
     var unit: String
+    var nutrition: NutritionValues? = nil
+    var provenance: NutritionProvenance? = nil
+    var uncertain: Bool? = nil
 }
 
 /// Committed linkage for presentation. Replay continues to use CoachReceipt.
@@ -32,6 +35,14 @@ struct CoachCommittedReceipt: Codable, Equatable, Sendable {
     var committedRevision: Int
     var targetLocalDate: String? = nil
     var items: [CoachCommittedItem] = []
+    var submissionState: SubmissionState? = nil
+}
+
+/// Companion status reads index metadata without decoding an exchange or its receipts.
+struct CoachOperationMetadata: Equatable, Sendable, Identifiable {
+    var id: UUID
+    var state: CoachTurnState
+    var capturedAt: Date
 }
 
 struct CoachExchangeSummary: Equatable, Sendable, Identifiable {

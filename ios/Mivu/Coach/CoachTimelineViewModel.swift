@@ -19,8 +19,10 @@ struct CoachTimelineRefresh: Sendable {
     private(set) var hasNewReply = false
     private(set) var isLoadDeferred = false
     private(set) var error: String?
-    private let source: PageSource
-    private let refreshSource: RefreshSource?
+    private(set) var queryError: CoachQueryError?
+    private(set) var completedPageRequestID: UUID?
+    private var source: PageSource
+    private var refreshSource: RefreshSource?
     private var generation = UUID()
     private var requests: [CoachPageDirection: Task<Void, Never>] = [:]
     private var requestIDs: [CoachPageDirection: UUID] = [:]
@@ -45,6 +47,12 @@ struct CoachTimelineRefresh: Sendable {
     init(source: @escaping PageSource, refreshSource: RefreshSource?) {
         self.source = source
         self.refreshSource = refreshSource
+    }
+
+    /// Retain one charged window across selections; every scheduled read keeps its old source.
+    func rebind(identity: CoachTimelineIdentity, source: @escaping PageSource, refreshSource: RefreshSource?) {
+        invalidate(identity: identity)
+        self.source = source; self.refreshSource = refreshSource
     }
 
     func loadLatest() async { await beginReplacement(.latest).value }
@@ -76,12 +84,13 @@ struct CoachTimelineRefresh: Sendable {
             preserveReader()
             guard window.reserveReplacement(anchor: window.viewportAnchor) else {
                 replacementID = nil
-                isLoadDeferred = true
+                isLoadDeferred = true; error = nil; queryError = nil
                 continue
             }
             recordCapacity()
             revision += 1
             let mutation = mutationGeneration
+            let source = source
             do {
                 let page = try await source(intent.request, intent.generation)
                 window.releaseReplacement()
@@ -92,10 +101,10 @@ struct CoachTimelineRefresh: Sendable {
                     continue
                 }
                 guard window.reset(page, request: intent.request) else {
-                    error = "The conversation page was invalid. Try again."
+                    error = "The conversation page was invalid. Try again."; queryError = nil
                     continue
                 }
-                error = nil
+                error = nil; queryError = nil
                 record(page)
                 switch intent.request {
                 case .latest:
@@ -119,7 +128,7 @@ struct CoachTimelineRefresh: Sendable {
                 window.releaseReplacement()
                 guard isCurrent(intent.generation, identity: intent.identity), replacementID == intent.id else { continue }
                 if mutation != mutationGeneration { pendingReplacement = intent }
-                else { self.error = String(describing: error) }
+                else { self.error = String(describing: error); queryError = error as? CoachQueryError }
             }
             replacementID = nil
         }
@@ -139,6 +148,7 @@ struct CoachTimelineRefresh: Sendable {
         requestIDs[direction] = reservation.id
         recordCapacity()
         revision += 1
+        let source = source
         requests[direction] = Task {
             defer {
                 window.finishRead(reservation)
@@ -153,17 +163,18 @@ struct CoachTimelineRefresh: Sendable {
                 let page = try await source(reservation.request, current)
                 guard isCurrent(current, identity: identity), requestIDs[direction] == reservation.id, !Task.isCancelled else { return }
                 if window.complete(page, reservation: reservation) {
-                    error = nil
+                    error = nil; queryError = nil
+                    completedPageRequestID = reservation.id
                     record(page)
                     // A deliberate viewport move may have superseded the original anchor.
                     preserveReader()
-                } else if case .failed(let message) = window.edgeState(direction) { error = message }
+                } else if case .failed(let message) = window.edgeState(direction) { error = message; queryError = nil }
                 revision += 1
             } catch {
                 guard isCurrent(current, identity: identity), requestIDs[direction] == reservation.id, !Task.isCancelled else { return }
                 let message = String(describing: error)
                 window.fail(reservation, message: message)
-                self.error = message
+                self.error = message; queryError = error as? CoachQueryError
                 revision += 1
             }
         }
@@ -227,15 +238,15 @@ struct CoachTimelineRefresh: Sendable {
                 let result = try await refreshSource(ids, identity, current)
                 guard isCurrent(current, identity: identity), refreshID == operation, mutation == mutationGeneration, !Task.isCancelled else { return }
                 guard window.refresh(result, requestedIDs: ids) else {
-                    error = "The conversation update was invalid. Try again."
+                    error = "The conversation update was invalid. Try again."; queryError = nil
                     return
                 }
-                error = nil
+                error = nil; queryError = nil
                 preserveReader()
                 revision += 1
             } catch {
                 guard isCurrent(current, identity: identity), refreshID == operation, mutation == mutationGeneration, !Task.isCancelled else { return }
-                self.error = String(describing: error)
+                self.error = String(describing: error); queryError = error as? CoachQueryError
             }
         }
         return refreshTask
@@ -249,11 +260,18 @@ struct CoachTimelineRefresh: Sendable {
         restoration = .none
         hasNewReply = false
         isLoadDeferred = false
-        error = nil
+        error = nil; queryError = nil; completedPageRequestID = nil
         requestedRanges = []
         peakCapacity = 0
         revision += 1
     }
+    /// Abandon only the source-owning navigation; resident deltas and edge work stay owned.
+    func abandonReplacement(sourceGeneration: UUID) {
+        guard generation == sourceGeneration, replacementID != nil else { return }
+        replacementID = nil
+        if pendingReplacement?.generation == sourceGeneration { pendingReplacement = nil }
+    }
+
     private func supersede() {
         generation = UUID()
         retirePagingRequests()

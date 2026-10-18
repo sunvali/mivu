@@ -262,7 +262,7 @@ private actor ReceiptRefreshFailureOnce {
         #expect(coach.draft.submissionID == submissionID)
         #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
         await #expect(throws: DiaryError.persistenceFailed) { try await store.snapshotForExport() }
-        #expect(diary.latestCoachPage?.exchanges.isEmpty == true)
+        #expect(coach.exchanges.isEmpty)
     }
 
     @Test func passiveRefreshAndAnalysisNeverEmitFeedback() async throws {

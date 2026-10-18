@@ -28,6 +28,9 @@ actor DiaryStore {
     private func validateOwnership(_ expected: DiarySelectionOwnership, profileID: UUID) throws {
         guard expected == (try selectionOwnership(expectedProfileID: profileID)) else { throw DiaryError.wrongOwner }
     }
+    func validateSelectionOwnership(_ expected: DiarySelectionOwnership) throws {
+        try validateOwnership(expected, profileID: expected.identity.profileID)
+    }
     func coachCapturePreparation(at: Date, expectedProfileID: UUID) throws -> CoachCapturePreparation {
         let ownership = try selectionOwnership(expectedProfileID: expectedProfileID)
         let head = try diaryHead(expectedProfileID: expectedProfileID)
@@ -138,6 +141,83 @@ actor DiaryStore {
     func meal(id: UUID, expectedProfileID: UUID) throws -> MealReadModel { try pagedConnection(expectedProfileID: expectedProfileID).database.meal(id: id, expectedProfileID: expectedProfileID) }
     func photoContent(_ reference: DiaryPhotoReference, expectedProfileID: UUID) throws -> Data { try pagedConnection(expectedProfileID: expectedProfileID).database.photoContent(reference, expectedProfileID: expectedProfileID) }
     func coachPage(_ request: CoachPageRequest, expectedProfileID: UUID) throws -> CoachPage { try pagedConnection(expectedProfileID: expectedProfileID).database.coachPage(request, expectedProfileID: expectedProfileID) }
+    func coachPage(_ request: CoachPageRequest, expectedSelection: DiarySelectionOwnership) throws -> CoachPage {
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        let page = try coachPage(request, expectedProfileID: expectedSelection.identity.profileID)
+        guard page.identity == expectedSelection.identity else { throw CoachQueryError.wrongTimeline }
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        return page
+    }
+    func coachTimelineRefresh(ids: Set<UUID>, expectedSelection: DiarySelectionOwnership) throws -> CoachTimelineRefresh {
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        let result = try pagedConnection(expectedProfileID: expectedSelection.identity.profileID).database.coachTimelineRefresh(
+            ids: ids, expectedIdentity: expectedSelection.identity)
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        return result
+    }
+    func coachOperationMetadata(turnID: UUID? = nil, expectedSelection: DiarySelectionOwnership) throws -> CoachOperationMetadata? {
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        let value = try pagedConnection(expectedProfileID: expectedSelection.identity.profileID).database.coachOperationMetadata(
+            turnID: turnID, expectedIdentity: expectedSelection.identity)
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        return value
+    }
+    func coachLatestExchange(expectedSelection: DiarySelectionOwnership) throws -> CoachExchangeSummary? {
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        let value = try pagedConnection(expectedProfileID: expectedSelection.identity.profileID).database.coachLatestExchange(expectedIdentity: expectedSelection.identity)
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        return value
+    }
+    func coachExchange(turnID: UUID, expectedSelection: DiarySelectionOwnership) throws -> CoachExchangeSummary {
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        let database = try pagedConnection(expectedProfileID: expectedSelection.identity.profileID).database
+        let result = try database.domainRead(expectedProfileID: expectedSelection.identity.profileID) { head in
+            guard head.timelineGeneration == expectedSelection.identity.timelineGeneration else { throw CoachQueryError.wrongTimeline }
+            return try database.coachExchangeSummary(turnID: turnID, expectedProfileID: expectedSelection.identity.profileID)
+        }
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        return result
+    }
+    func coachCapturedDayLabels(ids: Set<UUID>, expectedSelection: DiarySelectionOwnership) throws -> [UUID: String] {
+        guard ids.count <= CoachPagedHistoryWindow.maximumExchanges else { throw DiaryError.invalidData }
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        let database = try pagedConnection(expectedProfileID: expectedSelection.identity.profileID).database
+        let labels = try database.domainRead(expectedProfileID: expectedSelection.identity.profileID) { head in
+            guard head.timelineGeneration == expectedSelection.identity.timelineGeneration else { throw CoachQueryError.wrongTimeline }
+            return try Dictionary(uniqueKeysWithValues: ids.map { ($0, try database.trackingDay(id: $0).localDate) })
+        }
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        return labels
+    }
+    func coachReceiptTargets(exchanges: [CoachExchangeSummary], expectedSelection: DiarySelectionOwnership) throws -> [UUID: CoachReceiptTarget] {
+        guard exchanges.count <= CoachPagedHistoryWindow.maximumExchanges else { throw DiaryError.invalidData }
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        let database = try pagedConnection(expectedProfileID: expectedSelection.identity.profileID).database
+        let targets = try database.domainRead(expectedProfileID: expectedSelection.identity.profileID) { head in
+            guard head.timelineGeneration == expectedSelection.identity.timelineGeneration else { throw CoachQueryError.wrongTimeline }
+            let transaction = DiaryTransaction(database: database, head: head)
+            var targets: [UUID: CoachReceiptTarget] = [:]
+            for exchange in exchanges {
+                for id in Set(exchange.receipts.compactMap(\.mealID) + (exchange.pendingMealID.map { [$0] } ?? [])) where targets[id] == nil {
+                    do {
+                        let meal = try transaction.mealProjection(id: id)
+                        let day = try database.trackingDay(id: meal.dayID)
+                        targets[id] = .meal(meal, localDate: day.localDate)
+                    } catch DiaryError.notFound { targets[id] = .unavailable }
+                }
+                for id in Set(exchange.receipts.compactMap(\.workoutID)) where targets[id] == nil {
+                    do {
+                        let workout = try transaction.workout(id: id)
+                        let day = try database.trackingDay(id: workout.dayID)
+                        targets[id] = .workout(workout, localDate: day.localDate)
+                    } catch DiaryError.notFound { targets[id] = .unavailable }
+                }
+            }
+            return targets
+        }
+        try validateOwnership(expectedSelection, profileID: expectedSelection.identity.profileID)
+        return targets
+    }
     func coachDays(before: CoachDayCursor? = nil, expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws -> CoachDayPage {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)
         return try pagedConnection(expectedProfileID: expectedProfileID).database.coachDays(before: before, expectedProfileID: expectedProfileID)

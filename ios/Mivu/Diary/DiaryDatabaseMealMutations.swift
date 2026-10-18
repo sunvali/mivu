@@ -250,7 +250,7 @@ extension DiaryTransaction {
         defer { sqlite3_finalize(totals) }; guard try database.mutationStep(totals) else { throw DiaryError.invalidData }
         let emptyComplete = sqlite3_column_int64(totals, 0) == 0 && day.completeness == .complete && pending == 0
         func value(_ column: Int32) -> Double? { emptyComplete ? 0 : (sqlite3_column_type(totals, column) == SQLITE_NULL ? nil : sqlite3_column_double(totals, column)) }
-        return DiaryDaySummary(day: day, totals: NutritionTotals(kcal: value(1), carbs: value(2), protein: value(3), fat: value(4), unknownItemCount: Int(sqlite3_column_int64(totals, 5))), savedMealCount: saved, pendingMealCount: pending)
+        return DiaryDaySummary(mealCount: Int(sqlite3_column_int64(statement, 0)), day: day, totals: NutritionTotals(kcal: value(1), carbs: value(2), protein: value(3), fat: value(4), unknownItemCount: Int(sqlite3_column_int64(totals, 5))), savedMealCount: saved, pendingMealCount: pending)
     }
     func records(_ table: String, clause: String, values: [DiaryDatabase.Value], limit: Int? = nil) throws -> [DiaryDatabase.Record] {
         let hasParent = ["meal", "submission", "item", "photo", "weight", "workout", "coach_photo"].contains(table)

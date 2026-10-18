@@ -34,7 +34,11 @@ private enum CoachFlowWaitFailure: Error, Equatable {
             while !(await suspended.started) {
                 try Task.checkCancellation()
                 guard coach.isWorking else {
-                    throw CoachFlowWaitFailure.workerEndedBeforeInference(state: coach.turns.first?.state, message: coach.errorMessage)
+                    let state: CoachTurnState?
+                    if let owner = coach.diary.selection, let operationID = coach.captureReceipt {
+                        state = try await coach.diary.store.coachOperationMetadata(turnID: operationID, expectedSelection: owner)?.state
+                    } else { state = nil }
+                    throw CoachFlowWaitFailure.workerEndedBeforeInference(state: state, message: coach.errorMessage)
                 }
                 guard clock.now < deadline else { throw CoachFlowWaitFailure.inferenceStartTimedOut }
                 try await Task.sleep(for: .milliseconds(10))
@@ -255,10 +259,15 @@ extension CoachFlowTests {
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { CoachUITestInference.respond })
         coach.draft.text = "Two eggs, three bread slices and salad"
         #expect(await coach.send()); await coach.waitForWorker()
-        let foodTurn = try #require(coach.turns.last), meal = try #require(diary.readModel?.meals.first)
+        let foodTurnID = try #require(coach.captureReceipt), ownerSelection = try #require(diary.selection)
+        let foodTurn = try await diary.store.coachExchange(turnID: foodTurnID, expectedSelection: ownerSelection)
+        let meal = try #require(diary.readModel?.meals.first)
         coach.draft.text = "I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal"
         #expect(await coach.send()); await coach.waitForWorker()
-        let turn = try #require(coach.turns.last), workout = try #require(diary.readModel?.workouts.first)
+        let turnID = try #require(coach.captureReceipt)
+        let turn = try await diary.store.coachExchange(turnID: turnID, expectedSelection: ownerSelection)
+        let workout = try #require(diary.readModel?.workouts.first)
+        await coach.loadTimelineIfNeeded()
         await coach.refreshLinks()
         #expect(coach.linkedWorkouts(turn).map(\.id) == [workout.id])
         #expect(coach.linkedMeals(turn).isEmpty)
@@ -266,11 +275,15 @@ extension CoachFlowTests {
         #expect(coach.linkedWorkouts(foodTurn).isEmpty)
         await diary.createProfile(name: "Synthetic other owner")
         #expect(coach.linkedWorkouts(turn).isEmpty)
+        #expect(coach.linkedMeals(foodTurn).isEmpty)
         await diary.switchProfile(owner)
         await coach.refreshLinks()
         #expect(coach.linkedWorkouts(turn).map(\.id) == [workout.id])
         try await diary.store.deleteWorkout(id: workout.id, expectedRevision: workout.revision, expectedProfileID: owner)
         try await diary.refresh(profileID: owner)
+        #expect(coach.linkedWorkouts(turn).isEmpty)
+        let receipt = try #require(turn.receipts.first)
+        #expect(coach.receiptTarget(receipt) == .loading)
         await coach.refreshLinks()
         #expect(coach.linkedWorkouts(turn).isEmpty)
         #expect(coach.linkedMeals(foodTurn).map(\.id) == [meal.id])

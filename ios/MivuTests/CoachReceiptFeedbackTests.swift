@@ -52,6 +52,31 @@ private actor CoachFeedbackReplies {
         return try #require(await store.snapshotForExport().meals.first)
     }
 
+    @Test func completedSubmissionCannotMaskADifferentPendingRecoveryOperation() async throws {
+        let (store, profile, _, root) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let diary = DiaryViewModel(store: store)
+        await diary.load(createDefaultProfile: false)
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
+        coach.enterBackground()
+        coach.draft.text = "Synthetic completed submission"
+        #expect(await coach.send())
+        let completed = try #require(coach.captureReceipt)
+        let submission = coach.companionSubmission, event = coach.companionCaptureEvent
+        try await store.setCoachTurnState(turnID: completed, state: .completed, expectedProfileID: profile.id)
+        let pending = try await capturedTurn(store, text: "Synthetic pending network operation", photos: [], at: now,
+                                             expectedProfileID: profile.id)
+        try await store.setCoachTurnState(turnID: pending.id, state: .waitingForNetwork, expectedProfileID: profile.id)
+        try await diary.refresh(profileID: profile.id)
+        #expect(diary.workStatus.pendingTurnID == pending.id)
+        await coach.refreshActiveOperation()
+        #expect(coach.activeOperationTurn?.id == pending.id)
+        #expect(coach.activeOperationTurn?.state == .waitingForNetwork)
+        #expect(coach.companionNeedsRecovery && !coach.companionIsProcessing)
+        #expect(coach.companionSubmission == submission && coach.companionCaptureEvent == event && coach.captureReceipt == completed,
+                "Refreshing another operation's state cannot invent acceptance or durable feedback")
+    }
+
     @Test func twoReviewPatchesToOneItemInOneTurnBothPersist() async throws {
         let (store, profile, day, root) = try await fixture()
         defer { try? FileManager.default.removeItem(at: root) }

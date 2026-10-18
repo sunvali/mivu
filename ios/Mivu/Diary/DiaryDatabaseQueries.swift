@@ -9,6 +9,46 @@ extension DiaryDatabase {
         return try coachExchange(row, context: context)
     }
 
+    func coachOperationMetadata(turnID: UUID?, expectedIdentity: CoachTimelineIdentity) throws -> CoachOperationMetadata? {
+        try coachRead {
+            let context = try coachContext(expectedProfileID: expectedIdentity.profileID)
+            guard context.identity == expectedIdentity else { throw CoachQueryError.wrongTimeline }
+            let predicate = turnID == nil ? "" : " WHERE turnID = ?"
+            let values: [Value] = turnID.map { [.text($0.uuidString)] } ?? []
+            let statement = try coachStatement("SELECT turnID, state, capturedAt FROM coach_index" + predicate + " ORDER BY sequence DESC LIMIT 1", values)
+            defer { sqlite3_finalize(statement) }
+            guard try coachStep(statement) else { return nil }
+            guard let state = CoachTurnState(rawValue: try coachText(statement, 1)) else { throw DiaryError.invalidData }
+            return CoachOperationMetadata(id: try coachUUID(statement, 0), state: state,
+                capturedAt: Date(timeIntervalSinceReferenceDate: sqlite3_column_double(statement, 2)))
+        }
+    }
+
+    func coachLatestExchange(expectedIdentity: CoachTimelineIdentity) throws -> CoachExchangeSummary? {
+        try coachRead {
+            let context = try coachContext(expectedProfileID: expectedIdentity.profileID)
+            guard context.identity == expectedIdentity else { throw CoachQueryError.wrongTimeline }
+            return try coachIndexRows("sequence > 0", order: "DESC", limit: 1).first.map { try coachExchange($0, context: context) }
+        }
+    }
+
+    /// Resident IDs and latest metadata come from one consistent, bounded transaction.
+    func coachTimelineRefresh(ids: Set<UUID>, expectedIdentity: CoachTimelineIdentity) throws -> CoachTimelineRefresh {
+        guard ids.count <= CoachPagedHistoryWindow.maximumExchanges else { throw DiaryError.invalidData }
+        return try coachRead {
+            let context = try coachContext(expectedProfileID: expectedIdentity.profileID)
+            guard context.identity == expectedIdentity else { throw CoachQueryError.wrongTimeline }
+            let rows = try ids.flatMap { id in
+                try coachIndexRows("turnID = ?", values: [.text(id.uuidString)], limit: 1)
+            }.sorted { $0.sequence < $1.sequence }
+            let latest = try coachIndexRows("sequence > 0", order: "DESC", limit: 1).first
+            return CoachTimelineRefresh(identity: context.identity,
+                exchanges: try rows.map { try coachExchange($0, context: context) },
+                latestCursor: latest.map { CoachCursor(identity: context.identity, sequence: $0.sequence, turnID: $0.id) },
+                latestEmptySegment: try coachEmptySegment(expectedProfileID: expectedIdentity.profileID))
+        }
+    }
+
     func coachPage(_ request: CoachPageRequest, expectedProfileID: UUID) throws -> CoachPage {
         diagnostics?.recordCoachPageRead()
         return try coachRead {
@@ -272,13 +312,15 @@ extension DiaryDatabase {
         if value.targetLocalDate == nil, let date = facts.targetLocalDate, validLocalDate(date) { value.targetLocalDate = date }
         if let id = receipt.dayID, facts.id == id, let date = facts.localDate, validLocalDate(date) { value.targetLocalDate = date }
         if let id = receipt.goalID, facts.id == id, let date = facts.effectiveLocalDate, validLocalDate(date) { value.targetLocalDate = date }
+        value.submissionState = facts.state
         var items: [FoodItem] = []
-        if facts.state == .saved {
+        if facts.state == .saved || facts.state == .awaitingReview {
             if let id = receipt.mealID, facts.id == id, facts.dayID == receipt.dayID { items = facts.items ?? [] }
             if let id = receipt.mealID, facts.mealID == id, let item = facts.item, item.id == receipt.itemID { items = [item] }
         }
         do { try validateItems(items) } catch { return value }
-        value.items = items.map { CoachCommittedItem(itemID: $0.id, name: $0.name, quantity: $0.quantity, unit: $0.unit) }
+        value.items = items.map { CoachCommittedItem(itemID: $0.id, name: $0.name, quantity: $0.quantity, unit: $0.unit,
+            nutrition: $0.nutrition, provenance: $0.provenance, uncertain: $0.uncertain) }
         return value
     }
 
@@ -348,6 +390,7 @@ extension DiaryDatabase {
                         summaries.append("This item was deleted. Its prior receipt is retained."); continue
                     }
                     if receipt.itemID != nil, !facts.items.isEmpty {
+                        if meal.state == .awaitingReview { summaries.append("Estimate ready for review."); continue }
                         let items = facts.items.map { "\($0.name) (\(number($0.quantity)) \($0.unit))" }.joined(separator: ", ")
                         let date = facts.targetLocalDate.map { " on " + $0 } ?? ""
                         summaries.append("Updated \(items)\(date). Nutrition may be uncertain.")

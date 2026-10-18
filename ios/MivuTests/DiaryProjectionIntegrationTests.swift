@@ -5,6 +5,22 @@ import Testing
 @testable import Mivu
 
 @Suite @MainActor struct DiaryProjectionIntegrationTests {
+    @Test func historyMealCountDoesNotDoubleCountSavedMealAwaitingCorrection() async throws {
+        let f = try ProjectionIntegrationFixture(exchanges: 1)
+        defer { f.remove() }
+        let store = f.store()
+        _ = try await store.selectProfile(f.owner)
+        let before = try await store.meal(id: f.mealID, expectedProfileID: f.owner)
+        #expect(before.revision > 0)
+        _ = try await store.correctMealProjection(mealID: before.id, text: "Synthetic pending correction", reviewFirst: true,
+            expectedSelection: try await store.selectionOwnership(expectedProfileID: f.owner), expectedProfileID: f.owner)
+        let history = try await store.diaryHistory(expectedProfileID: f.owner)
+        let summary = try #require(history.days.first { $0.day.id == before.dayID })
+        #expect(summary.mealCount == 1)
+        #expect(summary.savedMealCount == 1 && summary.pendingMealCount == 1)
+        #expect(try await store.meal(id: before.id, expectedProfileID: f.owner).revision == before.revision)
+    }
+
     @Test(arguments: [100, 10_000])
     func productionStartupCaptureAndWorkerRemainBounded(exchanges: Int) async throws {
         let f = try ProjectionIntegrationFixture(exchanges: exchanges - 1, pending: true)
@@ -14,6 +30,8 @@ import Testing
         defer { coach.enterBackground(); model.enterBackground() }
         f.metrics.reset()
         await model.load(createDefaultProfile: false)
+        #expect(f.metrics.counters.decodedTurnPayloads == 0 && f.metrics.counters.coachPageReads == 0)
+        await coach.loadTimelineIfNeeded()
         let startup = f.metrics.counters
         #expect(startup.completeReads == 0 && startup.completeReconciles == 0)
         #expect(startup.decodedTurnPayloads <= 20 && startup.originalPhotoBytes == 0)
@@ -463,7 +481,11 @@ import Testing
         let reopened = DiaryViewModel(store: DiaryStore(directory: f.root, diagnostics: metrics))
         await reopened.load(createDefaultProfile: false)
         #expect(try #require(reopened.readModel).head.profile.id == f.source.profile.id)
-        #expect(reopened.profiles.count == 1 && reopened.latestCoachPage?.exchanges.count == 20)
+        #expect(reopened.profiles.count == 1)
+        #expect(metrics.counters.decodedTurnPayloads == 0 && metrics.counters.coachPageReads == 0)
+        let coach = CoachViewModel(diary: reopened, connection: ChatGPTConnection())
+        await coach.loadTimelineIfNeeded()
+        #expect(coach.exchanges.count == 20)
         #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0)
         #expect(metrics.counters.decodedTurnPayloads <= 20 && metrics.counters.originalPhotoBytes == 0)
     }

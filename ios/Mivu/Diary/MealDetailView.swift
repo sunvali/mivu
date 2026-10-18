@@ -5,6 +5,7 @@ struct MealDetailView: View {
     let mealID: UUID
     @Environment(\.dismiss) private var dismiss
     @Environment(\.diarySettingsRoutes) private var routes
+    @Environment(\.openDiaryCoach) private var openChat
     @State private var showCorrection = false
     @State private var editedItem: FoodItem?
     @State private var editingRevision: Int?
@@ -21,6 +22,20 @@ struct MealDetailView: View {
                 List {
                     Section {
                         mealSummary(meal, snapshot: snapshot).listRowBackground(Color.diarySummarySurface)
+                    }.listRowBackground(Color.clear)
+                    Section("Source conversation") {
+                        if let source = meal.sourceTurnID {
+                            let selection = model.selection
+                            Button {
+                                guard let selection, openChat(.turn(source), expectedSelection: selection) else { return }
+                                dismiss()
+                            } label: { Label("Open source chat", systemImage: "bubble.left").frame(minHeight: 44) }
+                                .disabled(selection == nil || model.isChangingProfile || openChat.origin?.selection != selection)
+                                .accessibilityIdentifier("mealSourceChat")
+                        } else {
+                            Text("No source conversation is recorded for this meal.")
+                                .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("mealSourceUnavailable")
+                        }
                     }.listRowBackground(Color.clear)
                     if let review = meal.submissions.last(where: { $0.state == .awaitingReview }), let proposal = review.proposal {
                         Section("Review estimate") {
@@ -517,40 +532,6 @@ private struct MealPhotoViewer: View {
                 Button("Cancel", role: .cancel) {}
             } message: { Text("Only this photo will be removed. The meal and its notes are kept.") }
             .interactiveDismissDisabled(deleting)
-        }
-    }
-}
-
-
-private struct DiaryPhotoRequest: Hashable {
-    var profileID: UUID?
-    var epoch: UInt64?
-    var timeline: UUID?
-    var reference: DiaryPhotoReference.Identity
-    var generation: UInt64
-}
-
-struct DiaryPhotoPreview: View {
-    @Bindable var model: DiaryViewModel
-    let reference: DiaryPhotoReference
-    var height: CGFloat = 180
-    @State private var image: CGImage?
-    private var request: DiaryPhotoRequest { DiaryPhotoRequest(profileID: model.selection?.identity.profileID,
-        epoch: model.selection?.selectionEpoch, timeline: model.selection?.identity.timelineGeneration,
-        reference: reference.id, generation: model.photoRequestGeneration) }
-    var body: some View {
-        Group {
-            if let image { Image(decorative: image, scale: 1).resizable().scaledToFit() }
-            else { Image(systemName: "photo").foregroundStyle(Color.diarySecondary) }
-        }
-        .frame(maxWidth: .infinity).frame(height: height).clipShape(RoundedRectangle(cornerRadius: 12))
-        .task(id: request) {
-            let captured = request; image = nil
-            guard let loader = model.photoLoader else { return }
-            do {
-                let result = try await loader.thumbnail(for: reference, pixelSize: 512)
-                guard !Task.isCancelled, !model.isChangingProfile, captured == request else { return }; image = result.image
-            } catch { if captured == request, !Task.isCancelled { image = nil } }
         }
     }
 }

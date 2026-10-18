@@ -188,6 +188,39 @@ import XCTest
         }
     }
 
+    func testLargestTextCameraCancelKeepsDraftAndSeparateLibraryReachable() {
+        for appearance in ["--proof-light", "--proof-dark"] {
+            let app = launch(["--proof-largest-text", appearance])
+            enter("Camera cancellation keeps this note", in: app)
+            let camera = app.buttons["coachPhotos"]
+            XCTAssertTrue(camera.isHittable)
+            XCTAssertGreaterThanOrEqual(camera.frame.height, 44)
+            camera.tap()
+            let close = app.buttons["coachCameraClose"]
+            XCTAssertTrue(close.waitForExistence(timeout: 5))
+            for control in [close, app.buttons["coachCameraLibrary"], app.buttons["coachCameraShutter"]] {
+                XCTAssertTrue(control.exists)
+                XCTAssertGreaterThanOrEqual(control.frame.height, 44)
+                XCTAssertGreaterThanOrEqual(control.frame.width, 44)
+            }
+            XCTAssertTrue(app.buttons["coachCameraLibrary"].isHittable,
+                          "Existing photos need their own reachable path when camera capture is unavailable")
+            close.tap()
+            let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: close)
+            XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+            let input = app.textFields["coachInput"]
+            XCTAssertEqual(input.value as? String, "Camera cancellation keeps this note")
+            XCTAssertEqual(app.buttons.matching(identifier: "coachMealLink").count, 0,
+                           "Opening and canceling the camera cannot acknowledge or save a draft")
+            input.tap(); input.typeText(" and keyboard focus")
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            XCTAssertEqual(input.value as? String, "Camera cancellation keeps this note and keyboard focus")
+            XCTAssertTrue(app.buttons["coachSend"].isHittable)
+            XCTAssertGreaterThanOrEqual(app.buttons["coachSend"].frame.height, 44)
+            app.terminate()
+        }
+    }
+
     func testSettingsShowsPipPreviewWithoutOneItemPicker() {
         let app = launch(); settings(in: app)
         let name = app.staticTexts["companionName"]

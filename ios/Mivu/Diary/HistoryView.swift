@@ -31,18 +31,18 @@ struct HistoryView: View {
                             let totals = summary.totals
                             ViewThatFits(in: .horizontal) {
                                 HStack(spacing: 16) {
-                                    dayLabel(day, mealCount: summary.savedMealCount + summary.pendingMealCount)
+                                    dayLabel(day, mealCount: summary.mealCount)
                                     Spacer(minLength: 8)
                                     energy(totals.kcal)
                                 }
                                 VStack(alignment: .leading, spacing: 8) {
-                                    dayLabel(day, mealCount: summary.savedMealCount + summary.pendingMealCount)
+                                    dayLabel(day, mealCount: summary.mealCount)
                                     energy(totals.kcal)
                                 }
                             }
                             .frame(minHeight: 64, alignment: .leading)
                             .accessibilityElement(children: .combine)
-                        }.accessibilityIdentifier("diaryDay")
+                        }.accessibilityIdentifier("diaryDay").accessibilityValue(day.localDate + " " + day.timeZoneID)
                     }
                 } header: { DiarySectionLabel(title: "Recorded days", symbol: "calendar", color: .diaryProtein) }
                 if page?.hasMore == true { Button("Earlier days") { Task { await loadHistory(before: page?.cursor) } }.frame(minHeight: 44) }
@@ -140,6 +140,8 @@ struct HistoryView: View {
 struct DayHistoryView: View {
     @Bindable var model: DiaryViewModel
     let dayID: UUID
+    @Environment(\.openDiaryCoach) private var openChat
+    @Environment(\.dismiss) private var dismiss
     @State private var showMeal = false
     @State private var showWeight = false
     @State private var showWorkout = false
@@ -148,6 +150,15 @@ struct DayHistoryView: View {
         List {
             if let snapshot = model.dayDetail(dayID) {
                 let day = snapshot.day
+                Section {
+                    let selection = model.selection
+                    Button {
+                        guard let selection, openChat(.day(dayID), expectedSelection: selection) else { return }
+                        dismiss()
+                    } label: { Label("Open chat", systemImage: "bubble.left").frame(minHeight: 44) }
+                        .disabled(selection == nil || model.isChangingProfile || openChat.origin?.selection != selection)
+                        .accessibilityIdentifier("diaryDayOpenChat")
+                }
                 if let savedMealID, model.meal(savedMealID) != nil {
                     Section {
                         NavigationLink { MealDetailView(model: model, mealID: savedMealID) } label: {
@@ -193,6 +204,9 @@ struct DayHistoryView: View {
                         }
                     }
                 }
+            } else {
+                ContentUnavailableView("Day unavailable", systemImage: "calendar", description: Text("This recorded day is unavailable in the selected diary."))
+                    .accessibilityIdentifier("diaryDayUnavailable")
             }
         }
         .listStyle(.plain)

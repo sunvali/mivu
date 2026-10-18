@@ -167,6 +167,29 @@ import Testing
         #expect(metrics.counters.originalPhotoBytes == 0)
     }
 
+    @Test func operationMetadataNeverDecodesExchangePayloads() throws {
+        let snapshot = ChatHistoryFixture.snapshot(exchanges: 100)
+        let url = try migrated(snapshot)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let metrics = DiaryQueryDiagnostics(), database = try DiaryDatabase(url: url, diagnostics: metrics)
+        let identity = try database.coachDays(before: nil, expectedProfileID: snapshot.profile.id).identity
+        // Keep JSON expression indexes writable while making every CoachTurn undecodable.
+        try ChatHistoryFixture.execute(url, "UPDATE coach_turn SET payload = CAST('{}' AS BLOB)")
+        metrics.reset()
+        let oldest = snapshot.coachTurns[0], newest = try #require(snapshot.coachTurns.last)
+        let exact = try database.coachOperationMetadata(turnID: oldest.id, expectedIdentity: identity)
+        let latest = try database.coachOperationMetadata(turnID: nil, expectedIdentity: identity)
+        #expect(exact == CoachOperationMetadata(id: oldest.id, state: oldest.state, capturedAt: oldest.capturedAt))
+        #expect(latest == CoachOperationMetadata(id: newest.id, state: newest.state, capturedAt: newest.capturedAt))
+        #expect(try database.coachOperationMetadata(turnID: UUID(), expectedIdentity: identity) == nil)
+        #expect(metrics.counters.decodedTurnPayloads == 0 && metrics.counters.coachPageReads == 0)
+        #expect(metrics.counters.completeReads == 0 && metrics.counters.originalPhotoBytes == 0)
+        let stale = CoachTimelineIdentity(profileID: identity.profileID, timelineGeneration: UUID())
+        #expect(throws: CoachQueryError.wrongTimeline) { try database.coachOperationMetadata(turnID: nil, expectedIdentity: stale) }
+        // Negative control: a real exchange projection must still encounter the poisoned payload.
+        #expect(throws: DecodingError.self) { try database.coachPage(.latest, expectedProfileID: snapshot.profile.id) }
+    }
+
     @Test func receiptFactsKeepOriginalDateAndServingWithoutReadingCurrentRecords() throws {
         var snapshot = ChatHistoryFixture.snapshot(exchanges: 5)
         var item = snapshot.meals[0].items[0]
@@ -194,12 +217,18 @@ import Testing
         let page = try DiaryDatabase(url: url).coachPage(.latest, expectedProfileID: snapshot.profile.id)
         let facts = try #require(page.exchanges.first?.receipts.first)
         #expect(facts.targetLocalDate == "2027-01-14")
-        #expect(facts.items == [CoachCommittedItem(itemID: item.id, name: "Original serving", quantity: 0.5, unit: "bowl")])
+        let originalItem = CoachCommittedItem(itemID: item.id, name: "Original serving", quantity: 0.5, unit: "bowl",
+            nutrition: item.nutrition, provenance: item.provenance, uncertain: item.uncertain)
+        #expect(facts.items == [originalItem])
+        #expect(facts.submissionState == .saved)
         #expect(page.exchanges[1].receipts[0].targetLocalDate == nil)
         #expect(page.exchanges[2].receipts[0].targetLocalDate == "2027-01-14")
         #expect(page.exchanges[3].receipts[0].items.isEmpty)
         #expect(page.exchanges[3].receipts[0].targetLocalDate == nil)
-        #expect(page.exchanges[4].receipts[0].items.isEmpty)
+        #expect(page.exchanges[3].receipts[0].submissionState == nil)
+        // This receipt includes the original proposal JSON; it is not saved intake.
+        #expect(page.exchanges[4].receipts[0].items == [originalItem])
+        #expect(page.exchanges[4].receipts[0].submissionState == .awaitingReview)
     }
 
     @Test func transferredPhotoCollisionsRetainEveryBoundedOwnerWithoutOriginalReads() throws {

@@ -18,12 +18,12 @@ struct MealDraft: Equatable {
     private let profileSelection: @Sendable (UUID) async throws -> DiaryReadModel
     // Foreground actions have their own load boundary; subscriber loads are independent.
     private let actionReadModelLoading: @Sendable (UUID) async throws -> DiaryReadModel
+    private let subscriberReadModelLoading: @Sendable (UUID) async throws -> DiaryReadModel
     private let mealDetailLoading: @Sendable (UUID, UUID) async throws -> MealReadModel
     private let dayDetailLoading: @Sendable (UUID, UUID) async throws -> DiaryDayReadModel
     private let preferences: UserDefaults?
     let backup: FolderBackup?
     private(set) var readModel: DiaryReadModel?
-    private(set) var latestCoachPage: CoachPage?
     private(set) var selection: DiarySelectionOwnership?
     private(set) var workStatus = CoachWorkStatus()
     private(set) var photoLoader: DiaryPhotoLoader?
@@ -60,12 +60,14 @@ struct MealDraft: Equatable {
     init(store: DiaryStore, sampleMode: Bool = false, preferences: UserDefaults? = nil, backup: FolderBackup? = nil,
          profileSelection: (@Sendable (UUID) async throws -> DiaryReadModel)? = nil,
          actionReadModelLoading: (@Sendable (UUID) async throws -> DiaryReadModel)? = nil,
+         subscriberReadModelLoading: (@Sendable (UUID) async throws -> DiaryReadModel)? = nil,
          mealDetailLoading: (@Sendable (UUID, UUID) async throws -> MealReadModel)? = nil,
          dayDetailLoading: (@Sendable (UUID, UUID) async throws -> DiaryDayReadModel)? = nil,
          photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil) {
         self.store = store; self.sampleMode = sampleMode; self.preferences = preferences; self.backup = backup
         self.profileSelection = profileSelection ?? { try await store.selectProfile($0) }
         self.actionReadModelLoading = actionReadModelLoading ?? { try await store.diaryReadModel(expectedProfileID: $0) }
+        self.subscriberReadModelLoading = subscriberReadModelLoading ?? { try await store.diaryReadModel(expectedProfileID: $0) }
         self.mealDetailLoading = mealDetailLoading ?? { try await store.meal(id: $0, expectedProfileID: $1) }
         self.dayDetailLoading = dayDetailLoading ?? { try await store.diaryDay(id: $0, expectedProfileID: $1) }
         self.photoWorkLimiter = photoWorkLimiter; self.exportCoordinator = exportCoordinator ?? DiaryExportCoordinator(store: store)
@@ -79,7 +81,13 @@ struct MealDraft: Equatable {
     deinit { memoryTask?.cancel() }
     static func local() -> DiaryViewModel {
         let directory = DiaryLaunch.directory
-        return DiaryViewModel(store: DiaryStore(directory: directory), sampleMode: DiaryLaunch.isSampleMode, preferences: DiaryLaunch.defaults,
+        let processTime: @Sendable () -> Date = {
+            #if DEBUG
+            if CoachCorrectionUITestFixture.isEnabled { return CoachCorrectionUITestFixture.processInstant }
+            #endif
+            return Date()
+        }
+        return DiaryViewModel(store: DiaryStore(directory: directory, currentTime: processTime), sampleMode: DiaryLaunch.isSampleMode, preferences: DiaryLaunch.defaults,
             backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)))
     }
     var activeDay: TrackingDay? { readModel?.activeDay }
@@ -124,6 +132,12 @@ struct MealDraft: Equatable {
         defer { finishProfileTransition() }
         do {
             profiles = try await store.profiles()
+            #if DEBUG
+            if DiaryLaunch.isCoachHistoryFixture, profiles.isEmpty {
+                _ = try await store.importProfile(CoachUITestInference.historySnapshot())
+                profiles = try await store.profiles()
+            }
+            #endif
             if preferences?.bool(forKey: "diarySignedOut") == true { await clearProfileSelection(); return }
             if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 try await install(try await profileSelection(profile.id))
@@ -151,12 +165,14 @@ struct MealDraft: Equatable {
             })
         }
         let current = try await store.diaryReadModel(expectedProfileID: owner)
-        let page = try await store.coachPage(.latest, expectedProfileID: owner)
         let status = try await store.coachWorkStatus(expectedProfileID: owner)
         try await store.validateSelection(epoch: token.selectionEpoch, expectedProfileID: owner)
         selection = token; exactMeals = [:]; exactDays = [:]; savedMealID = nil; manualCaptureAttempt = nil
         photoRequestGeneration &+= 1; changeGeneration &+= 1
-        readModel = current; latestCoachPage = page; workStatus = status
+        readModel = current; workStatus = status
+        #if DEBUG
+        if CoachCorrectionUITestFixture.isEnabled { try CoachCorrectionUITestFixture.installAudit() }
+        #endif
         await selectBackupProfile(owner); rememberSelection()
         changesTask = Task { [weak self] in
             for await changes in stream {
@@ -169,21 +185,20 @@ struct MealDraft: Equatable {
     func refresh(profileID: UUID) async throws { try await refresh(profileID: profileID, changes: nil) }
     private func refresh(profileID: UUID, changes: DiaryChanges?) async throws {
         guard let token = selection, token.identity.profileID == profileID else { return }
-        let updated = try await (changes == nil ? actionReadModelLoading(profileID) : store.diaryReadModel(expectedProfileID: profileID))
+        let updated = try await (changes == nil ? actionReadModelLoading(profileID) : subscriberReadModelLoading(profileID))
         guard !isChangingProfile, selection == token else { return }
         guard updated.head.timelineGeneration == token.identity.timelineGeneration,
               updated.head.revision >= (readModel?.head.revision ?? 0) else { return }
         if updated.head.revision == readModel?.head.revision { return }
-        let page = try await store.coachPage(.latest, expectedProfileID: profileID)
         let status = try await store.coachWorkStatus(expectedProfileID: profileID)
-        let invalidation = changes ?? DiaryChanges(mealIDs: Set(updated.meals.map(\.id)).union(exactMeals.keys), turnIDs: Set(page.exchanges.map(\.id)))
-        await photoLoader?.invalidate(invalidation)
+        if let changes { await photoLoader?.invalidate(changes) }
+        else { await photoLoader?.purgeForMemoryPressure() }
         var meals: [UUID: MealReadModel] = [:], days: [UUID: DiaryDayReadModel] = [:]
         for id in exactMeals.keys { do { meals[id] = try await store.meal(id: id, expectedProfileID: profileID) } catch DiaryError.notFound {} }
         for id in exactDays.keys { do { days[id] = try await store.diaryDay(id: id, expectedProfileID: profileID) } catch DiaryError.notFound {} }
         guard !isChangingProfile, selection == token, updated.head.revision >= (readModel?.head.revision ?? 0) else { return }
         photoRequestGeneration &+= 1; changeGeneration &+= 1
-        readModel = updated; latestCoachPage = page; workStatus = status; exactMeals = meals; exactDays = days
+        readModel = updated; workStatus = status; exactMeals = meals; exactDays = days
         if let index = profiles.firstIndex(where: { $0.id == profileID }) { profiles[index] = updated.head.profile }
         queueBackup()
     }
@@ -261,7 +276,7 @@ struct MealDraft: Equatable {
     private func clearProfileSelection() async {
         await backup?.selectProfile(nil); await store.signOut()
         if let photoLoader { await photoLoader.purgeForMemoryPressure() }
-        selection = nil; manualCaptureAttempt = nil; readModel = nil; latestCoachPage = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
+        selection = nil; manualCaptureAttempt = nil; readModel = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
         photoRequestGeneration &+= 1; changeGeneration &+= 1
         backupGeneration = nil; backupStatus = FolderBackupStatus(); backupScheduledRevision = nil
         preferences?.set(true, forKey: "diarySignedOut"); preferences?.removeObject(forKey: "diarySelectedProfile")
@@ -365,7 +380,7 @@ enum DiaryLaunch {
     }
     static var isUITest: Bool { testID != nil }
     #if DEBUG
-    static var isCoachScrollSpike: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-scroll-spike") }
+    static var isCoachHistoryFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-history-fixture") }
     #endif
     static var isCoachUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-ui-test") }
     static var isCoachInferenceFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-inference-fixture") }
