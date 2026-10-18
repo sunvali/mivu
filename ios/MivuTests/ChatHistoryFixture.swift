@@ -64,6 +64,18 @@ enum ChatHistoryFixture {
         return snapshot
     }
 
+    /// Alternating day evidence and backwards clocks exercise sequence-based paging.
+    static func pagingSnapshot(exchanges: Int = 100) -> DiarySnapshot {
+        var value = snapshot(exchanges: exchanges)
+        for index in value.coachTurns.indices {
+            value.coachTurns[index].activeDayID = index.isMultiple(of: 2) ? value.days[0].id : value.days[1].id
+            if index % 3 == 0 {
+                value.coachTurns[index].capturedAt = value.coachTurns[index].capturedAt.addingTimeInterval(-Double(index))
+            }
+        }
+        return value
+    }
+
     static func makeDatabase(_ snapshot: DiarySnapshot) throws -> URL {
         let directory = URL.temporaryDirectory.appending(path: "ChatHistory-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

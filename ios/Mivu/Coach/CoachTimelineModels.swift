@@ -11,6 +11,13 @@ struct CoachCursor: Equatable, Sendable {
     var turnID: UUID
 }
 
+struct CoachCommittedItem: Equatable, Sendable {
+    var itemID: UUID
+    var name: String
+    var quantity: Double
+    var unit: String
+}
+
 /// Committed linkage for presentation. Replay continues to use CoachReceipt.
 struct CoachCommittedReceipt: Equatable, Sendable {
     var operationKey: String
@@ -23,6 +30,8 @@ struct CoachCommittedReceipt: Equatable, Sendable {
     var goalID: UUID?
     var destination: CoachDestination?
     var committedRevision: Int
+    var targetLocalDate: String? = nil
+    var items: [CoachCommittedItem] = []
 }
 
 struct CoachExchangeSummary: Equatable, Sendable, Identifiable {
