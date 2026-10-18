@@ -6,9 +6,34 @@ struct FolderBackupStatus: Equatable, Sendable {
     var pendingError: String? = nil
 }
 
-/// Synchronous actor operations serialize profile switching, deletion and coordinated file work.
+/// The lock covers metadata eligibility and persistence, never provider access or an await.
+fileprivate final class FolderBackupFence: @unchecked Sendable {
+    let lock = NSRecursiveLock()
+    var version: UInt64 = 0
+    var acknowledged: (UUID, FolderBackup.Configuration)?
+}
+
+struct FolderBackupAcknowledgement: Sendable {
+    fileprivate let fence: FolderBackupFence
+    fileprivate let version: UInt64
+    fileprivate let profileID: UUID
+    fileprivate let configuration: FolderBackup.Configuration
+    fileprivate let directory: URL
+    fileprivate let beforeWrite: @Sendable (URL) throws -> Void
+
+    func commit() throws {
+        fence.lock.lock(); defer { fence.lock.unlock() }
+        guard fence.version == version else { throw DiaryError.wrongOwner }
+        try Task.checkCancellation()
+        try beforeWrite(directory.appendingPathComponent(profileID.uuidString + ".backup.json"))
+        try FolderBackup.persistConfiguration(configuration, profileID: profileID, directory: directory)
+        fence.acknowledged = (profileID, configuration)
+        fence.version &+= 1
+    }
+}
+
 actor FolderBackup {
-    private struct Configuration: Codable {
+    fileprivate struct Configuration: Codable, Sendable {
         var bookmark: Data?
         var previousBookmarks: [Data]? = nil
         var generation: UUID? = UUID()
@@ -21,176 +46,260 @@ actor FolderBackup {
         var retired = false
         var destinations: [Data] { (bookmark.map { [$0] } ?? []) + (previousBookmarks ?? []) }
     }
+    private struct Intent {
+        var snapshot: DiarySnapshot
+        var configuration: Configuration
+        var version: UInt64
+    }
     private let directory: URL
+    private let fence = FolderBackupFence()
     private var selectedProfileID: UUID?
     private var configurations: [UUID: Configuration] = [:]
-    init(directory: URL) { self.directory = directory }
-
-    static func filename(profileID: UUID) -> String { "mivu-" + profileID.uuidString + ".json" }
-    func selectProfile(_ profileID: UUID?) { selectedProfileID = profileID }
-
-    /// Capture this token with the snapshot before scheduling work, never inside an already queued job.
-    func generation(profileID: UUID) throws -> UUID {
-        guard selectedProfileID == profileID else { throw DiaryError.wrongOwner }
-        var configuration = try self.configuration(profileID) ?? Configuration()
-        guard !configuration.retired else { throw DiaryError.wrongOwner }
-        if configuration.generation == nil { configuration.generation = UUID() }
-        try persist(configuration, profileID: profileID)
-        configurations[profileID] = configuration
-        return configuration.generation!
+    private let beforeAcknowledgementWrite: @Sendable (URL) throws -> Void
+    init(directory: URL, beforeAcknowledgementWrite: @escaping @Sendable (URL) throws -> Void = { _ in }) {
+        self.directory = directory; self.beforeAcknowledgementWrite = beforeAcknowledgementWrite
     }
 
-    /// Only the explicitly confirmed, durable fresh-import path may reopen a deleted identity.
-    func authorizeRestoredProfile(_ profileID: UUID) throws -> UUID {
-        guard selectedProfileID == profileID else { throw DiaryError.wrongOwner }
-        var configuration = try self.configuration(profileID) ?? Configuration()
-        if configuration.retired {
-            try removeProfile(profileID)
-            configuration = Configuration()
+    private func metadata<Value>(_ operation: () throws -> Value) rethrows -> Value {
+        fence.lock.lock(); defer { fence.lock.unlock() }
+        if let (profileID, configuration) = fence.acknowledged {
+            configurations[profileID] = configuration
+            fence.acknowledged = nil
         }
-        configuration.generation = UUID()
-        try persist(configuration, profileID: profileID)
-        configurations[profileID] = configuration
-        return configuration.generation!
+        return try operation()
+    }
+
+    static func filename(profileID: UUID) -> String { "mivu-" + profileID.uuidString + ".json" }
+    func selectProfile(_ profileID: UUID?) {
+        metadata {
+            if selectedProfileID != profileID { fence.version &+= 1 }
+            selectedProfileID = profileID
+        }
+    }
+
+    /// Capture this token before scheduling work, never inside an already queued job.
+    func generation(profileID: UUID) throws -> UUID {
+        try metadata {
+            guard selectedProfileID == profileID else { throw DiaryError.wrongOwner }
+            var configuration = try self.configuration(profileID) ?? Configuration()
+            guard !configuration.retired else { throw DiaryError.wrongOwner }
+            if configuration.generation == nil { configuration.generation = UUID(); fence.version &+= 1 }
+            try persist(configuration, profileID: profileID)
+            configurations[profileID] = configuration
+            return configuration.generation!
+        }
+    }
+
+    func authorizeRestoredProfile(_ profileID: UUID) throws -> UUID {
+        let retired = try metadata {
+            guard selectedProfileID == profileID else { throw DiaryError.wrongOwner }
+            return try configuration(profileID)?.retired == true
+        }
+        if retired { try removeProfile(profileID) }
+        return try metadata {
+            var configuration = try self.configuration(profileID) ?? Configuration()
+            if retired { configuration = Configuration() }
+            configuration.generation = UUID()
+            try persist(configuration, profileID: profileID)
+            configurations[profileID] = configuration; fence.version &+= 1
+            return configuration.generation!
+        }
     }
 
     func status(profileID: UUID) -> FolderBackupStatus {
         do {
-            guard let configuration = try configuration(profileID) else { return FolderBackupStatus() }
-            let acknowledged = !configuration.retired && configuration.bookmark.flatMap { try? resolve($0).standardizedFileURL }
-                == configuration.acknowledgedBookmark.flatMap { try? resolve($0).standardizedFileURL }
-                && configuration.acknowledgedBookmark != nil
-            return FolderBackupStatus(configured: configuration.bookmark != nil && !configuration.retired,
-                savedAt: acknowledged ? configuration.savedAt : nil, pendingError: configuration.pendingError)
+            return try metadata {
+                guard let configuration = try configuration(profileID) else { return FolderBackupStatus() }
+                let acknowledged = !configuration.retired && configuration.bookmark.flatMap { try? resolve($0).standardizedFileURL }
+                    == configuration.acknowledgedBookmark.flatMap { try? resolve($0).standardizedFileURL }
+                    && configuration.acknowledgedBookmark != nil
+                return FolderBackupStatus(configured: configuration.bookmark != nil && !configuration.retired,
+                    savedAt: acknowledged ? configuration.savedAt : nil, pendingError: configuration.pendingError)
+            }
         } catch { return FolderBackupStatus(pendingError: DiaryError.persistenceFailed.localizedDescription) }
     }
 
     func selectFolder(_ url: URL, profileID: UUID) throws {
-        guard selectedProfileID == profileID else { throw DiaryError.wrongOwner }
-        try BackupFileAccess.withAccess(to: url) {
+        let bookmark = try BackupFileAccess.withAccess(to: url) {
             guard try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { throw DiaryError.invalidData }
+            #if os(macOS)
+            return try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+            #else
+            return try url.bookmarkData(options: [.minimalBookmark], includingResourceValuesForKeys: nil, relativeTo: nil)
+            #endif
+        }
+        try metadata {
+            guard selectedProfileID == profileID else { throw DiaryError.wrongOwner }
             var configuration = try self.configuration(profileID) ?? Configuration()
             guard !configuration.retired else { throw DiaryError.wrongOwner }
             let sameFolder = configuration.bookmark.flatMap { try? resolve($0).standardizedFileURL } == url.standardizedFileURL
             if let prior = configuration.bookmark, !sameFolder {
                 configuration.previousBookmarks = (configuration.previousBookmarks ?? []) + [prior]
             }
-            configuration.previousBookmarks = (configuration.previousBookmarks ?? []).filter {
-                (try? resolve($0).standardizedFileURL) != url.standardizedFileURL
-            }
-            // Former destinations are cleanup-only; new records go only to the currently selected folder.
+            configuration.previousBookmarks = (configuration.previousBookmarks ?? []).filter { (try? resolve($0).standardizedFileURL) != url.standardizedFileURL }
             guard configuration.destinations.count <= 100 else { throw DiaryError.invalidData }
             let formerBookmark = configuration.bookmark
-            #if os(macOS)
-            configuration.bookmark = try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
-            #else
-            configuration.bookmark = try url.bookmarkData(options: [.minimalBookmark], includingResourceValuesForKeys: nil, relativeTo: nil)
-            #endif
+            configuration.bookmark = bookmark
             if sameFolder, let formerBookmark, let head = configuration.acknowledgedHeads?[formerBookmark.base64EncodedString()] {
-                configuration.acknowledgedHeads?[configuration.bookmark!.base64EncodedString()] = head
+                configuration.acknowledgedHeads?[bookmark.base64EncodedString()] = head
             }
             let retainedKeys = Set(configuration.destinations.map { $0.base64EncodedString() })
             configuration.acknowledgedHeads = configuration.acknowledgedHeads?.filter { retainedKeys.contains($0.key) }
             if !sameFolder {
-                configuration.savedAt = nil
-                configuration.acknowledgedBookmark = nil
+                configuration.savedAt = nil; configuration.acknowledgedBookmark = nil
                 configuration.pendingError = "Backup to the selected folder is pending."
             }
             try persist(configuration, profileID: profileID)
-            configurations[profileID] = configuration
+            configurations[profileID] = configuration; fence.version &+= 1
+        }
+    }
+
+    private func selectedConfiguration(_ profileID: UUID, generation: UUID) throws -> Configuration {
+        try metadata {
+            guard selectedProfileID == profileID, let configuration = try configuration(profileID),
+                  !configuration.retired, configuration.generation == generation else { throw DiaryError.wrongOwner }
+            return configuration
+        }
+    }
+
+    private func beginSave(_ snapshot: DiarySnapshot, generation: UUID) throws -> Intent {
+        try metadata {
+            var configuration = try selectedConfiguration(snapshot.profile.id, generation: generation)
+            guard configuration.bookmark != nil else { throw DiaryError.wrongOwner }
+            guard snapshot.revision >= (configuration.revision ?? 0),
+                  Set(snapshot.meals.map(\.id)).isDisjoint(with: configuration.deletedMealIDs),
+                  Set(snapshot.deletedMealIDs).isSuperset(of: configuration.deletedMealIDs) else { throw DiaryError.staleArchive }
+            configuration.revision = snapshot.revision
+            configuration.deletedMealIDs = Array(Set(configuration.deletedMealIDs + snapshot.deletedMealIDs))
+            configuration.pendingError = "Backup to the selected folder is pending."
+            // A failed metadata write must not reopen older queued copies in this process.
+            configurations[snapshot.profile.id] = configuration; fence.version &+= 1
+            try persist(configuration, profileID: snapshot.profile.id)
+            return Intent(snapshot: snapshot, configuration: configuration, version: fence.version)
+        }
+    }
+
+    private func validate(_ intent: Intent) throws {
+        try metadata {
+            let current = try selectedConfiguration(intent.snapshot.profile.id, generation: intent.configuration.generation!)
+            guard fence.version == intent.version, current.bookmark == intent.configuration.bookmark,
+                  current.revision == intent.snapshot.revision else { throw DiaryError.wrongOwner }
+        }
+    }
+
+    private func acknowledgement(_ intent: Intent) throws -> FolderBackupAcknowledgement {
+        try metadata {
+            try validate(intent)
+            var configuration = try self.configuration(intent.snapshot.profile.id)!
+            let key = configuration.bookmark!.base64EncodedString()
+            if let head = intent.snapshot.lineage?.last {
+                configuration.acknowledgedHeads = (configuration.acknowledgedHeads ?? [:]).merging([key: head]) { _, new in new }
+            } else { configuration.acknowledgedHeads?.removeValue(forKey: key) }
+            configuration.savedAt = Date(); configuration.acknowledgedBookmark = configuration.bookmark
+            configuration.pendingError = (configuration.previousBookmarks ?? []).isEmpty ? nil : "Previous folder cleanup is pending."
+            return FolderBackupAcknowledgement(fence: fence, version: intent.version, profileID: intent.snapshot.profile.id,
+                configuration: configuration, directory: directory, beforeWrite: beforeAcknowledgementWrite)
+        }
+    }
+
+    private func recordFailure(_ error: Error, profileID: UUID, generation: UUID, bookmark: Data?) {
+        try? metadata {
+            guard var current = try configuration(profileID), !current.retired,
+                  current.generation == generation, current.bookmark == bookmark else { return }
+            current.pendingError = error.localizedDescription
+            configurations[profileID] = current
+            try persist(current, profileID: profileID)
+        }
+    }
+
+    private func cleanFormerDestinations(_ intent: Intent) throws {
+        let profileID = intent.snapshot.profile.id
+        let current = try metadata { try configuration(profileID)! }
+        for bookmark in current.previousBookmarks ?? [] {
+            try delete(profileID: profileID, folder: resolve(bookmark), expectedHead: current.acknowledgedHeads?[bookmark.base64EncodedString()])
+        }
+        try metadata {
+            var latest = try selectedConfiguration(profileID, generation: intent.configuration.generation!)
+            guard latest.bookmark == intent.configuration.bookmark, latest.revision == intent.snapshot.revision else { throw DiaryError.wrongOwner }
+            latest.previousBookmarks = nil
+            let key = latest.bookmark!.base64EncodedString()
+            latest.acknowledgedHeads = latest.acknowledgedHeads?.filter { $0.key == key }
+            latest.pendingError = nil
+            try persist(latest, profileID: profileID); configurations[profileID] = latest
         }
     }
 
     func save(_ snapshot: DiarySnapshot, generation: UUID) throws {
-        let profileID = snapshot.profile.id
-        guard selectedProfileID == profileID else { throw DiaryError.wrongOwner }
-        guard var configuration = try configuration(profileID), !configuration.retired,
-              configuration.generation == generation else { throw DiaryError.wrongOwner }
-        guard configuration.bookmark != nil else { return }
-        let previousSavedAt = configuration.savedAt
-        let previousAcknowledgedBookmark = configuration.acknowledgedBookmark
-        let previousAcknowledgedHeads = configuration.acknowledgedHeads
-        var acknowledgedConfiguration: Configuration?
+        let selection = try selectedConfiguration(snapshot.profile.id, generation: generation)
+        guard selection.bookmark != nil else { return }
         do {
             let data = try DiaryArchive.encode(snapshot)
-            guard snapshot.revision >= (configuration.revision ?? 0),
-                  Set(snapshot.meals.map(\.id)).isDisjoint(with: configuration.deletedMealIDs),
-                  Set(snapshot.deletedMealIDs).isSuperset(of: configuration.deletedMealIDs) else { throw DiaryError.staleArchive }
-            // Persist deletion/highwater intent before provider work so a failed copy cannot reopen stale jobs after restart.
-            configuration.revision = snapshot.revision
-            configuration.deletedMealIDs = Array(Set(configuration.deletedMealIDs + snapshot.deletedMealIDs))
-            configuration.pendingError = "Backup to the selected folder is pending."
-            try persist(configuration, profileID: profileID)
-            configurations[profileID] = configuration
-            try write(data, snapshot: snapshot, folder: resolve(configuration.bookmark!))
-            let currentKey = configuration.bookmark!.base64EncodedString()
-            if let head = snapshot.lineage?.last {
-                configuration.acknowledgedHeads = (configuration.acknowledgedHeads ?? [:]).merging([currentKey: head]) { _, new in new }
-            } else {
-                configuration.acknowledgedHeads?.removeValue(forKey: currentKey)
-            }
-            configuration.savedAt = Date()
-            configuration.acknowledgedBookmark = configuration.bookmark
-            configuration.pendingError = (configuration.previousBookmarks ?? []).isEmpty ? nil : "Previous folder cleanup is pending."
-            try persist(configuration, profileID: profileID)
-            configurations[profileID] = configuration
-            acknowledgedConfiguration = configuration
-            var firstError: Error?
-            for bookmark in configuration.previousBookmarks ?? [] {
-                do { try delete(profileID: profileID, folder: resolve(bookmark), expectedHead: configuration.acknowledgedHeads?[bookmark.base64EncodedString()]) }
-                catch { if firstError == nil { firstError = error } }
-            }
-            if let firstError { throw firstError }
-            configuration.previousBookmarks = nil
-            configuration.acknowledgedHeads = configuration.acknowledgedHeads?.filter { $0.key == currentKey }
-            configuration.pendingError = nil
-            try persist(configuration, profileID: profileID)
-            configurations[profileID] = configuration
+            let intent = try beginSave(snapshot, generation: generation)
+            try write(data, snapshot: snapshot, folder: resolve(intent.configuration.bookmark!))
+            try acknowledgement(intent).commit()
+            try cleanFormerDestinations(intent)
         } catch {
-            if let acknowledgedConfiguration {
-                configuration = acknowledgedConfiguration
-            } else {
-                configuration.savedAt = previousSavedAt
-                configuration.acknowledgedBookmark = previousAcknowledgedBookmark
-                configuration.acknowledgedHeads = previousAcknowledgedHeads
-            }
-            configuration.pendingError = error.localizedDescription
-            configurations[profileID] = configuration
-            try? persist(configuration, profileID: profileID)
+            recordFailure(error, profileID: snapshot.profile.id, generation: generation, bookmark: selection.bookmark)
+            throw error
+        }
+    }
+
+    func save(_ request: DiaryExportRequest, coordinator: DiaryExportCoordinator) async throws {
+        guard let generation = request.backupGeneration else { throw DiaryError.wrongOwner }
+        let selection = try selectedConfiguration(request.profileID, generation: generation)
+        guard selection.bookmark != nil else { return }
+        var ticket: DiaryExportTicket?
+        do {
+            let cloned = try await coordinator.makeClone(request); ticket = cloned
+            let archive = try await coordinator.archiveContent(cloned)
+            let intent = try beginSave(archive.snapshot, generation: generation)
+            let folder = try resolve(intent.configuration.bookmark!)
+            let target = folder.appendingPathComponent(Self.filename(profileID: request.profileID))
+            try await coordinator.checkpoint(.providerWrite, target)
+            try Task.checkCancellation()
+            try await coordinator.store.validateExportRequest(request, cloneHead: cloned.head)
+            try validate(intent)
+            try write(archive.data, snapshot: archive.snapshot, folder: folder)
+            try await coordinator.checkpoint(.providerWritten, target)
+            try Task.checkCancellation()
+            try await coordinator.checkpoint(.acknowledgement, target)
+            try Task.checkCancellation()
+            let pending = try acknowledgement(intent)
+            try await coordinator.store.acknowledgeExport(request, cloneHead: cloned.head, acknowledgement: pending)
+            try cleanFormerDestinations(intent)
+            try await coordinator.release(cloned); ticket = nil
+        } catch {
+            if let ticket { try? await coordinator.release(ticket) }
+            recordFailure(error, profileID: request.profileID, generation: generation, bookmark: selection.bookmark)
             throw error
         }
     }
 
     func removeProfile(_ profileID: UUID) throws {
-        var configuration = try self.configuration(profileID) ?? Configuration()
-        configuration.generation = UUID()
-        configuration.savedAt = nil
-        configuration.acknowledgedBookmark = nil
-        configuration.pendingError = "Profile deletion is pending."
-        try persist(configuration, profileID: profileID)
-        configurations[profileID] = configuration
-        let recoverable = configuration
+        let recoverable = try metadata {
+            var configuration = try self.configuration(profileID) ?? Configuration()
+            configuration.generation = UUID(); configuration.savedAt = nil; configuration.acknowledgedBookmark = nil
+            configuration.pendingError = "Profile deletion is pending."
+            try persist(configuration, profileID: profileID)
+            configurations[profileID] = configuration; fence.version &+= 1
+            return configuration
+        }
         do {
             var firstError: Error?
-            for bookmark in configuration.destinations {
-                do { try delete(profileID: profileID, folder: resolve(bookmark), expectedHead: configuration.acknowledgedHeads?[bookmark.base64EncodedString()]) }
+            for bookmark in recoverable.destinations {
+                do { try delete(profileID: profileID, folder: resolve(bookmark), expectedHead: recoverable.acknowledgedHeads?[bookmark.base64EncodedString()]) }
                 catch { if firstError == nil { firstError = error } }
             }
             if let firstError { throw firstError }
-            configuration.retired = true
-            configuration.bookmark = nil
-            configuration.previousBookmarks = nil
-            configuration.savedAt = nil
-            configuration.acknowledgedBookmark = nil
-            configuration.acknowledgedHeads = nil
-            configuration.pendingError = nil
-            try persist(configuration, profileID: profileID)
-            configurations[profileID] = configuration
+            try metadata {
+                var configuration = recoverable
+                configuration.retired = true; configuration.bookmark = nil; configuration.previousBookmarks = nil
+                configuration.savedAt = nil; configuration.acknowledgedBookmark = nil; configuration.acknowledgedHeads = nil; configuration.pendingError = nil
+                try persist(configuration, profileID: profileID)
+                configurations[profileID] = configuration; fence.version &+= 1
+            }
         } catch {
-            configuration = recoverable
-            configuration.pendingError = error.localizedDescription
-            configurations[profileID] = configuration
-            try? persist(configuration, profileID: profileID)
+            recordFailure(error, profileID: profileID, generation: recoverable.generation!, bookmark: recoverable.bookmark)
             throw error
         }
     }
@@ -265,14 +374,19 @@ actor FolderBackup {
     }
 
     private func persist(_ configuration: Configuration, profileID: UUID) throws {
+        try Self.persistConfiguration(configuration, profileID: profileID, directory: directory)
+    }
+
+    fileprivate static func persistConfiguration(_ configuration: Configuration, profileID: UUID, directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let data = try JSONEncoder().encode(configuration)
         guard data.count <= 5_000_000 else { throw DiaryError.invalidData }
+        let file = directory.appendingPathComponent(profileID.uuidString + ".backup.json")
         #if os(iOS)
-        try data.write(to: metadataFile(profileID), options: [.atomic, .completeFileProtectionUnlessOpen])
+        try data.write(to: file, options: [.atomic, .completeFileProtectionUnlessOpen])
         #else
-        try data.write(to: metadataFile(profileID), options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: metadataFile(profileID).path)
+        try data.write(to: file, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         #endif
     }
 

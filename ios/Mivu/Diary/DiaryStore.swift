@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// One serialized writer; a mutation becomes visible only after atomic disk replacement.
 actor DiaryStore {
@@ -7,6 +8,7 @@ actor DiaryStore {
     private var pagedHead: DiaryHead?
     private var stagedCoachSnapshot: DiarySnapshot?
     private var profileSelectionEpoch: UInt64 = 0
+    private let legacyExportTimeline = UUID()
     private var fileIdentities: [UUID: UInt64] = [:]
     private let currentTime: @Sendable () -> Date
     private let diagnostics: DiaryQueryDiagnostics?
@@ -679,14 +681,99 @@ actor DiaryStore {
                 try FileManager.default.removeItem(at: url)
             }
         } catch { throw DiaryError.persistenceFailed }
-        if current?.profile.id == id { current = nil; profileSelectionEpoch &+= 1 }
+        if current?.profile.id == id || pagedHead?.profile.id == id {
+            current = nil; pagedHead = nil; profileSelectionEpoch &+= 1
+        }
     }
 
-    func exportData(expectedProfileID: UUID? = nil) throws -> Data {
-        try JSONEncoder().encode(snapshot(expectedProfileID: expectedProfileID))
+    func exportData(expectedProfileID: UUID? = nil) async throws -> Data {
+        guard let owner = expectedProfileID ?? pagedHead?.profile.id ?? current?.profile.id else { throw DiaryError.noProfile }
+        let coordinator = DiaryExportCoordinator(store: self)
+        let ticket = try await coordinator.makeClone(exportRequest(expectedProfileID: owner))
+        do {
+            let data = try await coordinator.portableData(ticket)
+            try await coordinator.release(ticket)
+            return data
+        } catch { try? await coordinator.release(ticket); throw error }
     }
 
-    func restore(_ incoming: DiarySnapshot, expectedProfileID: UUID? = nil) throws {
+    func exportRequest(expectedProfileID: UUID, backupGeneration: UUID? = nil) throws -> DiaryExportRequest {
+        let head: DiaryHead
+        if pagedHead != nil { head = try diaryHead(expectedProfileID: expectedProfileID) }
+        else {
+            let value = try snapshot(expectedProfileID: expectedProfileID)
+            head = DiaryHead(profile: value.profile, revision: value.revision, lineage: value.lineage,
+                activeDayID: value.activeDayID, previousDayConfirmedAt: value.previousDayConfirmedAt,
+                timelineGeneration: legacyExportTimeline, activeConversationSegmentID: value.activeConversationSegmentID)
+        }
+        guard let identity = fileIdentities[expectedProfileID], try fileIdentity(file(expectedProfileID)) == identity else {
+            throw DiaryError.persistenceFailed
+        }
+        return DiaryExportRequest(operationID: UUID(), profileID: expectedProfileID, head: head,
+            selectionEpoch: profileSelectionEpoch, sourceURL: file(expectedProfileID), sourceFileIdentity: identity,
+            backupGeneration: backupGeneration, storageVersion: pagedHead == nil ? 0 : 1, maximumBytes: maximumFileBytes)
+    }
+
+    /// This short synchronous check never keeps the writer occupied during interchange work.
+    func validateExportRequest(_ request: DiaryExportRequest, cloneHead: DiaryHead? = nil) throws {
+        guard request.selectionEpoch == profileSelectionEpoch else { throw DiaryError.wrongOwner }
+        let current = try exportRequest(expectedProfileID: request.profileID)
+        guard current.sourceFileIdentity == request.sourceFileIdentity,
+              current.storageVersion == request.storageVersion,
+              current.head.timelineGeneration == request.head.timelineGeneration else { throw DiaryError.wrongOwner }
+        func succeeds(_ newer: DiaryHead, _ older: DiaryHead) -> Bool {
+            guard newer.profile.id == older.profile.id, newer.revision >= older.revision else { return false }
+            if newer.revision == older.revision { return newer.lineage == older.lineage }
+            guard let token = older.lineage?.last else { return false }
+            return newer.lineage?.dropLast().contains(token) == true
+        }
+        guard succeeds(current.head, request.head) else { throw DiaryError.staleRevision }
+        if let cloneHead {
+            guard cloneHead.timelineGeneration == request.head.timelineGeneration,
+                  succeeds(cloneHead, request.head), succeeds(current.head, cloneHead) else { throw DiaryError.staleRevision }
+        }
+    }
+
+    func installReplacement(_ replacement: DiaryPreparedReplacement,
+                            beforeSwitch: @Sendable () throws -> Void = {}) throws -> DiaryHead {
+        try Task.checkCancellation()
+        try validateExportRequest(replacement.request, cloneHead: replacement.originalHead)
+        let selected = try exportRequest(expectedProfileID: replacement.request.profileID)
+        guard selected.head == replacement.originalHead else { throw DiaryError.staleRevision }
+        let root = replacement.protectedDatabaseURL.deletingLastPathComponent()
+        guard root.lastPathComponent.hasPrefix("diary-replacement-"),
+              root.deletingLastPathComponent() == replacement.request.sourceURL.deletingLastPathComponent().deletingLastPathComponent(),
+              replacement.protectedDatabaseURL.lastPathComponent == "diary.sqlite" else { throw DiaryError.wrongOwner }
+        let identity = try fileIdentity(replacement.protectedDatabaseURL)
+        try beforeSwitch()
+        guard rename(replacement.protectedDatabaseURL.path, replacement.request.sourceURL.path) == 0 else { throw DiaryError.persistenceFailed }
+        fileIdentities[replacement.request.profileID] = identity
+        profileSelectionEpoch &+= 1
+        if replacement.request.storageVersion == 1 { pagedHead = replacement.head; current = nil }
+        else { current = replacement.legacySnapshot; pagedHead = nil }
+        try? FileManager.default.removeItem(at: root)
+        return replacement.head
+    }
+
+    func acknowledgeExport(_ request: DiaryExportRequest, cloneHead: DiaryHead,
+                           acknowledgement: FolderBackupAcknowledgement) throws {
+        try Task.checkCancellation()
+        try validateExportRequest(request, cloneHead: cloneHead)
+        try acknowledgement.commit()
+    }
+
+    func restore(_ incoming: DiarySnapshot, expectedProfileID: UUID? = nil) async throws {
+        if let selected = pagedHead {
+            let request = try exportRequest(expectedProfileID: expectedProfileID ?? selected.profile.id)
+            let coordinator = DiaryExportCoordinator(store: self)
+            let ticket = try await coordinator.makeClone(request)
+            do {
+                let prepared = try await coordinator.prepareReplacement(incoming, replacing: ticket)
+                _ = try installReplacement(prepared)
+                try await coordinator.release(ticket)
+            } catch { try? await coordinator.release(ticket); throw error }
+            return
+        }
         let original = try snapshot(expectedProfileID: expectedProfileID)
         try incoming.validate()
         guard incoming.profile.id == original.profile.id else { throw DiaryError.wrongOwner }
@@ -704,6 +791,7 @@ actor DiaryStore {
         replacement.lineage = Array((incoming.lineage ?? []).suffix(255)) + [UUID()]
         try write(replacement)
         current = replacement
+        profileSelectionEpoch &+= 1
     }
 
     private func transaction(_ owner: UUID?, _ change: (inout DiarySnapshot) throws -> Void) throws {

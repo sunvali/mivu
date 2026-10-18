@@ -204,10 +204,12 @@ enum ChatHistoryFixture {
     static func completeReference(databaseURL: URL) throws -> DiarySnapshot {
         try withConnection(databaseURL) { connection in
             struct Row { var parent: String?; var payload: Any; var bytes: Data }
+            var pagedStorage = false
             func rows(_ table: String) throws -> [Row] {
                 let parents = ["meal", "submission", "item", "photo", "weight", "workout", "coach_photo"]
                 let isPhoto = ["photo", "coach_photo"].contains(table)
-                let query = "SELECT \(parents.contains(table) ? "parent" : "NULL"), payload, \(isPhoto ? "bytes" : "NULL") FROM \(table) ORDER BY \(table == "meta" ? "id" : "ordinal, id")"
+                let order = table == "meta" ? "id" : (table == "coach_turn" && pagedStorage ? "(SELECT sequence FROM coach_index WHERE turnID = coach_turn.id)" : "ordinal, id")
+                let query = "SELECT \(parents.contains(table) ? "parent" : "NULL"), payload, \(isPhoto ? "bytes" : "NULL") FROM \(table) ORDER BY \(order)"
                 var statement: OpaquePointer?
                 guard sqlite3_prepare_v2(connection, query, -1, &statement, nil) == SQLITE_OK, let statement else { throw DiaryError.invalidData }
                 defer { sqlite3_finalize(statement) }
@@ -223,6 +225,7 @@ enum ChatHistoryFixture {
                 }
             }
             let version = try strings(databaseURL, "PRAGMA user_version")
+            pagedStorage = version == [["1"]]
             var root: [String: Any]
             if version == [["1"]] {
                 // Version 1 export takes metadata only from its authoritative normalized head.
