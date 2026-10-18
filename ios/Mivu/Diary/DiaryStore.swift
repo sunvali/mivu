@@ -54,6 +54,41 @@ actor DiaryStore {
         return (database, head)
     }
 
+    func diaryReadModel(expectedProfileID: UUID) throws -> DiaryReadModel {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.diaryReadModel(expectedProfileID: expectedProfileID)
+    }
+    func diaryDay(id: UUID, expectedProfileID: UUID) throws -> DiaryDayReadModel {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.diaryDay(id: id, expectedProfileID: expectedProfileID)
+    }
+    func meal(id: UUID, expectedProfileID: UUID) throws -> MealReadModel {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.meal(id: id, expectedProfileID: expectedProfileID)
+    }
+    func photoContent(_ reference: DiaryPhotoReference, expectedProfileID: UUID) throws -> Data {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.photoContent(reference, expectedProfileID: expectedProfileID)
+    }
+    func diaryHistory(before: DiaryHistoryCursor? = nil, limit: Int = 30, recordedOnly: Bool = false, expectedProfileID: UUID) throws -> DiaryHistoryPage {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.diaryHistory(before: before, limit: limit, recordedOnly: recordedOnly, expectedProfileID: expectedProfileID)
+    }
+    func captureProjection(text: String, photos: [MealPhoto], reviewFirst: Bool, dayID: UUID, at: Date = Date(), dateOnly: Bool = false, submissionID: UUID = UUID(), forCoach: Bool = false, expectedProfileID: UUID) throws -> MealReadModel {
+        try pagedMutation(expectedProfileID) { database, head in
+            try database.captureProjection(text: text, photos: photos, reviewFirst: reviewFirst, dayID: dayID, at: at, dateOnly: dateOnly, submissionID: submissionID, forCoach: forCoach, expected: head, maximumBytes: maximumFileBytes)
+        }
+    }
+    func correctMealProjection(mealID: UUID, text: String, photos: [MealPhoto] = [], reviewFirst: Bool = false, submissionID: UUID = UUID(), forCoach: Bool = false, expectedProfileID: UUID) throws -> MealReadModel {
+        try pagedMutation(expectedProfileID) { database, head in
+            try database.correctMealProjection(mealID: mealID, text: text, photos: photos, reviewFirst: reviewFirst, submissionID: submissionID, forCoach: forCoach, at: currentTime(), expected: head, maximumBytes: maximumFileBytes)
+        }
+    }
+    private func pagedMutation<Value: Sendable>(_ owner: UUID?, _ body: (DiaryDatabase, DiaryHead) throws -> DiaryCommit<Value>) throws -> Value {
+        guard let selected = pagedHead else { throw DiaryError.noProfile }
+        guard owner == nil || owner == selected.profile.id else { throw DiaryError.wrongOwner }
+        let (database, head) = try pagedConnection(expectedProfileID: selected.profile.id)
+        let commit = try body(database, head)
+        try database.validateFileIdentity()
+        pagedHead = commit.head
+        return commit.value
+    }
+
     func profiles() throws -> [DiaryProfile] {
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
         do {
@@ -108,12 +143,22 @@ actor DiaryStore {
     }
 
     func startDay(at: Date = Date(), expectedProfileID: UUID? = nil) throws -> TrackingDay {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.startDay(at: at, expected: $1, maximumBytes: maximumFileBytes) } }
         var day: TrackingDay!
         try transaction(expectedProfileID) { snapshot in day = startDay(in: &snapshot, at: at) }
         return day
     }
 
     func dayAssignment(at: Date = Date(), expectedProfileID: UUID? = nil) throws -> DayAssignment {
+        if let selected = pagedHead {
+            let head = try diaryHead(expectedProfileID: expectedProfileID ?? selected.profile.id)
+            guard let id = head.activeDayID else { return .newDay }
+            let day = try pagedConnection(expectedProfileID: head.profile.id).database.trackingDay(id: id)
+            let localDate = diaryDateLabel(at, zone: head.profile.timeZoneID)
+            if let confirmed = head.previousDayConfirmedAt, at >= confirmed, at.timeIntervalSince(confirmed) < 4 * 3600,
+               diaryDateLabel(confirmed, zone: head.profile.timeZoneID) == localDate { return .existing(id) }
+            return day.timeZoneID == head.profile.timeZoneID && day.localDate == localDate ? .existing(id) : .ask(id)
+        }
         let snapshot = try snapshot(expectedProfileID: expectedProfileID)
         guard let day = snapshot.days.first(where: { $0.id == snapshot.activeDayID }) else { return .newDay }
         let localDate = dateLabel(at, zone: snapshot.profile.timeZoneID)
@@ -125,6 +170,7 @@ actor DiaryStore {
     }
 
     func confirmPreviousDay(at: Date = Date(), expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.confirmPreviousDay(at: at, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard snapshot.activeDayID != nil else { throw DiaryError.notFound }
             snapshot.previousDayConfirmedAt = at
@@ -149,6 +195,23 @@ actor DiaryStore {
     }
 
     func processPending(expectedProfileID: UUID? = nil) throws {
+        if let selected = pagedHead {
+            let owner = expectedProfileID ?? selected.profile.id
+            while !Task.isCancelled {
+                let (database, _) = try pagedConnection(expectedProfileID: owner)
+                guard let job = try database.nextPendingMealSubmission(expectedProfileID: owner) else { return }
+                try pagedMutation(owner) { try $0.prepareAnalysis(mealID: job.mealID, submissionID: job.submissionID, expected: $1, maximumBytes: maximumFileBytes) }
+                let input = try analysisInput(mealID: job.mealID, submissionID: job.submissionID, expectedProfileID: owner)
+                do { try applyAnalysis(SampleAnalyzer().analyze(input), expectedProfileID: owner) }
+                catch {
+                    try pagedMutation(owner) { database, head in
+                        try database.transaction(expected: head, maximumBytes: maximumFileBytes) { try $0.setSubmissionState(mealID: job.mealID, submissionID: job.submissionID, state: .needsRetry) }
+                    }
+                    throw error
+                }
+            }
+            return
+        }
         let snapshot = try snapshot(expectedProfileID: expectedProfileID)
         let owner = snapshot.profile.id
         let jobs = snapshot.meals.flatMap { meal in
@@ -181,6 +244,10 @@ actor DiaryStore {
     }
 
     func analysisInput(mealID: UUID, submissionID: UUID, expectedProfileID: UUID? = nil) throws -> AnalysisInput {
+        if let selected = pagedHead {
+            let owner = expectedProfileID ?? selected.profile.id
+            return try pagedConnection(expectedProfileID: owner).database.analysisInput(mealID: mealID, submissionID: submissionID, expectedProfileID: owner)
+        }
         let snapshot = try snapshot(expectedProfileID: expectedProfileID)
         guard let meal = snapshot.meals.first(where: { $0.id == mealID }),
               let submission = meal.submissions.first(where: { $0.id == submissionID }), submission.state != .cancelled
@@ -193,6 +260,7 @@ actor DiaryStore {
     }
 
     func applyAnalysis(_ output: AnalysisOutput, expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.applyAnalysis(output, expected: $1, maximumBytes: maximumFileBytes) } }
         let original = try snapshot(expectedProfileID: expectedProfileID)
         guard output.profileID == original.profile.id else { throw DiaryError.wrongOwner }
         guard output.schemaVersion == 1, !output.items.isEmpty else { throw DiaryError.invalidData }
@@ -217,6 +285,7 @@ actor DiaryStore {
     }
 
     func acceptReview(mealID: UUID, submissionID: UUID, expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.acceptReview(mealID: mealID, submissionID: submissionID, expected: $1, maximumBytes: maximumFileBytes) } }
         let original = try snapshot(expectedProfileID: expectedProfileID)
         guard let meal = original.meals.first(where: { $0.id == mealID }),
               let submission = meal.submissions.first(where: { $0.id == submissionID }) else { throw DiaryError.notFound }
@@ -233,6 +302,7 @@ actor DiaryStore {
     }
 
     func editItem(mealID: UUID, item: FoodItem, reviewSubmissionID: UUID? = nil, expectedRevision: Int? = nil, expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.editItem(mealID: mealID, item: item, reviewSubmissionID: reviewSubmissionID, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard let m = snapshot.meals.firstIndex(where: { $0.id == mealID }) else { throw DiaryError.notFound }
             guard expectedRevision == nil || expectedRevision == snapshot.meals[m].revision else { throw DiaryError.staleRevision }
@@ -280,6 +350,7 @@ actor DiaryStore {
     }
 
     func addPhotos(mealID: UUID, photos: [MealPhoto], expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.addPhotos(mealID: mealID, photos: photos, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard let m = snapshot.meals.firstIndex(where: { $0.id == mealID }) else { throw DiaryError.notFound }
             snapshot.meals[m].photos.append(contentsOf: photos)
@@ -287,6 +358,7 @@ actor DiaryStore {
     }
 
     func deletePhoto(mealID: UUID, photoID: UUID, expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.deletePhoto(mealID: mealID, photoID: photoID, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard let m = snapshot.meals.firstIndex(where: { $0.id == mealID }) else { throw DiaryError.notFound }
             snapshot.meals[m].photos.removeAll { $0.id == photoID }
@@ -306,6 +378,7 @@ actor DiaryStore {
     }
 
     func deleteMeal(_ mealID: UUID, expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.deleteMeal(mealID, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard snapshot.meals.contains(where: { $0.id == mealID }) else { throw DiaryError.notFound }
             let photoIDs = Set(snapshot.meals.first { $0.id == mealID }!.photos.map(\.id))
@@ -320,6 +393,7 @@ actor DiaryStore {
     }
 
     func moveMeal(_ mealID: UUID, to dayID: UUID, eatenAt: Date? = nil, expectedRevision: Int? = nil, expectedDayID: UUID? = nil, expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.moveMeal(mealID, to: dayID, eatenAt: eatenAt, expectedRevision: expectedRevision, expectedDayID: expectedDayID, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard snapshot.days.contains(where: { $0.id == dayID }), let m = snapshot.meals.firstIndex(where: { $0.id == mealID })
             else { throw DiaryError.notFound }
@@ -335,6 +409,7 @@ actor DiaryStore {
     }
 
     func setCompleteness(dayID: UUID, _ completeness: DayCompleteness, expectedProfileID: UUID? = nil) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.setCompleteness(dayID: dayID, completeness, expected: $1, maximumBytes: maximumFileBytes) } }
         try transaction(expectedProfileID) { snapshot in
             guard let d = snapshot.days.firstIndex(where: { $0.id == dayID }) else { throw DiaryError.notFound }
             snapshot.days[d].completeness = completeness
@@ -937,25 +1012,7 @@ actor DiaryStore {
     }
 
     private func correctedItem(_ item: FoodItem, previous: FoodItem) throws -> FoodItem {
-        var edited = item
-        edited.nutrientSources = previous.nutrientSources
-        let nutrients: [(String, KeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("carbs", \.carbs), ("protein", \.protein), ("fat", \.fat)]
-        for (name, field) in nutrients {
-            edited.nutrientSources[name] = item.nutrition[keyPath: field] == previous.nutrition[keyPath: field]
-                ? previous.nutrientSources[name] ?? previous.provenance : .user
-        }
-        if edited.quantity != previous.quantity && edited.nutrition == previous.nutrition {
-            let basis = previous.nutritionBasis ?? (previous.quantity > 0 ? previous.nutrition.scaled(by: 1 / previous.quantity) : nil)
-            guard let basis else { throw DiaryError.invalidData }
-            edited.nutrition = basis.scaled(by: edited.quantity)
-            edited.nutritionBasis = basis
-        } else if edited.quantity > 0 {
-            edited.nutritionBasis = edited.nutrition.scaled(by: 1 / edited.quantity)
-        }
-        edited.provenance = .user
-        edited.reference = previous.reference
-        edited.uncertain = previous.uncertain || edited.nutrientSources.values.contains { [.sample, .estimate].contains($0) }
-        return edited
+        try diaryCorrectedItem(item, previous: previous)
     }
 
     func coachMeal(id: UUID, expectedProfileID: UUID) throws -> CoachContext.Meal {
@@ -1524,6 +1581,13 @@ actor DiaryStore {
         }
     }
     func coachRecordedSummary(expectedProfileID: UUID) throws -> String {
+        if pagedHead != nil {
+            let page = try diaryHistory(limit: 14, recordedOnly: true, expectedProfileID: expectedProfileID)
+            let facts = page.days.reversed().map { summary in
+                "\(summary.day.localDate): " + (summary.totals.kcal.map { "\(Int($0.rounded())) kcal" } ?? "calories incomplete") + "."
+            }
+            return "No new food was saved in this turn.\n" + (facts.isEmpty ? "There are no recorded food totals yet." : facts.joined(separator: "\n"))
+        }
         let snapshot = try snapshot(expectedProfileID: expectedProfileID)
         let days = snapshot.days.filter { day in day.completeness == .complete || snapshot.meals.contains { $0.dayID == day.id && $0.isSaved } }.suffix(14)
         let facts = days.map { day in
@@ -1534,6 +1598,7 @@ actor DiaryStore {
     }
 
     func chooseCoachDay(turnID: UUID, usePrevious: Bool, at: Date = Date(), expectedProfileID: UUID) throws {
+        if pagedHead != nil { return try pagedMutation(expectedProfileID) { try $0.chooseCoachDay(turnID: turnID, usePrevious: usePrevious, at: at, expected: $1, maximumBytes: maximumFileBytes) } }
         let turn = try coachTurn(turnID: turnID, expectedProfileID: expectedProfileID)
         guard turn.needsDayChoice == true else { throw DiaryError.invalidData }
         try transaction(expectedProfileID) { snapshot in

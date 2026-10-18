@@ -344,6 +344,23 @@ final class DiaryTransaction {
         changed = true
     }
 
+    /// Remove one exact portable contribution before its physical row/cascade disappears.
+    func removeContribution(table: String, rowID: String) throws {
+        let statement = try database.mutationStatement("SELECT encodedBytes, originalPhotoBytes, parentID FROM storage_contribution WHERE tableName = ? AND rowID = ?", [.text(table), .text(rowID)])
+        defer { sqlite3_finalize(statement) }
+        guard try database.mutationStep(statement) else { throw DiaryError.invalidData }
+        let bytes = Int(sqlite3_column_int64(statement, 0)), originals = Int(sqlite3_column_int64(statement, 1))
+        let parent = sqlite3_column_type(statement, 2) == SQLITE_NULL ? nil : try database.mutationText(statement, 2)
+        let siblings = try parent.map { parent in
+            try database.mutationInteger("SELECT COUNT(*) FROM storage_contribution WHERE tableName = ? AND parentID = ?", [.text(table), .text(parent)])
+        } ?? database.mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = ?", [.text(table)])
+        guard table != "meta", siblings > 0 else { throw DiaryError.invalidData }
+        try database.execute("DELETE FROM storage_contribution WHERE tableName = ? AND rowID = ?", [.text(table), .text(rowID)])
+        try database.execute("UPDATE storage_row_count SET rowCount = rowCount - 1 WHERE tableName = ?", [.text(table)])
+        try database.execute("UPDATE storage_quota SET portableBytes = portableBytes - ?, originalPhotoBytes = originalPhotoBytes - ? WHERE id = 1", [.integer(bytes + (siblings > 1 ? 1 : 0)), .integer(originals)])
+        changed = true
+    }
+
     func finish(maximumBytes: Int) throws {
         guard changed || head != originalHead else { return }
         guard head.profile.id == originalHead.profile.id, head.timelineGeneration == originalHead.timelineGeneration,

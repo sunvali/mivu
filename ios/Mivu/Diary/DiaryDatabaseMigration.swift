@@ -30,6 +30,7 @@ extension DiaryDatabase {
             try migrateMeals(metadata: metadata, days: days)
             try migrateProgress(metadata: metadata, days: days)
             try migrateTurns(metadata: metadata, days: days)
+            try createDayMealIndexes()
             try finishPagedAccounting(maximumBytes: maximumBytes)
             try execute("PRAGMA user_version = 1")
             try execute("COMMIT")
@@ -73,6 +74,14 @@ extension DiaryDatabase {
             try execute("CREATE INDEX IF NOT EXISTS \(table)_ordinal ON \(table)(ordinal, id)")
         }
         try execute("CREATE INDEX goal_date ON goal(effectiveLocalDate)")
+    }
+
+    private func createDayMealIndexes() throws {
+        // JSON expressions must follow typed validation so malformed source data remains invalidData.
+        try execute("CREATE INDEX day_date_zone_ordinal ON day(json_extract(CAST(payload AS TEXT), '$.localDate'), json_extract(CAST(payload AS TEXT), '$.timeZoneID'), ordinal, id)")
+        try execute("CREATE INDEX coach_turn_day_choice ON coach_turn(json_extract(CAST(payload AS TEXT), '$.needsDayChoice'), json_extract(CAST(payload AS TEXT), '$.state'), ordinal, id)")
+        try execute("CREATE INDEX submission_state_ordinal ON submission(json_extract(CAST(payload AS TEXT), '$.state'), ordinal, id)")
+        try execute("CREATE INDEX submission_pending_ordinal ON submission(ordinal, id) WHERE json_extract(CAST(payload AS TEXT), '$.state') IN ('captured','waitingForConnection','analyzing','needsRetry')")
     }
 
     private struct StorageRow {

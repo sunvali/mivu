@@ -107,3 +107,21 @@ final class DiaryQueryDiagnostics: Sendable {
     func recordCompleteReconcile() { state.withLock { $0.completeReconciles += 1 } }
     func recordQueryPlan(_ plan: String) { state.withLock { $0.queryPlans.append(plan) } }
 }
+
+struct DiaryHistoryCursor: Equatable, Sendable {
+    var identity: CoachTimelineIdentity
+    var ordinal: Int
+    var dayID: UUID
+    var recordedOnly: Bool
+}
+struct DiaryDaySummary: Equatable, Sendable {
+    var day: TrackingDay
+    var totals: NutritionTotals
+    var savedMealCount: Int
+    var pendingMealCount: Int
+}
+struct DiaryHistoryPage: Equatable, Sendable {
+    var days: [DiaryDaySummary]
+    var cursor: DiaryHistoryCursor?
+    var hasMore: Bool
+}
