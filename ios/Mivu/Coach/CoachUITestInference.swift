@@ -62,3 +62,70 @@ enum CoachUITestInference {
         return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: name, namespace: "mivu", arguments: argumentsJSON)], outputItems: [])
     }
 }
+
+#if DEBUG
+/// Generates bounded pages without opening a profile or constructing DiaryRootView.
+actor CoachScrollSpikeSource {
+    static let identity = CoachTimelineIdentity(profileID: id(900), timelineGeneration: id(901))
+    private var held: [CoachPageDirection: CheckedContinuation<Void, Never>] = [:]
+    private var armed: Set<CoachPageDirection> = []
+    private var released: Set<CoachPageDirection> = []
+    private var replyCompleted = false
+
+    static func id(_ sequence: Int) -> UUID {
+        UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", sequence))!
+    }
+
+    func arm(_ direction: CoachPageDirection) { armed.insert(direction) }
+    func release(_ direction: CoachPageDirection) {
+        if let continuation = held.removeValue(forKey: direction) { continuation.resume() }
+        else if armed.contains(direction) { released.insert(direction) }
+    }
+    func completeReply() { replyCompleted = true }
+
+    func page(_ request: CoachPageRequest, _: UUID) async -> CoachPage {
+        let upper: Int
+        switch request {
+        case .latest: upper = 140
+        case .before(let cursor):
+            await barrier(.earlier)
+            upper = Int(cursor.sequence) - 1
+        case .after(let cursor):
+            await barrier(.later)
+            upper = min(140, Int(cursor.sequence) + 20)
+        case .aroundTurn(let id): upper = min(140, (1...140).first { Self.id($0) == id }.map { $0 + 10 } ?? 140)
+        case .atDay: upper = 140
+        }
+        let lower = max(1, upper - 19)
+        var rows = upper >= lower ? (lower...upper).map(Self.exchange) : []
+        if replyCompleted, let index = rows.firstIndex(where: { $0.sequence == 140 }) {
+            rows[index].assistantText = "Off-viewport asynchronous reply completed."
+        }
+        return CoachPage(identity: Self.identity, exchanges: rows,
+                         before: rows.first.map(Self.cursor), after: rows.last.map(Self.cursor),
+                         hasEarlier: lower > 1, hasLater: upper < 140,
+                         earlierSegment: nil, laterSegment: nil)
+    }
+
+    private func barrier(_ direction: CoachPageDirection) async {
+        if armed.remove(direction) != nil, released.remove(direction) == nil {
+            await withCheckedContinuation { held[direction] = $0 }
+        }
+    }
+
+    private static func cursor(_ row: CoachExchangeSummary) -> CoachCursor {
+        CoachCursor(identity: identity, sequence: row.sequence, turnID: row.id)
+    }
+
+    private static func exchange(_ sequence: Int) -> CoachExchangeSummary {
+        let phrase = sequence.isMultiple(of: 3) ? "Apricot breakfast with a measured serving. " : "Cedar lunch. "
+        return CoachExchangeSummary(id: id(sequence), sequence: Int64(sequence),
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_000), captureTimeZoneID: "UTC",
+            segmentID: id(800 + sequence / 20), trackingDayID: nil,
+            displayLocalDate: (sequence / 20).isMultiple(of: 2) ? "2026-10-17" : "2026-10-18", displayTimeZoneID: "UTC",
+            text: "Exchange \(sequence). " + String(repeating: phrase, count: sequence % 6 + 1),
+            assistantText: sequence.isMultiple(of: 2) ? String(repeating: "Recorded serving details. ", count: sequence % 5 + 1) : nil,
+            state: .completed, photos: [], receipts: [])
+    }
+}
+#endif

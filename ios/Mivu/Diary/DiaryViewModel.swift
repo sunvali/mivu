@@ -310,6 +310,9 @@ final class DiaryViewModel {
         return UUID(uuidString: args[index + 1])
     }
     static var isUITest: Bool { testID != nil }
+    #if DEBUG
+    static var isCoachScrollSpike: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-scroll-spike") }
+    #endif
     static var isCoachUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-ui-test") }
     static var isCoachInferenceFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-inference-fixture") }
     static var isSampleMode: Bool { (isUITest && !isCoachUITest) || ProcessInfo.processInfo.arguments.contains("--sample-mode") }
