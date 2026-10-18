@@ -126,8 +126,12 @@ import Testing
         await expectStale(first); await expectStale(second)
         let purged = await loader.statistics()
         #expect(purged.residentCost == 0 && purged.reservedCost == 0)
+        await gate.arm()
         let third = Task { try await loader.thumbnail(for: ref, pixelSize: 16) }
         let fourth = Task { try await loader.thumbnail(for: ref, pixelSize: 16) }
+        await gate.waitUntilEntered(2)
+        #expect(await loader.statistics().reservedCost == 2048)
+        await gate.release()
         _ = try await third.value; _ = try await fourth.value
         let stats = await loader.statistics()
         #expect(stats.cachedCount == 1 && stats.residentCost == 512 && stats.reservedCost == 0)
