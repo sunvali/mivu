@@ -10,8 +10,9 @@ struct CoachView: View {
     @State private var showingDetail = false
     let openDestination: (CoachDestination) -> Void
     @State private var showPhotos = false
-    @State private var preparation = PhotoPreparation()
-    @State private var importFailed = false
+    @State private var cameraPresentationID: UUID?
+    @State private var retakingPhotoID: UUID?
+    @State private var restoreKeyboard = false
     @State private var followLatest = true
     @State private var scrollPhase: ScrollPhase = .idle
     @State private var position = ScrollPosition(idType: String.self)
@@ -137,23 +138,26 @@ struct CoachView: View {
                 .onAppear { showingDetail = true; reportCompanionContext() }
                 .onDisappear { showingDetail = false; reportCompanionContext() }
         }
-        .sheet(isPresented: $showPhotos) {
-            NavigationStack {
-                Form { PhotoInput(photos: $coach.draft.photos, preparation: preparation, importFailed: $importFailed) }
-                    .navigationTitle("Coach photos")
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPhotos = false }.frame(minHeight: 44) } }
-            }.environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
+        .fullScreenCover(isPresented: $showPhotos, onDismiss: {
+            if let id = cameraPresentationID { Task { try? await coach.attachmentDraft.endPresentation(id) } }
+            cameraPresentationID = nil; retakingPhotoID = nil
+            if restoreKeyboard, coach.diary.selection == coach.attachmentDraft.ownership { editing = true }
+            restoreKeyboard = false
+        }) {
+            if let id = cameraPresentationID {
+                CoachCameraView(draft: coach.attachmentDraft, presentationID: id, retaking: retakingPhotoID)
+                    .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
+            }
         }
-        .alert("Could not import photo", isPresented: $importFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
         .sensoryFeedback(.success, trigger: coach.captureReceipt)
-        .onAppear { surfaceVisible = true; preparation.use(limiter: coach.diary.photoWorkLimiter); reportCompanionContext() }
+        .onAppear { surfaceVisible = true; coach.synchronizeDraftOwnership(); reportCompanionContext() }
         .task(id: coach.diary.changeGeneration) { await coach.refreshLinks() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
-        .onChange(of: [editing, showPhotos, importFailed, showingDetail, companionProcessing, companionRecovery]) { _, _ in reportCompanionContext() }
-        .onChange(of: coach.diary.readModel?.profile.id, initial: true) { _, _ in
+        .onChange(of: [editing, showPhotos, showingDetail, companionProcessing, companionRecovery]) { _, _ in reportCompanionContext() }
+        .onChange(of: coach.diary.selection, initial: true) { _, _ in
             history.reset(ids: turnIDs)
-            preparation.cancel(); preparation = PhotoPreparation(limiter: coach.diary.photoWorkLimiter)
-            showPhotos = false; editing = false
+            coach.synchronizeDraftOwnership()
+            restoreKeyboard = false; showPhotos = false; editing = false
             followLatest = true; hasNewMessage = false
             followRequested = false
             position = ScrollPosition(idType: String.self)
@@ -165,7 +169,7 @@ struct CoachView: View {
     private func reportCompanionContext() {
         onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: editing && !coach.isSending,
             isProcessing: companionProcessing, needsRecovery: companionRecovery,
-            playback: surfaceVisible && !showPhotos && !importFailed && !showingDetail ? .animated : .hidden))
+            playback: surfaceVisible && !showPhotos && !showingDetail ? .animated : .hidden))
     }
     private var companionStrip: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -243,7 +247,8 @@ struct CoachView: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !coach.draft.photos.isEmpty { Text("\(coach.draft.photos.count) photos attached").font(.caption).foregroundStyle(Color.diarySecondary) }
+            if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
+            if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
             if typeSize.isAccessibilitySize {
                 composerInput
                 HStack {
@@ -273,7 +278,7 @@ struct CoachView: View {
         .disabled(coach.isSending || coach.diary.isChangingProfile)
     }
     private var composerInput: some View {
-        TextField("Message Coach", text: $coach.draft.text, axis: .vertical)
+        TextField("Message Coach", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }), axis: .vertical)
             .lineLimit(1...(typeSize.isAccessibilitySize ? 2 : 5)).focused($editing)
             .accessibilityIdentifier("coachInput")
             .padding(.horizontal, 16).padding(.vertical, 10)
@@ -282,12 +287,13 @@ struct CoachView: View {
             .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
     }
     private var photoAction: some View {
-        Button { editing = false; showPhotos = true } label: {
+        Button { openCamera() } label: {
             Image(systemName: "camera.fill").font(.system(size: 19, weight: .medium))
                 .frame(width: 48, height: 48)
                 .foregroundStyle(Color.diaryText)
                 .background(Color.diarySurface, in: Circle())
         }.accessibilityLabel("Add photos").accessibilityIdentifier("coachPhotos")
+            .disabled(coach.attachmentDraft.attachments.count + coach.attachmentDraft.reservedAttachmentCount >= 8)
     }
     private var send: some View {
         Button { editing = false; Task { _ = await coach.send() } } label: {
@@ -298,11 +304,38 @@ struct CoachView: View {
             }
             .frame(minWidth: 48, minHeight: 48)
             .padding(.horizontal, typeSize.isAccessibilitySize ? 12 : 0)
-            .background(coach.canSend && preparation.canCapture ? Color.diaryAccent : Color.diaryRule, in: Capsule())
+            .background(coach.canSend ? Color.diaryAccent : Color.diaryRule, in: Capsule())
         }
-        .foregroundStyle(coach.canSend && preparation.canCapture ? Color.diaryActionText : Color.diarySecondary)
-        .disabled(!coach.canSend || !preparation.canCapture)
+        .foregroundStyle(coach.canSend ? Color.diaryActionText : Color.diarySecondary)
+        .disabled(!coach.canSend)
         .accessibilityLabel("Send").accessibilityIdentifier("coachSend")
+    }
+    private var draftPhotos: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 12) {
+                ForEach(Array(coach.attachmentDraft.attachments.enumerated()), id: \.element.id) { index, photo in
+                    VStack(spacing: 0) {
+                        if let image = UIImage(data: photo.data) {
+                            Image(uiImage: image).resizable().scaledToFill().frame(width: 88, height: 88).clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityLabel("Attached photo \(index + 1)")
+                        }
+                        HStack {
+                            Button("Retake") { openCamera(replacing: photo.id) }.frame(minWidth: 44, minHeight: 44)
+                                .accessibilityLabel("Retake photo \(index + 1)")
+                            Button("Remove", role: .destructive) { Task { try? await coach.attachmentDraft.remove(photo.id) } }
+                                .frame(minWidth: 44, minHeight: 44).accessibilityLabel("Remove photo \(index + 1)")
+                        }.font(.caption)
+                    }
+                }
+            }
+        }
+    }
+    private func openCamera(replacing id: UUID? = nil) {
+        coach.synchronizeDraftOwnership()
+        do {
+            cameraPresentationID = try coach.attachmentDraft.beginPresentation()
+            retakingPhotoID = id; restoreKeyboard = editing; editing = false; showPhotos = true
+        } catch { coach.errorMessage = "Choose your diary before adding photos." }
     }
     private func inputBubble(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .trailing, spacing: 8) {

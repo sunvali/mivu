@@ -6,7 +6,11 @@ import Network
     typealias Inference = @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult
     let diary: DiaryViewModel
     let connection: ChatGPTConnection
-    var draft = MealDraft()
+    let attachmentDraft: CoachAttachmentDraft
+    var draft: MealDraft {
+        get { attachmentDraft.legacyDraft }
+        set { synchronizeDraftOwnership(); attachmentDraft.legacyDraft = newValue }
+    }
     var exchanges: [CoachExchangeSummary] { diary.latestCoachPage?.exchanges ?? [] }
     private(set) var captureReceipt: UUID?
     private(set) var companionCaptureEvent: CompanionEvent?
@@ -34,12 +38,14 @@ import Network
          lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured },
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.diary = diary; self.connection = connection
+        attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter,
+            dependencies: .init(store: diary.store, refresh: { selected in try await diary.refresh(profileID: selected.identity.profileID) }))
         self.inference = inference ?? { try connection.coachInference() }
         self.lookup = lookup; self.sleep = sleep
     }
 
     var turns: [CoachExchangeSummary] { exchanges }
-    var canSend: Bool { draft.isValid && !isSending && !diary.isSaving && !diary.isChangingProfile && diary.readModel != nil }
+    var canSend: Bool { attachmentDraft.isValid && !attachmentDraft.isPreparing && !isSending && !diary.isSaving && !diary.isChangingProfile && diary.readModel != nil }
     var hasPendingWork: Bool { diary.workStatus.pendingTurnID != nil }
     private var companionTurn: CoachExchangeSummary? {
         if let latest = turns.last, latest.id == companionSubmission?.operationID { return latest }
@@ -56,42 +62,28 @@ import Network
             (activity != nil || companionTurn?.state == .analyzing || companionTurn?.state == .captured)))
     }
 
-    private var attemptedCapture: (draft: MealDraft, preparation: CoachCapturePreparation, payload: CoachSubmissionPayload)?
+    func synchronizeDraftOwnership() { attachmentDraft.synchronizeOwnership(diary.selection) }
     @discardableResult func send() async -> Bool {
+        synchronizeDraftOwnership()
         guard canSend, let token = diary.selection else { return false }
         let owner = token.identity.profileID
         sendingErrorRevision = errorRevision; isSending = true; diary.isSaving = true
         defer { isSending = false; diary.isSaving = false }
-        let captured = draft
-        companionSubmission = CompanionSubmission(profileID: owner, operationID: captured.submissionID, acceptedAt: Date())
+        companionSubmission = CompanionSubmission(profileID: owner, operationID: attachmentDraft.submissionID, acceptedAt: Date())
         do {
-            let attempt: (draft: MealDraft, preparation: CoachCapturePreparation, payload: CoachSubmissionPayload)
-            if let previous = attemptedCapture, previous.draft.submissionID == captured.submissionID {
-                guard previous.draft == captured else {
-                    let prior = try await diary.store.reconcileCoachCapture(submissionID: previous.payload.submissionID,
-                        expectedManifest: previous.payload.manifest, expectedSelection: previous.preparation.ownership, expectedProfileID: owner)
-                    if case .accepted = prior { draft.submissionID = UUID() }
-                    attemptedCapture = nil
-                    return false
-                }
-                attempt = previous
-            } else {
-                let prepared = try await diary.store.coachCapturePreparation(at: Date(), expectedProfileID: owner)
-                guard diary.selection == token, prepared.ownership == token else { return false }
-                let payload = try CoachSubmissionPayload(submissionID: captured.submissionID, text: captured.text,
-                    attachments: captured.photos.map { MealPhoto(data: $0) }, context: prepared.context)
-                attempt = (captured, prepared, payload); attemptedCapture = attempt
-            }
-            let result = try await diary.store.captureCoachSubmission(attempt.payload, expectedSelection: attempt.preparation.ownership, expectedProfileID: owner)
-            try await diary.refresh(profileID: owner)
-            guard !Task.isCancelled, diary.selection == token, !diary.isChangingProfile, draft == captured else { return false }
+            guard let result = try await attachmentDraft.send() else { return false }
+            guard !Task.isCancelled, diary.selection == token, !diary.isChangingProfile else { return false }
+            resume()
+            guard attachmentDraft.captureReceipt == result.id else { return false }
             captureReceipt = result.id
+            if companionSubmission?.operationID != result.id {
+                companionSubmission = CompanionSubmission(profileID: owner, operationID: result.id, acceptedAt: Date())
+            }
             if companionCaptureEvent?.profileID != owner || companionCaptureEvent?.operationID != result.id {
                 companionCaptureEvent = CompanionEvent(profileID: owner, operationID: result.id, kind: .saved, committedAt: Date())
             }
-            draft = MealDraft()
             if errorRevision == sendingErrorRevision { errorMessage = nil }
-            resume(); return true
+            return true
         } catch {
             if diary.selection == token, !diary.isChangingProfile { errorMessage = "Could not save on this iPhone. Your input is still here." }
             return false
