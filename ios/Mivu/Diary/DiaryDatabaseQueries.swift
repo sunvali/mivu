@@ -156,7 +156,7 @@ extension DiaryDatabase {
               turn.captureSegmentID == nil || turn.captureSegmentID == row.segmentID else { throw DiaryError.invalidData }
         let receipts = try turn.receipts.map { receipt in
             try validateCoachReceiptFields(receipt, turnID: turn.id, revision: context.revision)
-            return coachCommittedReceipt(receipt)
+            return Self.coachCommittedReceipt(receipt)
         }
         return CoachExchangeSummary(id: turn.id, sequence: row.sequence, capturedAt: row.capturedAt,
             captureTimeZoneID: row.captureTimeZoneID, segmentID: row.segmentID, trackingDayID: row.trackingDayID,
@@ -257,7 +257,7 @@ extension DiaryDatabase {
         var item: FoodItem?
     }
 
-    private func coachCommittedReceipt(_ receipt: CoachReceipt) -> CoachCommittedReceipt {
+    static func coachCommittedReceipt(_ receipt: CoachReceipt) -> CoachCommittedReceipt {
         var value = CoachCommittedReceipt(operationKey: receipt.operationKey, turnID: receipt.turnID, dayID: receipt.dayID,
             mealID: receipt.mealID, itemID: receipt.itemID, weightID: receipt.weightID, workoutID: receipt.workoutID,
             goalID: receipt.goalID, destination: receipt.destination, committedRevision: receipt.committedRevision)
@@ -337,9 +337,11 @@ extension DiaryDatabase {
             var summaries: [String] = []
             func number(_ value: Double) -> String { value.formatted(.number.grouping(.never).locale(Locale(identifier: "en_US"))) }
             for receipt in turn.receipts {
-                let facts = coachCommittedReceipt(receipt)
+                let facts = Self.coachCommittedReceipt(receipt)
                 if let id = receipt.mealID {
-                    guard let meal = try? transaction.mealProjection(id: id) else { summaries.append("This meal was deleted. Its prior receipt is retained."); continue }
+                    let meal: MealReadModel
+                    do { meal = try transaction.mealProjection(id: id) }
+                    catch DiaryError.notFound { summaries.append("This meal was deleted. Its prior receipt is retained."); continue }
                     if let itemID = receipt.itemID, !meal.items.contains(where: { $0.id == itemID }) {
                         summaries.append("This item was deleted. Its prior receipt is retained."); continue
                     }
@@ -351,11 +353,15 @@ extension DiaryDatabase {
                     else if receipt.operationKey.contains("/retry_meal/") { summaries.append("Queued the original saved meal input for analysis.") }
                     else { summaries.append("The requested meal change was recorded.") }
                 } else if let id = receipt.weightID {
-                    if let weight = try? transaction.weight(id: id) { summaries.append("Recorded weight: \(number(weight.value)) \(weight.unit).") }
-                    else { summaries.append("This weight was deleted.") }
+                    do {
+                        let weight = try transaction.weight(id: id)
+                        summaries.append("Recorded weight: \(number(weight.value)) \(weight.unit).")
+                    } catch DiaryError.notFound { summaries.append("This weight was deleted.") }
                 } else if let id = receipt.workoutID {
-                    if let workout = try? transaction.workout(id: id) { summaries.append("Recorded \(workout.kind.rawValue): \(workout.durationMinutes) minutes.") }
-                    else { summaries.append("This workout was deleted.") }
+                    do {
+                        let workout = try transaction.workout(id: id)
+                        summaries.append("Recorded \(workout.kind.rawValue): \(workout.durationMinutes) minutes.")
+                    } catch DiaryError.notFound { summaries.append("This workout was deleted.") }
                 } else if let id = receipt.goalID {
                     guard try transaction.records("goal", clause: "id = ?", values: [.text(id.uuidString)], limit: 1).first != nil else { throw DiaryError.notFound }
                     summaries.append("Saved your requested goals.")

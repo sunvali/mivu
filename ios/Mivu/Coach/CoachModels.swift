@@ -222,6 +222,17 @@ struct CoachContext: Codable, Equatable, Sendable {
     var omittedReceiptCount: Int? = nil
 }
 
+extension CoachContext {
+    mutating func includeCommittedReceipts(_ receipts: [CoachCommittedReceipt]) throws {
+        committedReceipts = []
+        for receipt in receipts {
+            if try JSONEncoder().encode(committedReceipts! + [receipt]).count > 8192 { break }
+            committedReceipts!.append(receipt)
+        }
+        omittedReceiptCount = receipts.count - committedReceipts!.count
+    }
+}
+
 enum CoachError: Error, Equatable { case invalidTool, invalidArguments, limitExceeded, ungroundedConfirmation, connectionRequired }
 
 func coachJSON<T: Encodable>(_ value: T) throws -> String {

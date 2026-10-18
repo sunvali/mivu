@@ -54,8 +54,7 @@ extension DiaryDatabase {
             else {
                 let day = try trackingDay(id: meal.dayID)
                 let context = CoachCaptureContext(capturedAt: meal.capturedAt, timeZoneID: day.timeZoneID,
-                    activeDayID: expected.activeDayID, previousDayConfirmedAt: expected.previousDayConfirmedAt,
-                    activeConversationSegmentID: expected.effectiveConversationSegmentID)
+                    activeDayID: nil, previousDayConfirmedAt: nil)
                 let payload = try CoachSubmissionPayload(submissionID: turnID, text: submission.text, attachments: [], context: context)
                 try transaction.appendCapture(payload, legacyMeal: meal, legacyPhotoIDs: submission.photoIDs)
                 for photo in submission.photoIDs {
@@ -173,12 +172,7 @@ extension DiaryDatabase {
             context.weights = progress.weights; context.workouts = progress.workouts
             context.omittedWeightCount = progress.omittedWeights; context.omittedWorkoutCount = progress.omittedWorkouts
             let facts = try coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID).receipts
-            context.committedReceipts = []
-            for fact in facts {
-                if try JSONEncoder().encode(context.committedReceipts! + [fact]).count > 8192 { break }
-                context.committedReceipts!.append(fact)
-            }
-            context.omittedReceiptCount = facts.count - context.committedReceipts!.count
+            try context.includeCommittedReceipts(facts)
             context.truncated = recent.count < min(12, Int(work.sequence - 1)) || !context.omittedMeals.isEmpty || context.additionalMealCount > 0 || context.preferencesTruncated == true
             while try JSONEncoder().encode(context).count > 60_000, let meal = context.meals.first {
                 context.meals.removeFirst(); context.omittedMeals.append(.init(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count)); context.truncated = true

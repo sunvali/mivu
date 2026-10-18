@@ -70,7 +70,7 @@ extension DiaryDatabase {
         return try inferredEmptyConversationSegmentID(for: head)
     }
 
-    private func inferredEmptyConversationSegmentID(for head: DiaryHead) throws -> UUID {
+    func inferredEmptyConversationSegmentID(for head: DiaryHead) throws -> UUID {
         struct Seed: Encodable {
             let domain = "mivu.coach.empty-segment.v1"
             var timelineGeneration: UUID
@@ -246,7 +246,7 @@ final class DiaryTransaction {
         let ordinal = try database.mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = 'coach_turn'")
         guard ordinal < 10_000 else { throw DiaryError.invalidData }
         let last = try database.captureSegment()
-        let day = try head.activeDayID.map { try database.trackingDay(id: $0) }
+        let day = try legacyMeal == nil ? head.activeDayID.map { try database.trackingDay(id: $0) } : nil
         let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone(identifier: payload.context.timeZoneID)
@@ -262,7 +262,7 @@ final class DiaryTransaction {
             segmentID = last.id
         } else { segmentID = UUID() }
         let turn = CoachTurn(id: payload.submissionID, capturedAt: payload.context.capturedAt, text: payload.text,
-            captureTimeZoneID: payload.context.timeZoneID, activeDayID: payload.context.activeDayID,
+            captureTimeZoneID: payload.context.timeZoneID, activeDayID: legacyMeal == nil ? payload.context.activeDayID : nil,
             photoIDs: legacyMeal == nil ? payload.attachments.map(\.id) : legacyPhotoIDs,
             resolvedDayID: legacyMeal?.dayID, pendingMealID: legacyMeal?.id, pendingMealRevision: legacyMeal?.revision,
             submissionManifest: legacyMeal == nil ? payload.manifest : nil, captureSegmentID: segmentID)
@@ -284,6 +284,10 @@ final class DiaryTransaction {
                 [.text(turn.id.uuidString), .text(original.id.uuidString), .text(turn.id.uuidString)])
         }
         try appendCaptureIndex(turn, sequence: sequence, segmentID: segmentID, date: date, zone: zone, last: last)
+        if legacyMeal != nil, let raw = head.activeConversationSegmentID, try database.captureSegment(id: raw) != nil {
+            // Inferred legacy input interrupts populated A1; the unchanged active day needs pending A2.
+            head.activeConversationSegmentID = try database.inferredEmptyConversationSegmentID(for: head)
+        }
         try database.execute("UPDATE storage_head SET nextSequence = ? WHERE id = 1", [.integer(sequence + 1)])
         changes.turnIDs.insert(turn.id)
         changes.coachLatestChanged = true

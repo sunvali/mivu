@@ -946,6 +946,7 @@ actor DiaryStore {
         context.omittedWorkoutCount = max(0, snapshot.workouts.count - (context.workouts?.count ?? 0))
         context.omittedWeightCount = max(0, snapshot.weights.count - context.weights.count)
         context.pendingMealID = turn.pendingMealID; context.pendingMealRevision = turn.pendingMealRevision
+        try context.includeCommittedReceipts(turn.receipts.map(DiaryDatabase.coachCommittedReceipt))
         context.truncated = profile != snapshot.profile || recent.count != snapshot.coachTurns.filter { $0.id != turnID }.count ||
             recent.contains { projected in snapshot.coachTurns.contains { $0.id == projected.id && ($0.text != projected.text || $0.assistantText != projected.assistantText) } }
         context.additionalMealCount = max(0, eligibleMeals.count - 40)
@@ -1309,6 +1310,15 @@ actor DiaryStore {
                 } else { facts.append("This workout was deleted.") }
             } else if let id = receipt.mealID {
                 guard let meal = snapshot.meals.first(where: { $0.id == id }) else { facts.append("This meal was deleted."); continue }
+                if let itemID = receipt.itemID {
+                    guard meal.items.contains(where: { $0.id == itemID }) else { facts.append("This item was deleted. Its prior receipt is retained."); continue }
+                    let original = DiaryDatabase.coachCommittedReceipt(receipt)
+                    if !original.items.isEmpty {
+                        let names = original.items.map { "\($0.name) (\(coachNumber($0.quantity)) \($0.unit))" }.joined(separator: ", ")
+                        facts.append("Updated " + names + (original.targetLocalDate.map { " on " + $0 } ?? "") + ". Nutrition may be uncertain.")
+                        continue
+                    }
+                }
                 if receipt.operationKey.contains("/retry_meal/") { facts.append("Queued the original saved meal input for analysis. A retry does not add another meal."); continue }
                 if receipt.operationKey.contains("/move_meal/") {
                     let date = snapshot.days.first { $0.id == meal.dayID }?.localDate ?? "its saved tracking day"
