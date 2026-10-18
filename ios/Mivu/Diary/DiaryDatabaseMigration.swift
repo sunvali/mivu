@@ -25,8 +25,8 @@ extension DiaryDatabase {
             }
             try createPagedSchema()
             let metadata = try migrateMetadata()
-            let days = try migrateDays(metadata: metadata)
-            try validateMetadata(metadata, days: days)
+            let days = try migrateDays()
+            guard metadata.activeDayID == nil || days[metadata.activeDayID!] != nil else { throw DiaryError.invalidData }
             try migrateMeals(metadata: metadata, days: days)
             try migrateProgress(metadata: metadata, days: days)
             try migrateTurns(metadata: metadata, days: days)
@@ -128,10 +128,9 @@ extension DiaryDatabase {
             metadata = value
         }
         guard let metadata else { throw DiaryError.invalidData }
-        guard metadata.goals.count <= 10_000, Set(metadata.goals.map(\.id)).count == metadata.goals.count,
-              Set(metadata.goals.map(\.effectiveLocalDate)).count == metadata.goals.count,
-              metadata.deletedWeightIDs.count <= 10_000, Set(metadata.deletedWeightIDs).count == metadata.deletedWeightIDs.count,
-              metadata.deletedWorkoutIDs.count <= 50_000, Set(metadata.deletedWorkoutIDs).count == metadata.deletedWorkoutIDs.count else { throw DiaryError.invalidData }
+        try validateDiaryMetadataFields(schemaVersion: metadata.schemaVersion, revision: metadata.revision, profile: metadata.profile,
+            lineage: metadata.lineage, previousDayConfirmedAt: metadata.previousDayConfirmedAt)
+        try validateDiaryMetadataCollections(goals: metadata.goals, deletedWeightIDs: metadata.deletedWeightIDs, deletedWorkoutIDs: metadata.deletedWorkoutIDs)
         try execute("INSERT INTO storage_head(id, schemaVersion, profileID, profilePayload, revision, lineagePayload, activeDayID, previousDayConfirmedAt, timelineGeneration, nextSequence) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
             [.integer(metadata.schemaVersion), .text(metadata.profile.id.uuidString), .blob(try JSONEncoder().encode(metadata.profile)),
              .integer(metadata.revision), try metadata.lineage.map { .blob(try JSONEncoder().encode($0)) } ?? .null,
@@ -155,47 +154,22 @@ extension DiaryDatabase {
         return metadata
     }
 
-    private func migrateDays(metadata: DiarySnapshot) throws -> [UUID: TrackingDay] {
+    private func migrateDays() throws -> [UUID: TrackingDay] {
         var days: [UUID: TrackingDay] = [:]
         try visitStorageRows("day") { row in
             let day = try decode(TrackingDay.self, row.record)
-            guard validLocalDate(day.localDate), TimeZone(identifier: day.timeZoneID) != nil,
-                  day.startAt.timeIntervalSince1970.isFinite,
-                  day.closedAt == nil || day.closedAt!.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+            try validateTrackingDayFields(day)
             days[day.id] = day
             try account(day, table: "day", row: row.record)
         }
         return days
     }
 
-    private func validateMetadata(_ metadata: DiarySnapshot, days: [UUID: TrackingDay]) throws {
-        let profile = metadata.profile
-        guard metadata.schemaVersion == 1, (0..<10_000_000).contains(metadata.revision),
-              !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, profile.name.count <= 200,
-              ["en", "he"].contains(profile.language), TimeZone(identifier: profile.timeZoneID) != nil,
-              profile.preferences.count <= 10_000,
-              metadata.activeDayID == nil || days[metadata.activeDayID!] != nil,
-              metadata.previousDayConfirmedAt == nil || metadata.previousDayConfirmedAt!.timeIntervalSince1970.isFinite,
-              metadata.lineage == nil || (!metadata.lineage!.isEmpty && metadata.lineage!.count <= 256 && Set(metadata.lineage!).count == metadata.lineage!.count),
-              metadata.goals.count <= 10_000, Set(metadata.goals.map(\.id)).count == metadata.goals.count,
-              Set(metadata.goals.map(\.effectiveLocalDate)).count == metadata.goals.count,
-              metadata.deletedWeightIDs.count <= 10_000, Set(metadata.deletedWeightIDs).count == metadata.deletedWeightIDs.count,
-              metadata.deletedWorkoutIDs.count <= 50_000, Set(metadata.deletedWorkoutIDs).count == metadata.deletedWorkoutIDs.count else { throw DiaryError.invalidData }
-        for goal in metadata.goals {
-            guard validLocalDate(goal.effectiveLocalDate), TimeZone(identifier: goal.timeZoneID) != nil,
-                  (1..<1_000_000).contains(goal.revision),
-                  [goal.targets.kcal, goal.targets.carbs, goal.targets.protein, goal.targets.fat, goal.goalWeightKg]
-                    .allSatisfy({ $0 == nil || ($0!.isFinite && $0! > 0 && $0! <= 10_000_000) }) else { throw DiaryError.invalidData }
-        }
-    }
-
     private func migrateMeals(metadata: DiarySnapshot, days: [UUID: TrackingDay]) throws {
         try visitStorageRows("meal") { row in
             let meal = try decode(DiaryMeal.self, row.record)
             guard row.record.parent == meal.dayID.uuidString, days[meal.dayID] != nil,
-                  meal.items.isEmpty, meal.photos.isEmpty, meal.submissions.isEmpty,
-                  (0..<1_000_000).contains(meal.revision),
-                  meal.capturedAt.timeIntervalSince1970.isFinite, meal.eatenAt.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+                  meal.items.isEmpty, meal.photos.isEmpty, meal.submissions.isEmpty else { throw DiaryError.invalidData }
             try account(meal, table: "meal", row: row.record)
             var items: [FoodItem] = []
             try visitStorageRows("item", parent: row.record.id) { child in
@@ -204,20 +178,12 @@ extension DiaryDatabase {
                 try account(item, table: "item", row: child.record, nested: true)
             }
             try validateItems(items)
-            guard meal.revision == 0 || !items.isEmpty else { throw DiaryError.invalidData }
+            try validateMealFields(meal, itemCount: items.count)
             let photoIDs = try migratePhotos(table: "photo", parent: row.record.id, owner: "meal")
             try visitStorageRows("submission", parent: row.record.id) { child in
                 let submission = try decode(MealSubmission.self, child.record)
-                guard submission.baseRevision >= 0, submission.baseRevision <= meal.revision,
-                      submission.text.count <= 20_000, Set(submission.photoIDs).count == submission.photoIDs.count,
-                      submission.photoIDs.allSatisfy({ photoIDs.contains($0) }),
-                      submission.state != .awaitingReview || submission.proposal != nil else { throw DiaryError.invalidData }
-                if let proposal = submission.proposal {
-                    guard proposal.schemaVersion == 1, proposal.profileID == metadata.profile.id,
-                          proposal.mealID == meal.id, proposal.submissionID == submission.id,
-                          proposal.baseRevision == submission.baseRevision else { throw DiaryError.invalidData }
-                    try validateItems(proposal.items)
-                }
+                try validateMealSubmissionFields(submission, mealID: meal.id, mealRevision: meal.revision, profileID: metadata.profile.id)
+                guard submission.photoIDs.allSatisfy({ photoIDs.contains($0) }) else { throw DiaryError.invalidData }
                 try account(submission, table: "submission", row: child.record, nested: true)
             }
         }
@@ -227,9 +193,8 @@ extension DiaryDatabase {
         var ids = Set<UUID>()
         try visitStorageRows(table, parent: parent) { row in
             let photo = try decode(MealPhoto.self, row.record, composite: true)
-            guard photo.data.isEmpty, photo.createdAt.timeIntervalSince1970.isFinite,
-                  row.photoBytes > 0, row.photoBytes <= 10_000_000,
-                  ids.insert(photo.id).inserted else { throw DiaryError.invalidData }
+            guard photo.data.isEmpty, ids.insert(photo.id).inserted else { throw DiaryError.invalidData }
+            try validatePhotoFields(photo, byteCount: row.photoBytes)
             let encoded = try JSONEncoder().encode(photo).count + encodedPhotoContentBytes(table: table, rowID: row.rowID, byteCount: row.photoBytes)
             try contribution(table: table, row: row.record, count: encoded, originalBytes: row.photoBytes, nested: true)
             try execute("INSERT INTO photo_content(ownerKind, parentID, photoID, physicalID, contentToken, mealPhysicalID, coachPhysicalID) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -265,29 +230,16 @@ extension DiaryDatabase {
         let deletedWorkoutIDs = Set(metadata.deletedWorkoutIDs)
         try visitStorageRows("weight") { row in
             let weight = try decode(WeightEntry.self, row.record)
-            guard row.record.parent == weight.dayID?.uuidString,
-                  weight.value.isFinite, weight.value > 0, weight.value <= 1500,
-                  ["kg", "lb"].contains(weight.unit), weight.measuredAt.timeIntervalSince1970.isFinite,
-                  (1..<1_000_000).contains(weight.revision), !deletedWeightIDs.contains(weight.id) else { throw DiaryError.invalidData }
+            try validateWeightFields(weight)
+            guard row.record.parent == weight.dayID?.uuidString, !deletedWeightIDs.contains(weight.id) else { throw DiaryError.invalidData }
             if let dayID = weight.dayID { guard days[dayID] != nil, weightDays.insert(dayID).inserted else { throw DiaryError.invalidData } }
             try account(weight, table: "weight", row: row.record)
         }
         try visitStorageRows("workout") { row in
             let workout = try decode(WorkoutSession.self, row.record)
+            try validateWorkoutFields(workout)
             guard row.record.parent == workout.dayID.uuidString, days[workout.dayID] != nil,
-                  workout.performedAt.timeIntervalSince1970.isFinite,
-                  (1..<1_000_000).contains(workout.revision), (1...1440).contains(workout.durationMinutes),
-                  workout.exercises.count <= 100, !deletedWorkoutIDs.contains(workout.id),
-                  workout.estimatedBurnKcal == nil || (workout.estimatedBurnKcal!.isFinite && workout.estimatedBurnKcal! >= 0 && workout.estimatedBurnKcal! <= 100_000),
-                  workout.burnSource == nil || workout.estimatedBurnKcal != nil else { throw DiaryError.invalidData }
-            for exercise in workout.exercises {
-                guard !exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                      exercise.name.count <= 200, exercise.sets.count <= 100 else { throw DiaryError.invalidData }
-                for set in exercise.sets {
-                    guard (1...10_000).contains(set.repetitions),
-                          set.loadKg == nil || (set.loadKg!.isFinite && set.loadKg! >= 0 && set.loadKg! <= 100_000) else { throw DiaryError.invalidData }
-                }
-            }
+                  !deletedWorkoutIDs.contains(workout.id) else { throw DiaryError.invalidData }
             try account(workout, table: "workout", row: row.record)
         }
         try visitStorageRows("tombstone") { row in
@@ -307,12 +259,8 @@ extension DiaryDatabase {
         formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"
         try visitStorageRows("coach_turn") { row in
             let turn = try decode(CoachTurn.self, row.record)
-            guard turn.photos.isEmpty, turn.capturedAt.timeIntervalSince1970.isFinite, turn.text.count <= 20_000,
-                  let zone = TimeZone(identifier: turn.captureTimeZoneID),
-                  Set(turn.photoIDs).count == turn.photoIDs.count, turn.photoIDs.count <= 30,
-                  turn.assistantText == nil || turn.assistantText!.utf8.count <= 65_536,
-                  turn.receipts.count <= 16, Set(turn.receipts.map(\.operationKey)).count == turn.receipts.count,
-                  turn.pendingMealRevision == nil || turn.pendingMealRevision! >= 0,
+            let zone = try validateCoachTurnFields(turn)
+            guard turn.photos.isEmpty,
                   turn.activeDayID == nil || days[turn.activeDayID!] != nil,
                   turn.resolvedDayID == nil || days[turn.resolvedDayID!] != nil else { throw DiaryError.invalidData }
             try account(turn, table: "coach_turn", row: row.record)
@@ -345,11 +293,8 @@ extension DiaryDatabase {
     private func migrateTurnLinks(_ turn: CoachTurn, metadata: DiarySnapshot, days: [UUID: TrackingDay], ownPhotos: Set<UUID>) throws {
         let linkedMeals = Set(turn.receipts.compactMap(\.mealID) + (turn.pendingMealID.map { [$0] } ?? []))
         for receipt in turn.receipts {
-            guard receipt.turnID == turn.id, !receipt.operationKey.isEmpty, receipt.operationKey.utf8.count <= 500,
-                  receipt.committedRevision > 0, receipt.committedRevision <= metadata.revision,
-                  receipt.resultJSON.utf8.count <= 65_536,
-                  (receipt.dayID.map { days[$0] != nil } ?? (receipt.goalID != nil || receipt.destination != nil || receipt.operationKey == "\(turn.id.uuidString)/update_preferences" || receipt.operationKey.hasPrefix("\(turn.id.uuidString)/update_preferences/"))),
-                  (try? JSONSerialization.jsonObject(with: Data(receipt.resultJSON.utf8))) != nil else { throw DiaryError.invalidData }
+            try validateCoachReceiptFields(receipt, turnID: turn.id, revision: metadata.revision)
+            guard receipt.dayID == nil || days[receipt.dayID!] != nil else { throw DiaryError.invalidData }
             let foodPrefix = turn.id.uuidString + "/food/"
             let isFoodCreate = turn.pendingMealID == nil && receipt.operationKey.hasPrefix(foodPrefix) && validLocalDate(String(receipt.operationKey.dropFirst(foodPrefix.count)))
             for (kind, id) in [("meal", receipt.mealID), ("weight", receipt.weightID), ("workout", receipt.workoutID), ("goal", receipt.goalID)] {

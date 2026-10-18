@@ -260,70 +260,46 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
         return nutritionTotals(items)
     }
     func validate() throws {
+        try validateDiaryMetadataFields(schemaVersion: schemaVersion, revision: revision, profile: profile,
+            lineage: lineage, previousDayConfirmedAt: previousDayConfirmedAt)
+        try validateDiaryMetadataCollections(goals: goals, deletedWeightIDs: deletedWeightIDs, deletedWorkoutIDs: deletedWorkoutIDs)
         let linkedWeightDayIDs = weights.compactMap(\.dayID)
-        guard schemaVersion == 1, revision >= 0, revision < 10_000_000, !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              profile.name.count <= 200, ["en", "he"].contains(profile.language),
-              TimeZone(identifier: profile.timeZoneID) != nil, profile.preferences.count <= 10_000,
-              days.count <= 10_000, meals.count <= 50_000, weights.count <= 10_000,
-              goals.count <= 10_000, workouts.count <= 50_000,
-              deletedMealIDs.count <= 50_000, deletedWeightIDs.count <= 10_000, deletedWorkoutIDs.count <= 50_000,
+        guard days.count <= 10_000, meals.count <= 50_000, weights.count <= 10_000, workouts.count <= 50_000,
+              deletedMealIDs.count <= 50_000,
               unique(days.map(\.id)), unique(meals.map(\.id)), unique(weights.map(\.id)), unique(linkedWeightDayIDs),
-              unique(goals.map(\.id)), unique(workouts.map(\.id)),
-              unique(deletedMealIDs), unique(deletedWeightIDs), unique(deletedWorkoutIDs),
-              Set(goals.map(\.effectiveLocalDate)).count == goals.count,
-              lineage == nil || (lineage!.count > 0 && lineage!.count <= 256 && unique(lineage!)),
+              unique(workouts.map(\.id)), unique(deletedMealIDs),
               activeDayID == nil || days.contains(where: { $0.id == activeDayID }),
-              previousDayConfirmedAt == nil || previousDayConfirmedAt!.timeIntervalSince1970.isFinite,
               Set(meals.map(\.id)).isDisjoint(with: deletedMealIDs),
               Set(weights.map(\.id)).isDisjoint(with: deletedWeightIDs),
               Set(workouts.map(\.id)).isDisjoint(with: deletedWorkoutIDs) else { throw DiaryError.invalidData }
         var photoBytes = 0
         var submissionIDs = Set<UUID>()
-        for day in days {
-            guard validLocalDate(day.localDate), TimeZone(identifier: day.timeZoneID) != nil,
-                  day.startAt.timeIntervalSince1970.isFinite,
-                  day.closedAt == nil || day.closedAt!.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
-        }
+        for day in days { try validateTrackingDayFields(day) }
         for meal in meals {
-            guard days.contains(where: { $0.id == meal.dayID }), meal.revision >= 0, meal.revision < 1_000_000,
-                  meal.revision == 0 || !meal.items.isEmpty,
-                  meal.capturedAt.timeIntervalSince1970.isFinite, meal.eatenAt.timeIntervalSince1970.isFinite,
-                  meal.items.count <= 200, meal.photos.count <= 30, meal.submissions.count <= 1000,
+            guard days.contains(where: { $0.id == meal.dayID }), meal.photos.count <= 30, meal.submissions.count <= 1000,
                   unique(meal.photos.map(\.id)) else { throw DiaryError.invalidData }
+            try validateMealFields(meal, itemCount: meal.items.count)
             try validateItems(meal.items)
             for photo in meal.photos {
-                guard !photo.data.isEmpty, photo.data.count <= 10_000_000,
-                      photo.createdAt.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+                try validatePhotoFields(photo, byteCount: photo.data.count)
                 photoBytes += photo.data.count
             }
             for submission in meal.submissions {
-                guard submissionIDs.insert(submission.id).inserted, submission.baseRevision >= 0,
-                      submission.baseRevision <= meal.revision, submission.text.count <= 20_000,
-                      unique(submission.photoIDs), submission.photoIDs.allSatisfy({ id in meal.photos.contains { $0.id == id } })
+                guard submissionIDs.insert(submission.id).inserted,
+                      submission.photoIDs.allSatisfy({ id in meal.photos.contains { $0.id == id } })
                 else { throw DiaryError.invalidData }
-                if let proposal = submission.proposal {
-                    guard proposal.schemaVersion == 1, proposal.profileID == profile.id, proposal.mealID == meal.id,
-                          proposal.submissionID == submission.id, proposal.baseRevision == submission.baseRevision
-                    else { throw DiaryError.invalidData }
-                    try validateItems(proposal.items)
-                }
-                guard submission.state != .awaitingReview || submission.proposal != nil else { throw DiaryError.invalidData }
+                try validateMealSubmissionFields(submission, mealID: meal.id, mealRevision: meal.revision, profileID: profile.id)
             }
         }
         guard coachTurns.count <= 10_000, unique(coachTurns.map(\.id)) else { throw DiaryError.invalidData }
         for turn in coachTurns {
-            guard turn.capturedAt.timeIntervalSince1970.isFinite, turn.text.count <= 20_000,
-                  TimeZone(identifier: turn.captureTimeZoneID) != nil, turn.photos.count <= 30,
-                  unique(turn.photos.map(\.id)), unique(turn.photoIDs), turn.photoIDs.count <= 30,
-                  turn.assistantText == nil || turn.assistantText!.utf8.count <= 65_536,
-                  turn.receipts.count <= 16, Set(turn.receipts.map(\.operationKey)).count == turn.receipts.count,
-                  turn.pendingMealRevision == nil || turn.pendingMealRevision! >= 0,
+            try validateCoachTurnFields(turn)
+            guard turn.photos.count <= 30, unique(turn.photos.map(\.id)),
                   turn.activeDayID == nil || days.contains(where: { $0.id == turn.activeDayID }),
                   turn.resolvedDayID == nil || days.contains(where: { $0.id == turn.resolvedDayID }),
                   turn.photos.allSatisfy({ turn.photoIDs.contains($0.id) }) else { throw DiaryError.invalidData }
             for photo in turn.photos {
-                guard !photo.data.isEmpty, photo.data.count <= 10_000_000,
-                      photo.createdAt.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+                try validatePhotoFields(photo, byteCount: photo.data.count)
                 photoBytes += photo.data.count
             }
             for id in turn.photoIDs {
@@ -332,43 +308,18 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
                 }) else { throw DiaryError.invalidData }
             }
             for receipt in turn.receipts {
-                guard receipt.turnID == turn.id, receipt.operationKey.utf8.count <= 500,
-                      !receipt.operationKey.isEmpty, receipt.committedRevision > 0,
-                      receipt.committedRevision <= revision, receipt.resultJSON.utf8.count <= 65_536,
-                      (receipt.dayID.map { id in days.contains { $0.id == id } } ??
-                       (receipt.goalID != nil || receipt.destination != nil || receipt.operationKey == "\(turn.id.uuidString)/update_preferences" || receipt.operationKey.hasPrefix("\(turn.id.uuidString)/update_preferences/"))),
-                      let data = receipt.resultJSON.data(using: .utf8),
-                      (try? JSONSerialization.jsonObject(with: data)) != nil else { throw DiaryError.invalidData }
+                try validateCoachReceiptFields(receipt, turnID: turn.id, revision: revision)
+                guard receipt.dayID == nil || days.contains(where: { $0.id == receipt.dayID }) else { throw DiaryError.invalidData }
             }
         }
         guard photoBytes <= 250_000_000 else { throw DiaryError.invalidData }
         for weight in weights {
-            guard weight.value.isFinite, weight.value > 0, weight.value <= 1500,
-                  ["kg", "lb"].contains(weight.unit), weight.measuredAt.timeIntervalSince1970.isFinite,
-                  weight.revision > 0, weight.revision < 1_000_000,
-                  weight.dayID == nil || days.contains(where: { $0.id == weight.dayID }) else { throw DiaryError.invalidData }
-        }
-        for goal in goals {
-            guard validLocalDate(goal.effectiveLocalDate), TimeZone(identifier: goal.timeZoneID) != nil,
-                  goal.revision > 0, goal.revision < 1_000_000,
-                  [goal.targets.kcal, goal.targets.carbs, goal.targets.protein, goal.targets.fat, goal.goalWeightKg]
-                    .allSatisfy({ $0 == nil || ($0!.isFinite && $0! > 0 && $0! <= 10_000_000) }) else { throw DiaryError.invalidData }
+            try validateWeightFields(weight)
+            guard weight.dayID == nil || days.contains(where: { $0.id == weight.dayID }) else { throw DiaryError.invalidData }
         }
         for workout in workouts {
-            guard days.contains(where: { $0.id == workout.dayID }),
-                  workout.performedAt.timeIntervalSince1970.isFinite,
-                  workout.revision > 0, workout.revision < 1_000_000,
-                  (1...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
-                  workout.estimatedBurnKcal == nil || (workout.estimatedBurnKcal!.isFinite && workout.estimatedBurnKcal! >= 0 && workout.estimatedBurnKcal! <= 100_000),
-                  workout.burnSource == nil || workout.estimatedBurnKcal != nil else { throw DiaryError.invalidData }
-            for exercise in workout.exercises {
-                guard !exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                      exercise.name.count <= 200, exercise.sets.count <= 100 else { throw DiaryError.invalidData }
-                for set in exercise.sets {
-                    guard (1...10_000).contains(set.repetitions),
-                          set.loadKg == nil || (set.loadKg!.isFinite && set.loadKg! >= 0 && set.loadKg! <= 100_000) else { throw DiaryError.invalidData }
-                }
-            }
+            try validateWorkoutFields(workout)
+            guard days.contains(where: { $0.id == workout.dayID }) else { throw DiaryError.invalidData }
         }
     }
 }
@@ -407,5 +358,97 @@ func validateItems(_ items: [FoodItem]) throws {
                       $0 == nil || ($0!.isFinite && $0! >= 0 && $0! <= 10_000_000)
                   }
               }) else { throw DiaryError.invalidData }
+    }
+}
+
+// Row rules are shared by complete interchange validation and bounded SQLite reads.
+func validateDiaryMetadataFields(schemaVersion: Int, revision: Int, profile: DiaryProfile,
+                                 lineage: [UUID]?, previousDayConfirmedAt: Date?) throws {
+    guard schemaVersion == 1, revision >= 0, revision < 10_000_000,
+          !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          profile.name.count <= 200, ["en", "he"].contains(profile.language),
+          TimeZone(identifier: profile.timeZoneID) != nil, profile.preferences.count <= 10_000,
+          lineage == nil || (!lineage!.isEmpty && lineage!.count <= 256 && unique(lineage!)),
+          previousDayConfirmedAt == nil || previousDayConfirmedAt!.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+}
+
+func validateDiaryMetadataCollections(goals: [GoalRecord], deletedWeightIDs: [UUID], deletedWorkoutIDs: [UUID]) throws {
+    guard goals.count <= 10_000, unique(goals.map(\.id)),
+          Set(goals.map(\.effectiveLocalDate)).count == goals.count,
+          deletedWeightIDs.count <= 10_000, unique(deletedWeightIDs),
+          deletedWorkoutIDs.count <= 50_000, unique(deletedWorkoutIDs) else { throw DiaryError.invalidData }
+    for goal in goals { try validateGoalFields(goal) }
+}
+
+func validateTrackingDayFields(_ day: TrackingDay) throws {
+    guard validLocalDate(day.localDate), TimeZone(identifier: day.timeZoneID) != nil,
+          day.startAt.timeIntervalSince1970.isFinite,
+          day.closedAt == nil || day.closedAt!.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+}
+
+func validateMealFields(_ meal: DiaryMeal, itemCount: Int) throws {
+    guard meal.revision >= 0, meal.revision < 1_000_000, meal.revision == 0 || itemCount > 0,
+          meal.capturedAt.timeIntervalSince1970.isFinite, meal.eatenAt.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+}
+
+func validateMealSubmissionFields(_ submission: MealSubmission, mealID: UUID, mealRevision: Int, profileID: UUID) throws {
+    guard submission.baseRevision >= 0, submission.baseRevision <= mealRevision,
+          submission.text.count <= 20_000, unique(submission.photoIDs),
+          submission.state != .awaitingReview || submission.proposal != nil else { throw DiaryError.invalidData }
+    if let proposal = submission.proposal {
+        guard proposal.schemaVersion == 1, proposal.profileID == profileID, proposal.mealID == mealID,
+              proposal.submissionID == submission.id, proposal.baseRevision == submission.baseRevision else { throw DiaryError.invalidData }
+        try validateItems(proposal.items)
+    }
+}
+
+func validatePhotoFields(_ photo: MealPhoto, byteCount: Int) throws {
+    guard byteCount > 0, byteCount <= 10_000_000, photo.createdAt.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+}
+
+@discardableResult
+func validateCoachTurnFields(_ turn: CoachTurn) throws -> TimeZone {
+    guard turn.capturedAt.timeIntervalSince1970.isFinite, turn.text.count <= 20_000,
+          let zone = TimeZone(identifier: turn.captureTimeZoneID),
+          unique(turn.photoIDs), turn.photoIDs.count <= 30,
+          turn.assistantText == nil || turn.assistantText!.utf8.count <= 65_536,
+          turn.receipts.count <= 16, Set(turn.receipts.map(\.operationKey)).count == turn.receipts.count,
+          turn.pendingMealRevision == nil || turn.pendingMealRevision! >= 0 else { throw DiaryError.invalidData }
+    return zone
+}
+
+func validateCoachReceiptFields(_ receipt: CoachReceipt, turnID: UUID, revision: Int) throws {
+    guard receipt.turnID == turnID, receipt.operationKey.utf8.count <= 500, !receipt.operationKey.isEmpty,
+          receipt.committedRevision > 0, receipt.committedRevision <= revision, receipt.resultJSON.utf8.count <= 65_536,
+          receipt.dayID != nil || receipt.goalID != nil || receipt.destination != nil ||
+            receipt.operationKey == "\(turnID.uuidString)/update_preferences" || receipt.operationKey.hasPrefix("\(turnID.uuidString)/update_preferences/"),
+          let data = receipt.resultJSON.data(using: .utf8),
+          (try? JSONSerialization.jsonObject(with: data)) != nil else { throw DiaryError.invalidData }
+}
+
+func validateWeightFields(_ weight: WeightEntry) throws {
+    guard weight.value.isFinite, weight.value > 0, weight.value <= 1500, ["kg", "lb"].contains(weight.unit),
+          weight.measuredAt.timeIntervalSince1970.isFinite, weight.revision > 0, weight.revision < 1_000_000 else { throw DiaryError.invalidData }
+}
+
+func validateGoalFields(_ goal: GoalRecord) throws {
+    guard validLocalDate(goal.effectiveLocalDate), TimeZone(identifier: goal.timeZoneID) != nil,
+          goal.revision > 0, goal.revision < 1_000_000,
+          [goal.targets.kcal, goal.targets.carbs, goal.targets.protein, goal.targets.fat, goal.goalWeightKg]
+            .allSatisfy({ $0 == nil || ($0!.isFinite && $0! > 0 && $0! <= 10_000_000) }) else { throw DiaryError.invalidData }
+}
+
+func validateWorkoutFields(_ workout: WorkoutSession) throws {
+    guard workout.performedAt.timeIntervalSince1970.isFinite, workout.revision > 0, workout.revision < 1_000_000,
+          (1...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
+          workout.estimatedBurnKcal == nil || (workout.estimatedBurnKcal!.isFinite && workout.estimatedBurnKcal! >= 0 && workout.estimatedBurnKcal! <= 100_000),
+          workout.burnSource == nil || workout.estimatedBurnKcal != nil else { throw DiaryError.invalidData }
+    for exercise in workout.exercises {
+        guard !exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              exercise.name.count <= 200, exercise.sets.count <= 100 else { throw DiaryError.invalidData }
+        for set in exercise.sets {
+            guard (1...10_000).contains(set.repetitions),
+                  set.loadKg == nil || (set.loadKg!.isFinite && set.loadKg! >= 0 && set.loadKg! <= 100_000) else { throw DiaryError.invalidData }
+        }
     }
 }
