@@ -63,6 +63,14 @@ struct CoachPage: Equatable, Sendable {
     var hasLater: Bool
     var earlierSegment: CoachSegmentSummary?
     var laterSegment: CoachSegmentSummary?
+    var latestEmptySegment: CoachEmptySegment? = nil
+}
+
+struct CoachEmptySegment: Equatable, Sendable {
+    var segmentID: UUID
+    var trackingDayID: UUID
+    var displayLocalDate: String
+    var displayTimeZoneID: String
 }
 
 struct CoachSegmentSummary: Equatable, Sendable, Identifiable {

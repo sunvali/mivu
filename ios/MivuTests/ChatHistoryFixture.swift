@@ -157,7 +157,7 @@ enum ChatHistoryFixture {
             if version == [["1"]] {
                 // Version 1 export takes metadata only from its authoritative normalized head.
                 var statement: OpaquePointer?
-                guard sqlite3_prepare_v2(connection, "SELECT schemaVersion, revision, profilePayload, lineagePayload, activeDayID, previousDayConfirmedAt FROM storage_head WHERE id = 1", -1, &statement, nil) == SQLITE_OK, let statement else { throw DiaryError.invalidData }
+                guard sqlite3_prepare_v2(connection, "SELECT schemaVersion, revision, profilePayload, lineagePayload, activeDayID, previousDayConfirmedAt, activeConversationSegmentID FROM storage_head WHERE id = 1", -1, &statement, nil) == SQLITE_OK, let statement else { throw DiaryError.invalidData }
                 defer { sqlite3_finalize(statement) }
                 guard sqlite3_step(statement) == SQLITE_ROW, let profile = sqlite3_column_blob(statement, 2) else { throw DiaryError.invalidData }
                 root = ["schemaVersion": Int(sqlite3_column_int64(statement, 0)), "revision": Int(sqlite3_column_int64(statement, 1)),
@@ -167,6 +167,7 @@ enum ChatHistoryFixture {
                 if sqlite3_column_type(statement, 5) != SQLITE_NULL {
                     root["previousDayConfirmedAt"] = sqlite3_column_double(statement, 5)
                 }
+                if let segment = sqlite3_column_text(statement, 6) { root["activeConversationSegmentID"] = String(cString: segment) }
                 root["goals"] = try rows("goal").map(\.payload)
                 root["deletedWeightIDs"] = try rows("weight_tombstone").map(\.payload)
                 root["deletedWorkoutIDs"] = try rows("workout_tombstone").map(\.payload)

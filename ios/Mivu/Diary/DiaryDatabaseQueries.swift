@@ -2,6 +2,13 @@ import Foundation
 import SQLite3
 
 extension DiaryDatabase {
+    /// The caller owns the read/write transaction; this never opens a nested transaction.
+    func coachExchangeSummary(turnID: UUID, expectedProfileID: UUID) throws -> CoachExchangeSummary {
+        let context = try coachContext(expectedProfileID: expectedProfileID)
+        guard let row = try coachIndexRows("turnID = ?", values: [.text(turnID.uuidString)], limit: 1).first else { throw DiaryError.notFound }
+        return try coachExchange(row, context: context)
+    }
+
     func coachPage(_ request: CoachPageRequest, expectedProfileID: UUID) throws -> CoachPage {
         try coachRead {
             let context = try coachContext(expectedProfileID: expectedProfileID)
@@ -29,13 +36,30 @@ extension DiaryDatabase {
             let earlier = try rows.first.flatMap { try coachIndexRows("sequence < ?", values: [.integer(Int($0.sequence))], order: "DESC", limit: 1).first }
             let later = try rows.last.flatMap { try coachIndexRows("sequence > ?", values: [.integer(Int($0.sequence))], limit: 1).first }
             let exchanges = try rows.map { try coachExchange($0, context: context) }
+            let atLatest: Bool
+            if !rows.isEmpty { atLatest = later == nil }
+            else {
+                switch request {
+                case .latest, .after: atLatest = true
+                default: atLatest = false
+                }
+            }
             return CoachPage(identity: context.identity, exchanges: exchanges,
                 before: rows.first.map { CoachCursor(identity: context.identity, sequence: $0.sequence, turnID: $0.id) },
                 after: rows.last.map { CoachCursor(identity: context.identity, sequence: $0.sequence, turnID: $0.id) },
                 hasEarlier: earlier != nil, hasLater: later != nil,
                 earlierSegment: try earlier.map { try coachSegment(id: $0.segmentID) },
-                laterSegment: try later.map { try coachSegment(id: $0.segmentID) })
+                laterSegment: try later.map { try coachSegment(id: $0.segmentID) },
+                latestEmptySegment: atLatest ? try coachEmptySegment(expectedProfileID: expectedProfileID) : nil)
         }
+    }
+
+    private func coachEmptySegment(expectedProfileID: UUID) throws -> CoachEmptySegment? {
+        let head = try readHead(expectedProfileID: expectedProfileID)
+        guard let dayID = head.activeDayID, let segmentID = head.effectiveConversationSegmentID,
+              try captureSegment(id: segmentID) == nil else { return nil }
+        let day = try trackingDay(id: dayID)
+        return CoachEmptySegment(segmentID: segmentID, trackingDayID: day.id, displayLocalDate: day.localDate, displayTimeZoneID: day.timeZoneID)
     }
 
     func coachDays(before: CoachDayCursor?, expectedProfileID: UUID) throws -> CoachDayPage {
@@ -127,7 +151,8 @@ extension DiaryDatabase {
         let turn = try decode(CoachTurn.self, Record(id: row.id.uuidString, ordinal: 0, payload: try coachBlob(statement, 0)))
         try validateCoachTurnFields(turn)
         guard turn.photos.isEmpty, turn.capturedAt == row.capturedAt, turn.captureTimeZoneID == row.captureTimeZoneID,
-              turn.activeDayID == row.trackingDayID, turn.state == row.state else { throw DiaryError.invalidData }
+              turn.activeDayID == row.trackingDayID, turn.state == row.state,
+              turn.captureSegmentID == nil || turn.captureSegmentID == row.segmentID else { throw DiaryError.invalidData }
         let receipts = try turn.receipts.map { receipt in
             try validateCoachReceiptFields(receipt, turnID: turn.id, revision: context.revision)
             return coachCommittedReceipt(receipt)

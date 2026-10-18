@@ -4,16 +4,48 @@ import Foundation
 actor DiaryStore {
     private let directory: URL
     private var current: DiarySnapshot?
+    private var pagedHead: DiaryHead?
     private var stagedCoachSnapshot: DiarySnapshot?
     private var profileSelectionEpoch: UInt64 = 0
     private var fileIdentities: [UUID: UInt64] = [:]
     private let currentTime: @Sendable () -> Date
-    init(directory: URL, maximumFileBytes: Int = 350_000_000, currentTime: @escaping @Sendable () -> Date = { Date() }) {
+    private let diagnostics: DiaryQueryDiagnostics?
+    init(directory: URL, maximumFileBytes: Int = 350_000_000, currentTime: @escaping @Sendable () -> Date = { Date() }, diagnostics: DiaryQueryDiagnostics? = nil) {
         self.directory = directory
         self.currentTime = currentTime
+        self.diagnostics = diagnostics
         self.maximumFileBytes = min(maximumFileBytes, 350_000_000)
     }
     private let maximumFileBytes: Int
+
+    /// Component-only selection; automatic migration and shipping selection activate together later.
+    func selectPagedProfile(_ id: UUID) throws -> DiaryHead {
+        let identity = try fileIdentity(file(id))
+        let head = try DiaryDatabase(url: file(id), diagnostics: diagnostics).readHead(expectedProfileID: id)
+        guard try fileIdentity(file(id)) == identity else { throw DiaryError.persistenceFailed }
+        current = nil; pagedHead = head; fileIdentities[id] = identity
+        profileSelectionEpoch &+= 1
+        return head
+    }
+    func diaryHead(expectedProfileID: UUID) throws -> DiaryHead {
+        guard let head = pagedHead else { throw DiaryError.noProfile }
+        guard head.profile.id == expectedProfileID else { throw DiaryError.wrongOwner }
+        guard try fileIdentity(file(expectedProfileID)) == fileIdentities[expectedProfileID] else { throw DiaryError.persistenceFailed }
+        return head
+    }
+    func captureCoachSubmission(_ payload: CoachSubmissionPayload, expectedProfileID: UUID) throws -> CoachExchangeSummary {
+        let head = try diaryHead(expectedProfileID: expectedProfileID)
+        let commit = try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics)
+            .captureCoachSubmission(payload, expected: head, maximumBytes: maximumFileBytes)
+        pagedHead = commit.head
+        return commit.value
+    }
+    func reconcileCoachCapture(submissionID: UUID, expectedManifest: CoachSubmissionManifest,
+                               expectedProfileID: UUID) throws -> CoachCaptureReconciliation {
+        _ = try diaryHead(expectedProfileID: expectedProfileID)
+        return try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics).reconcileCoachCapture(
+            submissionID: submissionID, expectedManifest: expectedManifest, expectedProfileID: expectedProfileID)
+    }
 
     func profiles() throws -> [DiaryProfile] {
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
@@ -36,6 +68,7 @@ actor DiaryStore {
         snapshot.lineage = [UUID()]
         try write(snapshot)
         current = snapshot
+        pagedHead = nil
         profileSelectionEpoch &+= 1
         return snapshot
     }
@@ -45,6 +78,7 @@ actor DiaryStore {
         guard !exists(incoming.profile.id) else { throw DiaryError.invalidData }
         try write(incoming)
         current = incoming
+        pagedHead = nil
         profileSelectionEpoch &+= 1
         return incoming
     }
@@ -53,11 +87,12 @@ actor DiaryStore {
         let loaded = try read(file(id))
         guard loaded.profile.id == id else { throw DiaryError.wrongOwner }
         current = loaded
+        pagedHead = nil
         profileSelectionEpoch &+= 1
         return loaded
     }
 
-    func signOut() { current = nil; profileSelectionEpoch &+= 1 }
+    func signOut() { current = nil; pagedHead = nil; profileSelectionEpoch &+= 1 }
 
     func snapshot(expectedProfileID: UUID? = nil) throws -> DiarySnapshot {
         guard let current = stagedCoachSnapshot ?? self.current else { throw DiaryError.noProfile }
@@ -632,11 +667,13 @@ actor DiaryStore {
         }
     }
     func selectionEpoch(expectedProfileID: UUID) throws -> UInt64 {
-        _ = try snapshot(expectedProfileID: expectedProfileID)
+        if pagedHead != nil { _ = try diaryHead(expectedProfileID: expectedProfileID) }
+        else { _ = try snapshot(expectedProfileID: expectedProfileID) }
         return profileSelectionEpoch
     }
     func validateSelection(epoch: UInt64, expectedProfileID: UUID) throws {
-        _ = try snapshot(expectedProfileID: expectedProfileID)
+        if pagedHead != nil { _ = try diaryHead(expectedProfileID: expectedProfileID) }
+        else { _ = try snapshot(expectedProfileID: expectedProfileID) }
         guard epoch == profileSelectionEpoch else { throw DiaryError.wrongOwner }
     }
     func captureCoachTurn(text: String, photos: [MealPhoto], at: Date = Date(), turnID: UUID = UUID(), pendingMealID: UUID? = nil, expectedProfileID: UUID) throws -> CoachTurn {
@@ -748,6 +785,15 @@ actor DiaryStore {
         return String(decoding: value.utf8.prefix(maximumBytes), as: UTF8.self) + "…"
     }
     func setCoachTurnState(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, expectedProfileID: UUID) throws {
+        if pagedHead != nil {
+            let head = try diaryHead(expectedProfileID: expectedProfileID)
+            let database = try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics)
+            let assistantText = state == .completed ? try database.coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID).assistantText : nil
+            let commit = try database.updateCoachTurn(turnID: turnID, state: state, assistantText: assistantText,
+                needsDayChoice: needsDayChoice, expected: head, maximumBytes: maximumFileBytes)
+            pagedHead = commit.head
+            return
+        }
         try transaction(expectedProfileID) { snapshot in
             guard let i = snapshot.coachTurns.firstIndex(where: { $0.id == turnID }) else { throw DiaryError.notFound }
             snapshot.coachTurns[i].state = state
@@ -756,6 +802,14 @@ actor DiaryStore {
         }
     }
     func completeCoachTurn(turnID: UUID, assistantText: String, expectedProfileID: UUID) throws {
+        if pagedHead != nil {
+            let head = try diaryHead(expectedProfileID: expectedProfileID)
+            let commit = try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics).updateCoachTurn(
+                turnID: turnID, state: .completed, assistantText: assistantText, needsDayChoice: false,
+                expected: head, maximumBytes: maximumFileBytes)
+            pagedHead = commit.head
+            return
+        }
         try transaction(expectedProfileID) { snapshot in
             guard let i = snapshot.coachTurns.firstIndex(where: { $0.id == turnID }) else { throw DiaryError.notFound }
             snapshot.coachTurns[i].assistantText = assistantText; snapshot.coachTurns[i].state = .completed

@@ -42,7 +42,7 @@ extension DiaryDatabase {
 
     private func createPagedSchema() throws {
         let statements = [
-            "CREATE TABLE storage_head (id INTEGER PRIMARY KEY CHECK(id = 1), schemaVersion INTEGER NOT NULL, profileID TEXT NOT NULL UNIQUE, profilePayload BLOB NOT NULL, revision INTEGER NOT NULL, lineagePayload BLOB, activeDayID TEXT REFERENCES day(id) DEFERRABLE INITIALLY DEFERRED, previousDayConfirmedAt REAL, timelineGeneration TEXT NOT NULL, nextSequence INTEGER NOT NULL)",
+            "CREATE TABLE storage_head (id INTEGER PRIMARY KEY CHECK(id = 1), schemaVersion INTEGER NOT NULL, profileID TEXT NOT NULL UNIQUE, profilePayload BLOB NOT NULL, revision INTEGER NOT NULL, lineagePayload BLOB, activeDayID TEXT REFERENCES day(id) DEFERRABLE INITIALLY DEFERRED, previousDayConfirmedAt REAL, timelineGeneration TEXT NOT NULL, nextSequence INTEGER NOT NULL, activeConversationSegmentID TEXT)",
             "CREATE TABLE goal (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, effectiveLocalDate TEXT NOT NULL UNIQUE, payload BLOB NOT NULL)",
             "CREATE TABLE weight_tombstone (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)",
             "CREATE TABLE workout_tombstone (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)",
@@ -131,11 +131,13 @@ extension DiaryDatabase {
         try validateDiaryMetadataFields(schemaVersion: metadata.schemaVersion, revision: metadata.revision, profile: metadata.profile,
             lineage: metadata.lineage, previousDayConfirmedAt: metadata.previousDayConfirmedAt)
         try validateDiaryMetadataCollections(goals: metadata.goals, deletedWeightIDs: metadata.deletedWeightIDs, deletedWorkoutIDs: metadata.deletedWorkoutIDs)
-        try execute("INSERT INTO storage_head(id, schemaVersion, profileID, profilePayload, revision, lineagePayload, activeDayID, previousDayConfirmedAt, timelineGeneration, nextSequence) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+        guard metadata.activeConversationSegmentID == nil || metadata.activeDayID != nil else { throw DiaryError.invalidData }
+        try execute("INSERT INTO storage_head(id, schemaVersion, profileID, profilePayload, revision, lineagePayload, activeDayID, previousDayConfirmedAt, timelineGeneration, nextSequence, activeConversationSegmentID) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
             [.integer(metadata.schemaVersion), .text(metadata.profile.id.uuidString), .blob(try JSONEncoder().encode(metadata.profile)),
              .integer(metadata.revision), try metadata.lineage.map { .blob(try JSONEncoder().encode($0)) } ?? .null,
              metadata.activeDayID.map { .text($0.uuidString) } ?? .null,
-             metadata.previousDayConfirmedAt.map { .real($0.timeIntervalSinceReferenceDate) } ?? .null, .text(UUID().uuidString)])
+             metadata.previousDayConfirmedAt.map { .real($0.timeIntervalSinceReferenceDate) } ?? .null, .text(UUID().uuidString),
+             metadata.activeConversationSegmentID.map { .text($0.uuidString) } ?? .null])
         for (ordinal, goal) in metadata.goals.enumerated() {
             let payload = try JSONEncoder().encode(goal)
             try execute("INSERT INTO goal(id, ordinal, effectiveLocalDate, payload) VALUES (?, ?, ?, ?)", [.text(goal.id.uuidString), .integer(ordinal), .text(goal.effectiveLocalDate), .blob(payload)])
@@ -255,6 +257,7 @@ extension DiaryDatabase {
     private func migrateTurns(metadata: DiarySnapshot, days: [UUID: TrackingDay]) throws {
         var sequence = 0
         var priorDayID: UUID?, priorDate: String?, priorZone: String?, segmentID: UUID?
+        var usedSegments = Set<UUID>()
         let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"
         try visitStorageRows("coach_turn") { row in
@@ -271,8 +274,11 @@ extension DiaryDatabase {
             let day = turn.activeDayID.flatMap { days[$0] }
             let date = day?.localDate ?? formatter.string(from: turn.capturedAt)
             let displayZone = day?.timeZoneID ?? turn.captureTimeZoneID
-            if segmentID == nil || priorDayID != turn.activeDayID || priorDate != date || priorZone != displayZone {
-                segmentID = UUID()
+            let matchesPrior = segmentID != nil && priorDayID == turn.activeDayID && priorDate == date && priorZone == displayZone
+            if let explicit = turn.captureSegmentID, explicit == segmentID, !matchesPrior { throw DiaryError.invalidData }
+            if !matchesPrior || (turn.captureSegmentID != nil && turn.captureSegmentID != segmentID) {
+                segmentID = turn.captureSegmentID ?? turn.id
+                guard usedSegments.insert(segmentID!).inserted else { throw DiaryError.invalidData }
                 try execute("INSERT INTO coach_segment(segmentID, trackingDayID, displayLocalDate, displayTimeZoneID, firstTurnID, firstCapturedAt, firstSequence, lastSequence, preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [.text(segmentID!.uuidString), turn.activeDayID.map { .text($0.uuidString) } ?? .null,
                      .text(date), .text(displayZone), .text(turn.id.uuidString), .real(turn.capturedAt.timeIntervalSinceReferenceDate),
@@ -288,6 +294,11 @@ extension DiaryDatabase {
             try migrateTurnLinks(turn, metadata: metadata, days: days, ownPhotos: photoIDs)
         }
         try execute("UPDATE storage_head SET nextSequence = ? WHERE id = 1", [.integer(sequence + 1)])
+        if let raw = metadata.activeConversationSegmentID, let segment = try captureSegment(id: raw) {
+            let day = metadata.activeDayID.flatMap { days[$0] }
+            guard segment.id == segmentID, segment.dayID == day?.id, segment.date == day?.localDate,
+                  segment.zone == day?.timeZoneID else { throw DiaryError.invalidData }
+        }
     }
 
     private func migrateTurnLinks(_ turn: CoachTurn, metadata: DiarySnapshot, days: [UUID: TrackingDay], ownPhotos: Set<UUID>) throws {

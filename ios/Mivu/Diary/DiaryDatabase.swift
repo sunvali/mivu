@@ -7,6 +7,7 @@ final class DiaryDatabase {
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
     let url: URL
     let diagnostics: DiaryQueryDiagnostics?
+    private let openedFileIdentity: UInt64
 
     init(url: URL, create: Bool = false, diagnostics: DiaryQueryDiagnostics? = nil) throws {
         self.url = url; self.diagnostics = diagnostics
@@ -16,6 +17,8 @@ final class DiaryDatabase {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData
         }
+        do { openedFileIdentity = try Self.identity(of: url) }
+        catch { sqlite3_close(connection); connection = nil; throw DiaryError.persistenceFailed }
         do {
             try execute("PRAGMA foreign_keys = ON")
             try execute("PRAGMA journal_mode = DELETE")
@@ -49,6 +52,17 @@ final class DiaryDatabase {
     }
 
     deinit { sqlite3_close(connection) }
+
+    private static func identity(of url: URL) throws -> UInt64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard attributes[.type] as? FileAttributeType == .typeRegular,
+              let inode = attributes[.systemFileNumber] as? NSNumber else { throw DiaryError.persistenceFailed }
+        return inode.uint64Value
+    }
+
+    func validateFileIdentity() throws {
+        guard (try? Self.identity(of: url)) == openedFileIdentity else { throw DiaryError.persistenceFailed }
+    }
 
     func read(maximumBytes: Int) throws -> DiarySnapshot {
         try execute("BEGIN")

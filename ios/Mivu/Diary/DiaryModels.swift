@@ -214,13 +214,15 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     var deletedWeightIDs: [UUID] = []
     var deletedWorkoutIDs: [UUID] = []
     var lineage: [UUID]? = nil
-    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, goals, workouts, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, deletedWeightIDs, deletedWorkoutIDs, lineage }
-    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], goals: [GoalRecord] = [], workouts: [WorkoutSession] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], deletedWeightIDs: [UUID] = [], deletedWorkoutIDs: [UUID] = [], lineage: [UUID]? = nil) {
+    var activeConversationSegmentID: UUID? = nil
+    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, goals, workouts, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, deletedWeightIDs, deletedWorkoutIDs, lineage, activeConversationSegmentID }
+    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], goals: [GoalRecord] = [], workouts: [WorkoutSession] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], deletedWeightIDs: [UUID] = [], deletedWorkoutIDs: [UUID] = [], lineage: [UUID]? = nil, activeConversationSegmentID: UUID? = nil) {
         self.schemaVersion = schemaVersion; self.revision = revision; self.profile = profile
         self.days = days; self.meals = meals; self.weights = weights; self.goals = goals; self.workouts = workouts; self.coachTurns = coachTurns
         self.activeDayID = activeDayID; self.previousDayConfirmedAt = previousDayConfirmedAt
         self.deletedMealIDs = deletedMealIDs; self.deletedWeightIDs = deletedWeightIDs
         self.deletedWorkoutIDs = deletedWorkoutIDs; self.lineage = lineage
+        self.activeConversationSegmentID = activeConversationSegmentID
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -239,6 +241,7 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
         deletedWeightIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedWeightIDs) ?? []
         deletedWorkoutIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedWorkoutIDs) ?? []
         lineage = try c.decodeIfPresent([UUID].self, forKey: .lineage)
+        activeConversationSegmentID = try c.decodeIfPresent(UUID.self, forKey: .activeConversationSegmentID)
     }
     func goal(on localDate: String) -> GoalRecord? {
         goals.filter { $0.effectiveLocalDate <= localDate }.max { $0.effectiveLocalDate < $1.effectiveLocalDate }

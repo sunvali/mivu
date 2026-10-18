@@ -8,6 +8,9 @@ struct DiaryHead: Equatable, Sendable {
     var activeDayID: UUID?
     var previousDayConfirmedAt: Date?
     var timelineGeneration: UUID
+    var activeConversationSegmentID: UUID? = nil
+    /// Derived capture context only; never encoded or persisted as portable metadata by a read/status.
+    var effectiveConversationSegmentID: UUID? = nil
 }
 
 enum DiaryPhotoOwner: Hashable, Sendable { case meal(UUID), coachTurn(UUID) }
@@ -74,6 +77,7 @@ struct DiaryChanges: Equatable, Sendable {
     var workoutIDs: Set<UUID> = []
     var profileReset = false
     var timelineReset = false
+    var coachLatestChanged = false
 }
 
 struct DiaryCommit<Value: Sendable>: Sendable {
