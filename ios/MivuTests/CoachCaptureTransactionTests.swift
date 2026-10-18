@@ -4,6 +4,41 @@ import Testing
 @testable import Mivu
 
 @Suite struct CoachCaptureTransactionTests {
+    @Test func connectionBoundaryRejectsIdenticalReplacementAfterSelectionCheck() async throws {
+        let fixture = try CaptureFixture(); defer { fixture.remove() }
+        let store = DiaryStore(directory: fixture.root)
+        let head = try await store.selectPagedProfile(fixture.profileID)
+        let identity = try #require(FileManager.default.attributesOfItem(atPath: fixture.url.path)[.systemFileNumber] as? NSNumber).uint64Value
+        let payload = try fixture.payload(head: head, photos: [fixture.photo()])
+        // Reproduce the exact boundary: selection check succeeds, then an identical new inode replaces it.
+        #expect(try await store.diaryHead(expectedProfileID: fixture.profileID) == head)
+        let before = try fixture.durableState()
+        let replacement = fixture.root.appending(path: "replacement.sqlite")
+        let original = fixture.root.appending(path: "preserved-original.sqlite")
+        try FileManager.default.copyItem(at: fixture.url, to: replacement)
+        try FileManager.default.moveItem(at: fixture.url, to: original)
+        try FileManager.default.moveItem(at: replacement, to: fixture.url)
+        let replacementIdentity = try #require(FileManager.default.attributesOfItem(atPath: fixture.url.path)[.systemFileNumber] as? NSNumber).uint64Value
+        #expect(replacementIdentity != identity)
+        #expect(try fixture.durableState(databaseURL: original) == before)
+        #expect(try fixture.durableState() == before)
+        var acknowledgements = 0
+        do {
+            let database = try DiaryDatabase(url: fixture.url, expectedFileIdentity: identity)
+            _ = try database.captureCoachSubmission(payload, expected: head, maximumBytes: ChatHistoryFixture.maximumBytes)
+            acknowledgements += 1
+        } catch { #expect(error as? DiaryError == .persistenceFailed) }
+        #expect(acknowledgements == 0)
+        #expect(try fixture.durableState(databaseURL: original) == before)
+        #expect(try fixture.durableState() == before)
+        try FileManager.default.removeItem(at: fixture.url)
+        #expect(throws: DiaryError.persistenceFailed) {
+            try DiaryDatabase(url: fixture.url, create: true, expectedFileIdentity: identity)
+        }
+        #expect(!FileManager.default.fileExists(atPath: fixture.url.path))
+        #expect(try fixture.durableState(databaseURL: original) == before)
+    }
+
     @Test func captureAppendsWithoutReadingOrReplacingHistory() async throws {
         let fixture = try CaptureFixture(exchanges: 9_999)
         defer { fixture.remove() }
@@ -253,7 +288,7 @@ struct CaptureFixture {
                 timeZoneID: head.profile.timeZoneID, activeDayID: head.activeDayID, previousDayConfirmedAt: head.previousDayConfirmedAt,
                 activeConversationSegmentID: head.effectiveConversationSegmentID))
     }
-    func durableState() throws -> [[[String]]] {
+    func durableState(databaseURL: URL? = nil) throws -> [[[String]]] {
         try ["storage_head", "coach_turn", "coach_photo", "photo", "coach_index", "coach_segment", "photo_content", "photo_consumer", "storage_contribution", "storage_row_count", "storage_quota"].map { table in
             let columns: String
             switch table {
@@ -262,7 +297,7 @@ struct CaptureFixture {
             case "photo", "coach_photo": columns = "id, parent, ordinal, hex(payload), hex(bytes)"
             default: columns = "*"
             }
-            return try rows("SELECT \(columns) FROM \(table) ORDER BY rowid")
+            return try ChatHistoryFixture.strings(databaseURL ?? url, "SELECT \(columns) FROM \(table) ORDER BY rowid")
         }
     }
 }

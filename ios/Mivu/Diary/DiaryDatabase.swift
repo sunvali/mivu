@@ -9,15 +9,21 @@ final class DiaryDatabase {
     let diagnostics: DiaryQueryDiagnostics?
     private let openedFileIdentity: UInt64
 
-    init(url: URL, create: Bool = false, diagnostics: DiaryQueryDiagnostics? = nil) throws {
+    init(url: URL, create: Bool = false, diagnostics: DiaryQueryDiagnostics? = nil, expectedFileIdentity: UInt64? = nil) throws {
         self.url = url; self.diagnostics = diagnostics
+        if let expectedFileIdentity {
+            guard (try? Self.identity(of: url)) == expectedFileIdentity else { throw DiaryError.persistenceFailed }
+        }
         guard create || FileManager.default.fileExists(atPath: url.path) else { throw DiaryError.persistenceFailed }
         let flags = SQLITE_OPEN_READWRITE | (create ? SQLITE_OPEN_CREATE : 0)
         guard sqlite3_open_v2(url.path, &connection, flags, nil) == SQLITE_OK else {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData
         }
-        do { openedFileIdentity = try Self.identity(of: url) }
+        do {
+            openedFileIdentity = try Self.identity(of: url)
+            guard expectedFileIdentity == nil || openedFileIdentity == expectedFileIdentity else { throw DiaryError.persistenceFailed }
+        }
         catch { sqlite3_close(connection); connection = nil; throw DiaryError.persistenceFailed }
         do {
             try execute("PRAGMA foreign_keys = ON")

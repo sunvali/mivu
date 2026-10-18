@@ -21,7 +21,7 @@ actor DiaryStore {
     /// Component-only selection; automatic migration and shipping selection activate together later.
     func selectPagedProfile(_ id: UUID) throws -> DiaryHead {
         let identity = try fileIdentity(file(id))
-        let head = try DiaryDatabase(url: file(id), diagnostics: diagnostics).readHead(expectedProfileID: id)
+        let head = try DiaryDatabase(url: file(id), diagnostics: diagnostics, expectedFileIdentity: identity).readHead(expectedProfileID: id)
         guard try fileIdentity(file(id)) == identity else { throw DiaryError.persistenceFailed }
         current = nil; pagedHead = head; fileIdentities[id] = identity
         profileSelectionEpoch &+= 1
@@ -34,17 +34,24 @@ actor DiaryStore {
         return head
     }
     func captureCoachSubmission(_ payload: CoachSubmissionPayload, expectedProfileID: UUID) throws -> CoachExchangeSummary {
-        let head = try diaryHead(expectedProfileID: expectedProfileID)
-        let commit = try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics)
-            .captureCoachSubmission(payload, expected: head, maximumBytes: maximumFileBytes)
+        let (database, head) = try pagedConnection(expectedProfileID: expectedProfileID)
+        let commit = try database.captureCoachSubmission(payload, expected: head, maximumBytes: maximumFileBytes)
         pagedHead = commit.head
         return commit.value
     }
     func reconcileCoachCapture(submissionID: UUID, expectedManifest: CoachSubmissionManifest,
                                expectedProfileID: UUID) throws -> CoachCaptureReconciliation {
-        _ = try diaryHead(expectedProfileID: expectedProfileID)
-        return try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics).reconcileCoachCapture(
+        let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+        return try database.reconcileCoachCapture(
             submissionID: submissionID, expectedManifest: expectedManifest, expectedProfileID: expectedProfileID)
+    }
+
+    /// Bind every new staged connection to this selection, including replacement during construction.
+    func pagedConnection(expectedProfileID: UUID) throws -> (database: DiaryDatabase, head: DiaryHead) {
+        let head = try diaryHead(expectedProfileID: expectedProfileID)
+        guard let identity = fileIdentities[expectedProfileID] else { throw DiaryError.persistenceFailed }
+        let database = try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics, expectedFileIdentity: identity)
+        return (database, head)
     }
 
     func profiles() throws -> [DiaryProfile] {
@@ -786,8 +793,7 @@ actor DiaryStore {
     }
     func setCoachTurnState(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, expectedProfileID: UUID) throws {
         if pagedHead != nil {
-            let head = try diaryHead(expectedProfileID: expectedProfileID)
-            let database = try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics)
+            let (database, head) = try pagedConnection(expectedProfileID: expectedProfileID)
             let assistantText = state == .completed ? try database.coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID).assistantText : nil
             let commit = try database.updateCoachTurn(turnID: turnID, state: state, assistantText: assistantText,
                 needsDayChoice: needsDayChoice, expected: head, maximumBytes: maximumFileBytes)
@@ -803,8 +809,8 @@ actor DiaryStore {
     }
     func completeCoachTurn(turnID: UUID, assistantText: String, expectedProfileID: UUID) throws {
         if pagedHead != nil {
-            let head = try diaryHead(expectedProfileID: expectedProfileID)
-            let commit = try DiaryDatabase(url: file(expectedProfileID), diagnostics: diagnostics).updateCoachTurn(
+            let (database, head) = try pagedConnection(expectedProfileID: expectedProfileID)
+            let commit = try database.updateCoachTurn(
                 turnID: turnID, state: .completed, assistantText: assistantText, needsDayChoice: false,
                 expected: head, maximumBytes: maximumFileBytes)
             pagedHead = commit.head
