@@ -4,6 +4,14 @@ import Testing
 @testable import Mivu
 
 @Suite @MainActor struct DiaryDatabaseTests {
+    @Test func ordinaryProfileCreationAndSelectionDoNotActivatePagedStorage() async throws {
+        let root = directory(); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root), profile = DiaryProfile(name: "Synthetic staged storage")
+        _ = try await store.createProfile(profile)
+        _ = try await store.selectProfile(profile.id)
+        #expect(try ChatHistoryFixture.strings(file(root, profile.id), "PRAGMA user_version") == [["0"]])
+        #expect(try ChatHistoryFixture.strings(file(root, profile.id), "SELECT name FROM sqlite_master WHERE name = 'storage_head'").isEmpty)
+    }
     private func directory() -> URL { URL.temporaryDirectory.appending(path: "Database-" + UUID().uuidString) }
     private func file(_ root: URL, _ id: UUID, _ ext: String = "sqlite") -> URL { ext == "sqlite" ? root.appendingPathComponent(id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite") : root.appendingPathComponent(id.uuidString + "." + ext) }
     private func legacy(_ root: URL) throws -> DiarySnapshot {
