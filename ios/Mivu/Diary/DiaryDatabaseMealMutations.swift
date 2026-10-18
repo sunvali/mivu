@@ -9,8 +9,10 @@ extension DiaryDatabase {
             let projection = try day.map { try transaction.dayProjection($0) }
             let pending = try mutationInteger("SELECT COUNT(*) FROM submission WHERE json_extract(CAST(payload AS TEXT), '$.state') IN ('captured','waitingForConnection','analyzing','needsRetry')")
                 + mutationInteger("SELECT COUNT(*) FROM coach_index WHERE pendingMealID IS NULL AND state IN ('captured','analyzing','waitingForConnection','waitingForNetwork','needsRetry','needsClarification')")
+            let activePending = try day.map { day in try mutationInteger("SELECT EXISTS(SELECT 1 FROM coach_turn WHERE COALESCE(json_extract(CAST(payload AS TEXT), '$.resolvedDayID'), json_extract(CAST(payload AS TEXT), '$.activeDayID')) = ? AND json_extract(CAST(payload AS TEXT), '$.state') != 'completed')", [.text(day.id.uuidString)]) > 0 } ?? false
             return DiaryReadModel(head: head, activeDay: day, meals: projection?.meals ?? [], weight: projection?.weight,
-                workouts: projection?.workouts ?? [], activeGoal: try transaction.goal(on: day?.localDate ?? diaryDateLabel(Date(), zone: head.profile.timeZoneID)), pendingAnalysisCount: pending)
+                workouts: projection?.workouts ?? [], activeGoal: try transaction.goal(on: day?.localDate ?? diaryDateLabel(Date(), zone: head.profile.timeZoneID)), pendingAnalysisCount: pending,
+                hasPendingOnActiveDay: activePending || projection?.meals.contains(where: \.hasUnresolvedInput) == true)
         }
     }
     func diaryDay(id: UUID, expectedProfileID: UUID) throws -> DiaryDayReadModel {
@@ -35,17 +37,18 @@ extension DiaryDatabase {
             return bytes
         }
     }
-    func diaryHistory(before: DiaryHistoryCursor? = nil, limit: Int = 30, recordedOnly: Bool = false, expectedProfileID: UUID) throws -> DiaryHistoryPage {
+    func diaryHistory(before: DiaryHistoryCursor? = nil, limit: Int = 30, recordedOnly: Bool = false, localDate: String? = nil, expectedProfileID: UUID) throws -> DiaryHistoryPage {
         try domainRead(expectedProfileID: expectedProfileID) { head in
             guard limit > 0, limit <= 30 else { throw DiaryError.invalidData }
             let identity = CoachTimelineIdentity(profileID: head.profile.id, timelineGeneration: head.timelineGeneration)
             var clauses: [String] = [], values: [Value] = []
             if let before {
                 guard before.identity == identity else { throw CoachQueryError.wrongTimeline }
-                guard before.recordedOnly == recordedOnly else { throw CoachQueryError.invalidCursor }
+                guard before.recordedOnly == recordedOnly, before.localDate == localDate else { throw CoachQueryError.invalidCursor }
                 guard try mutationInteger("SELECT COUNT(*) FROM day WHERE id = ? AND ordinal = ?", [.text(before.dayID.uuidString), .integer(before.ordinal)]) == 1 else { throw CoachQueryError.invalidCursor }
                 clauses.append("(d.ordinal, d.id) < (?, ?)"); values += [.integer(before.ordinal), .text(before.dayID.uuidString)]
             }
+            if let localDate { guard validLocalDate(localDate) else { throw DiaryError.invalidData }; clauses.append("json_extract(CAST(d.payload AS TEXT), '$.localDate') = ?"); values.append(.text(localDate)) }
             if recordedOnly { clauses.append("(json_extract(CAST(d.payload AS TEXT), '$.completeness') = 'complete' OR EXISTS (SELECT 1 FROM meal m WHERE m.parent = d.id AND json_extract(CAST(m.payload AS TEXT), '$.revision') > 0))") }
             let statement = try domainStatement("SELECT d.id, d.ordinal, d.payload FROM day d \(clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ")) ORDER BY d.ordinal DESC, d.id DESC LIMIT ?", values + [.integer(limit + 1)])
             defer { sqlite3_finalize(statement) }
@@ -60,7 +63,7 @@ extension DiaryDatabase {
             let hasMore = rows.count > limit
             if hasMore { rows.removeLast() }
             let days = try rows.map { try transaction.daySummary($0.day) }
-            return DiaryHistoryPage(days: days, cursor: rows.last.map { DiaryHistoryCursor(identity: identity, ordinal: $0.ordinal, dayID: $0.day.id, recordedOnly: recordedOnly) }, hasMore: hasMore)
+            return DiaryHistoryPage(days: days, cursor: rows.last.map { DiaryHistoryCursor(identity: identity, ordinal: $0.ordinal, dayID: $0.day.id, recordedOnly: recordedOnly, localDate: localDate) }, hasMore: hasMore)
         }
     }
     func startDay(at: Date, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<TrackingDay> {

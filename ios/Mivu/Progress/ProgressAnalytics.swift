@@ -50,6 +50,12 @@ struct WeightProgress: Codable, Equatable, Sendable {
 }
 
 enum ProgressAnalytics {
+    static func daily(readModel: DiaryReadModel) -> DailyProgress {
+        let burn = readModel.workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? readModel.workouts.reduce(0) { $0 + ($1.estimatedBurnKcal ?? 0) } : nil
+        return daily(localDate: readModel.activeDay?.localDate ?? dateLabel(Date(), zone: readModel.profile.timeZoneID),
+            days: readModel.activeDay.map { [$0] } ?? [], subtotals: readModel.activeDay == nil ? [] : [readModel.totals],
+            hasPending: readModel.hasPendingOnActiveDay, goal: readModel.activeGoal, workoutCount: readModel.workouts.count, estimatedBurnKcal: burn)
+    }
     static func daily(snapshot: DiarySnapshot, localDate: String) -> DailyProgress {
         let days = snapshot.days.filter { $0.localDate == localDate }
         let dayIDs = Set(days.map(\.id))

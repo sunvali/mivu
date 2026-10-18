@@ -24,7 +24,7 @@ struct DiaryBackupSettings: View {
     @State private var exported = false
     var body: some View {
         Group {
-            if model.snapshot != nil {
+            if model.readModel != nil {
             if model.backupStatus.configured {
                 if let date = model.backupStatus.savedAt {
                     VStack(alignment: .leading, spacing: 8) {
@@ -38,14 +38,24 @@ struct DiaryBackupSettings: View {
                          : "Backup pending. Check that the folder is available, then retry. Your local diary is saved.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
-                Button("Retry backup") { model.queueBackup() }.frame(minHeight: 44)
+                Button("Retry backup") { model.retryBackup() }.frame(minHeight: 44)
             } else { Text("No backup folder selected").foregroundStyle(Color.diarySecondary) }
             Button("Choose private backup folder") { folderPicker = true }.frame(minHeight: 44)
             Text("Choose a private Files folder, including iCloud Drive when available. Folder acknowledgement does not confirm remote upload.").font(.subheadline).foregroundStyle(Color.diarySecondary)
             Button("Export diary and photos") {
-                guard let snapshot = model.snapshot else { return }
-                do { exportDocument = DiaryExportDocument(data: try DiaryArchive.encode(snapshot)); exportPicker = true }
-                catch { model.errorMessage = "Could not prepare an export. Your local diary is preserved." }
+                guard let token = model.selection else { return }
+                Task {
+                    do {
+                        let request = try await model.store.exportRequest(expectedProfileID: token.identity.profileID)
+                        let ticket = try await model.exportCoordinator.makeClone(request)
+                        do {
+                            let data = try await model.exportCoordinator.archiveData(ticket)
+                            try await model.exportCoordinator.release(ticket)
+                            guard model.selection == token else { return }
+                            exportDocument = DiaryExportDocument(data: data); exportPicker = true
+                        } catch { try? await model.exportCoordinator.release(ticket); throw error }
+                    } catch { model.errorMessage = "Could not prepare an export. Your local diary is preserved." }
+                }
             }.frame(minHeight: 44)
             if exported { Label("Export saved", systemImage: "checkmark.circle").font(.subheadline) }
             }
@@ -66,7 +76,7 @@ struct DiaryBackupSettings: View {
                     defer { importing = false }
                     do {
                         let archive = try await Task.detached { try DiaryArchive.read(url) }.value
-                        guard !model.profiles.contains(where: { $0.id == archive.profile.id }) || model.snapshot?.profile.id == archive.profile.id else {
+                        guard !model.profiles.contains(where: { $0.id == archive.profile.id }) || model.readModel?.profile.id == archive.profile.id else {
                             model.errorMessage = "This archive belongs to another local profile. Select that profile before restoring."; return
                         }
                         imported = archive; confirmRestore = true
@@ -85,7 +95,7 @@ struct DiaryBackupSettings: View {
             Button("Restore diary", role: .destructive) { if let archive = imported { Task { if await model.importArchive(archive) { imported = nil } } } }
             Button("Cancel", role: .cancel) { imported = nil }
         } message: {
-            if imported?.profile.id == model.snapshot?.profile.id { Text("Replace \(model.snapshot?.profile.name ?? "the selected profile") with \(imported?.profile.name ?? "the validated archive") (\(imported?.meals.count ?? 0) meals). Older or deleted records cannot overwrite newer changes.") }
+            if imported?.profile.id == model.readModel?.profile.id { Text("Replace \(model.readModel?.profile.name ?? "the selected profile") with \(imported?.profile.name ?? "the validated archive") (\(imported?.meals.count ?? 0) meals). Older or deleted records cannot overwrite newer changes.") }
             else { Text("Import \(imported?.profile.name ?? "the archived profile") (\(imported?.meals.count ?? 0) meals) as a separate private local diary. The selected profile is preserved.") }
         }
     }

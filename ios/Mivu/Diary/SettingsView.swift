@@ -33,14 +33,14 @@ struct SettingsView: View {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.largeTitle).foregroundStyle(Color.diaryProtein).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(model.snapshot?.profile.name ?? "Local profiles").font(.title3.weight(.semibold))
+                            Text(model.readModel?.profile.name ?? "Local profiles").font(.title3.weight(.semibold))
                             Text("Private diary on this iPhone").font(.subheadline).foregroundStyle(Color.diarySecondary)
                         }
                     }.frame(minHeight: 72)
                 }.accessibilityIdentifier("localProfiles")
             }
             companionSection
-            if model.snapshot != nil {
+            if model.readModel != nil {
                 Section("Setup") {
                     Button { showGoals = true } label: { settingsRow("Goals", symbol: "scope", color: .diaryAccent) }
                         .accessibilityIdentifier("editGoals")
@@ -93,9 +93,9 @@ struct SettingsView: View {
             .environment(\.layoutDirection, .leftToRight)
         }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
-        .onChange(of: model.snapshot?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
-        .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.snapshot?.profile, restoreGeneration: model.restoreGeneration) }
-        .confirmationDialog("Delete \(model.snapshot?.profile.name ?? "this private local profile")?", isPresented: $showDelete, titleVisibility: .visible) {
+        .onChange(of: model.readModel?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
+        .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.readModel?.profile, restoreGeneration: model.restoreGeneration) }
+        .confirmationDialog("Delete \(model.readModel?.profile.name ?? "this private local profile")?", isPresented: $showDelete, titleVisibility: .visible) {
             Button("Delete profile", role: .destructive) { Task { await model.deleteCurrentProfile() } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("This removes the selected profile's meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved.") }
@@ -144,19 +144,19 @@ struct SettingsView: View {
             switch section {
             case .profiles:
             Section("Private local profile") {
-                if let profile = model.snapshot?.profile { Text(profile.name).font(.headline) }
+                if let profile = model.readModel?.profile { Text(profile.name).font(.headline) }
                 Text("Profiles are separate private diaries on this iPhone. Keep a backup folder or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 ForEach(model.profiles) { profile in
                     Button { Task { await model.switchProfile(profile.id) } } label: {
-                        HStack { Text(profile.name); Spacer(); if model.snapshot?.profile.id == profile.id { Image(systemName: "checkmark").accessibilityLabel("Selected profile") } }
+                        HStack { Text(profile.name); Spacer(); if model.readModel?.profile.id == profile.id { Image(systemName: "checkmark").accessibilityLabel("Selected profile") } }
                     }.frame(minHeight: 44)
                 }
                 Button("Create local profile") { creatingProfile = true }.frame(minHeight: 44)
-                if model.snapshot != nil { Button("Sign out of local profile") { Task { await model.signOut() } }.frame(minHeight: 44) }
+                if model.readModel != nil { Button("Sign out of local profile") { Task { await model.signOut() } }.frame(minHeight: 44) }
             }
 
             case .preferences:
-                if let profile = model.snapshot?.profile {
+                if let profile = model.readModel?.profile {
                 Section("Diary preferences") {
                     TextField("Timezone", text: $fields.timezone).autocorrectionDisabled().textInputAutocapitalization(.never)
                     TextField("Dietary preferences and restrictions", text: $fields.preferences, axis: .vertical).lineLimit(3...6).accessibilityIdentifier("dietaryPreferences")
@@ -164,7 +164,7 @@ struct SettingsView: View {
                     Button("Save preferences") {
                         Task {
                             do {
-                                let latest = try await model.store.snapshot(expectedProfileID: profile.id).profile
+                                let latest = try await model.store.diaryHead(expectedProfileID: profile.id).profile
                                 guard !fields.conflicts(with: latest) else {
                                     fields.synchronize(latest, restoreGeneration: model.restoreGeneration)
                                     try await model.refresh(profileID: profile.id)
@@ -178,7 +178,7 @@ struct SettingsView: View {
                     if fields.hasConflict {
                         Text("These settings changed while you were editing. Your draft is preserved.")
                             .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                        Button("Use latest saved settings") { fields.useSaved(model.snapshot?.profile) }
+                        Button("Use latest saved settings") { fields.useSaved(model.readModel?.profile) }
                             .frame(minHeight: 44)
                     }
                     Text("Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use.").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -242,10 +242,10 @@ struct SettingsView: View {
             Button("Create") {
                 let name = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { return }
-                let previousProfileID = model.snapshot?.profile.id
+                let previousProfileID = model.readModel?.profile.id
                 Task {
                     await model.createProfile(name: name)
-                    guard let profile = model.snapshot?.profile,
+                    guard let profile = model.readModel?.profile,
                           profile.id != previousProfileID,
                           profile.name == name else { return }
                     profileName = ""

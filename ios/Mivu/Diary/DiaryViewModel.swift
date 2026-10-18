@@ -1,28 +1,38 @@
 import Foundation
 import Observation
+import UIKit
 
-struct MealDraft {
-    let submissionID = UUID()
+struct MealDraft: Equatable {
+    var submissionID = UUID()
     var text = ""
     var photos: [Data] = []
     var reviewFirst = false
     var isValid: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty }
 }
 
-@MainActor @Observable
-final class DiaryViewModel {
+@MainActor @Observable final class DiaryViewModel {
     let store: DiaryStore
     let sampleMode: Bool
-    var resumeCoach: (() -> Void)?
-    var retryCoachMeal: ((UUID) -> Void)?
-    private let profileSelection: @Sendable (UUID) async throws -> DiarySnapshot
-    private let snapshotLoading: @Sendable (UUID) async throws -> DiarySnapshot
+    let photoWorkLimiter: PhotoWorkLimiter
+    let exportCoordinator: DiaryExportCoordinator
+    private let profileSelection: @Sendable (UUID) async throws -> DiaryReadModel
+    // Foreground actions have their own load boundary; subscriber loads are independent.
+    private let actionReadModelLoading: @Sendable (UUID) async throws -> DiaryReadModel
     private let preferences: UserDefaults?
     let backup: FolderBackup?
-    var backupStatus = FolderBackupStatus()
-    private var backupTask: Task<Void, Never>?
-    private var backupGeneration: UUID?
-    var snapshot: DiarySnapshot?
+    private(set) var readModel: DiaryReadModel?
+    private(set) var latestCoachPage: CoachPage?
+    private(set) var selection: DiarySelectionOwnership?
+    private(set) var workStatus = CoachWorkStatus()
+    private(set) var photoLoader: DiaryPhotoLoader?
+    private(set) var photoRequestGeneration: UInt64 = 0
+    private(set) var changeGeneration: UInt64 = 0
+    private(set) var savedMealID: UUID?
+    private var manualCaptureAttempt: (selection: DiarySelectionOwnership, draft: MealDraft, photos: [MealPhoto], isNew: Bool)?
+    private var exactMeals: [UUID: MealReadModel] = [:]
+    private var exactDays: [UUID: DiaryDayReadModel] = [:]
+    var resumeCoach: (() -> Void)?
+    var retryCoachMeal: ((UUID) -> Void)?
     var profiles: [DiaryProfile] = []
     var errorMessage: String?
     var isSaving = false
@@ -32,270 +42,292 @@ final class DiaryViewModel {
     private(set) var companionReviewEvent: CompanionEvent?
     private var companionReviewSubmissions: [UUID: Set<UUID>] = [:]
     var restoreGeneration = 0
+    var backupStatus = FolderBackupStatus()
+    private var backupGeneration: UUID?
+    private var backupTask: Task<Void, Never>?
+    private var backupTaskID: UUID?
+    private var backupRequested: (DiarySelectionOwnership, Int, UUID)?
+    private var backupScheduledRevision: Int?
+    private var changesTask: Task<Void, Never>?
     private var worker: Task<Void, Never>?
     private var workerID: UUID?
+    @ObservationIgnored private var memoryTask: Task<Void, Never>?
 
-    init(store: DiaryStore, sampleMode: Bool = false, preferences: UserDefaults? = nil, backup: FolderBackup? = nil, profileSelection: (@Sendable (UUID) async throws -> DiarySnapshot)? = nil, snapshotLoading: (@Sendable (UUID) async throws -> DiarySnapshot)? = nil) {
+    init(store: DiaryStore, sampleMode: Bool = false, preferences: UserDefaults? = nil, backup: FolderBackup? = nil,
+         profileSelection: (@Sendable (UUID) async throws -> DiaryReadModel)? = nil,
+         actionReadModelLoading: (@Sendable (UUID) async throws -> DiaryReadModel)? = nil,
+         photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil) {
         self.store = store; self.sampleMode = sampleMode; self.preferences = preferences; self.backup = backup
         self.profileSelection = profileSelection ?? { try await store.selectProfile($0) }
-        self.snapshotLoading = snapshotLoading ?? { try await store.snapshot(expectedProfileID: $0) }
+        self.actionReadModelLoading = actionReadModelLoading ?? { try await store.diaryReadModel(expectedProfileID: $0) }
+        self.photoWorkLimiter = photoWorkLimiter; self.exportCoordinator = exportCoordinator ?? DiaryExportCoordinator(store: store)
+        memoryTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.didReceiveMemoryWarningNotification) {
+                guard let self, !Task.isCancelled else { return }
+                await self.photoLoader?.purgeForMemoryPressure(); self.photoRequestGeneration &+= 1
+            }
+        }
     }
-
+    deinit { memoryTask?.cancel() }
     static func local() -> DiaryViewModel {
         let directory = DiaryLaunch.directory
-        return DiaryViewModel(store: DiaryStore(directory: directory), sampleMode: DiaryLaunch.isSampleMode, preferences: DiaryLaunch.defaults, backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)))
+        return DiaryViewModel(store: DiaryStore(directory: directory), sampleMode: DiaryLaunch.isSampleMode, preferences: DiaryLaunch.defaults,
+            backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)))
     }
-
-    var activeDay: TrackingDay? { snapshot?.days.first { $0.id == snapshot?.activeDayID } }
-    var todaysMeals: [DiaryMeal] { snapshot?.meals.filter { $0.dayID == activeDay?.id }.sorted { $0.capturedAt > $1.capturedAt } ?? [] }
-    func meal(_ id: UUID) -> DiaryMeal? { snapshot?.meals.first { $0.id == id } }
-
+    var activeDay: TrackingDay? { readModel?.activeDay }
+    var todaysMeals: [MealReadModel] { readModel?.meals.sorted { $0.capturedAt > $1.capturedAt } ?? [] }
+    func meal(_ id: UUID) -> MealReadModel? { readModel?.meals.first { $0.id == id } ?? exactMeals[id] }
+    func day(_ id: UUID) -> TrackingDay? { activeDay?.id == id ? activeDay : exactDays[id]?.day }
+    func dayDetail(_ id: UUID) -> DiaryDayReadModel? { exactDays[id] }
+    func loadMeal(_ id: UUID) async {
+        guard let token = selection else { return }
+        do {
+            let value = try await store.meal(id: id, expectedProfileID: token.identity.profileID)
+            let day = try await store.diaryDay(id: value.dayID, expectedProfileID: token.identity.profileID)
+            guard selection == token else { return }
+            if exactMeals.count >= 30 { exactMeals = [:] }; if exactDays.count >= 30 { exactDays = [:] }
+            exactMeals[id] = value; exactDays[day.day.id] = day
+        } catch DiaryError.notFound { if selection == token { exactMeals[id] = nil } }
+        catch { if selection == token { present(error) } }
+    }
+    func loadDay(_ id: UUID) async {
+        guard let token = selection else { return }
+        do { let value = try await store.diaryDay(id: id, expectedProfileID: token.identity.profileID)
+            guard selection == token else { return }; if exactDays.count >= 30 { exactDays = [:] }; exactDays[id] = value
+        } catch { if selection == token { present(error) } }
+    }
     func load(createDefaultProfile: Bool = true) async {
         guard beginProfileTransition() else { return }
-        let previous = snapshot
+        let previous = readModel?.head.profile.id
         defer { finishProfileTransition() }
         do {
             profiles = try await store.profiles()
             if preferences?.bool(forKey: "diarySignedOut") == true { await clearProfileSelection(); return }
-            let selected: DiarySnapshot
-            if let currentID = snapshot?.profile.id {
-                selected = try await profileSelection(currentID)
-            } else if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
-                selected = try await profileSelection(profile.id)
-            } else {
-                guard createDefaultProfile else { return }
-                selected = try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language))
+            if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
+                try await install(try await profileSelection(profile.id))
+            } else if createDefaultProfile {
+                try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language)))
                 profiles = try await store.profiles()
             }
-            await selectBackupProfile(selected.profile.id)
-            snapshot = selected
-            rememberSelection()
         } catch { await recoverProfileSelection(previous); present(error) }
     }
-
-    func refresh(profileID: UUID) async throws {
-        let updated = try await snapshotLoading(profileID)
-        guard !isChangingProfile, snapshot?.profile.id == profileID else { return }
-        snapshot = updated
-        if let index = profiles.firstIndex(where: { $0.id == profileID }) { profiles[index] = updated.profile }
-        else { profiles.append(updated.profile) }
+    private func install(_ initial: DiaryReadModel) async throws {
+        let owner = initial.head.profile.id, token = try await store.selectionOwnership(expectedProfileID: initial.head.profile.id)
+        changesTask?.cancel()
+        let stream = await store.changes(expectedProfileID: owner)
+        let scope = DiaryPhotoScope(identity: token.identity, selectionEpoch: token.selectionEpoch)
+        if let photoLoader { await photoLoader.reset(to: scope) }
+        else {
+            let store = store
+            photoLoader = DiaryPhotoLoader(scope: scope, limiter: photoWorkLimiter, reader: { reference, scope in
+                try await store.validateSelection(epoch: scope.selectionEpoch, expectedProfileID: scope.identity.profileID)
+                guard try await store.diaryHead(expectedProfileID: scope.identity.profileID).timelineGeneration == scope.identity.timelineGeneration else { throw DiaryError.wrongOwner }
+                let bytes = try await store.photoContent(reference, expectedProfileID: scope.identity.profileID)
+                try await store.validateSelection(epoch: scope.selectionEpoch, expectedProfileID: scope.identity.profileID)
+                guard try await store.diaryHead(expectedProfileID: scope.identity.profileID).timelineGeneration == scope.identity.timelineGeneration else { throw DiaryError.wrongOwner }
+                return bytes
+            })
+        }
+        let current = try await store.diaryReadModel(expectedProfileID: owner)
+        let page = try await store.coachPage(.latest, expectedProfileID: owner)
+        let status = try await store.coachWorkStatus(expectedProfileID: owner)
+        try await store.validateSelection(epoch: token.selectionEpoch, expectedProfileID: owner)
+        selection = token; exactMeals = [:]; exactDays = [:]; savedMealID = nil; manualCaptureAttempt = nil
+        photoRequestGeneration &+= 1; changeGeneration &+= 1
+        readModel = current; latestCoachPage = page; workStatus = status
+        await selectBackupProfile(owner); rememberSelection()
+        changesTask = Task { [weak self] in
+            for await changes in stream {
+                guard let self, !Task.isCancelled, !self.isChangingProfile, self.selection == token else { return }
+                do { try await self.refresh(profileID: owner, changes: changes) }
+                catch { if !self.isChangingProfile, self.selection == token { self.present(error) } }
+            }
+        }
+    }
+    func refresh(profileID: UUID) async throws { try await refresh(profileID: profileID, changes: nil) }
+    private func refresh(profileID: UUID, changes: DiaryChanges?) async throws {
+        guard let token = selection, token.identity.profileID == profileID else { return }
+        let updated = try await (changes == nil ? actionReadModelLoading(profileID) : store.diaryReadModel(expectedProfileID: profileID))
+        guard !isChangingProfile, selection == token else { return }
+        guard updated.head.timelineGeneration == token.identity.timelineGeneration,
+              updated.head.revision >= (readModel?.head.revision ?? 0) else { return }
+        if updated.head.revision == readModel?.head.revision { return }
+        let page = try await store.coachPage(.latest, expectedProfileID: profileID)
+        let status = try await store.coachWorkStatus(expectedProfileID: profileID)
+        let invalidation = changes ?? DiaryChanges(mealIDs: Set(updated.meals.map(\.id)).union(exactMeals.keys), turnIDs: Set(page.exchanges.map(\.id)))
+        await photoLoader?.invalidate(invalidation)
+        var meals: [UUID: MealReadModel] = [:], days: [UUID: DiaryDayReadModel] = [:]
+        for id in exactMeals.keys { do { meals[id] = try await store.meal(id: id, expectedProfileID: profileID) } catch DiaryError.notFound {} }
+        for id in exactDays.keys { do { days[id] = try await store.diaryDay(id: id, expectedProfileID: profileID) } catch DiaryError.notFound {} }
+        guard !isChangingProfile, selection == token, updated.head.revision >= (readModel?.head.revision ?? 0) else { return }
+        photoRequestGeneration &+= 1; changeGeneration &+= 1
+        readModel = updated; latestCoachPage = page; workStatus = status; exactMeals = meals; exactDays = days
+        if let index = profiles.firstIndex(where: { $0.id == profileID }) { profiles[index] = updated.head.profile }
         queueBackup()
     }
-
-    @discardableResult
-    func change(_ operation: () async throws -> Void) async -> Bool {
-        guard !isChangingProfile, let owner = snapshot?.profile.id else { return false }
-        do {
-            try await operation()
-            try await refresh(profileID: owner)
-            return true
-        } catch { if snapshot?.profile.id == owner { present(error) }; return false }
+    @discardableResult func change(_ operation: () async throws -> Void) async -> Bool {
+        guard !isChangingProfile, let token = selection else { return false }
+        do { try await operation(); try await refresh(profileID: token.identity.profileID); return !Task.isCancelled && selection == token }
+        catch { if selection == token { present(error) }; return false }
     }
-
-    @discardableResult
-    func acceptReview(mealID: UUID, submissionID: UUID, expectedProfileID: UUID, currentTime: () -> Date = Date.init) async -> Bool {
-        guard !Task.isCancelled, !isChangingProfile, snapshot?.profile.id == expectedProfileID else { return false }
-        let isNewReview = meal(mealID)?.submissions.contains { $0.id == submissionID && $0.state == .awaitingReview } == true
-        let accepted = await change {
-            try await store.acceptReview(mealID: mealID, submissionID: submissionID, expectedProfileID: expectedProfileID)
+    @discardableResult func acceptReview(mealID: UUID, submissionID: UUID, expectedProfileID: UUID, currentTime: () -> Date = Date.init) async -> Bool {
+        guard selection?.identity.profileID == expectedProfileID else { return false }
+        let prior = try? await store.meal(id: mealID, expectedProfileID: expectedProfileID)
+        let fresh = prior?.submissions.contains { $0.id == submissionID && $0.state == .awaitingReview } == true
+        let result = await change { try await store.acceptReview(mealID: mealID, submissionID: submissionID, expectedProfileID: expectedProfileID) }
+        if result, fresh, companionReviewSubmissions[expectedProfileID, default: []].insert(submissionID).inserted {
+            companionReviewEvent = CompanionEvent(profileID: expectedProfileID, operationID: submissionID, kind: .reviewed, committedAt: currentTime())
         }
-        guard accepted, !Task.isCancelled, !isChangingProfile, snapshot?.profile.id == expectedProfileID else { return false }
-        if isNewReview, companionReviewSubmissions[expectedProfileID, default: []].insert(submissionID).inserted {
-            companionReviewEvent = CompanionEvent(profileID: expectedProfileID, operationID: submissionID,
-                                                  kind: .reviewed, committedAt: currentTime())
-        }
-        return true
+        return result
     }
-
-    func capture(_ draft: MealDraft, dayID: UUID, at: Date = Date(), dateOnly: Bool = false, photoPreparation: PhotoPreparation? = nil) async -> Bool {
-        guard draft.isValid, photoPreparation?.canCapture != false, !isSaving, !isChangingProfile, let owner = snapshot?.profile.id else { return false }
-        let isNewSubmission = snapshot?.meals.contains { $0.submissions.contains { $0.id == draft.submissionID } } != true
-        isSaving = true
-        defer { isSaving = false }
+    func capture(_ draft: MealDraft, dayID: UUID, at: Date = Date(), dateOnly: Bool = false, photoPreparation: PhotoPreparation? = nil, expectedSelection: DiarySelectionOwnership? = nil) async -> Bool {
+        guard draft.isValid, photoPreparation?.canCapture != false, !isSaving, !isChangingProfile, let token = selection else { return false }
+        guard expectedSelection == nil || expectedSelection == token else { return false }
+        isSaving = true; defer { isSaving = false }
         do {
-            _ = try await store.capture(text: draft.text, photos: draft.photos.map { MealPhoto(data: $0) }, reviewFirst: draft.reviewFirst, dayID: dayID, at: at, dateOnly: dateOnly, submissionID: draft.submissionID, forCoach: !sampleMode, expectedProfileID: owner)
-            try await refresh(profileID: owner)
-            guard !Task.isCancelled, !isChangingProfile, snapshot?.profile.id == owner else { return false }
-            if isNewSubmission {
-                captureReceipt = draft.submissionID
-                companionCaptureEvent = CompanionEvent(profileID: owner, operationID: draft.submissionID,
-                                                       kind: .saved, committedAt: Date())
+            let attempt: (selection: DiarySelectionOwnership, draft: MealDraft, photos: [MealPhoto], isNew: Bool)
+            if let prior = manualCaptureAttempt, prior.selection == token, prior.draft.submissionID == draft.submissionID {
+                guard prior.draft == draft else { throw DiaryError.staleRevision }
+                attempt = prior
+            } else {
+                let prior = try await store.capturedMeal(submissionID: draft.submissionID, expectedSelection: token, expectedProfileID: token.identity.profileID)
+                guard selection == token, !isChangingProfile else { return false }
+                let references = prior?.submissions.first { $0.id == draft.submissionID }?.photoIDs.compactMap { id in prior?.photos.first { $0.photoID == id } } ?? []
+                let photos = draft.photos.enumerated().map { index, data in
+                    if references.indices.contains(index) {
+                        let reference = references[index]
+                        return MealPhoto(id: reference.photoID, data: data, createdAt: reference.createdAt, role: reference.role)
+                    }
+                    return MealPhoto(data: data)
+                }
+                attempt = (token, draft, photos, prior == nil); manualCaptureAttempt = attempt
             }
-            resumeWorker()
-            return true
-        } catch { if snapshot?.profile.id == owner { present(error) }; return false }
+            let saved = try await store.captureProjection(text: draft.text, photos: attempt.photos, reviewFirst: draft.reviewFirst,
+                dayID: dayID, at: at, dateOnly: dateOnly, submissionID: draft.submissionID, forCoach: !sampleMode, expectedSelection: token, expectedProfileID: token.identity.profileID)
+            try await refresh(profileID: token.identity.profileID)
+            guard !Task.isCancelled, selection == token else { return false }
+            savedMealID = saved.id
+            if attempt.isNew, companionCaptureEvent?.profileID != token.identity.profileID || companionCaptureEvent?.operationID != draft.submissionID {
+                captureReceipt = draft.submissionID
+                companionCaptureEvent = CompanionEvent(profileID: token.identity.profileID, operationID: draft.submissionID, kind: .saved, committedAt: Date())
+            }
+            resumeWorker(); return true
+        } catch { if selection == token { present(error) }; return false }
     }
-
     func switchProfile(_ id: UUID) async {
-        guard beginProfileTransition() else { return }
-        let previous = snapshot
+        guard beginProfileTransition() else { return }; let previous = readModel?.head.profile.id
         defer { finishProfileTransition() }
-        do {
-            let selected = try await profileSelection(id)
-            await selectBackupProfile(selected.profile.id)
-            snapshot = selected
-            rememberSelection()
-        } catch { await recoverProfileSelection(previous); present(error) }
+        do { try await install(try await profileSelection(id)) } catch { await recoverProfileSelection(previous); present(error) }
     }
-
     func createProfile(name: String) async {
-        guard beginProfileTransition() else { return }
-        let previous = snapshot
+        guard beginProfileTransition() else { return }; let previous = readModel?.head.profile.id
         defer { finishProfileTransition() }
-        do {
-            let selected = try await store.createProfile(DiaryProfile(name: name))
-            profiles = try await store.profiles()
-            await selectBackupProfile(selected.profile.id)
-            snapshot = selected
-            rememberSelection()
-        } catch { await recoverProfileSelection(previous); present(error) }
+        do { try await install(try await store.createProfile(DiaryProfile(name: name))); profiles = try await store.profiles() }
+        catch { await recoverProfileSelection(previous); present(error) }
     }
-
-    func signOut() async {
-        guard beginProfileTransition() else { return }
-        defer { finishProfileTransition() }
-        await clearProfileSelection()
-    }
+    func signOut() async { guard beginProfileTransition() else { return }; defer { finishProfileTransition() }; await clearProfileSelection() }
     func deleteCurrentProfile() async {
-        guard let previous = snapshot, beginProfileTransition() else { return }
-        defer { finishProfileTransition() }
-        do {
-            try await backup?.removeProfile(previous.profile.id)
-            try await store.deleteProfile(previous.profile.id)
-            await clearProfileSelection()
-            profiles = try await store.profiles()
-        } catch { await recoverProfileSelection(previous); present(error) }
+        guard let owner = readModel?.head.profile.id, beginProfileTransition() else { return }; defer { finishProfileTransition() }
+        do { try await backup?.removeProfile(owner); try await store.deleteProfile(owner); await clearProfileSelection(); profiles = try await store.profiles() }
+        catch { present(error) }
     }
     private func beginProfileTransition() -> Bool {
-        guard !isChangingProfile, !isSaving else { return false }
-        isChangingProfile = true
-        enterBackground(); backupTask?.cancel()
-        return true
+        guard !isChangingProfile, !isSaving else { return false }; isChangingProfile = true; photoRequestGeneration &+= 1
+        changesTask?.cancel(); enterBackground(); backupTask?.cancel(); backupRequested = nil; return true
     }
-    private func finishProfileTransition() {
-        isChangingProfile = false
-        queueBackup(); resumeWorker()
-    }
+    private func finishProfileTransition() { isChangingProfile = false; queueBackup(); resumeWorker() }
     private func clearProfileSelection() async {
-        await backup?.selectProfile(nil)
-        await store.signOut()
-        snapshot = nil; backupGeneration = nil; backupStatus = FolderBackupStatus()
-        preferences?.set(true, forKey: "diarySignedOut")
-        preferences?.removeObject(forKey: "diarySelectedProfile")
+        await backup?.selectProfile(nil); await store.signOut()
+        if let photoLoader { await photoLoader.purgeForMemoryPressure() }
+        selection = nil; manualCaptureAttempt = nil; readModel = nil; latestCoachPage = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
+        photoRequestGeneration &+= 1; changeGeneration &+= 1
+        backupGeneration = nil; backupStatus = FolderBackupStatus(); backupScheduledRevision = nil
+        preferences?.set(true, forKey: "diarySignedOut"); preferences?.removeObject(forKey: "diarySelectedProfile")
     }
-    private func recoverProfileSelection(_ previous: DiarySnapshot?) async {
-        if let previous, let restored = try? await store.selectProfile(previous.profile.id) {
-            await selectBackupProfile(restored.profile.id)
-            snapshot = restored
-            rememberSelection()
-        } else { await clearProfileSelection() }
+    private func recoverProfileSelection(_ previous: UUID?) async {
+        if let previous { do { try await install(try await profileSelection(previous)); return } catch {} }
+        await clearProfileSelection()
     }
-    private func rememberSelection() {
-        guard let id = snapshot?.profile.id else { return }
-        preferences?.set(id.uuidString, forKey: "diarySelectedProfile")
-        preferences?.set(false, forKey: "diarySignedOut")
-    }
+    private func rememberSelection() { if let id = readModel?.head.profile.id { preferences?.set(id.uuidString, forKey: "diarySelectedProfile"); preferences?.set(false, forKey: "diarySignedOut") } }
     func loadProfiles() async { guard !isChangingProfile else { return }; do { profiles = try await store.profiles() } catch { present(error) } }
-    func waitForWorker() async { await worker?.value }
-    func waitForBackup() async { await backupTask?.value }
     private func selectBackupProfile(_ profileID: UUID?) async {
-        backupTask?.cancel()
-        backupGeneration = nil
+        backupGeneration = nil; backupScheduledRevision = nil; backupRequested = nil
         await backup?.selectProfile(profileID)
         if let owner = profileID, let backup {
-            do { backupGeneration = try await backup.generation(profileID: owner) }
-            catch { backupStatus = await backup.status(profileID: owner); backupStatus.pendingError = "Backup pending"; return }
+            do { backupGeneration = try await backup.generation(profileID: owner) } catch { backupStatus = FolderBackupStatus(pendingError: "Backup pending"); return }
             backupStatus = await backup.status(profileID: owner)
         } else { backupStatus = FolderBackupStatus() }
     }
     func queueBackup() {
-        guard !isChangingProfile, let backup, let captured = snapshot, let generation = backupGeneration else { return }
-        backupTask?.cancel()
+        guard !isChangingProfile, let token = selection, let head = readModel?.head, backupStatus.configured,
+              let generation = backupGeneration, backup != nil, backupScheduledRevision != head.revision else { return }
+        backupRequested = (token, head.revision, generation); backupScheduledRevision = head.revision
+        guard backupTask == nil || backupTask?.isCancelled == true else { return }
+        let id = UUID(); backupTaskID = id
         backupTask = Task {
-            let status = await backup.status(profileID: captured.profile.id)
-            guard !Task.isCancelled, snapshot?.profile.id == captured.profile.id else { return }
-            if status.configured {
-                do { try await backup.save(captured, generation: generation) }
-                catch {
-                    guard !Task.isCancelled, snapshot?.profile.id == captured.profile.id else { return }
-                    backupStatus = await backup.status(profileID: captured.profile.id)
+            defer { if backupTaskID == id { backupTask = nil; backupTaskID = nil } }
+            while let pending = backupRequested, !Task.isCancelled {
+                backupRequested = nil
+                guard selection == pending.0, let backup else { return }
+                let owner = pending.0.identity.profileID
+                let status = await backup.status(profileID: owner)
+                guard selection == pending.0, status.configured else { return }
+                do {
+                    let request = try await store.exportRequest(expectedProfileID: owner, backupGeneration: pending.2)
+                    guard selection == pending.0, !Task.isCancelled else { return }
+                    try await backup.save(request, coordinator: exportCoordinator)
+                } catch {
+                    guard selection == pending.0, !Task.isCancelled else { return }
+                    backupStatus = await backup.status(profileID: owner)
                     if backupStatus.pendingError == nil { backupStatus.pendingError = "Backup pending" }
                     return
                 }
+                if selection == pending.0 { backupStatus = await backup.status(profileID: owner) }
             }
-            guard !Task.isCancelled, snapshot?.profile.id == captured.profile.id else { return }
-            backupStatus = await backup.status(profileID: captured.profile.id)
         }
     }
+    func retryBackup() {
+        backupScheduledRevision = nil
+        queueBackup()
+    }
+    func waitForBackup() async { await backupTask?.value }
     func selectBackupFolder(_ url: URL) async {
-        guard !isChangingProfile, let backup, let owner = snapshot?.profile.id else { return }
+        guard !isChangingProfile, let backup, let token = selection else { return }
         do {
-            try await backup.selectFolder(url, profileID: owner)
-            guard snapshot?.profile.id == owner else { return }
-            backupGeneration = try await backup.generation(profileID: owner)
-            backupStatus = await backup.status(profileID: owner)
-            queueBackup()
+            try await backup.selectFolder(url, profileID: token.identity.profileID)
+            guard selection == token else { return }
+            backupGeneration = try await backup.generation(profileID: token.identity.profileID)
+            backupStatus = await backup.status(profileID: token.identity.profileID); backupScheduledRevision = nil; queueBackup()
         } catch { errorMessage = "Could not choose this backup folder. Your local diary is preserved." }
     }
     func importArchive(_ archive: DiarySnapshot) async -> Bool {
-        guard beginProfileTransition() else { return false }
-        let previous = snapshot
+        guard beginProfileTransition() else { return false }; let previous = readModel?.head.profile.id
         defer { finishProfileTransition() }
         do {
-            let selected: DiarySnapshot
             if profiles.contains(where: { $0.id == archive.profile.id }) {
-                guard snapshot?.profile.id == archive.profile.id else { throw DiaryError.wrongOwner }
+                guard previous == archive.profile.id else { throw DiaryError.wrongOwner }
                 try await store.restore(archive, expectedProfileID: archive.profile.id)
-                selected = try await store.snapshot(expectedProfileID: archive.profile.id)
-                await selectBackupProfile(selected.profile.id)
-            } else {
-                selected = try await store.importProfile(archive)
-                profiles = try await store.profiles()
-                await backup?.selectProfile(selected.profile.id)
-                if let backup {
-                    do {
-                        backupGeneration = try await backup.authorizeRestoredProfile(selected.profile.id)
-                        backupStatus = await backup.status(profileID: selected.profile.id)
-                    } catch { backupGeneration = nil; backupStatus = FolderBackupStatus(pendingError: "Backup pending") }
-                }
-            }
-            snapshot = selected
-            rememberSelection()
-            restoreGeneration += 1
-            return true
+                try await install(try await store.diaryReadModel(expectedProfileID: archive.profile.id))
+            } else { try await install(try await store.importProfile(archive)); profiles = try await store.profiles() }
+            restoreGeneration += 1; return true
         } catch { await recoverProfileSelection(previous); present(error); return false }
     }
-
     func enterBackground() { worker?.cancel(); worker = nil; workerID = nil }
+    func waitForWorker() async { await worker?.value }
     func resumeWorker() {
         guard sampleMode else { resumeCoach?(); return }
-        guard !isChangingProfile, worker == nil, let owner = snapshot?.profile.id else { return }
-        let id = UUID()
-        workerID = id
+        guard !isChangingProfile, worker == nil, let token = selection else { return }
+        let id = UUID(); workerID = id
         worker = Task {
             defer { if workerID == id { worker = nil; workerID = nil } }
-            do {
-                try Task.checkCancellation()
-                try await store.processPending(expectedProfileID: owner)
-                try Task.checkCancellation()
-                try await refresh(profileID: owner)
-            } catch is CancellationError {} catch { if snapshot?.profile.id == owner { present(error) } }
+            do { try Task.checkCancellation(); try await store.processPending(expectedProfileID: token.identity.profileID); try Task.checkCancellation(); try await refresh(profileID: token.identity.profileID) }
+            catch is CancellationError {} catch { if selection == token { present(error) } }
         }
     }
-
-    private func present(_ error: Error) {
-        switch error as? DiaryError {
-        case .persistenceFailed: errorMessage = "Could not save on this iPhone. Your input is still here."
-        case .staleRevision: errorMessage = "This meal changed. Open it again before editing."
-        case .ambiguousDay: errorMessage = "Choose the tracking day before saving."
-        case .staleArchive: errorMessage = "This backup conflicts with this diary or contains older or deleted records. Your local diary is preserved."
-        case .wrongOwner: errorMessage = "The active profile changed. Try again in this profile."
-        default: errorMessage = "Could not complete this action. Your saved diary is unchanged."
-        }
-    }
+    private func present(_ error: Error) { errorMessage = (error as? LocalizedError)?.errorDescription ?? "Could not save on this iPhone. Your input is still here." }
 }
 
-@MainActor enum DiaryLaunch {
+enum DiaryLaunch {
     static func shouldLaunchDiary(arguments: [String], environment: [String: String]) -> Bool {
         guard environment["XCTestConfigurationFilePath"] != nil else { return true }
         guard let index = arguments.firstIndex(of: "--diary-ui-test"), arguments.indices.contains(index + 1) else { return false }
@@ -328,6 +360,9 @@ final class DiaryViewModel {
 }
 
 @MainActor @Observable final class PhotoPreparation {
+    private var limiter: PhotoWorkLimiter?
+    init(limiter: PhotoWorkLimiter? = nil) { self.limiter = limiter }
+    func use(limiter: PhotoWorkLimiter?) { self.limiter = limiter }
     private(set) var isPreparing = false
     private var generation: UUID?
     private var active = true
@@ -339,9 +374,10 @@ final class DiaryViewModel {
         return id
     }
     func isCurrent(_ id: UUID) -> Bool { generation == id && isPreparing }
-    func load(_ id: UUID, using operation: () async throws -> Data) async throws -> Data? {
+    func load(_ id: UUID, using operation: @escaping @Sendable () async throws -> Data) async throws -> Data? {
         guard isCurrent(id), !Task.isCancelled else { return nil }
-        let data = try await operation()
+        let data: Data
+        if let limiter { data = try await limiter.withPermit(operation) } else { data = try await operation() }
         return isCurrent(id) && !Task.isCancelled ? data : nil
     }
     func finish(_ id: UUID) { if generation == id { generation = nil; isPreparing = false } }

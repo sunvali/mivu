@@ -26,7 +26,7 @@ private actor ActivityInference {
         let store = DiaryStore(directory: path)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let suspended = ActivityInference()
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in await suspended.respond() } })
         coach.draft.text = "Synthetic question"

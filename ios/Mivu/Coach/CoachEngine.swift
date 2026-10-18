@@ -136,10 +136,12 @@ struct CoachEngine: Sendable {
                 try Task.checkCancellation()
                 if !writes.isEmpty { await onActivity(.saving) }
                 let receipts = try await store.applyCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID, mode: mode)
-                for receipt in receipts {
-                    if let meal = try? JSONDecoder().decode(CoachContext.Meal.self, from: Data(receipt.resultJSON.utf8)), meal.id == receipt.mealID {
-                        knownMeals.removeAll { $0.id == meal.id }; knownMeals.append(meal)
-                    }
+                for id in Set(receipts.compactMap(\.mealID)) {
+                    // Receipt results can omit a review that changed without a food revision.
+                    do {
+                        let meal = try await store.coachMeal(id: id, expectedProfileID: expectedProfileID)
+                        knownMeals.removeAll { $0.id == id }; knownMeals.append(meal)
+                    } catch DiaryError.notFound { knownMeals.removeAll { $0.id == id } }
                 }
                 let updated = try await store.coachContext(turnID: turnID, expectedProfileID: expectedProfileID)
                 for meal in updated.meals {

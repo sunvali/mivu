@@ -13,13 +13,13 @@ import Testing
         try ChatHistoryFixture.execute(url, "CREATE TABLE legacy_applications(itemID TEXT)")
         try ChatHistoryFixture.execute(url, "CREATE TRIGGER count_legacy_correction AFTER UPDATE ON item WHEN json_extract(CAST(NEW.payload AS TEXT), '$.quantity') != json_extract(CAST(OLD.payload AS TEXT), '$.quantity') BEGIN INSERT INTO legacy_applications VALUES (NEW.id); END")
         let store = DiaryStore(directory: root); _ = try await store.selectProfile(source.profile.id)
-        let turn = try await store.captureCoachTurn(text: "Please edit yesterday’s lunch because I ate one more chicken.", photos: [],
+        let turn = try await capturedTurn(store, text: "Please edit yesterday’s lunch because I ate one more chicken.", photos: [],
             at: ISO8601DateFormatter().date(from: "2027-01-16T10:00:00Z")!, expectedProfileID: source.profile.id)
         let first = CoachJourneyTransport(interruptAfterCommit: true)
         await #expect(throws: CoachJourneyTransport.Interruption.afterCommit) {
             try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: source.profile.id)
         }
-        let before = try await store.snapshot(expectedProfileID: source.profile.id)
+        let before = try await store.snapshotForExport(expectedProfileID: source.profile.id)
         let receipt = try #require(before.coachTurns.first { $0.id == turn.id }?.receipts.first)
         #expect(before.meals[0].items[0].quantity == 3)
         let applications = try ChatHistoryFixture.strings(url, "SELECT COUNT(*) FROM legacy_applications")
@@ -35,15 +35,15 @@ import Testing
         #expect(capturedContext.committedReceipts?.first?.targetLocalDate == "2027-01-15")
         #expect(capturedContext.committedReceipts?.first?.items.first?.quantity == 3)
         #expect(try ChatHistoryFixture.strings(url, "SELECT COUNT(*) FROM legacy_applications") == applications)
-        var manual = try await fresh.snapshot(expectedProfileID: source.profile.id).meals[0].items[0]; manual.quantity = 5
+        var manual = try await fresh.snapshotForExport(expectedProfileID: source.profile.id).meals[0].items[0]; manual.quantity = 5
         try await fresh.editItem(mealID: source.meals[0].id, item: manual, expectedRevision: 2, expectedProfileID: source.profile.id)
         try await fresh.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: source.profile.id)
         let replay = CoachJourneyTransport()
         let again = try await CoachEngine(store: fresh, infer: { try await replay.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: source.profile.id)
         #expect(again.receipts == [receipt] && again.assistantText?.contains("3 piece") == true)
-        #expect(try await fresh.snapshot(expectedProfileID: source.profile.id).meals[0].items[0].quantity == 5)
+        #expect(try await fresh.snapshotForExport(expectedProfileID: source.profile.id).meals[0].items[0].quantity == 5)
         #expect(await replay.calls.isEmpty)
-        #expect(try ChatHistoryFixture.strings(url, "PRAGMA user_version") == [["0"]])
+        #expect(try ChatHistoryFixture.strings(url, "PRAGMA user_version") == [["1"]])
     }
 
     @Test(arguments: ["empty", "populated", "nil"])
@@ -92,10 +92,10 @@ import Testing
         let latest = try database.coachPage(.latest, expectedProfileID: f.profileID)
         #expect(latest.latestEmptySegment?.trackingDayID == current && latest.latestEmptySegment?.segmentID == after.effectiveConversationSegmentID)
         let next: CoachExchangeSummary
-        if boundary == "empty" { next = try await store.captureCoachSubmission(frozen, expectedProfileID: f.profileID) }
+        if boundary == "empty" { next = try await capturedSubmission(store, frozen, expectedProfileID: f.profileID) }
         else {
-            await #expect(throws: DiaryError.staleRevision) { try await store.captureCoachSubmission(frozen, expectedProfileID: f.profileID) }
-            next = try await store.captureCoachSubmission(f.payload(head: after, text: "Fresh normal send"), expectedProfileID: f.profileID)
+            await #expect(throws: DiaryError.staleRevision) { try await capturedSubmission(store, frozen, expectedProfileID: f.profileID) }
+            next = try await capturedSubmission(store, f.payload(head: after, text: "Fresh normal send"), expectedProfileID: f.profileID)
         }
         #expect(next.trackingDayID == current && next.segmentID == after.effectiveConversationSegmentID && next.segmentID != exchange.segmentID)
         #expect(try f.rows("SELECT turnID,sequence,capturedAt,captureTimeZoneID,trackingDayID,displayLocalDate,displayTimeZoneID,segmentID FROM coach_index WHERE sequence <= 2 ORDER BY sequence") == immutable)

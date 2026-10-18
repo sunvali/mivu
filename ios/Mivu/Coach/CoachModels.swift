@@ -267,6 +267,11 @@ struct CoachProgress: Codable, Equatable, Sendable {
     var omittedWeightCount: Int
     var omittedWorkoutCount: Int
     var truncated: Bool
+    var dailyReports: [DailyProgress]? = nil
+    var displayWeights: [CoachWeightReference]? = nil
+    var latestWeight: CoachWeightReference? = nil
+    var workoutTotal: Int? = nil
+    var savedFoodDates: [String]? = nil
 }
 
 extension NutritionTotals: Codable {

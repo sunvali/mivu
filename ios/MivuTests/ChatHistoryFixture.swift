@@ -1,5 +1,6 @@
 import Foundation
 import SQLite3
+import Testing
 @testable import Mivu
 
 /// Complete interchange assembly belongs to tests, never a viewport or mutation.
@@ -203,6 +204,10 @@ enum ChatHistoryFixture {
 
     static func completeReference(databaseURL: URL) throws -> DiarySnapshot {
         try withConnection(databaseURL) { connection in
+            func queryFailure(_ stage: String) -> DiaryError {
+                Issue.record("Reference query \(stage): SQLite \(sqlite3_errcode(connection)) / \(String(cString: sqlite3_errmsg(connection)))")
+                return .invalidData
+            }
             struct Row { var parent: String?; var payload: Any; var bytes: Data }
             var pagedStorage = false
             func rows(_ table: String) throws -> [Row] {
@@ -211,13 +216,13 @@ enum ChatHistoryFixture {
                 let order = table == "meta" ? "id" : (table == "coach_turn" && pagedStorage ? "(SELECT sequence FROM coach_index WHERE turnID = coach_turn.id)" : "ordinal, id")
                 let query = "SELECT \(parents.contains(table) ? "parent" : "NULL"), payload, \(isPhoto ? "bytes" : "NULL") FROM \(table) ORDER BY \(order)"
                 var statement: OpaquePointer?
-                guard sqlite3_prepare_v2(connection, query, -1, &statement, nil) == SQLITE_OK, let statement else { throw DiaryError.invalidData }
+                guard sqlite3_prepare_v2(connection, query, -1, &statement, nil) == SQLITE_OK, let statement else { throw queryFailure("prepare \(table)") }
                 defer { sqlite3_finalize(statement) }
                 var result: [Row] = []
                 while true {
                     let status = sqlite3_step(statement)
                     if status == SQLITE_DONE { return result }
-                    guard status == SQLITE_ROW, let payload = sqlite3_column_blob(statement, 1) else { throw DiaryError.invalidData }
+                    guard status == SQLITE_ROW, let payload = sqlite3_column_blob(statement, 1) else { throw queryFailure("step \(table), status \(status)") }
                     let data = Data(bytes: payload, count: Int(sqlite3_column_bytes(statement, 1)))
                     let bytes = sqlite3_column_blob(statement, 2).map { Data(bytes: $0, count: Int(sqlite3_column_bytes(statement, 2))) } ?? Data()
                     result.append(Row(parent: sqlite3_column_text(statement, 0).map { String(cString: $0) },
@@ -232,7 +237,8 @@ enum ChatHistoryFixture {
                 var statement: OpaquePointer?
                 guard sqlite3_prepare_v2(connection, "SELECT schemaVersion, revision, profilePayload, lineagePayload, activeDayID, previousDayConfirmedAt, activeConversationSegmentID FROM storage_head WHERE id = 1", -1, &statement, nil) == SQLITE_OK, let statement else { throw DiaryError.invalidData }
                 defer { sqlite3_finalize(statement) }
-                guard sqlite3_step(statement) == SQLITE_ROW, let profile = sqlite3_column_blob(statement, 2) else { throw DiaryError.invalidData }
+                let headStatus = sqlite3_step(statement)
+                guard headStatus == SQLITE_ROW, let profile = sqlite3_column_blob(statement, 2) else { throw queryFailure("head step \(headStatus)") }
                 root = ["schemaVersion": Int(sqlite3_column_int64(statement, 0)), "revision": Int(sqlite3_column_int64(statement, 1)),
                     "profile": try JSONSerialization.jsonObject(with: Data(bytes: profile, count: Int(sqlite3_column_bytes(statement, 2))))]
                 if let lineage = sqlite3_column_blob(statement, 3) { root["lineage"] = try JSONSerialization.jsonObject(with: Data(bytes: lineage, count: Int(sqlite3_column_bytes(statement, 3)))) }

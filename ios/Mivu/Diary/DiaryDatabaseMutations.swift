@@ -240,7 +240,18 @@ final class DiaryTransaction {
         changes.turnIDs.insert(turn.id)
     }
 
-    func appendCapture(_ payload: CoachSubmissionPayload, legacyMeal: DiaryMeal? = nil, legacyPhotoIDs: [UUID] = []) throws {
+    func appendCapture(_ payload: CoachSubmissionPayload) throws {
+        try appendCapture(submissionID: payload.submissionID, text: payload.text, context: payload.context,
+            attachments: payload.attachments, manifest: payload.manifest, legacyMeal: nil, legacyPhotoIDs: [])
+    }
+    func appendLegacyCapture(submissionID: UUID, text: String, context: CoachCaptureContext, meal: DiaryMeal, photoIDs: [UUID]) throws {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photoIDs.isEmpty,
+              photoIDs.count <= 30, Set(photoIDs).count == photoIDs.count else { throw DiaryError.invalidData }
+        try appendCapture(submissionID: submissionID, text: text, context: context, attachments: [], manifest: nil,
+            legacyMeal: meal, legacyPhotoIDs: photoIDs)
+    }
+    private func appendCapture(submissionID: UUID, text: String, context: CoachCaptureContext, attachments: [MealPhoto],
+                               manifest: CoachSubmissionManifest?, legacyMeal: DiaryMeal?, legacyPhotoIDs: [UUID]) throws {
         let sequence = try database.mutationInteger("SELECT nextSequence FROM storage_head WHERE id = 1")
         guard sequence > 0, sequence < Int.max else { throw DiaryError.invalidData }
         let ordinal = try database.mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = 'coach_turn'")
@@ -249,9 +260,9 @@ final class DiaryTransaction {
         let day = try legacyMeal == nil ? head.activeDayID.map { try database.trackingDay(id: $0) } : nil
         let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: payload.context.timeZoneID)
-        let date = day?.localDate ?? formatter.string(from: payload.context.capturedAt)
-        let zone = day?.timeZoneID ?? payload.context.timeZoneID
+        formatter.timeZone = TimeZone(identifier: context.timeZoneID)
+        let date = day?.localDate ?? formatter.string(from: context.capturedAt)
+        let zone = day?.timeZoneID ?? context.timeZoneID
         guard validLocalDate(date) else { throw DiaryError.invalidData }
         let segmentID: UUID
         if day != nil {
@@ -261,17 +272,17 @@ final class DiaryTransaction {
         } else if let last, last.dayID == nil, last.date == date, last.zone == zone {
             segmentID = last.id
         } else { segmentID = UUID() }
-        let turn = CoachTurn(id: payload.submissionID, capturedAt: payload.context.capturedAt, text: payload.text,
-            captureTimeZoneID: payload.context.timeZoneID, activeDayID: legacyMeal == nil ? payload.context.activeDayID : nil,
-            photoIDs: legacyMeal == nil ? payload.attachments.map(\.id) : legacyPhotoIDs,
+        let turn = CoachTurn(id: submissionID, capturedAt: context.capturedAt, text: text,
+            captureTimeZoneID: context.timeZoneID, activeDayID: legacyMeal == nil ? context.activeDayID : nil,
+            photoIDs: legacyMeal == nil ? attachments.map(\.id) : legacyPhotoIDs,
             resolvedDayID: legacyMeal?.dayID, pendingMealID: legacyMeal?.id, pendingMealRevision: legacyMeal?.revision,
-            submissionManifest: legacyMeal == nil ? payload.manifest : nil, captureSegmentID: segmentID)
+            submissionManifest: legacyMeal == nil ? manifest : nil, captureSegmentID: segmentID)
         try validateCoachTurnFields(turn)
         let encoded = try JSONEncoder().encode(turn)
         try database.execute("INSERT INTO coach_turn(id, ordinal, payload) VALUES (?, ?, ?)",
             [.text(turn.id.uuidString), .integer(ordinal), .blob(encoded)])
         try contribution(table: "coach_turn", rowID: turn.id.uuidString, encodedBytes: encoded.count)
-        for (ordinal, original) in payload.attachments.enumerated() {
+        for (ordinal, original) in attachments.enumerated() {
             let physicalID = turn.id.uuidString + "/" + original.id.uuidString
             var metadata = original; metadata.data = Data()
             try database.execute("INSERT INTO coach_photo(id, parent, ordinal, payload, bytes) VALUES (?, ?, ?, ?, ?)",

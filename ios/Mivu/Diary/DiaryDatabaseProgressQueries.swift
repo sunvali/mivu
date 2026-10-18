@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 
 extension DiaryDatabase {
-    func progressRange(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, expectedProfileID: UUID) throws -> CoachProgress {
+    func progressRange(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, includeDailyReports: Bool = false, expectedProfileID: UUID) throws -> CoachProgress {
         guard validLocalDate(endingOn), [1, 7, 30].contains(days) else { throw CoachError.invalidArguments }
         return try domainRead(expectedProfileID: expectedProfileID) { head in
             let transaction = DiaryTransaction(database: self, head: head), zone = head.profile.timeZoneID
@@ -10,6 +10,7 @@ extension DiaryDatabase {
             let horizon = ProgressAnalytics.window(endingOn: endingOn, days: 37, offset: 0, zone: zone)
             guard horizon.count == 37 else { throw DiaryError.invalidData }
             var reports: [String: DailyProgress] = [:], latest: [String: WeightEntry] = [:]
+            var savedFoodDates: Set<String> = []
             var weights: [(Int, CoachWeightReference)] = [], workouts: [(Int, WorkoutReference)] = [], workoutCount = 0
             for label in horizon {
                 let rows = try transaction.records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(label)])
@@ -20,6 +21,7 @@ extension DiaryDatabase {
                 var totals: [NutritionTotals] = [], pending = nilDayPending, dailyWorkoutCount = 0, burn: Double? = 0
                 for day in tracked {
                     let summary = try transaction.daySummary(day)
+                    if summary.savedMealCount > 0 { savedFoodDates.insert(label) }
                     let pendingStatement = try domainStatement("SELECT EXISTS(SELECT 1 FROM coach_turn WHERE COALESCE(json_extract(CAST(payload AS TEXT), '$.resolvedDayID'), json_extract(CAST(payload AS TEXT), '$.activeDayID')) = ? AND json_extract(CAST(payload AS TEXT), '$.state') != 'completed' AND id != ?)", [.text(day.id.uuidString), .text(finalizingTurnID?.uuidString ?? "")])
                     defer { sqlite3_finalize(pendingStatement) }; guard try mutationStep(pendingStatement) else { throw DiaryError.invalidData }
                     let dayPending = nilDayPending || summary.pendingMealCount > 0 || sqlite3_column_int64(pendingStatement, 0) != 0
@@ -61,10 +63,25 @@ extension DiaryDatabase {
             }
             let labels = Array(horizon.suffix(days)), references = weights.map(\.1).filter { $0.localDate >= labels[0] }
             let complete = horizon.suffix(28).compactMap { reports[$0] }.filter { $0.completeness == .complete && !$0.hasPending && $0.foodTotals?.kcal != nil }.count
+            var newestWeight: CoachWeightReference?
+            if includeDailyReports {
+                let query = try domainStatement("SELECT w.id, w.payload, json_extract(CAST(d.payload AS TEXT), '$.localDate') FROM weight w LEFT JOIN day d ON d.id = w.parent ORDER BY json_extract(CAST(w.payload AS TEXT), '$.measuredAt') DESC, json_extract(CAST(w.payload AS TEXT), '$.revision') DESC, w.ordinal LIMIT 1")
+                defer { sqlite3_finalize(query) }
+                if try mutationStep(query) {
+                    let value = try decode(WeightEntry.self, Record(id: mutationText(query, 0), ordinal: 0, payload: mutationBlob(query, 1)))
+                    let date = try sqlite3_column_type(query, 2) == SQLITE_NULL ? diaryDateLabel(value.measuredAt, zone: zone) : mutationText(query, 2)
+                    newestWeight = CoachWeightReference(localDate: date, record: value)
+                }
+            }
             return CoachProgress(startLocalDate: labels[0], endLocalDate: endingOn, daily: reports[endingOn]!,
                 period: days == 1 ? nil : ProgressAnalytics.period(endingOn: endingOn, days: days, reports: labels.compactMap { reports[$0] }),
                 weight: ProgressAnalytics.weight(endingOn: endingOn, zone: zone, latest: latest, completeKcalDays: complete),
-                weights: Array(references.suffix(40)), workouts: workouts.map(\.1), omittedWeightCount: max(0, references.count - 40), omittedWorkoutCount: max(0, workoutCount - 100), truncated: references.count > 40 || workoutCount > 100)
+                weights: Array(references.suffix(40)), workouts: workouts.map(\.1), omittedWeightCount: max(0, references.count - 40), omittedWorkoutCount: max(0, workoutCount - 100), truncated: references.count > 40 || workoutCount > 100,
+                dailyReports: includeDailyReports ? labels.compactMap { reports[$0] } : nil,
+                displayWeights: includeDailyReports ? horizon.suffix(30).compactMap { label in latest[label].map { CoachWeightReference(localDate: label, record: $0) } } : nil,
+                latestWeight: newestWeight,
+                workoutTotal: includeDailyReports ? try mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = 'workout'") : nil,
+                savedFoodDates: includeDailyReports ? labels.filter { savedFoodDates.contains($0) } : nil)
         }
     }
 }

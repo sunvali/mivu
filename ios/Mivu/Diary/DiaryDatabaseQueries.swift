@@ -162,7 +162,8 @@ extension DiaryDatabase {
             captureTimeZoneID: row.captureTimeZoneID, segmentID: row.segmentID, trackingDayID: row.trackingDayID,
             displayLocalDate: row.displayLocalDate, displayTimeZoneID: row.displayTimeZoneID,
             text: turn.text, assistantText: turn.assistantText, state: row.state,
-            photos: try coachPhotoReferences(turn: turn, profileID: context.identity.profileID), receipts: receipts)
+            photos: try coachPhotoReferences(turn: turn, profileID: context.identity.profileID), receipts: receipts,
+            pendingMealID: turn.pendingMealID, needsDayChoice: turn.needsDayChoice == true)
     }
 
     private func coachPhotoReferences(turn: CoachTurn, profileID: UUID) throws -> [DiaryPhotoReference] {
@@ -342,16 +343,33 @@ extension DiaryDatabase {
                     let meal: MealReadModel
                     do { meal = try transaction.mealProjection(id: id) }
                     catch DiaryError.notFound { summaries.append("This meal was deleted. Its prior receipt is retained."); continue }
-                    if let itemID = receipt.itemID, !meal.items.contains(where: { $0.id == itemID }) {
+                    let proposalItems = meal.submissions.filter { $0.state == .awaitingReview }.flatMap { $0.proposal?.items ?? [] }
+                    if let itemID = receipt.itemID, !(meal.items + proposalItems).contains(where: { $0.id == itemID }) {
                         summaries.append("This item was deleted. Its prior receipt is retained."); continue
                     }
-                    if !facts.items.isEmpty {
+                    if receipt.itemID != nil, !facts.items.isEmpty {
                         let items = facts.items.map { "\($0.name) (\(number($0.quantity)) \($0.unit))" }.joined(separator: ", ")
                         let date = facts.targetLocalDate.map { " on " + $0 } ?? ""
-                        summaries.append("\(receipt.itemID == nil ? "Logged" : "Updated") \(items)\(date). Nutrition may be uncertain.")
+                        summaries.append("Updated \(items)\(date). Nutrition may be uncertain.")
+                    } else if receipt.operationKey.contains("/retry_meal/") {
+                        summaries.append("Queued the original saved meal input for analysis. A retry does not add another meal.")
+                    } else if receipt.operationKey.contains("/move_meal/") {
+                        let day = try trackingDay(id: meal.dayID)
+                        summaries.append("Meal is now recorded on \(day.localDate). Its original eating time is preserved.")
+                    } else if receipt.operationKey.contains("/attach_photos/") {
+                        summaries.append("Photos attached to this meal: \(meal.photos.count). Attaching photos does not change food totals.")
+                    } else if receipt.operationKey.contains("/delete_photo/") {
+                        struct DeletedPhoto: Decodable { let id: UUID }
+                        let deleted = try? JSONDecoder().decode(DeletedPhoto.self, from: Data(receipt.resultJSON.utf8))
+                        if let deleted, !meal.photos.contains(where: { $0.photoID == deleted.id }) {
+                            summaries.append("Deleted the requested meal photo. The food record is preserved.")
+                        } else { summaries.append("Review the meal's current attached photos.") }
                     } else if meal.state == .awaitingReview { summaries.append("Estimate ready for review.") }
-                    else if receipt.operationKey.contains("/retry_meal/") { summaries.append("Queued the original saved meal input for analysis.") }
-                    else { summaries.append("The requested meal change was recorded.") }
+                    else {
+                        let items = meal.items.map { "\($0.name) (\(number($0.quantity)) \($0.unit))" }.joined(separator: ", ")
+                        let calories = meal.totals.kcal.map { " \(Int($0.rounded())) kcal." } ?? " Calories are incomplete."
+                        summaries.append("\(receipt.itemID == nil ? "Logged" : "Updated") \(items)." + calories + " Nutrition may be uncertain.")
+                    }
                 } else if let id = receipt.weightID {
                     do {
                         let weight = try transaction.weight(id: id)

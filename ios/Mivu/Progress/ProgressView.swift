@@ -61,7 +61,47 @@ struct DiaryProgressView: View {
     @State private var coverageExpanded = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private enum Report { case daily, weekly, monthly }
+    private enum Report: Equatable { case daily, weekly, monthly }
+    private struct ReportRequest: Equatable {
+        let ownership: DiarySelectionOwnership?
+        let generation: UInt64
+        let date: String
+        let report: Report
+    }
+    private struct LedgerRequest: Equatable {
+        let ownership: DiarySelectionOwnership?
+        let generation: UInt64
+        let before: Int?
+    }
+    @State private var progress: CoachProgress?
+    @State private var loadedReport: ReportRequest?
+    @State private var reportRequestID = UUID()
+    @State private var loadError: String?
+    @State private var weightPage: DiaryRecordPage<WeightEntry>?
+    @State private var weightBefore: Int?
+    @State private var loadedWeights: LedgerRequest?
+    @State private var weightRequestID = UUID()
+    @State private var weightDates: [UUID: String] = [:]
+    @State private var weightError: String?
+    @State private var workoutPage: DiaryRecordPage<WorkoutSession>?
+    @State private var workoutBefore: Int?
+    @State private var loadedWorkouts: LedgerRequest?
+    @State private var workoutRequestID = UUID()
+    @State private var workoutDates: [UUID: String] = [:]
+    @State private var workoutError: String?
+    private var reportRequest: ReportRequest {
+        ReportRequest(ownership: model.selection, generation: model.changeGeneration, date: today, report: report)
+    }
+    private var weightRequest: LedgerRequest { LedgerRequest(ownership: model.selection, generation: model.changeGeneration, before: weightBefore) }
+    private var workoutRequest: LedgerRequest { LedgerRequest(ownership: model.selection, generation: model.changeGeneration, before: workoutBefore) }
+    private var visibleProgress: CoachProgress? {
+        let request = reportRequest
+        guard let loadedReport, loadedReport.ownership == request.ownership,
+              loadedReport.date == request.date, loadedReport.report == request.report else { return nil }
+        return progress
+    }
+    private var visibleWeights: [WeightEntry] { loadedWeights == weightRequest ? weightPage?.values ?? [] : [] }
+    private var visibleWorkouts: [WorkoutSession] { loadedWorkouts == workoutRequest ? workoutPage?.values ?? [] : [] }
     private struct Observation: Identifiable {
         let label: String
         let value: Double
@@ -77,36 +117,28 @@ struct DiaryProgressView: View {
         var id: String { label }
     }
 
-    private var snapshot: DiarySnapshot? { model.snapshot }
+    private var readModel: DiaryReadModel? { model.readModel }
     private var today: String {
         model.activeDay?.localDate
-            ?? ProgressDate.label(Date(), zone: snapshot?.profile.timeZoneID ?? TimeZone.current.identifier)
+            ?? ProgressDate.label(Date(), zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
-    private var daily: DailyProgress? {
-        snapshot.map { ProgressAnalytics.daily(snapshot: $0, localDate: today) }
-    }
-    private var period: PeriodProgress? {
-        guard let snapshot else { return nil }
-        return ProgressAnalytics.period(snapshot: snapshot, endingOn: today, days: report == .monthly ? 30 : 7)
-    }
-    private var weightReport: WeightProgress? {
-        snapshot.map { ProgressAnalytics.weight(snapshot: $0, endingOn: today) }
-    }
+    private var daily: DailyProgress? { visibleProgress?.daily }
+    private var period: PeriodProgress? { visibleProgress?.period }
+    private var weightReport: WeightProgress? { visibleProgress?.weight }
     private var nutrition: [Observation] {
-        guard let snapshot else { return [] }
-        let start = report == .daily ? today : (period?.startLocalDate ?? today)
-        let dayLabels = Dictionary(uniqueKeysWithValues: snapshot.days.map { ($0.id, $0.localDate) })
-        let savedDates = Set(snapshot.meals.compactMap { $0.isSaved ? dayLabels[$0.dayID] : nil })
-        return savedDates.filter { $0 >= start && $0 <= today }.sorted().compactMap { label in
-            guard let value = ProgressAnalytics.daily(snapshot: snapshot, localDate: label).foodTotals?.kcal else { return nil }
-            guard let date = ProgressDate.date(label, zone: snapshot.profile.timeZoneID) else { return nil }
-            let day = ProgressAnalytics.daily(snapshot: snapshot, localDate: label)
-            return Observation(label: label, value: value, date: date, complete: day.completeness == .complete, coverage: day.completeness?.rawValue.capitalized ?? "No tracking day")
+        let zone = readModel?.profile.timeZoneID ?? TimeZone.current.identifier
+        let savedDates = Set(visibleProgress?.savedFoodDates ?? [])
+        return (visibleProgress?.dailyReports ?? []).compactMap { day in
+            guard savedDates.contains(day.localDate), let value = day.foodTotals?.kcal, let date = ProgressDate.date(day.localDate, zone: zone) else { return nil }
+            return Observation(label: day.localDate, value: value, date: date,
+                               complete: day.completeness == .complete,
+                               coverage: day.completeness?.rawValue.capitalized ?? "No tracking day")
         }
     }
     var nutritionDomain: ClosedRange<Date> {
-        let zone = snapshot?.profile.timeZoneID ?? TimeZone.current.identifier
-        let firstDate = ProgressDate.date(report == .daily ? today : (period?.startLocalDate ?? today), zone: zone) ?? Date()
+        let zone = readModel?.profile.timeZoneID ?? TimeZone.current.identifier
+        let firstLabel = report == .daily ? today : (ProgressAnalytics.window(endingOn: today, days: report == .monthly ? 30 : 7, offset: 0, zone: zone).first ?? today)
+        let firstDate = ProgressDate.date(firstLabel, zone: zone) ?? Date()
         let lastDate = ProgressDate.date(today, zone: zone) ?? firstDate
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
@@ -116,12 +148,13 @@ struct DiaryProgressView: View {
         return start...end
     }
     var weights: [WeightObservation] {
-        guard let snapshot else { return [] }
-        let start = ProgressAnalytics.period(snapshot: snapshot, endingOn: today, days: 30).startLocalDate
-        let latest = ProgressAnalytics.latestWeightsByDate(snapshot: snapshot)
-        return latest.keys.filter { $0 >= start && $0 <= today }.sorted().compactMap { label in
-            guard let entry = latest[label], let date = ProgressDate.date(label, zone: snapshot.profile.timeZoneID) else { return nil }
-            return WeightObservation(label: label, date: date,
+        Self.weightObservations(progress: visibleProgress, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
+    }
+    static func weightObservations(progress: CoachProgress?, zone: String) -> [WeightObservation] {
+        (progress?.displayWeights ?? []).sorted { $0.localDate < $1.localDate }.compactMap { reference in
+            guard let date = ProgressDate.date(reference.localDate, zone: zone) else { return nil }
+            let entry = reference.record
+            return WeightObservation(label: reference.localDate, date: date,
                                      value: entry.unit == "lb" ? entry.value * 0.45359237 : entry.value)
         }
     }
@@ -140,7 +173,7 @@ struct DiaryProgressView: View {
 
     var body: some View {
         List {
-            if let snapshot, let daily {
+            if let readModel, let daily {
                 Section {
                     if typeSize.isAccessibilitySize {
                         VStack(alignment: .leading, spacing: 8) { reportControls }
@@ -197,7 +230,7 @@ struct DiaryProgressView: View {
                             }
                         }
                         .chartYScale(domain: .automatic(includesZero: true))
-                        .environment(\.timeZone, TimeZone(identifier: snapshot.profile.timeZoneID) ?? .gmt)
+                        .environment(\.timeZone, TimeZone(identifier: readModel.profile.timeZoneID) ?? .gmt)
                         .frame(height: 200).accessibilityHidden(true)
                         Text("Lighter bars show days without complete coverage. Missing days have no bar.")
                             .font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -221,11 +254,11 @@ struct DiaryProgressView: View {
                 .listRowBackground(Color.diaryChartSurface)
                 Section {
                     NavigationLink { weightDetail } label: {
-                        LabeledContent("Weight", value: snapshot.weights.max(by: { $0.measuredAt < $1.measuredAt }).map { "\($0.value.formatted()) \($0.unit)" } ?? "No measurements")
+                        LabeledContent("Weight", value: (visibleProgress?.latestWeight?.record).map { "\($0.value.formatted()) \($0.unit)" } ?? "No measurements")
                             .frame(minHeight: 48).monospacedDigit()
                     }.accessibilityIdentifier("openWeight")
-                    NavigationLink { workoutList(snapshot) } label: {
-                        LabeledContent("Workouts", value: "\(snapshot.workouts.count) recorded").frame(minHeight: 48).monospacedDigit()
+                    NavigationLink { workoutList } label: {
+                        LabeledContent("Workouts", value: "\(visibleProgress?.workoutTotal ?? 0) recorded").frame(minHeight: 48).monospacedDigit()
                     }.accessibilityIdentifier("openWorkouts")
                     Button { showGoals = true } label: {
                         HStack { Text("Goals").foregroundStyle(Color.diaryText); Spacer(); Text("Manage").foregroundStyle(Color.diarySecondary); Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary) }.frame(minHeight: 48)
@@ -252,6 +285,13 @@ struct DiaryProgressView: View {
                         }
                     }
                 }
+            } else if model.selection != nil {
+                if let loadError {
+                    Section {
+                        Text(loadError).foregroundStyle(Color.diaryError)
+                        Button("Retry loading progress") { Task { await reloadProgress() } }.frame(minHeight: 44)
+                    }
+                } else { ProgressView("Loading progress…") }
             } else {
                 ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle")
             }
@@ -264,8 +304,11 @@ struct DiaryProgressView: View {
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(item: $editingWeight) { WeightCorrectionView(model: model, entry: $0, localDate: weightDate($0)) }
-        .onChange(of: model.snapshot?.profile.id) { _, _ in
+        .task(id: reportRequest) { await reloadProgress() }
+        .onChange(of: model.selection) { _, _ in
             selectedWeightDate = nil; nutritionExpanded = false; coverageExpanded = false
+            weightBefore = nil; workoutBefore = nil; editingWeight = nil
+            showGoals = false; showWeight = false; showWorkout = false
         }
     }
 
@@ -282,7 +325,7 @@ struct DiaryProgressView: View {
 
     private var weightDetail: some View {
         List {
-            if let latest = snapshot?.weights.max(by: { $0.measuredAt < $1.measuredAt }) {
+            if let latest = visibleProgress?.latestWeight?.record {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Latest measurement").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -335,16 +378,24 @@ struct DiaryProgressView: View {
                 }
                 .listRowBackground(Color.diaryChartSurface)
 
-            if let snapshot {
-                Section("Measurement ledger") {
-                    ForEach(snapshot.weights.sorted { $0.measuredAt > $1.measuredAt }) { entry in
+            Section("Measurement ledger") {
+                    if let weightError {
+                        Text(weightError).foregroundStyle(Color.diaryError)
+                        Button("Retry loading measurements") { Task { await loadWeights() } }.frame(minHeight: 44)
+                    } else if loadedWeights != weightRequest { ProgressView("Loading measurements…") }
+                    ForEach(visibleWeights.sorted { $0.measuredAt > $1.measuredAt }) { entry in
                         Button { editingWeight = entry } label: {
                             LabeledContent(weightDate(entry), value: "\(entry.value.formatted()) \(entry.unit)")
                                 .foregroundStyle(Color.diaryText).monospacedDigit().frame(minHeight: 44)
                         }.accessibilityIdentifier("editWeight")
                     }
+                    if loadedWeights == weightRequest, weightPage?.hasMore == true {
+                        Button("Older measurements") { weightBefore = weightPage?.cursor }.frame(minHeight: 44)
+                    }
+                    if weightBefore != nil {
+                        Button("Latest measurements") { weightBefore = nil }.frame(minHeight: 44)
+                    }
                 }
-            }
             Section {
                 Button { showWeight = true } label: { Label("Log morning weight", systemImage: "plus").frame(minHeight: 44) }
                     .accessibilityIdentifier("logWeight")
@@ -353,29 +404,40 @@ struct DiaryProgressView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .navigationTitle("Weight").navigationBarTitleDisplayMode(.inline)
+        .task(id: weightRequest) { await loadWeights() }
         .toolbar(.hidden, for: .tabBar)
     }
 
-    private func workoutList(_ snapshot: DiarySnapshot) -> some View {
+    private var workoutList: some View {
         List {
                 Section {
                     Button("Log workout") { showWorkout = true }
                         .frame(minHeight: 44).accessibilityIdentifier("logWorkout")
-                    if snapshot.workouts.isEmpty {
+                    if let workoutError {
+                        Text(workoutError).foregroundStyle(Color.diaryError)
+                        Button("Retry loading workouts") { Task { await loadWorkouts() } }.frame(minHeight: 44)
+                    } else if loadedWorkouts != workoutRequest { ProgressView("Loading workouts…") }
+                    else if visibleWorkouts.isEmpty {
                         Text("No workouts recorded yet.").foregroundStyle(Color.diarySecondary)
                     }
-                    ForEach(snapshot.workouts.sorted { $0.performedAt > $1.performedAt }) { session in
+                    ForEach(visibleWorkouts.sorted { $0.performedAt > $1.performedAt }) { session in
                         NavigationLink {
                             WorkoutDetailView(model: model, sessionID: session.id)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(session.kind.title).font(.headline)
-                                Text("\(workoutDate(session, snapshot: snapshot)) · \(session.durationMinutes) minutes")
+                                Text("\(workoutDate(session)) · \(session.durationMinutes) minutes")
                                     .font(.subheadline).foregroundStyle(Color.diarySecondary)
                             }
                             .frame(minHeight: 44, alignment: .leading)
                         }
                         .accessibilityIdentifier("workoutRow")
+                    }
+                    if loadedWorkouts == workoutRequest, workoutPage?.hasMore == true {
+                        Button("Older workouts") { workoutBefore = workoutPage?.cursor }.frame(minHeight: 44)
+                    }
+                    if workoutBefore != nil {
+                        Button("Latest workouts") { workoutBefore = nil }.frame(minHeight: 44)
                     }
                 } header: {
                     Label { Text("Workouts") } icon: { Image(systemName: "figure.run").foregroundStyle(Color.diaryWorkout) }
@@ -385,12 +447,14 @@ struct DiaryProgressView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .navigationTitle("Workouts").navigationBarTitleDisplayMode(.inline)
+        .task(id: workoutRequest) { await loadWorkouts() }
         .toolbar(.hidden, for: .tabBar)
     }
 
     private func weightDate(_ entry: WeightEntry) -> String {
-        snapshot?.days.first { $0.id == entry.dayID }?.localDate
-            ?? ProgressDate.label(entry.measuredAt, zone: snapshot?.profile.timeZoneID ?? TimeZone.current.identifier)
+        entry.dayID.flatMap { weightDates[$0] }
+            ?? (visibleProgress?.latestWeight?.record.id == entry.id ? visibleProgress?.latestWeight?.localDate : nil)
+            ?? ProgressDate.label(entry.measuredAt, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
 
     private func reportButton(_ title: String, id: String, value: Report) -> some View {
@@ -417,24 +481,102 @@ struct DiaryProgressView: View {
             ?? "Seven-day change: insufficient data."
         return "Weight chart: \(weights.count) measured dates. " + average + " " + change + " " + samples.joined(separator: "; ")
     }
-    private func workoutDate(_ session: WorkoutSession, snapshot: DiarySnapshot) -> String {
-        snapshot.days.first { $0.id == session.dayID }?.localDate
-            ?? ProgressDate.label(session.performedAt, zone: snapshot.profile.timeZoneID)
+    private func workoutDate(_ session: WorkoutSession) -> String {
+        workoutDates[session.dayID]
+            ?? ProgressDate.label(session.performedAt, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
+    }
+
+    private func reloadProgress() async {
+        let key = reportRequest, requestID = UUID()
+        guard let ownership = key.ownership, model.selection == ownership else { return }
+        reportRequestID = requestID; loadError = nil
+        do {
+            let value = try await Self.loadProgress(model: model, endingOn: key.date,
+                days: key.report == .daily ? 1 : (key.report == .monthly ? 30 : 7))
+            guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
+            progress = value; loadedReport = key
+        } catch {
+            guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
+            loadError = "Could not load progress. Your diary is preserved."; return
+        }
+    }
+
+    static func loadProgress(model: DiaryViewModel, endingOn: String, days: Int) async throws -> CoachProgress {
+        guard let ownership = model.selection else { throw DiaryError.wrongOwner }
+        let generation = model.changeGeneration
+        let report = try await model.store.progressForDisplay(endingOn: endingOn, days: days, expectedProfileID: ownership.identity.profileID)
+        guard !Task.isCancelled, model.selection == ownership else { throw DiaryError.wrongOwner }
+        guard model.changeGeneration == generation else { throw DiaryError.staleRevision }
+        return report
+    }
+
+    private func loadWeights() async {
+        let key = weightRequest, requestID = UUID()
+        guard let ownership = key.ownership, model.selection == ownership else { return }
+        weightRequestID = requestID; weightError = nil
+        do {
+            let page = try await model.store.weightHistory(before: key.before, expectedProfileID: ownership.identity.profileID)
+            var dates: [UUID: String] = [:]
+            for id in Set(page.values.compactMap(\.dayID)) {
+                guard !Task.isCancelled, model.selection == ownership, weightRequest == key, weightRequestID == requestID else { return }
+                dates[id] = try await model.store.trackingDay(id: id, expectedProfileID: ownership.identity.profileID).localDate
+            }
+            guard !Task.isCancelled, model.selection == ownership, weightRequest == key, weightRequestID == requestID else { return }
+            weightPage = page; weightDates = dates; loadedWeights = key
+        } catch {
+            guard !Task.isCancelled, model.selection == ownership, weightRequest == key, weightRequestID == requestID else { return }
+            weightError = "Could not load measurements. Your diary is preserved."
+        }
+    }
+
+    private func loadWorkouts() async {
+        let key = workoutRequest, requestID = UUID()
+        guard let ownership = key.ownership, model.selection == ownership else { return }
+        workoutRequestID = requestID; workoutError = nil
+        do {
+            let page = try await model.store.workoutHistory(before: key.before, expectedProfileID: ownership.identity.profileID)
+            var dates: [UUID: String] = [:]
+            for id in Set(page.values.map(\.dayID)) {
+                guard !Task.isCancelled, model.selection == ownership, workoutRequest == key, workoutRequestID == requestID else { return }
+                dates[id] = try await model.store.trackingDay(id: id, expectedProfileID: ownership.identity.profileID).localDate
+            }
+            guard !Task.isCancelled, model.selection == ownership, workoutRequest == key, workoutRequestID == requestID else { return }
+            workoutPage = page; workoutDates = dates; loadedWorkouts = key
+        } catch {
+            guard !Task.isCancelled, model.selection == ownership, workoutRequest == key, workoutRequestID == requestID else { return }
+            workoutError = "Could not load workouts. Your diary is preserved."
+        }
     }
 }
 
 struct WorkoutDetailView: View {
     @Bindable var model: DiaryViewModel
     let sessionID: UUID
-    @State private var editing = false
+    @State private var editingSession: WorkoutSession?
+    @State private var editingDate: String?
     @State private var pendingDeletion: WorkoutSession?
-    @State private var deletionOwnerID: UUID?
+    @State private var ownership: DiarySelectionOwnership?
+    @State private var session: WorkoutSession?
+    @State private var day: TrackingDay?
+    @State private var loadedGeneration: UInt64?
+    @State private var requestID = UUID()
+    @State private var loadError: String?
+    @State private var loading = true
     @State private var deleting = false
     @Environment(\.dismiss) private var dismiss
 
+    init(model: DiaryViewModel, sessionID: UUID) {
+        self.model = model; self.sessionID = sessionID
+        _ownership = State(initialValue: model.selection)
+    }
+
+    private var currentSession: WorkoutSession? {
+        model.selection == ownership && loadedGeneration == model.changeGeneration ? session : nil
+    }
+
     var body: some View {
         List {
-            if let snapshot = model.snapshot, let session = snapshot.workouts.first(where: { $0.id == sessionID }) {
+            if let session = currentSession {
                 Section {
                     Text(session.kind.title).font(.title2.weight(.semibold))
                     Text("\(session.durationMinutes) minutes")
@@ -457,16 +599,19 @@ struct WorkoutDetailView: View {
                     Label { Text("Exercises") } icon: { Image(systemName: "dumbbell").foregroundStyle(Color.diaryWorkout) }
                 }
                 Section {
-                    Button("Edit workout") { editing = true }.frame(minHeight: 44)
+                    Button("Edit workout") { editingDate = day?.localDate; editingSession = session }.frame(minHeight: 44)
                         .accessibilityIdentifier("editWorkout")
                     Button("Delete workout", role: .destructive) {
-                        deletionOwnerID = snapshot.profile.id
                         pendingDeletion = session
                     }.frame(minHeight: 44).accessibilityIdentifier("deleteWorkout")
                 }
                 if let message = model.errorMessage {
                     Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
                 }
+            } else if loading { ProgressView("Loading workout…") }
+            else {
+                ContentUnavailableView(loadError ?? "Workout unavailable", systemImage: "figure.run")
+                Button("Reload workout") { Task { await loadSession() } }.frame(minHeight: 44)
             }
         }
         .disabled(deleting)
@@ -477,34 +622,57 @@ struct WorkoutDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .alert(deletionTitle, isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }), presenting: pendingDeletion) { session in
             Button("Delete workout", role: .destructive) {
-                guard let owner = deletionOwnerID, model.snapshot?.profile.id == owner, !deleting else { return }
+                guard let ownership, model.selection == ownership, !deleting else { return }
+                let owner = ownership.identity.profileID
                 deleting = true
                 Task {
+                    guard model.selection == ownership else { deleting = false; return }
                     let success = await model.change {
                         try await model.store.deleteWorkout(id: session.id, expectedRevision: session.revision, expectedProfileID: owner)
                     }
                     deleting = false
-                    if success && model.snapshot?.profile.id == owner { dismiss() }
+                    if success && model.selection == ownership { dismiss() }
                 }
             }
             Button("Cancel", role: .cancel) { pendingDeletion = nil }
         } message: { _ in
             Text("This removes only this workout and its exercise details. Meals, weights and other workouts are preserved.")
         }
-        .onChange(of: model.snapshot?.profile.id) { _, _ in pendingDeletion = nil; editing = false }
-        .sheet(isPresented: $editing) {
-            if let snapshot = model.snapshot, let session = snapshot.workouts.first(where: { $0.id == sessionID }),
-               let date = snapshot.days.first(where: { $0.id == session.dayID })?.localDate {
-                WorkoutEditorView(model: model, localDate: date, session: session)
+        .task(id: model.changeGeneration) { await loadSession() }
+        .onChange(of: model.selection) { _, selected in
+            pendingDeletion = nil; editingSession = nil
+            if selected != ownership { dismiss() }
+        }
+        .sheet(item: $editingSession) { session in
+            if let editingDate {
+                WorkoutEditorView(model: model, localDate: editingDate, session: session)
             }
         }
     }
 
     private var deletionTitle: String {
         guard let session = pendingDeletion else { return "Delete workout?" }
-        let date = model.snapshot?.days.first { $0.id == session.dayID }?.localDate ?? "its recorded day"
+        let date = day?.localDate ?? "its recorded day"
         return "Delete \(session.kind.title.lowercased()) workout on \(date)?"
     }
+
+    private func loadSession() async {
+        guard let ownership, model.selection == ownership else { return }
+        let generation = model.changeGeneration, request = UUID()
+        requestID = request; loading = true; loadError = nil
+        do {
+            let value = try await model.store.coachWorkout(id: sessionID, expectedProfileID: ownership.identity.profileID)
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
+            let recordedDay = try await model.store.trackingDay(id: value.dayID, expectedProfileID: ownership.identity.profileID)
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
+            session = value; day = recordedDay; loadedGeneration = generation; loading = false
+        } catch {
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
+            session = nil; day = nil; loading = false
+            loadError = "Could not load this workout. It may have been removed."
+        }
+    }
+
 }
 
 private extension WorkoutKind {

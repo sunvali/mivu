@@ -4,13 +4,17 @@ import Testing
 
 @Suite @MainActor struct ProgressEditorStateTests {
     @Test(arguments: ["2026-03-08", "2026-11-01"])
-    func intakeChartDomainContainsWholeDaysAcrossDaylightSaving(endingOn: String) throws {
+    func intakeChartDomainContainsWholeDaysAcrossDaylightSaving(endingOn: String) async throws {
         let zone = "America/Los_Angeles"
         let day = TrackingDay(localDate: endingOn, timeZoneID: zone, startAt: try #require(ProgressDate.date(endingOn, zone: zone)), completeness: .unknown)
         var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic chart range", timeZoneID: zone))
         snapshot.days = [day]; snapshot.activeDayID = day.id
-        let model = DiaryViewModel(store: DiaryStore(directory: URL.temporaryDirectory.appending(path: "ChartRange-" + UUID().uuidString)))
-        model.snapshot = snapshot
+        let directory = URL.temporaryDirectory.appending(path: "ChartRange-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DiaryStore(directory: directory)
+        _ = try await store.importProfile(snapshot)
+        let model = DiaryViewModel(store: store)
+        await model.load(createDefaultProfile: false)
         let domain = DiaryProgressView(model: model).nutritionDomain
         let spring = endingOn == "2026-03-08"
         let formatter = ISO8601DateFormatter()
@@ -19,25 +23,25 @@ import Testing
     }
 
     @Test(arguments: [false, true], [false, true])
-    func chartAndReportSelectHighestRevisionOnTiedMeasurementTime(legacy: Bool, reverse: Bool) throws {
+    func chartAndReportSelectHighestRevisionOnTiedMeasurementTime(legacy: Bool, reverse: Bool) async throws {
         var snapshot = tiedWeightSnapshot()
         let measured = ISO8601DateFormatter().date(from: "2026-01-08T00:30:00Z")!
         let higher = WeightEntry(dayID: legacy ? nil : snapshot.days[0].id, measuredAt: measured, value: 70, revision: 2)
         let lower = WeightEntry(dayID: legacy ? nil : snapshot.days[1].id, measuredAt: measured, value: 80, revision: 1)
         snapshot.weights = reverse ? [lower, higher] : [higher, lower]
         try snapshot.validate()
-        try assertChartAndReport(snapshot, expectedKg: 70)
+        try await assertChartAndReport(snapshot, expectedKg: 70)
     }
 
     @Test(arguments: [false, true], [false, true])
-    func equalRevisionTieKeepsFirstEntryInChartAndReport(legacy: Bool, reverse: Bool) throws {
+    func equalRevisionTieKeepsFirstEntryInChartAndReport(legacy: Bool, reverse: Bool) async throws {
         var snapshot = tiedWeightSnapshot()
         let measured = ISO8601DateFormatter().date(from: "2026-01-08T00:30:00Z")!
         let first = WeightEntry(dayID: legacy ? nil : snapshot.days[0].id, measuredAt: measured, value: 70, revision: 2)
         let second = WeightEntry(dayID: legacy ? nil : snapshot.days[1].id, measuredAt: measured, value: 80, revision: 2)
         snapshot.weights = reverse ? [second, first] : [first, second]
         try snapshot.validate()
-        try assertChartAndReport(snapshot, expectedKg: reverse ? 80 : 70)
+        try await assertChartAndReport(snapshot, expectedKg: reverse ? 80 : 70)
     }
 
     private func tiedWeightSnapshot() -> DiarySnapshot {
@@ -52,12 +56,16 @@ import Testing
         return snapshot
     }
 
-    private func assertChartAndReport(_ snapshot: DiarySnapshot, expectedKg: Double) throws {
-        let store = DiaryStore(directory: URL.temporaryDirectory.appending(path: "ProgressTie-" + UUID().uuidString))
+    private func assertChartAndReport(_ snapshot: DiarySnapshot, expectedKg: Double) async throws {
+        let directory = URL.temporaryDirectory.appending(path: "ProgressTie-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DiaryStore(directory: directory)
+        _ = try await store.importProfile(snapshot)
         let model = DiaryViewModel(store: store)
-        model.snapshot = snapshot
-        let chart = DiaryProgressView(model: model).weights
-        let report = ProgressAnalytics.weight(snapshot: snapshot, endingOn: "2026-01-07")
+        await model.load(createDefaultProfile: false)
+        let bounded = try await DiaryProgressView.loadProgress(model: model, endingOn: "2026-01-07", days: 30)
+        let chart = DiaryProgressView.weightObservations(progress: bounded, zone: snapshot.profile.timeZoneID)
+        let report = bounded.weight
         #expect(chart.count == 1)
         #expect(chart.first?.label == "2026-01-07")
         #expect(chart.first?.value == expectedKg)
@@ -127,20 +135,20 @@ import Testing
                                                   targets: NutritionValues(kcal: target), goalWeightKg: nil,
                                                   exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
         }
-        var values = GoalEditorValues(snapshot: try await store.snapshot(), localDate: "2026-02-01")
+        var values = GoalEditorValues(snapshot: try await store.snapshotForExport(), localDate: "2026-02-01")
         values.kcal = ""
         #expect(values.valid)
         let cleared = try await store.setGoals(values.record(zone: profile.timeZoneID), expectedRevision: values.expectedRevision, expectedProfileID: profile.id)
-        var snapshot = try await store.snapshot()
+        var snapshot = try await store.snapshotForExport()
         #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-01-15").goal?.targets.kcal == 1800)
         #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-02-15").goal?.targets.kcal == nil)
         #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-02-15").remainingFromRecorded.kcal == nil)
         values.kcal = "2000"
         _ = try await store.setGoals(values.record(zone: profile.timeZoneID), expectedRevision: cleared.revision, expectedProfileID: profile.id)
-        let later = GoalEditorValues(snapshot: try await store.snapshot(), localDate: "2026-03-01")
+        let later = GoalEditorValues(snapshot: try await store.snapshotForExport(), localDate: "2026-03-01")
         #expect(later.valid)
         _ = try await store.setGoals(later.record(zone: profile.timeZoneID), expectedRevision: later.expectedRevision, expectedProfileID: profile.id)
-        snapshot = try await store.snapshot()
+        snapshot = try await store.snapshotForExport()
         #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-02-15").goal?.targets.kcal == 2000)
         #expect(ProgressAnalytics.daily(snapshot: snapshot, localDate: "2026-03-15").goal?.targets.kcal == nil)
         for invalid in ["0", "-1", "inf", "nan", "invalid"] {
@@ -163,7 +171,7 @@ import Testing
                                                 targets: NutritionValues(kcal: 2_000), goalWeightKg: nil,
                                                 exerciseCreditEnabled: false),
                                       expectedRevision: nil, expectedProfileID: profile.id)
-        let snapshot = try await store.snapshot()
+        let snapshot = try await store.snapshotForExport()
         let historical = GoalEditorValues(snapshot: snapshot, localDate: "2026-01-01")
         #expect(historical.kcal == "1800.0")
         #expect(historical.original?.id == older.id)
@@ -181,6 +189,6 @@ import Testing
         await #expect(throws: DiaryError.staleRevision) {
             try await store.setGoals(attempted, expectedRevision: historical.expectedRevision, expectedProfileID: profile.id)
         }
-        #expect(try await store.snapshot().goals.first { $0.id == older.id }?.targets.kcal == 1_900)
+        #expect(try await store.snapshotForExport().goals.first { $0.id == older.id }?.targets.kcal == 1_900)
     }
 }

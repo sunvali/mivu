@@ -49,7 +49,7 @@ import Lottie
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic root", timeZoneID: "UTC"))
         _ = try await store.startDay()
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "CompanionRoot-" + UUID().uuidString)))
         let coach = CoachViewModel(diary: diary, connection: connection)
         let pip = CharacterCatalog.bundled.resolve("pip")
@@ -98,7 +98,7 @@ import Lottie
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic cold save", timeZoneID: "UTC"))
         _ = try await store.startDay()
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "PipColdSave-" + UUID().uuidString)))
         let coach = CoachViewModel(diary: diary, connection: connection)
         let pip = CharacterCatalog.bundled.resolve("pip")
@@ -140,7 +140,7 @@ import Lottie
             #expect(await eventually { runtime.triggerCount == 1 }, "A still-current save must play when the first player becomes ready")
             #expect(runtime.displayedPose == .saved)
         }
-        #expect(diary.snapshot?.meals.count == 1, "Character loading must not duplicate or lose the saved record")
+        #expect(diary.readModel?.meals.count == 1, "Character loading must not duplicate or lose the saved record")
     }
 
     @Test func firstRunTodayShowsPipWithoutInventingDiaryRecords() async throws {
@@ -148,7 +148,7 @@ import Lottie
         let store = DiaryStore(directory: directory)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic empty", timeZoneID: "UTC"))
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "PipEmpty-" + UUID().uuidString)))
         let coach = CoachViewModel(diary: diary, connection: connection)
         let runtime = CompanionRuntime()
@@ -167,8 +167,8 @@ import Lottie
             try? FileManager.default.removeItem(at: directory)
         }
         #expect(await eventually { runtime.isReady }, "The real Today surface must load the companion before the first meal")
-        #expect(diary.snapshot?.meals.isEmpty == true)
-        #expect(diary.snapshot?.days.isEmpty == true, "Showing the companion must not create a recorded day")
+        #expect(diary.readModel?.meals.isEmpty == true)
+        #expect((try? await diary.store.snapshotForExport())?.days.isEmpty == true, "Showing the companion must not create a recorded day")
     }
 
     @Test func untouchedTodayKeepsBreathingDuringAnEmptyBackgroundCoachRefresh() async throws {
@@ -176,11 +176,11 @@ import Lottie
         let store = DiaryStore(directory: directory)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic quiet Today", timeZoneID: "UTC"))
         let gate = CompanionBackgroundRefreshGate()
-        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
             await gate.pauseIfArmed()
-            return try await store.snapshot(expectedProfileID: id)
+            return try await store.diaryReadModel(expectedProfileID: id)
         })
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let suite = "PipQuietToday-" + UUID().uuidString
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: suite)))
         let coach = CoachViewModel(diary: diary, connection: connection)
@@ -215,7 +215,7 @@ import Lottie
         try #require(await eventually { gate.waiting }, "Exercise the real worker's legacy-capture refresh")
         try #require(diary.isSaving && coach.isWorking,
                      "The shared save lock must be held while the empty background refresh is suspended")
-        #expect(coach.turns.isEmpty && diary.snapshot?.meals.isEmpty == true)
+        #expect(coach.turns.isEmpty && diary.readModel?.meals.isEmpty == true)
 
         // Hold the real await point across several SwiftUI updates. A transient thinking output
         // is still a failure even if a later render returns to idle before this check finishes.
@@ -233,7 +233,7 @@ import Lottie
         gate.release()
         await coach.waitForWorker()
         #expect(!diary.isSaving && !coach.isWorking)
-        #expect(coach.turns.isEmpty && diary.snapshot?.meals.isEmpty == true)
+        #expect(coach.turns.isEmpty && diary.readModel?.meals.isEmpty == true)
     }
 
     @Test(arguments: [false, true])
@@ -242,7 +242,7 @@ import Lottie
         let store = DiaryStore(directory: directory)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic submit", timeZoneID: "UTC"))
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "PipSubmit-" + UUID().uuidString)))
         let coach = CoachViewModel(diary: diary, connection: connection)
         let path = CharacterCatalog.bundled.resolve("pip").animationResourcePath
@@ -289,8 +289,8 @@ import Lottie
             try #require(await eventually { outputs.last?.pose == .saved })
             #expect(await eventually { runtime.displayedPose == .saved })
         }
-        #expect(diary.snapshot?.coachTurns.map(\.id) == [operation])
-        #expect(diary.snapshot?.meals.isEmpty == true)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.map(\.id) == [operation])
+        #expect(diary.readModel?.meals.isEmpty == true)
     }
 
 }

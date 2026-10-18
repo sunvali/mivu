@@ -2,8 +2,8 @@ import Foundation
 import SQLite3
 
 extension DiaryDatabase {
-    /// Staged explicitly; shipping activation and the legacy-writer fence belong together.
-    func migrateForPagedStorage(maximumBytes: Int) throws {
+    /// Existing profiles migrate once; ordinary version-1 opens never rewrite schema.
+    func migrateForPagedStorage(maximumBytes: Int, beforeCommit: () throws -> Void = {}) throws {
         let maximumBytes = min(maximumBytes, 350_000_000)
         guard maximumBytes > 0 else { throw DiaryError.invalidData }
         try execute("BEGIN IMMEDIATE")
@@ -33,6 +33,9 @@ extension DiaryDatabase {
             try createDayMealIndexes()
             try finishPagedAccounting(maximumBytes: maximumBytes)
             try execute("PRAGMA user_version = 1")
+            try validateFileIdentity()
+            try beforeCommit()
+            try validateFileIdentity()
             try execute("COMMIT")
         } catch {
             try? execute("ROLLBACK")
@@ -85,6 +88,9 @@ extension DiaryDatabase {
         try execute("CREATE INDEX coach_turn_pending_day ON coach_turn(COALESCE(json_extract(CAST(payload AS TEXT), '$.resolvedDayID'), json_extract(CAST(payload AS TEXT), '$.activeDayID')), json_extract(CAST(payload AS TEXT), '$.state'), ordinal, id)")
         try execute("CREATE INDEX coach_index_display_date ON coach_index(displayLocalDate, state, sequence)")
         try execute("CREATE INDEX weight_unlinked_time ON weight(json_extract(CAST(payload AS TEXT), '$.measuredAt'), ordinal, id) WHERE parent IS NULL")
+        try execute("CREATE INDEX weight_latest_measurement ON weight(json_extract(CAST(payload AS TEXT), '$.measuredAt') DESC, json_extract(CAST(payload AS TEXT), '$.revision') DESC, ordinal)")
+        try execute("CREATE INDEX weight_chronology ON weight(json_extract(CAST(payload AS TEXT), '$.measuredAt') DESC, ordinal DESC, id DESC)")
+        try execute("CREATE INDEX workout_chronology ON workout(json_extract(CAST(payload AS TEXT), '$.performedAt') DESC, ordinal DESC, id DESC)")
     }
 
     private struct StorageRow {

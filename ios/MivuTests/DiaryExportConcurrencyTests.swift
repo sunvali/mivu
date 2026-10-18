@@ -51,7 +51,7 @@ import Testing
         try await gate.waitUntilReached()
         let beforeCapture = try await store.diaryHead(expectedProfileID: f.profileID)
         let payload = try f.payload(head: beforeCapture, text: "Synthetic concurrent capture", photos: [f.photo()])
-        let captured = try await store.captureCoachSubmission(payload, expectedProfileID: f.profileID)
+        let captured = try await capturedSubmission(store, payload, expectedProfileID: f.profileID)
         let committed = try await store.diaryHead(expectedProfileID: f.profileID)
         #expect(committed.revision == beforeCapture.revision + 1)
         #expect(captured.id == payload.submissionID)
@@ -105,7 +105,7 @@ import Testing
         #expect(try Data(contentsOf: f.url) == bytes)
         #expect(try FileManager.default.contentsOfDirectory(atPath: scratch.path) == ["unrelated-sentinel"])
         let payload = try f.payload(head: head)
-        #expect(try await store.captureCoachSubmission(payload, expectedProfileID: f.profileID).id == payload.submissionID)
+        #expect(try await capturedSubmission(store, payload, expectedProfileID: f.profileID).id == payload.submissionID)
     }
 
     @Test(arguments: [DiaryExportStage.cloneCreated, .cloneStep])
@@ -226,7 +226,7 @@ import Testing
         let store = DiaryStore(directory: f.root)
         let head = try await store.selectPagedProfile(f.profileID)
         let photo = f.photo(), payload = try f.payload(head: head, photos: [photo])
-        _ = try await store.captureCoachSubmission(payload, expectedProfileID: f.profileID)
+        _ = try await capturedSubmission(store, payload, expectedProfileID: f.profileID)
         let receipt = try await store.applyCoachFood(turnID: payload.submissionID, targetLocalDate: f.before.days[0].localDate,
             items: [FoodItem(name: "Synthetic transferred photo", nutrition: NutritionValues(kcal: 100))], expectedProfileID: f.profileID)
         let coordinator = DiaryExportCoordinator(store: store, temporaryDirectory: f.root)
@@ -315,7 +315,7 @@ import Testing
             #expect(try ChatHistoryFixture.completeReference(databaseURL: candidate).revision == f.before.revision + 1)
         } else { #expect(!FileManager.default.fileExists(atPath: candidate.path)) }
         let payload = try f.payload(head: head)
-        #expect(try await store.captureCoachSubmission(payload, expectedProfileID: f.profileID).id == payload.submissionID)
+        #expect(try await capturedSubmission(store, payload, expectedProfileID: f.profileID).id == payload.submissionID)
         try await coordinator.release(ticket)
     }
 
@@ -333,7 +333,7 @@ import Testing
         #expect(try Data(contentsOf: f.url) == before)
         #expect(FileManager.default.fileExists(atPath: prepared.protectedDatabaseURL.path))
         let payload = try f.payload(head: head)
-        _ = try await store.captureCoachSubmission(payload, expectedProfileID: f.profileID)
+        _ = try await capturedSubmission(store, payload, expectedProfileID: f.profileID)
         let committed = try f.durableState()
         await #expect(throws: (any Error).self) { try await store.installReplacement(prepared) }
         #expect(try f.durableState() == committed)
@@ -401,7 +401,7 @@ import Testing
         let operation = Task { try await gate.observe { try await backup.save(request, coordinator: coordinator) } }
         try await gate.waitUntilReached()
         let payload = try f.payload(head: head)
-        _ = try await store.captureCoachSubmission(payload, expectedProfileID: f.profileID)
+        _ = try await capturedSubmission(store, payload, expectedProfileID: f.profileID)
         #expect(try await store.diaryHead(expectedProfileID: f.profileID).revision == head.revision + 1)
         await gate.release(); try await operation.value
         #expect(try DiaryArchive.readContents(folder.appending(path: FolderBackup.filename(profileID: f.profileID))) == f.before)
@@ -450,7 +450,7 @@ import Testing
         try await backup.save(f.before, generation: generation)
         let previousDate = await backup.status(profileID: f.profileID).savedAt
         if change != "retired" {
-            _ = try await store.captureCoachSubmission(try f.payload(head: head), expectedProfileID: f.profileID)
+            _ = try await capturedSubmission(store, try f.payload(head: head), expectedProfileID: f.profileID)
             head = try await store.diaryHead(expectedProfileID: f.profileID)
         }
         let coordinator = DiaryExportCoordinator(store: store, temporaryDirectory: f.root,
@@ -497,7 +497,7 @@ import Testing
         try await backup.save(f.before, generation: generation)
         let priorDate = await backup.status(profileID: f.profileID).savedAt
         let output = folder.appending(path: FolderBackup.filename(profileID: f.profileID)), priorBytes = try Data(contentsOf: output)
-        _ = try await store.captureCoachSubmission(try f.payload(head: head), expectedProfileID: f.profileID)
+        _ = try await capturedSubmission(store, try f.payload(head: head), expectedProfileID: f.profileID)
         let before = try f.durableState()
         let coordinator = DiaryExportCoordinator(store: store, temporaryDirectory: f.root,
             checkpoint: { current, url in if current == stage { await probe.record(url); throw POSIXError(.ENOSPC) } })
@@ -520,7 +520,7 @@ import Testing
         let backup = FolderBackup(directory: f.root.appending(path: "backup-metadata"),
             beforeAcknowledgementWrite: { _ in throw POSIXError(.ENOSPC) })
         await backup.selectProfile(f.profileID)
-        _ = try await store.captureCoachSubmission(try f.payload(head: head), expectedProfileID: f.profileID)
+        _ = try await capturedSubmission(store, try f.payload(head: head), expectedProfileID: f.profileID)
         let coordinator = DiaryExportCoordinator(store: store, temporaryDirectory: f.root)
         let request = try await store.exportRequest(expectedProfileID: f.profileID, backupGeneration: generation)
         await #expect(throws: (any Error).self) { try await backup.save(request, coordinator: coordinator) }

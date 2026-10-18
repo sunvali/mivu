@@ -174,8 +174,9 @@ extension DayCompleteness {
 }
 
 struct MealRow: View {
-    let meal: DiaryMeal
+    let meal: MealReadModel
     var prominent = false
+    var model: DiaryViewModel? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     private var title: String {
         let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -199,8 +200,9 @@ struct MealRow: View {
     }
     var body: some View {
         HStack(spacing: 12) {
-            if let data = meal.photos.first?.data, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill().frame(width: prominent ? 72 : 40, height: prominent ? 72 : 40).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
+            if let reference = meal.photos.first, let model {
+                DiaryPhotoPreview(model: model, reference: reference, height: prominent ? 72 : 40)
+                    .frame(width: prominent ? 72 : 40).accessibilityHidden(true)
             } else { Image(systemName: "fork.knife").font(.body).foregroundStyle(Color.diaryCarbs).frame(width: 24).accessibilityHidden(true) }
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 8) {

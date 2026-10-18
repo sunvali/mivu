@@ -73,7 +73,7 @@ import Testing
         #expect(try fixture.durableState() == before)
         let store = DiaryStore(directory: fixture.root)
         _ = try await store.selectPagedProfile(fixture.profileID)
-        let accepted = try await store.captureCoachSubmission(payload, expectedProfileID: fixture.profileID)
+        let accepted = try await capturedSubmission(store, payload, expectedProfileID: fixture.profileID)
         #expect(accepted.segmentID == boundary)
         let reopened = try DiaryDatabase(url: fixture.url)
         let page = try reopened.coachPage(.latest, expectedProfileID: fixture.profileID)
@@ -97,8 +97,8 @@ import Testing
         let head = try await store.selectPagedProfile(fixture.profileID)
         var context = try fixture.payload(head: head).context; context.activeConversationSegmentID = firstBoundary
         let stale = try fixture.payload(head: head, context: context)
-        await #expect(throws: DiaryError.staleRevision) { try await store.captureCoachSubmission(stale, expectedProfileID: fixture.profileID) }
-        let captured = try await store.captureCoachSubmission(try fixture.payload(head: head), expectedProfileID: fixture.profileID)
+        await #expect(throws: DiaryError.staleRevision) { try await capturedSubmission(store, stale, expectedProfileID: fixture.profileID) }
+        let captured = try await capturedSubmission(store, try fixture.payload(head: head), expectedProfileID: fixture.profileID)
         #expect(captured.segmentID == returnedBoundary)
         let page = try DiaryDatabase(url: fixture.url).coachPage(.latest, expectedProfileID: fixture.profileID)
         #expect(page.exchanges.map(\.segmentID) == [firstBoundary, returnedBoundary])
@@ -112,14 +112,14 @@ import Testing
         let store = DiaryStore(directory: fixture.root)
         let head = try await store.selectPagedProfile(fixture.profileID)
         let payload = try fixture.payload(head: head, photos: [fixture.photo()])
-        let accepted = try await store.captureCoachSubmission(payload, expectedProfileID: fixture.profileID)
+        let accepted = try await capturedSubmission(store, payload, expectedProfileID: fixture.profileID)
         let next = UUID()
         try fixture.execute("UPDATE storage_head SET activeConversationSegmentID = '\(next.uuidString)'")
         let reopened = DiaryStore(directory: fixture.root)
         _ = try await reopened.selectPagedProfile(fixture.profileID)
-        let retried = try await reopened.captureCoachSubmission(payload, expectedProfileID: fixture.profileID)
+        let retried = try await capturedSubmission(reopened, payload, expectedProfileID: fixture.profileID)
         #expect(retried == accepted && retried.segmentID == boundary)
-        #expect(try await reopened.reconcileCoachCapture(submissionID: payload.submissionID,
+        #expect(try await reconciledSubmission(reopened, submissionID: payload.submissionID,
             expectedManifest: payload.manifest, expectedProfileID: fixture.profileID) == .accepted(accepted))
         #expect(try fixture.rows("SELECT COUNT(*) FROM coach_turn") == [["1"]])
     }

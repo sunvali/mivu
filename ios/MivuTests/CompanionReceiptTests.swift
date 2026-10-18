@@ -2,49 +2,76 @@ import Foundation
 import Testing
 @testable import Mivu
 
+private enum ReceiptGateFailure: Error { case timeout, closed }
+
+private func receiptDeadline(_ operation: @escaping @Sendable () async throws -> Void) async throws {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        group.addTask { try await operation() }
+        group.addTask { try await Task.sleep(for: .seconds(10)); throw ReceiptGateFailure.timeout }
+        defer { group.cancelAll() }
+        _ = try await group.next()
+    }
+}
+
 private actor ReceiptRefreshGate {
     private var continuation: CheckedContinuation<Void, Never>?
     private var paused = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
+    private let entered = AsyncStream<Void>.makeStream()
     func pause() async {
-        guard !paused else { return }
-        paused = true
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            waiters.forEach { $0.resume() }; waiters = []
-        }
+        guard !paused else { return }; paused = true
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation; entered.continuation.yield(())
+            }
+        } onCancel: { Task { await self.release() } }
     }
-    func waitUntilPaused() async {
-        if !paused { await withCheckedContinuation { waiters.append($0) } }
+    func waitUntilPaused() async throws {
+        if paused { return }
+        let stream = entered.stream
+        do {
+            try await receiptDeadline {
+                for await _ in stream { return }
+                throw ReceiptGateFailure.closed
+            }
+        } catch { release(); throw error }
     }
     func release() { continuation?.resume(); continuation = nil }
 }
 
-private actor OrderedReceiptRefreshes {
-    private var started = 0
-    private var continuations: [Int: CheckedContinuation<Void, Never>] = [:]
-    private var waiters: [Int: CheckedContinuation<Void, Never>] = [:]
+private enum ReceiptReviewAction { @TaskLocal static var name: String? }
 
-    func pause() async {
-        started += 1
-        let index = started
-        await withCheckedContinuation { continuation in
-            continuations[index] = continuation
-            waiters.removeValue(forKey: index)?.resume()
-        }
+private actor OrderedReceiptRefreshes {
+    private var started: Set<String> = []
+    private var continuations: [String: CheckedContinuation<Void, Never>] = [:]
+    private let entered = AsyncStream<String>.makeStream()
+    func pause(_ name: String?) async {
+        guard let name else { return }
+        started.insert(name)
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                continuations[name] = continuation; entered.continuation.yield(name)
+            }
+        } onCancel: { Task { await self.release(name) } }
     }
-    func waitUntilPaused(_ index: Int) async {
-        if started < index { await withCheckedContinuation { waiters[index] = $0 } }
+    func waitUntilPaused(_ name: String) async throws {
+        if started.contains(name) { return }
+        let stream = entered.stream
+        do {
+            try await receiptDeadline {
+                for await value in stream { if value == name { return } }
+                throw ReceiptGateFailure.closed
+            }
+        } catch { releaseAll(); throw error }
     }
-    func release(_ index: Int) { continuations.removeValue(forKey: index)?.resume() }
+    func release(_ name: String) { continuations.removeValue(forKey: name)?.resume() }
+    func releaseAll() { let pending = continuations.values; continuations = [:]; for continuation in pending { continuation.resume() } }
 }
 
 private actor ReceiptRefreshFailureOnce {
     private var shouldFail = true
-    func snapshot(_ store: DiaryStore, owner: UUID) async throws -> DiarySnapshot {
+    func snapshot(_ store: DiaryStore, owner: UUID) async throws -> DiaryReadModel {
         if shouldFail { shouldFail = false; throw DiaryError.persistenceFailed }
-        return try await store.snapshot(expectedProfileID: owner)
+        return try await store.diaryReadModel(expectedProfileID: owner)
     }
 }
 
@@ -59,18 +86,18 @@ private actor ReceiptRefreshFailureOnce {
     }
 
     private func proposal(_ store: DiaryStore, _ profile: DiaryProfile, _ day: TrackingDay) async throws -> DiaryMeal {
-        let meal = try await store.capture(text: "Synthetic review apple", photos: [], reviewFirst: true,
+        let meal = try await capturedMeal(store, text: "Synthetic review apple", photos: [], reviewFirst: true,
             dayID: day.id, expectedProfileID: profile.id)
         try await store.applyAnalysis(AnalysisOutput(profileID: profile.id, mealID: meal.id,
             submissionID: meal.submissions[0].id, baseRevision: 0,
             items: [FoodItem(name: "Synthetic apple", nutrition: NutritionValues(kcal: 95))]), expectedProfileID: profile.id)
-        return try #require(await store.snapshot().meals.first { $0.id == meal.id })
+        return try #require(await store.snapshotForExport().meals.first { $0.id == meal.id })
     }
 
     @Test func capturePublishesCommittingOperationAndRepeatedSubmissionKeepsTimestamp() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let model = DiaryViewModel(store: store); model.snapshot = try await store.snapshot()
+        let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
         var draft = MealDraft(); draft.text = "Synthetic historical lunch"
         let historical = Date(timeIntervalSince1970: 1_600_000_000)
         let before = Date()
@@ -82,14 +109,14 @@ private actor ReceiptRefreshFailureOnce {
         #expect(model.captureReceipt == draft.submissionID)
         #expect(await model.capture(draft, dayID: day.id, at: historical))
         #expect(model.companionCaptureEvent == event)
-        #expect(try await store.snapshot().meals.count == 1)
-        #expect(try await store.snapshot().meals.first?.capturedAt == historical)
+        #expect(try await store.snapshotForExport().meals.count == 1)
+        #expect(try await store.snapshotForExport().meals.first?.capturedAt == historical)
     }
 
     @Test func sendPublishesCommittingOperationAndRepeatedSubmissionKeepsTimestamp() async throws {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let diary = DiaryViewModel(store: store); diary.snapshot = try await store.snapshot()
+        let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground()
         var draft = MealDraft(); draft.text = "Synthetic lunch"
@@ -104,18 +131,19 @@ private actor ReceiptRefreshFailureOnce {
         coach.draft = draft
         #expect(await coach.send())
         #expect(coach.companionCaptureEvent == event)
-        #expect(try await store.snapshot().coachTurns.map(\.id) == [draft.submissionID])
+        #expect(try await store.snapshotForExport().coachTurns.map(\.id) == [draft.submissionID])
     }
 
     @Test func acceptedSendSignalsBeforeRefreshAndRetainsPriorErrorUntilSaved() async throws {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let gate = ReceiptRefreshGate()
-        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+        defer { Task { await gate.release() } }
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
             await gate.pause()
-            return try await store.snapshot(expectedProfileID: id)
+            return try await store.diaryReadModel(expectedProfileID: id)
         })
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground()
         coach.errorMessage = "Synthetic prior failure"
@@ -123,7 +151,7 @@ private actor ReceiptRefreshFailureOnce {
         let operation = coach.draft.submissionID
         let before = Date()
         let sending = Task { await coach.send() }
-        await gate.waitUntilPaused()
+        try await gate.waitUntilPaused()
         let submission = try #require(coach.companionSubmission)
         #expect(submission.profileID == profile.id && submission.operationID == operation)
         #expect(submission.acceptedAt >= before && submission.acceptedAt <= Date())
@@ -141,7 +169,7 @@ private actor ReceiptRefreshFailureOnce {
     @Test func invalidSendNeverSignalsAndFailedSaveImmediatelyNeedsRecovery() async throws {
         let (path, store, _, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let diary = DiaryViewModel(store: store); diary.snapshot = try await store.snapshot()
+        let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground()
         #expect(!(await coach.send()))
@@ -158,10 +186,10 @@ private actor ReceiptRefreshFailureOnce {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let refresh = ReceiptRefreshFailureOnce()
-        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
             try await refresh.snapshot(store, owner: id)
         })
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground()
         coach.draft.text = "Synthetic capture retried after refresh failure"
@@ -176,7 +204,7 @@ private actor ReceiptRefreshFailureOnce {
         #expect(retried != first, "A separately accepted retry needs a new gesture identity")
         #expect(retried.profileID == profile.id && retried.operationID == operation)
         #expect(coach.companionCaptureEvent?.operationID == operation)
-        #expect(try await store.snapshot().coachTurns.map(\.id) == [operation])
+        #expect(try await store.snapshotForExport().coachTurns.map(\.id) == [operation])
     }
 
     @Test(arguments: [false, true])
@@ -184,17 +212,18 @@ private actor ReceiptRefreshFailureOnce {
         let (path, store, _, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let gate = ReceiptRefreshGate()
-        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+        defer { Task { await gate.release() } }
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
             await gate.pause()
-            return try await store.snapshot(expectedProfileID: id)
+            return try await store.diaryReadModel(expectedProfileID: id)
         })
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground()
         coach.errorMessage = "Synthetic prior worker error"
         coach.draft.text = "Synthetic next capture"
         let sending = Task { await coach.send() }
-        await gate.waitUntilPaused()
+        try await gate.waitUntilPaused()
         #expect(!coach.companionNeedsRecovery)
         let newerError = repeatsPriorText ? "Synthetic prior worker error" : "Synthetic newly reported worker error"
         coach.errorMessage = newerError
@@ -210,19 +239,20 @@ private actor ReceiptRefreshFailureOnce {
     @Test func failedCapturePreservesDraftAndEmitsNothing() async throws {
         let (path, store, _, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let model = DiaryViewModel(store: store); model.snapshot = try await store.snapshot()
+        let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
         try FileManager.default.removeItem(at: path); try Data([1]).write(to: path)
         var draft = MealDraft(); draft.text = "Synthetic lunch"; draft.photos = [Data([1, 2, 3])]
         #expect(!(await model.capture(draft, dayID: day.id)))
         #expect(draft.text == "Synthetic lunch" && draft.photos == [Data([1, 2, 3])])
         #expect(model.companionCaptureEvent == nil && model.captureReceipt == nil)
-        #expect(try await store.snapshot().meals.isEmpty)
+        await #expect(throws: DiaryError.persistenceFailed) { try await store.snapshotForExport() }
+        #expect(model.readModel?.meals.isEmpty == true)
     }
 
     @Test func failedSendPreservesDraftAndEmitsNothing() async throws {
         let (path, store, _, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let diary = DiaryViewModel(store: store); diary.snapshot = try await store.snapshot()
+        let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground(); coach.draft.text = "Synthetic lunch"; coach.draft.photos = [Data([1, 2, 3])]
         let submissionID = coach.draft.submissionID
@@ -231,15 +261,16 @@ private actor ReceiptRefreshFailureOnce {
         #expect(coach.draft.text == "Synthetic lunch" && coach.draft.photos == [Data([1, 2, 3])])
         #expect(coach.draft.submissionID == submissionID)
         #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
-        #expect(try await store.snapshot().coachTurns.isEmpty)
+        await #expect(throws: DiaryError.persistenceFailed) { try await store.snapshotForExport() }
+        #expect(diary.latestCoachPage?.exchanges.isEmpty == true)
     }
 
     @Test func passiveRefreshAndAnalysisNeverEmitFeedback() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let meal = try await store.capture(text: "Synthetic apple", photos: [], reviewFirst: true,
+        let meal = try await capturedMeal(store, text: "Synthetic apple", photos: [], reviewFirst: true,
             dayID: day.id, expectedProfileID: profile.id)
-        let model = DiaryViewModel(store: store); model.snapshot = try await store.snapshot()
+        let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: model, connection: ChatGPTConnection())
         coach.enterBackground()
         try await store.processPending(expectedProfileID: profile.id)
@@ -254,19 +285,20 @@ private actor ReceiptRefreshFailureOnce {
         defer { try? FileManager.default.removeItem(at: path) }
         let meal = try await proposal(store, profile, day), submissionID = meal.submissions[0].id
         let gate = ReceiptRefreshGate()
-        let model = DiaryViewModel(store: store, snapshotLoading: { id in
-            let updated = try await store.snapshot(expectedProfileID: id)
+        defer { Task { await gate.release() } }
+        let model = DiaryViewModel(store: store, actionReadModelLoading: { id in
+            let updated = try await store.diaryReadModel(expectedProfileID: id)
             await gate.pause()
             return updated
         })
-        model.snapshot = try await store.snapshot()
+        await model.load(createDefaultProfile: false)
         var completionTime = Date(timeIntervalSince1970: 1_800_000_000)
         let accepting = Task { await model.acceptReview(mealID: meal.id, submissionID: submissionID,
             expectedProfileID: profile.id, currentTime: { completionTime }) }
-        await gate.waitUntilPaused()
+        try await gate.waitUntilPaused()
         #expect(model.companionReviewEvent == nil)
-        #expect(model.meal(meal.id)?.state == .awaitingReview)
-        #expect(try await store.snapshot().meals.first?.state == .saved)
+        // Subscribers may publish durable facts before the action's own refresh finishes.
+        #expect(try await store.snapshotForExport().meals.first?.state == .saved)
         completionTime = completionTime.addingTimeInterval(30)
         await gate.release()
         #expect(await accepting.value)
@@ -284,12 +316,12 @@ private actor ReceiptRefreshFailureOnce {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let meal = try await proposal(store, profile, day)
-        let model = DiaryViewModel(store: store); model.snapshot = try await store.snapshot()
+        let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
         try FileManager.default.removeItem(at: path); try Data([1]).write(to: path)
         #expect(!(await model.acceptReview(mealID: meal.id, submissionID: meal.submissions[0].id, expectedProfileID: profile.id)))
         #expect(model.companionReviewEvent == nil)
         #expect(model.meal(meal.id)?.state == .awaitingReview)
-        #expect(try await store.snapshot().meals.first?.state == .awaitingReview)
+        await #expect(throws: DiaryError.persistenceFailed) { try await store.snapshotForExport() }
     }
 
     @Test func reviewForChangedProfileCannotEmit() async throws {
@@ -299,51 +331,53 @@ private actor ReceiptRefreshFailureOnce {
         let other = DiaryProfile(name: "Synthetic second owner")
         _ = try await store.createProfile(other); _ = try await store.selectProfile(profile.id)
         let gate = ReceiptRefreshGate()
-        let model = DiaryViewModel(store: store, snapshotLoading: { id in
-            let updated = try await store.snapshot(expectedProfileID: id)
+        defer { Task { await gate.release() } }
+        let model = DiaryViewModel(store: store, actionReadModelLoading: { id in
+            let updated = try await store.diaryReadModel(expectedProfileID: id)
             await gate.pause()
             return updated
         })
-        model.snapshot = try await store.snapshot()
+        await model.load(createDefaultProfile: false)
         let accepting = Task { await model.acceptReview(mealID: meal.id, submissionID: meal.submissions[0].id, expectedProfileID: profile.id) }
-        await gate.waitUntilPaused()
+        try await gate.waitUntilPaused()
         await model.switchProfile(other.id)
         await gate.release()
         #expect(!(await accepting.value))
-        #expect(model.snapshot?.profile.id == other.id && model.snapshot?.meals.isEmpty == true)
-        let otherSnapshot = try await store.snapshot()
+        #expect(model.readModel?.profile.id == other.id && model.readModel?.meals.isEmpty == true)
+        let otherSnapshot = try await store.snapshotForExport()
         #expect(otherSnapshot.profile.id == other.id && otherSnapshot.meals.isEmpty)
         #expect(model.companionReviewEvent == nil && model.companionCaptureEvent == nil)
         #expect(!(await model.acceptReview(mealID: meal.id, submissionID: meal.submissions[0].id, expectedProfileID: profile.id)))
-        let committed = try await store.selectProfile(profile.id)
+        let committed = try await completeSelectedProfile(store, profile.id)
         #expect(committed.meals.first?.state == .saved)
     }
 
     @Test func captureRefreshFailureDoesNotEmit() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let model = DiaryViewModel(store: store, snapshotLoading: { _ in throw DiaryError.persistenceFailed })
-        model.snapshot = try await store.snapshot()
+        let model = DiaryViewModel(store: store, actionReadModelLoading: { _ in throw DiaryError.persistenceFailed })
+        await model.load(createDefaultProfile: false)
         var draft = MealDraft(); draft.text = "Synthetic durable capture"
         #expect(!(await model.capture(draft, dayID: day.id)))
         #expect(model.companionCaptureEvent == nil && model.captureReceipt == nil)
-        #expect(draft.text == "Synthetic durable capture" && model.snapshot?.meals.isEmpty == true)
-        let durable = try await DiaryStore(directory: path).selectProfile(profile.id)
+        #expect(draft.text == "Synthetic durable capture" && model.readModel?.profile.id == profile.id)
+        // A subscriber may display the durable capture; the failed action still emits no feedback.
+        let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.meals.first?.submissions.first?.id == draft.submissionID)
     }
 
     @Test func sendRefreshFailureDoesNotEmit() async throws {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let diary = DiaryViewModel(store: store, snapshotLoading: { _ in throw DiaryError.persistenceFailed })
-        diary.snapshot = try await store.snapshot()
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { _ in throw DiaryError.persistenceFailed })
+        await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground(); coach.draft.text = "Synthetic durable turn"
         let submissionID = coach.draft.submissionID
         #expect(!(await coach.send()))
         #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
         #expect(coach.draft.text == "Synthetic durable turn" && coach.draft.submissionID == submissionID)
-        let durable = try await DiaryStore(directory: path).selectProfile(profile.id)
+        let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.coachTurns.map(\.id) == [submissionID])
     }
 
@@ -353,26 +387,27 @@ private actor ReceiptRefreshFailureOnce {
         let other = DiaryProfile(name: "Synthetic second owner")
         _ = try await store.createProfile(other); _ = try await store.selectProfile(profile.id)
         let gate = ReceiptRefreshGate()
-        let model = DiaryViewModel(store: store, snapshotLoading: { id in
-            let updated = try await store.snapshot(expectedProfileID: id)
+        defer { Task { await gate.release() } }
+        let model = DiaryViewModel(store: store, actionReadModelLoading: { id in
+            let updated = try await store.diaryReadModel(expectedProfileID: id)
             await gate.pause()
             return updated
         })
-        model.snapshot = try await store.snapshot()
+        await model.load(createDefaultProfile: false)
         var draft = MealDraft(); draft.text = "Synthetic cancelled capture"
         let capture = Task { await model.capture(draft, dayID: day.id) }
-        await gate.waitUntilPaused()
+        try await gate.waitUntilPaused()
         capture.cancel()
         await gate.release()
         #expect(!(await capture.value))
         #expect(model.companionCaptureEvent == nil && model.captureReceipt == nil)
-        #expect(try await store.snapshot().meals.first?.submissions.first?.id == draft.submissionID)
+        #expect(try await store.snapshotForExport().meals.first?.submissions.first?.id == draft.submissionID)
         await model.switchProfile(other.id)
-        #expect(model.snapshot?.profile.id == other.id && model.snapshot?.meals.isEmpty == true)
-        let otherSnapshot = try await store.snapshot()
+        #expect(model.readModel?.profile.id == other.id && model.readModel?.meals.isEmpty == true)
+        let otherSnapshot = try await store.snapshotForExport()
         #expect(otherSnapshot.profile.id == other.id && otherSnapshot.meals.isEmpty)
         #expect(model.companionCaptureEvent == nil)
-        let original = try await store.selectProfile(profile.id)
+        let original = try await completeSelectedProfile(store, profile.id)
         #expect(original.meals.count == 1)
     }
 
@@ -380,50 +415,51 @@ private actor ReceiptRefreshFailureOnce {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let gate = ReceiptRefreshGate()
-        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
-            let updated = try await store.snapshot(expectedProfileID: id)
+        defer { Task { await gate.release() } }
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
+            let updated = try await store.diaryReadModel(expectedProfileID: id)
             await gate.pause()
             return updated
         })
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground(); coach.draft.text = "Synthetic cancelled turn"
         let submissionID = coach.draft.submissionID
         let sending = Task { await coach.send() }
-        await gate.waitUntilPaused(); sending.cancel(); await gate.release()
+        try await gate.waitUntilPaused(); sending.cancel(); await gate.release()
         #expect(!(await sending.value))
         #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
         #expect(coach.draft.text == "Synthetic cancelled turn" && coach.draft.submissionID == submissionID)
-        let durable = try await DiaryStore(directory: path).selectProfile(profile.id)
+        let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.coachTurns.map(\.id) == [submissionID])
     }
     @Test func captureAndReviewUseDistinctKindsForTheSameSubmission() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let model = DiaryViewModel(store: store); model.snapshot = try await store.snapshot()
+        let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
         var draft = MealDraft(); draft.text = "Synthetic review apple"; draft.reviewFirst = true
         #expect(await model.capture(draft, dayID: day.id))
         let captured = try #require(model.companionCaptureEvent)
         try await store.processPending(expectedProfileID: profile.id)
         try await model.refresh(profileID: profile.id)
-        let meal = try #require(model.snapshot?.meals.first)
+        let meal = try #require(model.readModel?.meals.first)
         #expect(await model.acceptReview(mealID: meal.id, submissionID: draft.submissionID, expectedProfileID: profile.id))
         let reviewed = try #require(model.companionReviewEvent)
         #expect(captured.operationID == reviewed.operationID && captured.profileID == reviewed.profileID)
         #expect(captured.kind == .saved && reviewed.kind == .reviewed)
         #expect(model.companionCaptureEvent == captured)
-        #expect(try await store.snapshot().meals.first?.state == .saved)
+        #expect(try await store.snapshotForExport().meals.first?.state == .saved)
     }
 
     @Test func reviewRefreshFailureDoesNotEmitAfterDurableCommit() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let meal = try await proposal(store, profile, day)
-        let model = DiaryViewModel(store: store, snapshotLoading: { _ in throw DiaryError.persistenceFailed })
-        model.snapshot = try await store.snapshot()
+        let model = DiaryViewModel(store: store, actionReadModelLoading: { _ in throw DiaryError.persistenceFailed })
+        await model.load(createDefaultProfile: false)
         #expect(!(await model.acceptReview(mealID: meal.id, submissionID: meal.submissions[0].id, expectedProfileID: profile.id)))
         #expect(model.companionReviewEvent == nil && model.meal(meal.id)?.state == .awaitingReview)
-        let durable = try await DiaryStore(directory: path).selectProfile(profile.id)
+        let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.meals.first?.state == .saved)
     }
 
@@ -434,23 +470,24 @@ private actor ReceiptRefreshFailureOnce {
         let other = DiaryProfile(name: "Synthetic second owner")
         _ = try await store.createProfile(other); _ = try await store.selectProfile(profile.id)
         let gate = ReceiptRefreshGate()
-        let model = DiaryViewModel(store: store, snapshotLoading: { id in
-            let updated = try await store.snapshot(expectedProfileID: id)
+        defer { Task { await gate.release() } }
+        let model = DiaryViewModel(store: store, actionReadModelLoading: { id in
+            let updated = try await store.diaryReadModel(expectedProfileID: id)
             await gate.pause()
             return updated
         })
-        model.snapshot = try await store.snapshot()
+        await model.load(createDefaultProfile: false)
         let accepting = Task { await model.acceptReview(mealID: meal.id, submissionID: meal.submissions[0].id, expectedProfileID: profile.id) }
-        await gate.waitUntilPaused()
+        try await gate.waitUntilPaused()
         accepting.cancel()
         await model.switchProfile(other.id)
         await gate.release()
         #expect(!(await accepting.value))
-        #expect(model.snapshot?.profile.id == other.id && model.snapshot?.meals.isEmpty == true)
-        let otherSnapshot = try await store.snapshot()
+        #expect(model.readModel?.profile.id == other.id && model.readModel?.meals.isEmpty == true)
+        let otherSnapshot = try await store.snapshotForExport()
         #expect(otherSnapshot.profile.id == other.id && otherSnapshot.meals.isEmpty)
         #expect(model.companionReviewEvent == nil && model.companionCaptureEvent == nil)
-        let original = try await store.selectProfile(profile.id)
+        let original = try await completeSelectedProfile(store, profile.id)
         #expect(original.meals.first?.state == .saved)
     }
 
@@ -459,36 +496,43 @@ private actor ReceiptRefreshFailureOnce {
         defer { try? FileManager.default.removeItem(at: path) }
         let first = try await proposal(store, profile, day), second = try await proposal(store, profile, day)
         let refreshes = OrderedReceiptRefreshes()
-        let model = DiaryViewModel(store: store, snapshotLoading: { id in
-            let updated = try await store.snapshot(expectedProfileID: id)
-            await refreshes.pause()
+        defer { Task { await refreshes.releaseAll() } }
+        let model = DiaryViewModel(store: store, actionReadModelLoading: { id in
+            let updated = try await store.diaryReadModel(expectedProfileID: id)
+            await refreshes.pause(ReceiptReviewAction.name)
             return updated
         })
-        model.snapshot = try await store.snapshot()
+        await model.load(createDefaultProfile: false)
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        let firstAccept = Task { await model.acceptReview(mealID: first.id, submissionID: first.submissions[0].id,
-            expectedProfileID: profile.id, currentTime: { now }) }
-        await refreshes.waitUntilPaused(1)
-        let secondAccept = Task { await model.acceptReview(mealID: second.id, submissionID: second.submissions[0].id,
-            expectedProfileID: profile.id, currentTime: { now.addingTimeInterval(1) }) }
-        await refreshes.waitUntilPaused(2)
+        let firstAccept = Task { await ReceiptReviewAction.$name.withValue("first") {
+            await model.acceptReview(mealID: first.id, submissionID: first.submissions[0].id,
+                expectedProfileID: profile.id, currentTime: { now })
+        } }
+        try await refreshes.waitUntilPaused("first")
+        let secondAccept = Task { await ReceiptReviewAction.$name.withValue("second") {
+            await model.acceptReview(mealID: second.id, submissionID: second.submissions[0].id,
+                expectedProfileID: profile.id, currentTime: { now.addingTimeInterval(1) })
+        } }
+        try await refreshes.waitUntilPaused("second")
         var duplicateClockRead = false
-        let duplicateAccept = Task { await model.acceptReview(mealID: first.id, submissionID: first.submissions[0].id,
-            expectedProfileID: profile.id, currentTime: { duplicateClockRead = true; return now.addingTimeInterval(2) }) }
-        await refreshes.waitUntilPaused(3)
+        let duplicateAccept = Task { await ReceiptReviewAction.$name.withValue("duplicate") {
+            await model.acceptReview(mealID: first.id, submissionID: first.submissions[0].id,
+                expectedProfileID: profile.id, currentTime: { duplicateClockRead = true; return now.addingTimeInterval(2) })
+        } }
+        try await refreshes.waitUntilPaused("duplicate")
         #expect(model.companionReviewEvent == nil)
-        await refreshes.release(1)
+        await refreshes.release("first")
         #expect(await firstAccept.value)
         #expect(model.companionReviewEvent?.operationID == first.submissions[0].id)
-        await refreshes.release(2)
+        await refreshes.release("second")
         #expect(await secondAccept.value)
         let secondEvent = try #require(model.companionReviewEvent)
         #expect(secondEvent.operationID == second.submissions[0].id)
-        await refreshes.release(3)
+        await refreshes.release("duplicate")
         #expect(await duplicateAccept.value)
         #expect(model.companionReviewEvent == secondEvent)
         #expect(!duplicateClockRead)
-        let durable = try await DiaryStore(directory: path).selectProfile(profile.id)
+        let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.meals.count == 2 && durable.meals.allSatisfy { $0.state == .saved && $0.revision == 1 })
     }
 

@@ -55,8 +55,8 @@ extension DiaryDatabase {
                 let day = try trackingDay(id: meal.dayID)
                 let context = CoachCaptureContext(capturedAt: meal.capturedAt, timeZoneID: day.timeZoneID,
                     activeDayID: nil, previousDayConfirmedAt: nil)
-                let payload = try CoachSubmissionPayload(submissionID: turnID, text: submission.text, attachments: [], context: context)
-                try transaction.appendCapture(payload, legacyMeal: meal, legacyPhotoIDs: submission.photoIDs)
+                try transaction.appendLegacyCapture(submissionID: turnID, text: submission.text, context: context,
+                    meal: meal, photoIDs: submission.photoIDs)
                 for photo in submission.photoIDs {
                     guard try transaction.photoMetadata(photoID: photo, owner: .meal(mealID)) != nil else { throw DiaryError.notFound }
                     try execute("INSERT OR IGNORE INTO photo_consumer(ownerKind,parentID,photoID,turnID) VALUES ('meal',?,?,?)", [.text(mealID.uuidString), .text(photo.uuidString), .text(turnID.uuidString)])

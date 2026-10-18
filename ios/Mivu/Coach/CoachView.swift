@@ -26,7 +26,7 @@ struct CoachView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                if let snapshot = coach.diary.snapshot {
+                if let snapshot = coach.diary.readModel {
                     // Eager pages keep restored rows in the native accessibility tree.
                     VStack(alignment: .leading, spacing: 24) {
                         if DiaryLaunch.isCoachInferenceFixture {
@@ -37,10 +37,10 @@ struct CoachView: View {
                                 HStack(alignment: .firstTextBaseline) {
                                     Text(day.localDate).font(.subheadline).accessibilityIdentifier("coachDate")
                                     Spacer()
-                                    Text(snapshot.totals(dayID: day.id).kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal recorded" } ?? "Not estimated yet")
+                                    Text(snapshot.totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal recorded" } ?? "Not estimated yet")
                                         .font(.subheadline.weight(.medium)).monospacedDigit()
                                 }
-                                if let target = snapshot.goal(on: day.localDate)?.targets.kcal {
+                                if let target = snapshot.activeGoal?.targets.kcal {
                                     Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
                                         .font(.caption).accessibilityIdentifier("coachGoalSummary")
                                 }
@@ -55,14 +55,11 @@ struct CoachView: View {
                                     .foregroundStyle(Color.diarySecondary)
                             }.padding(.vertical, 24)
                         }
-                        if history.startIndex(in: turnIDs) > 0 {
-                            Button("Show earlier messages") {
-                                guard let first = history.showEarlier(ids: turnIDs) else { return }
-                                followLatest = false; followRequested = false
-                                position.scrollTo(id: "input-" + first.uuidString, anchor: .top)
-                            }
-                            .frame(minHeight: 44)
-                            .accessibilityIdentifier("coachEarlierMessages")
+                        if coach.diary.latestCoachPage?.hasEarlier == true {
+                            Text("Showing the latest conversation messages.").font(.caption).foregroundStyle(Color.diarySecondary)
+                        }
+                        if let boundary = coach.diary.latestCoachPage?.latestEmptySegment {
+                            Text(boundary.displayLocalDate).font(.subheadline).foregroundStyle(Color.diarySecondary)
                         }
                         ForEach(conversationRows) { row in
                             VStack(alignment: .leading, spacing: 0) {
@@ -125,7 +122,7 @@ struct CoachView: View {
                     .padding(.bottom, 8)
                 }
             }
-            if coach.diary.snapshot != nil { companionStrip; composer }
+            if coach.diary.readModel != nil { companionStrip; composer }
         }
         .background(Color.diaryCanvas)
         .navigationTitle("Coach")
@@ -149,12 +146,13 @@ struct CoachView: View {
         }
         .alert("Could not import photo", isPresented: $importFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
         .sensoryFeedback(.success, trigger: coach.captureReceipt)
-        .onAppear { surfaceVisible = true; reportCompanionContext() }
+        .onAppear { surfaceVisible = true; preparation.use(limiter: coach.diary.photoWorkLimiter); reportCompanionContext() }
+        .task(id: coach.diary.changeGeneration) { await coach.refreshLinks() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
         .onChange(of: [editing, showPhotos, importFailed, showingDetail, companionProcessing, companionRecovery]) { _, _ in reportCompanionContext() }
-        .onChange(of: coach.diary.snapshot?.profile.id, initial: true) { _, _ in
+        .onChange(of: coach.diary.readModel?.profile.id, initial: true) { _, _ in
             history.reset(ids: turnIDs)
-            preparation.cancel(); preparation = PhotoPreparation()
+            preparation.cancel(); preparation = PhotoPreparation(limiter: coach.diary.photoWorkLimiter)
             showPhotos = false; editing = false
             followLatest = true; hasNewMessage = false
             followRequested = false
@@ -228,13 +226,13 @@ struct CoachView: View {
     private struct WorkoutDestination: Hashable { let id: UUID }
     private struct ConversationRow: Identifiable {
         enum Kind: String { case input, reply, actions }
-        let turn: CoachTurn
+        let turn: CoachExchangeSummary
         let kind: Kind
         var id: String { kind.rawValue + "-" + turn.id.uuidString }
     }
     private var turnIDs: [UUID] { coach.turns.map(\.id) }
     private var conversationRows: [ConversationRow] {
-        coach.turns.dropFirst(history.startIndex(in: turnIDs)).flatMap { turn in
+        coach.turns.flatMap { turn in
             var rows = [ConversationRow(turn: turn, kind: .input)]
             if turn.assistantText != nil { rows.append(ConversationRow(turn: turn, kind: .reply)) }
             if turn.state != .completed || turn.pendingMealID != nil || turn.receipts.contains(where: { $0.mealID != nil || $0.workoutID != nil || $0.destination != nil }) {
@@ -306,11 +304,11 @@ struct CoachView: View {
         .disabled(!coach.canSend || !preparation.canCapture)
         .accessibilityLabel("Send").accessibilityIdentifier("coachSend")
     }
-    private func inputBubble(_ turn: CoachTurn) -> some View {
+    private func inputBubble(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
                 if !turn.text.isEmpty { Text(turn.text).textSelection(.enabled) }
-                if !turn.photoIDs.isEmpty { Label("\(turn.photoIDs.count) attached photos", systemImage: "photo").font(.caption) }
+                if !turn.photos.isEmpty { Label("\(turn.photos.count) attached photos", systemImage: "photo").font(.caption) }
             }
             .padding(16).foregroundStyle(Color.white)
             .background(Color.diaryMessage, in: RoundedRectangle(cornerRadius: 20))
@@ -318,7 +316,7 @@ struct CoachView: View {
                 .font(.caption).foregroundStyle(Color.diarySecondary)
         }.frame(maxWidth: .infinity, alignment: .trailing)
     }
-    private func turnActions(_ turn: CoachTurn) -> some View {
+    private func turnActions(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if turn.state != .completed {
                 if let activity = coach.activity, coach.activityTurnID == turn.id {
@@ -326,7 +324,7 @@ struct CoachView: View {
                 } else {
                     Label(status(turn.state), systemImage: turn.state == .analyzing ? "hourglass" : "clock").font(.subheadline).foregroundStyle(turn.state == .needsRetry ? Color.diaryError : turn.state == .analyzing ? Color.diaryAccent : Color.diaryWarning)
                 }
-                if turn.needsDayChoice == true {
+                if turn.needsDayChoice {
                     if let date = coach.previousDayDate(turn) {
                         Button("Use previous waking day: " + date) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
                     }
@@ -340,7 +338,7 @@ struct CoachView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label(meal.state == .awaitingReview ? "Needs review" : meal.isSaved ? "Saved meal" : "Captured on this iPhone", systemImage: meal.state == .awaitingReview ? "checkmark.circle.badge.questionmark" : "checkmark.circle")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(meal.state.color)
-                        MealRow(meal: meal)
+                        MealRow(meal: meal, model: coach.diary)
                     }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 12))
                 }.accessibilityIdentifier("coachMealLink")

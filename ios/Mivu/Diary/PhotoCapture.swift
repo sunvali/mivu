@@ -71,6 +71,7 @@ enum PhotoImport {
 
 struct PhotoInput: View {
     @Binding var photos: [Data]
+    @Environment(\.diaryPhotoLimiter) private var limiter
     let preparation: PhotoPreparation
     @Binding var importFailed: Bool
     @State private var selected: [PhotosPickerItem] = []
@@ -103,6 +104,7 @@ struct PhotoInput: View {
                 }
             }
         }
+        .onAppear { preparation.use(limiter: limiter) }
         .buttonStyle(.borderless)
         .tint(.diaryAccent)
         .sheet(isPresented: $showCamera) { CameraCapture(onPhoto: { photos.append($0) }, onFailure: { importFailed = true }).ignoresSafeArea() }

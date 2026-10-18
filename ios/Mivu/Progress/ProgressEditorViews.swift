@@ -49,8 +49,12 @@ struct GoalEditorValues: Equatable {
     var expectedRevision: Int? { original?.revision }
 
     init(snapshot: DiarySnapshot?, localDate: String) {
+        self.init(goal: snapshot?.goals.first { $0.effectiveLocalDate == localDate }, localDate: localDate)
+    }
+
+    init(goal: GoalRecord?, localDate: String) {
         self.localDate = localDate
-        original = snapshot?.goals.first { $0.effectiveLocalDate == localDate }
+        original = goal
         kcal = original?.targets.kcal.map { String($0) } ?? ""
         carbs = original?.targets.carbs.map { String($0) } ?? ""
         protein = original?.targets.protein.map { String($0) } ?? ""
@@ -88,12 +92,22 @@ struct GoalEditorView: View {
     @State private var values: GoalEditorValues
     @State private var saving = false
     @State private var ownerID: UUID
+    @State private var ownership: DiarySelectionOwnership?
     @State private var zone: String
     @State private var originalValues: GoalEditorValues
     @State private var showDiscard = false
     @State private var pendingDate: Date?
     @State private var showDateChange = false
     @State private var saveError: String?
+    @State private var loading = true
+    @State private var goalLoaded = false
+    @State private var goalRequest = UUID()
+    @State private var history: DiaryRecordPage<GoalRecord>?
+    @State private var historyBefore: Int?
+    @State private var historyRequest = UUID()
+    @State private var historyLoading = false
+    @State private var historyGeneration: UInt64?
+    @State private var historyError: String?
 
     private var isDirty: Bool {
         values != originalValues || ProgressDate.label(date, zone: zone) != originalValues.localDate
@@ -101,13 +115,14 @@ struct GoalEditorView: View {
 
     init(model: DiaryViewModel) {
         self.model = model
-        let snapshot = model.snapshot
-        _ownerID = State(initialValue: snapshot?.profile.id ?? UUID())
-        let zone = snapshot?.profile.timeZoneID ?? TimeZone.current.identifier
+        let readModel = model.readModel
+        _ownerID = State(initialValue: readModel?.profile.id ?? UUID())
+        _ownership = State(initialValue: model.selection)
+        let zone = readModel?.profile.timeZoneID ?? TimeZone.current.identifier
         _zone = State(initialValue: zone)
         let today = ProgressDate.label(Date(), zone: zone)
         _date = State(initialValue: ProgressDate.date(today, zone: zone) ?? Date())
-        let original = GoalEditorValues(snapshot: snapshot, localDate: today)
+        let original = GoalEditorValues(goal: nil, localDate: today)
         _originalValues = State(initialValue: original)
         _values = State(initialValue: original)
     }
@@ -117,11 +132,12 @@ struct GoalEditorView: View {
             Form {
                 Section("Effective date") {
                     DatePicker("Starting on", selection: Binding(get: { date }, set: requestDate), displayedComponents: .date)
+                    if loading { ProgressView("Loading saved goals…") }
                     Text("Goals are your settings. Earlier dates keep their own records.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                     DisclosureGroup("Goal history") {
-                        if let snapshot = model.snapshot, !snapshot.goals.isEmpty {
-                            ForEach(snapshot.goals.sorted { $0.effectiveLocalDate > $1.effectiveLocalDate }) { goal in
+                        if !historyLoading, historyGeneration == model.changeGeneration, let history, !history.values.isEmpty {
+                            ForEach(history.values.sorted { $0.effectiveLocalDate > $1.effectiveLocalDate }) { goal in
                                 Button {
                                     if let chosen = ProgressDate.date(goal.effectiveLocalDate, zone: zone) { requestDate(chosen) }
                                 } label: {
@@ -137,9 +153,26 @@ struct GoalEditorView: View {
                                     }.frame(minHeight: 44)
                                 }.accessibilityIdentifier("goalPeriod")
                             }
+                        } else if let historyError {
+                            Text(historyError).foregroundStyle(.red)
+                            Button("Retry loading history") { historyRequest = UUID() }.frame(minHeight: 44)
                         } else {
-                            Text("No goals set").foregroundStyle(Color.diarySecondary)
+                            Text(historyLoading || historyGeneration != model.changeGeneration ? "Loading goals…" : "No goals set").foregroundStyle(Color.diarySecondary)
                         }
+                        if !historyLoading, historyGeneration == model.changeGeneration, history?.hasMore == true {
+                            Button("Older goals") { historyBefore = history?.cursor; historyRequest = UUID() }
+                                .frame(minHeight: 44).disabled(historyLoading)
+                        }
+                        if historyBefore != nil {
+                            Button("Latest goals") { historyBefore = nil; historyRequest = UUID() }
+                                .frame(minHeight: 44).disabled(historyLoading)
+                        }
+                    }
+                }
+                if let saveError {
+                    Section {
+                        Text(saveError).foregroundStyle(.red)
+                        if !goalLoaded { Button("Retry loading goals") { goalRequest = UUID() }.frame(minHeight: 44) }
                     }
                 }
                 Section("Daily targets") {
@@ -153,11 +186,13 @@ struct GoalEditorView: View {
                 Section("Optional weight goal") { field("Weight (kg)", text: $values.weight, id: "goalWeight") }
                 Section("Exercise") {
                     Toggle("Include estimated workout energy in an adjusted remaining figure", isOn: $values.exerciseCredit)
+                        .disabled(!goalLoaded)
                         .accessibilityIdentifier("exerciseCreditEnabled")
                     Text("Recorded food, remaining from recorded food, and estimated burn are always shown separately.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
             }
+            .disabled(loading || saving)
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
             // A keyboard accessory here can leave a stale height after this sheet closes.
@@ -179,7 +214,7 @@ struct GoalEditorView: View {
                         Button("Keep editing", role: .cancel) {}
                     } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(!values.valid || saving || model.isChangingProfile)
+                    Button("Save") { save() }.disabled(!values.valid || !goalLoaded || loading || saving || model.isChangingProfile)
                         .frame(minHeight: 44).accessibilityIdentifier("saveGoals")
                         .alert("Could not save goals", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                             Button("OK", role: .cancel) { saveError = nil }
@@ -187,8 +222,14 @@ struct GoalEditorView: View {
                 }
             }
         }
-        .onChange(of: model.snapshot?.profile.id) { _, profileID in
-            if profileID != ownerID { dismiss() }
+        .onChange(of: model.selection) { _, selected in
+            if selected != ownership { dismiss() }
+        }
+        .task(id: goalRequest) { await loadGoal() }
+        .task(id: historyRequest) { await loadHistory() }
+        .onChange(of: model.changeGeneration) { _, _ in
+            if !goalLoaded { goalRequest = UUID() }
+            historyRequest = UUID()
         }
         .onDisappear { focusedField = nil }
         .interactiveDismissDisabled(isDirty || saving)
@@ -208,7 +249,7 @@ struct GoalEditorView: View {
 
     private func field(_ title: String, text: Binding<String>, id: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            progressNumberField(title, text: text, id: id, focus: $focusedField)
+            progressNumberField(title, text: text, id: id, focus: $focusedField).disabled(!goalLoaded)
             if !ProgressDate.validOptional(text.wrappedValue) {
                 Text("Enter a positive number, or leave this blank.").font(.subheadline).foregroundStyle(.red)
             }
@@ -240,11 +281,42 @@ struct GoalEditorView: View {
 
     private func loadDate(_ chosen: Date) {
         date = chosen
-        values = GoalEditorValues(snapshot: model.snapshot, localDate: ProgressDate.label(chosen, zone: zone))
+        loading = true; goalLoaded = false; goalRequest = UUID()
+    }
+
+    private func loadGoal() async {
+        guard let ownership, model.selection == ownership else { return }
+        let request = goalRequest, generation = model.changeGeneration
+        let label = ProgressDate.label(date, zone: zone), draft = values
+        loading = true; goalLoaded = false
+        do {
+            let goal = try await model.store.goal(on: label, exact: true, expectedProfileID: ownerID)
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation,
+                  goalRequest == request, values == draft, ProgressDate.label(date, zone: zone) == label else { return }
+            let loaded = GoalEditorValues(goal: goal, localDate: label)
+            values = loaded; originalValues = loaded; goalLoaded = true; loading = false; saveError = nil
+        } catch {
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, goalRequest == request else { return }
+            loading = false; saveError = "Could not load saved goals. Your draft is preserved."
+        }
+    }
+
+    private func loadHistory() async {
+        guard let ownership, model.selection == ownership else { return }
+        let request = historyRequest, generation = model.changeGeneration
+        historyLoading = true; historyError = nil
+        do {
+            let page = try await model.store.goalHistory(before: historyBefore, expectedProfileID: ownerID)
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, historyRequest == request else { return }
+            history = page; historyGeneration = generation; historyLoading = false
+        } catch {
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, historyRequest == request else { return }
+            historyLoading = false; historyError = "Could not load goal history. Your draft is preserved."
+        }
     }
 
     private func save() {
-        guard values.valid, model.snapshot?.profile.id == ownerID else { return }
+        guard goalLoaded, !loading, values.valid, model.selection == ownership && ownership != nil else { return }
         let label = ProgressDate.label(date, zone: zone)
         guard values.localDate == label else { return }
         let goal = values.record(zone: zone)
@@ -252,10 +324,11 @@ struct GoalEditorView: View {
         focusedField = nil
         saving = true
         Task {
+            guard model.selection == ownership, ownership != nil else { saving = false; return }
             let success = await model.change { _ = try await model.store.setGoals(goal, expectedRevision: expectedRevision, expectedProfileID: ownerID) }
             saving = false
-            if success && model.snapshot?.profile.id == ownerID { dismiss() }
-            else if model.snapshot?.profile.id == ownerID {
+            if success && model.selection == ownership && ownership != nil { dismiss() }
+            else if model.selection == ownership && ownership != nil {
                 saveError = model.errorMessage ?? "Could not save these goals. Your entries are preserved."
                 model.errorMessage = nil
             }
@@ -271,6 +344,7 @@ struct WeightCorrectionView: View {
     @State private var value: String
     @State private var saving = false
     @State private var ownerID: UUID
+    @State private var ownership: DiarySelectionOwnership?
     @State private var showDiscard = false
     @State private var saveError: String?
     private var isDirty: Bool { value != String(entry.value) }
@@ -278,7 +352,8 @@ struct WeightCorrectionView: View {
 
     init(model: DiaryViewModel, entry: WeightEntry, localDate: String) {
         self.model = model; self.entry = entry; self.localDate = localDate
-        _ownerID = State(initialValue: model.snapshot?.profile.id ?? UUID())
+        _ownerID = State(initialValue: model.readModel?.profile.id ?? UUID())
+        _ownership = State(initialValue: model.selection)
         _value = State(initialValue: String(entry.value))
     }
 
@@ -315,8 +390,8 @@ struct WeightCorrectionView: View {
                 }
             }
         }
-        .onChange(of: model.snapshot?.profile.id) { _, profileID in
-            if profileID != ownerID { dismiss() }
+        .onChange(of: model.selection) { _, selected in
+            if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
         .environment(\.locale, Locale(identifier: "en"))
@@ -324,16 +399,17 @@ struct WeightCorrectionView: View {
     }
 
     private func save() {
-        guard valid, let number = ProgressDate.number(value), model.snapshot?.profile.id == ownerID else { return }
+        guard valid, let number = ProgressDate.number(value), model.selection == ownership && ownership != nil else { return }
         saving = true
         Task {
+            guard model.selection == ownership, ownership != nil else { saving = false; return }
             let success = await model.change {
                 _ = try await model.store.updateWeight(id: entry.id, value: number,
                                                        expectedRevision: entry.revision, expectedProfileID: ownerID)
             }
             saving = false
-            if success && model.snapshot?.profile.id == ownerID { dismiss() }
-            else if model.snapshot?.profile.id == ownerID {
+            if success && model.selection == ownership && ownership != nil { dismiss() }
+            else if model.selection == ownership && ownership != nil {
                 saveError = model.errorMessage ?? "Could not save this weight. Your entry is preserved."
                 model.errorMessage = nil
             }
@@ -401,6 +477,7 @@ struct WorkoutEditorView: View {
     @State private var burn: String
     @State private var saving = false
     @State private var ownerID: UUID
+    @State private var ownership: DiarySelectionOwnership?
     @State private var originalExercises: [ExerciseFields]
     @State private var showDiscard = false
     @State private var saveError: String?
@@ -414,7 +491,8 @@ struct WorkoutEditorView: View {
     init(model: DiaryViewModel, localDate: String, session: WorkoutSession? = nil, dayID: UUID? = nil) {
         self.model = model; self.localDate = localDate; self.dayID = dayID
         _session = State(initialValue: session)
-        _ownerID = State(initialValue: model.snapshot?.profile.id ?? UUID())
+        _ownerID = State(initialValue: model.readModel?.profile.id ?? UUID())
+        _ownership = State(initialValue: model.selection)
         _kind = State(initialValue: session?.kind ?? .strength)
         _duration = State(initialValue: session.map { String($0.durationMinutes) } ?? "")
         let initialExercises = session.map { $0.exercises.map(ExerciseFields.init) } ?? [ExerciseFields()]
@@ -522,8 +600,8 @@ struct WorkoutEditorView: View {
                 }
             }
         }
-        .onChange(of: model.snapshot?.profile.id) { _, profileID in
-            if profileID != ownerID { dismiss() }
+        .onChange(of: model.selection) { _, selected in
+            if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
         .environment(\.locale, Locale(identifier: "en"))
@@ -543,13 +621,14 @@ struct WorkoutEditorView: View {
     }
 
     private func save() {
-        guard valid, let minutes = Int(duration), model.snapshot?.profile.id == ownerID else { return }
+        guard valid, let minutes = Int(duration), model.selection == ownership && ownership != nil else { return }
         let estimated = ProgressDate.number(burn)
         let draft = WorkoutDraft(kind: kind, durationMinutes: minutes, exercises: exercises.compactMap(\.record),
                                  estimatedBurnKcal: estimated,
                                  burnSource: estimated == nil ? nil : (estimated == session?.estimatedBurnKcal ? session?.burnSource : .userEstimate))
         saving = true
         Task {
+            guard model.selection == ownership, ownership != nil else { saving = false; return }
             let success: Bool
             if var session {
                 session.kind = draft.kind; session.durationMinutes = draft.durationMinutes
@@ -563,8 +642,8 @@ struct WorkoutEditorView: View {
                 success = await model.change { _ = try await model.store.createWorkout(localDate: localDate, draft: draft, performedAt: nil, expectedProfileID: ownerID) }
             }
             saving = false
-            if success && model.snapshot?.profile.id == ownerID { dismiss() }
-            else if model.snapshot?.profile.id == ownerID {
+            if success && model.selection == ownership && ownership != nil { dismiss() }
+            else if model.selection == ownership && ownership != nil {
                 saveError = model.errorMessage ?? "Could not save this workout. Your entries are preserved."
                 model.errorMessage = nil
             }
@@ -595,21 +674,29 @@ struct MorningWeightEditorView: View {
     @State private var showDiscard = false
     @State private var saveError: String?
     @State private var ownerID: UUID
+    @State private var ownership: DiarySelectionOwnership?
     private let dayID: UUID?
     @State private var initialWeight: WeightEntry?
-    private let localDate: String?
+    @State private var localDate: String?
+    @State private var loading = false
+    @State private var dayLoaded = false
+    @State private var dayRequest = UUID()
 
     private var isDirty: Bool { value != (initialWeight.map { String($0.value) } ?? "") }
     private var unit: String { initialWeight?.unit ?? "kg" }
 
     init(model: DiaryViewModel, dayID: UUID? = nil) {
         self.model = model
-        _ownerID = State(initialValue: model.snapshot?.profile.id ?? UUID())
+        _ownerID = State(initialValue: model.readModel?.profile.id ?? UUID())
+        _ownership = State(initialValue: model.selection)
         self.dayID = dayID
-        let existing = dayID.flatMap { selected in model.snapshot?.weights.first { $0.dayID == selected } }
+        let detail = dayID.flatMap { model.dayDetail($0) }
+        let existing = detail?.weight
         _initialWeight = State(initialValue: existing)
-        localDate = dayID.flatMap { selected in model.snapshot?.days.first { $0.id == selected }?.localDate }
+        _localDate = State(initialValue: detail?.day.localDate)
         _value = State(initialValue: existing.map { String($0.value) } ?? "")
+        _dayLoaded = State(initialValue: dayID == nil || detail != nil)
+        _loading = State(initialValue: dayID != nil && detail == nil)
     }
 
     private var valid: Bool {
@@ -621,7 +708,7 @@ struct MorningWeightEditorView: View {
             Form {
                 Section("Morning weight") {
                     if let localDate { LabeledContent("Waking day", value: localDate) }
-                    progressNumberField("Weight (\(unit))", text: $value, id: "weightInput")
+                    progressNumberField("Weight (\(unit))", text: $value, id: "weightInput").disabled(loading || !dayLoaded)
                     if !value.isEmpty && !valid {
                         Label("Enter a weight greater than 0 and no more than 1,000 \(unit).", systemImage: "exclamationmark.circle")
                             .font(.subheadline).foregroundStyle(.red)
@@ -629,7 +716,12 @@ struct MorningWeightEditorView: View {
                     Text(dayID == nil ? "Optional. Saving starts or reuses today's waking day." : "Saving updates only this selected waking day. Other day labels and your active day are preserved.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
-                if let saveError { Section { Label(saveError, systemImage: "exclamationmark.circle").foregroundStyle(.red) } }
+                if let saveError {
+                    Section {
+                        Label(saveError, systemImage: "exclamationmark.circle").foregroundStyle(.red)
+                        if !dayLoaded { Button("Retry loading weight") { dayRequest = UUID() }.frame(minHeight: 44) }
+                    }
+                }
             }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
@@ -644,25 +736,45 @@ struct MorningWeightEditorView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(!valid || saving || model.isChangingProfile)
+                    Button("Save") { save() }.disabled(!valid || !dayLoaded || loading || saving || model.isChangingProfile)
                         .accessibilityIdentifier("saveWeight")
                 }
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() }.accessibilityIdentifier("progressKeyboardDone") }
             }
         }
-        .onChange(of: model.snapshot?.profile.id) { _, profileID in
-            if profileID != ownerID { dismiss() }
+        .task(id: dayRequest) { await loadSelectedDay() }
+        .onChange(of: model.changeGeneration) { _, _ in if !dayLoaded { dayRequest = UUID() } }
+        .onChange(of: model.selection) { _, selected in
+            if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
         .environment(\.locale, Locale(identifier: "en"))
         .environment(\.layoutDirection, .leftToRight)
     }
 
+    private func loadSelectedDay() async {
+        guard let dayID, let ownership, model.selection == ownership, !dayLoaded else { return }
+        let request = dayRequest, generation = model.changeGeneration, draft = value
+        loading = true
+        do {
+            let detail = try await model.store.diaryDay(id: dayID, expectedProfileID: ownerID)
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation,
+                  dayRequest == request, value == draft else { return }
+            initialWeight = detail.weight; localDate = detail.day.localDate
+            value = detail.weight.map { String($0.value) } ?? ""
+            dayLoaded = true; loading = false; saveError = nil
+        } catch {
+            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, dayRequest == request else { return }
+            loading = false; saveError = "Could not load this day's saved weight. Your entry is preserved."
+        }
+    }
+
     private func save() {
-        guard valid, let number = ProgressDate.number(value), model.snapshot?.profile.id == ownerID else { return }
+        guard dayLoaded, !loading, valid, let number = ProgressDate.number(value), model.selection == ownership && ownership != nil else { return }
         saving = true
         saveError = nil
         Task {
+            guard model.selection == ownership, ownership != nil else { saving = false; return }
             let success: Bool
             if let initialWeight {
                 success = await model.change {
@@ -678,8 +790,8 @@ struct MorningWeightEditorView: View {
                 success = await model.change { _ = try await model.store.recordWeight(value: number, expectedProfileID: ownerID) }
             }
             saving = false
-            if success && model.snapshot?.profile.id == ownerID { dismiss() }
-            else if model.snapshot?.profile.id == ownerID {
+            if success && model.selection == ownership && ownership != nil { dismiss() }
+            else if model.selection == ownership && ownership != nil {
                 saveError = model.errorMessage ?? "Could not save this weight. Your entry is preserved."
                 model.errorMessage = nil
             }

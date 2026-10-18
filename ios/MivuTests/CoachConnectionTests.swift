@@ -137,7 +137,7 @@ import Testing
         let store = DiaryStore(directory: fixture.directory.appending(path: "Diary"))
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic usage recovery"))
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let delays = CoachUsageDelays()
         let coach = CoachViewModel(diary: diary, connection: fixture.connection, sleep: { duration in
             await delays.record(duration)
@@ -149,17 +149,17 @@ import Testing
         #expect(fixture.requests.count == 4)
         #expect(await delays.seconds == [1, 2, 4])
         #expect(fixture.connection.planAuthorized)
-        #expect(diary.snapshot?.coachTurns.count == 1)
-        #expect(diary.snapshot?.coachTurns.first?.id == id)
-        #expect(diary.snapshot?.coachTurns.first?.text == "Synthetic temporary usage outage")
-        #expect(diary.snapshot?.coachTurns.first?.state == (failures == 3 ? .completed : .needsRetry))
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.count == 1)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.id == id)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.text == "Synthetic temporary usage outage")
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == (failures == 3 ? .completed : .needsRetry))
         if failures == 4 {
             coach.resume(); await coach.waitForWorker()
             #expect(fixture.requests.count == 4)
             await coach.retry(id)
             await coach.waitForWorker()
             #expect(fixture.requests.count == 5)
-            #expect(diary.snapshot?.coachTurns.first?.state == .completed)
+            #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .completed)
         }
     }
 
@@ -175,7 +175,7 @@ import Testing
         let profile = DiaryProfile(name: "Synthetic original profile")
         _ = try await store.createProfile(profile)
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let coach = CoachViewModel(diary: diary, connection: fixture.connection, sleep: { _ in
             await diary.createProfile(name: "Synthetic other profile")
             await diary.switchProfile(profile.id)
@@ -184,9 +184,9 @@ import Testing
         let id = coach.draft.submissionID
         #expect(await coach.send())
         await coach.waitForWorker()
-        #expect(diary.snapshot?.profile.id == profile.id)
+        #expect(diary.readModel?.profile.id == profile.id)
         #expect(fixture.requests.count == 1)
-        let turn = try await store.coachTurn(turnID: id, expectedProfileID: profile.id)
+        let turn = try await exportedTurn(store, turnID: id, expectedProfileID: profile.id)
         #expect(turn.assistantText == nil)
         #expect(turn.text == "Synthetic profile-fenced retry")
     }

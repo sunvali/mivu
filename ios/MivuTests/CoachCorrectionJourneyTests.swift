@@ -218,7 +218,7 @@ struct CoachLunchFixture: Sendable {
         let head = try await store.diaryHead(expectedProfileID: owner)
         let context = CoachCaptureContext(capturedAt: capturedAt, timeZoneID: head.profile.timeZoneID, activeDayID: head.activeDayID,
             previousDayConfirmedAt: head.previousDayConfirmedAt, activeConversationSegmentID: head.effectiveConversationSegmentID)
-        return try await store.captureCoachSubmission(CoachSubmissionPayload(submissionID: UUID(), text: text, attachments: [], context: context), expectedProfileID: owner)
+        return try await capturedSubmission(store, CoachSubmissionPayload(submissionID: UUID(), text: text, attachments: [], context: context), expectedProfileID: owner)
     }
     @discardableResult func run(_ store: DiaryStore, _ id: UUID, _ transport: CoachJourneyTransport) async throws -> CoachTurnResult {
         let work = try #require(try await store.nextPendingCoachTurn(includeWaitingForConnection: false, expectedProfileID: owner))

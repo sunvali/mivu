@@ -48,7 +48,7 @@ import Testing
         let unloadedTurnBefore = try fixture.rows("SELECT id, hex(payload) FROM coach_turn ORDER BY ordinal LIMIT 1")
         let payload = try fixture.payload(head: head, text: "Synthetic append", photos: [fixture.photo()])
         metrics.reset()
-        let committed = try await store.captureCoachSubmission(payload, expectedProfileID: fixture.profileID)
+        let committed = try await capturedSubmission(store, payload, expectedProfileID: fixture.profileID)
         #expect(committed.id == payload.submissionID && committed.sequence == 10_000)
         #expect(committed.photos.map(\.photoID) == payload.attachments.map(\.id))
         #expect(try fixture.rows("SELECT id, hex(payload) FROM coach_turn ORDER BY ordinal LIMIT 1") == unloadedTurnBefore)
@@ -57,7 +57,7 @@ import Testing
         #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0)
         #expect(metrics.counters.originalPhotoBytes == 0)
         let over = try fixture.payload(head: try await store.diaryHead(expectedProfileID: fixture.profileID))
-        await #expect(throws: DiaryError.invalidData) { try await store.captureCoachSubmission(over, expectedProfileID: fixture.profileID) }
+        await #expect(throws: DiaryError.invalidData) { try await capturedSubmission(store, over, expectedProfileID: fixture.profileID) }
     }
 
     @Test func repeatedCaptureRetainsDateAndSequence() async throws {
@@ -65,14 +65,14 @@ import Testing
         let store = DiaryStore(directory: fixture.root)
         let head = try await store.selectPagedProfile(fixture.profileID)
         let payload = try fixture.payload(head: head, text: " exact text \n", photos: [fixture.photo()])
-        let first = try await store.captureCoachSubmission(payload, expectedProfileID: fixture.profileID)
+        let first = try await capturedSubmission(store, payload, expectedProfileID: fixture.profileID)
         try await store.setCoachTurnState(turnID: first.id, state: .waitingForNetwork, expectedProfileID: fixture.profileID)
         let afterStatus = try await store.diaryHead(expectedProfileID: fixture.profileID)
         // A later profile/day context cannot reinterpret an already accepted attempt.
         try fixture.execute("UPDATE storage_head SET activeDayID = NULL, previousDayConfirmedAt = NULL, activeConversationSegmentID = NULL")
         let reopened = DiaryStore(directory: fixture.root)
         _ = try await reopened.selectPagedProfile(fixture.profileID)
-        let retried = try await reopened.captureCoachSubmission(payload, expectedProfileID: fixture.profileID)
+        let retried = try await capturedSubmission(reopened, payload, expectedProfileID: fixture.profileID)
         #expect(retried.id == first.id && retried.sequence == first.sequence)
         #expect(retried.capturedAt == first.capturedAt && retried.captureTimeZoneID == first.captureTimeZoneID)
         #expect(retried.trackingDayID == first.trackingDayID && retried.segmentID == first.segmentID)
@@ -89,7 +89,7 @@ import Testing
             _ = try await stale.selectPagedProfile(fixture.profileID)
             let payload = try fixture.payload(head: head)
             switch failure {
-            case "head": _ = try await first.captureCoachSubmission(try fixture.payload(head: head), expectedProfileID: fixture.profileID)
+            case "head": _ = try await capturedSubmission(first, try fixture.payload(head: head), expectedProfileID: fixture.profileID)
             case "removed": try FileManager.default.removeItem(at: fixture.url)
             case "replaced":
                 let replacement = fixture.root.appending(path: "replacement")
@@ -100,7 +100,7 @@ import Testing
             default: break
             }
             let owner = failure == "owner" ? UUID() : fixture.profileID
-            await #expect(throws: (any Error).self) { try await stale.captureCoachSubmission(payload, expectedProfileID: owner) }
+            await #expect(throws: (any Error).self) { try await capturedSubmission(stale, payload, expectedProfileID: owner) }
             if failure != "removed" { #expect(try fixture.rows("SELECT COUNT(*) FROM coach_turn") == [[failure == "head" ? "2" : "1"]]) }
         }
     }
@@ -139,7 +139,7 @@ import Testing
         let before = try fixture.durableState()
         let reopened = DiaryStore(directory: fixture.root)
         _ = try await reopened.selectPagedProfile(fixture.profileID)
-        #expect(try await reopened.reconcileCoachCapture(submissionID: frozenAttempt.submissionID,
+        #expect(try await reconciledSubmission(reopened, submissionID: frozenAttempt.submissionID,
             expectedManifest: frozenAttempt.manifest, expectedProfileID: fixture.profileID) == .absent)
         #expect(try fixture.durableState() == before)
         #expect(try fixture.rows("SELECT COUNT(*) FROM meal") == [["1"]])
@@ -150,11 +150,11 @@ import Testing
         let store = DiaryStore(directory: fixture.root)
         let head = try await store.selectPagedProfile(fixture.profileID)
         let payload = try fixture.payload(head: head, photos: [fixture.photo()])
-        let captured = try await store.captureCoachSubmission(payload, expectedProfileID: fixture.profileID)
+        let captured = try await capturedSubmission(store, payload, expectedProfileID: fixture.profileID)
         // Fresh actor and connection simulate restart after capture, without scheduling any worker.
         let reopened = DiaryStore(directory: fixture.root)
         _ = try await reopened.selectPagedProfile(fixture.profileID)
-        let result = try await reopened.reconcileCoachCapture(submissionID: payload.submissionID,
+        let result = try await reconciledSubmission(reopened, submissionID: payload.submissionID,
             expectedManifest: payload.manifest, expectedProfileID: fixture.profileID)
         guard case .accepted(let recovered) = result else { Issue.record("accepted capture missing after reopening"); return }
         #expect(recovered == captured && recovered.state == .captured)
@@ -170,7 +170,7 @@ import Testing
         let head = try await store.selectPagedProfile(fixture.profileID)
         let photos = [fixture.photo(), fixture.photo()]
         let original = try fixture.payload(head: head, text: "exact", photos: photos)
-        _ = try await store.captureCoachSubmission(original, expectedProfileID: fixture.profileID)
+        _ = try await capturedSubmission(store, original, expectedProfileID: fixture.profileID)
         let before = try fixture.durableState()
         var changedContext = original.context; changedContext.previousDayConfirmedAt = nil
         var changedTime = original.context; changedTime.capturedAt.addTimeInterval(1)
@@ -193,9 +193,9 @@ import Testing
             fixture.payload(head: head, id: original.submissionID, text: "exact", photos: photos, context: changedDay)
         ]
         for variant in variants {
-            #expect(try await store.reconcileCoachCapture(submissionID: original.submissionID,
+            #expect(try await reconciledSubmission(store, submissionID: original.submissionID,
                 expectedManifest: variant.manifest, expectedProfileID: fixture.profileID) == .conflictingPayload)
-            await #expect(throws: DiaryError.staleRevision) { try await store.captureCoachSubmission(variant, expectedProfileID: fixture.profileID) }
+            await #expect(throws: DiaryError.staleRevision) { try await capturedSubmission(store, variant, expectedProfileID: fixture.profileID) }
         }
         #expect(try fixture.durableState() == before)
     }
@@ -205,17 +205,17 @@ import Testing
         let store = DiaryStore(directory: fixture.root)
         let head = try await store.selectPagedProfile(fixture.profileID)
         let attempted = try fixture.payload(head: head, text: "original draft", photos: [fixture.photo()])
-        _ = try await store.captureCoachSubmission(attempted, expectedProfileID: fixture.profileID)
+        _ = try await capturedSubmission(store, attempted, expectedProfileID: fixture.profileID)
         // The caller loses the returned acknowledgement, then edits its in-memory composer.
         let editedDraft = try fixture.payload(head: head, text: "edited draft", photos: [fixture.photo()])
         let reopened = DiaryStore(directory: fixture.root)
         _ = try await reopened.selectPagedProfile(fixture.profileID)
-        guard case .accepted(let accepted) = try await reopened.reconcileCoachCapture(submissionID: attempted.submissionID,
+        guard case .accepted(let accepted) = try await reconciledSubmission(reopened, submissionID: attempted.submissionID,
             expectedManifest: attempted.manifest, expectedProfileID: fixture.profileID) else { Issue.record("uncertain attempt not reconciled"); return }
         #expect(accepted.text == "original draft" && accepted.id == attempted.submissionID)
         #expect(editedDraft.text == "edited draft" && editedDraft.manifest != attempted.manifest)
         #expect(try fixture.rows("SELECT COUNT(*) FROM coach_turn") == [["2"]])
-        #expect(try await reopened.reconcileCoachCapture(submissionID: editedDraft.submissionID,
+        #expect(try await reconciledSubmission(reopened, submissionID: editedDraft.submissionID,
             expectedManifest: editedDraft.manifest, expectedProfileID: fixture.profileID) == .absent)
     }
 
@@ -249,11 +249,11 @@ import Testing
         let head = try await store.selectPagedProfile(fixture.profileID)
         var context = try fixture.payload(head: head).context; context.previousDayConfirmedAt = nil
         let stale = try fixture.payload(head: head, context: context)
-        await #expect(throws: DiaryError.staleRevision) { try await store.captureCoachSubmission(stale, expectedProfileID: fixture.profileID) }
+        await #expect(throws: DiaryError.staleRevision) { try await capturedSubmission(store, stale, expectedProfileID: fixture.profileID) }
         let legacy = try fixture.payload(head: head, id: fixture.before.coachTurns[0].id)
-        #expect(try await store.reconcileCoachCapture(submissionID: legacy.submissionID,
+        #expect(try await reconciledSubmission(store, submissionID: legacy.submissionID,
             expectedManifest: legacy.manifest, expectedProfileID: fixture.profileID) == .conflictingPayload)
-        await #expect(throws: DiaryError.staleRevision) { try await store.captureCoachSubmission(legacy, expectedProfileID: fixture.profileID) }
+        await #expect(throws: DiaryError.staleRevision) { try await capturedSubmission(store, legacy, expectedProfileID: fixture.profileID) }
         #expect(try fixture.rows("SELECT COUNT(*) FROM coach_turn") == [["1"]])
     }
 }

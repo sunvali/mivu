@@ -13,6 +13,16 @@ struct DiaryHead: Equatable, Sendable {
     var effectiveConversationSegmentID: UUID? = nil
 }
 
+struct DiarySelectionOwnership: Equatable, Sendable {
+    let identity: CoachTimelineIdentity
+    let selectionEpoch: UInt64
+}
+
+struct CoachCapturePreparation: Equatable, Sendable {
+    let ownership: DiarySelectionOwnership
+    let context: CoachCaptureContext
+}
+
 enum DiaryPhotoOwner: Hashable, Sendable { case meal(UUID), coachTurn(UUID) }
 
 struct DiaryPhotoReference: Equatable, Sendable, Identifiable {
@@ -58,6 +68,7 @@ struct DiaryReadModel: Equatable, Sendable {
     var workouts: [WorkoutSession]
     var activeGoal: GoalRecord?
     var pendingAnalysisCount: Int
+    var hasPendingOnActiveDay: Bool = false
 }
 
 struct DiaryDayReadModel: Equatable, Sendable {
@@ -115,6 +126,7 @@ struct DiaryHistoryCursor: Equatable, Sendable {
     var ordinal: Int
     var dayID: UUID
     var recordedOnly: Bool
+    var localDate: String? = nil
 }
 struct DiaryDaySummary: Equatable, Sendable {
     var day: TrackingDay
@@ -126,4 +138,26 @@ struct DiaryHistoryPage: Equatable, Sendable {
     var days: [DiaryDaySummary]
     var cursor: DiaryHistoryCursor?
     var hasMore: Bool
+}
+
+
+extension DiaryReadModel {
+    var profile: DiaryProfile { head.profile }
+    var revision: Int { head.revision }
+    var activeDayID: UUID? { head.activeDayID }
+    var previousDayConfirmedAt: Date? { head.previousDayConfirmedAt }
+    var pendingCount: Int { pendingAnalysisCount }
+    var totals: NutritionTotals {
+        let saved = meals.filter(\.isSaved)
+        if saved.isEmpty, activeDay?.completeness != .complete { return NutritionTotals(kcal: nil, carbs: nil, protein: nil, fat: nil, unknownItemCount: 0) }
+        return nutritionTotals(saved.flatMap(\.items))
+    }
+}
+
+extension DiaryDayReadModel {
+    var totals: NutritionTotals {
+        let saved = meals.filter(\.isSaved)
+        if saved.isEmpty, day.completeness != .complete { return NutritionTotals(kcal: nil, carbs: nil, protein: nil, fat: nil, unknownItemCount: 0) }
+        return nutritionTotals(saved.flatMap(\.items))
+    }
 }

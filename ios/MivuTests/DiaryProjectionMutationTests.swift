@@ -234,22 +234,22 @@ import Testing
         _ = try await store.selectPagedProfile(f.owner)
         let id = UUID(), photo = f.photo()
         let accepted = try await store.captureProjection(text: "manual", photos: [photo], reviewFirst: true, dayID: f.source.days[1].id,
-            at: f.instant, submissionID: id, forCoach: true, expectedProfileID: f.owner)
+            at: f.instant, submissionID: id, forCoach: true, expectedSelection: try await store.selectionOwnership(expectedProfileID: f.owner), expectedProfileID: f.owner)
         #expect(accepted.sourceTurnID == id && accepted.photos.first?.owner == .meal(accepted.id))
         let original = try f.database.coachExchangeSummary(turnID: id, expectedProfileID: f.owner)
         #expect(original.photos.first?.owner == .meal(accepted.id))
         let retry = try await store.captureProjection(text: "manual", photos: [photo], reviewFirst: true, dayID: f.source.days[1].id,
-            at: f.instant, submissionID: id, forCoach: true, expectedProfileID: f.owner)
+            at: f.instant, submissionID: id, forCoach: true, expectedSelection: try await store.selectionOwnership(expectedProfileID: f.owner), expectedProfileID: f.owner)
         #expect(retry == accepted && f.diagnostics.counters.originalPhotoBytes == 0)
         await #expect(throws: DiaryError.staleRevision) { try await store.captureProjection(text: "changed accepted input", photos: [photo], reviewFirst: true,
-            dayID: f.source.days[1].id, at: f.instant, submissionID: id, forCoach: true, expectedProfileID: f.owner) }
-        let correction = try await store.correctMealProjection(mealID: accepted.id, text: "different serving", forCoach: true, expectedProfileID: f.owner)
+            dayID: f.source.days[1].id, at: f.instant, submissionID: id, forCoach: true, expectedSelection: try await store.selectionOwnership(expectedProfileID: f.owner), expectedProfileID: f.owner) }
+        let correction = try await store.correctMealProjection(mealID: accepted.id, text: "different serving", forCoach: true, expectedSelection: try await store.selectionOwnership(expectedProfileID: f.owner), expectedProfileID: f.owner)
         #expect(correction.items == accepted.items && correction.submissions.count == 2)
         #expect(try f.database.coachExchangeSummary(turnID: id, expectedProfileID: f.owner) == original)
         let before = try f.durableState()
         try f.execute("CREATE TRIGGER fail_meal BEFORE INSERT ON meal BEGIN SELECT RAISE(ABORT, 'meal failure'); END")
         await #expect(throws: DiaryError.persistenceFailed) { try await store.captureProjection(text: "failed", photos: [f.photo()], reviewFirst: false,
-            dayID: f.source.days[0].id, forCoach: true, expectedProfileID: f.owner) }
+            dayID: f.source.days[0].id, forCoach: true, expectedSelection: try await store.selectionOwnership(expectedProfileID: f.owner), expectedProfileID: f.owner) }
         #expect(try f.durableState() == before)
         try f.execute("DROP TRIGGER fail_meal")
         let manifest = try ChatHistoryFixture.completeReference(databaseURL: f.url).coachTurns.first { $0.id == id }?.submissionManifest

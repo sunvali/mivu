@@ -5,10 +5,12 @@ struct HistoryView: View {
     @State private var dateFilter: String?
     @State private var selectedDate = Date()
     @State private var showDatePicker = false
+    @State private var page: DiaryHistoryPage?
+    @State private var coverage: [DayCompleteness: Int] = [:]
 
     var body: some View {
         List {
-            if let snapshot = model.snapshot {
+            if model.readModel != nil {
                 if let dateFilter {
                     Section {
                         LabeledContent("Selected date", value: dateFilter)
@@ -17,24 +19,24 @@ struct HistoryView: View {
                     }
                 }
                 Section {
-                    let days = snapshot.days.filter { dateFilter == nil || $0.localDate == dateFilter }
+                    let days = page?.days ?? []
                     if days.isEmpty, let dateFilter {
                         ContentUnavailableView("No recorded day", systemImage: "calendar", description: Text("There are no records for \(dateFilter). Missing logs do not mean zero intake."))
                     } else if days.isEmpty {
                         ContentUnavailableView("No recorded days", systemImage: "calendar", description: Text("Meals and measurements appear here after you save them."))
                     }
-                    ForEach(days.sorted { $0.startAt > $1.startAt }, id: \.id) { day in
+                    ForEach(days, id: \.day.id) { summary in
+                        let day = summary.day
                         NavigationLink(value: HistoryRoute.day(day.id)) {
-                            let meals = snapshot.meals.filter { $0.dayID == day.id }
-                            let totals = snapshot.totals(dayID: day.id)
+                            let totals = summary.totals
                             ViewThatFits(in: .horizontal) {
                                 HStack(spacing: 16) {
-                                    dayLabel(day, mealCount: meals.count)
+                                    dayLabel(day, mealCount: summary.savedMealCount + summary.pendingMealCount)
                                     Spacer(minLength: 8)
                                     energy(totals.kcal)
                                 }
                                 VStack(alignment: .leading, spacing: 8) {
-                                    dayLabel(day, mealCount: meals.count)
+                                    dayLabel(day, mealCount: summary.savedMealCount + summary.pendingMealCount)
                                     energy(totals.kcal)
                                 }
                             }
@@ -43,10 +45,11 @@ struct HistoryView: View {
                         }.accessibilityIdentifier("diaryDay")
                     }
                 } header: { DiarySectionLabel(title: "Recorded days", symbol: "calendar", color: .diaryProtein) }
+                if page?.hasMore == true { Button("Earlier days") { Task { await loadHistory(before: page?.cursor) } }.frame(minHeight: 44) }
                 Section {
                     DisclosureGroup("Day coverage") {
                         ForEach(DayCompleteness.allCases, id: \.self) { status in
-                            LabeledContent { Text(snapshot.days.filter { $0.completeness == status }.count.formatted()).monospacedDigit() } label: { Text(status.title) }
+                            LabeledContent { Text((coverage[status] ?? 0).formatted()).monospacedDigit() } label: { Text(status.title) }
                         }
                     }
                     Text("Complete means all intake was recorded. Partial, unknown and untracked days remain separate. Missing logs do not mean zero intake.")
@@ -65,6 +68,8 @@ struct HistoryView: View {
             case .day(let id): DayHistoryView(model: model, dayID: id)
             }
         }
+        .task(id: model.changeGeneration) { await loadHistory() }
+        .task(id: dateFilter) { await loadHistory() }
         .navigationTitle("Diary")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -85,17 +90,26 @@ struct HistoryView: View {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showDatePicker = false } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Show date") {
-                            dateFilter = ProgressDate.label(selectedDate, zone: model.snapshot?.profile.timeZoneID ?? TimeZone.current.identifier)
+                            dateFilter = ProgressDate.label(selectedDate, zone: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
                             showDatePicker = false
                         }.accessibilityIdentifier("applyDiaryDate")
                     }
                 }
             }
-            .environment(\.timeZone, TimeZone(identifier: model.snapshot?.profile.timeZoneID ?? TimeZone.current.identifier) ?? .current)
+            .environment(\.timeZone, TimeZone(identifier: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier) ?? .current)
         }
-        .onChange(of: model.snapshot?.profile.id) { _, _ in dateFilter = nil; showDatePicker = false }
+        .onChange(of: model.readModel?.profile.id) { _, _ in dateFilter = nil; showDatePicker = false }
     }
 
+    private func loadHistory(before: DiaryHistoryCursor? = nil) async {
+        guard let token = model.selection else { page = nil; return }
+        let filter = dateFilter
+        do {
+            let loaded = try await model.store.diaryHistory(before: before, localDate: filter, expectedProfileID: token.identity.profileID)
+            let counts = try await model.store.historyCoverage(expectedProfileID: token.identity.profileID)
+            guard !Task.isCancelled, model.selection == token, dateFilter == filter else { return }; page = loaded; coverage = counts
+        } catch { if model.selection == token { model.errorMessage = error.localizedDescription } }
+    }
     private func dayLabel(_ day: TrackingDay, mealCount: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(formattedDate(day))
@@ -132,7 +146,8 @@ struct DayHistoryView: View {
     @State private var savedMealID: UUID?
     var body: some View {
         List {
-            if let snapshot = model.snapshot, let day = snapshot.days.first(where: { $0.id == dayID }) {
+            if let snapshot = model.dayDetail(dayID) {
+                let day = snapshot.day
                 if let savedMealID, model.meal(savedMealID) != nil {
                     Section {
                         NavigationLink { MealDetailView(model: model, mealID: savedMealID) } label: {
@@ -141,7 +156,7 @@ struct DayHistoryView: View {
                         Text("Open the saved meal to review its analysis state.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }
                 }
-                Section { NutritionSummary(totals: snapshot.totals(dayID: dayID)).padding(.vertical, 12).listRowBackground(Color.diarySummarySurface) }
+                Section { NutritionSummary(totals: snapshot.totals).padding(.vertical, 12).listRowBackground(Color.diarySummarySurface) }
                 Section {
                     Button { showMeal = true } label: { Label("Log meal", systemImage: "plus.circle").frame(minHeight: 44) }
                         .accessibilityIdentifier("logMealForDay")
@@ -151,12 +166,12 @@ struct DayHistoryView: View {
                         .accessibilityIdentifier("logWorkoutForDay")
                 } header: { Text("Add to this day") }
                 Section("Day coverage") {
-                    Picker("Coverage", selection: Binding(get: { day.completeness }, set: { value in Task { await model.change { try await model.store.setCompleteness(dayID: dayID, value, expectedProfileID: snapshot.profile.id) } } })) {
+                    Picker("Coverage", selection: Binding(get: { day.completeness }, set: { value in Task { await model.change { try await model.store.setCompleteness(dayID: dayID, value, expectedProfileID: snapshot.head.profile.id) } } })) {
                         ForEach(DayCompleteness.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     Text("Complete means all intake was recorded, even if some estimates still need review.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                    if let weight = snapshot.weights.first(where: { $0.dayID == dayID }) {
+                    if let weight = snapshot.weight {
                         LabeledContent("Morning weight", value: "\(weight.value.formatted()) \(weight.unit)").monospacedDigit()
                     }
                 }
@@ -165,7 +180,7 @@ struct DayHistoryView: View {
                         Text("No meals recorded for this day.").foregroundStyle(Color.diarySecondary)
                     }
                     ForEach(snapshot.meals.filter { $0.dayID == dayID }.sorted { $0.eatenAt < $1.eatenAt }, id: \.id) { meal in
-                        NavigationLink { MealDetailView(model: model, mealID: meal.id) } label: { MealRow(meal: meal) }.accessibilityIdentifier("historyMeal")
+                        NavigationLink { MealDetailView(model: model, mealID: meal.id) } label: { MealRow(meal: meal, model: model) }.accessibilityIdentifier("historyMeal")
                     }
                 }
                 let workouts = snapshot.workouts.filter { $0.dayID == dayID }
@@ -182,17 +197,18 @@ struct DayHistoryView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .navigationTitle(model.snapshot?.days.first { $0.id == dayID }?.localDate ?? "Day")
+        .task(id: model.changeGeneration) { await model.loadDay(dayID) }
+        .navigationTitle(model.day(dayID)?.localDate ?? "Day")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showMeal) { MealComposerView(model: model, dayID: dayID, onSaved: { savedMealID = $0 }) }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model, dayID: dayID) }
         .sheet(isPresented: $showWorkout) {
-            if let day = model.snapshot?.days.first(where: { $0.id == dayID }) {
+            if let day = model.day(dayID) {
                 WorkoutEditorView(model: model, localDate: day.localDate, dayID: dayID)
             }
         }
-        .onChange(of: model.snapshot?.profile.id) { _, _ in savedMealID = nil; showMeal = false; showWeight = false; showWorkout = false }
+        .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil; showMeal = false; showWeight = false; showWorkout = false }
     }
 }
 

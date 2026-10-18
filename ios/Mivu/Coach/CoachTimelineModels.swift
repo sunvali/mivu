@@ -48,6 +48,8 @@ struct CoachExchangeSummary: Equatable, Sendable, Identifiable {
     var state: CoachTurnState
     var photos: [DiaryPhotoReference]
     var receipts: [CoachCommittedReceipt]
+    var pendingMealID: UUID? = nil
+    var needsDayChoice: Bool = false
 }
 
 enum CoachPageRequest: Equatable, Sendable {

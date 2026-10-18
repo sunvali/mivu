@@ -44,13 +44,15 @@ final class DiaryDatabase {
                 try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: url.path)
                 #endif
             }
-            try execute("BEGIN IMMEDIATE")
-            do {
-                try execute("CREATE TABLE IF NOT EXISTS coach_turn (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
-                try execute("CREATE TABLE IF NOT EXISTS coach_photo (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, ordinal INTEGER NOT NULL, payload BLOB NOT NULL, bytes BLOB NOT NULL)")
-                try execute("CREATE TABLE IF NOT EXISTS workout (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES day(id), ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
-                try execute("COMMIT")
-            } catch { try? execute("ROLLBACK"); throw error }
+            if try mutationInteger("PRAGMA user_version") != 1 {
+                try execute("BEGIN IMMEDIATE")
+                do {
+                    try execute("CREATE TABLE IF NOT EXISTS coach_turn (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
+                    try execute("CREATE TABLE IF NOT EXISTS coach_photo (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, ordinal INTEGER NOT NULL, payload BLOB NOT NULL, bytes BLOB NOT NULL)")
+                    try execute("CREATE TABLE IF NOT EXISTS workout (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES day(id), ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
+                    try execute("COMMIT")
+                } catch { try? execute("ROLLBACK"); throw error }
+            }
         } catch {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData
@@ -156,12 +158,13 @@ final class DiaryDatabase {
     }
 
     func write(_ snapshot: DiarySnapshot, expected: DiarySnapshot?, maximumBytes: Int) throws {
-        diagnostics?.recordCompleteReconcile()
-        try snapshot.validate()
-        guard try JSONEncoder().encode(snapshot).count <= maximumBytes else { throw DiaryError.invalidData }
         try execute("BEGIN IMMEDIATE")
         try execute("PRAGMA defer_foreign_keys = ON")
         do {
+            guard try mutationInteger("PRAGMA user_version") == 0 else { throw DiaryError.invalidData }
+            diagnostics?.recordCompleteReconcile()
+            try snapshot.validate()
+            guard try JSONEncoder().encode(snapshot).count <= maximumBytes else { throw DiaryError.invalidData }
             if let expected {
                 guard try readSnapshot(maximumBytes: maximumBytes) == expected else { throw DiaryError.staleRevision }
             } else {

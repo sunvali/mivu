@@ -7,6 +7,7 @@ import Network
     let diary: DiaryViewModel
     let connection: ChatGPTConnection
     var draft = MealDraft()
+    var exchanges: [CoachExchangeSummary] { diary.latestCoachPage?.exchanges ?? [] }
     private(set) var captureReceipt: UUID?
     private(set) var companionCaptureEvent: CompanionEvent?
     private(set) var companionSubmission: CompanionSubmission?
@@ -37,10 +38,10 @@ import Network
         self.lookup = lookup; self.sleep = sleep
     }
 
-    var turns: [CoachTurn] { diary.snapshot?.coachTurns ?? [] }
-    var canSend: Bool { draft.isValid && !isSending && !diary.isSaving && !diary.isChangingProfile && diary.snapshot != nil }
-    var hasPendingWork: Bool { turns.contains { [.captured, .analyzing, .waitingForNetwork].contains($0.state) } }
-    private var companionTurn: CoachTurn? {
+    var turns: [CoachExchangeSummary] { exchanges }
+    var canSend: Bool { draft.isValid && !isSending && !diary.isSaving && !diary.isChangingProfile && diary.readModel != nil }
+    var hasPendingWork: Bool { diary.workStatus.pendingTurnID != nil }
+    private var companionTurn: CoachExchangeSummary? {
         if let latest = turns.last, latest.id == companionSubmission?.operationID { return latest }
         return turns.first { $0.id == activityTurnID } ?? turns.last
     }
@@ -55,37 +56,51 @@ import Network
             (activity != nil || companionTurn?.state == .analyzing || companionTurn?.state == .captured)))
     }
 
+    private var attemptedCapture: (draft: MealDraft, preparation: CoachCapturePreparation, payload: CoachSubmissionPayload)?
     @discardableResult func send() async -> Bool {
-        guard canSend, let owner = diary.snapshot?.profile.id else { return false }
-        sendingErrorRevision = errorRevision
-        isSending = true; diary.isSaving = true
+        guard canSend, let token = diary.selection else { return false }
+        let owner = token.identity.profileID
+        sendingErrorRevision = errorRevision; isSending = true; diary.isSaving = true
         defer { isSending = false; diary.isSaving = false }
         let captured = draft
-        let isNewSubmission = !turns.contains { $0.id == captured.submissionID }
         companionSubmission = CompanionSubmission(profileID: owner, operationID: captured.submissionID, acceptedAt: Date())
         do {
-            _ = try await diary.store.captureCoachTurn(text: captured.text, photos: captured.photos.map { MealPhoto(data: $0) }, turnID: captured.submissionID, expectedProfileID: owner)
+            let attempt: (draft: MealDraft, preparation: CoachCapturePreparation, payload: CoachSubmissionPayload)
+            if let previous = attemptedCapture, previous.draft.submissionID == captured.submissionID {
+                guard previous.draft == captured else {
+                    let prior = try await diary.store.reconcileCoachCapture(submissionID: previous.payload.submissionID,
+                        expectedManifest: previous.payload.manifest, expectedSelection: previous.preparation.ownership, expectedProfileID: owner)
+                    if case .accepted = prior { draft.submissionID = UUID() }
+                    attemptedCapture = nil
+                    return false
+                }
+                attempt = previous
+            } else {
+                let prepared = try await diary.store.coachCapturePreparation(at: Date(), expectedProfileID: owner)
+                guard diary.selection == token, prepared.ownership == token else { return false }
+                let payload = try CoachSubmissionPayload(submissionID: captured.submissionID, text: captured.text,
+                    attachments: captured.photos.map { MealPhoto(data: $0) }, context: prepared.context)
+                attempt = (captured, prepared, payload); attemptedCapture = attempt
+            }
+            let result = try await diary.store.captureCoachSubmission(attempt.payload, expectedSelection: attempt.preparation.ownership, expectedProfileID: owner)
             try await diary.refresh(profileID: owner)
-            guard !Task.isCancelled, !diary.isChangingProfile, diary.snapshot?.profile.id == owner else { return false }
-            captureReceipt = captured.submissionID
-            if isNewSubmission {
-                companionCaptureEvent = CompanionEvent(profileID: owner, operationID: captured.submissionID,
-                                                       kind: .saved, committedAt: Date())
+            guard !Task.isCancelled, diary.selection == token, !diary.isChangingProfile, draft == captured else { return false }
+            captureReceipt = result.id
+            if companionCaptureEvent?.profileID != owner || companionCaptureEvent?.operationID != result.id {
+                companionCaptureEvent = CompanionEvent(profileID: owner, operationID: result.id, kind: .saved, committedAt: Date())
             }
             draft = MealDraft()
             if errorRevision == sendingErrorRevision { errorMessage = nil }
-            resume()
-            return true
+            resume(); return true
         } catch {
-            if !diary.isChangingProfile, diary.snapshot?.profile.id == owner {
-                errorMessage = "Could not save on this iPhone. Your input is still here."
-            }
+            if diary.selection == token, !diary.isChangingProfile { errorMessage = "Could not save on this iPhone. Your input is still here." }
             return false
         }
     }
 
     func resume() {
-        guard active, worker == nil, !diary.isChangingProfile, let owner = diary.snapshot?.profile.id else { return }
+        guard active, worker == nil, !diary.isChangingProfile, let selected = diary.selection else { return }
+        let owner = selected.identity.profileID
         let id = UUID(); workerID = id; isWorking = true
         worker = Task {
             defer { if workerID == id { worker = nil; workerID = nil; isWorking = false; activity = nil; activityTurnID = nil } }
@@ -133,44 +148,45 @@ import Network
                             }
                         }
                     }
+                    let photoLimiter = diary.photoWorkLimiter
                     do {
                         _ = try await CoachEngine(store: diary.store, infer: resilient, lookup: lookup, prepareImages: { originals in
-                            try PhotoImport.visionCopies(originals)
+                            try await photoLimiter.withPermit { try PhotoImport.visionCopies(originals) }
                         }, onActivity: { phase in
                             await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
                         }).run(turnID: turn.id, expectedProfileID: owner)
                     } catch {
-                        guard !Task.isCancelled, diary.snapshot?.profile.id == owner else { break }
+                        guard !Task.isCancelled, diary.selection == selected else { break }
                         errorMessage = message(for: error)
                         break
                     }
-                    guard !Task.isCancelled, diary.snapshot?.profile.id == owner else { break }
+                    guard !Task.isCancelled, diary.selection == selected else { break }
                     try await diary.refresh(profileID: owner)
                 }
-            } catch { if !Task.isCancelled, diary.snapshot?.profile.id == owner { errorMessage = message(for: error) } }
-            if diary.snapshot?.profile.id == owner, !diary.isChangingProfile { try? await diary.refresh(profileID: owner) }
+            } catch { if !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) } }
+            if diary.selection == selected, !diary.isChangingProfile { try? await diary.refresh(profileID: owner) }
         }
     }
 
     func chooseDay(_ turnID: UUID, usePrevious: Bool) async {
-        guard !diary.isChangingProfile, let owner = diary.snapshot?.profile.id else { return }
+        guard !diary.isChangingProfile, let selected = diary.selection else { return }
+        let owner = selected.identity.profileID
         do {
             try await diary.store.chooseCoachDay(turnID: turnID, usePrevious: usePrevious, expectedProfileID: owner)
             await retry(turnID)
         } catch { errorMessage = message(for: error) }
     }
-    func captureDate(_ turn: CoachTurn) -> String {
+    func captureDate(_ turn: CoachExchangeSummary) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: turn.captureTimeZoneID); formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: turn.capturedAt)
     }
-    func previousDayDate(_ turn: CoachTurn) -> String? {
-        diary.snapshot?.days.first(where: { $0.id == turn.activeDayID })?.localDate
-    }
+    func previousDayDate(_ turn: CoachExchangeSummary) -> String? { turn.trackingDayID.flatMap { diary.day($0)?.localDate } }
     func retry(_ turnID: UUID) async {
-        guard !diary.isChangingProfile, let owner = diary.snapshot?.profile.id else { return }
+        guard !diary.isChangingProfile, let selected = diary.selection else { return }
+        let owner = selected.identity.profileID
         cancel(); await waitForWorker()
-        guard !diary.isChangingProfile, diary.snapshot?.profile.id == owner else { return }
+        guard !diary.isChangingProfile, diary.selection == selected else { return }
         do {
             try await diary.store.setCoachTurnState(turnID: turnID, state: .captured, expectedProfileID: owner)
             try await diary.refresh(profileID: owner)
@@ -188,15 +204,16 @@ import Network
         try await diary.refresh(profileID: owner)
     }
     func retryMeal(_ mealID: UUID) async {
-        guard !diary.isChangingProfile, let owner = diary.snapshot?.profile.id else { return }
+        guard !diary.isChangingProfile, let selected = diary.selection else { return }
+        let owner = selected.identity.profileID
         cancel(); await waitForWorker()
-        guard !diary.isChangingProfile, diary.snapshot?.profile.id == owner else { return }
+        guard !diary.isChangingProfile, diary.selection == selected else { return }
         do {
             try await recoverLegacyCaptures(owner: owner)
-            guard let turn = turns.last(where: { $0.pendingMealID == mealID }) else {
+            guard let turnID = try await diary.store.coachTurnForMeal(mealID, expectedProfileID: owner) else {
                 errorMessage = "This meal changed. Review it before retrying its earlier input."; return
             }
-            await retry(turn.id)
+            await retry(turnID)
         } catch { errorMessage = message(for: error) }
     }
     func startMonitoring() {
@@ -214,18 +231,35 @@ import Network
     deinit { monitor.cancel() }
     func waitForWorker() async { await worker?.value }
     private func reportActivity(_ phase: CoachActivity, workerID id: UUID, owner: UUID, turnID: UUID) async {
-        guard active, presentationActive, !Task.isCancelled, workerID == id, diary.snapshot?.profile.id == owner, !diary.isChangingProfile else { return }
+        guard active, presentationActive, !Task.isCancelled, workerID == id, diary.readModel?.head.profile.id == owner, !diary.isChangingProfile else { return }
         activity = phase; activityTurnID = turnID
         try? await diary.refresh(profileID: owner)
     }
-    func linkedMeals(_ turn: CoachTurn) -> [DiaryMeal] {
-        let ids = Set(turn.receipts.compactMap(\.mealID) + (turn.pendingMealID.map { [$0] } ?? []))
-        return diary.snapshot?.meals.filter { ids.contains($0.id) } ?? []
+    private var linksSelection: DiarySelectionOwnership?
+    private var linksGeneration: UInt64 = 0
+    private var linksRequest = UUID()
+    private var mealsByTurn: [UUID: [MealReadModel]] = [:]
+    private var workoutsByTurn: [UUID: [WorkoutSession]] = [:]
+    func refreshLinks() async {
+        guard let token = diary.selection else { mealsByTurn = [:]; workoutsByTurn = [:]; linksSelection = nil; return }
+        let generation = diary.changeGeneration, request = UUID(); linksRequest = request
+        var meals: [UUID: [MealReadModel]] = [:], workouts: [UUID: [WorkoutSession]] = [:]
+        for turn in turns {
+            let ids = Set(turn.receipts.compactMap(\.mealID) + (turn.pendingMealID.map { [$0] } ?? []))
+            for id in ids { do { meals[turn.id, default: []].append(try await diary.store.meal(id: id, expectedProfileID: token.identity.profileID)) } catch DiaryError.notFound {} catch { return } }
+            for id in Set(turn.receipts.compactMap(\.workoutID)) { do { workouts[turn.id, default: []].append(try await diary.store.coachWorkout(id: id, expectedProfileID: token.identity.profileID)) } catch DiaryError.notFound {} catch { return } }
+            if let dayID = turn.trackingDayID { await diary.loadDay(dayID) }
+        }
+        guard diary.selection == token, diary.changeGeneration == generation, linksRequest == request else { return }
+        linksSelection = token; linksGeneration = generation; mealsByTurn = meals; workoutsByTurn = workouts
     }
-    func linkedWorkouts(_ turn: CoachTurn) -> [WorkoutSession] {
-        let ids = Set(turn.receipts.compactMap(\.workoutID))
-        guard !ids.isEmpty else { return [] }
-        return diary.snapshot?.workouts.filter { ids.contains($0.id) } ?? []
+    func linkedMeals(_ turn: CoachExchangeSummary) -> [MealReadModel] {
+        guard linksSelection == diary.selection, linksGeneration == diary.changeGeneration else { return [] }
+        return mealsByTurn[turn.id] ?? []
+    }
+    func linkedWorkouts(_ turn: CoachExchangeSummary) -> [WorkoutSession] {
+        guard linksSelection == diary.selection, linksGeneration == diary.changeGeneration else { return [] }
+        return workoutsByTurn[turn.id] ?? []
     }
     private func message(for error: Error) -> String {
         if error as? ResponsesClient.Failure == .usageUnavailable { return "ChatGPT is temporarily unavailable. Your input is saved. Retry when usage is available." }
