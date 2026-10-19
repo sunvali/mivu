@@ -42,6 +42,27 @@ class RigTests(unittest.TestCase):
                      if p["shape"] and p["shape"].split(".")[0] == slot and p["visible"]]
             self.assertEqual(len(shown), 1, slot)
 
+    def test_parts_under_hidden_shapes_are_hidden(self):
+        by_id = {p["id"]: p for p in self.parts}
+        for p in self.parts:
+            ancestor = by_id.get(p["parent"])
+            while ancestor:
+                if ancestor["shape"] and not ancestor["visible"]:
+                    self.assertFalse(p["visible"], p["id"])
+                ancestor = by_id.get(ancestor["parent"])
+
+    def test_parents_exist(self):
+        for p in self.parts:
+            self.assertIn(p["parent"], self.ids | {"body", None}, p["id"])
+
+    def test_missing_pivot_names_part(self):
+        import xml.etree.ElementTree as ET
+        import build
+
+        root = ET.fromstring('<svg xmlns="http://www.w3.org/2000/svg"><g id="ear-x"><path d="M 0 0 Z"/></g></svg>')
+        with self.assertRaisesRegex(ValueError, "ear-x"):
+            build.collect(root, build.IDENTITY, None, None, [])
+
     def test_size_budget(self):
         self.assertLess(RIG.stat().st_size, 524_288)
 

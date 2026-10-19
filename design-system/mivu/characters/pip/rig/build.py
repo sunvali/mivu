@@ -75,17 +75,20 @@ def flatten_path(d, m, part_id):
     return " ".join(out)
 
 
-def collect(node, matrix, parent, part_set, parts):
+def collect(node, matrix, parent, part_set, parts, hidden=False):
     for child in node:
         if child.tag != f"{SVG}g":
             continue
         m = multiply(matrix, parse_transform(child.get("transform")))
         child_set = child.get("data-set") or part_set
+        child_hidden = hidden or child.get("display") == "none"
         part_id = child.get("id")
         if part_id:
             path = child.find(f"{SVG}path")
             if path is None:
                 raise ValueError(f"{part_id}: every part needs one direct <path>")
+            if not child.get("data-pivot"):
+                raise ValueError(f"{part_id}: every part needs data-pivot")
             pivot = [float(v) for v in child.get("data-pivot").split()]
             parts.append({
                 "id": part_id,
@@ -94,12 +97,12 @@ def collect(node, matrix, parent, part_set, parts):
                 "z": len(parts),
                 "set": child_set,
                 "shape": child.get("data-shape"),
-                "visible": child.get("display") != "none",
+                "visible": not child_hidden,
                 "fill": path.get("fill"),
                 "fillDark": path.get("data-fill-dark") or path.get("fill"),
                 "path": flatten_path(path.get("d"), m, part_id),
             })
-        collect(child, m, part_id or parent, child_set, parts)
+        collect(child, m, part_id or parent, child_set, parts, child_hidden)
 
 
 def build():

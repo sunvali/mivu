@@ -31,11 +31,16 @@ python3 -m venv .venv && .venv/bin/pip install cairosvg pillow   # once, at repo
 - `data-set="standing|seated|curled"` marks pose-set parts (inherited by
   children); no attribute means shared.
 - Face alternatives: `data-shape="slot.name"` (`mouth.closedSmile`,
-  `eye-l.half`…). `display="none"` means `visible: false` in the JSON; exactly
-  one shape per slot is shown by default. Sub-parts of a shape (iris, glint,
+  `eye-l.half`…). `display="none"` means `visible: false` in the JSON for that
+  part and everything nested inside it; exactly one shape per slot is shown by
+  default. Sub-parts of a shape (iris, glint,
   tongue) are its children and need no `data-shape`. Hidden-by-default extras
   (cheek blush) also use `display="none"`.
-- `-l`/`-r` mean the viewer's left/right. The head faces slightly to the
-  viewer's left: `ear-l` stands up, `ear-r` splays out, like the waving Pip in
-  `../reference.png`.
-- Eyes are authored once around their own centre and placed by a transform.
+- `-l`/`-r` mean the viewer's left/right. The head is the 3/4 view of the dark
+  seated Pip in `../reference.png`: snout to the viewer's right, `ear-l` swept
+  out to the side, `ear-r` upright behind the head.
+- The head was traced from that painting (palette quantisation, per-region
+  contours, cleaned into the named parts) and checked by overlay; the scarf
+  hides the chin, so the jaw is closed with a straight edge under it. The other
+  mouth and eye shapes are derived from the traced face; `mouth.smallOpen` is
+  the waving Pip's open smile, mirrored.
