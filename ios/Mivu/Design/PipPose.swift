@@ -1,0 +1,29 @@
+import CoreGraphics
+
+/// A resting-or-moving description of Pip. Joint names address rig parts without their `@view` suffix.
+struct PipPose: Equatable {
+    struct Joint: Equatable {
+        var rotation: CGFloat = 0
+        var offset: CGPoint = .zero
+        var scale = CGSize(width: 1, height: 1)
+    }
+
+    enum EyeShape: String { case open, half, closedHappy, closedSleepy, wide, heart }
+    enum MouthShape: String { case closedSmile, smallOpen, bigOpen, o, concerned, yawn }
+    enum BodySet: String { case standing, seated, curled }
+
+    var joints: [String: Joint] = [:]
+    var eyes = EyeShape.open
+    var mouth = MouthShape.closedSmile
+    var brows: Joint?
+    /// Unit-disc pupil direction; +y looks down.
+    var gaze = CGPoint.zero
+    var blush = false
+    /// No heart parts exist in the head rig yet; Task 3 wires this to the body art.
+    var hearts = 0
+    var set = BodySet.seated
+    /// -1 left, 0 front, +1 right. Small moves around a view slide features; larger ones swap views.
+    var headTurn: CGFloat = 1
+
+    static let rest = PipPose()
+}
