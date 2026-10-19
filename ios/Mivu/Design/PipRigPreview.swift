@@ -7,9 +7,12 @@ struct PipRigPreview: View {
     @State private var set = PipPose.BodySet.standing
     @State private var driver = Driver()
     @State private var caption = " "
+    @State private var idle: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 12) {
+            Toggle("Idle", isOn: Binding(get: { idle != nil }, set: { $0 ? startIdle() : stopIdle() }))
+                .frame(minHeight: 44)
             Picker("Set", selection: $set) {
                 Text("Today").tag(PipPose.BodySet.standing)
                 Text("Coach").tag(PipPose.BodySet.seated)
@@ -33,6 +36,7 @@ struct PipRigPreview: View {
                 }
             }
         }
+        .onChange(of: set) { stopIdle() }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
@@ -52,6 +56,53 @@ struct PipRigPreview: View {
             driver.rigs.forEach { $0.play(gesture) { _ in } }
             DispatchQueue.main.asyncAfter(deadline: .now() + wait) { done.resume() }
         }
+        driver.rigs.forEach { $0.removeAllMotion(); $0.apply(.rest.withSet(set), animated: true) }
+    }
+
+    /// Runs the scheduler live with breathing. The preview pretends Pip has been quiet for a while (80 s on Today,
+    /// 40 s on Coach) so yawn, stretch and the curl show up within a short recording; after a curl it wakes Pip up
+    /// and starts the quiet period again.
+    private func startIdle() {
+        let quiet: TimeInterval = set == .standing ? 80 : 40
+        idle = Task { @MainActor in
+            driver.rigs.forEach { $0.setBreathing(true) }
+            var scheduler = PipIdleScheduler(random: SystemRandomNumberGenerator())
+            var lastInput = Date().addingTimeInterval(-quiet)
+            var curledAt: Date?
+            while !Task.isCancelled {
+                let surface: CompanionSurface = set == .standing ? .today : .coach
+                let next = scheduler.next(after: lastInput, now: Date(), surface: surface)
+                try? await Task.sleep(for: .seconds(next.at.timeIntervalSinceNow))
+                if Task.isCancelled { break }
+                if let since = curledAt, Date().timeIntervalSince(since) > 8 {
+                    caption = "wake"
+                    driver.rigs.forEach { $0.play(PipGestureLibrary.wake) { _ in } }
+                    curledAt = nil
+                    lastInput = Date().addingTimeInterval(-quiet)
+                    try? await Task.sleep(for: .seconds(1.4))
+                    continue
+                }
+                caption = "\(next.beat)"
+                switch next.beat {
+                case .blink: driver.rigs.forEach { $0.blink() }
+                case .doubleBlink: driver.rigs.forEach { $0.blink(double: true) }
+                case .glance(let point):
+                    driver.rigs.forEach { $0.look(at: point) }
+                    try? await Task.sleep(for: .seconds(1.2))
+                    driver.rigs.forEach { $0.look(at: .zero) }
+                default:
+                    if let gesture = PipGesture.forIdle(next.beat) {
+                        driver.rigs.forEach { $0.play(gesture) { _ in } }
+                        if next.beat == .curlUp { curledAt = Date() }
+                    }
+                }
+            }
+        }
+    }
+
+    private func stopIdle() {
+        idle?.cancel()
+        idle = nil
         driver.rigs.forEach { $0.removeAllMotion(); $0.apply(.rest.withSet(set), animated: true) }
     }
 

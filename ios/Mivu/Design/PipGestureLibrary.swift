@@ -147,7 +147,62 @@ enum PipGestureLibrary {
             $0.at(0.11) { $0.earPerk(-6, .right) }
             $0.settle(at: 0.22)
         },
+
+        // MARK: Idle beats (see PipIdleScheduler); blinks and glances use the rig's own blink and look
+        PipGesture("idle-ear-flick") {
+            $0.at(0.06) { $0.earPerk(16, .left) }
+            $0.at(0.12) { $0.earPerk(-5, .left).nod(1) }
+            $0.settle(at: 0.26)
+        },
+        PipGesture("idle-weight-shift") {
+            $0.at(0.45) { $0.tilt(1.5).tailWag(8).nod(1) }
+            $0.at(0.95) { $0.tilt(1.5).tailWag(8) }
+            $0.settle(at: 1.50)
+        },
+        PipGesture("idle-yawn") {
+            $0.at(0.45) { $0.nod(-6).earPerk(-6).mouth(.yawn).eyes(.closedSleepy) }
+            $0.at(1.15) { $0.nod(-5).earPerk(-6).mouth(.yawn).eyes(.closedSleepy) }
+            $0.at(1.50) { $0.nod(3).eyes(.closedSleepy).mouth(.smallOpen) }
+            $0.settle(at: 1.90)
+        },
+        PipGesture("idle-stretch") {
+            $0.at(0.50) { $0.squash(-0.05).pawUp(.both, -75, elbow: -10).nod(-7).earPerk(-8).tailWag(14).eyes(.closedHappy) }
+            $0.at(1.15) { $0.squash(-0.05).pawUp(.both, -75, elbow: -10).nod(-7).earPerk(-8).tailWag(14).eyes(.closedHappy) }
+            $0.at(1.45) { $0.squash(0.03).nod(2).eyes(.closedHappy) }
+            $0.settle(at: 1.90)
+        },
+        PipGesture("idle-hug-tail") {
+            $0.at(0.45) { $0.nod(8).tilt(2).tailWag(-34).eyes(.closedHappy).blushing().earPerk(-8) }
+            $0.at(1.25) { $0.nod(8).tilt(2.5).tailWag(-36).eyes(.closedHappy).blushing().earPerk(-10) }
+            $0.settle(at: 1.80)
+        },
+        // Changes set on purpose: ends curled and asleep, and `wake` stands Pip back up.
+        PipGesture("curl-up") {
+            $0.at(0.45) { $0.squash(0.05).nod(10).earPerk(-16).eyes(.half).tailWag(-12) }
+            $0.at(0.95) { $0.squash(0.06).nod(12).earPerk(-20).eyes(.closedSleepy) }
+            $0.end(in: .curled, at: 1.40) { $0.eyes(.closedSleepy) }
+        },
+        PipGesture("wake") {
+            $0.at(0.30) { $0.nod(5).earPerk(-8).eyes(.half) }
+            $0.at(0.80) { $0.nod(-3).earPerk(8).eyes(.open).mouth(.smallOpen) }
+            $0.end(in: .standing, at: 1.20)
+        },
     ]
+
+    static var wake: PipGesture { named("wake") }
+
+    /// The idle beats that need body motion; blinks and glances use `blink(double:)` and `look(at:)` instead.
+    static func gesture(forIdle beat: PipIdleScheduler.Beat) -> PipGesture? {
+        switch beat {
+        case .blink, .doubleBlink, .glance: return nil
+        case .earFlick: return named("idle-ear-flick")
+        case .weightShift: return named("idle-weight-shift")
+        case .yawn: return named("idle-yawn")
+        case .stretch: return named("idle-stretch")
+        case .hugTail: return named("idle-hug-tail")
+        case .curlUp: return named("curl-up")
+        }
+    }
 
     /// The only mapping from app moments to gestures. Variants (hour of day, tap level) are picked here.
     static func gesture(for moment: PipMoment) -> PipGesture {
@@ -177,5 +232,5 @@ enum PipGestureLibrary {
         return gesture.loops ? gesture : nil
     }
 
-    private static func named(_ name: String) -> PipGesture { all.first { $0.name == name }! }
+    static func named(_ name: String) -> PipGesture { all.first { $0.name == name }! }
 }

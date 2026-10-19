@@ -13,19 +13,22 @@ struct PipGesture {
     let name: String
     let keys: [(at: TimeInterval, pose: PipPose)]
     var loops = false
+    /// The body set Pip is in afterwards, for the few gestures that change it on purpose (`curl-up`, `wake`).
+    var endSet: PipPose.BodySet?
     var duration: TimeInterval { keys.last?.at ?? 0 }
 
-    init(name: String, keys: [(at: TimeInterval, pose: PipPose)], loops: Bool = false) {
+    init(name: String, keys: [(at: TimeInterval, pose: PipPose)], loops: Bool = false, endSet: PipPose.BodySet? = nil) {
         self.name = name
         self.keys = keys
         self.loops = loops
+        self.endSet = endSet
     }
 
     /// `PipGesture("saved") { $0.at(0.07) { $0.nod(6) }; $0.settle(at: 0.45) }`
     init(_ name: String, loops: Bool = false, _ build: (inout Builder) -> Void) {
         var builder = Builder()
         build(&builder)
-        self.init(name: name, keys: builder.keys, loops: loops)
+        self.init(name: name, keys: builder.keys, loops: loops, endSet: builder.endSet)
     }
 
     struct Builder {
@@ -33,9 +36,18 @@ struct PipGesture {
         /// A key built from `.rest` by chaining the pose helpers.
         mutating func at(_ time: TimeInterval, _ pose: (PipPose) -> PipPose) { keys.append((time, pose(.rest))) }
         mutating func settle(at time: TimeInterval) { keys.append((time, .rest)) }
+        fileprivate(set) var endSet: PipPose.BodySet?
+        /// Ends in another body set (the final key changes it), e.g. Pip curling up.
+        mutating func end(in set: PipPose.BodySet, at time: TimeInterval, _ pose: (PipPose) -> PipPose = { $0 }) {
+            var end = pose(.rest)
+            end.set = set
+            keys.append((time, end))
+            endSet = set
+        }
     }
 
     static func `for`(_ moment: PipMoment) -> PipGesture { PipGestureLibrary.gesture(for: moment) }
+    static func forIdle(_ beat: PipIdleScheduler.Beat) -> PipGesture? { PipGestureLibrary.gesture(forIdle: beat) }
     static func loopFor(_ moment: PipMoment) -> PipGesture? { PipGestureLibrary.loop(for: moment) }
 }
 

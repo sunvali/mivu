@@ -249,10 +249,15 @@ extension PipRigView {
     private func schedule(_ gesture: PipGesture, run: Playback) {
         for (i, key) in gesture.keys.enumerated() {
             let launch = i == 0 ? 0 : gesture.keys[i - 1].at
-            after(launch, run) { [unowned self] in step(to: key.pose, period: key.at - launch) }
+            let changesSet = i == gesture.keys.count - 1 ? gesture.endSet : nil
+            after(launch, run) { [unowned self] in step(to: key.pose, set: changesSet, period: key.at - launch) }
         }
         after(gesture.duration, run) { [unowned self] in
-            if gesture.loops { run.work.removeAll(); schedule(gesture, run: run); return }
+            if gesture.loops && gesture.duration > 0 { // a zero-length loop would recurse forever
+                run.work.removeAll()
+                schedule(gesture, run: run)
+                return
+            }
             playback = nil
             run.completion(true)
         }
@@ -277,9 +282,9 @@ extension PipRigView {
     }
 
     /// One key: eyes go first when the head turns, then the head follows.
-    private func step(to key: PipPose, period: TimeInterval) {
+    private func step(to key: PipPose, set: PipPose.BodySet?, period: TimeInterval) {
         var target = key
-        target.set = pose.set // gestures are authored on `.rest`; they never change the body set
+        target.set = set ?? pose.set // gestures are authored on `.rest`; only a declared `endSet` changes the body set
         guard target.headTurn != pose.headTurn, period > Self.eyesLead, let run = playback else {
             transition(to: target, period: period)
             return
@@ -288,6 +293,21 @@ extension PipRigView {
         glance.gaze = CGPoint(x: target.headTurn > pose.headTurn ? 1 : -1, y: target.gaze.y)
         transition(to: glance, period: period)
         after(Self.eyesLead, run) { [unowned self] in transition(to: target, period: period - Self.eyesLead) }
+    }
+
+    /// Chest and head swell 2% over 4.5 s and back. Additive, so it rides on top of gesture springs instead of fighting them.
+    func setBreathing(_ on: Bool) {
+        let breath = CABasicAnimation(keyPath: "transform.scale.y")
+        breath.fromValue = 0
+        breath.toValue = 0.02
+        breath.duration = 4.5
+        breath.autoreverses = true
+        breath.repeatCount = .infinity
+        breath.isAdditive = true
+        breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        for part in asset.parts where part.name == "head" || part.name == "chest" {
+            if on { containers[part.id]?.add(breath, forKey: "breath") } else { containers[part.id]?.removeAnimation(forKey: "breath") }
+        }
     }
 
     /// Saccade to `point` (unit disc, +y down) for idle glances and typing.

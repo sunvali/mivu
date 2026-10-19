@@ -15,10 +15,35 @@ import Testing
         #expect(Set(all.map(\.name)).count == all.count)
         for gesture in all { #expect(!gesture.keys.isEmpty, "\(gesture.name) has no keys") }
         for gesture in all where !gesture.loops && !gesture.keys.isEmpty {
-            #expect(gesture.keys.last?.pose == .rest, "\(gesture.name) must end at rest")
+            #expect(gesture.keys.last?.pose == Self.expectedEnd(of: gesture), "\(gesture.name) must end at rest")
             #expect(gesture.duration <= 2.0, "\(gesture.name) lasts \(gesture.duration)")
             #expect(gesture.keys.map(\.at) == gesture.keys.map(\.at).sorted(), "\(gesture.name) keys out of order")
         }
+    }
+
+    /// Named exception: only these change the body set on purpose, so only they end somewhere other than standing rest.
+    private static let setChangers: Set<String> = ["curl-up", "wake"]
+
+    private static func expectedEnd(of gesture: PipGesture) -> PipPose {
+        var end = PipPose.rest
+        end.set = gesture.endSet ?? .standing
+        if gesture.name == "curl-up" { end.eyes = .closedSleepy }
+        return end
+    }
+
+    @Test func onlyCurlUpAndWakeChangeTheBodySet() {
+        #expect(Set(PipGestureLibrary.all.filter { $0.endSet != nil }.map(\.name)) == Self.setChangers)
+        #expect(PipGestureLibrary.wake.endSet == .standing && PipGesture.forIdle(.curlUp)?.endSet == .curled)
+        for gesture in PipGestureLibrary.all where !Self.setChangers.contains(gesture.name) {
+            #expect(gesture.keys.allSatisfy { $0.pose.set == .standing }, "\(gesture.name)")
+        }
+    }
+
+    @Test func idleBeatsMapToSmallGestures() {
+        let beats: [PipIdleScheduler.Beat] = [.earFlick, .weightShift, .yawn, .stretch, .hugTail, .curlUp]
+        for beat in beats { #expect(PipGesture.forIdle(beat).map { PipGestureLibrary.all.map(\.name).contains($0.name) } == true, "\(beat)") }
+        #expect(PipGesture.forIdle(.yawn)?.keys.contains { $0.pose.mouth == .yawn } == true)
+        for beat in [PipIdleScheduler.Beat.blink, .doubleBlink, .glance(.zero)] { #expect(PipGesture.forIdle(beat) == nil) }
     }
 
     @Test func everyMomentMapsToALibraryGesture() {

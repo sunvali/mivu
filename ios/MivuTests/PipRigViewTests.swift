@@ -174,4 +174,46 @@ import UIKit
         try await Task.sleep(for: .milliseconds(160))
         #expect(view.visibleViews == ["left"], "head follows about 80 ms later")
     }
+
+    @Test func zeroDurationLoopPlaysOnce() async throws {
+        let view = try rig()
+        var results: [Bool] = []
+        view.play(PipGesture(name: "empty-loop", keys: [], loops: true)) { results.append($0) }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(results == [true])
+    }
+
+    @Test func removeAllMotionClearsBreathAndGestures() throws {
+        let view = try rig()
+        view.setBreathing(true)
+        view.play(PipGesture.for(.saved)) { _ in }
+        view.blink()
+        view.removeAllMotion()
+        func keys(_ layer: CALayer) -> [String] {
+            (layer.animationKeys() ?? []) + (layer.sublayers ?? []).flatMap(keys)
+        }
+        #expect(keys(view.layer).isEmpty)
+    }
+
+    @Test func breathingIsOneAdditiveAnimationThatSurvivesGestures() async throws {
+        let view = try rig()
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = view.frame
+        window.addSubview(view)
+        window.isHidden = false
+        view.setBreathing(true)
+        let head = try #require(view.layer(named: "head@right"))
+        let breath = try #require(head.animation(forKey: "breath") as? CABasicAnimation)
+        #expect(breath.isAdditive && breath.autoreverses && breath.repeatCount == .infinity)
+        #expect(abs(breath.duration - 4.5) < 0.001)
+        #expect(view.layer(named: "chest@seated")?.animation(forKey: "breath") != nil)
+        var done = false
+        view.play(PipGesture.for(.earTwitch)) { _ in done = true }
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(done)
+        #expect(head.animation(forKey: "breath") != nil)
+        view.setBreathing(false)
+        #expect(head.animation(forKey: "breath") == nil)
+    }
 }
