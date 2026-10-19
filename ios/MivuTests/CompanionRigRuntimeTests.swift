@@ -16,7 +16,7 @@ import UIKit
         sleeps += 1
         if fast {
             now = now.addingTimeInterval(seconds)
-            try await Task.sleep(for: .milliseconds(1)) // keeps the loop from outrunning gestures that take real time
+            await Task.yield()
         } else {
             try await Task.sleep(for: .seconds(3600))
         }
@@ -80,6 +80,8 @@ func animationKeys(in layer: CALayer) -> [String] {
         await runtime.apply(output(.dayComplete, reaction: UUID()), darkMode: false)
         #expect(!animationKeys(in: rig.layer).isEmpty && runtime.isIdleScheduled)
         await runtime.apply(output(.dayComplete, playback: .staticPose), darkMode: false)
+        #expect(animationKeys(in: rig.layer).isEmpty)
+        try await Task.sleep(for: .milliseconds(700)) // the cancelled gesture's later keys must never fire
         #expect(animationKeys(in: rig.layer).isEmpty)
         #expect(!runtime.isIdleScheduled && runtime.isPaused)
         #expect(runtime.displayedPose == .resting)
@@ -173,9 +175,33 @@ func animationKeys(in layer: CALayer) -> [String] {
         await runtime.apply(output(), darkMode: false)
         #expect(await eventually(60) { runtime.curled }, "a quiet Pip eventually curls up")
         harness.fast = false
-        await runtime.apply(output(.attentive), darkMode: false)
-        #expect(runtime.lastGestureName == "wake" || runtime.lastGestureName == "attentive")
-        #expect(await eventually { runtime.lastGestureName == "attentive" && !runtime.curled })
+        let start = runtime.playedGestures.count
+        await runtime.apply(output(.attentive, typing: 0.1), darkMode: false)
+        #expect(runtime.playedGestures[start...].first == "wake", "a sleeping Pip wakes before it reacts")
+        #expect(await eventually { runtime.playedGestures.last == "attentive" && !runtime.curled })
+    }
+
+    @Test func typingMovesTheEyesWithoutRestartingTheGesture() async {
+        let runtime = await ready()
+        await runtime.apply(output(.attentive, typing: 0), darkMode: false)
+        let starts = runtime.gestureStarts
+        for progress in [0.3, 0.6, 1.0] { await runtime.apply(output(.attentive, typing: progress), darkMode: false) }
+        #expect(runtime.gestureStarts == starts, "same pose: only the gaze updates")
+        #expect(runtime.gaze.x > 0.7)
+    }
+
+    @Test func interruptedGestureNeverLeavesIdleWaiting() async throws {
+        let harness = IdleHarness()
+        harness.fast = true
+        let runtime = await ready(harness)
+        let rig = try #require(runtime.rig)
+        let window = try mount(rig)
+        defer { runtime.stop(); window.isHidden = true }
+        await runtime.apply(output(.saved, reaction: UUID()), darkMode: false)
+        rig.removeAllMotion() // the rig is interrupted with no policy change, as when a view leaves the window
+        let before = runtime.idleBeatCount
+        #expect(await eventually { runtime.displayedPose == .resting })
+        #expect(await eventually { runtime.idleBeatCount > before }, "idle resumes after the interruption")
     }
 
     @Test func sharedDurationsMatchTheLibrary() {

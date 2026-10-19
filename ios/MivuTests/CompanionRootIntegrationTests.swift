@@ -2,7 +2,6 @@ import Foundation
 import SwiftUI
 import Testing
 import UIKit
-
 @testable import Mivu
 
 @MainActor private final class CompanionRootLoadGate {

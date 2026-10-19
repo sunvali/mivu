@@ -569,7 +569,6 @@ struct TodayView: View {
     private var companionArt: some View {
         CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
                       size: typeSize.isAccessibilitySize ? 144 : 200, runtime: companionRuntime)
-            .frame(width: 144, height: typeSize.isAccessibilitySize ? 144 : 186, alignment: .top)
             .onScrollVisibilityChange(threshold: 0.5) { visible in
                 companionVisible = visible; reportCompanionContext()
             }

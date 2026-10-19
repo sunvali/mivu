@@ -8,6 +8,12 @@ struct CompanionView: View {
     var surface: CompanionSurface = .today
     var onTouch: (CompanionTouch) -> Void = { _ in }
 
+    /// Coach is `size` wide; Today is `size` tall. Both match the rig's crop so nothing overflows.
+    private var frame: CGSize {
+        let aspect = runtime.cropAspect(for: surface)
+        return surface == .coach ? CGSize(width: size, height: size / aspect) : CGSize(width: size * aspect, height: size)
+    }
+
     private var animated: Bool { presentation.playback == .animated }
 
     var body: some View {
@@ -17,11 +23,12 @@ struct CompanionView: View {
                     .id(ObjectIdentifier(rig))
                     .task { await runtime.reconcileMount(rig) }
             } else {
+                // The square fallback overflows its crop by transparent margin only, like the rig's framing.
                 Image(runtime.fallbackAssetName(for: surface)).resizable().scaledToFit()
+                    .frame(width: max(frame.width, frame.height), height: max(frame.width, frame.height))
             }
         }
-        // Coach crops the rig to 76 x 66 so paws and tail are never clipped.
-        .frame(width: size, height: surface == .coach ? size * 66 / 76 : size)
+        .frame(width: frame.width, height: frame.height)
         .environment(\.colorScheme, darkMode ? .dark : .light)
         .contentShape(Rectangle())
         .gesture(TapGesture().onEnded {

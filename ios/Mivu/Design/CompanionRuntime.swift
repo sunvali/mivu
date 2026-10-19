@@ -14,6 +14,8 @@ import UIKit
     /// Observable by tests: the last gesture handed to the rig, the idle beats started, and where the eyes point.
     @ObservationIgnored private(set) var lastGestureName: String?
     @ObservationIgnored private(set) var idleBeatCount = 0
+    @ObservationIgnored private(set) var gestureStarts = 0
+    @ObservationIgnored private(set) var playedGestures: [String] = []
     @ObservationIgnored private(set) var gaze = CGPoint.zero
     @ObservationIgnored var isIdleScheduled: Bool { idleTask != nil }
     @ObservationIgnored private var asset: PipRigAsset?
@@ -127,7 +129,10 @@ import UIKit
         isPaused = false
         if surfaceChanged { show(surface) }
         startIdle()
-        if changed || freshReaction || !live || (typingGaze != nil && typingGaze != gaze) {
+        if !(changed || freshReaction || !live), let typingGaze, typingGaze != gaze {
+            gaze = typingGaze // same pose: only the eyes follow the text, never a restart
+            rig.look(at: typingGaze)
+        } else if changed || freshReaction || !live {
             playbackGeneration += 1
             let token = playbackGeneration
             live = true
@@ -139,8 +144,8 @@ import UIKit
             if let moment = Self.moment(for: pose, tapLevel: output.tapLevel, hour: Calendar.current.component(.hour, from: clock())) {
                 var gesture = PipGestureLibrary.loop(for: moment) ?? PipGestureLibrary.gesture(for: moment)
                 if let typingGaze { gesture = Self.looking(gesture, at: typingGaze) }
-                play(gesture) { [weak self] finished in
-                    guard finished, let self, token == self.playbackGeneration else { return }
+                play(gesture) { [weak self] _ in
+                    guard let self, token == self.playbackGeneration else { return }
                     if oneShot { self.displayedPose = .resting }
                 }
                 if let typingGaze { gaze = typingGaze; rig.look(at: typingGaze) }
@@ -179,6 +184,12 @@ import UIKit
         pauseAndReset()
     }
 
+    /// Width over height of the artboard crop each surface shows (the asset's frames), with the shipped values until loaded.
+    func cropAspect(for surface: CompanionSurface) -> CGFloat {
+        let frame = asset?.frames[surface == .coach ? "coach" : "today"]
+        return frame.map { $0.width / $0.height } ?? (surface == .coach ? 76.0 / 66 : 399.8 / 455.5)
+    }
+
     func fallbackAssetName(for surface: CompanionSurface = .today) -> String {
         character.fallbackAssetPrefix + (surface == .coach ? "Coach" : "Resting")
     }
@@ -212,10 +223,10 @@ import UIKit
         CGPoint(x: -0.8 + 1.6 * min(max(progress, 0), 1), y: 0.25)
     }
 
-    /// The attentive loop's own glances would pull the eyes off the text, so its keys look where the text is.
+    /// Typing holds the attentive loop's first pose: a loop's later glances would pull the eyes off the text.
     private static func looking(_ gesture: PipGesture, at point: CGPoint) -> PipGesture {
-        PipGesture(name: gesture.name, keys: gesture.keys.map { key in var pose = key.pose; pose.gaze = point; return (key.at, pose) },
-                   loops: gesture.loops, endSet: gesture.endSet)
+        PipGesture(name: gesture.name, keys: gesture.keys.prefix(1).map { key in var pose = key.pose; pose.gaze = point; return (key.at, pose) },
+                   loops: false, endSet: gesture.endSet)
     }
 
     private func restPose(_ surface: CompanionSurface) -> PipPose {
@@ -237,11 +248,14 @@ import UIKit
         gestureToken += 1
         let token = gestureToken
         gestureActive = true
+        gestureStarts += 1
         lastGestureName = gesture.name
+        if curled && wakes { playedGestures.append(PipGestureLibrary.wake.name) }
+        playedGestures.append(gesture.name)
         let finish: (Bool) -> Void = { [weak self] finished in
-            if finished, let self, token == self.gestureToken {
-                self.gestureActive = false
-                if let end = gesture.endSet { self.curled = end == .curled }
+            if let self, token == self.gestureToken {
+                self.gestureActive = false // an interrupted gesture must not leave the idle loop waiting
+                if finished, let end = gesture.endSet { self.curled = end == .curled }
             }
             done(finished)
         }
