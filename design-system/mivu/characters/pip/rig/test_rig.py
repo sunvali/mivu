@@ -4,6 +4,8 @@ import re
 import unittest
 from pathlib import Path
 
+from build import set_bounds
+
 RIG = Path(__file__).resolve().parents[5] / "ios/Mivu/Resources/Characters/pip/pip-rig.json"
 
 HEAD_IDS = (
@@ -111,19 +113,17 @@ class RigTests(unittest.TestCase):
             self.assertFalse(by_id[heart]["visible"], heart)
         self.assertEqual(by_id["head@right"]["parent"], "body")
 
-    def set_bounds(self, body_set):
-        """A set at rest: its visible parts plus the default head view on the set's mount."""
+    def test_limb_and_tail_chains(self):
         by_id = {p["id"]: p for p in self.parts}
-        k, tx, ty = by_id[set_id("body", body_set)]["mount"]
-        xs, ys = [], []
-        for p in self.parts:
-            if p["visible"] and (p["set"] == body_set or p["view"] == "right"):
-                px, py = points(p["path"])
-                if p["view"]:
-                    px, py = [k * x + tx for x in px], [k * y + ty for y in py]
-                xs += px
-                ys += py
-        return min(xs), min(ys), max(xs), max(ys)
+        chains = [("body", "arm-l", "forearm-l", "paw-l"), ("body", "arm-r", "forearm-r", "paw-r"),
+                  ("body", "leg-l", "foot-l"), ("body", "leg-r", "foot-r"),
+                  ("body", "tail-1", "tail-2", "tail-3", "tail-4"),
+                  ("body", "scarf-knot", "scarf-end-l"), ("body", "scarf-knot", "scarf-end-r")]
+        for body_set in SETS:
+            for chain in chains:
+                for parent, child in zip(chain, chain[1:]):
+                    self.assertEqual(by_id[set_id(child, body_set)]["parent"], set_id(parent, body_set),
+                                     (body_set, child))
 
     def test_feet_on_ground(self):
         for body_set in SETS:
@@ -133,16 +133,16 @@ class RigTests(unittest.TestCase):
 
     def test_inside_safe_bounds(self):
         for body_set in SETS:
-            x0, y0, x1, y1 = self.set_bounds(body_set)
+            x0, y0, x1, y1 = set_bounds(self.parts, body_set)
             self.assertTrue(40 <= x0 and x1 <= 472 and 32 <= y0 and y1 <= 472, (body_set, x0, y0, x1, y1))
 
     def test_coach_frame_contains_seated_set(self):
         x, y, w, h = self.rig["frames"]["coach"]
-        x0, y0, x1, y1 = self.set_bounds("seated")
+        x0, y0, x1, y1 = set_bounds(self.parts, "seated")
         self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w and y1 <= y + h)
         self.assertAlmostEqual(w / h, 76 / 66, delta=0.01)
         x, y, w, h = self.rig["frames"]["today"]
-        x0, y0, x1, y1 = self.set_bounds("standing")
+        x0, y0, x1, y1 = set_bounds(self.parts, "standing")
         self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w and y1 <= y + h)
 
     def test_pivots_inside_artboard(self):
