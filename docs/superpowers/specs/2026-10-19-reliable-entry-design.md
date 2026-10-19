@@ -1,6 +1,7 @@
 # Reliable food entry and shared editing
 
-Status: proposed for owner review; implementation has not started.
+Status: approved by the owner on 2026-10-19. Implementation plan review is next;
+product implementation has not started.
 Baseline: `main` at `5a6342146d5e773f71a51b9e9da9eff35b5edb2f`.
 Parent scope: [diary upgrades roadmap](2026-10-19-diary-upgrades-roadmap.md).
 
