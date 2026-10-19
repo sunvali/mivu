@@ -46,6 +46,8 @@ final class PipRigView: UIView {
         apply(pose, animated: false)
     }
 
+    deinit { MainActor.assumeIsolated { stopPlayback() } }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     func layer(named id: String) -> CALayer? { containers[id] }
@@ -250,7 +252,7 @@ extension PipRigView {
             after(launch, run) { [unowned self] in step(to: key.pose, period: key.at - launch) }
         }
         after(gesture.duration, run) { [unowned self] in
-            if gesture.loops { schedule(gesture, run: run); return }
+            if gesture.loops { run.work.removeAll(); schedule(gesture, run: run); return }
             playback = nil
             run.completion(true)
         }
@@ -275,7 +277,9 @@ extension PipRigView {
     }
 
     /// One key: eyes go first when the head turns, then the head follows.
-    private func step(to target: PipPose, period: TimeInterval) {
+    private func step(to key: PipPose, period: TimeInterval) {
+        var target = key
+        target.set = pose.set // gestures are authored on `.rest`; they never change the body set
         guard target.headTurn != pose.headTurn, period > Self.eyesLead, let run = playback else {
             transition(to: target, period: period)
             return
@@ -293,24 +297,38 @@ extension PipRigView {
         if animated { transition(to: next, period: 0.06) } else { apply(next, animated: false) }
     }
 
-    /// Upper lid sweeps down (70 ms), holds (40 ms), opens (90 ms) with a 3% squash; `double` blinks twice.
+    /// Upper lid sweeps down (70 ms), holds (40 ms), opens (90 ms); the eye white and iris close under it and
+    /// the whole eye squashes 3%. `double` blinks twice.
     func blink(double: Bool = false) {
         guard pose.eyes == .open else { return }
         let view = Self.view(for: pose.headTurn).0
+        func part(_ id: String) -> PipRigAsset.Part? { asset.parts.first { $0.id == id } }
         for side in ["l", "r"] {
-            guard let eye = containers["eye-\(side).open@\(view)"], let lid = containers["lid-upper-\(side)@\(view)"],
-                  let white = shapes["eye-\(side)@\(view)"]?.path?.boundingBoxOfPath,
-                  let part = asset.parts.first(where: { $0.id == "eye-\(side).open@\(view)" }) else { continue }
-            let toBottom = white.maxY - part.pivot[1]
-            // Squash the eye toward its lower edge; the lid rides down with it.
-            var closed = CATransform3DMakeTranslation(0, -toBottom, 0)
-            closed = CATransform3DConcat(closed, CATransform3DMakeScale(1.03, 0.12, 1))
-            closed = CATransform3DConcat(closed, CATransform3DMakeTranslation(0, toBottom, 0))
+            let rim = "eye-\(side).open@\(view)"
+            guard let white = shapes["eye-\(side)@\(view)"]?.path?.boundingBoxOfPath,
+                  let lid = shapes["lid-upper-\(side)@\(view)"]?.path?.boundingBoxOfPath else { continue }
+            let bottom = white.maxY
+            let targets: [(id: String, closed: CATransform3D)] = [
+                (rim, Self.squash(y: 0.97, x: 1.03, pivot: part(rim), bottom: bottom)),
+                ("eye-\(side)@\(view)", Self.squash(y: 0.08, x: 1, pivot: part("eye-\(side)@\(view)"), bottom: bottom)),
+                ("iris-\(side)@\(view)", Self.squash(y: 0.08, x: 1, pivot: part("iris-\(side)@\(view)"), bottom: bottom)),
+                ("lid-upper-\(side)@\(view)", CATransform3DMakeTranslation(0, bottom - lid.maxY, 0)),
+            ]
             for offset in double ? [0, 0.3] : [0] {
-                addBlink(to: eye, closed: closed, delay: offset)
-                addBlink(to: lid, closed: CATransform3DMakeTranslation(0, 3, 0), delay: offset)
+                for target in targets {
+                    guard let layer = containers[target.id] else { continue }
+                    addBlink(to: layer, closed: target.closed, delay: offset)
+                }
             }
         }
+    }
+
+    /// Scales about the eye's lower edge (in the layer's pivot-relative coordinates).
+    private static func squash(y: CGFloat, x: CGFloat, pivot: PipRigAsset.Part?, bottom: CGFloat) -> CATransform3D {
+        let d = bottom - (pivot?.pivot[1] ?? bottom)
+        var t = CATransform3DMakeTranslation(0, -d, 0)
+        t = CATransform3DConcat(t, CATransform3DMakeScale(x, y, 1))
+        return CATransform3DConcat(t, CATransform3DMakeTranslation(0, d, 0))
     }
 
     private func addBlink(to layer: CALayer, closed: CATransform3D, delay: TimeInterval) {

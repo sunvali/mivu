@@ -79,10 +79,27 @@ import UIKit
         view.blink()
         for side in ["l", "r"] {
             let layer = try #require(view.layer(named: "lid-upper-\(side)@right"))
-            let animation = try #require(layer.animation(forKey: "blink"))
+            let animation = try #require(layer.animation(forKey: "blink") as? CAKeyframeAnimation)
             #expect(abs(animation.duration - 0.2) <= 0.02)
             #expect(CATransform3DIsIdentity(layer.transform), "model stays open")
+            // Close 70 ms, hold 40 ms, open 90 ms.
+            #expect(animation.keyTimes == [0, 0.35, 0.55, 1])
+            let closed = try #require((animation.values?[1] as? NSValue)?.caTransform3DValue)
+            let lidBox = (layer.sublayers!.first as! CAShapeLayer).path!.boundingBoxOfPath
+            #expect(abs(lidBox.maxY + closed.m42 - whiteBox(view, side).maxY) < 0.5, "the lid sweeps down to the lower edge of the eye white")
+            let rim = try #require((view.layer(named: "eye-\(side).open@right")?.animation(forKey: "blink") as? CAKeyframeAnimation)?.values?[1] as? NSValue)
+            #expect(abs(rim.caTransform3DValue.m22 - 0.97) < 0.001, "3% eye squash")
         }
+    }
+
+    @Test func doubleBlinkPlaysTwoLidCycles() throws {
+        let view = try rig()
+        view.blink(double: true)
+        let lid = try #require(view.layer(named: "lid-upper-l@right"))
+        let first = try #require(lid.animation(forKey: "blink"))
+        let second = try #require(lid.animation(forKey: "blink2"))
+        #expect(second.beginTime > first.beginTime + first.duration, "second cycle starts after the first ends")
+        #expect(abs(second.duration - 0.2) <= 0.02)
     }
 
     @Test func interruptStartsFromPresentationValue() async throws {
@@ -94,6 +111,9 @@ import UIKit
         window.isHidden = false
         view.play(PipGesture.for(.saved)) { _ in }
         try await Task.sleep(for: .milliseconds(200))
+        // Freeze the timeline so the comparison cannot drift under load.
+        view.layer.timeOffset = view.layer.convertTime(CACurrentMediaTime(), from: nil)
+        view.layer.speed = 0
         let head = try #require(view.layer(named: "head@right"))
         let live = try #require(head.presentation()?.value(forKeyPath: "transform.rotation.z") as? CGFloat)
         view.play(PipGesture.for(.tapped(level: 0))) { _ in }
@@ -119,5 +139,39 @@ import UIKit
         #expect(view.layer(named: "heart-3")?.opacity == 0)
         #expect(view.layer(named: "cheek-blush-l@right")?.isHidden == false)
         #expect(try rig().layer(named: "heart-1")?.opacity == 0)
+    }
+
+    @Test(arguments: [(PipPose.BodySet.seated, PipMoment.saved), (.curled, .earTwitch)])
+    func gesturesKeepTheActiveBodySet(set: PipPose.BodySet, moment: PipMoment) async throws {
+        let view = PipRigView(asset: try PipRigAsset.load(PipRigAssetTests.bundledData()), set: set)
+        view.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let gesture = PipGesture.for(moment)
+        var finished = false
+        view.play(gesture) { _ in finished = true }
+        func check(_ when: String) throws {
+            let suffix = "@\(set.rawValue)"
+            #expect(view.layer(named: "body\(suffix)")?.isHidden == false, "\(when): \(set) body shown")
+            #expect(view.layer(named: "body")?.isHidden == true, "\(when): standing body hidden")
+            var ancestor = view.layer(named: "head@right")?.superlayer
+            while let layer = ancestor, layer !== view.layer(named: "body\(suffix)") { ancestor = layer.superlayer }
+            #expect(ancestor != nil, "\(when): head rides the \(set) body")
+        }
+        try await Task.sleep(for: .milliseconds(Int(gesture.duration * 500)))
+        try check("mid-flight")
+        try await Task.sleep(for: .milliseconds(Int(gesture.duration * 700) + 100))
+        #expect(finished)
+        try check("after completion")
+    }
+
+    @Test func eyesReachTheTurnBeforeTheHeadSwaps() async throws {
+        let view = try rig()
+        let turn = PipGesture("turn") { $0.at(0.4) { $0.turn(-1) }; $0.settle(at: 0.8) }
+        view.play(turn) { _ in }
+        let iris = try #require(view.layer(named: "iris-l@right"))
+        let glance = try #require(iris.animation(forKey: "pip.x") as? CABasicAnimation)
+        #expect((glance.toValue as? CGFloat ?? 0) < 0, "eyes glance toward the turn first")
+        #expect(view.visibleViews == ["right"], "head has not turned yet")
+        try await Task.sleep(for: .milliseconds(160))
+        #expect(view.visibleViews == ["left"], "head follows about 80 ms later")
     }
 }

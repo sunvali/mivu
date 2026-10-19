@@ -13,7 +13,7 @@ struct PipGesture {
     let name: String
     let keys: [(at: TimeInterval, pose: PipPose)]
     var loops = false
-    var duration: TimeInterval { keys.last!.at }
+    var duration: TimeInterval { keys.last?.at ?? 0 }
 
     init(name: String, keys: [(at: TimeInterval, pose: PipPose)], loops: Bool = false) {
         self.name = name
