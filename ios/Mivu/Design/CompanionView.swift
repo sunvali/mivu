@@ -1,5 +1,4 @@
 import SwiftUI
-import Lottie
 
 struct CompanionView: View {
     let presentation: CompanionOutput
@@ -7,54 +6,68 @@ struct CompanionView: View {
     let size: CGFloat
     let runtime: CompanionRuntime
     var surface: CompanionSurface = .today
+    var onTouch: (CompanionTouch) -> Void = { _ in }
 
-    private var fallbackPose: CompanionPose {
-        presentation.playback == .animated && !runtime.isReady && !runtime.loadFailed ? .resting : presentation.pose
-    }
+    private var animated: Bool { presentation.playback == .animated }
 
     var body: some View {
         Group {
-            if presentation.playback == .animated, let player = runtime.player {
-                CompanionLottieView(player: player, paused: runtime.isPaused)
-                    .id(ObjectIdentifier(player))
-                    .task { await runtime.reconcileMount(player) }
+            if animated, let rig = runtime.rig {
+                CompanionRigHost(rig: rig, onWindow: runtime.resumeBreathing)
+                    .id(ObjectIdentifier(rig))
+                    .task { await runtime.reconcileMount(rig) }
             } else {
-                Image(surface == .coach ? runtime.character.fallbackAssetPrefix + "Coach" : runtime.fallbackAssetName(for: fallbackPose)).resizable().scaledToFit()
+                Image(runtime.fallbackAssetName(for: surface)).resizable().scaledToFit()
             }
         }
-        .frame(width: size, height: size)
+        // Coach crops the rig to 76 x 66 so paws and tail are never clipped.
+        .frame(width: size, height: surface == .coach ? size * 66 / 76 : size)
         .environment(\.colorScheme, darkMode ? .dark : .light)
+        .contentShape(Rectangle())
+        .gesture(TapGesture().onEnded {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onTouch(.tap)
+        }, including: animated ? .all : .none)
+        .gesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            onTouch(.pat)
+        }, including: animated ? .all : .none)
         .accessibilityHidden(true)
     }
 }
 
-struct CompanionLottieView: UIViewRepresentable {
-    let player: LottieAnimationView
-    let paused: Bool
+struct CompanionRigHost: UIViewRepresentable {
+    let rig: PipRigView
+    var onWindow: () -> Void = {}
 
-    func makeCoordinator() -> LottieAnimationView { player }
+    final class Container: UIView {
+        var onWindow: () -> Void = {}
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { onWindow() }
+        }
+    }
+
+    func makeCoordinator() -> PipRigView { rig }
     func makeUIView(context: Context) -> UIView {
-        let container = UIView()
-        Self.install(player, in: container)
+        let container = Container()
+        container.onWindow = onWindow
+        Self.install(rig, in: container)
         return container
     }
-    func updateUIView(_ view: UIView, context: Context) {
-        Self.install(player, in: view)
-        if paused { player.pause() }
-    }
-    static func install(_ player: LottieAnimationView, in container: UIView) {
-        guard player.superview !== container else { return }
-        player.removeFromSuperview()
-        player.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(player)
+    func updateUIView(_ view: UIView, context: Context) { Self.install(rig, in: view) }
+    static func install(_ rig: PipRigView, in container: UIView) {
+        guard rig.superview !== container else { return }
+        rig.removeFromSuperview()
+        rig.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(rig)
         NSLayoutConstraint.activate([
-            player.leadingAnchor.constraint(equalTo: container.leadingAnchor), player.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            player.topAnchor.constraint(equalTo: container.topAnchor), player.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            rig.leadingAnchor.constraint(equalTo: container.leadingAnchor), rig.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            rig.topAnchor.constraint(equalTo: container.topAnchor), rig.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
     }
-    static func dismantleUIView(_ view: UIView, coordinator: LottieAnimationView) {
+    static func dismantleUIView(_ view: UIView, coordinator: PipRigView) {
         guard coordinator.superview === view else { return }
-        coordinator.pause()
         coordinator.removeFromSuperview()
     }
 }

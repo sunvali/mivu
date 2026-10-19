@@ -1,5 +1,4 @@
 import Foundation
-import Lottie
 import Observation
 import OSLog
 import UIKit
@@ -9,26 +8,46 @@ import UIKit
     private(set) var loadFailed = false
     private(set) var isPaused = true
     private(set) var character = CharacterCatalog.bundled.resolve("pip")
-    private(set) var player: LottieAnimationView?
+    private(set) var rig: PipRigView?
     private(set) var displayedPose: CompanionPose = .resting
     private(set) var triggerCount = 0
+    /// Observable by tests: the last gesture handed to the rig, the idle beats started, and where the eyes point.
+    @ObservationIgnored private(set) var lastGestureName: String?
+    @ObservationIgnored private(set) var idleBeatCount = 0
+    @ObservationIgnored private(set) var gaze = CGPoint.zero
+    @ObservationIgnored var isIdleScheduled: Bool { idleTask != nil }
+    @ObservationIgnored private var asset: PipRigAsset?
     @ObservationIgnored private var latestSurface: CompanionSurface = .today
     @ObservationIgnored private var displayedSurface: CompanionSurface = .today
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var idleTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var playbackGeneration = 0
+    @ObservationIgnored private var gestureToken = 0
+    @ObservationIgnored private var gestureActive = false
+    @ObservationIgnored private var live = false
+    @ObservationIgnored private(set) var curled = false
     @ObservationIgnored private var eligible = false
     @ObservationIgnored private var selected = false
+    @ObservationIgnored private var latestDark = false
     @ObservationIgnored private var consumedReaction: UUID?
     @ObservationIgnored private var latestOutput: CompanionOutput?
-    @ObservationIgnored private var transitionSnapshot: UIView?
-    @ObservationIgnored private let bundle: Bundle
+    @ObservationIgnored private var scheduler: PipIdleScheduler
+    @ObservationIgnored private var lastInput: Date
+    @ObservationIgnored private let clock: () -> Date
+    @ObservationIgnored private let sleep: (TimeInterval) async throws -> Void
     @ObservationIgnored private let load: @MainActor (CharacterDescriptor) async throws -> Data
 
     private static let logger = Logger(subsystem: "com.yakov103.mivu", category: "Companion")
+    private static let restGesture = PipGesture(name: "rest", keys: [(0.3, .rest)])
 
-    init(bundle: Bundle = .main) {
-        self.bundle = bundle
+    init(bundle: Bundle = .main, clock: @escaping () -> Date = Date.init,
+         sleep: @escaping (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) },
+         random: any RandomNumberGenerator = SystemRandomNumberGenerator()) {
+        self.clock = clock
+        self.sleep = sleep
+        scheduler = PipIdleScheduler(random: random)
+        lastInput = clock()
         load = { character in
             guard let url = bundle.url(forResource: character.animationResourcePath, withExtension: nil) else {
                 throw AssetError.missing
@@ -39,15 +58,22 @@ import UIKit
         }
     }
 
-    init(load: @escaping @MainActor (CharacterDescriptor) async throws -> Data) {
-        bundle = .main
+    init(clock: @escaping () -> Date = Date.init,
+         sleep: @escaping (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) },
+         random: any RandomNumberGenerator = SystemRandomNumberGenerator(),
+         load: @escaping @MainActor (CharacterDescriptor) async throws -> Data) {
+        self.clock = clock
+        self.sleep = sleep
+        scheduler = PipIdleScheduler(random: random)
+        lastInput = clock()
         self.load = load
     }
 
     func select(_ character: CharacterDescriptor) async {
         guard !selected || self.character.id != character.id else { return }
         stop()
-        player = nil
+        rig = nil
+        asset = nil
         isReady = false
         loadFailed = false
         self.character = character
@@ -83,50 +109,66 @@ import UIKit
     func apply(_ output: CompanionOutput, darkMode: Bool, surface: CompanionSurface = .today) async {
         latestOutput = output
         latestSurface = surface
+        latestDark = darkMode
         guard eligible, output.playback == .animated else {
             if let reaction = output.reactionID { consumedReaction = reaction }
             pauseAndReset()
             return
         }
-        guard let player else { isPaused = true; return }
+        guard let rig else { isPaused = true; return }
+        rig.isDark = darkMode
         let freshReaction = output.reactionID != nil && output.reactionID != consumedReaction
-        let oneShot = [.submitted, .saved, .reviewed, .greeting].contains(output.pose)
-        let pose = oneShot && !freshReaction && (displayedPose != output.pose || !player.isAnimationPlaying) ? .resting : output.pose
+        let oneShot = Self.isOneShot(output.pose)
+        let pose = oneShot && !freshReaction && (displayedPose != output.pose || !gestureActive) ? .resting : output.pose
         let surfaceChanged = surface != displayedSurface
+        if pose != .attentive { gaze = .zero }
+        let typingGaze = pose == .attentive ? Self.typingGaze(output.typingProgress) : nil
         let changed = pose != displayedPose || surfaceChanged
         isPaused = false
-        if changed || freshReaction || !player.isAnimationPlaying {
+        if surfaceChanged { show(surface) }
+        startIdle()
+        if changed || freshReaction || !live || (typingGaze != nil && typingGaze != gaze) {
             playbackGeneration += 1
             let token = playbackGeneration
-            player.pause()
+            live = true
             displayedPose = pose
             displayedSurface = surface
-            let marker = pose == .resting && freshReaction ? (surface == .coach ? "coach-blink" : "blink") : Self.marker(for: pose, surface: surface)
+            rig.setBreathing(true)
             if freshReaction && (oneShot || pose == .resting) { triggerCount += 1 }
-            let render = { [self] in
-                guard eligible, token == playbackGeneration else { return }
-                let loops = [.resting, .attentive, .thinking, .recovery].contains(pose) && !freshReaction
-                player.play(marker: marker, loopMode: loops ? .loop : .playOnce) { [weak self] finished in
-                    guard let self, let player = self.player, finished, self.eligible, token == self.playbackGeneration else { return }
-                    if oneShot || pose == .resting {
-                        self.displayedPose = .resting
-                        self.transition(player) {
-                            player.play(marker: Self.marker(for: .resting, surface: self.latestSurface), loopMode: .loop)
-                        }
-                    }
+            if pose != .resting || freshReaction { lastInput = clock() }
+            if let moment = Self.moment(for: pose, tapLevel: output.tapLevel, hour: Calendar.current.component(.hour, from: clock())) {
+                var gesture = PipGestureLibrary.loop(for: moment) ?? PipGestureLibrary.gesture(for: moment)
+                if let typingGaze { gesture = Self.looking(gesture, at: typingGaze) }
+                play(gesture) { [weak self] finished in
+                    guard finished, let self, token == self.playbackGeneration else { return }
+                    if oneShot { self.displayedPose = .resting }
                 }
+                if let typingGaze { gaze = typingGaze; rig.look(at: typingGaze) }
+            } else if curled {
+                // A quiet re-render does not wake a sleeping Pip.
+            } else {
+                if freshReaction { rig.blink() }
+                play(Self.restGesture) { _ in }
             }
-            if changed {
-                transition(player, crossfade: !surfaceChanged,
-                    duration: pose == .submitted ? MivuMotion.submissionTransition : MivuMotion.companionTransition, render)
-            } else { UIView.performWithoutAnimation(render) }
         }
         if let reaction = output.reactionID { consumedReaction = reaction }
     }
 
-    func reconcileMount(_ mountedPlayer: LottieAnimationView) async {
-        guard player === mountedPlayer, eligible, let latestOutput else { return }
-        await apply(latestOutput, darkMode: false, surface: latestSurface)
+    func reconcileMount(_ mounted: PipRigView) async {
+        guard rig === mounted, eligible, let latestOutput else { return }
+        await apply(latestOutput, darkMode: latestDark, surface: latestSurface)
+        resumeBreathing()
+    }
+
+    /// Core Animation drops a layer's animations when it leaves a window, so a remounted rig needs its breath again.
+    func resumeBreathing() {
+        if live { rig?.setBreathing(true) }
+    }
+
+    /// The small acknowledgement for a touch that cannot start a reaction. Never interrupts anything.
+    func earTwitch() {
+        guard eligible, live, !gestureActive, displayedPose == .resting, !curled else { return }
+        play(PipGestureLibrary.gesture(for: .earTwitch), wakes: false) { _ in }
     }
 
     func stop() {
@@ -137,68 +179,131 @@ import UIKit
         pauseAndReset()
     }
 
-    func fallbackAssetName(for pose: CompanionPose) -> String {
-        let names = ["Resting", "Attentive", "Thinking", "Saved", "Reviewed", "Recovery", "Greeting"]
-        // Task 7 replaces this runtime; new poses borrow the nearest existing fallback.
-        let index = switch pose {
-        case .submitted, .curious: CompanionPose.attentive.rawValue
-        case .firstMealToday, .dayComplete: CompanionPose.saved.rawValue
-        case .tapped, .patted: CompanionPose.resting.rawValue
-        case .welcomeBack: CompanionPose.greeting.rawValue
-        default: pose.rawValue
+    func fallbackAssetName(for surface: CompanionSurface = .today) -> String {
+        character.fallbackAssetPrefix + (surface == .coach ? "Coach" : "Resting")
+    }
+
+    /// The one place app output becomes a moment. Resting has no moment.
+    static func moment(for pose: CompanionPose, tapLevel: Int, hour: Int) -> PipMoment? {
+        switch pose {
+        case .resting: nil
+        case .attentive: .attentive
+        case .thinking: .thinking
+        case .saved: .saved
+        case .reviewed: .reviewed
+        case .recovery: .recovery
+        case .greeting: .greeting(hour: hour)
+        case .submitted: .submitted
+        case .firstMealToday: .firstMealToday
+        case .dayComplete: .dayComplete
+        case .curious: .curious
+        case .tapped: .tapped(level: tapLevel)
+        case .patted: .patted
+        case .welcomeBack: .welcomeBack
         }
-        return character.fallbackAssetPrefix + names[index]
+    }
+
+    private static func isOneShot(_ pose: CompanionPose) -> Bool {
+        ![.resting, .attentive, .thinking, .recovery].contains(pose)
+    }
+
+    /// Sweeps the eyes left to right as the draft grows, slightly down toward the text.
+    private static func typingGaze(_ progress: Double) -> CGPoint {
+        CGPoint(x: -0.8 + 1.6 * min(max(progress, 0), 1), y: 0.25)
+    }
+
+    /// The attentive loop's own glances would pull the eyes off the text, so its keys look where the text is.
+    private static func looking(_ gesture: PipGesture, at point: CGPoint) -> PipGesture {
+        PipGesture(name: gesture.name, keys: gesture.keys.map { key in var pose = key.pose; pose.gaze = point; return (key.at, pose) },
+                   loops: gesture.loops, endSet: gesture.endSet)
+    }
+
+    private func restPose(_ surface: CompanionSurface) -> PipPose {
+        var pose = PipPose.rest
+        pose.set = surface == .coach ? .seated : .standing
+        return pose
+    }
+
+    private func show(_ surface: CompanionSurface) {
+        curled = false
+        displayedSurface = surface
+        if let asset { rig?.visibleRect = asset.frames[surface == .coach ? "coach" : "today"] ?? rig?.visibleRect ?? .zero }
+        rig?.apply(restPose(surface), animated: false)
+    }
+
+    /// Plays `gesture`; `done(finished)` reports false when anything else takes the rig. A sleeping Pip wakes first.
+    private func play(_ gesture: PipGesture, wakes: Bool = true, done: @escaping (Bool) -> Void) {
+        guard let rig else { done(false); return }
+        gestureToken += 1
+        let token = gestureToken
+        gestureActive = true
+        lastGestureName = gesture.name
+        let finish: (Bool) -> Void = { [weak self] finished in
+            if finished, let self, token == self.gestureToken {
+                self.gestureActive = false
+                if let end = gesture.endSet { self.curled = end == .curled }
+            }
+            done(finished)
+        }
+        if curled && wakes {
+            rig.play(PipGestureLibrary.wake) { [weak self, weak rig] finished in
+                guard finished, let self, token == self.gestureToken else { finish(false); return }
+                self.curled = false
+                rig?.play(gesture, completion: finish)
+            }
+        } else {
+            rig.play(gesture, completion: finish)
+        }
+    }
+
+    private func startIdle() {
+        guard idleTask == nil else { return }
+        idleTask = Task { @MainActor [weak self] in await self?.idleLoop() }
+    }
+
+    private func idleLoop() async {
+        while !Task.isCancelled {
+            // Wait out feedback and gestures first, so the scheduler's hug-then-curl memory never advances unseen.
+            guard live, displayedPose == .resting, !gestureActive else {
+                do { try await sleep(0.5) } catch { return }
+                continue
+            }
+            let now = clock()
+            let next = scheduler.next(after: lastInput, now: now, surface: displayedSurface)
+            do { try await sleep(max(0, next.at.timeIntervalSince(now))) } catch { return }
+            guard !Task.isCancelled, let rig, live, displayedPose == .resting, !gestureActive else { continue }
+            idleBeatCount += 1
+            switch next.beat {
+            case .blink: rig.blink()
+            case .doubleBlink: rig.blink(double: true)
+            case .glance(let point):
+                rig.look(at: point)
+                do { try await sleep(0.9) } catch { return }
+                if live, !gestureActive { rig.look(at: .zero) }
+            default:
+                guard let gesture = PipGestureLibrary.gesture(forIdle: next.beat, curled: curled) else { continue }
+                await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+                    play(gesture, wakes: false) { _ in done.resume() }
+                }
+            }
+        }
     }
 
     private func pauseAndReset() {
         playbackGeneration += 1
+        gestureToken += 1
+        gestureActive = false
+        live = false
+        curled = false
         isPaused = true
-        transitionSnapshot?.removeFromSuperview()
-        transitionSnapshot = nil
-        player?.layer.removeAllAnimations()
-        player?.pause()
-        player?.currentFrame = player?.animation?.frameTime(forMarker: Self.marker(for: .resting, surface: latestSurface)) ?? 0
-        displayedSurface = latestSurface
+        idleTask?.cancel()
+        idleTask = nil
+        rig?.removeAllMotion()
+        rig?.setBreathing(false)
+        gaze = .zero
+        show(latestSurface)
         displayedPose = .resting
         if let reaction = latestOutput?.reactionID { consumedReaction = reaction }
-    }
-
-    private func transition(_ player: LottieAnimationView, crossfade: Bool = true,
-                            duration: TimeInterval = MivuMotion.companionTransition, _ changes: @escaping () -> Void) {
-        transitionSnapshot?.removeFromSuperview()
-        transitionSnapshot = nil
-        // The brief submit bridge smooths any breathing phase without delaying playback.
-        guard crossfade, latestSurface == .today || displayedPose == .submitted, player.window != nil,
-              let snapshot = player.snapshotView(afterScreenUpdates: false) else {
-            UIView.performWithoutAnimation(changes)
-            return
-        }
-        snapshot.frame = player.bounds
-        snapshot.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        snapshot.isUserInteractionEnabled = false
-        snapshot.accessibilityElementsHidden = true
-        // Never implicitly interpolate the Lottie layer tree: it contains every atlas scene.
-        UIView.performWithoutAnimation(changes)
-        player.addSubview(snapshot)
-        transitionSnapshot = snapshot
-        UIView.animate(withDuration: duration, delay: 0,
-            options: [.curveEaseInOut, .beginFromCurrentState], animations: { snapshot.alpha = 0 }) { [weak self] _ in
-                snapshot.removeFromSuperview()
-                if self?.transitionSnapshot === snapshot { self?.transitionSnapshot = nil }
-            }
-    }
-
-    private static func marker(for pose: CompanionPose, surface: CompanionSurface = .today) -> String {
-        let names = ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"]
-        let index = switch pose {
-        case .firstMealToday, .dayComplete: CompanionPose.saved.rawValue
-        case .curious: CompanionPose.attentive.rawValue
-        case .tapped, .patted: CompanionPose.resting.rawValue
-        case .welcomeBack: CompanionPose.greeting.rawValue
-        default: pose.rawValue
-        }
-        let name = names[index]
-        return surface == .coach ? "coach-" + name : name
     }
 
     private func check(_ descriptor: CharacterDescriptor, _ token: Int) throws {
@@ -207,33 +312,17 @@ import UIKit
 
     private func loadCharacter(_ descriptor: CharacterDescriptor, generation token: Int) async {
         do {
-            guard descriptor.schemaVersion == 1 else { throw AssetError.schema }
+            guard descriptor.schemaVersion == 2 else { throw AssetError.schema }
             let data = try await load(descriptor)
             try check(descriptor, token)
-            guard data.count <= 1_048_576 else { throw AssetError.corrupt }
-            guard let url = bundle.url(forResource: descriptor.animationResourcePath, withExtension: nil) else { throw AssetError.missing }
-            let directory = url.deletingLastPathComponent()
-            let name = url.deletingPathExtension().lastPathComponent
-            let prepared = try await Task.detached(priority: .utility) {
-                let animation = try LottieAnimation.from(data: data)
-                let images = try CompanionArtworkImageProvider(
-                    artworkURL: directory.appendingPathComponent(name + "-artwork.png"),
-                    matteURL: directory.appendingPathComponent(name + "-artwork-alpha.png"))
-                return PreparedArtwork(animation: animation, images: images)
-            }.value
+            let loaded = try await Task.detached(priority: .utility) { try PipRigAsset.load(data) }.value
             try check(descriptor, token)
-            for marker in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"].flatMap({ [$0, "coach-" + $0] }) {
-                guard prepared.animation.frameTime(forMarker: marker) != nil,
-                      let duration = prepared.animation.durationFrameTime(forMarker: marker), duration > 0 else { throw AssetError.schema }
-            }
-            let player = LottieAnimationView(animation: prepared.animation, imageProvider: prepared.images,
-                configuration: LottieConfiguration(renderingEngine: .specific(.coreAnimation)))
-            player.contentMode = .scaleAspectFit
-            player.backgroundBehavior = .pause
-            player.currentFrame = prepared.animation.frameTime(forMarker: "resting") ?? 0
-            self.player = player
+            let rig = PipRigView(asset: loaded, set: latestSurface == .coach ? .seated : .standing)
+            rig.visibleRect = loaded.frames[latestSurface == .coach ? "coach" : "today"] ?? rig.visibleRect
+            asset = loaded
+            self.rig = rig
             displayedPose = .resting
-            displayedSurface = .today
+            displayedSurface = latestSurface
             isReady = true
             loadFailed = false
             isPaused = false
@@ -247,9 +336,5 @@ import UIKit
         }
     }
 
-    private struct PreparedArtwork: @unchecked Sendable {
-        let animation: LottieAnimation
-        let images: CompanionArtworkImageProvider
-    }
-    private enum AssetError: Error { case missing, corrupt, schema }
+    private enum AssetError: Error { case missing, schema }
 }

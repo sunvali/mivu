@@ -36,7 +36,7 @@ import XCTest
         } catch { XCTFail("Could not preserve native visual evidence: \(error)") }
     }
 
-    func testLottieReferenceCompositionsAndHorizontalComposerInBothAppearances() {
+    func testRigReferenceCompositionsAndHorizontalComposerInBothAppearances() {
         for appearance in ["--proof-light", "--proof-dark"] {
             let app = launch([appearance])
             let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
@@ -90,7 +90,7 @@ import XCTest
             let row = app.buttons["mealRow"].firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 5))
             let today = XCTAttachment(screenshot: app.screenshot())
-            today.name = "Pip Lottie Today " + appearance; today.lifetime = .keepAlways; add(today)
+            today.name = "Pip Rig Today " + appearance; today.lifetime = .keepAlways; add(today)
             XCTAssertTrue(app.buttons["logMeal"].isHittable)
             let list = app.collectionViews.firstMatch
             for _ in 0..<6 where row.frame.maxY >= app.buttons["logMeal"].frame.minY - 12 { list.swipeUp() }

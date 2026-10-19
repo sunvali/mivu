@@ -282,9 +282,7 @@ struct CoachView: View {
     private var companionStrip: some View {
         HStack(alignment: .center, spacing: 12) {
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                          size: 88, runtime: companionRuntime, surface: .coach)
-                .frame(width: 76, height: 66, alignment: .top)
-                .clipped()
+                          size: 76, runtime: companionRuntime, surface: .coach)
             VStack(alignment: .leading, spacing: 4) {
                 if let day = coach.diary.activeDay {
                     Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)

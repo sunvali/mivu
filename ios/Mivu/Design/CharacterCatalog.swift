@@ -14,8 +14,8 @@ struct CharacterCatalog {
         CharacterDescriptor(
             id: "pip",
             displayName: "Pip",
-            schemaVersion: 1,
-            animationResourcePath: "Characters/pip/pip.json",
+            schemaVersion: 2,
+            animationResourcePath: "Characters/pip/pip-rig.json",
             fallbackAssetPrefix: "Pip",
             previewAssetName: "PipPreview"
         )
@@ -26,11 +26,11 @@ struct CharacterCatalog {
     init(characters: [CharacterDescriptor]) {
         let ids = characters.map(\.id)
         precondition(ids.allSatisfy { !$0.isEmpty } && Set(ids).count == ids.count, "Character IDs must be unique and nonempty")
-        precondition(characters.allSatisfy { $0.schemaVersion == 1 }, "Unsupported character schema")
+        precondition(characters.allSatisfy { $0.schemaVersion == 2 }, "Unsupported character schema")
         precondition(
             characters.contains {
-                $0.id == "pip" && $0.displayName == "Pip" && $0.schemaVersion == 1 &&
-                    $0.animationResourcePath == "Characters/pip/pip.json" &&
+                $0.id == "pip" && $0.displayName == "Pip" && $0.schemaVersion == 2 &&
+                    $0.animationResourcePath == "Characters/pip/pip-rig.json" &&
                     $0.fallbackAssetPrefix == "Pip" && $0.previewAssetName == "PipPreview"
             },
             "The catalog must include Pip fallback assets"

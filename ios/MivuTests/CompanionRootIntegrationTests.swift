@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import Testing
 import UIKit
-import Lottie
+
 @testable import Mivu
 
 @MainActor private final class CompanionRootLoadGate {
@@ -353,9 +353,7 @@ import Lottie
                 && outputs.last?.pose == .resting && outputs.last?.playback == .animated
                 && outputs.last?.reactionID == nil && runtime.displayedPose == .resting
         })
-        let player = try #require(runtime.player)
-        let restStart = try #require(player.animation?.frameTime(forMarker: "resting"))
-        let restEnd = restStart + (try #require(player.animation?.durationFrameTime(forMarker: "resting")))
+        let rig = try #require(runtime.rig)
         let triggers = runtime.triggerCount
         let firstOutput = outputs.count
         gate.armed = true
@@ -374,9 +372,7 @@ import Lottie
         }, timeout: 0.25)
         #expect(!changedPose, "A background check with no input must not make untouched Today flash another pose")
         #expect(outputs.last?.pose == .resting && outputs.last?.reactionID == nil)
-        #expect(player.isAnimationPlaying && player.realtimeAnimationFrame >= restStart
-                && player.realtimeAnimationFrame < restEnd,
-                "The warm production player must keep its existing breathing loop")
+        #expect(animationKeys(in: rig.layer).contains("breath"), "The warm production rig must keep breathing")
 
         gate.release()
         await coach.waitForWorker()
