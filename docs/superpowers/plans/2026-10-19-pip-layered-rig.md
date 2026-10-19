@@ -151,11 +151,20 @@ Removed in Task 9: Lottie SPM package, `pip.json`, `pip-artwork*.png`, `pip-*eye
 - Timings (spec): greeting ≈ 700 ms (prep 100 / lift 160 / wave 180 / settle 260); saved ≈ 450 ms (70/120/90/170); reviewed ≈ 650 ms (90/170/120/270); submitted ≤ 800 ms with first visible change ≤ 100 ms; thinking loop 1.4 s; recovery 200 ms tilt + paw-over-heart then still.
 - Gesture content per the spec tables (greeting variants: hour 5–11 adds stretch, 19–4 softer wave; tapped levels 0–3 rotate giggle squash / ear wiggle / wink / tail flick, level 4 = shake-off; patted = lean in, closedHappy eyes, blush, tail wag, 1 heart; firstMealToday = heart eyes, wiggle, 1 heart; dayComplete = both paws up, hop, blush, 2 hearts; welcomeBack = droop + puppy (`wide`) eyes 400 ms then joyful wave; curious = lean toward camera side, `wide` eyes; earTwitch = single ear flick).
 
+- Living eyes (owner asked that the eyes really move; Task 2 only slides the pupil inside the iris, which is barely visible):
+  - Gaze moves the whole iris group (iris + pupil + glint) inside the eye white, clipped by the eye-white shape as a mask; the glint counter-shifts ~30% so the light source feels fixed. Pupil-in-iris reach stays as a small extra.
+  - Blink is animated, not a shape swap: the upper lid sweeps down over ~70 ms, holds ~40 ms, opens over ~90 ms, with a tiny 3% eye squash; occasional double blink.
+  - Eyes lead the head: on a gaze or head-turn change the eyes reach the target ~80 ms before the head finishes turning (Disney "eyes lead").
+  - Saccades: gaze changes snap fast (~60 ms, slight overshoot) instead of drifting.
+  - `PipRigView.blink()` and `PipRigView.look(at: CGPoint, animated: Bool)` are public so idle (Task 5) and typing (Task 7) can drive them.
+
 - [ ] **Step 1: Failing tests:**
   - `PipGestureTests.everyMomentHasAGestureEndingAtRest` — for all moments except loops, last key pose == `.rest` (same set) and duration ≤ 2.0 s.
   - `PipGestureTests.spokenTimingsMatchSpec` — greeting 0.70 ±0.01, saved 0.45 ±0.01, reviewed 0.65 ±0.01; submitted first key ≤ 0.1 and duration ≤ 0.8.
   - `PipGestureTests.squashAndFeetStayInCaps` — every key: joint scales within 0.9…1.1; `foot-*` offsets y ≤ 0 (never below ground) and final y == 0.
   - `PipGestureTests.recoveryIsNeverCheerful` — recovery keys never use `bigOpen`, `closedHappy`, hearts or blush.
+  - `PipRigViewTests.gazeMovesIrisAcrossEyeWhite` — for both eyes, `look(at: (1,0), animated: false)` moves the iris group centre by ≥ 25% of the eye-white width and the iris layer has the eye-white mask; (−1,0) moves the other way.
+  - `PipRigViewTests.blinkAnimatesUpperLid` — `blink()` adds a position/path animation on `lid-upper-l` and `lid-upper-r` with total duration 0.2 ±0.02 s and ends open.
   - `PipRigViewTests.interruptStartsFromPresentationValue` — play `saved`, after 0.2 s play `tapped(level: 0)`; first added animation's `fromValue` equals the head layer's presentation rotation at interrupt time (±0.001).
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement** library + `play`. **Step 4: Run** → PASS.
 - [ ] **Step 5: Add Talk/gesture buttons for every moment to `PipRigPreview`; screen-record all gestures to `docs/verification/pip-layered-rig/gestures/`.**
