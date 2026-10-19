@@ -5,8 +5,25 @@ struct HistoryView: View {
     @State private var dateFilter: String?
     @State private var selectedDate = Date()
     @State private var showDatePicker = false
-    @State private var page: DiaryHistoryPage?
-    @State private var coverage: [DayCompleteness: Int] = [:]
+    @State private var history: DiaryHistoryViewModel
+    @AccessibilityFocusState private var focusedDay: UUID?
+
+    init(model: DiaryViewModel) {
+        self.model = model
+        let store = model.store
+        _history = State(initialValue: DiaryHistoryViewModel { scope, start in
+            try await store.validateSelectionOwnership(scope.selection)
+            let cursor: DiaryHistoryCursor?
+            switch start { case .latest: cursor = nil; case .before(let value): cursor = value }
+            let page = try await store.diaryHistory(before: cursor, limit: 30, localDate: scope.localDate, expectedProfileID: scope.selection.identity.profileID)
+            let coverage = try await store.historyCoverage(expectedProfileID: scope.selection.identity.profileID)
+            try await store.validateSelectionOwnership(scope.selection)
+            return DiaryHistoryLoad(page: page, coverage: coverage)
+        })
+    }
+    private var historyScope: DiaryHistoryScope? {
+        model.selection.map { DiaryHistoryScope(selection: $0, localDate: dateFilter, changeGeneration: model.changeGeneration) }
+    }
 
     var body: some View {
         List {
@@ -21,10 +38,10 @@ struct HistoryView: View {
                     }
                 }
                 Section {
-                    let days = page?.days ?? []
-                    if days.isEmpty, let dateFilter {
+                    let days = history.page?.days ?? []
+                    if days.isEmpty, !history.isLoading, history.errorMessage == nil, let dateFilter {
                         ContentUnavailableView("No recorded day", systemImage: "calendar", description: Text("There are no records for \(dateFilter). Missing logs do not mean zero intake."))
-                    } else if days.isEmpty {
+                    } else if days.isEmpty, !history.isLoading, history.errorMessage == nil {
                         ContentUnavailableView("No recorded days", systemImage: "calendar", description: Text("Meals and measurements appear here after you save them."))
                     }
                     ForEach(days, id: \.day.id) { summary in
@@ -45,15 +62,32 @@ struct HistoryView: View {
                             .frame(minHeight: 64, alignment: .leading)
                             .accessibilityElement(children: .combine)
                         }.accessibilityIdentifier("diaryDay").accessibilityValue(day.localDate + " " + day.timeZoneID)
+                            .accessibilityFocused($focusedDay, equals: day.id)
                             .diarySummaryCard()
                     }
                 } header: { DiarySectionLabel(title: "Recorded days", symbol: "calendar", color: .diaryProtein) }
-                if page?.hasMore == true { Button("Earlier days") { Task { await loadHistory(before: page?.cursor) } }.frame(minHeight: 44).listRowSeparator(.hidden) }
+                Section {
+                    if history.isLoading { ProgressView("Loading diary days…") }
+                    if let error = history.errorMessage {
+                        Text(error).foregroundStyle(Color.diarySecondary)
+                        Button("Retry") { Task { await history.retry(); focusFirstDay() } }
+                            .frame(minHeight: 44).disabled(history.isLoading).accessibilityIdentifier("retryDiaryHistory")
+                    }
+                    if history.page != nil {
+                        Button("Earlier days") { navigate(.earlier) }
+                            .disabled(!history.canLoadEarlier).accessibilityIdentifier("earlierDiaryDays").frame(minHeight: 44)
+                        Button("Newer days") { navigate(.newer) }
+                            .disabled(!history.canLoadNewer).accessibilityIdentifier("newerDiaryDays").frame(minHeight: 44)
+                        Button("Latest days") { navigate(.latest) }
+                            .disabled(!history.canLoadLatest).accessibilityIdentifier("latestDiaryDays").frame(minHeight: 44)
+                    }
+                }
+
                 Section {
                     VStack(alignment: .leading, spacing: 16) {
                         DisclosureGroup("Day coverage") {
                             ForEach(DayCompleteness.allCases, id: \.self) { status in
-                                LabeledContent { Text((coverage[status] ?? 0).formatted()).monospacedDigit() } label: { Text(status.title) }
+                                LabeledContent { Text((history.coverage[status] ?? 0).formatted()).monospacedDigit() } label: { Text(status.title) }
                             }
                         }
                         Text("Complete means all intake was recorded. Partial, unknown and untracked days remain separate. Missing logs do not mean zero intake.")
@@ -74,8 +108,7 @@ struct HistoryView: View {
             case .day(let id): DayHistoryView(model: model, dayID: id)
             }
         }
-        .task(id: model.changeGeneration) { await loadHistory() }
-        .task(id: dateFilter) { await loadHistory() }
+        .task(id: historyScope) { await history.setScope(historyScope) }
         .navigationTitle("Diary")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -107,14 +140,12 @@ struct HistoryView: View {
         .onChange(of: model.readModel?.profile.id) { _, _ in dateFilter = nil; showDatePicker = false }
     }
 
-    private func loadHistory(before: DiaryHistoryCursor? = nil) async {
-        guard let token = model.selection else { page = nil; return }
-        let filter = dateFilter
-        do {
-            let loaded = try await model.store.diaryHistory(before: before, localDate: filter, expectedProfileID: token.identity.profileID)
-            let counts = try await model.store.historyCoverage(expectedProfileID: token.identity.profileID)
-            guard !Task.isCancelled, model.selection == token, dateFilter == filter else { return }; page = loaded; coverage = counts
-        } catch { if model.selection == token { model.errorMessage = error.localizedDescription } }
+    private func navigate(_ direction: DiaryHistoryNavigation) {
+        Task { await history.navigate(direction); focusFirstDay() }
+    }
+    private func focusFirstDay() {
+        guard history.errorMessage == nil else { return }
+        focusedDay = history.page?.days.first?.day.id
     }
     private func dayLabel(_ day: TrackingDay, mealCount: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {

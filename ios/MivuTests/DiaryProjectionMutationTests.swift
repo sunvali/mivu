@@ -278,6 +278,32 @@ import Testing
         #expect(f.diagnostics.counters.originalPhotoBytes == 0 && f.diagnostics.counters.completeReads == 0)
     }
 
+    @Test func seventyFiveDayKeysetsAreReversibleWithoutCompleteReads() throws {
+        var source = ChatHistoryFixture.snapshot(exchanges: 0)
+        let instant = source.days[0].startAt
+        source.days = (0..<75).map { index in
+            TrackingDay(localDate: "2027-01-15", timeZoneID: "UTC", startAt: instant.addingTimeInterval(Double(-index) * 86400), completeness: .complete)
+        }
+        source.activeDayID = source.days[0].id
+        source.meals = []; source.weights = []; source.workouts = []
+        let f = try MealProjectionFixture(source); defer { f.remove() }
+        // Equal date labels exercise the ordinal/id keyset rather than date-only paging.
+        let latest = try f.database.diaryHistory(limit: 30, expectedProfileID: f.owner)
+        let middle = try f.database.diaryHistory(before: latest.cursor, limit: 30, expectedProfileID: f.owner)
+        let oldest = try f.database.diaryHistory(before: middle.cursor, limit: 30, expectedProfileID: f.owner)
+        #expect(latest.days.count == 30 && middle.days.count == 30 && oldest.days.count == 15)
+        #expect(latest.hasMore && middle.hasMore && !oldest.hasMore)
+        let allIDs = (latest.days + middle.days + oldest.days).map(\.day.id)
+        #expect(Set(allIDs) == Set(source.days.map(\.id)) && Set(allIDs).count == 75)
+        let newer = try f.database.diaryHistory(before: latest.cursor, limit: 30, expectedProfileID: f.owner)
+        #expect(newer.days.map(\.day.id) == middle.days.map(\.day.id))
+        let reset = try f.database.diaryHistory(limit: 30, expectedProfileID: f.owner)
+        #expect(reset.days.map(\.day.id) == latest.days.map(\.day.id))
+        #expect(f.diagnostics.counters.completeReads == 0)
+        #expect(f.diagnostics.counters.completeReconciles == 0)
+        #expect(f.diagnostics.counters.originalPhotoBytes == 0)
+    }
+
     @Test func targetedParentLimitsRejectAtomically() throws {
         var source = ChatHistoryFixture.snapshot(exchanges: 0)
         source.meals[0].photos = (0..<30).map { _ in MealPhoto(data: Data([1]), createdAt: source.days[0].startAt) }
