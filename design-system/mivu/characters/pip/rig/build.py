@@ -16,6 +16,7 @@ OUTPUT = HERE.parents[4] / "ios/Mivu/Resources/Characters/pip/pip-rig.json"
 SVG = "{http://www.w3.org/2000/svg}"
 SETS = ("standing", "seated", "curled")
 IDENTITY = (1, 0, 0, 1, 0, 0)
+PARALLAX_SCALE = 20  # artboard units a parallax-1.0 part slides at a full in-view turn
 
 
 def multiply(m, n):
@@ -75,13 +76,39 @@ def flatten_path(d, m, part_id):
     return " ".join(out)
 
 
-def collect(node, matrix, parent, part_set, parts, hidden=False):
+def swap_side(text):
+    """ear-l <-> ear-r: -l/-r always name the viewer's side, so a mirror swaps them."""
+    return re.sub(r"-([lr])(?=[.@]|$)", lambda m: "-r" if m.group(1) == "l" else "-l", text)
+
+
+def mirror_view(parts, source, target, hidden):
+    """Append a copy of view `source` reflected about its head pivot x, renamed to view `target`."""
+    rename = lambda part_id: part_id and swap_side(part_id.replace(f"@{source}", f"@{target}"))
+    by_id = {p["id"]: p for p in parts}
+    axis = by_id[f"head@{source}"]["pivot"][0]
+    for p in [p for p in parts if p["view"] == source]:
+        flip = (-1, 0, 0, 1, 2 * axis, 0)
+        pivot_x = 2 * axis - p["pivot"][0]
+        if "glint" in p["id"]:  # highlights keep the light on the same side: follow the parent unflipped
+            shift = 2 * axis - 2 * by_id[p["parent"]]["pivot"][0]
+            flip, pivot_x = (1, 0, 0, 1, shift, 0), p["pivot"][0] + shift
+        parts.append(dict(p, id=rename(p["id"]), parent=rename(p["parent"]), z=len(parts), view=target,
+                          shape=p["shape"] and swap_side(p["shape"]), visible=p["visible"] and not hidden,
+                          pivot=[float(number(pivot_x)), p["pivot"][1]],
+                          path=flatten_path(p["path"], flip, p["id"])))
+
+
+def collect(node, matrix, parent, part_set, parts, hidden=False, view=None):
     for child in node:
         if child.tag != f"{SVG}g":
             continue
         m = multiply(matrix, parse_transform(child.get("transform")))
         child_set = child.get("data-set") or part_set
         child_hidden = hidden or child.get("display") == "none"
+        child_view = child.get("data-view") or view
+        if child.get("data-mirror-of"):
+            mirror_view(parts, child.get("data-mirror-of"), child_view, child_hidden)
+            continue
         part_id = child.get("id")
         if part_id:
             path = child.find(f"{SVG}path")
@@ -96,20 +123,22 @@ def collect(node, matrix, parent, part_set, parts, hidden=False):
                 "pivot": [float(number(v)) for v in apply(m, *pivot)],
                 "z": len(parts),
                 "set": child_set,
+                "view": child_view,
                 "shape": child.get("data-shape"),
                 "visible": not child_hidden,
+                "parallax": float(child.get("data-parallax", 0)),
                 "fill": path.get("fill"),
                 "fillDark": path.get("data-fill-dark") or path.get("fill"),
                 "path": flatten_path(path.get("d"), m, part_id),
             })
-        collect(child, m, part_id or parent, child_set, parts, child_hidden)
+        collect(child, m, part_id or parent, child_set, parts, child_hidden, child_view)
 
 
 def build():
     root = ET.parse(SOURCE).getroot()
     parts = []
     collect(root, IDENTITY, None, None, parts)
-    rig = {"version": 2, "artboard": 512, "ground": 472,
+    rig = {"version": 2, "artboard": 512, "ground": 472, "parallaxScale": PARALLAX_SCALE,
            "frames": {"today": [40, 32, 432, 440], "coach": [40, 32, 432, 440]},
            "parts": sorted(parts, key=lambda p: p["z"])}
     OUTPUT.write_text(json.dumps(rig, separators=(",", ":")) + "\n")

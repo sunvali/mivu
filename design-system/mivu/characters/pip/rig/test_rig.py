@@ -13,6 +13,21 @@ HEAD_IDS = (
 ).split()
 MOUTHS = "closedSmile smallOpen bigOpen o concerned yawn".split()
 EYES = "open half closedHappy closedSleepy wide heart".split()
+VIEWS = ("right", "front", "left")
+
+
+def name(part_id):
+    return part_id.split("@")[0]
+
+
+def swap_side(text):
+    return re.sub(r"-([lr])(?=[.@]|$)", lambda m: "-r" if m.group(1) == "l" else "-l", text)
+
+
+def x_bounds(path):
+    xs = [float(v) for v in re.findall(r"-?[\d.]+", path)[0::2]]
+    ys = [float(v) for v in re.findall(r"-?[\d.]+", path)[1::2]]
+    return min(xs), max(xs), min(ys), max(ys)
 
 
 class RigTests(unittest.TestCase):
@@ -22,14 +37,55 @@ class RigTests(unittest.TestCase):
         cls.parts = cls.rig["parts"]
         cls.ids = {p["id"] for p in cls.parts}
 
-    def test_head_parts_present(self):
+    def test_each_view_has_all_slots(self):
         shapes = [f"mouth.{m}" for m in MOUTHS]
         shapes += [f"eye-{side}.{e}" for side in "lr" for e in EYES]
-        for part_id in HEAD_IDS:
-            self.assertIn(part_id, self.ids)
-        for shape in shapes:
-            self.assertIn(shape, {p["shape"] for p in self.parts})
+        for view in VIEWS:
+            parts = [p for p in self.parts if p["view"] == view]
+            for part_id in HEAD_IDS:
+                self.assertIn(part_id, {name(p["id"]) for p in parts}, view)
+            for shape in shapes:
+                self.assertIn(shape, {p["shape"] for p in parts}, view)
         self.assertEqual(len(self.ids), len(self.parts), "part ids must be unique")
+
+    def test_one_view_visible_by_default(self):
+        self.assertEqual({p["view"] for p in self.parts if p["visible"]} - {None}, {"right"})
+
+    def test_left_view_mirrors_right(self):
+        by_id = {p["id"]: p for p in self.parts}
+        axis = by_id["head@right"]["pivot"][0]
+        for p in self.parts:
+            if p["view"] != "right":
+                continue
+            twin = by_id[swap_side(name(p["id"])) + "@left"]
+            if "glint" in p["id"]:  # highlights keep the light from the same side; checked below
+                continue
+            x0, x1, y0, y1 = x_bounds(p["path"])
+            mx0, mx1, my0, my1 = x_bounds(twin["path"])
+            for got, want in ((mx0, 2 * axis - x1), (mx1, 2 * axis - x0), (my0, y0), (my1, y1)):
+                self.assertAlmostEqual(got, want, delta=2, msg=p["id"])
+
+    def test_mirrored_glints_keep_light_side(self):
+        by_id = {p["id"]: p for p in self.parts}
+        for view in ("right", "left"):
+            glint, iris = by_id[f"glint-l@{view}"], by_id[f"iris-l@{view}"]
+            gx0, gx1, _, _ = x_bounds(glint["path"])
+            ix0, ix1, _, _ = x_bounds(iris["path"])
+            self.assertLess((gx0 + gx1) / 2, (ix0 + ix1) / 2, view)  # highlight on the iris's upper left
+
+    def test_parallax_increases_toward_the_snout(self):
+        by_id = {p["id"]: p for p in self.parts}
+
+        def total(part_id):
+            p, value = by_id[part_id], 0.0
+            while p:
+                value += p["parallax"]
+                p = by_id.get(p["parent"])
+            return value
+        for view in VIEWS:
+            self.assertEqual(total(f"head@{view}"), 0)
+            self.assertAlmostEqual(total(f"nose@{view}"), 1.0)
+            self.assertTrue(0 < total(f"eye-l.open@{view}") < 1, view)
 
     def test_pivots_inside_artboard(self):
         for p in self.parts:
