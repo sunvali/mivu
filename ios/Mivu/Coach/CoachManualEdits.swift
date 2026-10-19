@@ -8,7 +8,7 @@ struct CoachNutrientEdit: Sendable {
 }
 
 enum CoachManualEdit: Sendable {
-    case item(mealID: UUID, item: FoodItem, revision: Int, submissionID: UUID?, original: FoodItem)
+    case item(mealID: UUID, item: FoodItem, revision: Int, submissionID: UUID?, explicitNutrients: Set<String>, original: FoodItem)
     case append(mealID: UUID, items: [FoodItem], revision: Int)
     case accept(mealID: UUID, submissionID: UUID, revision: Int)
     case move(mealID: UUID, date: String, revision: Int, originalDayID: UUID)
@@ -24,14 +24,14 @@ enum CoachManualEdit: Sendable {
 
     var mealID: UUID? {
         switch self {
-        case .item(let id, _, _, _, _), .append(let id, _, _), .accept(let id, _, _), .move(let id, _, _, _),
+        case .item(let id, _, _, _, _, _), .append(let id, _, _), .accept(let id, _, _), .move(let id, _, _, _),
              .deleteMeal(let id, _), .attach(let id, _, _, _), .deletePhoto(let id, _, _), .retry(let id, _): id
         default: nil
         }
     }
     var target: String {
         switch self {
-        case .item(let id, let item, _, let submission, _): "edit_item/\(id)/\(submission?.uuidString ?? "saved")/\(item.id)"
+        case .item(let id, let item, _, let submission, _, _): "edit_item/\(id)/\(submission?.uuidString ?? "saved")/\(item.id)"
         case .append(let id, _, _): "append_food/\(id)"
         case .accept(let id, let submission, _): "accept_review/\(id)/\(submission)"
         case .move(let id, _, _, _): "move_meal/\(id)"
@@ -135,7 +135,7 @@ extension CoachTools {
             guard ["name", "unit", "quantity"].contains(where: optional) || !nutrients.isEmpty else { throw CoachError.invalidArguments }
             for edit in nutrients { item.nutrition.set(edit) }
             try validateItems([item])
-            write = .item(mealID: mealID, item: item, revision: expected, submissionID: submission, original: original)
+            write = .item(mealID: mealID, item: item, revision: expected, submissionID: submission, explicitNutrients: Set(nutrients.map(\.nutrient)), original: original)
         case "append_food":
             try keys(mealFields.union(["items"]), mealFields.union(["items"]))
             write = .append(mealID: try id("meal_id"), items: try foodItems(args["items"], evidence: evidence), revision: try revision(allowZero: true))

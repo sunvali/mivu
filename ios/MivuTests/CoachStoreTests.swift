@@ -66,7 +66,7 @@ import Testing
         let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [item], expectedProfileID: profile.id)
         let correction = try await capturedTurn(store, text: "Half", photos: [], at: now, expectedProfileID: profile.id)
         var edited = item; edited.quantity = 2
-        try await store.editItem(mealID: receipt.mealID!, item: edited)
+        try await store.editItem(mealID: receipt.mealID!, item: edited, explicitNutrients: [])
         let before = try await store.snapshotForExport()
         await #expect(throws: DiaryError.staleRevision) { try await store.applyCoachItemCorrection(turnID: correction.id, mealID: receipt.mealID!, item: item, expectedRevision: 1, expectedProfileID: profile.id) }
         await #expect(throws: DiaryError.wrongOwner) { try await store.coachContext(turnID: turn.id, expectedProfileID: UUID()) }
@@ -240,7 +240,7 @@ import Testing
         let summary = try await store.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id)
         #expect(summary.contains("150 g")); #expect(summary.contains("1.5 portion"))
         var corrected = yogurt; corrected.quantity = 75
-        try await store.editItem(mealID: receipt.mealID!, item: corrected)
+        try await store.editItem(mealID: receipt.mealID!, item: corrected, explicitNutrients: [])
         let restored = DiaryStore(directory: root); _ = try await restored.selectProfile(profile.id)
         let updated = try await restored.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id)
         #expect(updated.contains("75 g")); #expect(!updated.contains("150 g"))

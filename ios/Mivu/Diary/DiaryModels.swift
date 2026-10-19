@@ -15,12 +15,13 @@ enum SubmissionState: String, Codable, Sendable { case captured, waitingForConne
 enum DayAssignment: Equatable, Sendable { case existing(UUID), newDay, ask(UUID) }
 
 enum DiaryError: Error, Equatable, LocalizedError {
-    case noProfile, wrongOwner, invalidData, persistenceFailed, staleRevision, notFound, emptyCapture, ambiguousDay, staleArchive
+    case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, notFound, emptyCapture, ambiguousDay, staleArchive
     var errorDescription: String? {
         switch self {
         case .noProfile: "Choose a local profile first."
         case .wrongOwner: "The profile changed. Please try again."
         case .invalidData: "This diary contains invalid or unsupported data."
+        case .invalidAmountUnitChange: "Enter or clear each known nutrient when changing to an unrelated unit."
         case .persistenceFailed: "The diary could not be saved. Your input is still available."
         case .staleRevision: "This meal changed. Please retry the correction."
         case .notFound: "This diary entry no longer exists."

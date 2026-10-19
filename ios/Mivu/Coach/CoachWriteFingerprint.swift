@@ -28,12 +28,12 @@ extension CoachWrite {
         case .manual(let edit, let patchKey):
             var arguments: [String: Any] = [:]
             switch edit {
-            case .item(_, let item, let revision, let submission, let original):
+            case .item(_, let item, let revision, let submission, let explicitNutrients, let original):
                 arguments = ["revision": revision, "submission": nullable(submission?.uuidString)]
                 if item.name != original.name { arguments["name"] = item.name }
                 if item.unit != original.unit { arguments["unit"] = item.unit }
                 if item.quantity != original.quantity { arguments["quantity"] = item.quantity }
-                for (key, field) in [("kcal", \NutritionValues.kcal), ("carbs", \NutritionValues.carbs), ("protein", \NutritionValues.protein), ("fat", \NutritionValues.fat)] where item.nutrition[keyPath: field] != original.nutrition[keyPath: field] { arguments[key] = nullable(item.nutrition[keyPath: field]) }
+                for (key, field) in [("kcal", \NutritionValues.kcal), ("carbs", \NutritionValues.carbs), ("protein", \NutritionValues.protein), ("fat", \NutritionValues.fat)] where explicitNutrients.contains(key) { arguments[key] = nullable(item.nutrition[keyPath: field]) }
             case .append(_, let items, let revision): arguments = ["items": try foods(items), "revision": revision]
             case .accept(_, _, let revision), .deleteMeal(_, let revision), .deletePhoto(_, _, let revision), .retry(_, let revision), .startDay(let revision): arguments = ["revision": revision]
             case .move(_, let date, let revision, _): arguments = ["date": date, "revision": revision]

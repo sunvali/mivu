@@ -36,7 +36,7 @@ import Testing
         #expect(capturedContext.committedReceipts?.first?.items.first?.quantity == 3)
         #expect(try ChatHistoryFixture.strings(url, "SELECT COUNT(*) FROM legacy_applications") == applications)
         var manual = try await fresh.snapshotForExport(expectedProfileID: source.profile.id).meals[0].items[0]; manual.quantity = 5
-        try await fresh.editItem(mealID: source.meals[0].id, item: manual, expectedRevision: 2, expectedProfileID: source.profile.id)
+        try await fresh.editItem(mealID: source.meals[0].id, item: manual, explicitNutrients: [], expectedRevision: 2, expectedProfileID: source.profile.id)
         try await fresh.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: source.profile.id)
         let replay = CoachJourneyTransport()
         let again = try await CoachEngine(store: fresh, infer: { try await replay.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: source.profile.id)

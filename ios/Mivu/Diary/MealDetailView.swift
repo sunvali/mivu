@@ -168,9 +168,9 @@ struct MealDetailView: View {
         }
         .onChange(of: model.readModel?.profile.id) { _, _ in viewingPhoto = nil; movedDayID = nil }
         .sheet(isPresented: $showCorrection) { MealComposerView(model: model, correctingMealID: mealID) }
-        .sheet(item: $editedItem) { item in FoodItemEditor(item: item, errorMessage: { model.errorMessage }) { updated in
+        .sheet(item: $editedItem) { item in FoodItemEditor(item: item, errorMessage: { model.errorMessage }) { updated, explicitNutrients in
             guard let owner = model.readModel?.profile.id else { return false }
-            return await model.change { try await model.store.editItem(mealID: mealID, item: updated, reviewSubmissionID: editingSubmissionID, expectedRevision: editingRevision, expectedProfileID: owner) }
+            return await model.change { try await model.store.editItem(mealID: mealID, item: updated, explicitNutrients: explicitNutrients, reviewSubmissionID: editingSubmissionID, expectedRevision: editingRevision, expectedProfileID: owner) }
         } }
         .alert(deletionTitle, isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), presenting: deletion) { target in
             switch target {
@@ -350,7 +350,7 @@ private struct MoveMealSheet: View {
 
 private struct FoodItemEditor: View {
     let item: FoodItem
-    let save: (FoodItem) async -> Bool
+    let save: (FoodItem, Set<String>) async -> Bool
     let errorMessage: () -> String?
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
@@ -360,11 +360,12 @@ private struct FoodItemEditor: View {
     @State private var carbs: String
     @State private var protein: String
     @State private var fat: String
+    @State private var explicitNutrients: Set<String> = []
     @State private var saving = false
     @State private var showDiscard = false
     @FocusState private var editingField: String?
     @Environment(\.dynamicTypeSize) private var typeSize
-    init(item: FoodItem, errorMessage: @escaping () -> String?, save: @escaping (FoodItem) async -> Bool) {
+    init(item: FoodItem, errorMessage: @escaping () -> String?, save: @escaping (FoodItem, Set<String>) async -> Bool) {
         self.item = item; self.save = save; self.errorMessage = errorMessage
         _name = State(initialValue: item.name); _quantity = State(initialValue: String(item.quantity)); _unit = State(initialValue: item.unit)
         _kcal = State(initialValue: item.nutrition.kcal.map { String($0) } ?? "")
@@ -382,10 +383,10 @@ private struct FoodItemEditor: View {
                     LabeledContent("Unit") { TextField("Unit", text: $unit).multilineTextAlignment(.trailing).focused($editingField, equals: "Unit") }
                 } header: { Text("Ingredient") }
                 Section {
-                    nutrientField("Energy (kcal)", text: $kcal, identifier: "itemCalories")
-                    nutrientField("Protein (g)", text: $protein)
-                    nutrientField("Carbs (g)", text: $carbs)
-                    nutrientField("Fat (g)", text: $fat)
+                    nutrientField("Energy (kcal)", text: nutrientBinding("kcal", $kcal), identifier: "itemCalories")
+                    nutrientField("Protein (g)", text: nutrientBinding("protein", $protein))
+                    nutrientField("Carbs (g)", text: nutrientBinding("carbs", $carbs))
+                    nutrientField("Fat (g)", text: nutrientBinding("fat", $fat))
                 } header: { Text("Nutrition for this amount") } footer: {
                     Text("Leave unknown values blank. Changing only quantity scales the recorded nutrients. Changes update this meal only.")
                 }
@@ -421,7 +422,7 @@ private struct FoodItemEditor: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Save") {
                     guard var updated = edited else { return }
                     updated.provenance = .user
-                    Task { saving = true; defer { saving = false }; if await save(updated) { dismiss() } }
+                    Task { saving = true; defer { saving = false }; if await save(updated, explicitNutrients) { dismiss() } }
                 }.disabled(edited == nil || saving).accessibilityIdentifier("saveItem") }
             }
         }
@@ -429,11 +430,17 @@ private struct FoodItemEditor: View {
         .environment(\.layoutDirection, .leftToRight)
     }
     private var hasChanges: Bool {
-        name != item.name || quantity != String(item.quantity) || unit != item.unit
+        !explicitNutrients.isEmpty || name != item.name || quantity != String(item.quantity) || unit != item.unit
             || kcal != (item.nutrition.kcal.map { String($0) } ?? "")
             || carbs != (item.nutrition.carbs.map { String($0) } ?? "")
             || protein != (item.nutrition.protein.map { String($0) } ?? "")
             || fat != (item.nutrition.fat.map { String($0) } ?? "")
+    }
+    private func nutrientBinding(_ key: String, _ value: Binding<String>) -> Binding<String> {
+        Binding(get: { value.wrappedValue }, set: { newValue in
+            value.wrappedValue = newValue
+            explicitNutrients.insert(key)
+        })
     }
     private func nutrientField(_ title: String, text: Binding<String>, identifier: String = "") -> some View {
         Group {
@@ -455,13 +462,14 @@ private struct FoodItemEditor: View {
     }
     private func number(_ text: String) -> Double? { Double(text.replacingOccurrences(of: ",", with: ".")) }
     private var edited: FoodItem? {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !unit.isEmpty, let amount = number(quantity), amount >= 0, amount.isFinite else { return nil }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !unit.isEmpty, let amount = number(quantity), amount >= 0, amount <= 100_000, amount.isFinite else { return nil }
         let inputs = [kcal, carbs, protein, fat]
-        guard inputs.allSatisfy({ $0.isEmpty || number($0).map { $0 >= 0 && $0.isFinite && $0 <= 100_000 } == true }) else { return nil }
+        guard inputs.allSatisfy({ $0.isEmpty || number($0).map { $0 >= 0 && $0.isFinite && $0 <= 10_000_000 } == true }) else { return nil }
         var updated = item
         updated.name = name; updated.quantity = amount; updated.unit = unit
         let values = inputs.map(number)
         updated.nutrition = NutritionValues(kcal: values[0], carbs: values[1], protein: values[2], fat: values[3])
+        guard (try? validateItems([updated])) != nil else { return nil }
         return updated
     }
 }

@@ -13,7 +13,7 @@ import Testing
         let selected = try f.database.diaryDay(id: source.days[1].id, expectedProfileID: f.owner)
         #expect(selected.meals.count == 101)
         var item = source.meals[0].items[0]; item.quantity = 2
-        let commit = try f.database.editItem(mealID: f.mealID, item: item, expectedRevision: 1, expected: f.head(), maximumBytes: f.maximum)
+        let commit = try f.database.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 1, expected: f.head(), maximumBytes: f.maximum)
         #expect(commit.changes.mealIDs == [f.mealID])
         #expect(f.diagnostics.counters.originalPhotoBytes == 0 && f.diagnostics.counters.completeReads == 0 && f.diagnostics.counters.completeReconciles == 0)
         #expect(try ChatHistoryFixture.completeReference(databaseURL: f.url).meals.filter { $0.id != f.mealID } == unloaded)
@@ -52,7 +52,7 @@ import Testing
         _ = try f.database.applyAnalysis(proposal, expected: f.head(), maximumBytes: f.maximum)
         #expect(try f.database.meal(id: f.mealID, expectedProfileID: f.owner).items == f.source.meals[0].items)
         var changed = f.source.meals[0].items[0]; changed.quantity = 2
-        _ = try f.database.editItem(mealID: f.mealID, item: changed, expectedRevision: 1, expected: f.head(), maximumBytes: f.maximum)
+        _ = try f.database.editItem(mealID: f.mealID, item: changed, explicitNutrients: [], expectedRevision: 1, expected: f.head(), maximumBytes: f.maximum)
         let before = try f.durableState()
         #expect(throws: DiaryError.staleRevision) { try f.database.acceptReview(mealID: f.mealID, submissionID: submission.id, expected: f.head(), maximumBytes: f.maximum) }
         #expect(throws: DiaryError.invalidData) { try f.database.addPhotos(mealID: f.mealID, photos: [f.photo()], expected: f.head(), maximumBytes: 1) }
@@ -221,7 +221,7 @@ import Testing
         for table in ["photo", "coach_photo"] { try f.execute("CREATE TRIGGER guard_\(table) BEFORE UPDATE OF bytes ON \(table) BEGIN SELECT RAISE(ABORT, 'unexpected blob write'); END") }
         _ = try f.database.transaction(expected: f.head(), maximumBytes: f.maximum) { try $0.updatePhotoRole(mealID: f.mealID, photoID: reference.photoID, role: .after) }
         var item = f.source.meals[0].items[0]; item.quantity = 3
-        _ = try f.database.editItem(mealID: f.mealID, item: item, expected: f.head(), maximumBytes: f.maximum)
+        _ = try f.database.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expected: f.head(), maximumBytes: f.maximum)
         let after = try #require(f.database.meal(id: f.mealID, expectedProfileID: f.owner).photos.first)
         #expect(after.contentToken == reference.contentToken && after.role == .after)
         #expect(f.diagnostics.counters.originalPhotoBytes == 0)
