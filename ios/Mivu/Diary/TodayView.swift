@@ -1,7 +1,15 @@
 import SwiftUI
+import Observation
+
+@MainActor @Observable final class DiarySettingsRouteOwner {
+    struct Route: Identifiable { let id = UUID(); let destination: CoachDestination? }
+    var route: Route?
+    func openConnection() { route = Route(destination: .connection) }
+}
 
 extension EnvironmentValues {
-    @Entry var openDiaryConnection: () -> Void = {}
+    @Entry var diarySettingsRoutes: DiarySettingsRouteOwner? = nil
+    @Entry var diaryPhotoLimiter: PhotoWorkLimiter? = nil
 }
 
 private struct DiarySetupView: View {
@@ -25,7 +33,7 @@ private struct DiarySetupView: View {
                 Button("Create diary") {
                     Task {
                         await model.createProfile(name: trimmedName)
-                        if model.snapshot != nil { onSelected() }
+                        if model.readModel != nil { onSelected() }
                     }
                 }.disabled(trimmedName.isEmpty || model.isChangingProfile)
                     .frame(minHeight: 44).accessibilityIdentifier("createDiary")
@@ -34,7 +42,7 @@ private struct DiarySetupView: View {
                 Section("Your local diaries") {
                     ForEach(model.profiles) { profile in
                         Button(profile.name) {
-                            Task { await model.switchProfile(profile.id); if model.snapshot?.profile.id == profile.id { onSelected() } }
+                            Task { await model.switchProfile(profile.id); if model.readModel?.profile.id == profile.id { onSelected() } }
                         }.disabled(model.isChangingProfile).frame(minHeight: 44)
                     }
                 }
@@ -53,11 +61,10 @@ struct DiaryRootView: View {
     @State private var connection: ChatGPTConnection
     @State private var coach: CoachViewModel
     @State private var selectedTab: String
-    private struct SettingsRoute: Identifiable {
-        let id = UUID()
-        let destination: CoachDestination?
-    }
-    @State private var settingsRoute: SettingsRoute?
+    private typealias SettingsRoute = DiarySettingsRouteOwner.Route
+    @State private var routes = DiarySettingsRouteOwner()
+    @State private var coachRoutes = CoachNavigationOwner()
+    @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
     @State private var companion = CompanionPresentation()
     @State private var companionRuntime: CompanionRuntime
@@ -108,7 +115,8 @@ struct DiaryRootView: View {
         _coach = State(initialValue: CoachViewModel(diary: diary, connection: session, inference: fixture, lookup: { query in
             try await foodSource.search(query: query, apiKey: keys.load())
         }))
-        _selectedTab = State(initialValue: DiaryLaunch.isUITest && !DiaryLaunch.isSampleMode ? "coach" : "today")
+        let startToday = DiaryLaunch.isUITest && ProcessInfo.processInfo.arguments.contains("--coach-navigation-start-today")
+        _selectedTab = State(initialValue: DiaryLaunch.isUITest && !DiaryLaunch.isSampleMode && !startToday ? "coach" : "today")
     }
     #if DEBUG
     // Hosted integration tests exercise the actual root task with an intentionally delayed asset.
@@ -131,51 +139,71 @@ struct DiaryRootView: View {
     @State private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
     @State private var backgroundGeneration: UUID?
     var body: some View {
-        Group {
-            if !hasLoaded {
-                ProgressView("Opening diary").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.diaryCanvas)
-            } else if model.snapshot == nil {
-                NavigationStack { DiarySetupView(model: model) { selectedTab = "today" } }
-            } else {
-                TabView(selection: $selectedTab) {
-                    Tab("Today", systemImage: "fork.knife", value: "today") {
-                        NavigationStack {
-                            TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
-                                      onCompanionContextChanged: updateCompanionContext).toolbar { profileControl }
-                        }
-                    }
-                    Tab("Diary", systemImage: "text.document", value: "diary") {
-                        NavigationStack { HistoryView(model: model).toolbar { profileControl } }
-                    }
-                    Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
-                        NavigationStack { DiaryProgressView(model: model).toolbar { profileControl } }
-                    }
-                    Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
-                        NavigationStack {
-                            CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
-                                      onCompanionContextChanged: updateCompanionContext) { destination in
-                                settingsRoute = SettingsRoute(destination: destination)
-                            }.toolbar { profileControl }
-                        }
-                    }
-                }
-            }
+        lifecycleView
+        .alert("Could not complete action", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
+            Button("OK", role: .cancel) { model.errorMessage = nil }
+        } message: { Text(LocalizedStringKey(model.errorMessage ?? "")) }
+        .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--proof-dark") ? .dark : ProcessInfo.processInfo.arguments.contains("--proof-light") ? .light : nil)
+        .transformEnvironment(\.dynamicTypeSize) {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--proof-largest-text") { $0 = .accessibility5 }
+            else if arguments.contains("--proof-large-text") { $0 = .accessibility3 }
         }
-        .tint(.diaryAccent)
-        .foregroundStyle(Color.diaryText)
-        .environment(\.openDiaryConnection) { settingsRoute = SettingsRoute(destination: .connection) }
-        .sensoryFeedback(.success, trigger: model.captureReceipt)
-        .sheet(item: $settingsRoute) { route in
-            NavigationStack {
-                SettingsView(model: model, connection: connection, nutritionKeys: nutritionKeys, destination: route.destination, companionSelection: $companionSelection)
+    }
+    private var lifecycleView: some View {
+        companionView
+        .task {
+            if !DiaryLaunch.isUITest, ["today", "diary", "progress", "coach"].contains(restoredTab) { selectedTab = restoredTab }
+            model.resumeCoach = { coach.resume() }
+            model.retryCoachMeal = { id in
+                Task { await coach.retryMeal(id) }
             }
-            .tint(.diaryAccent)
+            await model.load(createDefaultProfile: (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test"))
+            hasLoaded = true
+            resetCompanionProfile()
+            if !DiaryLaunch.isUITest { await connection.restore() }
+            coach.startMonitoring(); coach.resume()
         }
+        .onChange(of: model.isChangingProfile) { _, changing in
+            coachRoutes.synchronize(selection: model.selection, isChangingProfile: changing)
+            if changing { coachHistory = nil }
+            if changing { coach.cancel(); companionRuntime.stop(); companion.enterBackground(); refreshCompanion() }
+            else { resetCompanionProfile(); Task { await coach.waitForWorker(); coach.resume() } }
+        }
+        .onChange(of: model.readModel?.profile.id) { _, _ in
+            coach.draft = MealDraft(); coach.errorMessage = nil
+            resetCompanionProfile()
+        }
+        .onChange(of: connection.sessionRevision) { _, _ in coach.cancel() }
+        .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
+        .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
+        .onChange(of: phase) { _, value in
+            if value != .active {
+                companionRuntime.stop()
+                if value == .background { companion.enterBackground() }
+                refreshCompanion()
+            }
+            if value == .background { continueInBackground() }
+            if value == .active {
+                companion.attach(profileID: model.isChangingProfile ? nil : model.readModel?.profile.id,
+                                 existingEvents: companionEvents, existingSubmissions: companionSubmissions, now: Date())
+                refreshCompanion()
+            }
+            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(); model.queueBackup() }
+        }
+    }
+    private var companionView: some View {
+        routedContent
         .onChange(of: selectedTab) { _, value in
             if !DiaryLaunch.isUITest { restoredTab = value }
             refreshCompanion()
         }
-        .onChange(of: [settingsRoute != nil, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion, lowPower]) { _, _ in refreshCompanion() }
+        .onChange(of: [routes.route != nil, coachHistory != nil, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion, lowPower]) { _, _ in refreshCompanion() }
+        .onChange(of: model.selection, initial: true) { _, selection in
+            coachRoutes.synchronize(selection: selection, isChangingProfile: model.isChangingProfile)
+            coachHistory = nil
+        }
+        .onChange(of: model.restoreGeneration) { _, _ in coachRoutes.invalidate(); coachHistory = nil }
         .onChange(of: thermalState) { _, _ in refreshCompanion() }
         .onChange(of: companionSelection.selectedCharacterID) { _, _ in
             companionRuntime.stop()
@@ -217,52 +245,78 @@ struct DiaryRootView: View {
                 refreshCompanion()
             } catch {}
         }
-        .task {
-            if !DiaryLaunch.isUITest, ["today", "diary", "progress", "coach"].contains(restoredTab) { selectedTab = restoredTab }
-            model.resumeCoach = { coach.resume() }
-            model.retryCoachMeal = { id in
-                Task { await coach.retryMeal(id) }
+    }
+    private var routedContent: some View {
+        rootContent
+        .tint(.diaryAccent)
+        .foregroundStyle(Color.diaryText)
+        .environment(\.diarySettingsRoutes, routes)
+        .environment(\.diaryPhotoLimiter, model.photoWorkLimiter)
+        .environment(\.openDiaryCoach, openCoachAction)
+        .sensoryFeedback(.success, trigger: model.captureReceipt)
+        .sheet(item: $routes.route) { route in
+            NavigationStack {
+                SettingsView(model: model, connection: connection, nutritionKeys: nutritionKeys, destination: route.destination, companionSelection: $companionSelection)
             }
-            await model.load(createDefaultProfile: (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test"))
-            hasLoaded = true
-            resetCompanionProfile()
-            if !DiaryLaunch.isUITest { await connection.restore() }
-            coach.startMonitoring(); coach.resume()
+            .tint(.diaryAccent)
         }
-        .onChange(of: model.isChangingProfile) { _, changing in
-            if changing { coach.cancel(); companionRuntime.stop(); companion.enterBackground(); refreshCompanion() }
-            else { resetCompanionProfile(); Task { await coach.waitForWorker(); coach.resume() } }
+        .sheet(item: $coachHistory) { presentation in
+            CoachHistoryView(model: model, routes: coachRoutes, presentation: presentation,
+                             open: coachAction(from: presentation.origin))
         }
-        .onChange(of: model.snapshot?.profile.id) { _, _ in
-            coach.draft = MealDraft(); coach.errorMessage = nil
-            resetCompanionProfile()
-        }
-        .onChange(of: connection.sessionRevision) { _, _ in coach.cancel() }
-        .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
-        .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
-        .onChange(of: phase) { _, value in
-            if value != .active {
-                companionRuntime.stop()
-                if value == .background { companion.enterBackground() }
-                refreshCompanion()
+    }
+    private var rootContent: some View {
+        Group {
+            if !hasLoaded {
+                ProgressView("Opening diary").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.diaryCanvas)
+            } else if model.readModel == nil {
+                NavigationStack { DiarySetupView(model: model) { selectedTab = "today" } }
+            } else {
+                rootTabs
             }
-            if value == .background { continueInBackground() }
-            if value == .active {
-                companion.attach(profileID: model.isChangingProfile ? nil : model.snapshot?.profile.id,
-                                 existingEvents: companionEvents, existingSubmissions: companionSubmissions, now: Date())
-                refreshCompanion()
+        }
+    }
+    private var rootTabs: some View {
+        TabView(selection: $selectedTab) {
+            Tab("Today", systemImage: "fork.knife", value: "today") {
+                NavigationStack {
+                    TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
+                              onCompanionContextChanged: updateCompanionContext).toolbar { profileControl }
+                }
             }
-            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(); model.queueBackup() }
+            Tab("Diary", systemImage: "text.document", value: "diary") {
+                NavigationStack { HistoryView(model: model).toolbar { profileControl } }
+            }
+            Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
+                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl } }
+            }
+            Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
+                NavigationStack {
+                    CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
+                              onCompanionContextChanged: updateCompanionContext,
+                              navigationRequest: coachRoutes.request,
+                              onNavigationConsumed: { coachRoutes.consume($0) },
+                              openHistory: openCoachHistory) { destination in
+                        routes.route = SettingsRoute(destination: destination)
+                    }.toolbar { profileControl }
+                }
+            }
         }
-        .alert("Could not complete action", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
-            Button("OK", role: .cancel) { model.errorMessage = nil }
-        } message: { Text(LocalizedStringKey(model.errorMessage ?? "")) }
-        .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--proof-dark") ? .dark : ProcessInfo.processInfo.arguments.contains("--proof-light") ? .light : nil)
-        .transformEnvironment(\.dynamicTypeSize) {
-            let arguments = ProcessInfo.processInfo.arguments
-            if arguments.contains("--proof-largest-text") { $0 = .accessibility5 }
-            else if arguments.contains("--proof-large-text") { $0 = .accessibility3 }
+    }
+    private var openCoachAction: OpenDiaryCoachAction {
+        coachAction(from: coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile))
+    }
+    private func coachAction(from origin: CoachNavigationOrigin?) -> OpenDiaryCoachAction {
+        OpenDiaryCoachAction(origin: origin) { target, captured in
+            guard coachRoutes.queue(target, from: captured, selection: model.selection,
+                                    isChangingProfile: model.isChangingProfile) else { return false }
+            selectedTab = "coach"
+            return true
         }
+    }
+    private func openCoachHistory() {
+        guard let origin = coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile) else { return }
+        coachHistory = CoachHistoryPresentation(origin: origin, timeZoneID: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
     private var companionEvents: [CompanionEvent] {
         [model.companionCaptureEvent, model.companionReviewEvent, coach.companionCaptureEvent].compactMap { $0 }
@@ -285,12 +339,12 @@ struct DiaryRootView: View {
     private func resetCompanionProfile() {
         companionRuntime.stop()
         companion.enterBackground()
-        companion.attach(profileID: model.isChangingProfile ? nil : model.snapshot?.profile.id,
+        companion.attach(profileID: model.isChangingProfile ? nil : model.readModel?.profile.id,
                          existingEvents: companionEvents, existingSubmissions: companionSubmissions, now: Date())
         refreshCompanion()
     }
     private func receiveCompanionEvent(_ event: CompanionEvent?) {
-        guard phase == .active, !model.isChangingProfile, let event, event.profileID == model.snapshot?.profile.id else { return }
+        guard phase == .active, !model.isChangingProfile, let event, event.profileID == model.readModel?.profile.id else { return }
         // Observation may coalesce a fast write; acceptance must reach the presenter first.
         receiveCompanionSubmission()
         companion.receive(event, now: Date())
@@ -298,7 +352,7 @@ struct DiaryRootView: View {
     }
     private func receiveCompanionSubmission() {
         guard phase == .active, !model.isChangingProfile, let submission = coach.companionSubmission,
-              submission.profileID == model.snapshot?.profile.id else { return }
+              submission.profileID == model.readModel?.profile.id else { return }
         guard companion.receive(submission, now: Date()) else { return }
         if companionContext.surface == .coach, coach.isSending || !coach.draft.isValid {
             companionContext.isTyping = false
@@ -314,9 +368,9 @@ struct DiaryRootView: View {
         }
         context.playback = MotionPolicy.playback(
             reduceMotion: reduceMotion, lowPower: lowPower, thermalState: thermalState,
-            sceneActive: phase == .active && hasLoaded && model.snapshot != nil && !model.isChangingProfile,
+            sceneActive: phase == .active && hasLoaded && model.readModel != nil && !model.isChangingProfile,
             selected: context.surface != nil && context.surface == selectedCompanionSurface,
-            visible: context.playback != .hidden, covered: settingsRoute != nil || model.errorMessage != nil)
+            visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || model.errorMessage != nil)
         let output = companion.resolve(context: context, now: Date())
         if companionOutput.playback == .animated && output.playback != .animated { companionRuntime.stop() }
         companionOutput = output
@@ -342,7 +396,7 @@ struct DiaryRootView: View {
     }
     private var profileControl: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button { settingsRoute = SettingsRoute(destination: nil) } label: {
+            Button { routes.route = SettingsRoute(destination: nil) } label: {
                 Image(systemName: "person.crop.circle").font(.title3).frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("Profile and settings")
@@ -351,7 +405,7 @@ struct DiaryRootView: View {
     }
     private func continueInBackground() {
         coach.pauseActivity()
-        guard (model.snapshot?.pendingCount ?? 0) > 0 || coach.hasPendingWork else { coach.enterBackground(); connection.enterBackground(); return }
+        guard (model.readModel?.pendingCount ?? 0) > 0 || coach.hasPendingWork else { coach.enterBackground(); connection.enterBackground(); return }
         endBackgroundLease()
         let generation = UUID()
         backgroundGeneration = generation
@@ -386,7 +440,7 @@ struct TodayView: View {
     var body: some View {
         List {
             if model.sampleMode { Section { SampleBanner().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) } }
-            if let snapshot = model.snapshot {
+            if let snapshot = model.readModel {
                 if let savedMealID, model.meal(savedMealID) != nil {
                     Section {
                         NavigationLink(value: savedMealID) {
@@ -396,11 +450,11 @@ struct TodayView: View {
                     }
                 }
                 Section {
-                    VStack(alignment: .leading, spacing: typeSize.isAccessibilitySize ? 16 : 4) {
+                    VStack(alignment: .leading, spacing: 16) {
                         summaryDate
                         if let day = model.activeDay {
-                            intakeHero(totals: snapshot.totals(dayID: day.id), day: day)
-                            if snapshot.goal(on: day.localDate) != nil {
+                            intakeHero(totals: snapshot.totals, day: day)
+                            if snapshot.activeGoal != nil {
                                 todayGoal(snapshot: snapshot, day: day, showCompleteness: typeSize.isAccessibilitySize)
                             }
                         } else {
@@ -411,43 +465,44 @@ struct TodayView: View {
                                 .font(.subheadline).foregroundStyle(Color.diaryWarning)
                                 .accessibilityIdentifier("pendingCount")
                         }
-                    }.padding(.vertical, 4).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    }.diarySummaryCard()
                 }
                 Section {
                     if model.todaysMeals.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("Your first meal starts here", systemImage: "fork.knife").font(.headline)
                             Text("Add photos or a note.").foregroundStyle(Color.diarySecondary)
-                        }.padding(.vertical, 16)
+                        }.diarySummaryCard()
                     }
                     ForEach(model.todaysMeals, id: \.id) { meal in
-                        NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true) }
-                            .padding(.horizontal, 12).padding(.vertical, 4)
-                            .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 18))
-                            .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                        NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
+                            .diarySummaryCard()
                             .accessibilityIdentifier("mealRow")
                     }
                 } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
-                if let day = model.activeDay, snapshot.goal(on: day.localDate) == nil {
-                    Section { todayGoal(snapshot: snapshot, day: day, showCompleteness: false) }
+                if let day = model.activeDay, snapshot.activeGoal == nil {
+                    Section { todayGoal(snapshot: snapshot, day: day, showCompleteness: false).diarySummaryCard() }
                 }
                 Section {
                     Button { showWeight = true } label: {
                         HStack {
                             Label { Text("Morning weight") } icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
                             Spacer()
-                            if let entry = snapshot.weights.first(where: { $0.dayID == model.activeDay?.id }) {
+                            if let entry = snapshot.weight {
                                 Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()
                             } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
                         }.frame(minHeight: 44)
-                    }.accessibilityIdentifier("logWeight")
+                    }.accessibilityIdentifier("logWeight").diarySummaryCard()
                 }
                 if let day = model.activeDay {
-                    Section("Day coverage") {
-                        Picker("Completeness", selection: Binding(get: { day.completeness }, set: { value in
-                            Task { await model.change { try await model.store.setCompleteness(dayID: day.id, value, expectedProfileID: snapshot.profile.id) } }
-                        })) { ForEach(DayCompleteness.allCases, id: \.self) { Text($0.title).tag($0) } }
-                        Text("Complete means all intake was recorded. Partial totals describe only recorded meals.").font(.caption).foregroundStyle(Color.diarySecondary)
+                    Section {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Day coverage").font(.title3.weight(.bold))
+                            Picker("Completeness", selection: Binding(get: { day.completeness }, set: { value in
+                                Task { await model.change { try await model.store.setCompleteness(dayID: day.id, value, expectedProfileID: snapshot.profile.id) } }
+                            })) { ForEach(DayCompleteness.allCases, id: \.self) { Text($0.title).tag($0) } }
+                            Text("Complete means all intake was recorded. Partial totals describe only recorded meals.").font(.caption).foregroundStyle(Color.diarySecondary)
+                        }.diarySummaryCard()
                     }
                 }
             } else {
@@ -456,13 +511,13 @@ struct TodayView: View {
         }
         .listStyle(.plain)
         .listRowSpacing(0)
-        .listSectionSpacing(4)
+        .listSectionSpacing(12)
         .contentMargins(.top, 0, for: .scrollContent)
         .environment(\.defaultMinListRowHeight, 56)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .safeAreaInset(edge: .bottom) {
-            if model.snapshot != nil {
+            if model.readModel != nil {
                 DiaryCaptureAction { showComposer = true }
                     .padding(.horizontal, 20).padding(.vertical, 12)
                     .background(Color.diaryCanvas)
@@ -476,9 +531,9 @@ struct TodayView: View {
         .navigationTitle("Today")
         .toolbarTitleDisplayMode(.inlineLarge)
         .sheet(isPresented: $showComposer) { MealComposerView(model: model, onSaved: { savedMealID = $0 }) }
-        .onChange(of: model.snapshot?.profile.id) { _, _ in savedMealID = nil }
+        .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil }
         .confirmationDialog("Start a waking day?", isPresented: $confirmDay, titleVisibility: .visible) {
-            Button("Start new day") { guard let owner = model.snapshot?.profile.id else { return }; Task { await model.change { _ = try await model.store.startDay(expectedProfileID: owner) } } }
+            Button("Start new day") { guard let owner = model.readModel?.profile.id else { return }; Task { await model.change { _ = try await model.store.startDay(expectedProfileID: owner) } } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("Meals already recorded keep their original day. Repeated starts today reuse this day.") }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
@@ -503,7 +558,7 @@ struct TodayView: View {
                 Text(displayDate).font(.subheadline)
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
             }.foregroundStyle(Color.diarySecondary).frame(minHeight: 44)
-        }.accessibilityLabel("Day actions, " + displayDate)
+        }.accessibilityLabel("Day actions, " + displayDate).accessibilityIdentifier("todayDayActions")
     }
     private var displayDate: String {
         guard let value = model.activeDay?.localDate else { return "Your waking day" }
@@ -535,18 +590,18 @@ struct TodayView: View {
                             .animation(companionOutput.playback == .animated ? .snappy(duration: MivuMotion.numeric) : nil, value: totals.kcal)
                         Text("kcal recorded").font(.subheadline).foregroundStyle(Color.diaryText)
                     }
-                    HStack(spacing: 8) {
-                        heroMetric("Protein", value: totals.protein, color: .diaryProtein)
-                        Divider().frame(height: 32)
-                        heroMetric("Carbs", value: totals.carbs, color: .diaryCarbs)
-                        Divider().frame(height: 32)
-                        heroMetric("Fat", value: totals.fat, color: .diaryFat)
-                    }
                     Group {
                         if let day { Text("\(Text(day.completeness.title)) day") }
                         else { Text("No meals recorded") }
                     }.font(.caption).foregroundStyle(Color.diarySecondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack(spacing: 8) {
+                heroMetric("Protein", value: totals.protein, color: .diaryProtein)
+                Divider().frame(height: 32)
+                heroMetric("Carbs", value: totals.carbs, color: .diaryCarbs)
+                Divider().frame(height: 32)
+                heroMetric("Fat", value: totals.fat, color: .diaryFat)
             }
             if totals.unknownItemCount > 0 {
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.")
@@ -558,15 +613,15 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 3) {
                 Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
-                Text(title).font(.caption2)
+                Text(title).font(.caption).fixedSize(horizontal: true, vertical: false)
             }
             Text(value.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" } ?? "—")
                 .font(.system(size: 17, weight: .medium)).monospacedDigit()
         }.foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder private func todayGoal(snapshot: DiarySnapshot, day: TrackingDay, showCompleteness: Bool = true) -> some View {
-        let report = ProgressAnalytics.daily(snapshot: snapshot, localDate: day.localDate)
+    @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay, showCompleteness: Bool = true) -> some View {
+        let report = ProgressAnalytics.daily(readModel: snapshot)
         if let target = report.goal?.targets.kcal {
             VStack(alignment: .leading, spacing: 8) {
                 ViewThatFits(in: .horizontal) {

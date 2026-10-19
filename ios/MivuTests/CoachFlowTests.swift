@@ -34,7 +34,11 @@ private enum CoachFlowWaitFailure: Error, Equatable {
             while !(await suspended.started) {
                 try Task.checkCancellation()
                 guard coach.isWorking else {
-                    throw CoachFlowWaitFailure.workerEndedBeforeInference(state: coach.turns.first?.state, message: coach.errorMessage)
+                    let state: CoachTurnState?
+                    if let owner = coach.diary.selection, let operationID = coach.captureReceipt {
+                        state = try await coach.diary.store.coachOperationMetadata(turnID: operationID, expectedSelection: owner)?.state
+                    } else { state = nil }
+                    throw CoachFlowWaitFailure.workerEndedBeforeInference(state: state, message: coach.errorMessage)
                 }
                 guard clock.now < deadline else { throw CoachFlowWaitFailure.inferenceStartTimedOut }
                 try await Task.sleep(for: .milliseconds(10))
@@ -59,8 +63,8 @@ private enum CoachFlowWaitFailure: Error, Equatable {
         }
         #expect(!(await suspended.started))
         #expect(!coach.isWorking)
-        #expect(diary.snapshot?.coachTurns.first?.state == .waitingForConnection)
-        #expect(diary.snapshot?.meals.isEmpty == true)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .waitingForConnection)
+        #expect(diary.readModel?.meals.isEmpty == true)
     }
 
     @Test func cancelledStartWaitCleansUpSuspendedWorker() async throws {
@@ -74,7 +78,7 @@ private enum CoachFlowWaitFailure: Error, Equatable {
         waiting.cancel()
         await #expect(throws: CancellationError.self) { try await waiting.value }
         #expect(!coach.isWorking)
-        #expect(diary.snapshot?.coachTurns.first?.assistantText == nil)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.assistantText == nil)
         await suspended.finish()
     }
 
@@ -83,7 +87,7 @@ private enum CoachFlowWaitFailure: Error, Equatable {
         let store = DiaryStore(directory: path)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         return (diary, path)
     }
     @Test func sendCommitsTextAndPhotoBeforeInferenceCompletesAndSurvivesRelaunch() async throws {
@@ -97,14 +101,16 @@ private enum CoachFlowWaitFailure: Error, Equatable {
         // Park the worker before reopening the same database with another store.
         try await waitUntilStarted(suspended, coach: coach)
         try #require(await suspended.started)
-        let stored = try await DiaryStore(directory: path).selectProfile(#require(diary.snapshot?.profile.id))
+        let reopenedStore = DiaryStore(directory: path)
+        _ = try await reopenedStore.selectProfile(#require(diary.readModel?.profile.id))
+        let stored = try await reopenedStore.snapshotForExport()
         #expect(stored.coachTurns.first?.id == id)
         #expect(stored.coachTurns.first?.text == "Synthetic lunch")
         #expect(stored.coachTurns.first?.photos.first?.data == SyntheticConnectionProbe.image)
         #expect(stored.coachTurns.first?.state == .analyzing)
         #expect(stored.coachTurns.first?.assistantText == nil)
         await suspended.finish(); await coach.waitForWorker()
-        #expect(diary.snapshot?.coachTurns.first?.state == .completed)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .completed)
     }
     @Test func failedWriteRetainsDraftAndNeverAcknowledges() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
@@ -123,9 +129,9 @@ private enum CoachFlowWaitFailure: Error, Equatable {
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.draft.text = "Synthetic dinner"
         #expect(await coach.send()); await coach.waitForWorker()
-        #expect(diary.snapshot?.coachTurns.first?.state == .waitingForConnection)
-        #expect(diary.snapshot?.meals.isEmpty == true)
-        #expect(diary.snapshot?.coachTurns.first?.assistantText == nil)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .waitingForConnection)
+        #expect(diary.readModel?.meals.isEmpty == true)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.assistantText == nil)
     }
     @Test func profileTransitionFencesSuspendedCoachResult() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
@@ -135,23 +141,23 @@ private enum CoachFlowWaitFailure: Error, Equatable {
         #expect(await coach.send())
         try await waitUntilStarted(suspended, coach: coach)
         try #require(await suspended.started)
-        let first = try #require(diary.snapshot?.profile.id)
+        let first = try #require(diary.readModel?.profile.id)
         await diary.createProfile(name: "Synthetic second")
         await diary.switchProfile(first)
         await suspended.finish(); await coach.waitForWorker()
-        #expect(diary.snapshot?.coachTurns.first?.assistantText == nil)
-        #expect(diary.snapshot?.meals.isEmpty == true)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.assistantText == nil)
+        #expect(diary.readModel?.meals.isEmpty == true)
     }
     @Test func manualProductionCaptureAssociatesSameMealAndNeverRunsSampleWorker() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
-        let owner = try #require(diary.snapshot?.profile.id)
+        let owner = try #require(diary.readModel?.profile.id)
         let day = try await diary.store.startDay(expectedProfileID: owner)
         var draft = MealDraft(); draft.text = "Synthetic manual dinner"; draft.reviewFirst = true
         #expect(await diary.capture(draft, dayID: day.id)); await diary.waitForWorker()
-        #expect(diary.snapshot?.meals.count == 1)
-        #expect(diary.snapshot?.meals.first?.items.isEmpty == true)
-        #expect(diary.snapshot?.coachTurns.first?.id == draft.submissionID)
-        #expect(diary.snapshot?.coachTurns.first?.pendingMealID == diary.snapshot?.meals.first?.id)
+        #expect(diary.readModel?.meals.count == 1)
+        #expect(diary.readModel?.meals.first?.items.isEmpty == true)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.id == draft.submissionID)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.pendingMealID == diary.readModel?.meals.first?.id)
     }
 }
 
@@ -187,7 +193,7 @@ extension CoachFlowTests {
         #expect(await replies.calls == 4)
         #expect(await replies.delays == [1, 2, 4])
         #expect(bindings == 1)
-        #expect(diary.snapshot?.coachTurns.first?.state == .completed)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .completed)
     }
     @Test func exhaustedOfflineTurnResumesAfterRelaunchWithoutNewCapture() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
@@ -197,15 +203,16 @@ extension CoachFlowTests {
         let id = coach.draft.submissionID
         #expect(await coach.send()); await coach.waitForWorker()
         #expect(await replies.calls == 4)
-        #expect(diary.snapshot?.coachTurns.first?.state == .waitingForNetwork)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .waitingForNetwork)
         let reopened = DiaryViewModel(store: DiaryStore(directory: path))
-        reopened.snapshot = try await reopened.store.selectProfile(#require(diary.snapshot?.profile.id))
+        let owner = try #require(diary.readModel?.profile.id)
+        await reopened.switchProfile(owner)
         let resumed = CoachViewModel(diary: reopened, connection: ChatGPTConnection(), inference: { { _, _ in try await replies.respond() } }, sleep: { await replies.record($0) })
         resumed.resume(); await resumed.waitForWorker()
         #expect(await replies.calls == 5)
-        #expect(reopened.snapshot?.coachTurns.count == 1)
-        #expect(reopened.snapshot?.coachTurns.first?.id == id)
-        #expect(reopened.snapshot?.coachTurns.first?.state == .completed)
+        #expect((try? await reopened.store.snapshotForExport())?.coachTurns.count == 1)
+        #expect((try? await reopened.store.snapshotForExport())?.coachTurns.first?.id == id)
+        #expect((try? await reopened.store.snapshotForExport())?.coachTurns.first?.state == .completed)
     }
     @Test func forbiddenInferenceNeverRetriesAutomatically() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
@@ -215,27 +222,27 @@ extension CoachFlowTests {
         #expect(await coach.send()); await coach.waitForWorker()
         #expect(await replies.calls == 1)
         #expect(await replies.delays.isEmpty)
-        #expect(diary.snapshot?.coachTurns.first?.state == .waitingForConnection)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .waitingForConnection)
     }
     @Test func legacyPhotoSubmissionRecoversStableTurnWithoutDuplicateMealOrBytes() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
-        let owner = try #require(diary.snapshot?.profile.id)
+        let owner = try #require(diary.readModel?.profile.id)
         let day = try await diary.store.startDay(expectedProfileID: owner)
         let id = UUID(), photo = MealPhoto(data: SyntheticConnectionProbe.image)
-        let meal = try await diary.store.capture(text: "", photos: [photo], reviewFirst: false, dayID: day.id, submissionID: id, expectedProfileID: owner)
+        let meal = try await capturedMeal(diary.store, text: "", photos: [photo], reviewFirst: false, dayID: day.id, submissionID: id, expectedProfileID: owner)
         try await diary.refresh(profileID: owner)
         let arguments = "{\"target_local_date\":\"\(day.localDate)\",\"items\":[{\"name\":\"Eggs\",\"quantity\":2,\"unit\":\"egg\",\"kcal\":140,\"carbs\":1,\"protein\":12,\"fat\":10}]}"
         let call = CoachToolCall(id: "legacy-call", callID: "legacy-call", name: "log_food", namespace: "mivu", arguments: arguments)
         let replies = CoachRetryFixture(responses: [CoachInferenceResult(model: "fixture", text: "", calls: [call], outputItems: []), CoachInferenceResult(model: "fixture", text: "Fixture finished.", calls: [], outputItems: [])])
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in try await replies.respond() } })
         coach.resume(); await coach.waitForWorker(); coach.resume(); await coach.waitForWorker()
-        #expect(diary.snapshot?.coachTurns.count == 1)
-        #expect(diary.snapshot?.coachTurns.first?.id == id)
-        #expect(diary.snapshot?.coachTurns.first?.pendingMealID == meal.id)
-        #expect(diary.snapshot?.coachTurns.first?.photos.isEmpty == true)
-        #expect(diary.snapshot?.meals.count == 1)
-        #expect(diary.snapshot?.meals.first?.photos == [photo])
-        #expect(diary.snapshot?.meals.first?.items.first?.name == "Eggs")
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.count == 1)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.id == id)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.pendingMealID == meal.id)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.photos.isEmpty == true)
+        #expect(diary.readModel?.meals.count == 1)
+        #expect((try? await diary.store.snapshotForExport())?.meals.first?.photos == [photo])
+        #expect(diary.readModel?.meals.first?.items.first?.name == "Eggs")
     }
 }
 
@@ -248,75 +255,87 @@ extension CoachFlowTests {
 
     @Test func workoutReceiptsResolveOwnedSurvivorsAndPreserveMealLinks() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
-        let owner = try #require(diary.snapshot?.profile.id)
+        let owner = try #require(diary.readModel?.profile.id)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { CoachUITestInference.respond })
         coach.draft.text = "Two eggs, three bread slices and salad"
         #expect(await coach.send()); await coach.waitForWorker()
-        let foodTurn = try #require(coach.turns.last), meal = try #require(diary.snapshot?.meals.first)
+        let foodTurnID = try #require(coach.captureReceipt), ownerSelection = try #require(diary.selection)
+        let foodTurn = try await diary.store.coachExchange(turnID: foodTurnID, expectedSelection: ownerSelection)
+        let meal = try #require(diary.readModel?.meals.first)
         coach.draft.text = "I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal"
         #expect(await coach.send()); await coach.waitForWorker()
-        let turn = try #require(coach.turns.last), workout = try #require(diary.snapshot?.workouts.first)
+        let turnID = try #require(coach.captureReceipt)
+        let turn = try await diary.store.coachExchange(turnID: turnID, expectedSelection: ownerSelection)
+        let workout = try #require(diary.readModel?.workouts.first)
+        await coach.loadTimelineIfNeeded()
+        await coach.refreshLinks()
         #expect(coach.linkedWorkouts(turn).map(\.id) == [workout.id])
         #expect(coach.linkedMeals(turn).isEmpty)
         #expect(coach.linkedMeals(foodTurn).map(\.id) == [meal.id])
         #expect(coach.linkedWorkouts(foodTurn).isEmpty)
         await diary.createProfile(name: "Synthetic other owner")
         #expect(coach.linkedWorkouts(turn).isEmpty)
+        #expect(coach.linkedMeals(foodTurn).isEmpty)
         await diary.switchProfile(owner)
+        await coach.refreshLinks()
         #expect(coach.linkedWorkouts(turn).map(\.id) == [workout.id])
         try await diary.store.deleteWorkout(id: workout.id, expectedRevision: workout.revision, expectedProfileID: owner)
         try await diary.refresh(profileID: owner)
+        #expect(coach.linkedWorkouts(turn).isEmpty)
+        let receipt = try #require(turn.receipts.first)
+        #expect(coach.receiptTarget(receipt) == .loading)
+        await coach.refreshLinks()
         #expect(coach.linkedWorkouts(turn).isEmpty)
         #expect(coach.linkedMeals(foodTurn).map(\.id) == [meal.id])
     }
 
     @Test func queuedLegacySubmissionsUseFreshMealRevisionWithoutDuplicateRecords() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
-        let owner = try #require(diary.snapshot?.profile.id), firstID = UUID(), secondID = UUID()
+        let owner = try #require(diary.readModel?.profile.id), firstID = UUID(), secondID = UUID()
         let day = try await diary.store.startDay(expectedProfileID: owner)
         let photo = MealPhoto(data: SyntheticConnectionProbe.image)
-        let meal = try await diary.store.capture(text: "Synthetic first food", photos: [photo], reviewFirst: false, dayID: day.id, submissionID: firstID, expectedProfileID: owner)
-        _ = try await diary.store.correctMeal(mealID: meal.id, text: "Synthetic additional food", submissionID: secondID, expectedProfileID: owner)
+        let meal = try await capturedMeal(diary.store, text: "Synthetic first food", photos: [photo], reviewFirst: false, dayID: day.id, submissionID: firstID, expectedProfileID: owner)
+        _ = try await correctedMeal(diary.store, mealID: meal.id, text: "Synthetic additional food", submissionID: secondID, expectedProfileID: owner)
         try await diary.refresh(profileID: owner)
         let replies = CoachRetryFixture(responses: [foodReply(date: day.localDate, name: "Eggs", quantity: 2, kcal: 140, id: "first"), finishedReply,
             foodReply(date: day.localDate, name: "Bread", quantity: 1, kcal: 80, id: "second"), finishedReply])
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in try await replies.respond() } })
         coach.resume(); await coach.waitForWorker()
-        #expect(diary.snapshot?.meals.count == 1)
-        #expect(diary.snapshot?.meals.first?.id == meal.id)
-        #expect(diary.snapshot?.meals.first?.items.map(\.name) == ["Eggs", "Bread"])
-        #expect(diary.snapshot?.meals.first?.photos == [photo])
-        #expect(diary.snapshot?.coachTurns.map(\.id) == [firstID, secondID])
-        #expect(diary.snapshot?.coachTurns.allSatisfy { $0.state == .completed } == true)
+        #expect(diary.readModel?.meals.count == 1)
+        #expect(diary.readModel?.meals.first?.id == meal.id)
+        #expect(diary.readModel?.meals.first?.items.map(\.name) == ["Eggs", "Bread"])
+        #expect((try? await diary.store.snapshotForExport())?.meals.first?.photos == [photo])
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.map(\.id) == [firstID, secondID])
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.allSatisfy { $0.state == .completed } == true)
     }
 
     @Test func legacyPendingCorrectionAfterDirectEditUsesCurrentIdsAndRevision() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
-        let owner = try #require(diary.snapshot?.profile.id), pendingID = UUID()
+        let owner = try #require(diary.readModel?.profile.id), pendingID = UUID()
         let day = try await diary.store.startDay(expectedProfileID: owner)
         let initial = CoachRetryFixture(responses: [foodReply(date: day.localDate, name: "Bread", quantity: 2, kcal: 160, id: "initial"), finishedReply])
         let first = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in try await initial.respond() } })
         first.draft.text = "Synthetic bread"
         #expect(await first.send()); await first.waitForWorker()
-        let saved = try #require(diary.snapshot?.meals.first), previousReceipts = try #require(diary.snapshot?.coachTurns.first?.receipts)
+        let saved = try #require(diary.readModel?.meals.first), previousReceipts = try #require((try? await diary.store.snapshotForExport())?.coachTurns.first?.receipts)
         let photo = MealPhoto(data: SyntheticConnectionProbe.image)
-        _ = try await diary.store.correctMeal(mealID: saved.id, text: "Half of the current bread", photos: [photo], submissionID: pendingID, expectedProfileID: owner)
+        _ = try await correctedMeal(diary.store, mealID: saved.id, text: "Half of the current bread", photos: [photo], submissionID: pendingID, expectedProfileID: owner)
         var edited = try #require(saved.items.first); edited.quantity = 3
         try await diary.store.editItem(mealID: saved.id, item: edited, expectedRevision: saved.revision, expectedProfileID: owner)
         try await diary.refresh(profileID: owner)
-        let current = try #require(diary.snapshot?.meals.first)
+        let current = try #require(diary.readModel?.meals.first)
         let arguments = "{\"meal_id\":\"\(current.id)\",\"item_id\":\"\(edited.id)\",\"expected_revision\":\(current.revision),\"quantity\":1.5}"
         let call = CoachToolCall(id: "correction", callID: "correction", name: "correct_item", namespace: "mivu", arguments: arguments)
         let replies = CoachRetryFixture(responses: [CoachInferenceResult(model: "fixture", text: "", calls: [call], outputItems: []), finishedReply])
         let resumed = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in try await replies.respond() } })
         resumed.resume(); await resumed.waitForWorker()
-        #expect(diary.snapshot?.meals.count == 1)
-        #expect(diary.snapshot?.meals.first?.items.first?.id == edited.id)
-        #expect(diary.snapshot?.meals.first?.items.first?.quantity == 1.5)
-        #expect(diary.snapshot?.meals.first?.items.first?.nutrition.kcal == 120)
-        #expect(diary.snapshot?.meals.first?.photos == [photo])
-        #expect(diary.snapshot?.coachTurns.first?.receipts == previousReceipts)
-        #expect(diary.snapshot?.coachTurns.last?.id == pendingID)
-        #expect(diary.snapshot?.coachTurns.last?.state == .completed)
+        #expect(diary.readModel?.meals.count == 1)
+        #expect(diary.readModel?.meals.first?.items.first?.id == edited.id)
+        #expect(diary.readModel?.meals.first?.items.first?.quantity == 1.5)
+        #expect(diary.readModel?.meals.first?.items.first?.nutrition.kcal == 120)
+        #expect((try? await diary.store.snapshotForExport())?.meals.first?.photos == [photo])
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.receipts == previousReceipts)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.last?.id == pendingID)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.last?.state == .completed)
     }
 }

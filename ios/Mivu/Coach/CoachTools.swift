@@ -1,6 +1,8 @@
 import Foundation
 import CoreFoundation
 
+enum CoachWriteMode: Equatable, Sendable { case uninterrupted, replayOnly }
+
 enum CoachWrite: Sendable {
     case manual(CoachManualEdit, patchKey: String? = nil)
     case food(date: String, items: [FoodItem], eatenAt: Date?, reviewFirst: Bool = false)
@@ -47,6 +49,7 @@ enum CoachCommand: Sendable {
     case preferences
     case context
     case meal(UUID)
+    case meals(date: String, afterMealID: UUID?)
     case lookup(String)
     case progress(endingOn: String, days: Int)
     case workout(UUID)
@@ -86,6 +89,7 @@ enum CoachTools {
             ("delete_workout", "Delete an owned workout with its actual revision.", object(["workout_id": string, "expected_revision": integer], required: ["workout_id", "expected_revision"])),
             ("delete_weight", "Delete an owned weight with its actual revision.", object(["weight_id": string, "expected_revision": integer], required: ["weight_id", "expected_revision"])),
             ("get_context", "Read actual bounded diary and capture clock. truncated and omittedMeals explicitly mark details not included.", object([:], required: [])),
+            ("get_meals_for_date", "Read at most 20 actual dated meal candidates across matching diary days. Use captured calendar date and original description to identify lunch; date-only noon is not evidence. hasMore and omissions cannot establish uniqueness. Retrieve get_meal before correction.", object(["target_local_date": string, "after_meal_id": string], required: ["target_local_date"])),
             ("get_meal", "Retrieve actual owner-scoped meal by UUID before correction. omittedItemCount marks unavailable details requiring manual review.", object(["meal_id": string], required: ["meal_id"])),
             ("lookup_nutrition", "Search retrieved nutrition evidence; unavailable means use clearly uncertain estimates.", object(["query":string], required: ["query"])),
             ("log_food", "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Set review_first true when the user wants a proposal before totals. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":unconfirmedTime, "review_first":["type":"boolean"]], required: ["target_local_date", "items"])),
@@ -189,6 +193,10 @@ enum CoachTools {
                 reviewFirst = value.boolValue
             }
             return .write(.food(date: try string("target_local_date"), items: items, eatenAt: nil, reviewFirst: reviewFirst))
+        case "get_meals_for_date":
+            try keys(["target_local_date", "after_meal_id"], ["target_local_date"])
+            let cursor = args["after_meal_id"] == nil || args["after_meal_id"] is NSNull ? nil : try uuid("after_meal_id")
+            return .meals(date: try date("target_local_date"), afterMealID: cursor)
         case "correct_item":
             try keys(["meal_id", "item_id", "expected_revision", "quantity"], ["meal_id", "item_id", "expected_revision", "quantity"])
             let mealID = try uuid("meal_id"), itemID = try uuid("item_id")

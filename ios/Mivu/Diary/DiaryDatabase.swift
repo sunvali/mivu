@@ -3,16 +3,28 @@ import SQLite3
 
 /// Short-lived connections prevent a removed file from acknowledging writes through an old handle.
 final class DiaryDatabase {
-    private var connection: OpaquePointer?
+    private(set) var connection: OpaquePointer?
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    let url: URL
+    let diagnostics: DiaryQueryDiagnostics?
+    private let openedFileIdentity: UInt64
 
-    init(url: URL, create: Bool = false) throws {
+    init(url: URL, create: Bool = false, diagnostics: DiaryQueryDiagnostics? = nil, expectedFileIdentity: UInt64? = nil) throws {
+        self.url = url; self.diagnostics = diagnostics
+        if let expectedFileIdentity {
+            guard (try? Self.identity(of: url)) == expectedFileIdentity else { throw DiaryError.persistenceFailed }
+        }
         guard create || FileManager.default.fileExists(atPath: url.path) else { throw DiaryError.persistenceFailed }
         let flags = SQLITE_OPEN_READWRITE | (create ? SQLITE_OPEN_CREATE : 0)
         guard sqlite3_open_v2(url.path, &connection, flags, nil) == SQLITE_OK else {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData
         }
+        do {
+            openedFileIdentity = try Self.identity(of: url)
+            guard expectedFileIdentity == nil || openedFileIdentity == expectedFileIdentity else { throw DiaryError.persistenceFailed }
+        }
+        catch { sqlite3_close(connection); connection = nil; throw DiaryError.persistenceFailed }
         do {
             try execute("PRAGMA foreign_keys = ON")
             try execute("PRAGMA journal_mode = DELETE")
@@ -32,13 +44,15 @@ final class DiaryDatabase {
                 try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: url.path)
                 #endif
             }
-            try execute("BEGIN IMMEDIATE")
-            do {
-                try execute("CREATE TABLE IF NOT EXISTS coach_turn (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
-                try execute("CREATE TABLE IF NOT EXISTS coach_photo (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, ordinal INTEGER NOT NULL, payload BLOB NOT NULL, bytes BLOB NOT NULL)")
-                try execute("CREATE TABLE IF NOT EXISTS workout (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES day(id), ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
-                try execute("COMMIT")
-            } catch { try? execute("ROLLBACK"); throw error }
+            if try mutationInteger("PRAGMA user_version") != 1 {
+                try execute("BEGIN IMMEDIATE")
+                do {
+                    try execute("CREATE TABLE IF NOT EXISTS coach_turn (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
+                    try execute("CREATE TABLE IF NOT EXISTS coach_photo (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, ordinal INTEGER NOT NULL, payload BLOB NOT NULL, bytes BLOB NOT NULL)")
+                    try execute("CREATE TABLE IF NOT EXISTS workout (id TEXT PRIMARY KEY, parent TEXT NOT NULL REFERENCES day(id), ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
+                    try execute("COMMIT")
+                } catch { try? execute("ROLLBACK"); throw error }
+            }
         } catch {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData
@@ -46,6 +60,17 @@ final class DiaryDatabase {
     }
 
     deinit { sqlite3_close(connection) }
+
+    private static func identity(of url: URL) throws -> UInt64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard attributes[.type] as? FileAttributeType == .typeRegular,
+              let inode = attributes[.systemFileNumber] as? NSNumber else { throw DiaryError.persistenceFailed }
+        return inode.uint64Value
+    }
+
+    func validateFileIdentity() throws {
+        guard (try? Self.identity(of: url)) == openedFileIdentity else { throw DiaryError.persistenceFailed }
+    }
 
     func read(maximumBytes: Int) throws -> DiarySnapshot {
         try execute("BEGIN")
@@ -60,6 +85,7 @@ final class DiaryDatabase {
     }
 
     private func readSnapshot(maximumBytes: Int) throws -> DiarySnapshot {
+        diagnostics?.recordCompleteRead()
         do {
             try preflight(maximumBytes: maximumBytes)
             let integrity = try prepare("PRAGMA foreign_key_check")
@@ -132,11 +158,13 @@ final class DiaryDatabase {
     }
 
     func write(_ snapshot: DiarySnapshot, expected: DiarySnapshot?, maximumBytes: Int) throws {
-        try snapshot.validate()
-        guard try JSONEncoder().encode(snapshot).count <= maximumBytes else { throw DiaryError.invalidData }
         try execute("BEGIN IMMEDIATE")
         try execute("PRAGMA defer_foreign_keys = ON")
         do {
+            guard try mutationInteger("PRAGMA user_version") == 0 else { throw DiaryError.invalidData }
+            diagnostics?.recordCompleteReconcile()
+            try snapshot.validate()
+            guard try JSONEncoder().encode(snapshot).count <= maximumBytes else { throw DiaryError.invalidData }
             if let expected {
                 guard try readSnapshot(maximumBytes: maximumBytes) == expected else { throw DiaryError.staleRevision }
             } else {
@@ -180,16 +208,17 @@ final class DiaryDatabase {
         }
     }
 
-    private struct Record: Equatable {
+    struct Record: Equatable {
         var id: String
         var ordinal: Int
         var payload: Data
         var parent: String?
         var bytes = Data()
     }
-    private enum Value { case text(String), blob(Data), integer(Int), null }
-    private func decode<T: Decodable & Identifiable>(_ type: T.Type, _ row: Record, composite: Bool = false) throws -> T where T.ID == UUID {
+    enum Value { case text(String), blob(Data), integer(Int), real(Double), null }
+    func decode<T: Decodable & Identifiable>(_ type: T.Type, _ row: Record, composite: Bool = false) throws -> T where T.ID == UUID {
         let value = try JSONDecoder().decode(type, from: row.payload)
+        if T.self == CoachTurn.self { diagnostics?.recordTurnDecode() }
         let expected = composite ? (row.parent ?? "") + "/" + value.id.uuidString : value.id.uuidString
         guard row.id == expected else { throw DiaryError.invalidData }
         return value
@@ -200,7 +229,7 @@ final class DiaryDatabase {
     }
 
     /// SQLite length/count metadata is checked before any payload or photo is copied into Data.
-    private func preflight(maximumBytes: Int) throws {
+    func preflight(maximumBytes: Int) throws {
         var total: Int64 = 0
         var allPhotoBytes: Int64 = 0
         let limits = [("meta", 1), ("day", 10_000), ("meal", 50_000), ("submission", 50_000_000),
@@ -278,22 +307,24 @@ final class DiaryDatabase {
                 return Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, column)))
             }
             result.append(Record(id: String(cString: id), ordinal: Int(sqlite3_column_int(statement, 1)), payload: blob(2), parent: sqlite3_column_text(statement, 3).map { String(cString: $0) }, bytes: blob(4)))
+            if ["photo", "coach_photo"].contains(table) { diagnostics?.recordPhotoRead(bytes: result[result.count - 1].bytes.count) }
         }
     }
-    private func prepare(_ sql: String) throws -> OpaquePointer {
+    func prepare(_ sql: String) throws -> OpaquePointer {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK, let statement else { throw DiaryError.persistenceFailed }
         return statement
     }
-    private func execute(_ sql: String, _ values: [Value] = []) throws {
+    func execute(_ sql: String, _ values: [Value] = []) throws {
         let statement = try prepare(sql); defer { sqlite3_finalize(statement) }
         for (index, value) in values.enumerated() {
             let position = Int32(index + 1)
             let status: Int32
             switch value {
-            case .text(let string): status = sqlite3_bind_text(statement, position, string, -1, transient)
+            case .text(let string): status = sqlite3_bind_text(statement, position, string, Int32(string.utf8.count), transient)
             case .blob(let data): status = data.withUnsafeBytes { sqlite3_bind_blob(statement, position, $0.baseAddress, Int32($0.count), transient) }
             case .integer(let integer): status = sqlite3_bind_int64(statement, position, Int64(integer))
+            case .real(let value): status = sqlite3_bind_double(statement, position, value)
             case .null: status = sqlite3_bind_null(statement, position)
             }
             guard status == SQLITE_OK else { throw DiaryError.persistenceFailed }

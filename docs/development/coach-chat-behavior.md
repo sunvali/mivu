@@ -1,121 +1,131 @@
 # Coach chat behavior and recovery
 
-Reviewed 2026-10-14. This contract extends the existing Coach/store flow; it does
-not introduce another chat service, backend or UI dependency.
+Reviewed 2026-10-19 against the implemented Coach timeline and the approved
+[design](../superpowers/specs/2026-10-18-coach-chat-history-design.md) and
+[implementation plan](../superpowers/plans/2026-10-18-coach-chat-history.md).
+The production timeline is a self-sizing `UITableView` hosting SwiftUI rows
+([CoachTimelineView.swift](../../ios/Mivu/Coach/CoachTimelineView.swift)); the
+existing Coach view model, diary store and worker remain the owners of capture,
+queries and mutations. This adds no chat service or runtime dependency.
 
-## Research and decisions
+## Timeline and history
 
-[Apple's ScrollPosition documentation](https://developer.apple.com/documentation/swiftui/scrollposition)
-defines semantic positions and a user-position signal. Edge positioning stays
-stable across content-size changes; view identities also support resized lazy
-content. Mivu opens at the bottom and follows the latest message's native
-identity, with actual viewport geometry deciding whether content is visible.
-The reader's position must survive incoming activity while browsing history.
+- The latest page and each adjacent or seek page contain at most 20 exchanges.
+  The resident timeline plus reserved/in-flight page capacity is at most 100
+  exchanges across five pages. A request reserves capacity before it starts;
+  retired work keeps consuming the same persistent window until its underlying
+  read actually exits, including after invalidation.
+- Scrolling toward a measured loaded edge automatically requests an available
+  adjacent page. Capacity and interaction pins can defer reservation until the
+  gesture settles. Available and exhausted edges have no persistent view or
+  reserved height. Loading uses a transient spinner overlay; a failed edge has
+  a transient retry overlay. Exhausted edges do not repeat reads.
+- The existing Chat history toolbar button exposes named accessibility actions
+  for available earlier/later pages and failed-page retries. They share the
+  native measured-anchor request path and capacity checks with touch paging;
+  ordinary activation still opens history. Named rotor-action invocation is a
+  separate manual acceptance check in the verification record.
+- History is a recent-first list of at most 30 distinct conversation segments
+  per page. A segment is identified by its stable ID, not its displayed date;
+  repeated date labels can therefore remain separate. Date filters preserve
+  that identity.
+- The reader opens at the latest exchange. New activity follows only while the
+  reader is at the bottom. When the reader browses older content, appends and
+  offscreen replies preserve the visible row and expose **Jump to latest**.
+  Paging, cell updates and asynchronous photo growth retain the reader's
+  ownership until intentional movement, a seek, latest jump or invalidation.
+- The floating **Jump to latest** control is a 48-point circular down-arrow
+  with a spoken action label. It remains a native glass `UIButton` owned by
+  the timeline table, so a drag on it reaches the table's pan gesture. Preserve
+  the table's existing accessibility-element prefix and append the button via
+  [`UIAccessibilityContainer`](https://developer.apple.com/documentation/uikit/uiaccessibilitycontainer)
+  methods. Keep a target at least 44 points high and focus/reader ownership off
+  the underlying exchange. Verify an actual button drag and tap, icon fit at
+  normal/accessibility sizes, and reader restoration within 2 points.
+- Ordinary startup, profile selection, refresh, capture and worker paths use
+  bounded owner queries. They do not reconstruct a complete diary snapshot for
+  the Coach timeline. Diary retains status metadata, not a separate transcript;
+  opening Coach reads its first page once into the same persistent window.
+- Diary-day navigation opens that exact day's first conversation, when present.
+  A meal's **View conversation** action follows its persisted source-turn link,
+  including when the meal was backdated. Missing chat, missing source and
+  unavailable records remain distinct outcomes; the UI does not invent a link.
 
-[Stream's native message-list documentation](https://getstream.io/chat/docs/sdk/ios/swiftui/chat-channel-components/message-list/)
-separates typing indicators, unread content and jump controls. Mivu adopts that
-separation through its existing SwiftUI view. No Stream SDK is installed.
+## Capture, camera and photos
 
-[The function-calling guide](https://developers.openai.com/api/docs/guides/function-calling)
-recommends explicit tool contracts, enums, deterministic application work and
-strict schemas. Mivu already validates tool arguments and commits receipts with
-record changes. Clarification now uses an enum identifying the missing detail;
-the app owns the English question, so arbitrary model text cannot claim a save.
-Schema conformity alone does not establish a persisted record or correct live
-tool selection.
+The composer supports up to eight in-memory draft attachments. Draft text and
+attachments are not accepted or durable until the user sends; process restart
+does not restore an unsent draft. Camera opens directly from its own control,
+with a separate existing-photos control. Capturing or picking a photo returns it
+to the composer and never sends or creates food by itself. Access denial,
+cancellation and interruption leave the composer usable.
 
-## Scroll contract
+Photo loading uses at most two global jobs and a 16 MiB decoded-image cache.
+Rows hold references and load on demand; evicted content may be loaded again.
+These limits describe the decoded cache and concurrent loader, not the peak
+memory used while PhotosPicker transfers or normalizes an import.
 
-- Open completed conversations at the latest content, including after profile
-  loading and relaunch.
-- Follow new input, thinking, reading, saving, replies and linked actions while
-  the reader is at the bottom. Defer movement while a touch is active.
-- Preserve intentional history browsing. Track native user positioning separately
-  from an app-requested scroll; animation alone does not identify intent.
-- Show **New message** only when new content is below the viewport and the reader
-  is viewing history. Never show it while the latest content is visible.
-- Clear unread state at the bottom. Tapping the button returns to the bottom and
-  resumes following.
-- Keep the composer reachable with Dynamic Type, the keyboard and reduced motion;
-  use native controls with at least 44-point targets.
+Accepted capture freezes its submission identity, text, attachment identities,
+capture instant, timezone and active-day context. If the save result is
+uncertain, the app reconciles that same identity and immutable payload before
+resending or clearing the composer. An accepted capture resumes through the
+existing worker after relaunch. This is not a durable unsent-draft queue and does
+not claim exactly-once remote inference.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Latest
-    Latest --> Latest: Incoming activity or reply
-    Latest --> History: Reader scrolls away
-    History --> UnreadBelow: New content arrives
-    History --> Latest: Reader reaches bottom
-    UnreadBelow --> Latest: Jump button or reader reaches bottom
-```
+## Receipts, history and corrections
 
-## Food and clarification contract
+Show one compact, immutable receipt for a committed food operation: its
+original status, date, items and quantities, with Review / Edit opening current
+record details. Secondary macros sit behind a native disclosure; unknown
+nutrient completeness and estimation labels remain visible. Do not repeat the
+current saved meal, date or nutrition as a second block. A short notice appears
+only when known receipt facts differ from the current record; unrelated revision
+or capture timestamps do not count as changes. Current meal status, totals,
+items and availability come from a current bounded diary read. A later edit or
+deletion does not rewrite the historical receipt. Diary totals continue to
+reflect the current record. Unknown nutrients remain unknown, and estimated
+values remain labelled.
 
-A new consumption statement refers to new intake. An earlier request to keep a
-named review unaccepted stays scoped to that review. When enough context is
-available, Coach can log an explicitly uncertain estimate. Unknown exact grams
-or milliliters alone should not block logging. Ask when the food, serving, day,
-meal reference or workout is genuinely ambiguous.
+A new consumption statement records new intake. An explicit edit of an existing
+meal changes that same meal. For a clear “one more”, “another” or “same again”
+about a uniquely grounded existing meal, Coach may reuse the committed item's
+food and serving as an explicitly uncertain estimate. It must resolve the same
+item and serving; ambiguity about the meal, item or amount is clarified instead
+of guessed. Missing weight information is never invented. A grounded edit uses
+the record revision it read; a concurrent edit makes that correction stale and
+requires a fresh user decision. Retries reuse the original immutable receipt and
+do not increment the item twice. A later manual edit remains the current value
+and does not change the earlier receipt.
 
-For a clear “another,” “one more,” or “same again,” reuse the most recent matching
-committed food quantity and unit as an uncertain estimate. An unaccepted review
-is never a consumed-food default. Explicit current amounts or labels, or visible
-evidence of a different food/serving, override history. A new photo of the same
-food without a measurable amount does not by itself discard a clear saved portion.
+An unaccepted proposal is not consumed food. Current explicit amounts, labels
+and visible evidence of a different item or serving take precedence over an
+earlier committed portion. Read-only summaries come from current diary reads;
+assistant prose alone cannot claim a saved record. A clarification is an
+app-owned response for a typed missing detail and commits no food mutation.
 
-Interpret the current photos and description together. Estimate a visible
-serving first, then a labelled typical serving or mixture when identified but
-unmeasurable. A cocktail photo does not verify hidden alcohol or mixer quantities.
-Saved-food confirmations include the actual recorded quantities and units so
-the user can see and correct assumptions.
+Existing meal/photo estimation guidance remains in force: consider the current
+photos and description together; estimate a visible serving first, then a
+labelled typical serving or mixture when identified but not measurable. A
+cocktail photo does not establish hidden alcohol or mixer amounts. Exact grams
+or millilitres are not required when a reasonable uncertain estimate is
+otherwise possible.
 
-The context projection keeps the same bounds: 14 stored tracking days, at most
-40 eligible meals within 24 KB, 12 recent turns within 8 KB, and 60 KB overall.
-When meals compete for space, recent entries get priority; retained entries are
-still presented in their original order. Omitted record references remain available
-for retrieval through existing tools. This adds no separate memory store or model
-request, and does not replay previous photos. These are byte limits on the diary
-projection, not a claim that the entire multimodal request uses 60 KB or a fixed
-number of tokens.
+The existing bounded inference context remains 14 tracking days, at most 40
+eligible meals within 24 KB, 12 recent turns within 8 KB and 60 KB overall.
+Those are diary-projection byte limits, not a multimodal request or token limit.
+Omitted records can still be retrieved with existing tools; prior photos are
+not replayed as context.
 
-`ask_clarification` accepts an allowed `kind`, not free-form question prose.
-Its app-owned response is persisted as a completed conversational reply through
-the existing turn store. It records no food or other mutation; the user's answer
-is a new turn with the prior question available in context. The tool must be used
-alone, before any current-turn writes. Mixed writes or an earlier receipt are
-rejected, while already committed records remain intact.
+## Backups and acknowledgement
 
-Save confirmations continue to come from successfully committed receipts.
-Read-only summaries come from the diary. Missing nutrients and days remain
-unknown; estimates stay labelled, and retries reuse committed operation results.
+Local capture acknowledgement, committed food changes and backup-folder write
+acknowledgement are separate facts. A file-provider write does not establish
+remote synchronization. Keep pending errors visible and never restore stale
+backup data over later captures or deletions. The bounded Coach timeline does
+not reduce the completeness requirements of an explicit backup or restore.
 
-## Known evidence and remaining acceptance
+## Evidence boundary
 
-The owner's two yogurt messages completed without a food receipt. The displayed
-reply cannot reveal the original model's prose or earlier read-tool choices. A
-confirmed source path discarded safe clarification prose; prior-review intent
-spillover remains a hypothesis. The fix makes clarification explicit and narrows
-that intent contract. Fixture success does not prove live provider selection.
-
-The current catalog has 29 tools. The function-calling guide suggests evaluating
-smaller initial tool surfaces as a soft accuracy recommendation. This change
-preserves the approved manual-edit catalog; it does not add speculative intent
-routing or a tool-search subsystem. Validate natural intake and corrections with
-the owner's real account before changing that boundary.
-
-The offline checks completed, and the owner reconnected the iPhone for a focused
-live pass. Remaining device acceptance must cover:
-
-1. One new yogurt statement after an unaccepted review: one new record or a
-   visible question, then exactly one record after its answer.
-2. No unread button at the bottom during thinking and reply arrival.
-3. Mouse-wheel history browsing through Mirroring: retain position, show the
-   button when new content arrives, and resume following after tapping it.
-4. Relaunch into the latest conversation with the same saved records.
-
-Exact sources, counts, artifacts and the broader device checklist belong in
-[the verification record](../verification/2026-10-14-coach-edit-parity.md) and
-[Coach edit parity](coach-edit-parity.md). On 2026-10-14 the owner approved merging
-with the remaining fixes and device checks tracked in
-[#13](https://github.com/yakov103/mivu/issues/13). Integration does not establish
-those unchecked workflows as passed.
+Current implementation and recorded evidence, including unverified device and
+provider gates, are tracked in the
+[Coach history verification record](../verification/2026-10-18-coach-chat-history.md).

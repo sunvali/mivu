@@ -2,8 +2,10 @@ import SwiftUI
 import PhotosUI
 import AVFoundation
 import ImageIO
+import UniformTypeIdentifiers
 
 struct CameraCapture: UIViewControllerRepresentable {
+    let preparation: PhotoPreparation
     let onPhoto: (Data) -> Void
     let onFailure: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -15,16 +17,45 @@ struct CameraCapture: UIViewControllerRepresentable {
         return picker
     }
     func updateUIViewController(_ picker: UIImagePickerController, context: Context) {}
+    static func dismantleUIViewController(_ picker: UIImagePickerController, coordinator: Coordinator) { coordinator.cancel() }
+    @MainActor static func preparePhoto(_ image: UIImage, preparation: PhotoPreparation,
+                                        normalize: @escaping @Sendable (CameraCaptureImage) throws -> Data = { try PhotoImport.normalize($0) }) async throws -> Data? {
+        try Task.checkCancellation()
+        guard let cgImage = image.cgImage else { throw DiaryError.invalidData }
+        let pixels = CameraCaptureImage(image: cgImage, orientation: image.imageOrientation.rawValue)
+        let generation = preparation.begin()
+        defer { preparation.finish(generation) }
+        return try await preparation.load(generation, using: { try normalize(pixels) })
+    }
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let parent: CameraCapture
+        private var active = true
+        private var task: Task<Void, Never>?
         init(_ parent: CameraCapture) { self.parent = parent }
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
+        func cancel() { active = false; task?.cancel(); task = nil }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { cancel(); parent.dismiss() }
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let image = info[.originalImage] as? UIImage, let data = PhotoImport.jpeg(image) { parent.onPhoto(data) }
-            else { parent.onFailure() }
-            parent.dismiss()
+            guard active, task == nil else { return }
+            guard let image = info[.originalImage] as? UIImage else { parent.onFailure(); parent.dismiss(); return }
+            task = Task {
+                do {
+                    let bytes = try await CameraCapture.preparePhoto(image, preparation: parent.preparation)
+                    guard active, !Task.isCancelled else { return }
+                    active = false
+                    if let bytes { parent.onPhoto(bytes) }
+                    parent.dismiss()
+                } catch {
+                    guard active, !Task.isCancelled else { return }
+                    active = false; parent.onFailure(); parent.dismiss()
+                }
+            }
         }
     }
+}
+
+struct CameraCaptureImage: Sendable {
+    let image: CGImage
+    let orientation: Int
 }
 
 enum PhotoImport {
@@ -48,15 +79,42 @@ enum PhotoImport {
         }
     }
     static func jpeg(_ data: Data) -> Data? {
-        guard data.count <= 40_000_000, let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1600, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) else { return nil }
-        return jpeg(UIImage(cgImage: cgImage))
+        try? normalize(data)
+    }
+    static func normalize(_ data: Data) throws -> Data {
+        try Task.checkCancellation()
+        guard data.count <= 40_000_000,
+              let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1600,
+                kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceShouldCacheImmediately: true
+              ] as CFDictionary) else { throw DiaryError.invalidData }
+        try Task.checkCancellation()
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { throw DiaryError.invalidData }
+        CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.72] as CFDictionary)
+        guard CGImageDestinationFinalize(destination), output.length <= 5_000_000 else { throw DiaryError.invalidData }
+        try Task.checkCancellation()
+        return output as Data
+    }
+    static func normalize(_ capture: CameraCaptureImage) throws -> Data {
+        try Task.checkCancellation()
+        let orientation = UIImage.Orientation(rawValue: capture.orientation) ?? .up
+        let rotated = [UIImage.Orientation.left, .leftMirrored, .right, .rightMirrored].contains(orientation)
+        let size = CGSize(width: CGFloat(rotated ? capture.image.height : capture.image.width), height: CGFloat(rotated ? capture.image.width : capture.image.height))
+        let image = UIImage(cgImage: capture.image, scale: 1, orientation: orientation)
+        guard let bytes = jpeg(image, size: size) else { throw DiaryError.invalidData }
+        try Task.checkCancellation()
+        return bytes
     }
     static func jpeg(_ image: UIImage) -> Data? {
-        guard image.size.width > 0, image.size.height > 0, image.size.width.isFinite, image.size.height.isFinite else { return nil }
-        let scale = min(1, 1600 / max(image.size.width, image.size.height))
+        jpeg(image, size: image.size)
+    }
+    private static func jpeg(_ image: UIImage, size: CGSize) -> Data? {
+        guard size.width > 0, size.height > 0, size.width.isFinite, size.height.isFinite else { return nil }
+        let scale = min(1, 1600 / max(size.width, size.height))
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
-        let rendered = UIGraphicsImageRenderer(size: CGSize(width: image.size.width * scale, height: image.size.height * scale), format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: CGSize(width: image.size.width * scale, height: image.size.height * scale))) }
+        let rendered = UIGraphicsImageRenderer(size: CGSize(width: size.width * scale, height: size.height * scale), format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: CGSize(width: size.width * scale, height: size.height * scale))) }
         guard let bytes = rendered.jpegData(compressionQuality: 0.72), bytes.count <= 5_000_000 else { return nil }
         return bytes
     }
@@ -71,6 +129,7 @@ enum PhotoImport {
 
 struct PhotoInput: View {
     @Binding var photos: [Data]
+    @Environment(\.diaryPhotoLimiter) private var limiter
     let preparation: PhotoPreparation
     @Binding var importFailed: Bool
     @State private var selected: [PhotosPickerItem] = []
@@ -103,9 +162,10 @@ struct PhotoInput: View {
                 }
             }
         }
+        .onAppear { preparation.use(limiter: limiter) }
         .buttonStyle(.borderless)
         .tint(.diaryAccent)
-        .sheet(isPresented: $showCamera) { CameraCapture(onPhoto: { photos.append($0) }, onFailure: { importFailed = true }).ignoresSafeArea() }
+        .sheet(isPresented: $showCamera) { CameraCapture(preparation: preparation, onPhoto: { if photos.count < 8 { photos.append($0) } }, onFailure: { importFailed = true }).ignoresSafeArea() }
         .alert(noticeTitle, isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } }), presenting: notice) { value in
             switch value {
             case .cameraDenied:

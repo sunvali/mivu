@@ -4,7 +4,8 @@ struct MealDetailView: View {
     @Bindable var model: DiaryViewModel
     let mealID: UUID
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openDiaryConnection) private var openConnection
+    @Environment(\.diarySettingsRoutes) private var routes
+    @Environment(\.openDiaryCoach) private var openChat
     @State private var showCorrection = false
     @State private var editedItem: FoodItem?
     @State private var editingRevision: Int?
@@ -13,14 +14,28 @@ struct MealDetailView: View {
     @State private var deletion: Deletion?
     @State private var showMove = false
     @State private var movedDayID: UUID?
-    @State private var viewingPhoto: MealPhoto?
+    @State private var viewingPhoto: DiaryPhotoReference?
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         Group {
-            if let meal = model.meal(mealID), let snapshot = model.snapshot {
+            if let meal = model.meal(mealID), let snapshot = model.readModel {
                 List {
                     Section {
                         mealSummary(meal, snapshot: snapshot).listRowBackground(Color.diarySummarySurface)
+                    }.listRowBackground(Color.clear)
+                    Section("Source conversation") {
+                        if let source = meal.sourceTurnID {
+                            let selection = model.selection
+                            Button {
+                                guard let selection, openChat(.turn(source), expectedSelection: selection) else { return }
+                                dismiss()
+                            } label: { Label("Open source chat", systemImage: "bubble.left").frame(minHeight: 44) }
+                                .disabled(selection == nil || model.isChangingProfile || openChat.origin?.selection != selection)
+                                .accessibilityIdentifier("mealSourceChat")
+                        } else {
+                            Text("No source conversation is recorded for this meal.")
+                                .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("mealSourceUnavailable")
+                        }
                     }.listRowBackground(Color.clear)
                     if let review = meal.submissions.last(where: { $0.state == .awaitingReview }), let proposal = review.proposal {
                         Section("Review estimate") {
@@ -39,19 +54,15 @@ struct MealDetailView: View {
                         Section("Attached photos") {
                             ForEach(meal.photos, id: \.id) { photo in
                                 VStack(alignment: .leading, spacing: 8) {
-                                    if let image = UIImage(data: photo.data) {
-                                        Button { viewingPhoto = photo } label: {
-                                            Image(uiImage: image).resizable().scaledToFit().frame(maxWidth: .infinity, maxHeight: 260)
-                                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        }
-                                        .buttonStyle(.plain).accessibilityLabel("Meal photo")
+                                    Button { viewingPhoto = photo } label: {
+                                        DiaryPhotoPreview(model: model, reference: photo)
+                                    }.buttonStyle(.plain).accessibilityLabel("Meal photo")
                                         .accessibilityHint("Open full-screen photo viewer").accessibilityIdentifier("viewMealPhoto")
-                                    }
                                     HStack {
                                         Text(photo.role == .before ? "Before eating" : photo.role == .after ? "After eating" : "Timing unspecified")
                                             .font(.caption).foregroundStyle(Color.diarySecondary)
                                         Spacer()
-                                        Button("Delete photo", role: .destructive) { deletion = .photo(photo.id) }.frame(minHeight: 44)
+                                        Button("Delete photo", role: .destructive) { deletion = .photo(photo.photoID) }.frame(minHeight: 44)
                                     }
                                 }.padding(.vertical, 4)
                             }
@@ -66,7 +77,10 @@ struct MealDetailView: View {
                             Label("Add note or photo", systemImage: "note.text.badge.plus").frame(minHeight: 44)
                         }.accessibilityIdentifier("correctMeal")
                         if meal.isSaved && meal.state == .saved {
-                            Button("I ate half") { Task { if await model.change({ _ = try await model.store.correctMeal(mealID: mealID, text: "half", forCoach: !model.sampleMode, expectedProfileID: snapshot.profile.id) }) { model.resumeWorker() } } }
+                            Button("I ate half") {
+                                guard let token = model.selection else { return }
+                                Task { if await model.change({ _ = try await model.store.correctMealProjection(mealID: mealID, text: "half", forCoach: !model.sampleMode, expectedSelection: token, expectedProfileID: snapshot.profile.id) }) { model.resumeWorker() } }
+                            }
                                 .frame(minHeight: 44).accessibilityIdentifier("halfPortion")
                         }
                     }.listRowBackground(Color.clear)
@@ -127,11 +141,12 @@ struct MealDetailView: View {
         }
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .foregroundStyle(Color.diaryText).tint(.diaryAccent)
+        .task(id: model.changeGeneration) { await model.loadMeal(mealID) }
         .navigationTitle("Meal")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom) {
-            if let movedDayID, let day = model.snapshot?.days.first(where: { $0.id == movedDayID }) {
+            if let movedDayID, let day = model.day(movedDayID) {
                 NavigationLink { DayHistoryView(model: model, dayID: day.id) } label: {
                     Label {
                         VStack(alignment: .leading, spacing: 4) {
@@ -146,27 +161,27 @@ struct MealDetailView: View {
             }
         }
         .fullScreenCover(item: $viewingPhoto) { photo in
-            MealPhotoViewer(photo: photo) {
-                guard let owner = model.snapshot?.profile.id, model.meal(mealID)?.photos.contains(where: { $0.id == photo.id }) == true else { return false }
-                return await model.change { try await model.store.deletePhoto(mealID: mealID, photoID: photo.id, expectedProfileID: owner) }
+            MealPhotoViewer(model: model, photo: photo) {
+                guard let owner = model.readModel?.profile.id, model.meal(mealID)?.photos.contains(where: { $0.id == photo.id }) == true else { return false }
+                return await model.change { try await model.store.deletePhoto(mealID: mealID, photoID: photo.photoID, expectedProfileID: owner) }
             }
         }
-        .onChange(of: model.snapshot?.profile.id) { _, _ in viewingPhoto = nil; movedDayID = nil }
+        .onChange(of: model.readModel?.profile.id) { _, _ in viewingPhoto = nil; movedDayID = nil }
         .sheet(isPresented: $showCorrection) { MealComposerView(model: model, correctingMealID: mealID) }
         .sheet(item: $editedItem) { item in FoodItemEditor(item: item, errorMessage: { model.errorMessage }) { updated in
-            guard let owner = model.snapshot?.profile.id else { return false }
+            guard let owner = model.readModel?.profile.id else { return false }
             return await model.change { try await model.store.editItem(mealID: mealID, item: updated, reviewSubmissionID: editingSubmissionID, expectedRevision: editingRevision, expectedProfileID: owner) }
         } }
         .alert(deletionTitle, isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), presenting: deletion) { target in
             switch target {
             case .meal:
                 Button("Delete meal", role: .destructive) {
-                    guard let owner = model.snapshot?.profile.id else { return }
+                    guard let owner = model.readModel?.profile.id else { return }
                     Task { if await model.change({ try await model.store.deleteMeal(mealID, expectedProfileID: owner) }) { dismiss() } }
                 }
             case .photo(let photoID):
                 Button("Delete photo", role: .destructive) {
-                    guard let owner = model.snapshot?.profile.id else { return }
+                    guard let owner = model.readModel?.profile.id else { return }
                     Task { await model.change { try await model.store.deletePhoto(mealID: mealID, photoID: photoID, expectedProfileID: owner) } }
                 }
             }
@@ -178,27 +193,27 @@ struct MealDetailView: View {
             }
         }
         .sheet(isPresented: $showMove) {
-            if let meal = model.meal(mealID), let owner = model.snapshot?.profile.id {
+            if let meal = model.meal(mealID), let owner = model.readModel?.profile.id {
                 MoveMealSheet(model: model, meal: meal, ownerID: owner) { movedDayID = $0 }
             }
         }
     }
     private var deletionTitle: String {
         if case .some(.photo(_)) = deletion { return "Delete this photo?" }
-        guard let meal = model.meal(mealID), let day = model.snapshot?.days.first(where: { $0.id == meal.dayID }) else { return "Delete meal?" }
+        guard let meal = model.meal(mealID), let day = model.day(meal.dayID) else { return "Delete meal?" }
         return "Delete “\(displayTitle(meal))” on \(day.localDate)?"
     }
-    private func displayTitle(_ meal: DiaryMeal) -> String {
+    private func displayTitle(_ meal: MealReadModel) -> String {
         if let item = meal.items.first { return item.provenance == .sample ? "Apple (sample)" : item.name }
         let note = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return note.isEmpty ? "Meal" : note
     }
-    private func mealSummary(_ meal: DiaryMeal, snapshot: DiarySnapshot) -> some View {
+    private func mealSummary(_ meal: MealReadModel, snapshot: DiaryReadModel) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(displayTitle(meal))
                 .font(.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             if meal.timePrecision == .dateOnly {
-                Text(snapshot.days.first(where: { $0.id == meal.dayID })?.localDate ?? "Historical meal")
+                Text(model.day(meal.dayID)?.localDate ?? "Historical meal")
                     .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 Text("Time unspecified").font(.subheadline).foregroundStyle(Color.diarySecondary)
             } else {
@@ -222,7 +237,7 @@ struct MealDetailView: View {
                 }
             }
             if meal.state == .waitingForConnection {
-                Button("Open connection settings", systemImage: "link") { openConnection() }
+                Button("Open connection settings", systemImage: "link") { routes?.openConnection() }
                     .frame(minHeight: 44).buttonStyle(.glass).accessibilityIdentifier("openMealConnection")
             }
         }.padding(.vertical, 12)
@@ -270,23 +285,26 @@ private struct MoveMealSheet: View {
     @State private var originalRevision: Int
     @State private var destination: UUID
     @State private var moving = false
-    init(model: DiaryViewModel, meal: DiaryMeal, ownerID: UUID, onMoved: @escaping (UUID) -> Void) {
+    init(model: DiaryViewModel, meal: MealReadModel, ownerID: UUID, onMoved: @escaping (UUID) -> Void) {
         self.model = model; mealID = meal.id; self.onMoved = onMoved
         _ownerID = State(initialValue: ownerID)
         _originalDayID = State(initialValue: meal.dayID)
         _originalRevision = State(initialValue: meal.revision)
         _destination = State(initialValue: meal.dayID)
     }
+    @State private var destinations: [TrackingDay] = []
+    @State private var historyCursor: DiaryHistoryCursor?
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     Picker("Destination waking day", selection: $destination) {
-                        ForEach((model.snapshot?.days ?? []).sorted { $0.startAt > $1.startAt }) { day in
+                        ForEach(destinations.sorted { $0.startAt > $1.startAt }) { day in
                             Text(day.id == originalDayID ? "\(day.localDate) · Current day" : day.localDate).tag(day.id)
                                 .frame(minHeight: 44)
                         }
                     }.pickerStyle(.inline).accessibilityIdentifier("moveMealDestination")
+                    if historyCursor != nil { Button("Earlier days") { Task { await loadDestinations() } }.frame(minHeight: 44) }
                 } footer: {
                     Text("Only this meal will move. The destination changes when you tap Move.")
                 }
@@ -301,16 +319,25 @@ private struct MoveMealSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(moving) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Move") { Task { await move() } }
-                        .disabled(moving || destination == originalDayID || model.snapshot?.profile.id != ownerID)
+                        .disabled(moving || destination == originalDayID || model.readModel?.profile.id != ownerID)
                         .accessibilityIdentifier("confirmMoveMeal")
                 }
             }
+            .task { await loadDestinations() }
             .interactiveDismissDisabled(moving)
-            .onChange(of: model.snapshot?.profile.id) { _, id in if id != ownerID { dismiss() } }
+            .onChange(of: model.readModel?.profile.id) { _, id in if id != ownerID { dismiss() } }
         }
     }
+    private func loadDestinations() async {
+        do {
+            let page = try await model.store.diaryHistory(before: historyCursor, expectedProfileID: ownerID)
+            guard model.readModel?.profile.id == ownerID else { return }
+            destinations = page.days.map(\.day); historyCursor = page.cursor
+            if let original = model.day(originalDayID), !destinations.contains(where: { $0.id == originalDayID }) { destinations.append(original) }
+        } catch { model.errorMessage = error.localizedDescription }
+    }
     private func move() async {
-        guard !moving, destination != originalDayID, model.snapshot?.profile.id == ownerID else { return }
+        guard !moving, destination != originalDayID, model.readModel?.profile.id == ownerID else { return }
         moving = true
         defer { moving = false }
         let selectedDay = destination
@@ -440,7 +467,9 @@ private struct FoodItemEditor: View {
 }
 
 private struct MealPhotoViewer: View {
-    let photo: MealPhoto
+    @Bindable var model: DiaryViewModel
+    let photo: DiaryPhotoReference
+    @State private var original: Data?
     let delete: () async -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var zoom: CGFloat = 1
@@ -452,7 +481,7 @@ private struct MealPhotoViewer: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                if let image = UIImage(data: photo.data) {
+                if let original, let image = UIImage(data: original) {
                     GeometryReader { geometry in
                         ScrollView([.horizontal, .vertical]) {
                             Image(uiImage: image).resizable().scaledToFit()
@@ -480,6 +509,14 @@ private struct MealPhotoViewer: View {
                 }.padding(.horizontal, 20).padding(.bottom, 12)
             }
             .background(Color.diaryCanvas).foregroundStyle(Color.diaryText).tint(.diaryAccent)
+            .task(id: photo.id) {
+                guard let token = model.selection else { return }
+                do {
+                    let data = try await model.store.photoContent(photo, expectedProfileID: token.identity.profileID)
+                    try await model.store.validateSelection(epoch: token.selectionEpoch, expectedProfileID: token.identity.profileID)
+                    guard !Task.isCancelled, !model.isChangingProfile, model.selection == token else { return }; original = data
+                } catch { original = nil }
+            }
             .navigationTitle("Meal photo").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(deleting).accessibilityIdentifier("closeMealPhoto") }

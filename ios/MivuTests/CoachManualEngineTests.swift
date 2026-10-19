@@ -58,7 +58,7 @@ private actor RevisionCoachReplies {
         CoachInferenceResult(model: "fixture", text: text, calls: calls, outputItems: [])
     }
 
-    private func run(_ store: DiaryStore, _ profile: DiaryProfile, _ turn: CoachTurn, _ calls: [CoachToolCall]) async throws -> CoachTurn {
+    private func run(_ store: DiaryStore, _ profile: DiaryProfile, _ turn: CoachTurn, _ calls: [CoachToolCall]) async throws -> CoachTurnResult {
         let reads = try calls.compactMap { edit -> CoachToolCall? in
             guard ["edit_item", "accept_review", "attach_photos", "delete_photo"].contains(edit.name) else { return nil }
             guard let args = try JSONSerialization.jsonObject(with: Data(edit.arguments.utf8)) as? [String: Any],
@@ -70,7 +70,7 @@ private actor RevisionCoachReplies {
     }
 
     private func savedMeal(_ store: DiaryStore, _ profile: DiaryProfile, _ day: TrackingDay) async throws -> DiaryMeal {
-        let meal = try await store.capture(text: "Synthetic bread and egg", photos: [], reviewFirst: false, dayID: day.id, at: now)
+        let meal = try await capturedMeal(store, text: "Synthetic bread and egg", photos: [], reviewFirst: false, dayID: day.id, at: now)
         let bread = FoodItem(name: "Synthetic bread", quantity: 2, unit: "slice",
                              nutrition: NutritionValues(kcal: 160, carbs: 30, protein: 6, fat: 2),
                              provenance: .estimate, reference: "Synthetic estimate")
@@ -79,18 +79,18 @@ private actor RevisionCoachReplies {
                            provenance: .estimate, reference: "Synthetic estimate")
         try await store.applyAnalysis(AnalysisOutput(profileID: profile.id, mealID: meal.id,
             submissionID: meal.submissions[0].id, baseRevision: 0, items: [bread, egg]), expectedProfileID: profile.id)
-        return try #require(await store.snapshot().meals.first)
+        return try #require(await store.snapshotForExport().meals.first)
     }
 
     @Test func oneNutrientPatchPreservesOtherFoodFieldsAndItems() async throws {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
         let original = meal.items[0]
-        let turn = try await store.captureCoachTurn(text: "Correct bread calories", photos: [], at: now, expectedProfileID: profile.id)
+        let turn = try await capturedTurn(store, text: "Correct bread calories", photos: [], at: now, expectedProfileID: profile.id)
         let args: [String: Any] = ["meal_id": meal.id.uuidString, "item_id": original.id.uuidString,
             "expected_revision": meal.revision, "nutrients": [["nutrient": "kcal", "value": 150]]]
         let done = try await run(store, profile, turn, [call("edit_item", args)])
-        let updated = try #require(await store.snapshot().meals.first)
+        let updated = try #require(await store.snapshotForExport().meals.first)
         #expect(done.receipts.count == 1)
         #expect(updated.items[0].nutrition.kcal == 150)
         #expect(updated.items[0].nutrition.carbs == original.nutrition.carbs)
@@ -102,15 +102,15 @@ private actor RevisionCoachReplies {
 
     @Test func goalsAndPreferencesDoNotFabricateTrackingDays() async throws {
         let (store, profile, _, root) = try await fixture(startDay: false); defer { try? FileManager.default.removeItem(at: root) }
-        let goalTurn = try await store.captureCoachTurn(text: "Set my goal", photos: [], at: now, expectedProfileID: profile.id)
+        let goalTurn = try await capturedTurn(store, text: "Set my goal", photos: [], at: now, expectedProfileID: profile.id)
         let goals = try call("set_goals", ["effective_local_date": "2027-01-15",
             "targets": [["nutrient": "kcal", "value": 2100]], "exercise_credit_enabled": false])
         let goalResult = try await run(store, profile, goalTurn, [goals])
-        let preferenceTurn = try await store.captureCoachTurn(text: "Set my preference", photos: [], at: now, expectedProfileID: profile.id)
+        let preferenceTurn = try await capturedTurn(store, text: "Set my preference", photos: [], at: now, expectedProfileID: profile.id)
         let replies = RevisionCoachReplies()
         let preferenceResult = try await CoachEngine(store: store, infer: { try await replies.next($0, $1) })
             .run(turnID: preferenceTurn.id, expectedProfileID: profile.id)
-        let snapshot = try await store.snapshot()
+        let snapshot = try await store.snapshotForExport()
         #expect(snapshot.days.isEmpty && snapshot.activeDayID == nil)
         #expect(snapshot.goals.first?.targets.kcal == 2100)
         #expect(snapshot.profile.preferences == "Synthetic vegetarian preference")
@@ -122,34 +122,34 @@ private actor RevisionCoachReplies {
 
     @Test func openSettingsOnEmptyDiaryReturnsDestinationWithoutStartingDay() async throws {
         let (store, profile, _, root) = try await fixture(startDay: false); defer { try? FileManager.default.removeItem(at: root) }
-        let turn = try await store.captureCoachTurn(text: "Open settings", photos: [], at: now, expectedProfileID: profile.id)
+        let turn = try await capturedTurn(store, text: "Open settings", photos: [], at: now, expectedProfileID: profile.id)
         let done = try await run(store, profile, turn, [call("open_settings", ["destination": "settings"])])
         let receipt = try #require(done.receipts.first)
         #expect(receipt.destination == .settings && receipt.dayID == nil)
-        #expect(try await store.snapshot().days.isEmpty)
-        #expect(try await store.snapshot().activeDayID == nil)
+        #expect(try await store.snapshotForExport().days.isEmpty)
+        #expect(try await store.snapshotForExport().activeDayID == nil)
     }
 
     @Test func moveThenDeleteMealKeepsTombstoneAndRetryDoesNotRestoreIt() async throws {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
-        let moving = try await store.captureCoachTurn(text: "Move that meal", photos: [], at: now, expectedProfileID: profile.id)
+        let moving = try await capturedTurn(store, text: "Move that meal", photos: [], at: now, expectedProfileID: profile.id)
         let move = try call("move_meal", ["meal_id": meal.id.uuidString, "expected_revision": meal.revision,
             "target_local_date": "2027-01-14"])
         _ = try await run(store, profile, moving, [move])
-        let moved = try #require(await store.snapshot().meals.first)
-        #expect(try await store.snapshot().days.first { $0.id == moved.dayID }?.localDate == "2027-01-14")
-        let deleting = try await store.captureCoachTurn(text: "Delete that meal", photos: [], at: now, expectedProfileID: profile.id)
+        let moved = try #require(await store.snapshotForExport().meals.first)
+        #expect(try await store.snapshotForExport().days.first { $0.id == moved.dayID }?.localDate == "2027-01-14")
+        let deleting = try await capturedTurn(store, text: "Delete that meal", photos: [], at: now, expectedProfileID: profile.id)
         let delete = try call("delete_meal", ["meal_id": meal.id.uuidString, "expected_revision": moved.revision])
         let first = ManualCoachReplies([result([delete])])
         await #expect(throws: CoachError.limitExceeded) {
             try await CoachEngine(store: store, infer: { try await first.next($0, $1) }).run(turnID: deleting.id, expectedProfileID: profile.id)
         }
-        let after = try await store.snapshot()
+        let after = try await store.snapshotForExport()
         #expect(after.meals.isEmpty && after.deletedMealIDs.contains(meal.id))
         let retry = ManualCoachReplies([result([delete]), result()])
         _ = try await CoachEngine(store: store, infer: { try await retry.next($0, $1) }).run(turnID: deleting.id, expectedProfileID: profile.id)
-        let replayed = try await store.snapshot()
+        let replayed = try await store.snapshotForExport()
         #expect(replayed.meals.isEmpty && replayed.deletedMealIDs.filter { $0 == meal.id }.count == 1)
         #expect(replayed.coachTurns.first { $0.id == deleting.id }?.receipts.count == 1)
     }
@@ -158,17 +158,17 @@ private actor RevisionCoachReplies {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
         let photo = MealPhoto(data: Data([255, 216, 255, 224]), role: .before)
-        let attaching = try await store.captureCoachTurn(text: "Attach synthetic photo", photos: [photo], at: now, expectedProfileID: profile.id)
+        let attaching = try await capturedTurn(store, text: "Attach synthetic photo", photos: [photo], at: now, expectedProfileID: profile.id)
         let attach = try call("attach_photos", ["meal_id": meal.id.uuidString, "expected_revision": meal.revision,
             "photo_ids": [photo.id.uuidString], "role": "before"])
         _ = try await run(store, profile, attaching, [attach])
-        let attached = try #require(await store.snapshot().meals.first)
+        let attached = try #require(await store.snapshotForExport().meals.first)
         #expect(attached.photos.map(\.id) == [photo.id])
-        let deleting = try await store.captureCoachTurn(text: "Delete synthetic photo", photos: [], at: now, expectedProfileID: profile.id)
+        let deleting = try await capturedTurn(store, text: "Delete synthetic photo", photos: [], at: now, expectedProfileID: profile.id)
         let delete = try call("delete_photo", ["meal_id": meal.id.uuidString,
             "expected_revision": attached.revision, "photo_id": photo.id.uuidString])
         _ = try await run(store, profile, deleting, [delete])
-        let snapshot = try await store.snapshot()
+        let snapshot = try await store.snapshotForExport()
         #expect(snapshot.meals[0].photos.isEmpty)
         #expect(snapshot.coachTurns.allSatisfy { !$0.photoIDs.contains(photo.id) && !$0.photos.contains { $0.id == photo.id } })
         #expect(try DiaryArchive.decode(DiaryArchive.encode(snapshot)).meals[0].photos.isEmpty)
@@ -177,30 +177,30 @@ private actor RevisionCoachReplies {
     @Test func reviewPatchDoesNotCountUntilAccepted() async throws {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay)
-        let meal = try await store.capture(text: "Synthetic review food", photos: [], reviewFirst: true, dayID: day.id, at: now)
+        let meal = try await capturedMeal(store, text: "Synthetic review food", photos: [], reviewFirst: true, dayID: day.id, at: now)
         let item = FoodItem(name: "Synthetic soup", nutrition: NutritionValues(kcal: 100, carbs: 15, protein: 4, fat: 2))
         try await store.applyAnalysis(AnalysisOutput(profileID: profile.id, mealID: meal.id,
             submissionID: meal.submissions[0].id, baseRevision: 0, items: [item]), expectedProfileID: profile.id)
-        let editing = try await store.captureCoachTurn(text: "Review soup calories", photos: [], at: now, expectedProfileID: profile.id)
+        let editing = try await capturedTurn(store, text: "Review soup calories", photos: [], at: now, expectedProfileID: profile.id)
         let edit = try call("edit_item", ["meal_id": meal.id.uuidString, "item_id": item.id.uuidString,
             "expected_revision": 0, "review_submission_id": meal.submissions[0].id.uuidString,
             "nutrients": [["nutrient": "kcal", "value": 120]]])
         _ = try await run(store, profile, editing, [edit])
-        let pending = try #require(await store.snapshot().meals.first)
+        let pending = try #require(await store.snapshotForExport().meals.first)
         #expect(pending.items.isEmpty && pending.submissions[0].proposal?.items[0].nutrition.kcal == 120)
-        #expect(try await store.snapshot().totals(dayID: day.id).kcal == nil)
-        let accepting = try await store.captureCoachTurn(text: "Save reviewed soup", photos: [], at: now, expectedProfileID: profile.id)
+        #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == nil)
+        let accepting = try await capturedTurn(store, text: "Save reviewed soup", photos: [], at: now, expectedProfileID: profile.id)
         let accept = try call("accept_review", ["meal_id": meal.id.uuidString,
             "expected_revision": 0, "submission_id": meal.submissions[0].id.uuidString])
         _ = try await run(store, profile, accepting, [accept])
-        #expect(try await store.snapshot().totals(dayID: day.id).kcal == 120)
+        #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == 120)
     }
 
     @Test func invalidSecondWriteRollsBackFirstWriteAndReceipts() async throws {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
-        let turn = try await store.captureCoachTurn(text: "Patch and delete", photos: [], at: now, expectedProfileID: profile.id)
-        let before = try await store.snapshot()
+        let turn = try await capturedTurn(store, text: "Patch and delete", photos: [], at: now, expectedProfileID: profile.id)
+        let before = try await store.snapshotForExport()
         let edit = try call("edit_item", ["meal_id": meal.id.uuidString, "item_id": meal.items[0].id.uuidString,
             "expected_revision": meal.revision, "nutrients": [["nutrient": "kcal", "value": 150]]])
         let staleDelete = try call("delete_meal", ["meal_id": meal.id.uuidString, "expected_revision": 999_999])
@@ -209,22 +209,22 @@ private actor RevisionCoachReplies {
         await #expect(throws: DiaryError.staleRevision) {
             try await CoachEngine(store: store, infer: { try await replies.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }
-        let after = try await store.snapshot()
+        let after = try await store.snapshotForExport()
         #expect(after.meals == before.meals && after.deletedMealIDs == before.deletedMealIDs)
         #expect(after.coachTurns[0].receipts.isEmpty)
     }
 
     @Test func stalePreferenceInMixedBatchDoesNotCommitGoal() async throws {
         let (store, profile, _, root) = try await fixture(startDay: false); defer { try? FileManager.default.removeItem(at: root) }
-        let turn = try await store.captureCoachTurn(text: "Set goal and preference", photos: [], at: now, expectedProfileID: profile.id)
-        let before = try await store.snapshot()
+        let turn = try await capturedTurn(store, text: "Set goal and preference", photos: [], at: now, expectedProfileID: profile.id)
+        let before = try await store.snapshotForExport()
         let goal = try call("set_goals", ["effective_local_date": "2027-01-15",
             "targets": [["nutrient": "kcal", "value": 2000]]])
         let replies = RevisionCoachReplies(goal: goal, stale: true)
         await #expect(throws: DiaryError.staleRevision) {
             try await CoachEngine(store: store, infer: { try await replies.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }
-        let after = try await store.snapshot()
+        let after = try await store.snapshotForExport()
         #expect(after.goals == before.goals && after.profile == before.profile)
         #expect(after.days.isEmpty && after.coachTurns[0].receipts.isEmpty)
     }
@@ -232,38 +232,38 @@ private actor RevisionCoachReplies {
     @Test func photoAttachmentPreservesPendingReviewProposal() async throws {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay)
-        let meal = try await store.capture(text: "Synthetic review soup", photos: [], reviewFirst: true, dayID: day.id, at: now)
+        let meal = try await capturedMeal(store, text: "Synthetic review soup", photos: [], reviewFirst: true, dayID: day.id, at: now)
         let item = FoodItem(name: "Synthetic soup", nutrition: NutritionValues(kcal: 100, carbs: 15, protein: 4, fat: 2))
         try await store.applyAnalysis(AnalysisOutput(profileID: profile.id, mealID: meal.id,
             submissionID: meal.submissions[0].id, baseRevision: 0, items: [item]), expectedProfileID: profile.id)
         let photo = MealPhoto(data: Data([255, 216, 255, 224]), role: .before)
-        let attaching = try await store.captureCoachTurn(text: "Attach soup photo", photos: [photo], at: now, expectedProfileID: profile.id)
+        let attaching = try await capturedTurn(store, text: "Attach soup photo", photos: [photo], at: now, expectedProfileID: profile.id)
         let attach = try call("attach_photos", ["meal_id": meal.id.uuidString, "expected_revision": 0,
             "photo_ids": [photo.id.uuidString], "role": "before"])
         _ = try await run(store, profile, attaching, [attach])
-        let pending = try #require(await store.snapshot().meals.first)
+        let pending = try #require(await store.snapshotForExport().meals.first)
         #expect(pending.revision == 0 && pending.photos.map(\.id) == [photo.id])
         #expect(pending.submissions[0].proposal?.items == [item])
-        #expect(try await store.snapshot().totals(dayID: day.id).kcal == nil)
-        let accepting = try await store.captureCoachTurn(text: "Save reviewed soup", photos: [], at: now, expectedProfileID: profile.id)
+        #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == nil)
+        let accepting = try await capturedTurn(store, text: "Save reviewed soup", photos: [], at: now, expectedProfileID: profile.id)
         let accept = try call("accept_review", ["meal_id": meal.id.uuidString,
             "expected_revision": 0, "submission_id": meal.submissions[0].id.uuidString])
         _ = try await run(store, profile, accepting, [accept])
-        #expect(try await store.snapshot().totals(dayID: day.id).kcal == 100)
+        #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == 100)
     }
     @Test func appendFoodKeepsExistingItemsAndMealIdentity() async throws {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
-        let turn = try await store.captureCoachTurn(text: "Add synthetic yogurt to that meal", photos: [], at: now, expectedProfileID: profile.id)
+        let turn = try await capturedTurn(store, text: "Add synthetic yogurt to that meal", photos: [], at: now, expectedProfileID: profile.id)
         let args: [String: Any] = ["meal_id": meal.id.uuidString, "expected_revision": meal.revision,
             "items": [["name": "Synthetic yogurt", "quantity": 1, "unit": "cup", "kcal": 90,
                        "carbs": 8, "protein": 9, "fat": 2]]]
         _ = try await run(store, profile, turn, [call("append_food", args)])
-        let updated = try #require(await store.snapshot().meals.first)
+        let updated = try #require(await store.snapshotForExport().meals.first)
         #expect(updated.id == meal.id && updated.items.count == 3)
         #expect(Array(updated.items.prefix(2)) == meal.items)
         #expect(updated.items[2].name == "Synthetic yogurt")
-        #expect(try await store.snapshot().meals.count == 1)
+        #expect(try await store.snapshotForExport().meals.count == 1)
     }
 
     @Test func goalPatchClearsOnlyNamedNutrientAndNewDateInheritsOthers() async throws {
@@ -272,14 +272,14 @@ private actor RevisionCoachReplies {
             targets: NutritionValues(kcal: 2000, carbs: 220, protein: 110, fat: 70),
             goalWeightKg: 72, exerciseCreditEnabled: true)
         _ = try await store.setGoals(seeded, expectedRevision: nil, expectedProfileID: profile.id)
-        let turn = try await store.captureCoachTurn(text: "Clear carbs and set calories", photos: [], at: now, expectedProfileID: profile.id)
+        let turn = try await capturedTurn(store, text: "Clear carbs and set calories", photos: [], at: now, expectedProfileID: profile.id)
         let read = try call("get_goals", ["local_date": "2027-01-15"])
         let patch = try call("set_goals", ["effective_local_date": "2027-01-15", "expected_revision": NSNull(),
             "targets": [["nutrient": "carbs", "value": NSNull()], ["nutrient": "kcal", "value": 2100]]])
         let replies = ManualCoachReplies([result([read]), result([patch]), result()])
         _ = try await CoachEngine(store: store, infer: { try await replies.next($0, $1) })
             .run(turnID: turn.id, expectedProfileID: profile.id)
-        let snapshot = try await store.snapshot()
+        let snapshot = try await store.snapshotForExport()
         let earlier = try #require(snapshot.goals.first { $0.effectiveLocalDate == "2027-01-14" })
         let later = try #require(snapshot.goals.first { $0.effectiveLocalDate == "2027-01-15" })
         #expect(earlier.targets.carbs == 220 && earlier.targets.kcal == 2000)
@@ -293,11 +293,11 @@ private actor RevisionCoachReplies {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
         let original = meal.items[0]
-        let turn = try await store.captureCoachTurn(text: "Calories are unknown", photos: [], at: now, expectedProfileID: profile.id)
+        let turn = try await capturedTurn(store, text: "Calories are unknown", photos: [], at: now, expectedProfileID: profile.id)
         let patch = try call("edit_item", ["meal_id": meal.id.uuidString, "item_id": original.id.uuidString,
             "expected_revision": meal.revision, "nutrients": [["nutrient": "kcal", "value": NSNull()]]])
         _ = try await run(store, profile, turn, [patch])
-        let updated = try #require(await store.snapshot().meals.first)
+        let updated = try #require(await store.snapshotForExport().meals.first)
         #expect(updated.items[0].nutrition.kcal == nil)
         #expect(updated.items[0].nutrition.carbs == original.nutrition.carbs)
         #expect(updated.items[0].nutrition.protein == original.nutrition.protein)
@@ -308,16 +308,16 @@ private actor RevisionCoachReplies {
 
     @Test func startDayThenHistoricalCoverageLeavesActiveDayOpen() async throws {
         let (store, profile, _, root) = try await fixture(startDay: false); defer { try? FileManager.default.removeItem(at: root) }
-        let starting = try await store.captureCoachTurn(text: "Start my waking day", photos: [], at: now, expectedProfileID: profile.id)
+        let starting = try await capturedTurn(store, text: "Start my waking day", photos: [], at: now, expectedProfileID: profile.id)
         let startReplies = StartDayReplies()
         _ = try await CoachEngine(store: store, infer: { try await startReplies.next($0, $1) })
             .run(turnID: starting.id, expectedProfileID: profile.id)
-        let started = try await store.snapshot()
+        let started = try await store.snapshotForExport()
         let active = try #require(started.activeDayID)
-        let coverageTurn = try await store.captureCoachTurn(text: "Mark January 13 partial", photos: [], at: now, expectedProfileID: profile.id)
+        let coverageTurn = try await capturedTurn(store, text: "Mark January 13 partial", photos: [], at: now, expectedProfileID: profile.id)
         let coverage = try call("set_day_coverage", ["local_date": "2027-01-13", "completeness": "partial"])
         _ = try await run(store, profile, coverageTurn, [coverage])
-        let snapshot = try await store.snapshot()
+        let snapshot = try await store.snapshotForExport()
         let historical = try #require(snapshot.days.first { $0.localDate == "2027-01-13" })
         #expect(snapshot.activeDayID == active)
         #expect(historical.completeness == .partial && historical.closedAt == nil)

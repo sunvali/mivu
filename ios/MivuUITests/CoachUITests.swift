@@ -14,20 +14,13 @@ import XCTest
         app.terminate(); app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.staticTexts["History message 1"].exists, "Reopening should render only the latest twenty turns initially")
-        let earlier = app.buttons["coachEarlierMessages"]
-        revealCoach(earlier, in: app)
-        for _ in 0..<3 where earlier.frame.minY < app.navigationBars["Coach"].frame.maxY {
-            app.scrollViews.firstMatch.swipeDown()
-        }
-        XCTAssertGreaterThanOrEqual(earlier.frame.minY, app.navigationBars["Coach"].frame.maxY)
-        earlier.tap()
+        XCTAssertFalse(app.buttons["coachEarlierMessages"].exists)
         let first = app.staticTexts["History message 1"]
+        for _ in 0..<16 where !first.isHittable { coachViewport(in: app).swipeDown() }
         XCTAssertTrue(first.waitForExistence(timeout: 5))
-        XCTAssertTrue(first.isHittable, "Loading earlier should reveal the older page")
-        XCTAssertFalse(earlier.exists)
+        XCTAssertTrue(first.isHittable, "A real upward-history gesture must load and reveal the older page")
         enter("History message 22", in: app); app.buttons["coachSend"].tap()
         let newest = app.staticTexts["History message 22"]
-        XCTAssertTrue(newest.waitForExistence(timeout: 5))
         XCTAssertTrue(first.isHittable, "New input must preserve the history being read")
         let latest = app.buttons["coachNewMessage"]
         let found = latest.waitForExistence(timeout: 5)
@@ -35,6 +28,7 @@ import XCTest
             let diagnostic = XCTAttachment(string: app.debugDescription); diagnostic.name = "Paging failure"; diagnostic.lifetime = .keepAlways; add(diagnostic)
         }
         XCTAssertTrue(found); latest.tap()
+        XCTAssertTrue(newest.waitForExistence(timeout: 5))
         let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: newest)
         XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
     }
@@ -49,7 +43,6 @@ import XCTest
         XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Synthetic coach lunch")
         app.buttons["coachPhotos"].tap()
         XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
-        app.navigationBars.buttons["Done"].tap()
         let send = app.buttons["coachSend"]
         XCTAssertTrue(send.isHittable); XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 10))
@@ -82,7 +75,7 @@ import XCTest
         let send = app.buttons["coachSend"]
         XCTAssertTrue(send.isHittable); XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
         XCTAssertTrue(app.staticTexts["Two eggs, three bread slices and salad"].waitForExistence(timeout: 10))
-        waitForReplies(1, in: app)
+        waitForReply(to: "Two eggs, three bread slices and salad", in: app)
         let arrival = XCTAttachment(screenshot: app.screenshot()); arrival.name = "English dark accessibility5 latest reply arrival"; arrival.lifetime = .keepAlways; add(arrival)
         XCTAssertTrue(input.isHittable, "The composer must remain reachable after the latest reply")
         XCTAssertTrue(send.isHittable)
@@ -104,12 +97,12 @@ import XCTest
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["coachFixtureBanner"].exists)
         enter("Two eggs, three bread slices and salad", in: app)
         app.buttons["coachPhotos"].tap()
         XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
-        app.navigationBars.buttons["Done"].tap(); app.buttons["coachSend"].tap()
-        waitForReplies(1, in: app)
+        app.buttons["coachSend"].tap()
+        XCTAssertTrue(app.staticTexts["coachFixtureBanner"].waitForExistence(timeout: 5))
+        waitForReply(to: "Two eggs, three bread slices and salad", in: app)
         openLatestMeal(in: app)
         for food in ["Eggs", "Bread", "Salad"] { revealMealDetailItem(app.staticTexts[food].firstMatch, in: app) }
         revealMealDetailItem(app.staticTexts["3 slice"], in: app)
@@ -117,14 +110,14 @@ import XCTest
         XCTAssertTrue(app.buttons["viewMealPhoto"].firstMatch.isHittable)
         app.navigationBars.buttons.firstMatch.tap()
         enter("half bread", in: app); app.buttons["coachSend"].tap()
-        waitForReplies(2, in: app); openLatestMeal(in: app)
+        waitForReply(to: "half bread", in: app); openLatestMeal(in: app)
+        revealMealDetailItem(app.staticTexts["300"], in: app)
         for quantity in ["1.5 slice", "2 egg", "1 bowl"] {
             revealMealDetailItem(app.staticTexts[quantity], in: app)
         }
-        revealMealDetailItem(app.staticTexts["300"], in: app)
         app.navigationBars.buttons.firstMatch.tap()
         enter("Yesterday I had dessert", in: app); app.buttons["coachSend"].tap()
-        waitForReplies(3, in: app)
+        waitForReply(to: "Yesterday I had dessert", in: app)
         app.tabBars.buttons["Diary"].tap()
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Jerusalem")!
         let yesterday = calendar.date(byAdding: .day, value: -1, to: Date())!
@@ -152,18 +145,32 @@ import XCTest
         let review = app.switches["reviewFirst"].switches.firstMatch
         for _ in 0..<5 where !review.isHittable { app.collectionViews.firstMatch.swipeUp() }
         XCTAssertTrue(review.isHittable); review.tap(); app.buttons["sendMeal"].tap()
-        app.tabBars.buttons["Coach"].tap(); waitForReplies(4, in: app)
+        app.tabBars.buttons["Coach"].tap(); waitForReply(to: "Fixture review meal", in: app)
         let reviewLink = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
         revealCoachLink(reviewLink, in: app)
         XCTAssertTrue(reviewLink.waitForExistence(timeout: 5)); reviewLink.tap()
-        let accept = app.buttons["acceptReview"]; XCTAssertTrue(accept.waitForExistence(timeout: 5)); revealMealDetailItem(accept, in: app); accept.tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+        let accept = app.buttons["acceptReview"]
+        revealMealDetailItem(accept, in: app)
+        XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap()
         revealMealDetailItem(app.staticTexts["Snack"].firstMatch, in: app)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Synthetic fixture saved review record"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.terminate(); app.launch()
-        XCTAssertTrue(app.staticTexts["half bread"].waitForExistence(timeout: 15))
-        XCTAssertEqual(replyElements(in: app).count, 4)
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        let persistedInputs = ["Two eggs, three bread slices and salad", "half bread", "Yesterday I had dessert", "Fixture review meal"]
+        var persistedTurnIDs = Set<String>()
+        for text in persistedInputs.reversed() {
+            let input = app.staticTexts.matching(NSPredicate(format: "label == %@ AND identifier BEGINSWITH %@", text, "coachText-")).firstMatch
+            revealCoach(input, in: app)
+            XCTAssertEqual(input.label, text)
+            persistedTurnIDs.insert(input.identifier)
+            let reply = ownReply(to: text, in: app)
+            revealCoach(reply, in: app)
+            XCTAssertFalse(reply.label.isEmpty, "Each of the four actual captured turns must retain its own completed reply")
+        }
+        XCTAssertEqual(persistedTurnIDs.count, 4)
         let banner = app.staticTexts["coachFixtureBanner"]
-        for _ in 0..<12 where !banner.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        for _ in 0..<12 where !banner.isHittable { coachViewport(in: app).swipeDown() }
         XCTAssertTrue(banner.isHittable)
     }
 
@@ -172,7 +179,6 @@ import XCTest
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["coachFixtureBanner"].exists)
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         revealList(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
@@ -182,18 +188,20 @@ import XCTest
         XCTAssertTrue(app.buttons["doneSettings"].waitForExistence(timeout: 5)); app.buttons["doneSettings"].tap()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5))
         enter("Two eggs, three bread slices and salad", in: app); app.buttons["coachSend"].tap()
-        waitForReplies(1, in: app)
+        XCTAssertTrue(app.staticTexts["coachFixtureBanner"].waitForExistence(timeout: 5))
+        waitForReply(to: "Two eggs, three bread slices and salad", in: app)
         openLatestMeal(in: app)
         XCTAssertTrue(app.staticTexts["Eggs"].firstMatch.exists)
         app.navigationBars.buttons.firstMatch.tap()
         enter("I weighed 70 kg this morning", in: app); app.buttons["coachSend"].tap()
-        waitForReplies(2, in: app)
-        guard replyElements(in: app).element(boundBy: 1).label.contains("Recorded weight: 70 kg.") else {
+        let weight = waitForReply(to: "I weighed 70 kg this morning", in: app)
+        guard weight.label.contains("Recorded weight: 70 kg.") else {
             XCTFail("The morning weigh-in must be saved through the production tool and reported from its receipt")
             return
         }
         enter("I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal", in: app)
-        app.buttons["coachSend"].tap(); waitForReplies(3, in: app)
+        app.buttons["coachSend"].tap()
+        waitForReply(to: "I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal", in: app)
         let workout = app.buttons["coachWorkoutLink"]
         revealCoachLink(workout, in: app)
         XCTAssertGreaterThanOrEqual(workout.frame.height, 44); workout.tap()
@@ -205,15 +213,15 @@ import XCTest
         let detail = XCTAttachment(screenshot: app.screenshot()); detail.name = "Synthetic Coach receipt opens actual workout"; detail.lifetime = .keepAlways; add(detail)
         app.navigationBars.buttons.firstMatch.tap()
         enter("What is my remaining budget?", in: app); app.buttons["coachSend"].tap()
-        let budget = progressReply(containing: "Day coverage:", in: app)
-        XCTAssertTrue(budget.waitForExistence(timeout: 15)); XCTAssertTrue(budget.isHittable)
+        let budget = waitForReply(to: "What is my remaining budget?", in: app)
+        XCTAssertTrue(budget.label.contains("Day coverage:"), budget.label)
         for fact in ["Recorded food: 420 kcal.", "Remaining from recorded food: 1580 kcal.", "Configured target: 2000 kcal.", "Recorded workouts: 1.", "Estimated exercise burn: 200 kcal.", "Weight average: 70 kg from 1 measured dates."] {
             XCTAssertTrue(budget.label.contains(fact), fact)
         }
         XCTAssertFalse(budget.label.contains("Explicit exercise-adjusted remaining"))
         enter("Show my weekly report", in: app); app.buttons["coachSend"].tap()
-        let weekly = progressReply(containing: "Period recorded workouts: 1.", in: app)
-        XCTAssertTrue(weekly.waitForExistence(timeout: 15)); XCTAssertTrue(weekly.isHittable)
+        let weekly = waitForReply(to: "Show my weekly report", in: app)
+        XCTAssertTrue(weekly.label.contains("Period recorded workouts: 1."), weekly.label)
         XCTAssertTrue(weekly.label.contains("6 missing"))
         app.terminate(); app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
@@ -221,7 +229,7 @@ import XCTest
         XCTAssertTrue(weekly.label.contains("Remaining from recorded food: 1580 kcal."))
         XCTAssertTrue(weekly.label.contains("Weight average: 70 kg from 1 measured dates."))
         XCTAssertTrue(weekly.label.contains("Estimated exercise burn: 200 kcal."))
-        for text in ["Two eggs, three bread slices and salad", "I weighed 70 kg this morning", "What is my remaining budget?", "Show my weekly report"] {
+        for text in ["Two eggs, three bread slices and salad", "I weighed 70 kg this morning", "What is my remaining budget?", "Show my weekly report"].reversed() {
             let input = app.staticTexts[text]
             revealCoach(input, in: app)
             XCTAssertEqual(input.label, text)
@@ -251,7 +259,7 @@ import XCTest
         let latest = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: status)
         XCTAssertEqual(XCTWaiter.wait(for: [latest], timeout: 5), .completed)
         XCTAssertLessThan(status.frame.maxY, app.textFields["coachInput"].frame.minY)
-        app.scrollViews.firstMatch.swipeDown()
+        coachViewport(in: app).swipeDown()
         let banner = app.staticTexts.matching(NSPredicate(format: "label == %@", history)).firstMatch
         XCTAssertTrue(banner.isHittable)
         enter("Synthetic new message", in: app); app.buttons["coachSend"].tap()
@@ -273,14 +281,14 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         let history = (1...32).map { "Synthetic earlier line \($0)." }.joined(separator: " ")
         enter(history, in: app); app.buttons["coachSend"].tap()
-        waitForReplies(1, in: app)
+        waitForReply(to: history, in: app)
         enter("Synthetic delayed weekly report", in: app); app.buttons["coachSend"].tap()
         let activity = app.otherElements["coachActivity"]
         XCTAssertTrue(activity.waitForExistence(timeout: 5))
         XCTAssertTrue(activity.isHittable)
         XCTAssertLessThanOrEqual(activity.frame.maxY, app.textFields["coachInput"].frame.minY)
         let banner = app.staticTexts["coachFixtureBanner"]
-        for _ in 0..<4 where !banner.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        for _ in 0..<4 where !banner.isHittable { coachViewport(in: app).swipeDown() }
         XCTAssertTrue(banner.isHittable)
         let before = banner.frame.minY
         let jump = app.buttons["coachNewMessage"]
@@ -312,7 +320,7 @@ import XCTest
         enter("Synthetic delayed weekly report", in: app); app.buttons["coachSend"].tap()
         XCTAssertTrue(app.otherElements["coachActivity"].waitForExistence(timeout: 5))
         // Hold in the scroll view's empty gutter without dragging or selecting text.
-        app.scrollViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).press(forDuration: 9)
+        coachViewport(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).press(forDuration: 9)
         let reply = progressReply(containing: "Period recorded workouts:", in: app)
         XCTAssertTrue(reply.waitForExistence(timeout: 10))
         let bottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -353,11 +361,15 @@ import XCTest
         XCTAssertFalse(app.buttons["coachNewMessage"].exists)
     }
 
+    private func coachViewport(in app: XCUIApplication) -> XCUIElement {
+        let table = app.tables["coachViewport"]
+        return table.exists ? table : app.scrollViews.firstMatch
+    }
     private func revealCoachLink(_ link: XCUIElement, in app: XCUIApplication) {
         // Hittable can include a partially clipped link whose center is under the composer.
         for _ in 0..<8 {
             if link.isHittable && link.frame.maxY < app.textFields["coachInput"].frame.minY - 8 { break }
-            app.scrollViews.firstMatch.swipeUp()
+            coachViewport(in: app).swipeUp()
         }
         XCTAssertTrue(link.isHittable)
         XCTAssertLessThan(link.frame.maxY, app.textFields["coachInput"].frame.minY - 8)
@@ -370,7 +382,7 @@ import XCTest
         replyElements(in: app).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
     private func revealCoach(_ element: XCUIElement, in app: XCUIApplication) {
-        let scroll = app.scrollViews.firstMatch
+        let scroll = coachViewport(in: app)
         for _ in 0..<24 where !element.isHittable {
             let above = !element.exists || element.frame.midY < scroll.frame.midY
             let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: above ? 0.3 : 0.7))
@@ -388,16 +400,24 @@ import XCTest
     private func enter(_ text: String, in app: XCUIApplication) {
         let input = app.textFields["coachInput"]; XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText(text)
     }
-    private func waitForReplies(_ count: Int, in app: XCUIApplication) {
-        let replies = replyElements(in: app)
-        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            replies.count >= count
-        }, object: app)
-        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 15), .completed)
-        if replies.count > 0 {
-            let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: replies.element(boundBy: replies.count - 1))
-            XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed, "Latest completed reply should remain visible after it arrives")
+    private func ownReply(to text: String, in app: XCUIApplication) -> XCUIElement {
+        let input = app.staticTexts.matching(NSPredicate(format: "label == %@ AND identifier BEGINSWITH %@", text, "coachText-")).firstMatch
+        if !input.waitForExistence(timeout: 2) {
+            let jump = app.buttons["coachNewMessage"]
+            if jump.waitForExistence(timeout: 3), jump.isHittable { jump.tap() }
         }
+        XCTAssertTrue(input.waitForExistence(timeout: 5), "The exact submitted text must identify its captured turn after returning to latest")
+        let identifier = input.identifier
+        XCTAssertTrue(identifier.hasPrefix("coachText-"))
+        let exchange = app.descendants(matching: .any)["coachExchange-" + String(identifier.dropFirst("coachText-".count))].firstMatch
+        return exchange.descendants(matching: .any).matching(identifier: "coachReply").firstMatch
+    }
+    @discardableResult private func waitForReply(to text: String, in app: XCUIApplication) -> XCUIElement {
+        let reply = ownReply(to: text, in: app)
+        XCTAssertTrue(reply.waitForExistence(timeout: 15), "The submitted turn must receive its own completed reply: \(text)")
+        let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: reply)
+        XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed, "The current turn's completed reply must remain visible after arrival")
+        return reply
     }
     private func openLatestMeal(in app: XCUIApplication) {
         let links = app.buttons.matching(identifier: "coachMealLink")

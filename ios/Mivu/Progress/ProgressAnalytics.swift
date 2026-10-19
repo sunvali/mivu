@@ -50,17 +50,16 @@ struct WeightProgress: Codable, Equatable, Sendable {
 }
 
 enum ProgressAnalytics {
+    static func daily(readModel: DiaryReadModel) -> DailyProgress {
+        let burn = readModel.workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? readModel.workouts.reduce(0) { $0 + ($1.estimatedBurnKcal ?? 0) } : nil
+        return daily(localDate: readModel.activeDay?.localDate ?? dateLabel(Date(), zone: readModel.profile.timeZoneID),
+            days: readModel.activeDay.map { [$0] } ?? [], subtotals: readModel.activeDay == nil ? [] : [readModel.totals],
+            hasPending: readModel.hasPendingOnActiveDay, goal: readModel.activeGoal, workoutCount: readModel.workouts.count, estimatedBurnKcal: burn)
+    }
     static func daily(snapshot: DiarySnapshot, localDate: String) -> DailyProgress {
         let days = snapshot.days.filter { $0.localDate == localDate }
         let dayIDs = Set(days.map(\.id))
         let hasPending = Self.hasPending(on: localDate, dayIDs: dayIDs, snapshot: snapshot)
-        let completeness: DayCompleteness?
-        if days.isEmpty { completeness = nil }
-        else if days.allSatisfy({ $0.completeness == .complete }) {
-            completeness = hasPending ? .partial : .complete
-        } else if days.allSatisfy({ $0.completeness == .untracked }) { completeness = .untracked }
-        else if days.allSatisfy({ $0.completeness == .unknown }) { completeness = .unknown }
-        else { completeness = .partial }
         let subtotals = days.map { tracked -> NutritionTotals in
             let pending = Self.hasPending(on: localDate, dayIDs: [tracked.id], snapshot: snapshot)
             let hasSavedMeal = snapshot.meals.contains { $0.dayID == tracked.id && $0.isSaved }
@@ -70,6 +69,21 @@ enum ProgressAnalytics {
             }
             return snapshot.totals(dayID: tracked.id)
         }
+        let workouts = snapshot.workouts.filter { dayIDs.contains($0.dayID) }
+        let burn = workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? workouts.reduce(0) { $0 + $1.estimatedBurnKcal! } : nil
+        return daily(localDate: localDate, days: days, subtotals: subtotals, hasPending: hasPending,
+            goal: snapshot.goal(on: localDate), workoutCount: workouts.count, estimatedBurnKcal: burn)
+    }
+
+    static func daily(localDate: String, days: [TrackingDay], subtotals: [NutritionTotals], hasPending: Bool,
+                      goal: GoalRecord?, workoutCount: Int, estimatedBurnKcal burn: Double?) -> DailyProgress {
+        let completeness: DayCompleteness?
+        if days.isEmpty { completeness = nil }
+        else if days.allSatisfy({ $0.completeness == .complete }) {
+            completeness = hasPending ? .partial : .complete
+        } else if days.allSatisfy({ $0.completeness == .untracked }) { completeness = .untracked }
+        else if days.allSatisfy({ $0.completeness == .unknown }) { completeness = .unknown }
+        else { completeness = .partial }
         func sum(_ field: KeyPath<NutritionTotals, Double?>) -> Double? {
             guard !subtotals.isEmpty, subtotals.allSatisfy({ $0[keyPath: field] != nil }) else { return nil }
             return subtotals.reduce(0) { $0 + $1[keyPath: field]! }
@@ -77,20 +91,16 @@ enum ProgressAnalytics {
         let totals: NutritionTotals? = subtotals.isEmpty ? nil : NutritionTotals(
             kcal: sum(\.kcal), carbs: sum(\.carbs), protein: sum(\.protein), fat: sum(\.fat),
             unknownItemCount: subtotals.reduce(0) { $0 + $1.unknownItemCount })
-        let goal = snapshot.goal(on: localDate)
         let remaining = NutritionValues(
             kcal: remaining(goal?.targets.kcal, totals?.kcal),
             carbs: remaining(goal?.targets.carbs, totals?.carbs),
             protein: remaining(goal?.targets.protein, totals?.protein),
             fat: remaining(goal?.targets.fat, totals?.fat)
         )
-        let workouts = snapshot.workouts.filter { dayIDs.contains($0.dayID) }
-        let burn: Double? = workouts.allSatisfy { $0.estimatedBurnKcal != nil }
-            ? workouts.reduce(0) { $0 + $1.estimatedBurnKcal! } : nil
         let adjusted = goal?.exerciseCreditEnabled == true ? remaining.kcal.flatMap { kcal in burn.map { kcal + $0 } } : nil
         return DailyProgress(localDate: localDate, completeness: completeness, hasPending: hasPending,
                              foodTotals: totals, goal: goal, remainingFromRecorded: remaining,
-                             workoutCount: workouts.count, estimatedBurnKcal: burn,
+                             workoutCount: workoutCount, estimatedBurnKcal: burn,
                              exerciseAdjustedKcalRemaining: adjusted)
     }
 
@@ -98,6 +108,10 @@ enum ProgressAnalytics {
         precondition(days == 7 || days == 30)
         let labels = window(endingOn: endingOn, days: days, offset: 0, zone: snapshot.profile.timeZoneID)
         let reports = labels.map { daily(snapshot: snapshot, localDate: $0) }
+        return period(endingOn: endingOn, days: days, reports: reports)
+    }
+
+    static func period(endingOn: String, days: Int, reports: [DailyProgress]) -> PeriodProgress {
         let eligible = reports.filter { $0.completeness == .complete && !$0.hasPending }
         func average(_ field: KeyPath<NutritionTotals, Double?>) -> (Double?, Int) {
             let values = eligible.compactMap { $0.foodTotals?[keyPath: field] }
@@ -110,7 +124,7 @@ enum ProgressAnalytics {
             // A target is a range for reporting: a very low intake is not called adherence.
             return intake >= target * 0.9 && intake <= target * 1.1
         }
-        return PeriodProgress(startLocalDate: labels.first ?? endingOn, endLocalDate: endingOn,
+        return PeriodProgress(startLocalDate: reports.first?.localDate ?? endingOn, endLocalDate: endingOn,
                               dayCount: days,
                               completeDayCount: reports.filter { $0.completeness == .complete }.count,
                               partialDayCount: reports.filter { $0.completeness == .partial }.count,
@@ -142,10 +156,18 @@ enum ProgressAnalytics {
     }
 
     static func weight(snapshot: DiarySnapshot, endingOn: String) -> WeightProgress {
-        let latest = latestWeightsByDate(snapshot: snapshot)
+        let completeKcalDays = window(endingOn: endingOn, days: 28, offset: 0,
+                                      zone: snapshot.profile.timeZoneID).reduce(0) { count, label in
+            let report = daily(snapshot: snapshot, localDate: label)
+            return count + (report.completeness == .complete && !report.hasPending && report.foodTotals?.kcal != nil ? 1 : 0)
+        }
+        return weight(endingOn: endingOn, zone: snapshot.profile.timeZoneID, latest: latestWeightsByDate(snapshot: snapshot), completeKcalDays: completeKcalDays)
+    }
+
+    static func weight(endingOn: String, zone: String, latest: [String: WeightEntry], completeKcalDays: Int) -> WeightProgress {
         func summary(days: Int, offset: Int) -> (average: Double?, count: Int) {
             let entries = window(endingOn: endingOn, days: days, offset: offset,
-                                 zone: snapshot.profile.timeZoneID).compactMap { latest[$0] }
+                                 zone: zone).compactMap { latest[$0] }
             let kilograms = entries.map { $0.unit == "lb" ? $0.value * 0.45359237 : $0.value }
             return (kilograms.isEmpty ? nil : kilograms.reduce(0, +) / Double(kilograms.count), kilograms.count)
         }
@@ -153,11 +175,6 @@ enum ProgressAnalytics {
         let priorWeek = summary(days: 7, offset: 7)
         let priorMonth = summary(days: 7, offset: 30)
         let firstPlateauWeek = summary(days: 7, offset: 21)
-        let completeKcalDays = window(endingOn: endingOn, days: 28, offset: 0,
-                                      zone: snapshot.profile.timeZoneID).reduce(0) { count, label in
-            let report = daily(snapshot: snapshot, localDate: label)
-            return count + (report.completeness == .complete && !report.hasPending && report.foodTotals?.kcal != nil ? 1 : 0)
-        }
         let plateau: PlateauReadiness
         if current.count < 3 || firstPlateauWeek.count < 3 || completeKcalDays < 14 {
             plateau = .insufficientData
@@ -200,7 +217,7 @@ enum ProgressAnalytics {
         return formatter.string(from: date)
     }
 
-    private static func window(endingOn: String, days: Int, offset: Int, zone: String) -> [String] {
+    static func window(endingOn: String, days: Int, offset: Int, zone: String) -> [String] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
         let formatter = DateFormatter()

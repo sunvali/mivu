@@ -26,7 +26,7 @@ struct CoachActivityView: View {
         .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue("In progress")
+        .accessibilityValue("Analysis in progress. Input saved on this iPhone.")
         .accessibilityIdentifier("coachActivity")
     }
 

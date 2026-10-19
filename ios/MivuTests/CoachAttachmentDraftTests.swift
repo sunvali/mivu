@@ -1,0 +1,469 @@
+import Foundation
+import Testing
+@testable import Mivu
+
+@Suite @MainActor struct CoachAttachmentDraftTests {
+    @Test func draftImportsAreOrderedBoundedAndPartiallyRecoverable() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let gate = Task10Gate(), bytes = try Task10JPEG.tagged()
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        dependencies.normalize = { data, _ in data }
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Preserve my note", attachments: (0..<5).map { _ in MealPhoto(data: bytes) })
+        let existingIDs = draft.attachments.map(\.id)
+        let first = CoachAttachmentDraft.Selection { await gate.hold(0); return bytes }
+        let failed = CoachAttachmentDraft.Selection { throw DiaryError.invalidData }
+        let third = CoachAttachmentDraft.Selection { bytes }
+        let overflow = CoachAttachmentDraft.Selection { Issue.record("A ninth attachment must not transfer"); return bytes }
+        let importing = Task10Fixture.operation(gate: gate) { try await draft.importSelections([first, failed, third, overflow]) }
+        do {
+            try await gate.waitForArrivals(1)
+            #expect(draft.attachments.count + draft.reservedAttachmentCount <= 8)
+            await gate.releaseAll()
+            let failures = try await importing.value
+            #expect(failures.contains(failed.id))
+            #expect(draft.attachments.prefix(5).map(\.id) == existingIDs)
+            #expect(draft.attachments.dropFirst(5).map(\.id) == [first.id, third.id])
+            #expect(draft.attachments.count == 7 && draft.reservedAttachmentCount == 0)
+            #expect(draft.text == "Preserve my note")
+            let unsent = try await f.diary.store.snapshotForExport()
+            #expect(unsent.meals.isEmpty && unsent.coachTurns.isEmpty)
+        } catch { await gate.releaseAll(); _ = try? await importing.value; throw error }
+    }
+
+    @Test func retakePreservesStableIdentityAndFailedReplacementKeepsOriginal() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let original = MealPhoto(data: try Task10JPEG.tagged(), createdAt: Date(timeIntervalSinceReferenceDate: 100), role: .before)
+        var dependencies = Task10Fixture.dependencies(f.diary); dependencies.normalize = { bytes, _ in bytes }
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Keep", attachments: [original])
+        let submissionID = draft.submissionID
+        await #expect(throws: DiaryError.invalidData) {
+            try await draft.retake(original.id, selection: .init { throw DiaryError.invalidData })
+        }
+        #expect(draft.attachments == [original] && draft.submissionID == submissionID)
+        var replacement = try Task10JPEG.tagged(); replacement.append(0)
+        let replacedBytes = replacement
+        try await draft.retake(original.id, selection: .init { replacedBytes })
+        #expect(draft.attachments.map(\.id) == [original.id])
+        #expect(draft.attachments[0].data == replacedBytes && draft.attachments[0].role == .before)
+        #expect(draft.attachments[0].createdAt == original.createdAt)
+        #expect(draft.submissionID == submissionID && draft.text == "Keep")
+    }
+
+    @Test(arguments: ["remove", "cancel", "close"])
+    func lateRetakeCannotRecreateRemovedOrCancelledAttachment(action: String) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let original = MealPhoto(data: try Task10JPEG.tagged()), gate = Task10Gate()
+        var dependencies = Task10Fixture.dependencies(f.diary); dependencies.normalize = { bytes, _ in bytes }
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Keep", attachments: [original])
+        let presentation = try draft.beginPresentation()
+        let retaking = Task10Fixture.operation(gate: gate) {
+            try await draft.retake(original.id, selection: .init { await gate.hold(0); return original.data }, presentationID: presentation)
+        }
+        do {
+            try await gate.waitForArrivals(1)
+            if action == "remove" { try await draft.remove(original.id) }
+            else if action == "close" { try await draft.endPresentation(presentation) }
+            else { try await draft.cancelPendingImports() }
+            await gate.releaseAll()
+            _ = try? await retaking.value
+            #expect(draft.attachments == (action == "remove" ? [] : [original]))
+            #expect(draft.text == "Keep" && draft.reservedAttachmentCount == 0)
+        } catch { await gate.releaseAll(); _ = try? await retaking.value; throw error }
+    }
+
+    @Test(arguments: ["ABA", "restore", "presentation"])
+    func lateProfileRestoreOrPresentationResultIsDiscarded(change: String) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let gate = Task10Gate(), bytes = try Task10JPEG.tagged(), owner = try #require(f.diary.selection)
+        var dependencies = Task10Fixture.dependencies(f.diary); dependencies.normalize = { bytes, _ in bytes }
+        let draft = CoachAttachmentDraft(ownership: owner, limiter: f.diary.photoWorkLimiter, dependencies: dependencies, text: "Old profile input")
+        let presentation = try draft.beginPresentation()
+        let importing = Task10Fixture.operation(gate: gate) {
+            try await draft.importSelections([.init { await gate.hold(0); return bytes }], presentationID: presentation)
+        }
+        do {
+            try await gate.waitForArrivals(1)
+            if change == "presentation" {
+                try await draft.endPresentation(presentation)
+                _ = try draft.beginPresentation()
+            } else { try await changeOwner(f, kind: change, original: owner) }
+            await gate.releaseAll()
+            _ = try? await importing.value
+            #expect(draft.attachments.isEmpty && draft.reservedAttachmentCount == 0)
+            #expect(draft.captureReceipt == nil)
+            #expect(try await f.diary.store.snapshotForExport().coachTurns.isEmpty)
+        } catch { await gate.releaseAll(); _ = try? await importing.value; throw error }
+    }
+
+    @Test(arguments: ["capture", "refresh"])
+    func failedSaveRetainsDraftAndOperationIdentity(stage: String) async throws {
+        let once = Task10Once()
+        let f = try await Task10Fixture.make(actionLoading: { owner, store in
+            let value = try await store.diaryReadModel(expectedProfileID: owner)
+            if stage == "refresh", await once.claim() { throw DiaryError.persistenceFailed }
+            return value
+        }); defer { f.remove() }
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        if stage == "capture" { dependencies.capture = { _, _ in throw DiaryError.persistenceFailed } }
+        let photos = [MealPhoto(data: try Task10JPEG.tagged())]
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Keep after failed save", attachments: photos)
+        let id = draft.submissionID
+        await #expect(throws: DiaryError.persistenceFailed) { _ = try await draft.send() }
+        #expect(draft.text == "Keep after failed save" && draft.attachments == photos)
+        #expect(draft.submissionID == id && draft.captureReceipt == nil)
+        #expect(draft.uncertainAttempt?.payload.submissionID == id)
+        let actual = try await f.diary.store.snapshotForExport()
+        #expect(actual.meals.isEmpty)
+        #expect(actual.coachTurns.count == (stage == "refresh" ? 1 : 0))
+    }
+
+    @Test func uncertainSaveThenEditedDraftReconcilesBeforeNewSubmission() async throws {
+        let once = Task10Once(), trace = Task10SubmissionTrace()
+        let f = try await Task10Fixture.make(actionLoading: { owner, store in
+            let result = try await store.diaryReadModel(expectedProfileID: owner)
+            if await once.claim() { throw DiaryError.persistenceFailed }
+            return result
+        }); defer { f.remove() }
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        dependencies.normalize = { bytes, _ in bytes }
+        let capture = dependencies.capture, reconcile = dependencies.reconcile
+        dependencies.capture = { payload, owner in await trace.capture(payload); return try await capture(payload, owner) }
+        dependencies.reconcile = { id, manifest, owner in await trace.reconcile(id, manifest); return try await reconcile(id, manifest, owner) }
+        let originalPhoto = MealPhoto(data: try Task10JPEG.tagged(), createdAt: Date(timeIntervalSinceReferenceDate: 700), role: .before)
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Original accepted input", attachments: [originalPhoto])
+        let originalID = draft.submissionID
+        await #expect(throws: DiaryError.persistenceFailed) { _ = try await draft.send() }
+        let originalManifest = try #require(draft.uncertainAttempt?.payload.manifest)
+        draft.text = "Edited new input"
+        var replacement = originalPhoto.data; replacement.append(0)
+        let editedBytes = replacement
+        try await draft.retake(originalPhoto.id, selection: .init { editedBytes })
+        #expect(draft.uncertainAttempt?.payload.manifest == originalManifest)
+        let result = try #require(try await draft.send())
+        #expect(result.id != originalID && draft.captureReceipt == result.id)
+        let stored = try await f.diary.store.snapshotForExport()
+        #expect(stored.coachTurns.count == 2 && stored.meals.isEmpty)
+        let original = try #require(stored.coachTurns.first { $0.id == originalID })
+        let edited = try #require(stored.coachTurns.first { $0.id == result.id })
+        #expect(original.text == "Original accepted input" && original.photos == [originalPhoto])
+        #expect(original.submissionManifest == originalManifest)
+        #expect(edited.text == "Edited new input" && edited.photos.map(\.id) == [originalPhoto.id])
+        #expect(edited.photos[0].data == editedBytes)
+        #expect(await trace.events == [.capture(originalID), .reconcile(originalID), .capture(result.id)])
+        #expect(await trace.reconciledManifests == [originalManifest])
+        #expect(draft.text.isEmpty && draft.attachments.isEmpty)
+    }
+
+    @Test(arguments: ["failure", "conflict"])
+    func unresolvedOriginalAttemptCannotMintEditedSubmission(outcome: String) async throws {
+        let once = Task10Once(), trace = Task10SubmissionTrace()
+        let f = try await Task10Fixture.make(actionLoading: { owner, store in
+            let result = try await store.diaryReadModel(expectedProfileID: owner)
+            if await once.claim() { throw DiaryError.persistenceFailed }; return result
+        }); defer { f.remove() }
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture
+        dependencies.capture = { payload, owner in
+            await trace.capture(payload)
+            if outcome == "conflict" {
+                let different = try CoachSubmissionPayload(submissionID: payload.submissionID, text: "Already accepted different input",
+                    attachments: payload.attachments, context: payload.context)
+                _ = try await capture(different, owner)
+                throw DiaryError.persistenceFailed
+            }
+            return try await capture(payload, owner)
+        }
+        if outcome == "failure" { dependencies.reconcile = { _, _, _ in throw DiaryError.persistenceFailed } }
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Original")
+        let id = draft.submissionID
+        await #expect(throws: DiaryError.persistenceFailed) { _ = try await draft.send() }
+        let manifest = try #require(draft.uncertainAttempt?.payload.manifest)
+        draft.text = "Edited while uncertain"
+        do { _ = try await draft.send(); Issue.record("Unresolved original cannot acknowledge edited input") } catch { }
+        #expect(draft.submissionID == id && draft.text == "Edited while uncertain")
+        #expect(draft.uncertainAttempt?.payload.manifest == manifest && draft.captureReceipt == nil)
+        #expect(await trace.events == [.capture(id)])
+        let stored = try await f.diary.store.snapshotForExport()
+        #expect(stored.coachTurns.map(\.text) == [outcome == "conflict" ? "Already accepted different input" : "Original"])
+    }
+
+    @Test func absentOriginalIsReconciledBeforeEditedPayloadGetsNewIdentity() async throws {
+        let once = Task10Once(), trace = Task10SubmissionTrace()
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture, reconcile = dependencies.reconcile
+        dependencies.capture = { payload, owner in
+            await trace.capture(payload)
+            if await once.claim() { throw DiaryError.persistenceFailed }
+            return try await capture(payload, owner)
+        }
+        dependencies.reconcile = { id, manifest, owner in await trace.reconcile(id, manifest); return try await reconcile(id, manifest, owner) }
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Never committed")
+        let id = draft.submissionID
+        await #expect(throws: DiaryError.persistenceFailed) { _ = try await draft.send() }
+        draft.text = "Intentional edit"
+        let accepted = try #require(try await draft.send())
+        #expect(accepted.id != id)
+        #expect(await trace.events == [.capture(id), .reconcile(id), .capture(accepted.id)])
+        #expect(try await f.diary.store.snapshotForExport().coachTurns.map(\.text) == ["Intentional edit"])
+    }
+
+    @Test func uneditedRetryPreservesFrozenContextAttachmentIDsAndSubmissionID() async throws {
+        let once = Task10Once(), trace = Task10SubmissionTrace()
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture
+        dependencies.capture = { payload, owner in
+            await trace.capture(payload)
+            if await once.claim() { throw DiaryError.persistenceFailed }
+            return try await capture(payload, owner)
+        }
+        let photo = MealPhoto(data: try Task10JPEG.tagged())
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Exact retry", attachments: [photo])
+        let id = draft.submissionID
+        await #expect(throws: DiaryError.persistenceFailed) { _ = try await draft.send() }
+        let manifest = try #require(draft.uncertainAttempt?.payload.manifest)
+        let accepted = try #require(try await draft.send())
+        #expect(accepted.id == id)
+        #expect(await trace.capturedManifests == [manifest, manifest])
+        let actual = try await f.diary.store.snapshotForExport()
+        #expect(actual.coachTurns.count == 1 && actual.coachTurns[0].photos == [photo])
+        #expect(actual.coachTurns[0].submissionManifest == manifest)
+    }
+
+    @Test func actualCoachSendReconcilesCommittedOriginalBeforeSendingEditedDraft() async throws {
+        let once = Task10Once()
+        let f = try await Task10Fixture.make(actionLoading: { owner, store in
+            let result = try await store.diaryReadModel(expectedProfileID: owner)
+            if await once.claim() { throw DiaryError.persistenceFailed }; return result
+        }); defer { f.remove() }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection())
+        defer { coach.cancel() }
+        coach.draft.text = "Actual original"
+        let id = coach.draft.submissionID
+        #expect(!(await coach.send()))
+        #expect(coach.captureReceipt == nil && coach.draft.submissionID == id)
+        let first = try await f.diary.store.snapshotForExport()
+        #expect(first.coachTurns.map(\.text) == ["Actual original"])
+        coach.draft.text = "Actual edited input"
+        #expect(await coach.send())
+        await coach.waitForWorker()
+        let stored = try await f.diary.store.snapshotForExport()
+        #expect(stored.coachTurns.count == 2 && stored.meals.isEmpty)
+        #expect(stored.coachTurns.first { $0.id == id }?.text == "Actual original")
+        #expect(stored.coachTurns.contains { $0.id != id && $0.text == "Actual edited input" })
+        #expect(coach.draft.text.isEmpty)
+    }
+
+    @Test func relaunchLosesUnsentDraftButRecoversAcceptedSubmission() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let owner = try #require(f.diary.selection)
+        let unsent = CoachAttachmentDraft(ownership: owner, limiter: f.diary.photoWorkLimiter,
+            dependencies: Task10Fixture.dependencies(f.diary), text: "Do not persist unsent")
+        let acceptedDraft = CoachAttachmentDraft(ownership: owner, limiter: f.diary.photoWorkLimiter,
+            dependencies: Task10Fixture.dependencies(f.diary), text: "Durable accepted input", attachments: [MealPhoto(data: try Task10JPEG.tagged())])
+        let accepted = try #require(try await acceptedDraft.send())
+        let reopened = DiaryStore(directory: f.root)
+        _ = try await reopened.selectProfile(owner.identity.profileID)
+        let newOwner = try await reopened.selectionOwnership(expectedProfileID: owner.identity.profileID)
+        let relaunchedDraft = CoachAttachmentDraft(ownership: newOwner, limiter: PhotoWorkLimiter(),
+            dependencies: .init(store: reopened))
+        #expect(relaunchedDraft.text.isEmpty && relaunchedDraft.attachments.isEmpty)
+        #expect(relaunchedDraft.uncertainAttempt == nil)
+        let recoverable = try await reopened.nextCoachResult(includeWaitingForConnection: true, expectedProfileID: owner.identity.profileID)
+        #expect(recoverable?.id == accepted.id)
+        let stored = try await reopened.snapshotForExport()
+        #expect(stored.coachTurns.map(\.id) == [accepted.id])
+        #expect(!stored.coachTurns.contains { $0.id == unsent.submissionID })
+    }
+
+    @Test(arguments: ["ABA", "restore"], ["capture", "captureAcknowledgement", "reconcile", "reconcileAcknowledgement"])
+    func storeEntryRejectsObsoleteDraftOwnership(change: String, boundary: String) async throws {
+        let once = Task10Once(), gate = Task10Gate()
+        let f = try await Task10Fixture.make(actionLoading: { owner, store in
+            let result = try await store.diaryReadModel(expectedProfileID: owner)
+            if boundary.hasPrefix("reconcile"), await once.claim() { throw DiaryError.persistenceFailed }; return result
+        }); defer { f.remove() }
+        let owner = try #require(f.diary.selection)
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture, reconcile = dependencies.reconcile
+        if boundary == "capture" { dependencies.capture = { payload, owner in await gate.hold(0); return try await capture(payload, owner) } }
+        else if boundary == "captureAcknowledgement" { dependencies.capture = { payload, owner in let result = try await capture(payload, owner); await gate.hold(0); return result } }
+        else if boundary == "reconcile" { dependencies.reconcile = { id, manifest, owner in await gate.hold(0); return try await reconcile(id, manifest, owner) } }
+        else { dependencies.reconcile = { id, manifest, owner in let result = try await reconcile(id, manifest, owner); await gate.hold(0); return result } }
+        let draft = CoachAttachmentDraft(ownership: owner, limiter: f.diary.photoWorkLimiter, dependencies: dependencies, text: "Old selection")
+        let id = draft.submissionID
+        if boundary.hasPrefix("reconcile") {
+            await #expect(throws: DiaryError.persistenceFailed) { _ = try await draft.send() }
+            draft.text = "Old selection edited"
+        }
+        let sending = Task10Fixture.operation(gate: gate) { try await draft.send() }
+        do {
+            try await gate.waitForArrivals(1)
+            try await changeOwner(f, kind: change, original: owner)
+            let before = try await f.diary.store.snapshotForExport()
+            await gate.releaseAll()
+            await #expect(throws: DiaryError.wrongOwner) { _ = try await sending.value }
+            #expect(try await f.diary.store.snapshotForExport() == before)
+            #expect(draft.submissionID == id && draft.captureReceipt == nil)
+            #expect(!draft.text.isEmpty)
+        } catch { await gate.releaseAll(); _ = try? await sending.value; throw error }
+    }
+
+    @Test func editingWhileAcceptedCaptureAwaitsRefreshDoesNotClearCurrentDraft() async throws {
+        let gate = Task10Gate()
+        let f = try await Task10Fixture.make(actionLoading: { owner, store in
+            let result = try await store.diaryReadModel(expectedProfileID: owner); await gate.hold(0); return result
+        }); defer { f.remove() }
+        let photo = MealPhoto(data: try Task10JPEG.tagged())
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: Task10Fixture.dependencies(f.diary), text: "Pressed send", attachments: [photo])
+        let id = draft.submissionID
+        let sending = Task10Fixture.operation(gate: gate) { try await draft.send() }
+        do {
+            try await gate.waitForArrivals(1)
+            draft.text = "Edited during acknowledgement"
+            await gate.releaseAll(); _ = try await sending.value
+            #expect(draft.text == "Edited during acknowledgement" && draft.attachments == [photo])
+            #expect(draft.captureReceipt == nil)
+            let stored = try await f.diary.store.snapshotForExport()
+            #expect(stored.coachTurns.map(\.id) == [id])
+            #expect(stored.coachTurns[0].text == "Pressed send" && stored.coachTurns[0].photos == [photo])
+        } catch { await gate.releaseAll(); _ = try? await sending.value; throw error }
+    }
+
+    @Test func oversizeTransferAndNormalizationFailurePublishNoAttachment() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let photo = MealPhoto(data: try Task10JPEG.tagged())
+        let requiredOwner = try #require(f.diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
+            dependencies: Task10Fixture.dependencies(f.diary), text: "Retain text", attachments: [photo])
+        let id = draft.submissionID
+        let oversize = CoachAttachmentDraft.Selection { Data(repeating: 0, count: 40_000_001) }
+        let corrupt = CoachAttachmentDraft.Selection { Data([1, 2, 3]) }
+        let failures = try await draft.importSelections([oversize, corrupt])
+        #expect(Set(failures) == Set([oversize.id, corrupt.id]))
+        #expect(draft.attachments == [photo] && draft.text == "Retain text")
+        #expect(draft.submissionID == id && draft.reservedAttachmentCount == 0 && draft.captureReceipt == nil)
+        #expect(try await f.diary.store.snapshotForExport().coachTurns.isEmpty)
+    }
+
+    @Test func sourcePhotoQuotaFailurePreservesDraftAndDurableFacts() async throws {
+        let fixture = try CaptureFixture(exchanges: 0); defer { fixture.remove() }
+        let store = DiaryStore(directory: fixture.root)
+        _ = try await store.selectProfile(fixture.profileID)
+        let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
+        // Seed only the authoritative quota scalar; no 250 MB allocation or raised product limit.
+        try fixture.execute("UPDATE storage_quota SET originalPhotoBytes = 250000000")
+        let before = try fixture.durableState(), photo = MealPhoto(data: try Task10JPEG.tagged())
+        let requiredOwner = try #require(diary.selection)
+        let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: diary.photoWorkLimiter,
+            dependencies: Task10Fixture.dependencies(diary), text: "Quota must not lose this", attachments: [photo])
+        let id = draft.submissionID
+        await #expect(throws: DiaryError.invalidData) { _ = try await draft.send() }
+        #expect(try fixture.durableState() == before)
+        #expect(draft.attachments == [photo] && draft.text == "Quota must not lose this")
+        #expect(draft.submissionID == id && draft.captureReceipt == nil)
+    }
+
+    @Test func cancelledSynchronousNormalizationKeepsSharedPermitUntilItExits() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let stage = Task10SynchronousStage(), holderGate = Task10Gate(), bytes = try Task10JPEG.tagged()
+        let statistics = AsyncStream<PhotoWorkLimiter.Statistics>.makeStream()
+        let limiter = PhotoWorkLimiter(observe: { statistics.continuation.yield($0) })
+        // This injected application instance is shared with its real photo loader and both drafts.
+        let diary = DiaryViewModel(store: f.diary.store, photoWorkLimiter: limiter); await diary.load(createDefaultProfile: false)
+        var dependencies = Task10Fixture.dependencies(diary)
+        dependencies.normalize = { data, _ in
+            try await withTaskCancellationHandler { try stage.run(data) } onCancel: { stage.cancelled.continuation.yield(()) }
+        }
+        let requiredOwner = try #require(diary.selection)
+        let first = CoachAttachmentDraft(ownership: requiredOwner, limiter: diary.photoWorkLimiter, dependencies: dependencies)
+        let second = CoachAttachmentDraft(ownership: requiredOwner, limiter: diary.photoWorkLimiter,
+            dependencies: Task10Fixture.dependencies(diary))
+        let importing = Task { do { let result = try await first.importSelections([.init { bytes }]); stage.entered.continuation.finish(); return result }
+            catch { stage.entered.continuation.finish(); throw error } }
+        var holder: Task<Void, Error>?, queued: Task<[UUID], Error>?
+        do {
+            var entered = false
+            for await _ in stage.entered.stream { entered = true; break }
+            try #require(entered)
+            holder = Task10Fixture.operation(gate: holderGate) { try await limiter.withPermit { await holderGate.hold(0) } }
+            try await holderGate.waitForArrivals(1)
+            queued = Task { do { let result = try await second.importSelections([.init { bytes }]); statistics.continuation.finish(); return result }
+                catch { statistics.continuation.finish(); throw error } }
+            var sawQueued = false
+            for await state in statistics.stream where state.queued == 1 { sawQueued = true; break }
+            try #require(sawQueued)
+            importing.cancel()
+            for await _ in stage.cancelled.stream { break }
+            let held = await limiter.statistics()
+            #expect(held.active == 2 && held.queued == 1 && held.peakActive == 2)
+            #expect(second.attachments.isEmpty)
+            stage.release()
+            _ = try? await importing.value
+            _ = try await queued?.value
+            await holderGate.releaseAll(); _ = try await holder?.value
+            #expect(first.attachments.isEmpty && first.reservedAttachmentCount == 0)
+            #expect(second.attachments.count == 1)
+            #expect(await limiter.statistics().peakActive == 2)
+        } catch {
+            stage.release(); await holderGate.releaseAll(); importing.cancel(); queued?.cancel(); holder?.cancel()
+            _ = try? await importing.value; _ = try? await queued?.value; _ = try? await holder?.value
+            throw error
+        }
+    }
+
+    private func changeOwner(_ f: Task10Fixture, kind: String, original: DiarySelectionOwnership) async throws {
+        if kind == "ABA" {
+            _ = try await f.diary.store.createProfile(DiaryProfile(name: "Other synthetic profile"))
+            _ = try await f.diary.store.selectProfile(original.identity.profileID)
+        } else {
+            let archive = try await f.diary.store.snapshotForExport()
+            try await f.diary.store.restore(archive, expectedProfileID: original.identity.profileID)
+        }
+        #expect(try await f.diary.store.selectionOwnership(expectedProfileID: original.identity.profileID) != original)
+    }
+}
+
+private actor Task10SubmissionTrace {
+    enum Event: Equatable, Sendable { case capture(UUID), reconcile(UUID) }
+    private(set) var events: [Event] = []
+    private(set) var capturedManifests: [CoachSubmissionManifest] = []
+    private(set) var reconciledManifests: [CoachSubmissionManifest] = []
+    func capture(_ payload: CoachSubmissionPayload) { events.append(.capture(payload.submissionID)); capturedManifests.append(payload.manifest) }
+    func reconcile(_ id: UUID, _ manifest: CoachSubmissionManifest) { events.append(.reconcile(id)); reconciledManifests.append(manifest) }
+}
+
+private final class Task10SynchronousStage: Sendable {
+    let entered = AsyncStream<Void>.makeStream()
+    let cancelled = AsyncStream<Void>.makeStream()
+    private let semaphore = DispatchSemaphore(value: 0)
+    func run(_ data: Data) throws -> Data {
+        #expect(!Thread.isMainThread)
+        entered.continuation.yield(())
+        guard semaphore.wait(timeout: .now() + 10) == .success else {
+            Issue.record("Synchronous normalization fixture exceeded ten seconds")
+            throw DiaryError.persistenceFailed
+        }
+        return data
+    }
+    func release() { semaphore.signal() }
+}

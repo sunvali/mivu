@@ -104,14 +104,14 @@ struct ArchiveTests {
             performedAt: nil, expectedProfileID: initial.profile.id)
         try await store.deleteWeight(id: weight.id, expectedRevision: weight.revision, expectedProfileID: initial.profile.id)
         try await store.deleteWorkout(id: workout.id, expectedRevision: workout.revision, expectedProfileID: initial.profile.id)
-        let current = try await store.snapshot()
+        let current = try await store.snapshotForExport()
         var forged = current
         forged.revision += 1
         forged.lineage = (current.lineage ?? []) + [UUID()]
         forged.weights = [weight]; forged.workouts = [workout]
         forged.deletedWeightIDs = []; forged.deletedWorkoutIDs = []
         await #expect(throws: DiaryError.staleArchive) { try await store.restore(forged) }
-        #expect(try await store.snapshot() == current)
+        #expect(try await store.snapshotForExport() == current)
     }
 
     @Test func malformedVersionOwnerAndReferencesAreRejected() throws {
@@ -183,9 +183,9 @@ struct ArchiveTests {
         let restored = try DiaryArchive.decode(DiaryArchive.encode(snapshot))
         let store = DiaryStore(directory: directory)
         _ = try await store.importProfile(restored)
-        #expect(try await store.snapshot() == restored)
+        #expect(try await store.snapshotForExport() == restored)
         let reopened = DiaryStore(directory: directory)
-        #expect(try await reopened.selectProfile(snapshot.profile.id) == snapshot)
+        #expect(try await selectedSnapshot(reopened, snapshot.profile.id) == snapshot)
     }
 
     @Test func restoreRejectsOldSnapshotAndDeletedMeal() async throws {
@@ -199,7 +199,7 @@ struct ArchiveTests {
         var newer = initial
         newer.revision = 100
         await #expect(throws: DiaryError.staleArchive) { try await store.restore(newer) }
-        #expect(try await store.snapshot().meals.isEmpty)
+        #expect(try await store.snapshotForExport().meals.isEmpty)
     }
 
     @Test func folderBackupPropagatesDeletionAndRejectsStaleQueuedWrite() async throws {
@@ -321,7 +321,7 @@ struct ArchiveTests {
         _ = try await store.importProfile(initial)
         var malformed = initial; malformed.meals[0].dayID = UUID()
         await #expect(throws: DiaryError.invalidData) { try await store.restore(malformed) }
-        #expect(try await store.snapshot() == initial)
+        #expect(try await store.snapshotForExport() == initial)
     }
 
     @Test func photoDeletionReplacesInlineMediaAndSameRevisionConflictIsRejected() async throws {
@@ -490,7 +490,7 @@ struct ArchiveTests {
         let profile = DiaryProfile(name: "Synthetic shared owner")
         _ = try await oldStore.createProfile(profile)
         let day = try await oldStore.startDay()
-        let baseline = try await oldStore.snapshot()
+        let baseline = try await oldStore.snapshotForExport()
         let oldBackup = FolderBackup(directory: root.appendingPathComponent("OldBackup"))
         let newBackup = FolderBackup(directory: root.appendingPathComponent("NewBackup"))
         await oldBackup.selectProfile(profile.id)
@@ -501,20 +501,20 @@ struct ArchiveTests {
         let newGeneration = try await newBackup.generation(profileID: profile.id)
         try await oldBackup.save(baseline, generation: oldGeneration)
         _ = try await newStore.importProfile(baseline)
-        let newMeal = try await newStore.capture(text: "replacement phone meal", photos: [], reviewFirst: false, dayID: day.id)
-        let newBranch = try await newStore.snapshot()
+        let newMeal = try await capturedMeal(newStore, text: "replacement phone meal", photos: [], reviewFirst: false, dayID: day.id)
+        let newBranch = try await newStore.snapshotForExport()
         try await newBackup.save(newBranch, generation: newGeneration)
         let newFile = root.appendingPathComponent("NewDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
         let newBytes = try Data(contentsOf: newFile)
         let restingStore = DiaryStore(directory: root.appendingPathComponent("MatchingDiary"))
         _ = try await restingStore.importProfile(baseline)
         try await restingStore.restore(newBranch, expectedProfileID: profile.id)
-        #expect(try await restingStore.snapshot().meals.map(\.id).contains(newMeal.id))
+        #expect(try await restingStore.snapshotForExport().meals.map(\.id).contains(newMeal.id))
         let file = folder.appendingPathComponent(FolderBackup.filename(profileID: profile.id))
         let providerBytes = try Data(contentsOf: file)
-        _ = try await oldStore.capture(text: "old phone meal one", photos: [], reviewFirst: false, dayID: day.id)
-        _ = try await oldStore.capture(text: "old phone meal two", photos: [], reviewFirst: false, dayID: day.id)
-        let oldBranch = try await oldStore.snapshot()
+        _ = try await capturedMeal(oldStore, text: "old phone meal one", photos: [], reviewFirst: false, dayID: day.id)
+        _ = try await capturedMeal(oldStore, text: "old phone meal two", photos: [], reviewFirst: false, dayID: day.id)
+        let oldBranch = try await oldStore.snapshotForExport()
         let oldBytes = try Data(contentsOf: root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite"))
         #expect(oldBranch.revision > newBranch.revision)
         await #expect(throws: DiaryError.staleArchive) { try await oldBackup.save(oldBranch, generation: oldGeneration) }
@@ -523,9 +523,9 @@ struct ArchiveTests {
         #expect(await oldBackup.status(profileID: profile.id).pendingError != nil)
         await #expect(throws: DiaryError.staleArchive) { try await newStore.restore(oldBranch, expectedProfileID: profile.id) }
         #expect(try Data(contentsOf: newFile) == newBytes)
-        #expect(try await newStore.snapshot().meals.map(\.id).contains(newMeal.id))
-        let descendant = try await newStore.capture(text: "follow-up on replacement phone", photos: [], reviewFirst: false, dayID: day.id)
-        try await newBackup.save(try await newStore.snapshot(), generation: newGeneration)
+        #expect(try await newStore.snapshotForExport().meals.map(\.id).contains(newMeal.id))
+        let descendant = try await capturedMeal(newStore, text: "follow-up on replacement phone", photos: [], reviewFirst: false, dayID: day.id)
+        try await newBackup.save(try await newStore.snapshotForExport(), generation: newGeneration)
         #expect(try DiaryArchive.read(file).meals.map(\.id).contains(descendant.id))
     }
 
@@ -604,7 +604,7 @@ struct ArchiveTests {
         let store = DiaryStore(directory: root.appendingPathComponent("Diary"))
         _ = try await store.importProfile(legacy)
         try await store.updateProfile(DiaryProfile(id: legacy.profile.id, name: "Edited synthetic"))
-        await #expect(throws: DiaryError.staleArchive) { try await backup.save(try await store.snapshot(), generation: generation) }
+        await #expect(throws: DiaryError.staleArchive) { try await backup.save(try await store.snapshotForExport(), generation: generation) }
         #expect(try Data(contentsOf: file) == providerBytes)
         var unproven = legacy
         unproven.revision += 2
@@ -646,7 +646,7 @@ struct ArchiveTests {
         let profile = DiaryProfile(name: "Synthetic cleanup owner")
         _ = try await oldStore.createProfile(profile)
         let day = try await oldStore.startDay()
-        let baseline = try await oldStore.snapshot()
+        let baseline = try await oldStore.snapshotForExport()
         let oldBackup = FolderBackup(directory: root.appendingPathComponent("OldBackup"))
         let newBackup = FolderBackup(directory: root.appendingPathComponent("NewBackup"))
         await oldBackup.selectProfile(profile.id)
@@ -657,8 +657,8 @@ struct ArchiveTests {
         _ = try await newStore.importProfile(baseline)
         try await newBackup.selectFolder(first, profileID: profile.id)
         let newGeneration = try await newBackup.generation(profileID: profile.id)
-        _ = try await newStore.capture(text: "new phone meal", photos: [], reviewFirst: false, dayID: day.id)
-        try await newBackup.save(try await newStore.snapshot(), generation: newGeneration)
+        _ = try await capturedMeal(newStore, text: "new phone meal", photos: [], reviewFirst: false, dayID: day.id)
+        try await newBackup.save(try await newStore.snapshotForExport(), generation: newGeneration)
         let firstFile = first.appendingPathComponent(FolderBackup.filename(profileID: profile.id))
         let advancedBytes = try Data(contentsOf: firstFile)
         try await oldBackup.selectFolder(second, profileID: profile.id)
@@ -683,7 +683,7 @@ struct ArchiveTests {
         let profile = DiaryProfile(name: "Synthetic deletion owner")
         _ = try await oldStore.createProfile(profile)
         let day = try await oldStore.startDay()
-        let baseline = try await oldStore.snapshot()
+        let baseline = try await oldStore.snapshotForExport()
         let oldBackup = FolderBackup(directory: root.appendingPathComponent("OldBackup"))
         let newBackup = FolderBackup(directory: root.appendingPathComponent("NewBackup"))
         await oldBackup.selectProfile(profile.id)
@@ -694,8 +694,8 @@ struct ArchiveTests {
         _ = try await newStore.importProfile(baseline)
         try await newBackup.selectFolder(shared, profileID: profile.id)
         let newGeneration = try await newBackup.generation(profileID: profile.id)
-        _ = try await newStore.capture(text: "retained on new phone", photos: [], reviewFirst: false, dayID: day.id)
-        try await newBackup.save(try await newStore.snapshot(), generation: newGeneration)
+        _ = try await capturedMeal(newStore, text: "retained on new phone", photos: [], reviewFirst: false, dayID: day.id)
+        try await newBackup.save(try await newStore.snapshotForExport(), generation: newGeneration)
         let file = shared.appendingPathComponent(FolderBackup.filename(profileID: profile.id))
         let providerBytes = try Data(contentsOf: file)
         let localFile = root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
@@ -727,4 +727,10 @@ struct ArchiveTests {
         #expect(try Data(contentsOf: file) == providerBytes)
         #expect(try Data(contentsOf: localFile) == localBytes)
     }
+}
+
+
+private func selectedSnapshot(_ store: DiaryStore, _ id: UUID) async throws -> DiarySnapshot {
+    _ = try await store.selectProfile(id)
+    return try await store.snapshotForExport(expectedProfileID: id)
 }

@@ -7,6 +7,7 @@ struct MealComposerView: View {
     var onSaved: ((UUID) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var draft = MealDraft()
+    @State private var ownership: DiarySelectionOwnership?
     @State private var photoPreparation = PhotoPreparation()
     @State private var photoImportFailed = false
     @State private var ambiguousDay: UUID?
@@ -40,11 +41,11 @@ struct MealComposerView: View {
                 }
                 Section {
                     if let mealID = correctingMealID, let meal = model.meal(mealID) {
-                        LabeledContent("Waking day", value: model.snapshot?.days.first(where: { $0.id == meal.dayID })?.localDate ?? "Original meal day")
-                    } else if let dayID, let day = model.snapshot?.days.first(where: { $0.id == dayID }) {
+                        LabeledContent("Waking day", value: model.day(meal.dayID)?.localDate ?? "Original meal day")
+                    } else if let dayID, let day = model.day(dayID) {
                         LabeledContent("Waking day", value: day.localDate)
                         Text("The meal will be recorded on this day. Time will be unspecified.").font(.subheadline).foregroundStyle(Color.diarySecondary)
-                    } else if let snapshot = model.snapshot, let day = snapshot.days.first(where: { $0.id == snapshot.activeDayID }) {
+                    } else if let snapshot = model.readModel, let day = snapshot.activeDay {
                         LabeledContent("Waking day", value: day.localDate)
                     } else {
                         Label("A waking day will be started when you save.", systemImage: "sun.horizon")
@@ -59,6 +60,7 @@ struct MealComposerView: View {
                 if let message = model.errorMessage { Section { Text(LocalizedStringKey(message)).foregroundStyle(.red) } }
             }
             .onDisappear { photoPreparation.cancel() }
+            .task(id: model.changeGeneration) { if ownership == nil { ownership = model.selection }; photoPreparation.use(limiter: model.photoWorkLimiter); if let id = correctingMealID { await model.loadMeal(id) }; if let dayID { await model.loadDay(dayID) } }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
             .foregroundStyle(Color.diaryText)
@@ -84,49 +86,55 @@ struct MealComposerView: View {
             .alert("Could not import photo", isPresented: $photoImportFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
             .confirmationDialog("Which waking day?", isPresented: $showDayQuestion, titleVisibility: .visible) {
                 Button("Previous day") {
-                    guard let dayID = ambiguousDay, let owner = model.snapshot?.profile.id else { return }
+                    guard let dayID = ambiguousDay, let token = ownership, model.selection == token else { return }
+                    let owner = token.identity.profileID
                     Task {
-                        if await model.change({ try await model.store.confirmPreviousDay(expectedProfileID: owner) }) { await save(dayID: dayID) }
+                        if await model.change({ try await model.store.confirmPreviousDay(expectedSelection: token, expectedProfileID: owner) }) { await save(dayID: dayID) }
                     }
                 }
                 Button("New day") {
-                    guard let owner = model.snapshot?.profile.id else { return }
+                    guard let token = ownership, model.selection == token else { return }
+                    let owner = token.identity.profileID
                     Task {
-                        do { let day = try await model.store.startDay(expectedProfileID: owner); await save(dayID: day.id) }
+                        do { let day = try await model.store.startDay(expectedSelection: token, expectedProfileID: owner); await save(dayID: day.id) }
                         catch { _ = await model.change { throw error } }
                     }
                 }
                 Button("Keep editing", role: .cancel) {}
             } message: { Text("Your active day began on an earlier date. A late meal can stay in that day.") }
         }
+        .onChange(of: model.selection) { _, selection in
+            if let ownership, selection != ownership { photoPreparation.cancel(); dismiss() }
+        }
         .environment(\.locale, Locale(identifier: "en"))
         .environment(\.layoutDirection, .leftToRight)
     }
     private func send() async {
-        guard draft.isValid, photoPreparation.canCapture, !submitting, let owner = model.snapshot?.profile.id else { return }
+        guard draft.isValid, photoPreparation.canCapture, !submitting, let token = ownership, model.selection == token else { return }
+        let owner = token.identity.profileID
         if let mealID = correctingMealID {
             submitting = true
             defer { submitting = false }
             if await model.change({
-                _ = try await model.store.correctMeal(mealID: mealID, text: draft.text, photos: draft.photos.map { MealPhoto(data: $0, role: photoRole) }, reviewFirst: draft.reviewFirst, submissionID: draft.submissionID, forCoach: !model.sampleMode, expectedProfileID: owner)
+                _ = try await model.store.correctMealProjection(mealID: mealID, text: draft.text, photos: draft.photos.map { MealPhoto(data: $0, role: photoRole) }, reviewFirst: draft.reviewFirst, submissionID: draft.submissionID, forCoach: !model.sampleMode, expectedSelection: token, expectedProfileID: owner)
             }) { model.resumeWorker(); onSaved?(mealID); dismiss() }
             return
         }
         if let dayID { await save(dayID: dayID); return }
         do {
-            switch try await model.store.dayAssignment(expectedProfileID: owner) {
+            switch try await model.store.dayAssignment(expectedSelection: token, expectedProfileID: owner) {
             case .existing(let dayID): await save(dayID: dayID)
-            case .newDay: let day = try await model.store.startDay(expectedProfileID: owner); await save(dayID: day.id)
+            case .newDay: let day = try await model.store.startDay(expectedSelection: token, expectedProfileID: owner); await save(dayID: day.id)
             case .ask(let dayID): ambiguousDay = dayID; showDayQuestion = true
             }
         } catch { _ = await model.change { throw error } }
     }
     private func save(dayID: UUID) async {
-        guard photoPreparation.canCapture, !submitting else { return }
+        guard photoPreparation.canCapture, !submitting, let token = ownership, model.selection == token else { return }
         submitting = true
         defer { submitting = false }
-        if await model.capture(draft, dayID: dayID, dateOnly: self.dayID != nil, photoPreparation: photoPreparation) {
-            if let mealID = model.snapshot?.meals.first(where: { $0.submissions.contains(where: { $0.id == draft.submissionID }) })?.id {
+        if await model.capture(draft, dayID: dayID, dateOnly: self.dayID != nil, photoPreparation: photoPreparation, expectedSelection: token) {
+            if let mealID = model.savedMealID {
                 onSaved?(mealID)
             }
             dismiss()

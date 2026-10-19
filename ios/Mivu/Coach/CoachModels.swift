@@ -1,9 +1,84 @@
 import Foundation
+import CryptoKit
 
 enum CoachTurnState: String, Codable, Sendable { case captured, analyzing, waitingForConnection, waitingForNetwork, needsRetry, needsClarification, completed }
 enum MealTimePrecision: String, Codable, Sendable { case exact, dateOnly }
 enum CoachActivity: String, Sendable { case preparingPhotos, thinking, reading, saving }
 enum CoachDestination: String, Codable, CaseIterable, Sendable { case settings, profiles, connection, nutritionSource, backup }
+
+/// Engine acknowledgement contains no original photo payloads.
+struct CoachTurnResult: Equatable, Sendable {
+    var id: UUID
+    var text: String
+    var state: CoachTurnState
+    var assistantText: String?
+    var receipts: [CoachReceipt]
+    var pendingMealID: UUID?
+    init(_ turn: CoachTurn) {
+        id = turn.id; text = turn.text; state = turn.state; assistantText = turn.assistantText; receipts = turn.receipts; pendingMealID = turn.pendingMealID
+    }
+    init(_ work: CoachWorkItem) {
+        id = work.id; text = work.text; state = work.state; assistantText = work.assistantText; receipts = work.receipts; pendingMealID = work.pendingMealID
+    }
+}
+
+/// Durable worker metadata; originals are fetched separately for the selected job.
+struct CoachWorkItem: Equatable, Sendable, Identifiable {
+    var id: UUID
+    var sequence: Int64
+    var capturedAt: Date
+    var text: String
+    var state: CoachTurnState
+    var assistantText: String?
+    var receipts: [CoachReceipt]
+    var captureTimeZoneID: String
+    var activeDayID: UUID?
+    var resolvedDayID: UUID?
+    var needsDayChoice: Bool?
+    var pendingMealID: UUID?
+    var pendingMealRevision: Int?
+    var photos: [DiaryPhotoReference]
+}
+
+struct PendingSubmissionReference: Equatable, Sendable {
+    var mealID: UUID
+    var submissionID: UUID
+    var mealRevision: Int
+    var baseRevision: Int
+    var capturedAt: Date
+    var text: String
+    var state: SubmissionState
+    var dayID: UUID
+    var timeZoneID: String
+    var photos: [DiaryPhotoReference]
+}
+
+struct CoachMealCandidate: Codable, Equatable, Sendable, Identifiable {
+    struct Item: Codable, Equatable, Sendable {
+        var id: UUID
+        var name: String
+        var quantity: Double
+        var unit: String
+    }
+    var id: UUID
+    var dayID: UUID
+    var localDate: String
+    var timeZoneID: String
+    var revision: Int
+    var eatenAt: Date
+    var timePrecision: MealTimePrecision?
+    var items: [Item]
+    var omittedItemCount: Int
+    var capturedDescription: String
+    var descriptionTruncated: Bool
+}
+
+struct CoachMealCandidatePage: Codable, Equatable, Sendable {
+    var localDate: String
+    var meals: [CoachMealCandidate]
+    var hasMore: Bool
+    var nextAfterMealID: UUID?
+}
 
 struct CoachReceipt: Codable, Equatable, Sendable {
     var operationKey: String
@@ -17,6 +92,7 @@ struct CoachReceipt: Codable, Equatable, Sendable {
     var destination: CoachDestination? = nil
     var committedRevision: Int
     var resultJSON: String
+    var commandFingerprint: String? = nil
 }
 
 struct CoachTurn: Codable, Equatable, Sendable, Identifiable {
@@ -34,6 +110,60 @@ struct CoachTurn: Codable, Equatable, Sendable, Identifiable {
     var resolvedDayID: UUID? = nil
     var pendingMealID: UUID? = nil
     var pendingMealRevision: Int? = nil
+    var submissionManifest: CoachSubmissionManifest? = nil
+    var captureSegmentID: UUID? = nil
+}
+
+struct CoachCaptureContext: Codable, Equatable, Sendable {
+    var capturedAt: Date
+    var timeZoneID: String
+    var activeDayID: UUID?
+    var previousDayConfirmedAt: Date?
+    var activeConversationSegmentID: UUID? = nil
+}
+
+struct CoachSubmissionManifest: Codable, Equatable, Sendable {
+    struct Attachment: Codable, Equatable, Sendable {
+        var id: UUID
+        var role: PhotoRole
+        var createdAt: Date
+        var contentFingerprint: String
+    }
+    var submissionID: UUID
+    var context: CoachCaptureContext
+    var textFingerprint: String
+    var attachments: [Attachment]
+    var pendingMealID: UUID?
+    var pendingMealRevision: Int?
+}
+
+struct CoachSubmissionPayload: Sendable {
+    let submissionID: UUID
+    let text: String
+    let attachments: [MealPhoto]
+    let context: CoachCaptureContext
+    let manifest: CoachSubmissionManifest
+    init(submissionID: UUID, text: String, attachments: [MealPhoto], context: CoachCaptureContext,
+         pendingMealID: UUID? = nil, pendingMealRevision: Int? = nil) throws {
+        guard attachments.count <= 8, Set(attachments.map(\.id)).count == attachments.count, text.count <= 20_000,
+              context.capturedAt.timeIntervalSince1970.isFinite,
+              TimeZone(identifier: context.timeZoneID) != nil,
+              context.previousDayConfirmedAt == nil || context.previousDayConfirmedAt!.timeIntervalSince1970.isFinite,
+              (pendingMealID == nil) == (pendingMealRevision == nil),
+              pendingMealRevision == nil || pendingMealRevision! >= 0 else { throw DiaryError.invalidData }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else { throw DiaryError.emptyCapture }
+        for photo in attachments { try validatePhotoFields(photo, byteCount: photo.data.count) }
+        func fingerprint(_ bytes: Data) -> String { SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined() }
+        self.submissionID = submissionID; self.text = text; self.attachments = attachments; self.context = context
+        manifest = CoachSubmissionManifest(submissionID: submissionID, context: context,
+            textFingerprint: fingerprint(Data(text.utf8)), attachments: attachments.map {
+                CoachSubmissionManifest.Attachment(id: $0.id, role: $0.role, createdAt: $0.createdAt, contentFingerprint: fingerprint($0.data))
+            }, pendingMealID: pendingMealID, pendingMealRevision: pendingMealRevision)
+    }
+}
+
+enum CoachCaptureReconciliation: Equatable, Sendable {
+    case absent, accepted(CoachExchangeSummary), conflictingPayload
 }
 
 struct CoachContext: Codable, Equatable, Sendable {
@@ -88,6 +218,19 @@ struct CoachContext: Codable, Equatable, Sendable {
     var diaryRevision: Int? = nil
     var preferencesTruncated: Bool? = nil
     var attachedPhotoIDs: [UUID]? = nil
+    var committedReceipts: [CoachCommittedReceipt]? = nil
+    var omittedReceiptCount: Int? = nil
+}
+
+extension CoachContext {
+    mutating func includeCommittedReceipts(_ receipts: [CoachCommittedReceipt]) throws {
+        committedReceipts = []
+        for receipt in receipts {
+            if try JSONEncoder().encode(committedReceipts! + [receipt]).count > 8192 { break }
+            committedReceipts!.append(receipt)
+        }
+        omittedReceiptCount = receipts.count - committedReceipts!.count
+    }
 }
 
 enum CoachError: Error, Equatable { case invalidTool, invalidArguments, limitExceeded, ungroundedConfirmation, connectionRequired }
@@ -124,6 +267,11 @@ struct CoachProgress: Codable, Equatable, Sendable {
     var omittedWeightCount: Int
     var omittedWorkoutCount: Int
     var truncated: Bool
+    var dailyReports: [DailyProgress]? = nil
+    var displayWeights: [CoachWeightReference]? = nil
+    var latestWeight: CoachWeightReference? = nil
+    var workoutTotal: Int? = nil
+    var savedFoodDates: [String]? = nil
 }
 
 extension NutritionTotals: Codable {

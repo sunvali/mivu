@@ -7,14 +7,16 @@ import Lottie
 
 @MainActor private final class CompanionRootLoadGate {
     private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
     private(set) var waiting = false
     func pause() async {
+        guard !released else { return }
         await withCheckedContinuation { continuation in
             self.continuation = continuation
             waiting = true
         }
     }
-    func release() { continuation?.resume(); continuation = nil }
+    func release() { released = true; continuation?.resume(); continuation = nil }
 }
 
 @MainActor private final class CompanionBackgroundRefreshGate {
@@ -43,13 +45,159 @@ import Lottie
         }
         return condition()
     }
+
+    @Test func pagingAndPhotoLoadsEmitNoCompanionFeedback() async throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16))
+        let bytes = try #require(renderer.image { context in
+            UIColor.green.setFill(); context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }.pngData())
+        var source = ChatHistoryFixture.pagingSnapshot(exchanges: 140)
+        for index in source.coachTurns.indices {
+            source.coachTurns[index].state = .completed
+            for photo in source.coachTurns[index].photos.indices { source.coachTurns[index].photos[photo].data = bytes }
+        }
+        for index in source.meals.indices {
+            for photo in source.meals[index].photos.indices { source.meals[index].photos[photo].data = bytes }
+        }
+        let fixture = try CaptureFixture(snapshot: source)
+        defer { fixture.remove() }
+        let store = DiaryStore(directory: fixture.root)
+        _ = try await store.selectProfile(fixture.profileID)
+        let diary = DiaryViewModel(store: store)
+        await diary.load(createDefaultProfile: false)
+        let suite = "PipPaging-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: suite))))
+        let runtime = CompanionRuntime()
+        var outputs: [CompanionOutput] = []
+        let root = DiaryRootView(testDiary: diary, testCoach: coach, testRuntime: runtime,
+            testTab: "coach", testDefaults: defaults, observeCompanionOutput: { outputs.append($0) })
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.effectiveGeometry.coordinateSpace.bounds
+        window.rootViewController = UIHostingController(rootView: root.environment(\.scenePhase, .active))
+        window.isHidden = false
+        let timelineTask = Task { await coach.connectTimeline() }
+        defer {
+            timelineTask.cancel(); coach.enterBackground(); runtime.stop(); window.isHidden = true
+            defaults.removePersistentDomain(forName: suite)
+        }
+        try #require(await eventually {
+            runtime.isReady && !coach.isWorking && !diary.isSaving && coach.timeline?.exchanges.count == 20
+                && outputs.last?.pose == .resting && outputs.last?.playback == .animated
+        })
+        let timeline = try #require(coach.timeline)
+        let submission = coach.companionSubmission, saved = coach.companionCaptureEvent
+        let capture = coach.captureReceipt, reviewed = diary.companionReviewEvent
+        let triggers = runtime.triggerCount
+        let firstOutput = outputs.count
+        for _ in 0..<5 {
+            let exchange = try #require(timeline.exchanges.first)
+            let anchor = CoachViewportAnchor(rowID: exchange.id, offset: 12, focusedExchangeID: nil)
+            timeline.setViewport(.history(anchor), visibleIDs: [anchor.rowID])
+            let earlier = try #require(timeline.loadEarlier(anchor: anchor))
+            await earlier.value
+        }
+        #expect(timeline.window.residentCount <= 100)
+        await timeline.seek(.turn(source.coachTurns[0].id))
+        let first = try #require(timeline.exchanges.first)
+        let anchor = CoachViewportAnchor(rowID: first.id, offset: 0)
+        timeline.setViewport(.history(anchor), visibleIDs: [first.id])
+        let later = try #require(timeline.loadLater(anchor: anchor))
+        await later.value
+        let reference = try #require(timeline.exchanges.flatMap(\.photos).first)
+        let loader = try #require(diary.photoLoader)
+        _ = try await loader.thumbnail(for: reference, pixelSize: 64)
+        _ = try await loader.thumbnail(for: reference, pixelSize: 64)
+        await loader.purgeForMemoryPressure()
+        _ = try await loader.thumbnail(for: reference, pixelSize: 64)
+        let presentation = try coach.attachmentDraft.beginPresentation()
+        let draftID = coach.attachmentDraft.submissionID
+        let photoID = UUID()
+        let failed = try await coach.attachmentDraft.importSelections([.init(id: photoID, load: { bytes })], presentationID: presentation)
+        try await coach.attachmentDraft.endPresentation(presentation)
+        #expect(failed.isEmpty && coach.attachmentDraft.attachments.map(\.id) == [photoID])
+        #expect(coach.attachmentDraft.submissionID == draftID)
+        await timeline.jumpToLatest()
+        #expect(coach.companionSubmission == submission && coach.companionCaptureEvent == saved)
+        #expect(coach.captureReceipt == capture && diary.companionReviewEvent == reviewed)
+        #expect(runtime.triggerCount == triggers)
+        #expect(outputs.dropFirst(firstOutput).allSatisfy {
+            $0.pose == .resting && $0.reactionID == nil && $0.playback == .animated
+        }, "Paging, eviction, seek, thumbnail delivery and unsent imports must remain quiet at the real root")
+        #expect(try fixture.rows("SELECT COUNT(*) FROM coach_turn") == [["140"]])
+    }
+
+    @Test func offPageActiveOperationKeepsProcessingThroughHistoryAndLateCancellation() async throws {
+        var source = ChatHistoryFixture.pagingSnapshot(exchanges: 140)
+        for index in source.coachTurns.indices { source.coachTurns[index].state = .completed }
+        source.coachTurns[0].state = .captured
+        source.coachTurns[0].photos = []; source.coachTurns[0].photoIDs = []
+        source.coachTurns[0].receipts = []; source.coachTurns[0].assistantText = nil
+        source.coachTurns[139].state = .needsRetry
+        let operation = source.coachTurns[0].id
+        let fixture = try CaptureFixture(snapshot: source)
+        defer { fixture.remove() }
+        let store = DiaryStore(directory: fixture.root)
+        _ = try await store.selectProfile(fixture.profileID)
+        let diary = DiaryViewModel(store: store)
+        await diary.load(createDefaultProfile: false)
+        let gate = CompanionRootLoadGate()
+        let suite = "PipOffPage-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: suite)))
+        let coach = CoachViewModel(diary: diary, connection: connection, inference: { { _, _ in
+            await gate.pause()
+            return CoachInferenceResult(model: "fixture", text: "Synthetic guidance", calls: [], outputItems: [])
+        } })
+        let runtime = CompanionRuntime()
+        var outputs: [CompanionOutput] = []
+        let root = DiaryRootView(testDiary: diary, testCoach: coach, testRuntime: runtime,
+            testTab: "coach", testDefaults: defaults, observeCompanionOutput: { outputs.append($0) })
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.effectiveGeometry.coordinateSpace.bounds
+        window.rootViewController = UIHostingController(rootView: root.environment(\.scenePhase, .active))
+        window.isHidden = false
+        let timelineTask = Task { await coach.connectTimeline() }
+        defer {
+            coach.cancel(); gate.release(); timelineTask.cancel(); runtime.stop(); window.isHidden = true
+            defaults.removePersistentDomain(forName: suite)
+        }
+        // The real root starts the worker after initialization; its profile reload cancels earlier work.
+        try #require(await eventually {
+            gate.waiting && runtime.isReady && coach.timeline?.exchanges.count == 20
+                && outputs.last?.pose == .thinking
+        })
+        #expect(coach.activityTurnID == operation && coach.activity == .thinking)
+        #expect(!coach.exchanges.contains { $0.id == operation }, "The current operation is outside the single resident transcript")
+        #expect(!coach.turns.contains { $0.id == operation }, "The current operation is outside the resident page")
+        #expect(!coach.companionNeedsRecovery && coach.companionIsProcessing,
+                "A newer historical needsRetry row cannot replace the actual inference operation")
+        let firstOutput = outputs.count, triggers = runtime.triggerCount
+        let timeline = try #require(coach.timeline)
+        await timeline.seek(.turn(operation))
+        await timeline.jumpToLatest()
+        #expect(!coach.turns.contains { $0.id == operation })
+        #expect(coach.activityTurnID == operation && coach.companionIsProcessing && !coach.companionNeedsRecovery)
+        #expect(coach.companionSubmission == nil && coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
+        #expect(runtime.triggerCount == triggers)
+        #expect(outputs.dropFirst(firstOutput).allSatisfy { $0.pose == .thinking && $0.reactionID == nil })
+        coach.cancel()
+        #expect(coach.activity == nil && coach.activityTurnID == nil)
+        gate.release()
+        await coach.waitForWorker()
+        #expect(coach.activity == nil && coach.activityTurnID == nil,
+                "Late inference completion must not restore canceled activity")
+    }
+
     @Test func latestRecoveryPoseIsAppliedWhenInitialRootLoadFinishes() async throws {
         let path = URL.temporaryDirectory.appending(path: "CompanionRoot-" + UUID().uuidString)
         let store = DiaryStore(directory: path)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic root", timeZoneID: "UTC"))
         _ = try await store.startDay()
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "CompanionRoot-" + UUID().uuidString)))
         let coach = CoachViewModel(diary: diary, connection: connection)
         let pip = CharacterCatalog.bundled.resolve("pip")
@@ -98,7 +246,7 @@ import Lottie
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic cold save", timeZoneID: "UTC"))
         _ = try await store.startDay()
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "PipColdSave-" + UUID().uuidString)))
         let coach = CoachViewModel(diary: diary, connection: connection)
         let pip = CharacterCatalog.bundled.resolve("pip")
@@ -140,7 +288,7 @@ import Lottie
             #expect(await eventually { runtime.triggerCount == 1 }, "A still-current save must play when the first player becomes ready")
             #expect(runtime.displayedPose == .saved)
         }
-        #expect(diary.snapshot?.meals.count == 1, "Character loading must not duplicate or lose the saved record")
+        #expect(diary.readModel?.meals.count == 1, "Character loading must not duplicate or lose the saved record")
     }
 
     @Test func firstRunTodayShowsPipWithoutInventingDiaryRecords() async throws {
@@ -148,7 +296,7 @@ import Lottie
         let store = DiaryStore(directory: directory)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic empty", timeZoneID: "UTC"))
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "PipEmpty-" + UUID().uuidString)))
         let coach = CoachViewModel(diary: diary, connection: connection)
         let runtime = CompanionRuntime()
@@ -167,8 +315,8 @@ import Lottie
             try? FileManager.default.removeItem(at: directory)
         }
         #expect(await eventually { runtime.isReady }, "The real Today surface must load the companion before the first meal")
-        #expect(diary.snapshot?.meals.isEmpty == true)
-        #expect(diary.snapshot?.days.isEmpty == true, "Showing the companion must not create a recorded day")
+        #expect(diary.readModel?.meals.isEmpty == true)
+        #expect((try? await diary.store.snapshotForExport())?.days.isEmpty == true, "Showing the companion must not create a recorded day")
     }
 
     @Test func untouchedTodayKeepsBreathingDuringAnEmptyBackgroundCoachRefresh() async throws {
@@ -176,11 +324,11 @@ import Lottie
         let store = DiaryStore(directory: directory)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic quiet Today", timeZoneID: "UTC"))
         let gate = CompanionBackgroundRefreshGate()
-        let diary = DiaryViewModel(store: store, snapshotLoading: { id in
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
             await gate.pauseIfArmed()
-            return try await store.snapshot(expectedProfileID: id)
+            return try await store.diaryReadModel(expectedProfileID: id)
         })
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let suite = "PipQuietToday-" + UUID().uuidString
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: suite)))
         let coach = CoachViewModel(diary: diary, connection: connection)
@@ -215,7 +363,7 @@ import Lottie
         try #require(await eventually { gate.waiting }, "Exercise the real worker's legacy-capture refresh")
         try #require(diary.isSaving && coach.isWorking,
                      "The shared save lock must be held while the empty background refresh is suspended")
-        #expect(coach.turns.isEmpty && diary.snapshot?.meals.isEmpty == true)
+        #expect(coach.turns.isEmpty && diary.readModel?.meals.isEmpty == true)
 
         // Hold the real await point across several SwiftUI updates. A transient thinking output
         // is still a failure even if a later render returns to idle before this check finishes.
@@ -233,7 +381,7 @@ import Lottie
         gate.release()
         await coach.waitForWorker()
         #expect(!diary.isSaving && !coach.isWorking)
-        #expect(coach.turns.isEmpty && diary.snapshot?.meals.isEmpty == true)
+        #expect(coach.turns.isEmpty && diary.readModel?.meals.isEmpty == true)
     }
 
     @Test(arguments: [false, true])
@@ -242,7 +390,7 @@ import Lottie
         let store = DiaryStore(directory: directory)
         _ = try await store.createProfile(DiaryProfile(name: "Synthetic submit", timeZoneID: "UTC"))
         let diary = DiaryViewModel(store: store)
-        diary.snapshot = try await store.snapshot()
+        await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "PipSubmit-" + UUID().uuidString)))
         let coach = CoachViewModel(diary: diary, connection: connection)
         let path = CharacterCatalog.bundled.resolve("pip").animationResourcePath
@@ -289,8 +437,8 @@ import Lottie
             try #require(await eventually { outputs.last?.pose == .saved })
             #expect(await eventually { runtime.displayedPose == .saved })
         }
-        #expect(diary.snapshot?.coachTurns.map(\.id) == [operation])
-        #expect(diary.snapshot?.meals.isEmpty == true)
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.map(\.id) == [operation])
+        #expect(diary.readModel?.meals.isEmpty == true)
     }
 
 }

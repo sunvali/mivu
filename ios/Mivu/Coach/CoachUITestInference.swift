@@ -1,11 +1,11 @@
 import Foundation
+#if DEBUG
+import UIKit
+#endif
 
 // Explicit UI-test isolation is required by the caller; no provider request is made.
 enum CoachUITestInference {
     static func respond(_ input: [CoachInferenceInput], _: Data) async throws -> CoachInferenceResult {
-        if input.contains(where: { if case .functionOutput = $0 { return true }; return false }) {
-            return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: [], outputItems: [])
-        }
         if input.contains(where: {
             if case .message(role: .user, let text, _) = $0 { return text == "Synthetic delayed weekly report" }
             return false
@@ -20,6 +20,18 @@ enum CoachUITestInference {
         let text = input.compactMap { entry -> String? in
             if case .message(role: .user, let text, _) = entry { return text }; return nil
         }.joined(separator: " ").lowercased()
+        if text.contains("edit yesterday’s lunch"), text.contains("one more chicken") {
+            let result = try correction(input, context: context)
+            #if DEBUG
+            if CoachCorrectionUITestFixture.isEnabled {
+                return try await CoachCorrectionUITestFixture.intercept(input: input, context: context, result: result)
+            }
+            #endif
+            return result
+        }
+        if input.contains(where: { if case .functionOutput = $0 { return true }; return false }) {
+            return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: [], outputItems: [])
+        }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: context.captureTimeZoneID) ?? .gmt
         let date = text.contains("yesterday") ? calendar.date(byAdding: .day, value: -1, to: context.capturedAt)! : context.capturedAt
@@ -61,4 +73,116 @@ enum CoachUITestInference {
         let id = UUID().uuidString
         return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: name, namespace: "mivu", arguments: argumentsJSON)], outputItems: [])
     }
+    private static func correction(_ input: [CoachInferenceInput], context: CoachContext) throws -> CoachInferenceResult {
+        func reply(_ name: String? = nil, _ args: [String: Any] = [:]) throws -> CoachInferenceResult {
+            let id = UUID().uuidString
+            let calls = try name.map { [CoachToolCall(id: id, callID: id, name: $0, namespace: "mivu",
+                arguments: String(decoding: try JSONSerialization.data(withJSONObject: args, options: .sortedKeys), as: UTF8.self))] } ?? []
+            return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: calls, outputItems: [])
+        }
+        // A prior committed increment is a result, never a new serving calculation.
+        if !(context.committedReceipts ?? []).isEmpty || (context.omittedReceiptCount ?? 0) > 0 { return try reply() }
+        let outputs = input.compactMap { value -> String? in if case .functionOutput(_, let text) = value { return text }; return nil }
+        if outputs.isEmpty {
+            var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: context.captureTimeZoneID)!
+            let date = calendar.date(byAdding: .day, value: -1, to: context.capturedAt)!
+            return try reply("get_meals_for_date", ["target_local_date": diaryDateLabel(date, zone: context.captureTimeZoneID)])
+        }
+        if outputs.count == 1 {
+            let page = try JSONDecoder().decode(CoachMealCandidatePage.self, from: Data(outputs[0].utf8))
+            let lunches = page.meals.filter { $0.capturedDescription.lowercased().contains("lunch") }
+            guard !page.hasMore, !page.meals.contains(where: { $0.descriptionTruncated }), lunches.count == 1 else {
+                return try reply("ask_clarification", ["kind": "meal"])
+            }
+            return try reply("get_meal", ["meal_id": lunches[0].id.uuidString])
+        }
+        if outputs.count == 2 {
+            let meal = try JSONDecoder().decode(CoachContext.Meal.self, from: Data(outputs[1].utf8))
+            let chicken = meal.items.filter { $0.name.lowercased() == "chicken" }
+            guard meal.omittedItemCount == 0, chicken.count == 1 else { return try reply("ask_clarification", ["kind": "food"]) }
+            guard chicken[0].unit == "piece", chicken[0].quantity > 0 else { return try reply("ask_clarification", ["kind": "portion"]) }
+            return try reply("correct_item", ["meal_id": meal.id.uuidString, "item_id": chicken[0].id.uuidString,
+                "expected_revision": meal.revision, "quantity": chicken[0].quantity + 1])
+        }
+        return try reply()
+    }
+
 }
+
+#if DEBUG
+extension CoachUITestInference {
+    static let historyCaptureInstant = ISO8601DateFormatter().date(from: "2027-01-16T10:00:00Z")!
+    static func historyID(_ number: Int) -> UUID {
+        UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", number))!
+    }
+    /// Called only for an absent isolated fixture profile. Reopen always uses its real database.
+    @MainActor static func historySnapshot() throws -> DiarySnapshot {
+        let instant = historyCaptureInstant
+        let lunch = TrackingDay(id: historyID(901), localDate: "2027-01-15", timeZoneID: "UTC", startAt: instant.addingTimeInterval(-86_400))
+        let repeated = TrackingDay(id: historyID(902), localDate: lunch.localDate, timeZoneID: "Pacific/Honolulu", startAt: lunch.startAt)
+        let newer = TrackingDay(id: historyID(903), localDate: "2027-01-20", timeZoneID: "UTC", startAt: instant.addingTimeInterval(4 * 86_400))
+        let empty = TrackingDay(id: historyID(904), localDate: "2027-01-21", timeZoneID: "UTC", startAt: instant.addingTimeInterval(5 * 86_400))
+        let basis = NutritionValues(kcal: 100, carbs: nil, protein: 20, fat: 3)
+        let items = [FoodItem(id: historyID(920), name: "Chicken", quantity: 2, unit: "piece", nutrition: basis.scaled(by: 2),
+                            provenance: .estimate, reference: "Synthetic committed portion", uncertain: true,
+                            nutrientSources: ["kcal": .estimate, "protein": .estimate], nutritionBasis: basis),
+                     FoodItem(id: historyID(921), name: "Rice", quantity: 1, unit: "cup", nutrition: NutritionValues(kcal: 200),
+                              provenance: .estimate, reference: "Synthetic rice serving"),
+                     FoodItem(id: historyID(922), name: "Salad", quantity: 1, unit: "bowl", nutrition: NutritionValues(kcal: 50),
+                              provenance: .estimate, reference: "Synthetic salad serving")]
+        let bytes = try syntheticPhotoBytes()
+        let photo = MealPhoto(id: historyID(930), data: bytes, createdAt: lunch.startAt)
+        let meal = DiaryMeal(id: historyID(910), dayID: lunch.id, capturedAt: lunch.startAt, eatenAt: lunch.startAt,
+            revision: 1, timePrecision: .dateOnly, items: items, photos: [photo],
+            submissions: [MealSubmission(id: historyID(1), baseRevision: 0, text: "Synthetic lunch: chicken, rice and salad.", photoIDs: [photo.id], reviewFirst: false, state: .saved)])
+        var dinner = meal; dinner.id = historyID(911); dinner.dayID = repeated.id; dinner.photos = []
+        dinner.items = dinner.items.enumerated().map { index, item in var item = item; item.id = historyID(940 + index); return item }
+        dinner.submissions = [MealSubmission(id: historyID(912), baseRevision: 0, text: "Synthetic dinner", photoIDs: [], reviewFirst: false, state: .saved)]
+        var value = DiarySnapshot(revision: 9, profile: DiaryProfile(id: historyID(900), name: "Synthetic conversation", timeZoneID: "UTC"),
+            days: [lunch, repeated, newer, empty], meals: [meal, dinner], activeDayID: empty.id, previousDayConfirmedAt: instant,
+            activeConversationSegmentID: historyID(4000))
+        value.coachTurns = (1...140).map { index in
+            let day = index == 1 ? newer : index.isMultiple(of: 5) ? lunch : index.isMultiple(of: 2) ? repeated : newer
+            let phrase = index.isMultiple(of: 3) ? "Apricot breakfast with a measured serving. " : "Cedar lunch. "
+            let text = index == 1 ? "Synthetic lunch: chicken, rice and salad." : "Exchange \(index). " + String(repeating: phrase, count: index % 6 + 1)
+            var turn = CoachTurn(id: historyID(index), capturedAt: day.startAt,
+                text: text, state: .completed,
+                assistantText: index.isMultiple(of: 2) ? String(repeating: "Recorded serving details. ", count: index % 5 + 1) : nil,
+                captureTimeZoneID: "UTC", activeDayID: index.isMultiple(of: 11) ? nil : day.id,
+                captureSegmentID: historyID(1000 + index))
+            if index == 1 {
+                turn.photoIDs = [photo.id]
+                turn.receipts = [CoachReceipt(operationKey: "\(turn.id)/food/\(lunch.localDate)", turnID: turn.id,
+                    dayID: lunch.id, mealID: meal.id, committedRevision: 1,
+                    resultJSON: String(decoding: try! JSONEncoder().encode(CoachContext.Meal(id: meal.id, dayID: meal.dayID, revision: meal.revision, eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: meal.items, state: .saved)), as: UTF8.self))]
+            } else if index.isMultiple(of: 4) {
+                let photo = MealPhoto(id: historyID(5000 + index), data: bytes, createdAt: turn.capturedAt)
+                turn.photos = [photo]; turn.photoIDs = [photo.id]
+            }
+            if index == 80 {
+                turn.receipts = [CoachReceipt(operationKey: "\(turn.id)/reference/\(meal.id)", turnID: turn.id,
+                    dayID: lunch.id, mealID: meal.id, committedRevision: 1, resultJSON: "{}")]
+            }
+            return turn
+        }
+        if ProcessInfo.processInfo.arguments.contains("--history-short-paging") {
+            value.coachTurns = Array(value.coachTurns.prefix(43))
+            for index in value.coachTurns.indices {
+                value.coachTurns[index].text = "Exchange \(index + 1)."
+                value.coachTurns[index].assistantText = nil; value.coachTurns[index].photos = []; value.coachTurns[index].photoIDs = []
+                value.coachTurns[index].receipts = []; value.coachTurns[index].activeDayID = empty.id
+                value.coachTurns[index].capturedAt = empty.startAt; value.coachTurns[index].captureSegmentID = historyID(4001)
+            }
+        }
+        if CoachCorrectionUITestFixture.isEnabled { try CoachCorrectionUITestFixture.prepare(snapshot: &value) }
+        return value
+    }
+    @MainActor static func syntheticPhotoBytes() throws -> Data {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64))
+        let image = renderer.image { context in
+            UIColor.systemTeal.setFill(); context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        }
+        guard let data = image.jpegData(compressionQuality: 0.8) else { throw DiaryError.invalidData }; return data
+    }
+}
+#endif

@@ -33,7 +33,7 @@ struct DayTests {
         #expect(try await store.startDay(at: morning).id == day.id)
         let weight = try await store.recordWeight(value: 70, at: morning)
         let second = try await store.recordWeight(value: 71, at: morning)
-        let snapshot = try await store.snapshot()
+        let snapshot = try await store.snapshotForExport()
         #expect(weight.id == second.id)
         #expect(snapshot.days.count == 2)
         #expect(snapshot.weights.count == 1)
@@ -55,31 +55,31 @@ struct DayTests {
         changed.timeZoneID = "America/New_York"
         try await store.updateProfile(changed)
         #expect(try await store.dayAssignment(at: day.startAt) == .ask(day.id))
-        #expect(try await store.snapshot().days[0] == day)
+        #expect(try await store.snapshotForExport().days[0] == day)
         try await store.confirmPreviousDay(at: day.startAt)
         #expect(try await store.dayAssignment(at: day.startAt) == .existing(day.id))
     }
     @Test func moveUpdatesBothDayTotalsAndCompletenessStaysIndependent() async throws {
         let (store, _, oldDay) = try await Self.ready()
-        let meal = try await store.capture(text: "apple", photos: [], reviewFirst: false, dayID: oldDay.id)
+        let meal = try await capturedMeal(store, text: "apple", photos: [], reviewFirst: false, dayID: oldDay.id)
         try await store.processPending()
         try await store.setCompleteness(dayID: oldDay.id, .partial)
         let newDay = try await store.startDay(at: Self.date("2026-10-11T09:00:00Z"))
         try await store.moveMeal(meal.id, to: newDay.id)
-        let snapshot = try await store.snapshot()
+        let snapshot = try await store.snapshotForExport()
         #expect(snapshot.totals(dayID: oldDay.id).kcal == nil)
         #expect(snapshot.totals(dayID: newDay.id).kcal == 95)
         #expect(snapshot.days.first { $0.id == oldDay.id }?.completeness == .partial)
         try await store.setCompleteness(dayID: oldDay.id, .complete)
-        #expect(try await store.snapshot().totals(dayID: oldDay.id).kcal == 0)
+        #expect(try await store.snapshotForExport().totals(dayID: oldDay.id).kcal == 0)
     }
     @Test func confirmedEmptyDayWithPendingCaptureNeverReportsZero() async throws {
         let (store, _, day) = try await Self.ready()
         try await store.setCompleteness(dayID: day.id, .complete)
-        _ = try await store.capture(text: "apple", photos: [], reviewFirst: true, dayID: day.id)
-        #expect(try await store.snapshot().totals(dayID: day.id).kcal == nil)
+        _ = try await capturedMeal(store, text: "apple", photos: [], reviewFirst: true, dayID: day.id)
+        #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == nil)
         try await store.processPending()
-        #expect(try await store.snapshot().totals(dayID: day.id).kcal == nil)
+        #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == nil)
     }
 
 }

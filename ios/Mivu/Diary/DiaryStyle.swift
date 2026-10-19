@@ -32,6 +32,36 @@ extension Color {
     static let diaryRule = adaptive(0xD5DFE1, 0x374346, highContrastLight: 0x9BAEB2, highContrastDark: 0x68777B)
 }
 
+private struct DiarySummaryCardStyle: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        content
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.diarySurface)
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.06), radius: 10, x: 0, y: 4)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24)
+                    .strokeBorder(Color.diaryRule.opacity(contrast == .increased ? 1 : 0.35), lineWidth: contrast == .increased ? 1 : 0.5)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    func diarySummaryCard() -> some View {
+        modifier(DiarySummaryCardStyle())
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+    }
+}
+
 struct SampleBanner: View {
     var body: some View {
         DisclosureGroup {
@@ -174,8 +204,9 @@ extension DayCompleteness {
 }
 
 struct MealRow: View {
-    let meal: DiaryMeal
+    let meal: MealReadModel
     var prominent = false
+    var model: DiaryViewModel? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     private var title: String {
         let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -199,8 +230,9 @@ struct MealRow: View {
     }
     var body: some View {
         HStack(spacing: 12) {
-            if let data = meal.photos.first?.data, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill().frame(width: prominent ? 72 : 40, height: prominent ? 72 : 40).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
+            if let reference = meal.photos.first, let model {
+                DiaryPhotoPreview(model: model, reference: reference, height: prominent ? 72 : 40)
+                    .frame(width: prominent ? 72 : 40).accessibilityHidden(true)
             } else { Image(systemName: "fork.knife").font(.body).foregroundStyle(Color.diaryCarbs).frame(width: 24).accessibilityHidden(true) }
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 8) {

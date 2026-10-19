@@ -51,6 +51,35 @@ import Testing
         #expect(presentation.resolve(context: context(), now: start.addingTimeInterval(MivuMotion.saved)).pose != .saved)
     }
 
+    @Test(arguments: [false, true])
+    func cameraInterruptedReceiptDoesNotConsumeADifferentFreshHiddenCapture(expired: Bool) {
+        let presentation = resting()
+        let interrupted = event()
+        presentation.receive(interrupted, now: t)
+        let first = presentation.resolve(context: context(surface: .coach), now: t)
+        #expect(first.pose == .saved && first.reactionID != nil)
+        let coveredAt = t.addingTimeInterval(0.1)
+        let hidden = presentation.resolve(context: context(surface: .coach, playback: .hidden), now: coveredAt)
+        #expect(hidden.reactionID == nil && hidden.nextDeadline == nil)
+        presentation.receive(interrupted, now: coveredAt)
+        #expect(presentation.resolve(context: context(surface: .coach), now: t.addingTimeInterval(0.2)).pose == .resting)
+        _ = presentation.resolve(context: context(surface: .coach, playback: .hidden), now: t.addingTimeInterval(0.3))
+        let freshAt = t.addingTimeInterval(0.4)
+        let fresh = event(at: freshAt)
+        presentation.receive(fresh, now: freshAt)
+        #expect(presentation.resolve(context: context(surface: .coach, playback: .hidden), now: freshAt).reactionID == nil)
+        let returnedAt = freshAt.addingTimeInterval(MivuMotion.feedbackLifetime - (expired ? 0 : 0.001))
+        let returned = presentation.resolve(context: context(surface: .coach), now: returnedAt)
+        #expect(returned.pose == (expired ? .resting : .saved))
+        if !expired {
+            #expect(returned.reactionID != nil && returned.reactionID != first.reactionID)
+            #expect(presentation.resolve(context: context(surface: .coach), now: returnedAt) == returned)
+        }
+        presentation.receive(fresh, now: returnedAt.addingTimeInterval(MivuMotion.saved))
+        let settled = presentation.resolve(context: context(surface: .coach), now: returnedAt.addingTimeInterval(MivuMotion.saved))
+        #expect(settled.pose == .resting && settled.reactionID == nil)
+    }
+
     @Test func initialAttachmentNeverReplaysExistingReceipts() {
         let presentation = CompanionPresentation()
         let receipt = event()
