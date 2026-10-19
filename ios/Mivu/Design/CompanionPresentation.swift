@@ -128,6 +128,9 @@ struct CompanionOutput: Equatable {
             attachedAt = profileID == nil ? nil : now
             latestCommit = nil
             showRestAfterCharacterChange = false
+            welcomeBackDue = false
+            tapCount = 0
+            lastTapAt = nil
         }
         self.profileID = profileID
         if let lastActiveAt {
@@ -284,6 +287,8 @@ struct CompanionOutput: Equatable {
         greetingAvailable = true
         lastContext = nil
         lastTapAt = nil
+        welcomeBackDue = false
+        tapCount = 0
         showRestAfterCharacterChange = false
     }
 

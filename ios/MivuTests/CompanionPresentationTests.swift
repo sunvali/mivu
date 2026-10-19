@@ -467,6 +467,22 @@ import Testing
         #expect(presentation.touch(.pat, now: t) == false)
         _ = presentation.resolve(context: context(typing: true), now: t)
         #expect(presentation.touch(.pat, now: t) == false)
+        _ = presentation.resolve(context: context(playback: .hidden), now: t)
+        #expect(presentation.touch(.pat, now: t) == false)
+        _ = presentation.resolve(context: context(surface: nil), now: t)
+        #expect(presentation.touch(.pat, now: t) == false)
+    }
+
+    @Test func welcomeBackDoesNotLeakAcrossProfilesOrBackground() {
+        let presentation = CompanionPresentation(calendar: utc)
+        presentation.attach(profileID: owner, existingEvents: [], now: t, lastActiveAt: t.addingTimeInterval(-26 * 3600))
+        presentation.attach(profileID: UUID(), existingEvents: [], now: t)
+        #expect(presentation.resolve(context: context(), now: t).pose == .greeting)
+
+        presentation.attach(profileID: owner, existingEvents: [], now: t, lastActiveAt: t.addingTimeInterval(-26 * 3600))
+        presentation.enterBackground()
+        presentation.attach(profileID: owner, existingEvents: [], now: t)
+        #expect(presentation.resolve(context: context(), now: t).pose == .greeting)
     }
 
     @Test func rapidTapsEscalateOnceThenShakeOff() {
@@ -532,13 +548,19 @@ import Testing
         #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(MivuMotion.feedbackLifetime)).pose == .resting)
     }
 
+    private var utc: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
     @Test func welcomeBackAfterADayAway() {
-        let away = CompanionPresentation()
+        let away = CompanionPresentation(calendar: utc)
         away.attach(profileID: owner, existingEvents: [], now: t, lastActiveAt: t.addingTimeInterval(-26 * 3600))
         let back = away.resolve(context: context(), now: t)
         #expect(back.pose == .welcomeBack)
         #expect(back.nextDeadline == t.addingTimeInterval(MivuMotion.welcomeBack))
-        let recent = CompanionPresentation()
+        let recent = CompanionPresentation(calendar: utc)
         recent.attach(profileID: owner, existingEvents: [], now: t, lastActiveAt: t.addingTimeInterval(-2 * 3600))
         #expect(recent.resolve(context: context(), now: t).pose == .greeting)
     }
