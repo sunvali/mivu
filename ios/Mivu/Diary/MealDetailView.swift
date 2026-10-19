@@ -7,6 +7,7 @@ struct MealDetailView: View {
     @Environment(\.diarySettingsRoutes) private var routes
     @Environment(\.openDiaryCoach) private var openChat
     @State private var showCorrection = false
+    @State private var showManualNutrition = false
     @State private var editedItem: FoodItem?
     @State private var editingRevision: Int?
     @State private var editingSubmissionID: UUID?
@@ -76,6 +77,10 @@ struct MealDetailView: View {
                         Button { showCorrection = true } label: {
                             Label("Add note or photo", systemImage: "note.text.badge.plus").frame(minHeight: 44)
                         }.accessibilityIdentifier("correctMeal")
+                        if meal.isSaved && !meal.hasUnresolvedInput {
+                            Button("Add food manually", systemImage: "number") { showManualNutrition = true }
+                                .frame(minHeight: 44).accessibilityIdentifier("addFoodManually")
+                        }
                         if meal.isSaved && meal.state == .saved {
                             Button("I ate half") {
                                 guard let token = model.selection else { return }
@@ -167,6 +172,11 @@ struct MealDetailView: View {
             }
         }
         .onChange(of: model.readModel?.profile.id) { _, _ in viewingPhoto = nil; movedDayID = nil }
+        .sheet(isPresented: $showManualNutrition) {
+            if let meal = model.meal(mealID), let day = model.day(meal.dayID) {
+                ManualNutritionView(model: model, target: .recorded(dayID: day.id, localDate: day.localDate, timeZoneID: day.timeZoneID), appendingTo: meal) { _ in }
+            }
+        }
         .sheet(isPresented: $showCorrection) { MealComposerView(model: model, correctingMealID: mealID) }
         .sheet(item: $editedItem) { item in FoodItemEditor(item: item, errorMessage: { model.errorMessage }) { updated, explicitNutrients in
             guard let owner = model.readModel?.profile.id else { return false }

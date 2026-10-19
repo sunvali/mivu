@@ -180,6 +180,7 @@ struct DayHistoryView: View {
     @Environment(\.openDiaryCoach) private var openChat
     @Environment(\.dismiss) private var dismiss
     @State private var showMeal = false
+    @State private var showManualNutrition = false
     @State private var showWeight = false
     @State private var showWorkout = false
     @State private var savedMealID: UUID?
@@ -208,6 +209,8 @@ struct DayHistoryView: View {
                 Section {
                     Button { showMeal = true } label: { Label("Log meal", systemImage: "plus.circle").frame(minHeight: 44) }
                         .accessibilityIdentifier("logMealForDay")
+                    Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }
+                        .frame(minHeight: 44).accessibilityIdentifier("enterNutritionForDay")
                     Button { showWeight = true } label: { Label("Morning weight", systemImage: "scalemass").frame(minHeight: 44) }
                         .accessibilityIdentifier("logWeightForDay")
                     Button { showWorkout = true } label: { Label("Log workout", systemImage: "figure.strengthtraining.traditional").frame(minHeight: 44) }
@@ -253,13 +256,18 @@ struct DayHistoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showMeal) { MealComposerView(model: model, dayID: dayID, onSaved: { savedMealID = $0 }) }
+        .sheet(isPresented: $showManualNutrition) {
+            if let day = model.day(dayID) {
+                ManualNutritionView(model: model, target: .recorded(dayID: day.id, localDate: day.localDate, timeZoneID: day.timeZoneID)) { savedMealID = $0 }
+            }
+        }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model, dayID: dayID) }
         .sheet(isPresented: $showWorkout) {
             if let day = model.day(dayID) {
                 WorkoutEditorView(model: model, localDate: day.localDate, dayID: dayID)
             }
         }
-        .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil; showMeal = false; showWeight = false; showWorkout = false }
+        .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil; showMeal = false; showManualNutrition = false; showWeight = false; showWorkout = false }
     }
 }
 

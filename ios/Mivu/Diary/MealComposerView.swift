@@ -15,6 +15,8 @@ struct MealComposerView: View {
     @State private var photoRole = PhotoRole.unspecified
     @State private var submitting = false
     @State private var showDiscard = false
+    @State private var showManualNutrition = false
+    @State private var manuallySavedMealID: UUID?
     @FocusState private var editingText: Bool
     var body: some View {
         NavigationStack {
@@ -56,6 +58,19 @@ struct MealComposerView: View {
                     Text(correctingMealID == nil ? "Waking day" : "This meal")
                 } footer: {
                     Text("Saved on this iPhone before analysis. Pending or unreviewed results do not count in totals. We’ll ask if the waking day needs confirming.")
+                }
+                if correctingMealID == nil {
+                    Section {
+                        Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }
+                            .frame(minHeight: 44).accessibilityIdentifier("enterNutritionManually")
+                    } footer: { Text("Save known nutrition directly, including when offline.") }
+                }
+                if let mealID = manuallySavedMealID {
+                    Section {
+                        NavigationLink { MealDetailView(model: model, mealID: mealID) } label: { Label("View saved food", systemImage: "checkmark.circle").frame(minHeight: 44) }
+                            .accessibilityIdentifier("manualSavedFood")
+                        Text("Your note and photos are still here and have not been sent.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    }
                 }
                 if let message = model.errorMessage { Section { Text(LocalizedStringKey(message)).foregroundStyle(.red) } }
             }
@@ -102,6 +117,13 @@ struct MealComposerView: View {
                 }
                 Button("Keep editing", role: .cancel) {}
             } message: { Text("Your active day began on an earlier date. A late meal can stay in that day.") }
+        }
+        .sheet(isPresented: $showManualNutrition) {
+            let target = dayID.flatMap { model.day($0) }.map { ManualNutritionTarget.recorded(dayID: $0.id, localDate: $0.localDate, timeZoneID: $0.timeZoneID) }
+            ManualNutritionView(model: model, target: target) { mealID in
+                if draft.isValid || photoPreparation.isPreparing { manuallySavedMealID = mealID }
+                else { onSaved?(mealID); dismiss() }
+            }
         }
         .onChange(of: model.selection) { _, selection in
             if let ownership, selection != ownership { photoPreparation.cancel(); dismiss() }

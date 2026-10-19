@@ -21,6 +21,7 @@ struct MealDraft: Equatable {
     private let subscriberReadModelLoading: @Sendable (UUID) async throws -> DiaryReadModel
     private let mealDetailLoading: @Sendable (UUID, UUID) async throws -> MealReadModel
     private let dayDetailLoading: @Sendable (UUID, UUID) async throws -> DiaryDayReadModel
+    private let manualNutritionSaving: @Sendable (ManualNutritionPayload, DiarySelectionOwnership) async throws -> ManualNutritionSaveResult
     private let deviceTimeZone: @Sendable () -> TimeZone
     private let preferences: UserDefaults?
     let backup: FolderBackup?
@@ -65,7 +66,9 @@ struct MealDraft: Equatable {
          mealDetailLoading: (@Sendable (UUID, UUID) async throws -> MealReadModel)? = nil,
          dayDetailLoading: (@Sendable (UUID, UUID) async throws -> DiaryDayReadModel)? = nil,
          photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil,
+         manualNutritionSaving: (@Sendable (ManualNutritionPayload, DiarySelectionOwnership) async throws -> ManualNutritionSaveResult)? = nil,
          deviceTimeZone: @Sendable @escaping () -> TimeZone = { .current }) {
+        self.manualNutritionSaving = manualNutritionSaving ?? { try await store.saveManualNutrition($0, expectedSelection: $1, expectedProfileID: $0.profileID) }
         self.deviceTimeZone = deviceTimeZone
         self.store = store; self.sampleMode = sampleMode; self.preferences = preferences; self.backup = backup
         self.profileSelection = profileSelection ?? { try await store.selectProfile($0) }
@@ -136,6 +139,10 @@ struct MealDraft: Equatable {
         do {
             profiles = try await store.profiles()
             #if DEBUG
+            if DiaryHistoryUITestFixture.isEnabled, profiles.isEmpty {
+                _ = try await store.importProfile(DiaryHistoryUITestFixture.snapshot())
+                profiles = try await store.profiles()
+            }
             if DiaryLaunch.isCoachHistoryFixture, profiles.isEmpty {
                 _ = try await store.importProfile(CoachUITestInference.historySnapshot())
                 profiles = try await store.profiles()
@@ -253,6 +260,39 @@ struct MealDraft: Equatable {
             }
             resumeWorker(); return true
         } catch { if selection == token { present(error) }; return false }
+    }
+    func saveManualNutrition(_ payload: ManualNutritionPayload,
+                             expectedSelection: DiarySelectionOwnership) async -> ManualNutritionSaveResult? {
+        guard !isSaving, !isChangingProfile, selection == expectedSelection,
+              payload.profileID == expectedSelection.identity.profileID else { return nil }
+        isSaving = true; defer { isSaving = false }
+        let generation = changeGeneration
+        do {
+            let result = try await manualNutritionSaving(payload, expectedSelection)
+            try await store.validateSelectionOwnership(expectedSelection)
+            guard !Task.isCancelled, selection == expectedSelection, !isChangingProfile else { return nil }
+            var refreshNeeded = false
+            do { try await refresh(profileID: payload.profileID) }
+            catch { refreshNeeded = true }
+            try await store.validateSelectionOwnership(expectedSelection)
+            guard !Task.isCancelled, selection == expectedSelection, !isChangingProfile else { return nil }
+            if changeGeneration == generation { exactMeals[result.meal.id] = result.meal }
+            else if meal(result.meal.id) == nil { await loadMeal(result.meal.id) }
+            try await store.validateSelectionOwnership(expectedSelection)
+            guard !Task.isCancelled, selection == expectedSelection, !isChangingProfile else { return nil }
+            if meal(result.meal.id) == nil { refreshNeeded = true }
+            savedMealID = result.meal.id
+            errorMessage = refreshNeeded ? "Saved on this iPhone. Reload the diary to refresh totals." : nil
+            if !result.replayed, companionCaptureEvent?.operationID != result.submissionID {
+                captureReceipt = result.submissionID
+                companionCaptureEvent = CompanionEvent(profileID: payload.profileID, operationID: result.submissionID, kind: .saved, committedAt: Date())
+            }
+            return result
+        } catch {
+            if selection == expectedSelection,
+               (try? await store.selectionOwnership(expectedProfileID: payload.profileID)) == expectedSelection { present(error) }
+            return nil
+        }
     }
     func switchProfile(_ id: UUID) async {
         guard beginProfileTransition() else { return }; let previous = readModel?.head.profile.id
