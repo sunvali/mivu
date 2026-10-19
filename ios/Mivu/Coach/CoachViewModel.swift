@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Observation
 import Network
 import os
@@ -38,6 +39,7 @@ private final class CoachNavigationReadFence: Sendable {
     private var errorRevision = 0
     private var sendingErrorRevision = 0
     @ObservationIgnored private let timelinePageLoading: (@Sendable (CoachPageRequest, DiarySelectionOwnership) async throws -> CoachPage)?
+    @ObservationIgnored private let beginCaptureProtection: @MainActor () -> (@MainActor () -> Void)
     @ObservationIgnored private let inference: () throws -> Inference
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let lookup: @Sendable (String) async throws -> [FoodEvidenceRecord]
@@ -57,7 +59,8 @@ private final class CoachNavigationReadFence: Sendable {
          lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured },
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
          timelinePageLoading: (@Sendable (CoachPageRequest, DiarySelectionOwnership) async throws -> CoachPage)? = nil,
-         attachmentDependencies: CoachAttachmentDraft.Dependencies? = nil) {
+         attachmentDependencies: CoachAttachmentDraft.Dependencies? = nil,
+         beginCaptureProtection: @escaping @MainActor () -> (@MainActor () -> Void) = { CoachCaptureProtection.begin() }) {
         self.diary = diary; self.connection = connection; self.timelinePageLoading = timelinePageLoading
         var dependencies = CoachAttachmentDraft.Dependencies(store: diary.store,
             refresh: { selected in try await diary.refresh(profileID: selected.identity.profileID) })
@@ -71,6 +74,7 @@ private final class CoachNavigationReadFence: Sendable {
         attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter, dependencies: attachmentDependencies ?? dependencies)
         self.inference = inference ?? { try connection.coachInference() }
         self.lookup = lookup; self.sleep = sleep
+        self.beginCaptureProtection = beginCaptureProtection
     }
 
     private(set) var timeline: CoachTimelineViewModel?
@@ -271,6 +275,8 @@ private final class CoachNavigationReadFence: Sendable {
     private func performSend() async -> Bool {
         synchronizeDraftOwnership()
         guard canSend, let token = diary.selection else { return false }
+        let endCaptureProtection = beginCaptureProtection()
+        defer { endCaptureProtection() }
         let owner = token.identity.profileID
         let followsLatest = timeline.map { if case .latest = $0.window.viewport { true } else { false } } ?? true
         sendingErrorRevision = errorRevision; isSending = true; diary.isSaving = true
@@ -594,4 +600,32 @@ private final class CoachNavigationReadFence: Sendable {
         if error as? CoachError == .ungroundedConfirmation { return "More details are needed before a meal, weigh-in or workout can be logged. Your input is saved." }
         if error as? DiaryError == .persistenceFailed { return "Could not update the diary on this iPhone. Your captured input is saved; retry when ready." }
         return "Analysis could not finish. Your input is saved. Check your connection or retry when ready." }
+}
+
+@MainActor enum CoachCaptureProtection {
+    static func begin(
+        begin: (@escaping @MainActor () -> Void) -> UIBackgroundTaskIdentifier = { expire in
+            UIApplication.shared.beginBackgroundTask(withName: "Save Coach input") {
+                expire()
+            }
+        },
+        end: @escaping @MainActor (UIBackgroundTaskIdentifier) -> Void = { UIApplication.shared.endBackgroundTask($0) }
+    ) -> @MainActor () -> Void {
+        var identifier = UIBackgroundTaskIdentifier.invalid
+        var finished = false
+        func finish() {
+            guard !finished else { return }
+            finished = true
+            guard identifier != .invalid else { return }
+            let ending = identifier; identifier = .invalid
+            end(ending)
+        }
+        identifier = begin(finish)
+        // Expiration may arrive before acquisition returns its identifier.
+        if finished, identifier != .invalid {
+            let ending = identifier; identifier = .invalid
+            end(ending)
+        }
+        return finish
+    }
 }
