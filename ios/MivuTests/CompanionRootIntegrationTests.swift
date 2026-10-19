@@ -164,7 +164,7 @@ import Lottie
             coach.cancel(); gate.release(); timelineTask.cancel(); runtime.stop(); window.isHidden = true
             defaults.removePersistentDomain(forName: suite)
         }
-        coach.resume()
+        // The real root starts the worker after initialization; its profile reload cancels earlier work.
         try #require(await eventually {
             gate.waiting && runtime.isReady && coach.timeline?.exchanges.count == 20
                 && outputs.last?.pose == .thinking
