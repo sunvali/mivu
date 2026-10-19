@@ -65,6 +65,32 @@ import Testing
         #expect(try await f.store.meal(id: f.meal.id, expectedProfileID: f.profile.id).submissions.last?.id == draft.submissionID)
     }
 
+    @Test func historicalCaptureKeepsItsSavedMealWhenTheDetailReadIsInvalidated() async throws {
+        let path = URL.temporaryDirectory.appending(path: "ComposerHistorical-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: path) }
+        let store = DiaryStore(directory: path), profile = DiaryProfile(name: "Synthetic historical", timeZoneID: "UTC")
+        _ = try await store.createProfile(profile)
+        let yesterday = try await store.startDay(at: Date().addingTimeInterval(-86_400))
+        _ = try await store.startDay()
+        // A concurrent diary change lands during every detail read, as a resumed analysis worker's commits can.
+        let invalidator = ComposerDetailInvalidator()
+        let model = DiaryViewModel(store: store, mealDetailLoading: { id, owner in
+            let value = try await store.meal(id: id, expectedProfileID: owner)
+            _ = try await store.recordWeight(value: 70, startNewDay: false, expectedProfileID: owner)
+            try await invalidator.model?.refresh(profileID: owner)
+            return value
+        })
+        invalidator.model = model
+        await model.load(createDefaultProfile: false)
+        #expect(model.activeDay?.id != yesterday.id)
+        var draft = MealDraft(); draft.text = "Synthetic selected-day meal"
+        guard case .saved(let id) = await model.capture(draft, destination: .day(yesterday.id, dateOnly: false)) else {
+            Issue.record("Historical capture must save"); return
+        }
+        #expect(model.errorMessage == nil, "A durable save must not report a refresh failure")
+        #expect(model.meal(id)?.dayID == yesterday.id)
+    }
+
     @Test func ambiguousDayEndsProtectionWithoutCapturingUntilUserChooses() async throws {
         let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
         let protection = ComposerProtectionProbe()
@@ -137,6 +163,7 @@ private actor ComposerCaptureGate {
     }
     func release() { continuation?.resume(); continuation = nil }
 }
+@MainActor private final class ComposerDetailInvalidator { weak var model: DiaryViewModel? }
 @MainActor private final class ComposerProtectionProbe {
     var begun = 0, ended = 0
     func begin() -> (@MainActor () -> Void) { begun += 1; return { self.ended += 1 } }

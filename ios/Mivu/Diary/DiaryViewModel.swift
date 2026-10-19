@@ -349,8 +349,15 @@ enum DiaryCaptureResult: Equatable, Sendable {
             try await store.validateSelectionOwnership(token)
             guard selection == token, !isChangingProfile else { return .failed }
             await loadSavedMealIfNeeded(saved.id)
+            // Concurrent diary changes can invalidate every detail read; one direct read still owns this receipt.
+            var latest: MealReadModel?
+            if meal(saved.id) == nil { latest = try? await mealDetailLoading(saved.id, token.identity.profileID) }
             try await store.validateSelectionOwnership(token)
             guard selection == token, !isChangingProfile else { return .failed }
+            if let latest, meal(saved.id) == nil {
+                if exactMeals.count >= 30 { exactMeals = [:] }
+                exactMeals[saved.id] = latest
+            }
             if meal(saved.id) == nil { refreshNeeded = true }
             errorMessage = refreshNeeded ? "Saved on this iPhone. Reload the diary to refresh totals." : nil
             return .saved(saved.id)
