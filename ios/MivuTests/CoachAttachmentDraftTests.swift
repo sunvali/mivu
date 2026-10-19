@@ -120,6 +120,47 @@ import Testing
         #expect(actual.coachTurns.isEmpty)
     }
 
+    @Test func newCaptureDuringFailedFinalRefreshRunsWithoutRetryingExhaustedTurn() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let gate = Task10Gate(), once = Task10Once(), replies = Task8FailedHandoffReplies()
+        let store = f.diary.store
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { owner in
+            if await replies.oldCalls == 4, await once.claim() { await gate.hold(0) }
+            return try await store.diaryReadModel(expectedProfileID: owner)
+        })
+        await diary.load(createDefaultProfile: false)
+        var dependencies = Task10Fixture.dependencies(diary)
+        dependencies.refresh = { _ in }
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { input, _ in
+            try await replies.respond(input)
+        } }, sleep: { _ in }, attachmentDependencies: dependencies)
+        defer { coach.cancel(); diary.enterBackground() }
+        coach.draft.text = "Synthetic exhausted capture"
+        let oldID = coach.draft.submissionID
+        #expect(await coach.send())
+        do {
+            try await gate.waitForArrivals(1)
+            #expect(await replies.oldCalls == 4)
+            #expect(try await store.snapshotForExport().coachTurns.first { $0.id == oldID }?.state == .waitingForNetwork)
+            coach.draft.text = "Synthetic fresh capture"
+            let newID = coach.draft.submissionID
+            #expect(await coach.send())
+            #expect(coach.captureReceipt == newID)
+            await gate.releaseAll()
+            await coach.waitForWorker()
+            #expect(await replies.oldCalls == 4)
+            #expect(await replies.newCalls == 1)
+            let stored = try await store.snapshotForExport()
+            #expect(stored.coachTurns.count == 2)
+            #expect(stored.coachTurns.first { $0.id == newID }?.state == .completed)
+            #expect(stored.coachTurns.first { $0.id == oldID }?.state == .waitingForNetwork)
+            coach.resume()
+            await coach.waitForWorker()
+            #expect(await replies.oldCalls == 8, "A later explicit resume retains the normal four-attempt recovery budget")
+            #expect(await replies.newCalls == 1)
+        } catch { await gate.releaseAll(); await coach.waitForWorker(); throw error }
+    }
+
     @Test(arguments: ["failedSend", "recovery"])
     func failedNewSendOrRecoveryRetainsAcceptedCaptureWake(boundary: String) async throws {
         let f = try await Task10Fixture.make(); defer { f.remove() }
@@ -799,6 +840,22 @@ private actor Task8OwnerInference {
     func respond() async -> CoachInferenceResult {
         calls += 1
         if calls == 1 { await gate.hold(0) }
+        return CoachInferenceResult(model: "fixture", text: "Synthetic result", calls: [], outputItems: [])
+    }
+}
+
+private actor Task8FailedHandoffReplies {
+    private(set) var oldCalls = 0
+    private(set) var newCalls = 0
+    func respond(_ input: [CoachInferenceInput]) throws -> CoachInferenceResult {
+        if input.contains(where: {
+            if case .message(role: .user, text: "Synthetic exhausted capture", images: _) = $0 { return true }
+            return false
+        }) {
+            oldCalls += 1
+            throw URLError(.notConnectedToInternet)
+        }
+        newCalls += 1
         return CoachInferenceResult(model: "fixture", text: "Synthetic result", calls: [], outputItems: [])
     }
 }

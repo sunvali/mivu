@@ -306,8 +306,10 @@ private final class CoachNavigationReadFence: Sendable {
         let id = UUID(); workerID = id; isWorking = true
         worker = Task {
             defer { if workerID == id { worker = nil; workerID = nil; isWorking = false; activity = nil; activityTurnID = nil } }
+            var capturedOnly = false
             repeat {
                 guard active, !Task.isCancelled, diary.selection == selected, !diary.isChangingProfile else { break }
+                let acceptedCaptureAtPassStart = captureReceipt
                 var processingFailed = false
                 do {
                     try await recoverLegacyCaptures(owner: owner)
@@ -317,7 +319,7 @@ private final class CoachNavigationReadFence: Sendable {
                         captureNeedsProcessing = false
                         let next: CoachTurnResult?
                         do {
-                            next = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, expectedProfileID: owner)
+                            next = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, capturedOnly: capturedOnly, expectedProfileID: owner)
                         } catch {
                             captureNeedsProcessing = captureNeedsProcessing || pendingCaptureWake
                             throw error
@@ -388,7 +390,10 @@ private final class CoachNavigationReadFence: Sendable {
                     if !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) }
                 }
                 if diary.selection == selected, !diary.isChangingProfile { try? await diary.refresh(profileID: owner) }
-                if processingFailed { break }
+                if processingFailed {
+                    guard captureReceipt != acceptedCaptureAtPassStart else { break }
+                    capturedOnly = true
+                }
                 // A capture can arrive during the final refresh while this worker is still owned.
             } while captureNeedsProcessing && active && !Task.isCancelled && diary.selection == selected && !diary.isChangingProfile
         }
