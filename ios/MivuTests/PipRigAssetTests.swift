@@ -13,7 +13,8 @@ import Testing
         let asset = try PipRigAsset.load(Self.bundledData())
         #expect(asset.version == 2)
         #expect(asset.parts.contains { $0.id.hasPrefix("pupil-l") })
-        #expect(asset.frames["today"] == CGRect(x: 40, y: 32, width: 432, height: 440))
+        #expect(asset.frames["today"].map { CGRect(x: 0, y: 0, width: 512, height: 512).intersects($0) } == true)
+        #expect(asset.frames["coach"].map { abs($0.width / $0.height - 76.0 / 66) < 0.01 } == true)
     }
 
     @Test func rejectsOversizeWrongVersionAndBadPath() throws {

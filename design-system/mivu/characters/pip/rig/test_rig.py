@@ -14,6 +14,12 @@ HEAD_IDS = (
 MOUTHS = "closedSmile smallOpen bigOpen o concerned yawn".split()
 EYES = "open half closedHappy closedSleepy wide heart".split()
 VIEWS = ("right", "front", "left")
+SETS = ("standing", "seated", "curled")
+BODY_IDS = (
+    "body chest chest-fluff arm-l forearm-l paw-l arm-r forearm-r paw-r leg-l leg-r foot-l foot-r "
+    "tail-1 tail-2 tail-3 tail-4 scarf-knot scarf-end-l scarf-end-r shadow"
+).split()
+HEARTS = ("heart-1", "heart-2", "heart-3")
 
 
 def name(part_id):
@@ -28,6 +34,15 @@ def x_bounds(path):
     xs = [float(v) for v in re.findall(r"-?[\d.]+", path)[0::2]]
     ys = [float(v) for v in re.findall(r"-?[\d.]+", path)[1::2]]
     return min(xs), max(xs), min(ys), max(ys)
+
+
+def points(path):
+    v = [float(t) for t in re.findall(r"-?[\d.]+", path)]
+    return v[0::2], v[1::2]
+
+
+def set_id(part, body_set):
+    return part if body_set == "standing" else f"{part}@{body_set}"
 
 
 class RigTests(unittest.TestCase):
@@ -86,6 +101,49 @@ class RigTests(unittest.TestCase):
             self.assertEqual(total(f"head@{view}"), 0)
             self.assertAlmostEqual(total(f"nose@{view}"), 1.0)
             self.assertTrue(0 < total(f"eye-l.open@{view}") < 1, view)
+
+    def test_body_parts_present(self):
+        by_id = {p["id"]: p for p in self.parts}
+        for body_set in SETS:
+            for part in BODY_IDS:
+                self.assertEqual(by_id[set_id(part, body_set)]["set"], body_set, part)
+        for heart in HEARTS:
+            self.assertFalse(by_id[heart]["visible"], heart)
+        self.assertEqual(by_id["head@right"]["parent"], "body")
+
+    def set_bounds(self, body_set):
+        """A set at rest: its visible parts plus the default head view on the set's mount."""
+        by_id = {p["id"]: p for p in self.parts}
+        k, tx, ty = by_id[set_id("body", body_set)]["mount"]
+        xs, ys = [], []
+        for p in self.parts:
+            if p["visible"] and (p["set"] == body_set or p["view"] == "right"):
+                px, py = points(p["path"])
+                if p["view"]:
+                    px, py = [k * x + tx for x in px], [k * y + ty for y in py]
+                xs += px
+                ys += py
+        return min(xs), min(ys), max(xs), max(ys)
+
+    def test_feet_on_ground(self):
+        for body_set in SETS:
+            for foot in ("foot-l", "foot-r"):
+                part = next(p for p in self.parts if p["id"] == set_id(foot, body_set))
+                self.assertAlmostEqual(max(points(part["path"])[1]), 472, delta=2, msg=part["id"])
+
+    def test_inside_safe_bounds(self):
+        for body_set in SETS:
+            x0, y0, x1, y1 = self.set_bounds(body_set)
+            self.assertTrue(40 <= x0 and x1 <= 472 and 32 <= y0 and y1 <= 472, (body_set, x0, y0, x1, y1))
+
+    def test_coach_frame_contains_seated_set(self):
+        x, y, w, h = self.rig["frames"]["coach"]
+        x0, y0, x1, y1 = self.set_bounds("seated")
+        self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w and y1 <= y + h)
+        self.assertAlmostEqual(w / h, 76 / 66, delta=0.01)
+        x, y, w, h = self.rig["frames"]["today"]
+        x0, y0, x1, y1 = self.set_bounds("standing")
+        self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w and y1 <= y + h)
 
     def test_pivots_inside_artboard(self):
         for p in self.parts:

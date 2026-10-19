@@ -225,7 +225,8 @@ import XCTest
         window.isHidden = false
         defer { runtime.stop(); window.isHidden = true }
         player.layoutIfNeeded()
-        let mask = pixels(try XCTUnwrap(UIImage(named: "PipCoach")))
+        // The Lottie coach painting's silhouette (the pre-rig PipCoach fallback); retired with Lottie.
+        let mask = pixels(try XCTUnwrap(UIImage(named: "LottieCoachMask", in: Bundle(for: Self.self), with: nil)))
         for pose in [CompanionPose.greeting, .resting, .attentive, .resting, .saved, .resting] {
             let output = CompanionOutput(pose: pose, playback: .animated,
                 reactionID: [.greeting, .saved].contains(pose) ? UUID() : nil, nextDeadline: nil)

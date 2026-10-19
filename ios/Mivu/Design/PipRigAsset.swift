@@ -20,6 +20,8 @@ struct PipRigAsset: Decodable {
         let fill: String
         let fillDark: String?
         let path: String
+        /// On a set's `body`: where the head views sit on it, `[k, tx, ty]` meaning head point × k + t.
+        let mount: [CGFloat]?
 
         /// The id without its `@view` suffix; poses address parts by this name.
         var name: String { String(id.prefix { $0 != "@" }) }

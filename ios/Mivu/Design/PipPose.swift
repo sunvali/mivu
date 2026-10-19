@@ -19,9 +19,10 @@ struct PipPose: Equatable {
     /// Unit-disc pupil direction; +y looks down.
     var gaze = CGPoint.zero
     var blush = false
-    /// No heart parts exist in the head rig yet; Task 3 wires this to the body art.
+    /// The rig has hidden `heart-1…3` parts; showing them is not wired yet.
     var hearts = 0
-    var set = BodySet.seated
+    /// Today rests standing; Coach chooses `.seated` explicitly.
+    var set = BodySet.standing
     /// -1 left, 0 front, +1 right. Small moves around a view slide features; larger ones swap views.
     var headTurn: CGFloat = 1
 

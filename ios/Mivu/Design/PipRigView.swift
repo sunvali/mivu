@@ -6,6 +6,8 @@ import UIKit
 final class PipRigView: UIView {
     private let asset: PipRigAsset
     private let root = CALayer()
+    /// Carries the head views onto the active set's body at its mount.
+    private let headMount = CALayer()
     private var containers: [String: CALayer] = [:]
     private var shapes: [String: CAShapeLayer] = [:]
     private var slots: [String: String] = [:]
@@ -65,6 +67,7 @@ final class PipRigView: UIView {
             container.transform = t.translated(x: joint.offset.x + slide, y: joint.offset.y)
         }
         visibleViews = views
+        mountHead(on: pose.set)
         CATransaction.commit()
     }
 
@@ -77,6 +80,17 @@ final class PipRigView: UIView {
         CATransaction.setDisableActions(true)
         root.setAffineTransform(CGAffineTransform(a: s, b: 0, c: 0, d: s, tx: tx, ty: ty))
         CATransaction.commit()
+    }
+
+    /// Shared parts on `body` (the head views, hearts) follow whichever set's body is active.
+    private static func ridesHeadMount(_ part: PipRigAsset.Part) -> Bool { part.parent == "body" && part.set == nil }
+
+    private func mountHead(on set: PipPose.BodySet) {
+        let body = asset.parts.first { $0.name == "body" && $0.set == set.rawValue }
+        let host = body.flatMap { containers[$0.id] } ?? root
+        if headMount.superlayer !== host { host.addSublayer(headMount) }
+        let m = body?.mount ?? [1, 0, 0]
+        headMount.setAffineTransform(CGAffineTransform(a: m[0], b: 0, c: 0, d: m[0], tx: m[1], ty: m[2]))
     }
 
     // MARK: - Pose resolution
@@ -105,6 +119,9 @@ final class PipRigView: UIView {
         root.anchorPoint = .zero
         root.bounds = CGRect(x: 0, y: 0, width: asset.artboard, height: asset.artboard)
         layer.addSublayer(root)
+        headMount.anchorPoint = .zero
+        headMount.bounds = root.bounds
+        headMount.zPosition = CGFloat(asset.parts.filter(Self.ridesHeadMount).map(\.z).min() ?? 0)
         let byID = Dictionary(uniqueKeysWithValues: asset.parts.map { ($0.id, $0) })
         for part in asset.parts {
             let container = CALayer()
@@ -121,8 +138,9 @@ final class PipRigView: UIView {
             shapes[part.id] = shape
         }
         for part in asset.parts {
-            // A missing parent (the body, until it exists) means root.
-            (part.parent.flatMap { containers[$0] } ?? root).addSublayer(containers[part.id]!)
+            // Shared parts on `body` ride the head mount; a missing parent means root.
+            let parent = Self.ridesHeadMount(part) ? headMount : part.parent.flatMap { containers[$0] } ?? root
+            parent.addSublayer(containers[part.id]!)
             var ancestor: PipRigAsset.Part? = part
             while let current = ancestor, current.shape == nil { ancestor = current.parent.flatMap { byID[$0] } }
             slots[part.id] = ancestor?.shape
