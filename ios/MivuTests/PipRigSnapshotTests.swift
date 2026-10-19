@@ -16,7 +16,7 @@ import UIKit
 
     /// Union of every drawn path, in the view's coordinates.
     private func drawnBounds(_ layer: CALayer, in root: CALayer) -> CGRect {
-        guard !layer.isHidden else { return .null }
+        guard !layer.isHidden, layer.opacity > 0 else { return .null }
         var box = CGRect.null
         if let shape = layer as? CAShapeLayer, let path = shape.path, !path.isEmpty {
             box = shape.convert(path.boundingBoxOfPath, to: root)

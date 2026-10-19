@@ -12,6 +12,19 @@ final class PipRigView: UIView {
     private var shapes: [String: CAShapeLayer] = [:]
     private var slots: [String: String] = [:]
     private var pupilReach: [String: (lo: CGPoint, hi: CGPoint)] = [:]
+    /// Iris part id -> how far the whole iris group may travel inside the eye white at full gaze.
+    private var irisReach: [String: CGSize] = [:]
+    /// Glint part id -> its iris; the glint counter-shifts so the light seems fixed.
+    private var glintIris: [String: String] = [:]
+    private var playback: Playback?
+    private var playbackTick = 0
+
+    private final class Playback {
+        let token: Int
+        let completion: (Bool) -> Void
+        var work: [DispatchWorkItem] = []
+        init(token: Int, completion: @escaping (Bool) -> Void) { self.token = token; self.completion = completion }
+    }
 
     /// Artboard rectangle to fit in the view (defaults to the whole artboard).
     var visibleRect = CGRect(x: 0, y: 0, width: 512, height: 512) { didSet { setNeedsLayout() } }
@@ -38,6 +51,7 @@ final class PipRigView: UIView {
     func layer(named id: String) -> CALayer? { containers[id] }
 
     func removeAllMotion() {
+        stopPlayback()
         root.removeAllAnimations()
         containers.values.forEach { $0.removeAllAnimations() }
         shapes.values.forEach { $0.removeAllAnimations() }
@@ -50,21 +64,13 @@ final class PipRigView: UIView {
         if animated { CATransaction.setAnimationDuration(0.2) }
         let (view, local) = Self.view(for: pose.headTurn)
         let wanted: Set<String> = ["eye-l.\(pose.eyes.rawValue)", "eye-r.\(pose.eyes.rawValue)", "mouth.\(pose.mouth.rawValue)"]
-        let gaze = Self.clamped(pose.gaze)
         var views: Set<String> = []
         for part in asset.parts {
             guard let container = containers[part.id] else { continue }
             container.isHidden = !isShown(part, view: view, wanted: wanted, pose: pose)
             if !container.isHidden, let partView = part.view { views.insert(partView) }
-            var joint = pose.joints[part.name] ?? (part.name.hasPrefix("brow-") ? pose.brows : nil) ?? PipPose.Joint()
-            if let reach = pupilReach[part.id] {
-                joint.offset.x += gaze.x * (gaze.x < 0 ? -reach.lo.x : reach.hi.x)
-                joint.offset.y += gaze.y * (gaze.y < 0 ? -reach.lo.y : reach.hi.y)
-            }
-            let slide = (part.parallax ?? 0) * local * asset.parallaxScale
-            var t = CATransform3DMakeScale(joint.scale.width, joint.scale.height, 1)
-            t = CATransform3DRotate(t, joint.rotation, 0, 0, 1)
-            container.transform = t.translated(x: joint.offset.x + slide, y: joint.offset.y)
+            if let opacity = Self.opacity(of: part, in: pose) { container.opacity = opacity }
+            container.transform = Self.transform(joint(of: part, in: pose, slide: local))
         }
         visibleViews = views
         mountHead(on: pose.set)
@@ -95,6 +101,37 @@ final class PipRigView: UIView {
 
     // MARK: - Pose resolution
 
+    private func joint(of part: PipRigAsset.Part, in pose: PipPose, slide local: CGFloat) -> PipPose.Joint {
+        var joint = pose.joints[part.name] ?? (part.name.hasPrefix("brow-") ? pose.brows : nil) ?? PipPose.Joint()
+        let gaze = Self.clamped(pose.gaze)
+        if let reach = pupilReach[part.id] {
+            joint.offset.x += gaze.x * (gaze.x < 0 ? -reach.lo.x : reach.hi.x)
+            joint.offset.y += gaze.y * (gaze.y < 0 ? -reach.lo.y : reach.hi.y)
+        }
+        if let reach = irisReach[part.id] {
+            joint.offset.x += gaze.x * reach.width
+            joint.offset.y += gaze.y * reach.height
+        } else if let iris = glintIris[part.id], let reach = irisReach[iris] {
+            joint.offset.x -= 0.3 * gaze.x * reach.width
+            joint.offset.y -= 0.3 * gaze.y * reach.height
+        }
+        joint.offset.x += (part.parallax ?? 0) * local * asset.parallaxScale
+        return joint
+    }
+
+    private static func transform(_ joint: PipPose.Joint) -> CATransform3D {
+        var t = CATransform3DMakeScale(joint.scale.width, joint.scale.height, 1)
+        t = CATransform3DRotate(t, joint.rotation, 0, 0, 1)
+        return t.translated(x: joint.offset.x, y: joint.offset.y)
+    }
+
+    /// Blush and hearts fade in and out instead of popping.
+    private static func opacity(of part: PipRigAsset.Part, in pose: PipPose) -> Float? {
+        if part.name.hasPrefix("cheek-blush") { return pose.blush ? 1 : 0 }
+        if part.name.hasPrefix("heart-"), let n = Int(part.name.dropFirst(6)) { return n <= pose.hearts ? 1 : 0 }
+        return nil
+    }
+
     /// Which head view to show and how far (-1...1) to slide features inside it.
     private static func view(for turn: CGFloat) -> (String, CGFloat) {
         let (name, centre, span): (String, CGFloat, CGFloat) =
@@ -110,7 +147,7 @@ final class PipRigView: UIView {
     private func isShown(_ part: PipRigAsset.Part, view: String, wanted: Set<String>, pose: PipPose) -> Bool {
         guard part.view == nil || part.view == view, part.set == nil || part.set == pose.set.rawValue else { return false }
         if let slot = slots[part.id] { return wanted.contains(slot) }
-        return part.visible || (part.name.hasPrefix("cheek-blush") && pose.blush)
+        return part.visible || Self.opacity(of: part, in: pose) != nil
     }
 
     // MARK: - Layer tree
@@ -140,7 +177,23 @@ final class PipRigView: UIView {
         for part in asset.parts {
             // Shared parts on `body` ride the head mount; a missing parent means root.
             let parent = Self.ridesHeadMount(part) ? headMount : part.parent.flatMap { containers[$0] } ?? root
-            parent.addSublayer(containers[part.id]!)
+            if let white = irisWhite(of: part), let box = shapes[white.id]?.path?.boundingBoxOfPath {
+                // The iris group travels freely; this fixed wrapper clips it to the eye white.
+                let wrapper = CALayer()
+                wrapper.anchorPoint = .zero
+                wrapper.bounds = root.bounds
+                wrapper.zPosition = CGFloat(part.z)
+                let mask = CAShapeLayer()
+                mask.frame = root.bounds
+                mask.path = shapes[white.id]?.path
+                wrapper.mask = mask
+                wrapper.addSublayer(containers[part.id]!)
+                parent.addSublayer(wrapper)
+                irisReach[part.id] = CGSize(width: 0.3 * box.width, height: 0.25 * box.height)
+            } else {
+                parent.addSublayer(containers[part.id]!)
+            }
+            if part.name.contains("glint"), let iris = part.parent, byID[iris]?.name.contains("iris") == true { glintIris[part.id] = iris }
             var ancestor: PipRigAsset.Part? = part
             while let current = ancestor, current.shape == nil { ancestor = current.parent.flatMap { byID[$0] } }
             slots[part.id] = ancestor?.shape
@@ -156,6 +209,12 @@ final class PipRigView: UIView {
         applyFills()
     }
 
+    /// The eye-white part beside an iris (`eye-l`, or `eye-l.wide.white` for the other shapes).
+    private func irisWhite(of part: PipRigAsset.Part) -> PipRigAsset.Part? {
+        guard part.name.contains("iris") else { return nil }
+        return asset.parts.first { $0.parent == part.parent && ($0.name.hasSuffix(".white") || $0.name == "eye-l" || $0.name == "eye-r") }
+    }
+
     private func applyFills() {
         for part in asset.parts {
             shapes[part.id]?.fillColor = Self.color(isDark ? part.fillDark ?? part.fill : part.fill)
@@ -165,6 +224,166 @@ final class PipRigView: UIView {
     private static func color(_ hex: String) -> CGColor {
         let v = Int(hex.dropFirst(), radix: 16) ?? 0
         return CGColor(red: CGFloat(v >> 16 & 255) / 255, green: CGFloat(v >> 8 & 255) / 255, blue: CGFloat(v & 255) / 255, alpha: 1)
+    }
+}
+
+// MARK: - Springs, gestures and living eyes
+
+extension PipRigView {
+    /// Eyes snap to a new gaze in about 60 ms with a little overshoot.
+    private static let saccadeOmega: CGFloat = 110
+    /// Eyes reach a head turn's direction this long before the head finishes turning.
+    private static let eyesLead: TimeInterval = 0.08
+
+    /// Plays the gesture's keys as springs. `completion(false)` if another play, `removeAllMotion()` or deallocation ends it first.
+    func play(_ gesture: PipGesture, completion: @escaping (Bool) -> Void) {
+        stopPlayback()
+        playbackTick += 1
+        let run = Playback(token: playbackTick, completion: completion)
+        playback = run
+        schedule(gesture, run: run)
+    }
+
+    private func schedule(_ gesture: PipGesture, run: Playback) {
+        for (i, key) in gesture.keys.enumerated() {
+            let launch = i == 0 ? 0 : gesture.keys[i - 1].at
+            after(launch, run) { [unowned self] in step(to: key.pose, period: key.at - launch) }
+        }
+        after(gesture.duration, run) { [unowned self] in
+            if gesture.loops { schedule(gesture, run: run); return }
+            playback = nil
+            run.completion(true)
+        }
+    }
+
+    /// Runs `work` now when `delay` is zero, else on the main queue unless the playback was stopped.
+    private func after(_ delay: TimeInterval, _ run: Playback, _ work: @escaping () -> Void) {
+        guard delay > 0 else { work(); return }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, playback === run else { return }
+            work()
+        }
+        run.work.append(item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    private func stopPlayback() {
+        guard let run = playback else { return }
+        playback = nil
+        run.work.forEach { $0.cancel() }
+        run.completion(false)
+    }
+
+    /// One key: eyes go first when the head turns, then the head follows.
+    private func step(to target: PipPose, period: TimeInterval) {
+        guard target.headTurn != pose.headTurn, period > Self.eyesLead, let run = playback else {
+            transition(to: target, period: period)
+            return
+        }
+        var glance = pose
+        glance.gaze = CGPoint(x: target.headTurn > pose.headTurn ? 1 : -1, y: target.gaze.y)
+        transition(to: glance, period: period)
+        after(Self.eyesLead, run) { [unowned self] in transition(to: target, period: period - Self.eyesLead) }
+    }
+
+    /// Saccade to `point` (unit disc, +y down) for idle glances and typing.
+    func look(at point: CGPoint, animated: Bool = true) {
+        var next = pose
+        next.gaze = point
+        if animated { transition(to: next, period: 0.06) } else { apply(next, animated: false) }
+    }
+
+    /// Upper lid sweeps down (70 ms), holds (40 ms), opens (90 ms) with a 3% squash; `double` blinks twice.
+    func blink(double: Bool = false) {
+        guard pose.eyes == .open else { return }
+        let view = Self.view(for: pose.headTurn).0
+        for side in ["l", "r"] {
+            guard let eye = containers["eye-\(side).open@\(view)"], let lid = containers["lid-upper-\(side)@\(view)"],
+                  let white = shapes["eye-\(side)@\(view)"]?.path?.boundingBoxOfPath,
+                  let part = asset.parts.first(where: { $0.id == "eye-\(side).open@\(view)" }) else { continue }
+            let toBottom = white.maxY - part.pivot[1]
+            // Squash the eye toward its lower edge; the lid rides down with it.
+            var closed = CATransform3DMakeTranslation(0, -toBottom, 0)
+            closed = CATransform3DConcat(closed, CATransform3DMakeScale(1.03, 0.12, 1))
+            closed = CATransform3DConcat(closed, CATransform3DMakeTranslation(0, toBottom, 0))
+            for offset in double ? [0, 0.3] : [0] {
+                addBlink(to: eye, closed: closed, delay: offset)
+                addBlink(to: lid, closed: CATransform3DMakeTranslation(0, 3, 0), delay: offset)
+            }
+        }
+    }
+
+    private func addBlink(to layer: CALayer, closed: CATransform3D, delay: TimeInterval) {
+        let blink = CAKeyframeAnimation(keyPath: "transform")
+        blink.values = [CATransform3DIdentity, closed, closed, CATransform3DIdentity].map(NSValue.init)
+        blink.keyTimes = [0, 0.35, 0.55, 1]
+        blink.timingFunctions = [CAMediaTimingFunction(name: .easeIn), CAMediaTimingFunction(name: .linear), CAMediaTimingFunction(name: .easeOut)]
+        blink.duration = 0.2
+        blink.isAdditive = true
+        if delay > 0 {
+            blink.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + delay
+            blink.fillMode = .backwards
+        }
+        layer.add(blink, forKey: delay > 0 ? "blink2" : "blink")
+    }
+
+    /// Moves to `target` with one spring per changed joint component, each starting from what is on screen now.
+    private func transition(to target: PipPose, period: TimeInterval) {
+        var before: [String: [Float]] = [:]
+        // A layer that was hidden has no meaningful presentation value: it snaps to its pose instead of springing.
+        let wasHidden = Set(containers.filter { $0.value.isHidden }.keys)
+        for (id, container) in containers {
+            let live = container.presentation() ?? container
+            before[id] = Self.components.map { Float((live.value(forKeyPath: $0.path) as? NSNumber)?.floatValue ?? 0) } + [live.opacity]
+        }
+        apply(target, animated: false)
+        for part in asset.parts {
+            guard let container = containers[part.id], !container.isHidden, !wasHidden.contains(part.id), let from = before[part.id] else { continue }
+            let follower = ["ear-", "tail-2", "tail-3", "tail-4", "scarf-end-"].contains { part.name.hasPrefix($0) }
+            let gazePart = irisReach[part.id] != nil || pupilReach[part.id] != nil || glintIris[part.id] != nil
+            for (i, component) in Self.components.enumerated() {
+                let to = Float((container.value(forKeyPath: component.path) as? NSNumber)?.floatValue ?? 0)
+                guard abs(from[i] - to) > 0.0005 else { container.removeAnimation(forKey: component.key); continue }
+                container.add(spring(from: from[i], to: to, period: period, follower: follower, saccade: gazePart, on: container, path: component.path), forKey: component.key)
+            }
+            guard Self.opacity(of: part, in: pose) != nil else { continue }
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = from[Self.components.count]
+            fade.toValue = container.opacity
+            fade.duration = 0.18
+            container.add(fade, forKey: "pip.fade")
+            if part.name.hasPrefix("heart-"), from[Self.components.count] < 0.5, container.opacity == 1 {
+                let pop = CASpringAnimation(keyPath: "transform.scale")
+                pop.fromValue = 0.2
+                pop.toValue = 1
+                pop.stiffness = 260; pop.damping = 9
+                pop.duration = pop.settlingDuration
+                container.add(pop, forKey: "pip.pop")
+            }
+        }
+    }
+
+    private static let components: [(path: String, key: String)] = [
+        ("transform.rotation.z", "pip.rotation"), ("transform.translation.x", "pip.x"), ("transform.translation.y", "pip.y"),
+        ("transform.scale.x", "pip.scaleX"), ("transform.scale.y", "pip.scaleY"),
+    ]
+
+    /// Natural frequency is chosen so the first overshoot lands near the key time; followers are 40% softer and 40 ms late.
+    private func spring(from: Float, to: Float, period: TimeInterval, follower: Bool, saccade: Bool, on layer: CALayer, path: String) -> CASpringAnimation {
+        let animation = CASpringAnimation(keyPath: path)
+        animation.fromValue = from
+        animation.toValue = to
+        var omega = saccade ? Self.saccadeOmega : min(max(3.76 / CGFloat(max(period, 0.05)), 14), 90)
+        if follower { omega *= 0.6.squareRoot() }
+        animation.mass = 1
+        animation.stiffness = omega * omega
+        animation.damping = 2 * (saccade ? 0.6 : 0.55) * omega
+        animation.duration = animation.settlingDuration
+        if follower {
+            animation.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + 0.04
+            animation.fillMode = .backwards
+        }
+        return animation
     }
 }
 
