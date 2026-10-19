@@ -182,7 +182,8 @@ import UIKit
 
     @Test func eyesReachTheTurnBeforeTheHeadSwaps() async throws {
         let view = try rig()
-        let turn = PipGesture("turn") { $0.at(0.4) { $0.turn(-1) }; $0.settle(at: 0.8) }
+        // No settle key: the head stays turned, so a loaded main queue cannot make the test miss a brief window.
+        let turn = PipGesture("turn") { $0.at(0.4) { $0.turn(-1) } }
         view.play(turn) { _ in }
         let iris = try #require(view.layer(named: "iris-l@right"))
         // `play` queues the eyes' saccade synchronously; the head swaps later on the main queue.
