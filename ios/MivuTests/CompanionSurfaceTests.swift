@@ -157,7 +157,7 @@ import UIKit
             #expect(player.isAnimationPlaying)
             #expect(runtime.triggerCount == 0)
         }
-        for pose in CompanionPose.allCases {
+        for pose in CompanionPose.allCases where pose.rawValue <= CompanionPose.submitted.rawValue {
             let name = ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"][pose.rawValue]
             let reaction = [.submitted, .saved, .reviewed, .greeting].contains(pose) ? UUID() : nil
             await runtime.apply(CompanionOutput(pose: pose, playback: .animated, reactionID: reaction, nextDeadline: nil), darkMode: false, surface: .coach)

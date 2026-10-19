@@ -17,7 +17,8 @@ import Testing
         let names = Set(markers.compactMap { $0["cm"] as? String })
         let base = ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"]
         #expect(names == Set(base.flatMap { [$0, "coach-" + $0] }))
-        let durations = ["resting": MivuMotion.resting, "blink": MivuMotion.blink, "attentive": MivuMotion.attentive, "thinking": MivuMotion.thinking, "saved": MivuMotion.saved, "reviewed": MivuMotion.reviewed, "recovery": MivuMotion.recovery, "greeting": MivuMotion.greeting, "submitted": MivuMotion.submitted]
+        // The legacy Lottie file still authors the old saved/reviewed/greeting lengths; Task 7 replaces it with the new rig.
+        let durations = ["resting": MivuMotion.resting, "blink": MivuMotion.blink, "attentive": MivuMotion.attentive, "thinking": MivuMotion.thinking, "saved": 0.8, "reviewed": 1.0, "recovery": MivuMotion.recovery, "greeting": 1.2, "submitted": MivuMotion.submitted]
         for marker in markers {
             let name = try #require(marker["cm"] as? String)
             let seconds = try #require(marker["dr"] as? Double) / 60

@@ -139,7 +139,15 @@ import UIKit
 
     func fallbackAssetName(for pose: CompanionPose) -> String {
         let names = ["Resting", "Attentive", "Thinking", "Saved", "Reviewed", "Recovery", "Greeting"]
-        return character.fallbackAssetPrefix + names[pose == .submitted ? CompanionPose.attentive.rawValue : pose.rawValue]
+        // Task 7 replaces this runtime; new poses borrow the nearest existing fallback.
+        let index = switch pose {
+        case .submitted, .curious: CompanionPose.attentive.rawValue
+        case .firstMealToday, .dayComplete: CompanionPose.saved.rawValue
+        case .tapped, .patted: CompanionPose.resting.rawValue
+        case .welcomeBack: CompanionPose.greeting.rawValue
+        default: pose.rawValue
+        }
+        return character.fallbackAssetPrefix + names[index]
     }
 
     private func pauseAndReset() {
@@ -181,7 +189,15 @@ import UIKit
     }
 
     private static func marker(for pose: CompanionPose, surface: CompanionSurface = .today) -> String {
-        let name = ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"][pose.rawValue]
+        let names = ["resting", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"]
+        let index = switch pose {
+        case .firstMealToday, .dayComplete: CompanionPose.saved.rawValue
+        case .curious: CompanionPose.attentive.rawValue
+        case .tapped, .patted: CompanionPose.resting.rawValue
+        case .welcomeBack: CompanionPose.greeting.rawValue
+        default: pose.rawValue
+        }
+        let name = names[index]
         return surface == .coach ? "coach-" + name : name
     }
 
