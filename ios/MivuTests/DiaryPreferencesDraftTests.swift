@@ -3,6 +3,18 @@ import Testing
 @testable import Mivu
 
 @Suite struct DiaryPreferencesDraftTests {
+    @Test func missingProfileUsesDeviceTimezoneAndSavedProfileKeepsItsZone() {
+        var draft = DiaryPreferencesDraft()
+        draft.synchronize(nil, restoreGeneration: 0)
+        #expect(draft.timezone == TimeZone.current.identifier)
+        let profile = DiaryProfile(name: "Synthetic", timeZoneID: "Asia/Jerusalem")
+        draft.synchronize(profile, restoreGeneration: 0)
+        #expect(draft.timezone == "Asia/Jerusalem")
+        draft.useSaved(nil)
+        #expect(draft.timezone == TimeZone.current.identifier)
+        #expect(!draft.isDirty)
+    }
+
     @Test func isDirtyTracksEditsSaveSynchronizationConflictAndRevert() {
         var profile = DiaryProfile(name: "Synthetic profile")
         var draft = DiaryPreferencesDraft()

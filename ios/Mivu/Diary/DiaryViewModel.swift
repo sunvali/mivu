@@ -21,6 +21,7 @@ struct MealDraft: Equatable {
     private let subscriberReadModelLoading: @Sendable (UUID) async throws -> DiaryReadModel
     private let mealDetailLoading: @Sendable (UUID, UUID) async throws -> MealReadModel
     private let dayDetailLoading: @Sendable (UUID, UUID) async throws -> DiaryDayReadModel
+    private let deviceTimeZone: @Sendable () -> TimeZone
     private let preferences: UserDefaults?
     let backup: FolderBackup?
     private(set) var readModel: DiaryReadModel?
@@ -63,7 +64,9 @@ struct MealDraft: Equatable {
          subscriberReadModelLoading: (@Sendable (UUID) async throws -> DiaryReadModel)? = nil,
          mealDetailLoading: (@Sendable (UUID, UUID) async throws -> MealReadModel)? = nil,
          dayDetailLoading: (@Sendable (UUID, UUID) async throws -> DiaryDayReadModel)? = nil,
-         photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil) {
+         photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil,
+         deviceTimeZone: @Sendable @escaping () -> TimeZone = { .current }) {
+        self.deviceTimeZone = deviceTimeZone
         self.store = store; self.sampleMode = sampleMode; self.preferences = preferences; self.backup = backup
         self.profileSelection = profileSelection ?? { try await store.selectProfile($0) }
         self.actionReadModelLoading = actionReadModelLoading ?? { try await store.diaryReadModel(expectedProfileID: $0) }
@@ -142,7 +145,7 @@ struct MealDraft: Equatable {
             if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 try await install(try await profileSelection(profile.id))
             } else if createDefaultProfile {
-                try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language)))
+                try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
                 profiles = try await store.profiles()
             }
         } catch { await recoverProfileSelection(previous); present(error) }
@@ -259,7 +262,7 @@ struct MealDraft: Equatable {
     func createProfile(name: String) async {
         guard beginProfileTransition() else { return }; let previous = readModel?.head.profile.id
         defer { finishProfileTransition() }
-        do { try await install(try await store.createProfile(DiaryProfile(name: name))); profiles = try await store.profiles() }
+        do { try await install(try await store.createProfile(DiaryProfile(name: name, timeZoneID: deviceTimeZone().identifier))); profiles = try await store.profiles() }
         catch { await recoverProfileSelection(previous); present(error) }
     }
     func signOut() async { guard beginProfileTransition() else { return }; defer { finishProfileTransition() }; await clearProfileSelection() }
@@ -397,11 +400,11 @@ enum DiaryLaunch {
 }
 
 struct DiaryPreferencesDraft {
-    var timezone = "Asia/Jerusalem"
+    var timezone = TimeZone.current.identifier
     var preferences = ""
     private var profileID: UUID?
     private var synchronizedRestoreGeneration: Int?
-    private var savedTimezone = "Asia/Jerusalem"
+    private var savedTimezone = TimeZone.current.identifier
     private var savedPreferences = ""
     private(set) var timezoneConflict = false
     private(set) var preferencesConflict = false
@@ -414,7 +417,7 @@ struct DiaryPreferencesDraft {
             useSaved(profile)
             return
         }
-        let currentTimezone = profile?.timeZoneID ?? "Asia/Jerusalem"
+        let currentTimezone = profile?.timeZoneID ?? TimeZone.current.identifier
         let currentPreferences = profile?.preferences ?? ""
         if currentTimezone != savedTimezone {
             if timezone == savedTimezone || timezone == currentTimezone { timezone = currentTimezone; timezoneConflict = false }
@@ -428,7 +431,7 @@ struct DiaryPreferencesDraft {
         }
     }
     mutating func useSaved(_ profile: DiaryProfile?) {
-        timezone = profile?.timeZoneID ?? "Asia/Jerusalem"
+        timezone = profile?.timeZoneID ?? TimeZone.current.identifier
         preferences = profile?.preferences ?? ""
         savedTimezone = timezone; savedPreferences = preferences
         timezoneConflict = false; preferencesConflict = false

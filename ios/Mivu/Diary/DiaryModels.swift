@@ -4,7 +4,7 @@ struct DiaryProfile: Codable, Equatable, Sendable, Identifiable {
     var id = UUID()
     var name: String
     var language = "en"
-    var timeZoneID = "Asia/Jerusalem"
+    var timeZoneID = TimeZone.current.identifier
     var preferences = ""
 }
 
