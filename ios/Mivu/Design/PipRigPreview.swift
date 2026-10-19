@@ -91,7 +91,7 @@ struct PipRigPreview: View {
                     try? await Task.sleep(for: .seconds(1.2))
                     driver.rigs.forEach { $0.look(at: .zero) }
                 default:
-                    if let gesture = PipGesture.forIdle(next.beat) {
+                    if let gesture = PipGesture.forIdle(next.beat, curled: curledAt != nil) {
                         driver.rigs.forEach { $0.play(gesture) { _ in } }
                         if next.beat == .curlUp { curledAt = Date() }
                     }

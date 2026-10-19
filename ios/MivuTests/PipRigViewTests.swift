@@ -12,6 +12,26 @@ import UIKit
         return view
     }
 
+    /// A window for tests that need a live render tree; the caller hides and drops it when done.
+    private func window(holding view: PipRigView) throws -> UIWindow {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = view.frame
+        window.addSubview(view)
+        window.isHidden = false
+        return window
+    }
+
+    private func keys(_ layer: CALayer) -> [String] {
+        (layer.animationKeys() ?? []) + (layer.sublayers ?? []).flatMap(keys)
+    }
+
+    /// Polls until `done` or a generous timeout, instead of sleeping a fixed time.
+    private func spin(until done: () -> Bool) async {
+        let deadline = Date().addingTimeInterval(5)
+        while !done() && Date() < deadline { try? await Task.sleep(for: .milliseconds(5)) }
+    }
+
     @Test func restPoseShowsDefaultFaceShapesOnly() throws {
         let view = try rig()
         #expect(view.layer(named: "mouth.closedSmile@right")?.isHidden == false)
@@ -104,11 +124,8 @@ import UIKit
 
     @Test func interruptStartsFromPresentationValue() async throws {
         let view = try rig()
-        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let window = UIWindow(windowScene: scene)
-        window.frame = view.frame
-        window.addSubview(view)
-        window.isHidden = false
+        var window: UIWindow? = try window(holding: view)
+        defer { window?.isHidden = true; window = nil }
         view.play(PipGesture.for(.saved)) { _ in }
         try await Task.sleep(for: .milliseconds(200))
         // Freeze the timeline so the comparison cannot drift under load.
@@ -168,11 +185,12 @@ import UIKit
         let turn = PipGesture("turn") { $0.at(0.4) { $0.turn(-1) }; $0.settle(at: 0.8) }
         view.play(turn) { _ in }
         let iris = try #require(view.layer(named: "iris-l@right"))
+        // `play` queues the eyes' saccade synchronously; the head swaps later on the main queue.
         let glance = try #require(iris.animation(forKey: "pip.x") as? CABasicAnimation)
         #expect((glance.toValue as? CGFloat ?? 0) < 0, "eyes glance toward the turn first")
         #expect(view.visibleViews == ["right"], "head has not turned yet")
-        try await Task.sleep(for: .milliseconds(160))
-        #expect(view.visibleViews == ["left"], "head follows about 80 ms later")
+        await spin { view.visibleViews == ["left"] }
+        #expect(view.visibleViews == ["left"], "head follows the eyes")
     }
 
     @Test func zeroDurationLoopPlaysOnce() async throws {
@@ -185,23 +203,23 @@ import UIKit
 
     @Test func removeAllMotionClearsBreathAndGestures() throws {
         let view = try rig()
+        var window: UIWindow? = try window(holding: view)
+        defer { window?.isHidden = true; window = nil }
         view.setBreathing(true)
         view.play(PipGesture.for(.saved)) { _ in }
         view.blink()
+        let head = try #require(view.layer(named: "head@right"))
+        #expect(head.animation(forKey: "breath") != nil, "precondition: breathing is running")
+        #expect(!keys(view.layer).isEmpty, "precondition: gesture, blink and breath animations exist")
         view.removeAllMotion()
-        func keys(_ layer: CALayer) -> [String] {
-            (layer.animationKeys() ?? []) + (layer.sublayers ?? []).flatMap(keys)
-        }
+        #expect(head.animation(forKey: "breath") == nil)
         #expect(keys(view.layer).isEmpty)
     }
 
     @Test func breathingIsOneAdditiveAnimationThatSurvivesGestures() async throws {
         let view = try rig()
-        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let window = UIWindow(windowScene: scene)
-        window.frame = view.frame
-        window.addSubview(view)
-        window.isHidden = false
+        var window: UIWindow? = try window(holding: view)
+        defer { window?.isHidden = true; window = nil }
         view.setBreathing(true)
         let head = try #require(view.layer(named: "head@right"))
         let breath = try #require(head.animation(forKey: "breath") as? CABasicAnimation)
@@ -215,5 +233,23 @@ import UIKit
         #expect(head.animation(forKey: "breath") != nil)
         view.setBreathing(false)
         #expect(head.animation(forKey: "breath") == nil)
+    }
+
+    @Test func curledIdleBeatsKeepTheSleepyFace() async throws {
+        let view = PipRigView(asset: try PipRigAsset.load(PipRigAssetTests.bundledData()), set: .curled)
+        view.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        var asleep = PipPose.rest
+        asleep.set = .curled
+        asleep.eyes = .closedSleepy
+        view.apply(asleep, animated: false)
+        var done = false
+        view.play(try #require(PipGesture.forIdle(.earFlick, curled: true))) { _ in done = true }
+        view.blink()
+        view.blink(double: true)
+        await spin { done }
+        #expect(done)
+        #expect(view.layer(named: "eye-l.closedSleepy@right")?.isHidden == false, "eyes stay sleepy")
+        #expect(view.layer(named: "eye-l.open@right")?.isHidden == true, "eyes did not open")
+        #expect(view.layer(named: "lid-upper-l@right")?.animation(forKey: "blink") == nil, "no blink on closed eyes")
     }
 }

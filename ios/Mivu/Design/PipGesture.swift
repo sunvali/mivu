@@ -47,7 +47,8 @@ struct PipGesture {
     }
 
     static func `for`(_ moment: PipMoment) -> PipGesture { PipGestureLibrary.gesture(for: moment) }
-    static func forIdle(_ beat: PipIdleScheduler.Beat) -> PipGesture? { PipGestureLibrary.gesture(forIdle: beat) }
+    /// `curled` is true while Pip sleeps: the beat then keeps its eyes closed.
+    static func forIdle(_ beat: PipIdleScheduler.Beat, curled: Bool = false) -> PipGesture? { PipGestureLibrary.gesture(forIdle: beat, curled: curled) }
     static func loopFor(_ moment: PipMoment) -> PipGesture? { PipGestureLibrary.loop(for: moment) }
 }
 

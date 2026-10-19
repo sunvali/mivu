@@ -154,6 +154,12 @@ enum PipGestureLibrary {
             $0.at(0.12) { $0.earPerk(-5, .left).nod(1) }
             $0.settle(at: 0.26)
         },
+        // The ear flick for a sleeping Pip: the eyes never open.
+        PipGesture("curled-ear-flick") {
+            $0.at(0.06) { $0.earPerk(16, .left).eyes(.closedSleepy) }
+            $0.at(0.12) { $0.earPerk(-5, .left).eyes(.closedSleepy) }
+            $0.at(0.26) { $0.eyes(.closedSleepy) }
+        },
         PipGesture("idle-weight-shift") {
             $0.at(0.45) { $0.tilt(1.5).tailWag(8).nod(1) }
             $0.at(0.95) { $0.tilt(1.5).tailWag(8) }
@@ -192,10 +198,10 @@ enum PipGestureLibrary {
     static var wake: PipGesture { named("wake") }
 
     /// The idle beats that need body motion; blinks and glances use `blink(double:)` and `look(at:)` instead.
-    static func gesture(forIdle beat: PipIdleScheduler.Beat) -> PipGesture? {
+    static func gesture(forIdle beat: PipIdleScheduler.Beat, curled: Bool = false) -> PipGesture? {
         switch beat {
         case .blink, .doubleBlink, .glance: return nil
-        case .earFlick: return named("idle-ear-flick")
+        case .earFlick: return named(curled ? "curled-ear-flick" : "idle-ear-flick")
         case .weightShift: return named("idle-weight-shift")
         case .yawn: return named("idle-yawn")
         case .stretch: return named("idle-stretch")

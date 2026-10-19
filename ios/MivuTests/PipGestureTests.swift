@@ -27,7 +27,7 @@ import Testing
     private static func expectedEnd(of gesture: PipGesture) -> PipPose {
         var end = PipPose.rest
         end.set = gesture.endSet ?? .standing
-        if gesture.name == "curl-up" { end.eyes = .closedSleepy }
+        if gesture.name == "curl-up" || gesture.name == "curled-ear-flick" { end.eyes = .closedSleepy }
         return end
     }
 
@@ -43,6 +43,8 @@ import Testing
         let beats: [PipIdleScheduler.Beat] = [.earFlick, .weightShift, .yawn, .stretch, .hugTail, .curlUp]
         for beat in beats { #expect(PipGesture.forIdle(beat).map { PipGestureLibrary.all.map(\.name).contains($0.name) } == true, "\(beat)") }
         #expect(PipGesture.forIdle(.yawn)?.keys.contains { $0.pose.mouth == .yawn } == true)
+        #expect(PipGesture.forIdle(.earFlick, curled: true)?.name == "curled-ear-flick")
+        #expect(PipGesture.forIdle(.earFlick, curled: true)?.keys.allSatisfy { $0.pose.eyes == .closedSleepy } == true)
         for beat in [PipIdleScheduler.Beat.blink, .doubleBlink, .glance(.zero)] { #expect(PipGesture.forIdle(beat) == nil) }
     }
 
