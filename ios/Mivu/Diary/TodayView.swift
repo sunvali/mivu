@@ -189,7 +189,7 @@ struct DiaryRootView: View {
                                  existingEvents: companionEvents, existingSubmissions: companionSubmissions, now: Date())
                 refreshCompanion()
             }
-            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(); model.queueBackup() }
+            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
         }
     }
     private var companionView: some View {

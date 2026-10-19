@@ -556,8 +556,12 @@ struct DiaryProgressView: View {
 struct WorkoutDetailView: View {
     @Bindable var model: DiaryViewModel
     let sessionID: UUID
-    @State private var editingSession: WorkoutSession?
-    @State private var editingDate: String?
+    private struct WorkoutEdit: Identifiable {
+        let session: WorkoutSession
+        let localDate: String
+        var id: UUID { session.id }
+    }
+    @State private var editingWorkout: WorkoutEdit?
     @State private var pendingDeletion: WorkoutSession?
     @State private var ownership: DiarySelectionOwnership?
     @State private var session: WorkoutSession?
@@ -603,7 +607,10 @@ struct WorkoutDetailView: View {
                     Label { Text("Exercises") } icon: { Image(systemName: "dumbbell").foregroundStyle(Color.diaryWorkout) }
                 }
                 Section {
-                    Button("Edit workout") { editingDate = day?.localDate; editingSession = session }.frame(minHeight: 44)
+                    Button("Edit workout") {
+                        guard let day else { return }
+                        editingWorkout = WorkoutEdit(session: session, localDate: day.localDate)
+                    }.frame(minHeight: 44)
                         .accessibilityIdentifier("editWorkout")
                     Button("Delete workout", role: .destructive) {
                         pendingDeletion = session
@@ -644,13 +651,11 @@ struct WorkoutDetailView: View {
         }
         .task(id: model.changeGeneration) { await loadSession() }
         .onChange(of: model.selection) { _, selected in
-            pendingDeletion = nil; editingSession = nil
+            pendingDeletion = nil; editingWorkout = nil
             if selected != ownership { dismiss() }
         }
-        .sheet(item: $editingSession) { session in
-            if let editingDate {
-                WorkoutEditorView(model: model, localDate: editingDate, session: session)
-            }
+        .sheet(item: $editingWorkout) { edit in
+            WorkoutEditorView(model: model, localDate: edit.localDate, session: edit.session)
         }
     }
 

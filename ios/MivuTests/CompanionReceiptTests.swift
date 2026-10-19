@@ -356,16 +356,16 @@ private actor ReceiptCaptureAckFailureOnce {
         #expect(committed.meals.first?.state == .saved)
     }
 
-    @Test func captureRefreshFailureDoesNotEmit() async throws {
+    @Test func captureRefreshFailureStillAcknowledgesDurableSave() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let model = DiaryViewModel(store: store, actionReadModelLoading: { _ in throw DiaryError.persistenceFailed })
         await model.load(createDefaultProfile: false)
         var draft = MealDraft(); draft.text = "Synthetic durable capture"
-        #expect(!(await model.capture(draft, dayID: day.id)))
-        #expect(model.companionCaptureEvent == nil && model.captureReceipt == nil)
+        #expect(await model.capture(draft, dayID: day.id))
+        #expect(model.companionCaptureEvent?.operationID == draft.submissionID && model.captureReceipt == draft.submissionID)
         #expect(draft.text == "Synthetic durable capture" && model.readModel?.profile.id == profile.id)
-        // A subscriber may display the durable capture; the failed action still emits no feedback.
+        // Presentation failure cannot turn an already durable save into a failed capture.
         let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.meals.first?.submissions.first?.id == draft.submissionID)
     }
@@ -386,7 +386,7 @@ private actor ReceiptCaptureAckFailureOnce {
         #expect(durable.coachTurns.map(\.id) == [submissionID])
     }
 
-    @Test func cancelledCaptureDoesNotEmitAfterDurableCommit() async throws {
+    @Test func cancelledCaptureWaiterKeepsDurableAcknowledgement() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let other = DiaryProfile(name: "Synthetic second owner")
@@ -402,16 +402,17 @@ private actor ReceiptCaptureAckFailureOnce {
         var draft = MealDraft(); draft.text = "Synthetic cancelled capture"
         let capture = Task { await model.capture(draft, dayID: day.id) }
         try await gate.waitUntilPaused()
+        #expect(model.captureReceipt == draft.submissionID)
         capture.cancel()
         await gate.release()
-        #expect(!(await capture.value))
-        #expect(model.companionCaptureEvent == nil && model.captureReceipt == nil)
+        #expect(await capture.value)
+        #expect(model.companionCaptureEvent?.operationID == draft.submissionID && model.captureReceipt == draft.submissionID)
         #expect(try await store.snapshotForExport().meals.first?.submissions.first?.id == draft.submissionID)
         await model.switchProfile(other.id)
         #expect(model.readModel?.profile.id == other.id && model.readModel?.meals.isEmpty == true)
         let otherSnapshot = try await store.snapshotForExport()
         #expect(otherSnapshot.profile.id == other.id && otherSnapshot.meals.isEmpty)
-        #expect(model.companionCaptureEvent == nil)
+        #expect(model.companionCaptureEvent?.profileID == profile.id && model.companionCaptureEvent?.profileID != other.id)
         let original = try await completeSelectedProfile(store, profile.id)
         #expect(original.meals.count == 1)
     }

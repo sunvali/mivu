@@ -45,6 +45,8 @@ private final class CoachNavigationReadFence: Sendable {
     @ObservationIgnored private let lookup: @Sendable (String) async throws -> [FoodEvidenceRecord]
     @ObservationIgnored private var sending: Task<Bool, Never>?
     @ObservationIgnored private var captureNeedsProcessing = false
+    @ObservationIgnored private var acceptedDiaryCapture: UUID?
+    @ObservationIgnored private var acceptedDiaryCaptureOwner: DiarySelectionOwnership?
     @ObservationIgnored private var backgroundCompletion: Task<Void, Never>?
     @ObservationIgnored private var backgroundGeneration: UUID?
     @ObservationIgnored private var backgroundEnd: (@MainActor () -> Void)?
@@ -146,8 +148,15 @@ private final class CoachNavigationReadFence: Sendable {
         guard let owner = diary.selection, !diary.isChangingProfile else { return }
         // Subscribe before the initial read so an accepted mutation cannot fall in the gap.
         let stream = await diary.store.changes(expectedProfileID: owner.identity.profileID)
+        let reusingTimeline = timelineOwnership == owner && timeline != nil
         await loadTimelineIfNeeded()
         guard diary.selection == owner, let model = timeline, !Task.isCancelled else { return }
+        if reusingTimeline {
+            let changed = Set(model.exchanges.map(\.id))
+            await model.apply(DiaryChanges(turnIDs: changed, coachLatestChanged: true))?.value
+            guard diary.selection == owner, !diary.isChangingProfile, !Task.isCancelled else { return }
+            await refreshLinks()
+        }
         for await changes in stream {
             guard diary.selection == owner, !diary.isChangingProfile, !Task.isCancelled else { return }
             model.apply(changes)
@@ -307,6 +316,11 @@ private final class CoachNavigationReadFence: Sendable {
     }
 
     func resume() {
+        if let receipt = diary.captureReceipt, let owner = diary.selection, !diary.isChangingProfile,
+           diary.companionCaptureEvent?.profileID == owner.identity.profileID,
+           receipt != acceptedDiaryCapture || owner != acceptedDiaryCaptureOwner {
+            acceptedDiaryCapture = receipt; acceptedDiaryCaptureOwner = owner; captureNeedsProcessing = true
+        }
         guard active, worker == nil, !diary.isChangingProfile, let selected = diary.selection else { return }
         let owner = selected.identity.profileID
         let id = UUID(); workerID = id; isWorking = true
@@ -316,6 +330,7 @@ private final class CoachNavigationReadFence: Sendable {
             repeat {
                 guard active, !Task.isCancelled, diary.selection == selected, !diary.isChangingProfile else { break }
                 let acceptedCaptureAtPassStart = captureReceipt
+                let acceptedDiaryCaptureAtPassStart = diary.captureReceipt
                 var processingFailed = false
                 do {
                     try await recoverLegacyCaptures(owner: owner)
@@ -397,7 +412,7 @@ private final class CoachNavigationReadFence: Sendable {
                 }
                 if diary.selection == selected, !diary.isChangingProfile { try? await diary.refresh(profileID: owner) }
                 if processingFailed {
-                    guard captureReceipt != acceptedCaptureAtPassStart else { break }
+                    guard captureReceipt != acceptedCaptureAtPassStart || diary.captureReceipt != acceptedDiaryCaptureAtPassStart else { break }
                     capturedOnly = true
                 }
                 // A capture can arrive during the final refresh while this worker is still owned.
@@ -469,8 +484,8 @@ private final class CoachNavigationReadFence: Sendable {
                               onWorkerDrain: @escaping @MainActor () -> Void = {}) {
         pauseActivity()
         endBackgroundLease()
-        guard sending != nil || isSending || captureNeedsProcessing || hasPendingWork || (diary.readModel?.pendingCount ?? 0) > 0,
-              let owner = diary.selection else { enterBackground(); connection.enterBackground(); return }
+        guard diary.hasCaptureInFlight || sending != nil || isSending || captureNeedsProcessing || hasPendingWork || (diary.readModel?.pendingCount ?? 0) > 0,
+              let owner = diary.selection else { diary.enterBackground(); enterBackground(); connection.enterBackground(); return }
         let generation = UUID()
         backgroundGeneration = generation
         guard begin({ [weak self] in
@@ -484,9 +499,10 @@ private final class CoachNavigationReadFence: Sendable {
         }
         backgroundEnd = end
         active = true
-        diary.resumeWorker()
+        diary.resumeWorker(allowProcessing: true)
         backgroundCompletion = Task {
             _ = await sending?.value
+            await diary.waitForCapture()
             guard backgroundGeneration == generation else { return }
             guard diary.selection == owner, !diary.isChangingProfile else { endBackgroundLease(); return }
             if captureNeedsProcessing { resume() }
@@ -496,7 +512,7 @@ private final class CoachNavigationReadFence: Sendable {
             onWorkerDrain()
             await waitForWorker()
             guard backgroundGeneration == generation else { return }
-            if diary.selection == owner, !diary.isChangingProfile { enterBackground(); connection.enterBackground() }
+            if diary.selection == owner, !diary.isChangingProfile { diary.enterBackground(); enterBackground(); connection.enterBackground() }
             endBackgroundLease()
         }
     }

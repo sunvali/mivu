@@ -10,6 +10,13 @@ struct MealDraft: Equatable {
     var isValid: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty }
 }
 
+enum DiaryCaptureDestination: Equatable, Sendable {
+    case automatic, day(UUID, dateOnly: Bool), previousDay(UUID), newDay, meal(UUID)
+}
+enum DiaryCaptureResult: Equatable, Sendable {
+    case saved(UUID), needsDayChoice(UUID), failed
+}
+
 @MainActor @Observable final class DiaryViewModel {
     let store: DiaryStore
     let sampleMode: Bool
@@ -22,6 +29,9 @@ struct MealDraft: Equatable {
     private let mealDetailLoading: @Sendable (UUID, UUID) async throws -> MealReadModel
     private let dayDetailLoading: @Sendable (UUID, UUID) async throws -> DiaryDayReadModel
     private let manualNutritionSaving: @Sendable (ManualNutritionPayload, DiarySelectionOwnership) async throws -> ManualNutritionSaveResult
+    @ObservationIgnored private var captureTask: Task<DiaryCaptureResult, Never>?
+    @ObservationIgnored private let beginCaptureProtection: @MainActor () -> (@MainActor () -> Void)
+    private let captureDayAssignment: @Sendable (Date, DiarySelectionOwnership) async throws -> DayAssignment
     private let deviceTimeZone: @Sendable () -> TimeZone
     private let preferences: UserDefaults?
     let backup: FolderBackup?
@@ -32,7 +42,17 @@ struct MealDraft: Equatable {
     private(set) var photoRequestGeneration: UInt64 = 0
     private(set) var changeGeneration: UInt64 = 0
     private(set) var savedMealID: UUID?
-    private var manualCaptureAttempt: (selection: DiarySelectionOwnership, draft: MealDraft, photos: [MealPhoto], isNew: Bool)?
+    private struct CaptureAttempt {
+        let selection: DiarySelectionOwnership
+        let draft: MealDraft
+        let destination: DiaryCaptureDestination
+        let photoRole: PhotoRole
+        let at: Date
+        let photos: [MealPhoto]
+        let isNew: Bool
+        var resolvedDestination: DiaryCaptureDestination?
+    }
+    private var manualCaptureAttempt: CaptureAttempt?
     private var exactMeals: [UUID: MealReadModel] = [:]
     private var exactDays: [UUID: DiaryDayReadModel] = [:]
     private var mealDetailRequests: [UUID: UUID] = [:]
@@ -55,6 +75,7 @@ struct MealDraft: Equatable {
     private var backupRequested: (DiarySelectionOwnership, Int, UUID)?
     private var backupScheduledRevision: Int?
     private var changesTask: Task<Void, Never>?
+    private var sampleProcessingAllowed = true
     private var worker: Task<Void, Never>?
     private var workerID: UUID?
     @ObservationIgnored private var memoryTask: Task<Void, Never>?
@@ -67,8 +88,12 @@ struct MealDraft: Equatable {
          dayDetailLoading: (@Sendable (UUID, UUID) async throws -> DiaryDayReadModel)? = nil,
          photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil,
          manualNutritionSaving: (@Sendable (ManualNutritionPayload, DiarySelectionOwnership) async throws -> ManualNutritionSaveResult)? = nil,
-         deviceTimeZone: @Sendable @escaping () -> TimeZone = { .current }) {
+         deviceTimeZone: @Sendable @escaping () -> TimeZone = { .current },
+         beginCaptureProtection: @escaping @MainActor () -> (@MainActor () -> Void) = { CoachCaptureProtection.begin() },
+         captureDayAssignment: (@Sendable (Date, DiarySelectionOwnership) async throws -> DayAssignment)? = nil) {
         self.manualNutritionSaving = manualNutritionSaving ?? { try await store.saveManualNutrition($0, expectedSelection: $1, expectedProfileID: $0.profileID) }
+        self.captureDayAssignment = captureDayAssignment ?? { try await store.dayAssignment(at: $0, expectedSelection: $1, expectedProfileID: $1.identity.profileID) }
+        self.beginCaptureProtection = beginCaptureProtection
         self.deviceTimeZone = deviceTimeZone
         self.store = store; self.sampleMode = sampleMode; self.preferences = preferences; self.backup = backup
         self.profileSelection = profileSelection ?? { try await store.selectProfile($0) }
@@ -112,6 +137,7 @@ struct MealDraft: Equatable {
         defer { if mealDetailRequests[id] == request { mealDetailRequests[id] = nil } }
         do {
             let value = try await mealDetailLoading(id, token.identity.profileID)
+            try await store.validateSelectionOwnership(token)
             guard isCurrent() else { return }
             if exactMeals.count >= 30 { exactMeals = [:] }; exactMeals[id] = value
             await loadDay(value.dayID)
@@ -228,38 +254,126 @@ struct MealDraft: Equatable {
         return result
     }
     func capture(_ draft: MealDraft, dayID: UUID, at: Date = Date(), dateOnly: Bool = false, photoPreparation: PhotoPreparation? = nil, expectedSelection: DiarySelectionOwnership? = nil) async -> Bool {
-        guard draft.isValid, photoPreparation?.canCapture != false, !isSaving, !isChangingProfile, let token = selection else { return false }
-        guard expectedSelection == nil || expectedSelection == token else { return false }
-        isSaving = true; defer { isSaving = false }
+        if case .saved = await capture(draft, destination: .day(dayID, dateOnly: dateOnly), at: at,
+                                      photoPreparation: photoPreparation, expectedSelection: expectedSelection) { return true }
+        return false
+    }
+    func capture(_ draft: MealDraft, destination: DiaryCaptureDestination, at: Date = Date(), photoRole: PhotoRole = .unspecified,
+                 photoPreparation: PhotoPreparation? = nil, expectedSelection: DiarySelectionOwnership? = nil) async -> DiaryCaptureResult {
+        guard draft.isValid, photoPreparation?.canCapture != false, !isSaving, !isChangingProfile, let token = selection,
+              expectedSelection == nil || expectedSelection == token, captureTask == nil else { return .failed }
+        isSaving = true
+        let endProtection = beginCaptureProtection()
+        let task = Task {
+            defer { endProtection(); isSaving = false }
+            return await performCapture(draft, destination: destination, at: at, photoRole: photoRole, token: token)
+        }
+        captureTask = task
+        defer { captureTask = nil }
+        return await task.value
+    }
+    var hasCaptureInFlight: Bool { captureTask != nil }
+    func waitForCapture() async { _ = await captureTask?.value }
+    private func performCapture(_ draft: MealDraft, destination: DiaryCaptureDestination, at: Date, photoRole: PhotoRole,
+                                token: DiarySelectionOwnership) async -> DiaryCaptureResult {
+        var committedID: UUID?
         do {
-            let attempt: (selection: DiarySelectionOwnership, draft: MealDraft, photos: [MealPhoto], isNew: Bool)
+            var attempt: CaptureAttempt
             if let prior = manualCaptureAttempt, prior.selection == token, prior.draft.submissionID == draft.submissionID {
-                guard prior.draft == draft else { throw DiaryError.staleRevision }
+                guard prior.draft == draft, prior.destination == destination, prior.photoRole == photoRole else { throw DiaryError.staleRevision }
                 attempt = prior
             } else {
                 let prior = try await store.capturedMeal(submissionID: draft.submissionID, expectedSelection: token, expectedProfileID: token.identity.profileID)
-                guard selection == token, !isChangingProfile else { return false }
+                guard selection == token, !isChangingProfile else { return .failed }
                 let references = prior?.submissions.first { $0.id == draft.submissionID }?.photoIDs.compactMap { id in prior?.photos.first { $0.photoID == id } } ?? []
                 let photos = draft.photos.enumerated().map { index, data in
                     if references.indices.contains(index) {
                         let reference = references[index]
                         return MealPhoto(id: reference.photoID, data: data, createdAt: reference.createdAt, role: reference.role)
                     }
-                    return MealPhoto(data: data)
+                    return MealPhoto(data: data, role: photoRole)
                 }
-                attempt = (token, draft, photos, prior == nil); manualCaptureAttempt = attempt
+                attempt = CaptureAttempt(selection: token, draft: draft, destination: destination, photoRole: photoRole,
+                                         at: at, photos: photos, isNew: prior == nil, resolvedDestination: nil)
+                // A committed automatic capture must not create another day during reconciliation.
+                if let prior, destination == .automatic || destination == .newDay {
+                    attempt.resolvedDestination = .day(prior.dayID, dateOnly: false)
+                }
+                manualCaptureAttempt = attempt
             }
-            let saved = try await store.captureProjection(text: draft.text, photos: attempt.photos, reviewFirst: draft.reviewFirst,
-                dayID: dayID, at: at, dateOnly: dateOnly, submissionID: draft.submissionID, forCoach: !sampleMode, expectedSelection: token, expectedProfileID: token.identity.profileID)
-            try await refresh(profileID: token.identity.profileID)
-            guard !Task.isCancelled, selection == token else { return false }
+            if attempt.resolvedDestination == nil {
+                switch destination {
+                case .automatic:
+                    switch try await captureDayAssignment(attempt.at, token) {
+                    case .existing(let id): attempt.resolvedDestination = .day(id, dateOnly: false)
+                    case .newDay:
+                        let day = try await store.startDay(at: attempt.at, expectedSelection: token, expectedProfileID: token.identity.profileID)
+                        attempt.resolvedDestination = .day(day.id, dateOnly: false)
+                    case .ask(let id):
+                        manualCaptureAttempt = nil
+                        return .needsDayChoice(id)
+                    }
+                case .newDay:
+                    let day = try await store.startDay(at: attempt.at, expectedSelection: token, expectedProfileID: token.identity.profileID)
+                    attempt.resolvedDestination = .day(day.id, dateOnly: false)
+                case .previousDay(let id):
+                    try await store.confirmPreviousDay(at: attempt.at, expectedSelection: token, expectedProfileID: token.identity.profileID)
+                    attempt.resolvedDestination = .day(id, dateOnly: false)
+                case .day, .meal: attempt.resolvedDestination = destination
+                }
+                manualCaptureAttempt = attempt
+            }
+            let saved: MealReadModel
+            switch attempt.resolvedDestination {
+            case .meal(let id):
+                saved = try await store.correctMealProjection(mealID: id, text: draft.text, photos: attempt.photos, reviewFirst: draft.reviewFirst,
+                    submissionID: draft.submissionID, forCoach: !sampleMode, at: attempt.at, expectedSelection: token, expectedProfileID: token.identity.profileID)
+            case .day(let id, let dateOnly):
+                saved = try await store.captureProjection(text: draft.text, photos: attempt.photos, reviewFirst: draft.reviewFirst,
+                    dayID: id, at: attempt.at, dateOnly: dateOnly, submissionID: draft.submissionID, forCoach: !sampleMode,
+                    expectedSelection: token, expectedProfileID: token.identity.profileID)
+            default: throw DiaryError.invalidData
+            }
+            committedID = saved.id
+            try await store.validateSelectionOwnership(token)
+            guard selection == token, !isChangingProfile else { return .failed }
             savedMealID = saved.id
             if attempt.isNew, companionCaptureEvent?.profileID != token.identity.profileID || companionCaptureEvent?.operationID != draft.submissionID {
                 captureReceipt = draft.submissionID
                 companionCaptureEvent = CompanionEvent(profileID: token.identity.profileID, operationID: draft.submissionID, kind: .saved, committedAt: Date())
             }
-            resumeWorker(); return true
-        } catch { if selection == token { present(error) }; return false }
+            resumeWorker()
+            var refreshNeeded = false
+            do { try await refresh(profileID: token.identity.profileID) }
+            catch { refreshNeeded = true }
+            try await store.validateSelectionOwnership(token)
+            guard selection == token, !isChangingProfile else { return .failed }
+            await loadSavedMealIfNeeded(saved.id)
+            try await store.validateSelectionOwnership(token)
+            guard selection == token, !isChangingProfile else { return .failed }
+            if meal(saved.id) == nil { refreshNeeded = true }
+            errorMessage = refreshNeeded ? "Saved on this iPhone. Reload the diary to refresh totals." : nil
+            return .saved(saved.id)
+        } catch {
+            guard selection == token, !isChangingProfile else { return .failed }
+            do { try await store.validateSelectionOwnership(token) }
+            catch DiaryError.wrongOwner, DiaryError.noProfile { return .failed }
+            catch { /* Storage failure does not prove that the selected owner changed. */ }
+            if let committedID {
+                errorMessage = "Saved on this iPhone. Reload the diary to refresh totals."
+                return .saved(committedID)
+            }
+            present(error)
+            return .failed
+        }
+    }
+    private func loadSavedMealIfNeeded(_ id: UUID) async {
+        // One bounded retry when a newer projection invalidates an in-flight detail read.
+        for _ in 0..<2 where meal(id) == nil && !Task.isCancelled {
+            let generation = changeGeneration
+            await loadMeal(id)
+            if generation == changeGeneration { break }
+        }
     }
     func saveManualNutrition(_ payload: ManualNutritionPayload,
                              expectedSelection: DiarySelectionOwnership) async -> ManualNutritionSaveResult? {
@@ -276,8 +390,10 @@ struct MealDraft: Equatable {
             catch { refreshNeeded = true }
             try await store.validateSelectionOwnership(expectedSelection)
             guard !Task.isCancelled, selection == expectedSelection, !isChangingProfile else { return nil }
-            if changeGeneration == generation { exactMeals[result.meal.id] = result.meal }
-            else if meal(result.meal.id) == nil { await loadMeal(result.meal.id) }
+            if changeGeneration == generation {
+                if exactMeals.count >= 30 { exactMeals = [:] }
+                exactMeals[result.meal.id] = result.meal
+            } else { await loadSavedMealIfNeeded(result.meal.id) }
             try await store.validateSelectionOwnership(expectedSelection)
             guard !Task.isCancelled, selection == expectedSelection, !isChangingProfile else { return nil }
             if meal(result.meal.id) == nil { refreshNeeded = true }
@@ -289,8 +405,11 @@ struct MealDraft: Equatable {
             }
             return result
         } catch {
-            if selection == expectedSelection,
-               (try? await store.selectionOwnership(expectedProfileID: payload.profileID)) == expectedSelection { present(error) }
+            guard selection == expectedSelection, !isChangingProfile else { return nil }
+            do { try await store.validateSelectionOwnership(expectedSelection) }
+            catch DiaryError.wrongOwner, DiaryError.noProfile { return nil }
+            catch { /* Storage failure does not prove that the selected owner changed. */ }
+            present(error)
             return nil
         }
     }
@@ -313,7 +432,7 @@ struct MealDraft: Equatable {
     }
     private func beginProfileTransition() -> Bool {
         guard !isChangingProfile, !isSaving else { return false }; isChangingProfile = true; photoRequestGeneration &+= 1
-        changesTask?.cancel(); enterBackground(); backupTask?.cancel(); backupRequested = nil; return true
+        changesTask?.cancel(); cancelSampleWorker(); backupTask?.cancel(); backupRequested = nil; return true
     }
     private func finishProfileTransition() { isChangingProfile = false; queueBackup(); resumeWorker() }
     private func clearProfileSelection() async {
@@ -392,11 +511,13 @@ struct MealDraft: Equatable {
             restoreGeneration += 1; return true
         } catch { await recoverProfileSelection(previous); present(error); return false }
     }
-    func enterBackground() { worker?.cancel(); worker = nil; workerID = nil }
+    private func cancelSampleWorker() { worker?.cancel(); worker = nil; workerID = nil }
+    func enterBackground() { sampleProcessingAllowed = false; cancelSampleWorker() }
     func waitForWorker() async { await worker?.value }
-    func resumeWorker() {
+    func resumeWorker(allowProcessing: Bool = false) {
+        if allowProcessing { sampleProcessingAllowed = true }
         guard sampleMode else { resumeCoach?(); return }
-        guard !isChangingProfile, worker == nil, let token = selection else { return }
+        guard sampleProcessingAllowed, !isChangingProfile, worker == nil, let token = selection else { return }
         let id = UUID(); workerID = id
         worker = Task {
             defer { if workerID == id { worker = nil; workerID = nil } }

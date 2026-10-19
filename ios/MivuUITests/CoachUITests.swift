@@ -297,7 +297,9 @@ import XCTest
         XCTAssertEqual(banner.frame.minY, before, accuracy: 2)
         jump.tap()
         let reply = progressReply(containing: "Period recorded workouts:", in: app)
-        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        let replyArrived = reply.waitForExistence(timeout: 30)
+        XCTAssertTrue(replyArrived, "The delayed report must complete both inference rounds after returning to latest")
+        guard replyArrived else { return }
         let bottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             reply.frame.maxY <= app.textFields["coachInput"].frame.minY
         }, object: app)
@@ -341,6 +343,18 @@ import XCTest
         unread.isInverted = true
         XCTAssertEqual(XCTWaiter.wait(for: [unread], timeout: 10), .completed, "Capture, thinking, tools and completed reply at latest must not advertise unread content")
         let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        var advertisedUnread = false
+        let completedWithoutUnread = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            if app.buttons["coachNewMessage"].exists {
+                advertisedUnread = true
+                return true
+            }
+            return reply.exists
+        }, object: app)
+        let completion = XCTWaiter.wait(for: [completedWithoutUnread], timeout: 30)
+        XCTAssertEqual(completion, .completed, "Expected the delayed tool reply while following latest")
+        XCTAssertFalse(advertisedUnread, "Latest must not advertise unread content before the delayed reply arrives")
+        guard completion == .completed, !advertisedUnread else { return }
         XCTAssertTrue(reply.exists)
         XCTAssertLessThanOrEqual(reply.frame.maxY, app.textFields["coachInput"].frame.minY)
         XCTAssertFalse(app.buttons["coachNewMessage"].exists)

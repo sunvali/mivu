@@ -140,7 +140,8 @@ import XCTest
         let link = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
         XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap()
         let accept = app.buttons["acceptReview"]
-        XCTAssertTrue(accept.waitForExistence(timeout: 5)); reveal(accept, in: app); accept.tap()
+        reveal(accept, in: app)
+        XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap()
         XCTAssertFalse(accept.exists)
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.textFields["coachInput"].waitForExistence(timeout: 5))
@@ -276,23 +277,33 @@ import XCTest
             let camera = app.buttons["coachPhotos"]
             XCTAssertTrue(camera.isHittable)
             XCTAssertGreaterThanOrEqual(camera.frame.height, 44)
-            camera.tap()
-            let close = app.buttons["coachCameraClose"]
-            XCTAssertTrue(close.waitForExistence(timeout: 5))
-            for control in [close, app.buttons["coachCameraLibrary"], app.buttons["coachCameraShutter"]] {
-                XCTAssertTrue(control.exists)
-                XCTAssertGreaterThanOrEqual(control.frame.height, 44)
-                XCTAssertGreaterThanOrEqual(control.frame.width, 44)
-            }
-            XCTAssertTrue(app.buttons["coachCameraLibrary"].isHittable,
-                          "Existing photos need their own reachable path when camera capture is unavailable")
-            close.tap()
-            let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: close)
-            XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
             let input = app.textFields["coachInput"]
-            XCTAssertEqual(input.value as? String, "Camera cancellation keeps this note")
-            XCTAssertEqual(app.buttons.matching(identifier: "coachMealLink").count, 0,
-                           "Opening and canceling the camera cannot acknowledge or save a draft")
+            let edges = [CGVector(dx: 0, dy: -21), CGVector(dx: 0, dy: 21),
+                         CGVector(dx: -21, dy: 0), CGVector(dx: 21, dy: 0)]
+            for edge in edges {
+                camera.tap()
+                let close = app.buttons["coachCameraClose"]
+                guard close.waitForExistence(timeout: 5) else {
+                    XCTFail("Camera Close must be reachable before its edge tap"); return
+                }
+                for control in [app.buttons["coachCameraLibrary"], app.buttons["coachCameraShutter"]] {
+                    XCTAssertTrue(control.exists)
+                    XCTAssertGreaterThanOrEqual(control.frame.height, 44)
+                    XCTAssertGreaterThanOrEqual(control.frame.width, 44)
+                }
+                XCTAssertTrue(app.buttons["coachCameraLibrary"].isHittable,
+                              "Existing photos need their own reachable path when camera capture is unavailable")
+                // AX may expose only text; exercise the actual interior edges of a 44-point target.
+                print("COACH_CAMERA_CLOSE_EDGE \(appearance) frame=\(close.frame) offset=\(edge)")
+                close.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(edge).tap()
+                let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: close)
+                let result = XCTWaiter.wait(for: [dismissed], timeout: 5)
+                XCTAssertEqual(result, .completed, "Close must dismiss at target edge \(edge) in \(appearance)")
+                guard result == .completed else { return }
+                XCTAssertEqual(input.value as? String, "Camera cancellation keeps this note")
+                XCTAssertEqual(app.buttons.matching(identifier: "coachMealLink").count, 0,
+                               "Opening and canceling the camera cannot acknowledge or save a draft")
+            }
             input.tap(); input.typeText(" and keyboard focus")
             XCTAssertTrue(app.keyboards.firstMatch.exists)
             XCTAssertEqual(input.value as? String, "Camera cancellation keeps this note and keyboard focus")

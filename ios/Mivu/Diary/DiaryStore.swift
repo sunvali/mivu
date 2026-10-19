@@ -587,11 +587,11 @@ actor DiaryStore {
             try database.captureProjection(text: text, photos: photos, reviewFirst: reviewFirst, dayID: dayID, at: at, dateOnly: dateOnly, submissionID: submissionID, forCoach: forCoach, expected: head, maximumBytes: maximumFileBytes)
         }
     }
-    func correctMealProjection(mealID: UUID, text: String, photos: [MealPhoto] = [], reviewFirst: Bool = false, submissionID: UUID = UUID(), forCoach: Bool = false,
+    func correctMealProjection(mealID: UUID, text: String, photos: [MealPhoto] = [], reviewFirst: Bool = false, submissionID: UUID = UUID(), forCoach: Bool = false, at: Date? = nil,
                                expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws -> MealReadModel {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)
         return try pagedMutation(expectedProfileID) { database, head in
-            try database.correctMealProjection(mealID: mealID, text: text, photos: photos, reviewFirst: reviewFirst, submissionID: submissionID, forCoach: forCoach, at: currentTime(), expected: head, maximumBytes: maximumFileBytes)
+            try database.correctMealProjection(mealID: mealID, text: text, photos: photos, reviewFirst: reviewFirst, submissionID: submissionID, forCoach: forCoach, at: at ?? currentTime(), expected: head, maximumBytes: maximumFileBytes)
         }
     }
 

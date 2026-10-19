@@ -195,7 +195,7 @@ import XCTest
         XCTAssertTrue(row.waitForExistence(timeout: 10)); reveal(row, in: app); row.tap()
         XCTAssertFalse(app.tabBars.buttons["Today"].isHittable, "Focused meal details must hide the tab bar")
         let accept = app.buttons["acceptReview"]
-        XCTAssertTrue(accept.waitForExistence(timeout: 10)); reveal(accept, in: app); accept.tap()
+        reveal(accept, in: app); XCTAssertTrue(accept.waitForExistence(timeout: 10)); accept.tap()
         let half = app.buttons["halfPortion"]
         reveal(half, in: app); XCTAssertTrue(half.isEnabled); half.tap()
         let edit = app.buttons["editItem"].firstMatch
@@ -223,7 +223,7 @@ import XCTest
         XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap()
         XCTAssertFalse(app.tabBars.buttons["Diary"].isHittable)
         let savedWeight = app.staticTexts["Morning weight, 70 kg"]
-        XCTAssertTrue(savedWeight.waitForExistence(timeout: 5)); reveal(savedWeight, in: app)
+        reveal(savedWeight, in: app); XCTAssertTrue(savedWeight.waitForExistence(timeout: 5))
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "Synthetic diary history"; attachment.lifetime = .keepAlways; add(attachment)
     }
 

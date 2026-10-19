@@ -15,6 +15,24 @@ import Testing
         #expect(model.readModel == before && model.captureReceipt == receipt && model.companionCaptureEvent == reaction)
         #expect(payload == f.payload)
     }
+    @Test func manualStorageFailureReplacesStaleErrorWhenOwnershipReadAlsoFails() async throws {
+        let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
+        let database = f.path.appendingPathComponent(f.payload.profileID.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
+        let model = DiaryViewModel(store: f.store, manualNutritionSaving: { _, _ in
+            try FileManager.default.removeItem(at: database)
+            throw DiaryError.persistenceFailed
+        })
+        await model.load(createDefaultProfile: false)
+        let owner = try #require(model.selection), before = model.readModel
+        let receipt = model.captureReceipt, reaction = model.companionCaptureEvent, payload = f.payload
+        model.errorMessage = "Synthetic stale error"
+        #expect(await model.saveManualNutrition(payload, expectedSelection: owner) == nil)
+        #expect(model.selection == owner)
+        #expect(model.errorMessage == DiaryError.persistenceFailed.localizedDescription)
+        #expect(model.readModel == before && model.captureReceipt == receipt && model.companionCaptureEvent == reaction)
+        #expect(payload == f.payload)
+    }
+
     @Test func manualReplayDoesNotReplaySaveReaction() async throws {
         let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
         let model = DiaryViewModel(store: f.store)
