@@ -273,7 +273,6 @@ private final class CoachNavigationReadFence: Sendable {
         guard canSend, let token = diary.selection else { return false }
         let owner = token.identity.profileID
         let followsLatest = timeline.map { if case .latest = $0.window.viewport { true } else { false } } ?? true
-        captureNeedsProcessing = false
         sendingErrorRevision = errorRevision; isSending = true; diary.isSaving = true
         defer { isSending = false; diary.isSaving = false }
         companionSubmission = CompanionSubmission(profileID: owner, operationID: attachmentDraft.submissionID, acceptedAt: Date())
@@ -309,13 +308,21 @@ private final class CoachNavigationReadFence: Sendable {
             defer { if workerID == id { worker = nil; workerID = nil; isWorking = false; activity = nil; activityTurnID = nil } }
             repeat {
                 guard active, !Task.isCancelled, diary.selection == selected, !diary.isChangingProfile else { break }
-                captureNeedsProcessing = false
+                var processingFailed = false
                 do {
                     try await recoverLegacyCaptures(owner: owner)
                     while !Task.isCancelled {
-                        guard active else { break }
+                        guard active, diary.selection == selected, !diary.isChangingProfile else { break }
+                        let pendingCaptureWake = captureNeedsProcessing
                         captureNeedsProcessing = false
-                        guard let turn = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, expectedProfileID: owner) else {
+                        let next: CoachTurnResult?
+                        do {
+                            next = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, expectedProfileID: owner)
+                        } catch {
+                            captureNeedsProcessing = captureNeedsProcessing || pendingCaptureWake
+                            throw error
+                        }
+                        guard let turn = next else {
                             if captureNeedsProcessing { continue }
                             break
                         }
@@ -329,6 +336,7 @@ private final class CoachNavigationReadFence: Sendable {
                         let bound: Inference
                         do { bound = try inference() }
                         catch {
+                            processingFailed = true
                             try await diary.store.setCoachTurnState(turnID: turn.id, state: .waitingForConnection, expectedProfileID: owner)
                             try await diary.refresh(profileID: owner)
                             break
@@ -369,14 +377,19 @@ private final class CoachNavigationReadFence: Sendable {
                         } catch {
                             guard !Task.isCancelled, diary.selection == selected else { break }
                             errorMessage = message(for: error)
+                            processingFailed = true
                             break
                         }
                         guard !Task.isCancelled, diary.selection == selected else { break }
                         try await diary.refresh(profileID: owner)
                     }
-                } catch { if !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) } }
+                } catch {
+                    processingFailed = true
+                    if !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) }
+                }
                 if diary.selection == selected, !diary.isChangingProfile { try? await diary.refresh(profileID: owner) }
-            // A capture can arrive during the final refresh while this worker is still owned.
+                if processingFailed { break }
+                // A capture can arrive during the final refresh while this worker is still owned.
             } while captureNeedsProcessing && active && !Task.isCancelled && diary.selection == selected && !diary.isChangingProfile
         }
     }
@@ -441,7 +454,8 @@ private final class CoachNavigationReadFence: Sendable {
         monitor.start(queue: DispatchQueue(label: "Mivu.CoachConnectivity"))
     }
     func continueInBackground(begin: (@escaping @MainActor () -> Void) -> Bool,
-                              end: @escaping @MainActor () -> Void) {
+                              end: @escaping @MainActor () -> Void,
+                              onWorkerDrain: @escaping @MainActor () -> Void = {}) {
         pauseActivity()
         endBackgroundLease()
         guard sending != nil || isSending || captureNeedsProcessing || hasPendingWork || (diary.readModel?.pendingCount ?? 0) > 0,
@@ -450,6 +464,7 @@ private final class CoachNavigationReadFence: Sendable {
         backgroundGeneration = generation
         guard begin({ [weak self] in
             guard let self, backgroundGeneration == generation else { return }
+            guard diary.selection == owner, !diary.isChangingProfile else { endBackgroundLease(); return }
             diary.enterBackground(); enterBackground(); connection.enterBackground(); endBackgroundLease()
         }) else {
             backgroundGeneration = nil
@@ -467,6 +482,7 @@ private final class CoachNavigationReadFence: Sendable {
             await diary.waitForWorker()
             guard backgroundGeneration == generation else { return }
             guard diary.selection == owner, !diary.isChangingProfile else { endBackgroundLease(); return }
+            onWorkerDrain()
             await waitForWorker()
             guard backgroundGeneration == generation else { return }
             if diary.selection == owner, !diary.isChangingProfile { enterBackground(); connection.enterBackground() }

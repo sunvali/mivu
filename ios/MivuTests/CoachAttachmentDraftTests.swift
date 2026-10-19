@@ -120,6 +120,87 @@ import Testing
         #expect(actual.coachTurns.isEmpty)
     }
 
+    @Test(arguments: ["failedSend", "recovery"])
+    func failedNewSendOrRecoveryRetainsAcceptedCaptureWake(boundary: String) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let initial = try await f.diary.store.diaryReadModel(expectedProfileID: f.diary.selection!.identity.profileID)
+        let store = f.diary.store
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { owner in
+            if boundary == "recovery" { throw DiaryError.persistenceFailed }
+            return try await store.diaryReadModel(expectedProfileID: owner)
+        }, subscriberReadModelLoading: { _ in initial })
+        await diary.load(createDefaultProfile: false)
+        let once = Task10Once(), lease = Task8LeaseProbe(), inference = Task8InferenceProbe()
+        var dependencies = Task10Fixture.dependencies(diary)
+        let capture = dependencies.capture
+        dependencies.capture = { payload, owner in
+            guard await once.claim() else { throw DiaryError.persistenceFailed }
+            return try await capture(payload, owner)
+        }
+        dependencies.refresh = { _ in throw DiaryError.persistenceFailed }
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in await inference.respond() } }, attachmentDependencies: dependencies)
+        defer { coach.cancel(); diary.enterBackground() }
+        coach.pauseForInactiveScene()
+        let photo = try Task10JPEG.tagged()
+        coach.draft = MealDraft(text: "Accepted input must retain its wake", photos: [photo])
+        let accepted = coach.draft.submissionID
+        #expect(await coach.send())
+        if boundary == "failedSend" {
+            coach.draft.text = "New input that fails persistence"
+            #expect(!(await coach.send()))
+            #expect(coach.draft.text == "New input that fails persistence")
+        } else {
+            coach.enterForeground()
+            await coach.waitForWorker()
+            coach.pauseForInactiveScene()
+        }
+        #expect(diary.workStatus.pendingTurnID == nil && (diary.readModel?.pendingCount ?? 0) == 0)
+        coach.continueInBackground(begin: lease.begin, end: lease.end)
+        #expect(lease.begun == 1)
+        await coach.waitForBackgroundCompletion()
+        #expect(lease.ended == 1)
+        #expect(await inference.calls == (boundary == "failedSend" ? 1 : 0))
+        let stored = try await store.snapshotForExport()
+        #expect(stored.coachTurns.map(\.id) == [accepted] && stored.coachTurns[0].photos.map(\.data) == [photo])
+    }
+
+    @Test(arguments: ["other", "ABA"])
+    func expiredLeaseCannotPauseChangedSelection(change: String) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let original = f.diary.selection!.identity.profileID
+        let other = DiaryProfile(name: "Other synthetic lease owner")
+        _ = try await f.diary.store.createProfile(other)
+        await f.diary.switchProfile(original)
+        let oldOwner = f.diary.selection
+        let gate = Task10Gate(), draining = Task10Gate(), lease = Task8LeaseProbe()
+        let inference = Task8OwnerInference(gate: gate)
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), inference: { { _, _ in await inference.respond() } })
+        defer { coach.cancel() }
+        coach.draft.text = "Old owner operation"
+        #expect(await coach.send())
+        do {
+            try await gate.waitForArrivals(1)
+            coach.continueInBackground(begin: lease.begin, end: lease.end, onWorkerDrain: { Task { await draining.hold(0) } })
+            try await draining.waitForArrivals(1)
+            await draining.releaseAll()
+            await f.diary.switchProfile(other.id)
+            if change == "ABA" { await f.diary.switchProfile(original) }
+            #expect(f.diary.selection != oldOwner)
+            coach.draft.text = "New selection operation"
+            let newID = coach.draft.submissionID
+            #expect(await coach.send())
+            let resumeNewOwner = Task { await coach.waitForWorker(); coach.resume(); await coach.waitForWorker() }
+            lease.expire?()
+            #expect(lease.ended == 1)
+            await gate.releaseAll()
+            await resumeNewOwner.value
+            #expect(await inference.calls == (change == "ABA" ? 3 : 2))
+            #expect(coach.captureReceipt == newID)
+            let selected = try await f.diary.store.snapshotForExport()
+            #expect(selected.coachTurns.first { $0.id == newID }?.state == .completed)
+        } catch { await draining.releaseAll(); await gate.releaseAll(); await coach.waitForWorker(); throw error }
+    }
+
     @Test(arguments: ["capture", "refresh"])
     func backgroundLeaseAdmitsInFlightSendAndDrainsItsWorker(boundary: String) async throws {
         let f = try await Task10Fixture.make(); defer { f.remove() }
@@ -708,5 +789,16 @@ private actor Task8RetryProbe {
     func respond() throws -> CoachInferenceResult {
         calls += 1
         throw URLError(.notConnectedToInternet)
+    }
+}
+
+private actor Task8OwnerInference {
+    let gate: Task10Gate
+    private(set) var calls = 0
+    init(gate: Task10Gate) { self.gate = gate }
+    func respond() async -> CoachInferenceResult {
+        calls += 1
+        if calls == 1 { await gate.hold(0) }
+        return CoachInferenceResult(model: "fixture", text: "Synthetic result", calls: [], outputItems: [])
     }
 }
