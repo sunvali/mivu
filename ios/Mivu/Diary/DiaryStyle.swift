@@ -32,6 +32,36 @@ extension Color {
     static let diaryRule = adaptive(0xD5DFE1, 0x374346, highContrastLight: 0x9BAEB2, highContrastDark: 0x68777B)
 }
 
+private struct DiarySummaryCardStyle: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        content
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.diarySurface)
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.06), radius: 10, x: 0, y: 4)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24)
+                    .strokeBorder(Color.diaryRule.opacity(contrast == .increased ? 1 : 0.35), lineWidth: contrast == .increased ? 1 : 0.5)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    func diarySummaryCard() -> some View {
+        modifier(DiarySummaryCardStyle())
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+    }
+}
+
 struct SampleBanner: View {
     var body: some View {
         DisclosureGroup {

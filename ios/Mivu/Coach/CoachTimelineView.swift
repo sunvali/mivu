@@ -141,53 +141,30 @@ struct CoachTimelineView: UIViewRepresentable {
             }
             guard table.jumpButton == nil || appearanceChanged else { return }
             var configuration = UIButton.Configuration.glass()
-            configuration.title = String(localized: "Jump to latest")
             configuration.image = UIImage(systemName: "arrow.down")
-            configuration.imagePadding = 8; configuration.titleLineBreakMode = .byWordWrapping
-            configuration.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
+            configuration.cornerStyle = .capsule
+            configuration.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
             configuration.baseForegroundColor = UIColor(Color.diaryAccent)
-            let font = UIFont.preferredFont(forTextStyle: .body,
-                compatibleWith: UITraitCollection(preferredContentSizeCategory: jumpContentSizeCategory))
-            configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                var attributes = attributes; attributes.font = font; return attributes
-            }
-            configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(font: font)
+            configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
             if let button = table.jumpButton as? UIButton { button.configuration = configuration }
             else {
                 let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.owner.jumpToLatest?() })
                 button.accessibilityIdentifier = "coachNewMessage"
                 button.accessibilityLabel = String(localized: "Jump to latest")
                 button.translatesAutoresizingMaskIntoConstraints = false
-                button.titleLabel?.numberOfLines = 0
                 table.addSubview(button); table.jumpButton = button
                 NSLayoutConstraint.activate([
                     button.centerXAnchor.constraint(equalTo: table.frameLayoutGuide.centerXAnchor),
                     button.bottomAnchor.constraint(equalTo: table.frameLayoutGuide.bottomAnchor, constant: -8),
                     button.leadingAnchor.constraint(greaterThanOrEqualTo: table.frameLayoutGuide.leadingAnchor, constant: 16),
                     button.trailingAnchor.constraint(lessThanOrEqualTo: table.frameLayoutGuide.trailingAnchor, constant: -16),
-                    button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
+                    button.widthAnchor.constraint(equalToConstant: 48),
+                    button.heightAnchor.constraint(equalToConstant: 48)
                 ])
             }
             if let button = table.jumpButton {
                 button.overrideUserInterfaceStyle = owner.colorScheme == .dark ? .dark : .light
                 table.bringSubviewToFront(button)
-            }
-        }
-        private var jumpContentSizeCategory: UIContentSizeCategory {
-            switch owner.typeSize {
-            case .xSmall: .extraSmall
-            case .small: .small
-            case .medium: .medium
-            case .large: .large
-            case .xLarge: .extraLarge
-            case .xxLarge: .extraExtraLarge
-            case .xxxLarge: .extraExtraExtraLarge
-            case .accessibility1: .accessibilityMedium
-            case .accessibility2: .accessibilityLarge
-            case .accessibility3: .accessibilityExtraLarge
-            case .accessibility4: .accessibilityExtraExtraLarge
-            case .accessibility5: .accessibilityExtraExtraExtraLarge
-            @unknown default: .large
             }
         }
         func configure(_ cell: CoachTimelineCell, row: CoachTimelineRow) {

@@ -13,9 +13,11 @@ struct HistoryView: View {
             if model.readModel != nil {
                 if let dateFilter {
                     Section {
-                        LabeledContent("Selected date", value: dateFilter)
-                        Button("Show all recorded days") { self.dateFilter = nil }
-                            .frame(minHeight: 44).accessibilityIdentifier("showAllDiaryDays")
+                        VStack(alignment: .leading, spacing: 16) {
+                            LabeledContent("Selected date", value: dateFilter)
+                            Button("Show all recorded days") { self.dateFilter = nil }
+                                .frame(minHeight: 44).accessibilityIdentifier("showAllDiaryDays")
+                        }.diarySummaryCard()
                     }
                 }
                 Section {
@@ -43,17 +45,20 @@ struct HistoryView: View {
                             .frame(minHeight: 64, alignment: .leading)
                             .accessibilityElement(children: .combine)
                         }.accessibilityIdentifier("diaryDay").accessibilityValue(day.localDate + " " + day.timeZoneID)
+                            .diarySummaryCard()
                     }
                 } header: { DiarySectionLabel(title: "Recorded days", symbol: "calendar", color: .diaryProtein) }
-                if page?.hasMore == true { Button("Earlier days") { Task { await loadHistory(before: page?.cursor) } }.frame(minHeight: 44) }
+                if page?.hasMore == true { Button("Earlier days") { Task { await loadHistory(before: page?.cursor) } }.frame(minHeight: 44).listRowSeparator(.hidden) }
                 Section {
-                    DisclosureGroup("Day coverage") {
-                        ForEach(DayCompleteness.allCases, id: \.self) { status in
-                            LabeledContent { Text((coverage[status] ?? 0).formatted()).monospacedDigit() } label: { Text(status.title) }
+                    VStack(alignment: .leading, spacing: 16) {
+                        DisclosureGroup("Day coverage") {
+                            ForEach(DayCompleteness.allCases, id: \.self) { status in
+                                LabeledContent { Text((coverage[status] ?? 0).formatted()).monospacedDigit() } label: { Text(status.title) }
+                            }
                         }
-                    }
-                    Text("Complete means all intake was recorded. Partial, unknown and untracked days remain separate. Missing logs do not mean zero intake.")
-                        .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        Text("Complete means all intake was recorded. Partial, unknown and untracked days remain separate. Missing logs do not mean zero intake.")
+                            .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    }.diarySummaryCard()
                 }
             } else {
                 ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Profile and settings to select a private local profile."))
@@ -61,6 +66,7 @@ struct HistoryView: View {
         }
         .listStyle(.plain)
         .listRowSpacing(0)
+        .listSectionSpacing(12)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .navigationDestination(for: HistoryRoute.self) { route in
@@ -113,7 +119,7 @@ struct HistoryView: View {
     private func dayLabel(_ day: TrackingDay, mealCount: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(formattedDate(day))
-                .font(.body.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+                .font(.headline).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 4) {
                 Text(day.completeness.title)
                 Text("· \(mealCount) \(mealCount == 1 ? "meal" : "meals")")

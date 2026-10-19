@@ -156,7 +156,9 @@ struct CoachReceiptView: View {
                 DisclosureGroup {
                     Text(macros).monospacedDigit().accessibilityIdentifier("coachReceiptMacros")
                 } label: {
-                    Text(presentation.estimateLabel ?? "Nutrition details").frame(minHeight: 44, alignment: .leading)
+                    Text(presentation.estimateLabel ?? "Nutrition details")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(minHeight: 44, alignment: .leading)
                 }
                 .disclosureGroupStyle(CoachReceiptDisclosureStyle())
             }

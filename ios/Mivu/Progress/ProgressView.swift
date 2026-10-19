@@ -50,6 +50,7 @@ struct GoalSummaryView: View {
 
 struct DiaryProgressView: View {
     @Bindable var model: DiaryViewModel
+    let openDiary: () -> Void
     @State private var report = Report.weekly
     @State private var showGoals = false
     @State private var showWeight = false
@@ -182,87 +183,88 @@ struct DiaryProgressView: View {
                     }
                 }.listRowSeparator(.hidden)
                 Section {
-                    if report == .daily {
-                        Text(today).font(.subheadline).foregroundStyle(Color.diarySecondary)
-                        GoalSummaryView(report: daily, identifier: "progressGoalSummary")
-                        Text(daily.completeness.map { "Coverage: \($0.rawValue)" } ?? "No tracking day recorded")
-                            .font(.subheadline)
-                        Text(daily.completeness == nil ? "No entry for this day. Missing does not mean zero intake." : "Missing dates are never counted as zero intake.")
-                            .font(.subheadline).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("missingDayCopy")
-                    } else if let period {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("\(period.startLocalDate) to \(period.endLocalDate)")
-                                .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                            Text("\(period.completeDayCount) of \(period.dayCount) days complete")
-                                .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                            Label { Text("Recorded intake") } icon: { Image(systemName: "flame").foregroundStyle(Color.diaryEnergy) }.font(.headline).padding(.top, 12)
-                            if typeSize.isAccessibilitySize {
-                                VStack(alignment: .leading, spacing: 0) { averageValue(period); Text("kcal").foregroundStyle(Color.diarySecondary) }
-                            } else {
-                                HStack(alignment: .firstTextBaseline, spacing: 8) { averageValue(period); Text("kcal").font(.title3).foregroundStyle(Color.diarySecondary) }
-                            }
-                            Text("Average · \(period.knownIntakeSamples.kcal) complete days with known energy")
-                                .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                            if period.knownIntakeSamples.kcal == 0 {
-                                Text("Not enough complete days").font(.headline)
-                                NavigationLink {
-                                    HistoryView(model: model).toolbar(.hidden, for: .tabBar)
-                                } label: {
-                                    Label("Open Diary", systemImage: "calendar").frame(minHeight: 44)
-                                }.accessibilityIdentifier("openDiaryForCoverage")
-                            }
-                        }.padding(.vertical, 8)
-                    }
-                }.listRowSeparator(.hidden).listRowBackground(Color.diarySummarySurface)
-                Section {
-                    if nutrition.isEmpty {
-                        Text("No saved food samples in this period.").foregroundStyle(Color.diarySecondary)
-                    } else {
-                        Chart(nutrition) { point in
-                            BarMark(x: .value("Date", point.date, unit: .day), y: .value("Recorded kcal", point.value))
-                                .foregroundStyle(point.complete ? Color.diaryEnergy : Color.diaryEnergy.opacity(0.70))
+                    VStack(alignment: .leading, spacing: 16) {
+                        if report == .daily {
+                            Text(today).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                            GoalSummaryView(report: daily, identifier: "progressGoalSummary")
+                            Text(daily.completeness.map { "Coverage: \($0.rawValue)" } ?? "No tracking day recorded")
+                                .font(.subheadline)
+                            Text(daily.completeness == nil ? "No entry for this day. Missing does not mean zero intake." : "Missing dates are never counted as zero intake.")
+                                .font(.subheadline).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("missingDayCopy")
+                        } else if let period {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("\(period.startLocalDate) to \(period.endLocalDate)")
+                                    .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                Text("\(period.completeDayCount) of \(period.dayCount) days complete")
+                                    .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                Label { Text("Recorded intake") } icon: { Image(systemName: "flame").foregroundStyle(Color.diaryEnergy) }.font(.title3.weight(.bold)).padding(.top, 12)
+                                if typeSize.isAccessibilitySize {
+                                    VStack(alignment: .leading, spacing: 0) { averageValue(period); Text("kcal").foregroundStyle(Color.diarySecondary) }
+                                } else {
+                                    HStack(alignment: .firstTextBaseline, spacing: 8) { averageValue(period); Text("kcal").font(.title3).foregroundStyle(Color.diarySecondary) }
+                                }
+                                Text("Average · \(period.knownIntakeSamples.kcal) complete days with known energy")
+                                    .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                if period.knownIntakeSamples.kcal == 0 {
+                                    Text("Not enough complete days").font(.headline)
+                                    Button(action: openDiary) {
+                                        Label("Open Diary", systemImage: "calendar").frame(minHeight: 44)
+                                    }.accessibilityIdentifier("openDiaryForCoverage")
+                                }
+                            }.padding(.vertical, 8)
                         }
-                        .chartXScale(domain: nutritionDomain)
-                        .chartXAxis {
-                            AxisMarks(values: .stride(by: .day, count: report == .monthly ? 7 : 1)) { _ in
-                                AxisGridLine()
-                                AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                            }
-                        }
-                        .chartYScale(domain: .automatic(includesZero: true))
-                        .environment(\.timeZone, TimeZone(identifier: readModel.profile.timeZoneID) ?? .gmt)
-                        .frame(height: 200).accessibilityHidden(true)
-                        Text("Lighter bars show days without complete coverage. Missing days have no bar.")
-                            .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                    }
-                    DisclosureGroup(isExpanded: $nutritionExpanded) {
-                        ForEach(nutrition) { point in
-                            VStack(alignment: .leading, spacing: 4) {
-                                LabeledContent(point.label, value: "\(point.value.formatted(.number.precision(.fractionLength(0)))) kcal").monospacedDigit()
-                                Text(point.coverage).font(.subheadline).foregroundStyle(Color.diarySecondary)
-                            }
-                        }
-                        Text(nutritionSummary).font(.subheadline).foregroundStyle(Color.diarySecondary)
-                            .accessibilityIdentifier("nutritionChartSummary")
-                    } label: {
-                        Text("Recorded intake data").accessibilityIdentifier("nutritionData")
-                            .accessibilityValue(nutritionExpanded ? "Expanded" : "Collapsed")
-                    }
-                } header: {
-                    Label { Text("Nutrition trend") } icon: { Image(systemName: "chart.bar").foregroundStyle(Color.diaryEnergy) }
+                    }.diarySummaryCard()
                 }
-                .listRowBackground(Color.diaryChartSurface)
+                Section {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Label { Text("Nutrition trend") } icon: { Image(systemName: "chart.bar").foregroundStyle(Color.diaryEnergy) }
+                            .font(.title3.weight(.bold))
+                        if nutrition.isEmpty {
+                            Text("No saved food samples in this period.").foregroundStyle(Color.diarySecondary)
+                        } else {
+                            Chart(nutrition) { point in
+                                BarMark(x: .value("Date", point.date, unit: .day), y: .value("Recorded kcal", point.value))
+                                    .foregroundStyle(point.complete ? Color.diaryEnergy : Color.diaryEnergy.opacity(0.70))
+                            }
+                            .chartXScale(domain: nutritionDomain)
+                            .chartXAxis {
+                                AxisMarks(values: .stride(by: .day, count: report == .monthly ? 7 : 1)) { _ in
+                                    AxisGridLine()
+                                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                                }
+                            }
+                            .chartYScale(domain: .automatic(includesZero: true))
+                            .environment(\.timeZone, TimeZone(identifier: readModel.profile.timeZoneID) ?? .gmt)
+                            .frame(height: 200).accessibilityHidden(true)
+                            Text("Lighter bars show days without complete coverage. Missing days have no bar.")
+                                .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        }
+                        DisclosureGroup(isExpanded: $nutritionExpanded) {
+                            ForEach(nutrition) { point in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    LabeledContent(point.label, value: "\(point.value.formatted(.number.precision(.fractionLength(0)))) kcal").monospacedDigit()
+                                    Text(point.coverage).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                }
+                            }
+                            Text(nutritionSummary).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                .accessibilityIdentifier("nutritionChartSummary")
+                        } label: {
+                            Text("Recorded intake data").accessibilityIdentifier("nutritionData")
+                                .accessibilityValue(nutritionExpanded ? "Expanded" : "Collapsed")
+                        }
+                    }.diarySummaryCard()
+                }
                 Section {
                     NavigationLink { weightDetail } label: {
                         LabeledContent("Weight", value: (visibleProgress?.latestWeight?.record).map { "\($0.value.formatted()) \($0.unit)" } ?? "No measurements")
                             .frame(minHeight: 48).monospacedDigit()
-                    }.accessibilityIdentifier("openWeight")
+                    }.accessibilityIdentifier("openWeight").diarySummaryCard()
                     NavigationLink { workoutList } label: {
                         LabeledContent("Workouts", value: "\(visibleProgress?.workoutTotal ?? 0) recorded").frame(minHeight: 48).monospacedDigit()
-                    }.accessibilityIdentifier("openWorkouts")
+                    }.accessibilityIdentifier("openWorkouts").diarySummaryCard()
                     Button { showGoals = true } label: {
                         HStack { Text("Goals").foregroundStyle(Color.diaryText); Spacer(); Text("Manage").foregroundStyle(Color.diarySecondary); Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary) }.frame(minHeight: 48)
-                    }.accessibilityIdentifier("editGoals")
+                    }.accessibilityIdentifier("editGoals").diarySummaryCard()
                 }
                 if report != .daily, let period {
                     Section {
@@ -282,7 +284,7 @@ struct DiaryProgressView: View {
                         } label: {
                             Label { Text("Coverage & averages") } icon: { Image(systemName: "checkmark.circle").foregroundStyle(Color.diaryEnergy) }.accessibilityIdentifier("progressCoverage")
                                 .accessibilityValue(coverageExpanded ? "Expanded" : "Collapsed")
-                        }
+                        }.diarySummaryCard()
                     }
                 }
             } else if model.selection != nil {
@@ -297,6 +299,8 @@ struct DiaryProgressView: View {
             }
         }
         .listStyle(.plain)
+        .listRowSpacing(0)
+        .listSectionSpacing(12)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .accessibilityIdentifier("progressList")
         .navigationTitle("Progress")

@@ -34,13 +34,14 @@ queries and mutations. This adds no chat service or runtime dependency.
   offscreen replies preserve the visible row and expose **Jump to latest**.
   Paging, cell updates and asynchronous photo growth retain the reader's
   ownership until intentional movement, a seek, latest jump or invalidation.
-- The floating **Jump to latest** control is a native glass `UIButton` owned by
+- The floating **Jump to latest** control is a 48-point circular down-arrow
+  with a spoken action label. It remains a native glass `UIButton` owned by
   the timeline table, so a drag on it reaches the table's pan gesture. Preserve
   the table's existing accessibility-element prefix and append the button via
   [`UIAccessibilityContainer`](https://developer.apple.com/documentation/uikit/uiaccessibilitycontainer)
-  methods. Keep natural Dynamic Type sizing, a target at least 44 points high,
-  and focus/reader ownership off the underlying exchange. Verify an actual
-  button drag and tap, natural text fit, and reader restoration within 2 points.
+  methods. Keep a target at least 44 points high and focus/reader ownership off
+  the underlying exchange. Verify an actual button drag and tap, icon fit at
+  normal/accessibility sizes, and reader restoration within 2 points.
 - Ordinary startup, profile selection, refresh, capture and worker paths use
   bounded owner queries. They do not reconstruct a complete diary snapshot for
   the Coach timeline. Diary retains status metadata, not a separate transcript;

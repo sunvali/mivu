@@ -80,6 +80,7 @@ Keep the floating **Jump to latest** as the native glass `UIButton` owned by
 gesture. Preserve the table's default accessibility-element prefix and append
 the button through its
 [`UIAccessibilityContainer`](https://developer.apple.com/documentation/uikit/uiaccessibilitycontainer)
-methods. Keep focus away from the underlying exchange, preserve natural text
-sizing and a 44-point minimum target, and verify an actual button drag and tap,
-row/focus routing, text fit, and viewport restoration within 2 points.
+methods. Use the owner's compact down-arrow treatment: a 48-point circular
+control with the spoken “Jump to latest” label. Keep focus away from the
+underlying exchange and a 44-point minimum target, and verify an actual button
+drag and tap, row/focus routing, icon fit, and viewport restoration within 2 points.

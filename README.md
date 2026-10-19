@@ -54,6 +54,8 @@ the current scope and evidence.
 
 ## Agent guidance
 
+The [navigation and summary layout guide](docs/development/navigation-and-summary-layout.md) records the approved card treatment, tab responsibilities and applied UX research.
+
 See [repository instructions](AGENTS.md) and the concise
 [Copilot instructions](.github/copilot-instructions.md).
 For companion animation work, use the repository-local

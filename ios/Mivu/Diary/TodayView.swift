@@ -288,7 +288,7 @@ struct DiaryRootView: View {
                 NavigationStack { HistoryView(model: model).toolbar { profileControl } }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
-                NavigationStack { DiaryProgressView(model: model).toolbar { profileControl } }
+                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl } }
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                 NavigationStack {
@@ -450,7 +450,7 @@ struct TodayView: View {
                     }
                 }
                 Section {
-                    VStack(alignment: .leading, spacing: typeSize.isAccessibilitySize ? 16 : 4) {
+                    VStack(alignment: .leading, spacing: 16) {
                         summaryDate
                         if let day = model.activeDay {
                             intakeHero(totals: snapshot.totals, day: day)
@@ -465,25 +465,23 @@ struct TodayView: View {
                                 .font(.subheadline).foregroundStyle(Color.diaryWarning)
                                 .accessibilityIdentifier("pendingCount")
                         }
-                    }.padding(.vertical, 4).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    }.diarySummaryCard()
                 }
                 Section {
                     if model.todaysMeals.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("Your first meal starts here", systemImage: "fork.knife").font(.headline)
                             Text("Add photos or a note.").foregroundStyle(Color.diarySecondary)
-                        }.padding(.vertical, 16)
+                        }.diarySummaryCard()
                     }
                     ForEach(model.todaysMeals, id: \.id) { meal in
                         NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
-                            .padding(.horizontal, 12).padding(.vertical, 4)
-                            .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 18))
-                            .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                            .diarySummaryCard()
                             .accessibilityIdentifier("mealRow")
                     }
                 } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
                 if let day = model.activeDay, snapshot.activeGoal == nil {
-                    Section { todayGoal(snapshot: snapshot, day: day, showCompleteness: false) }
+                    Section { todayGoal(snapshot: snapshot, day: day, showCompleteness: false).diarySummaryCard() }
                 }
                 Section {
                     Button { showWeight = true } label: {
@@ -494,14 +492,17 @@ struct TodayView: View {
                                 Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()
                             } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
                         }.frame(minHeight: 44)
-                    }.accessibilityIdentifier("logWeight")
+                    }.accessibilityIdentifier("logWeight").diarySummaryCard()
                 }
                 if let day = model.activeDay {
-                    Section("Day coverage") {
-                        Picker("Completeness", selection: Binding(get: { day.completeness }, set: { value in
-                            Task { await model.change { try await model.store.setCompleteness(dayID: day.id, value, expectedProfileID: snapshot.profile.id) } }
-                        })) { ForEach(DayCompleteness.allCases, id: \.self) { Text($0.title).tag($0) } }
-                        Text("Complete means all intake was recorded. Partial totals describe only recorded meals.").font(.caption).foregroundStyle(Color.diarySecondary)
+                    Section {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Day coverage").font(.title3.weight(.bold))
+                            Picker("Completeness", selection: Binding(get: { day.completeness }, set: { value in
+                                Task { await model.change { try await model.store.setCompleteness(dayID: day.id, value, expectedProfileID: snapshot.profile.id) } }
+                            })) { ForEach(DayCompleteness.allCases, id: \.self) { Text($0.title).tag($0) } }
+                            Text("Complete means all intake was recorded. Partial totals describe only recorded meals.").font(.caption).foregroundStyle(Color.diarySecondary)
+                        }.diarySummaryCard()
                     }
                 }
             } else {
@@ -510,7 +511,7 @@ struct TodayView: View {
         }
         .listStyle(.plain)
         .listRowSpacing(0)
-        .listSectionSpacing(4)
+        .listSectionSpacing(12)
         .contentMargins(.top, 0, for: .scrollContent)
         .environment(\.defaultMinListRowHeight, 56)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
@@ -557,7 +558,7 @@ struct TodayView: View {
                 Text(displayDate).font(.subheadline)
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
             }.foregroundStyle(Color.diarySecondary).frame(minHeight: 44)
-        }.accessibilityLabel("Day actions, " + displayDate)
+        }.accessibilityLabel("Day actions, " + displayDate).accessibilityIdentifier("todayDayActions")
     }
     private var displayDate: String {
         guard let value = model.activeDay?.localDate else { return "Your waking day" }
@@ -589,18 +590,18 @@ struct TodayView: View {
                             .animation(companionOutput.playback == .animated ? .snappy(duration: MivuMotion.numeric) : nil, value: totals.kcal)
                         Text("kcal recorded").font(.subheadline).foregroundStyle(Color.diaryText)
                     }
-                    HStack(spacing: 8) {
-                        heroMetric("Protein", value: totals.protein, color: .diaryProtein)
-                        Divider().frame(height: 32)
-                        heroMetric("Carbs", value: totals.carbs, color: .diaryCarbs)
-                        Divider().frame(height: 32)
-                        heroMetric("Fat", value: totals.fat, color: .diaryFat)
-                    }
                     Group {
                         if let day { Text("\(Text(day.completeness.title)) day") }
                         else { Text("No meals recorded") }
                     }.font(.caption).foregroundStyle(Color.diarySecondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack(spacing: 8) {
+                heroMetric("Protein", value: totals.protein, color: .diaryProtein)
+                Divider().frame(height: 32)
+                heroMetric("Carbs", value: totals.carbs, color: .diaryCarbs)
+                Divider().frame(height: 32)
+                heroMetric("Fat", value: totals.fat, color: .diaryFat)
             }
             if totals.unknownItemCount > 0 {
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.")
@@ -612,7 +613,7 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 3) {
                 Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
-                Text(title).font(.caption2)
+                Text(title).font(.caption).fixedSize(horizontal: true, vertical: false)
             }
             Text(value.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" } ?? "—")
                 .font(.system(size: 17, weight: .medium)).monospacedDigit()

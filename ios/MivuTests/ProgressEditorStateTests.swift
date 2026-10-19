@@ -15,7 +15,7 @@ import Testing
         _ = try await store.importProfile(snapshot)
         let model = DiaryViewModel(store: store)
         await model.load(createDefaultProfile: false)
-        let domain = DiaryProgressView(model: model).nutritionDomain
+        let domain = DiaryProgressView(model: model, openDiary: {}).nutritionDomain
         let spring = endingOn == "2026-03-08"
         let formatter = ISO8601DateFormatter()
         #expect(domain.lowerBound == formatter.date(from: spring ? "2026-03-02T08:00:00Z" : "2026-10-26T07:00:00Z"))

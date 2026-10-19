@@ -84,11 +84,11 @@ private struct AutomaticPageHost: View {
         let jump = try #require(table.jumpButton as? UIButton)
         #expect(jump.isDescendant(of: table))
         #expect(jump.bounds.height >= 44)
-        #expect(jump.bounds.width > jump.bounds.height)
-        let label = try #require(jump.titleLabel), text = try #require(label.text), font = try #require(label.font)
-        #expect(text == "Jump to latest")
-        let naturalTextWidth = (text as NSString).size(withAttributes: [.font: font]).width
-        #expect(label.bounds.width + 1 >= naturalTextWidth)
+        #expect(abs(jump.bounds.width - 48) <= 1)
+        #expect(abs(jump.bounds.height - 48) <= 1)
+        #expect(jump.configuration?.title == nil)
+        #expect(jump.configuration?.image != nil)
+        #expect(jump.accessibilityLabel == "Jump to latest")
         let frame = jump.convert(jump.bounds, to: window)
         let point = CGPoint(x: frame.midX, y: frame.midY)
         let hit = try #require(window.hitTest(point, with: nil))
@@ -135,11 +135,11 @@ private struct AutomaticPageHost: View {
         host.rootView = AutomaticPageHost(model: model, jumpAction: {}, textSize: .accessibility5)
         try await waitFor { table.typeSize == .accessibility5 }
         table.layoutIfNeeded()
-        let largeButton = try #require(table.jumpButton as? UIButton), largeLabel = try #require(largeButton.titleLabel)
-        #expect(largeButton.bounds.width <= table.bounds.width - 32 + 1)
-        let fitting = largeLabel.sizeThatFits(CGSize(width: largeLabel.bounds.width, height: .greatestFiniteMagnitude))
-        #expect(largeLabel.bounds.height + 1 >= fitting.height)
-        #expect(largeButton.bounds.height >= 44)
+        let largeButton = try #require(table.jumpButton as? UIButton)
+        #expect(abs(largeButton.bounds.width - 48) <= 1)
+        #expect(abs(largeButton.bounds.height - 48) <= 1)
+        #expect(largeButton.configuration?.title == nil)
+        #expect(largeButton.accessibilityLabel == "Jump to latest")
     }
     @Test func unappliedModelRevisionCannotPublishOldNativeViewport() async throws {
         let source = AutomaticPageSource(total: 140)
