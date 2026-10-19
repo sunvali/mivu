@@ -262,10 +262,16 @@ extension DiaryTransaction {
     func nextOrdinal(_ table: String, parent: UUID? = nil) throws -> Int {
         try database.mutationInteger("SELECT COALESCE(MAX(ordinal) + 1, 0) FROM \(table) \(parent == nil ? "" : "WHERE parent = ?")", parent.map { [.text($0.uuidString)] } ?? [])
     }
-    func resolveDay(localDate: String, timeZoneID: String, at: Date) throws -> TrackingDay {
+    func resolveDay(localDate: String, timeZoneID: String, at: Date, newDayID: UUID? = nil) throws -> TrackingDay {
         let row = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND json_extract(CAST(payload AS TEXT), '$.timeZoneID') = ?", values: [.text(localDate), .text(timeZoneID)], limit: 1).first
-        if let row { let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day }
-        let day = TrackingDay(localDate: localDate, timeZoneID: timeZoneID, startAt: at)
+        if let row {
+            let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day)
+            guard newDayID == nil || newDayID == day.id else { throw DiaryError.invalidData }; return day
+        }
+        if let newDayID {
+            guard try records("day", clause: "id = ?", values: [.text(newDayID.uuidString)], limit: 1).isEmpty else { throw DiaryError.invalidData }
+        }
+        let day = TrackingDay(id: newDayID ?? UUID(), localDate: localDate, timeZoneID: timeZoneID, startAt: at)
         try validateTrackingDayFields(day)
         let payload = try JSONEncoder().encode(day)
         try database.execute("INSERT INTO day(id, ordinal, payload) VALUES (?, ?, ?)", [.text(day.id.uuidString), .integer(nextOrdinal("day")), .blob(payload)])
@@ -343,7 +349,11 @@ extension DiaryTransaction {
     }
     func saveSubmission(_ submission: MealSubmission, meal: DiaryMeal) throws {
         try validateMealSubmissionFields(submission, mealID: meal.id, mealRevision: meal.revision, profileID: head.profile.id)
-        if let parent = try submissionParent(id: submission.id) { guard parent == meal.id else { throw DiaryError.invalidData } }
+        if let parent = try submissionParent(id: submission.id) {
+            guard parent == meal.id else { throw DiaryError.invalidData }
+            let original = try self.submission(id: submission.id, mealID: meal.id)
+            guard original.manualAcceptance == nil || original == submission else { throw DiaryError.invalidData }
+        }
         let payload = try JSONEncoder().encode(submission)
         try database.execute("INSERT INTO submission(id, parent, ordinal, payload) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
             [.text(submission.id.uuidString), .text(meal.id.uuidString), .integer(nextOrdinal("submission", parent: meal.id)), .blob(payload)])
@@ -377,7 +387,7 @@ extension DiaryTransaction {
         guard output.baseRevision == meal.revision, output.baseRevision == submission.baseRevision else { throw DiaryError.staleRevision }
         submission.proposal = output
         if submission.reviewFirst { submission.state = .awaitingReview }
-        else { try replaceItems(output.items, mealID: meal.id); meal.revision += 1; try saveMeal(meal); submission.state = .saved }
+        else { meal = try commitSavedItems(mealID: meal.id, items: output.items, expectedRevision: meal.revision); submission.state = .saved }
         try saveSubmission(submission, meal: meal)
     }
     func acceptReview(mealID: UUID, submissionID: UUID) throws {
@@ -385,7 +395,7 @@ extension DiaryTransaction {
         if submission.state == .saved { return }
         guard submission.state == .awaitingReview, let proposal = submission.proposal else { throw DiaryError.invalidData }
         guard meal.revision == proposal.baseRevision else { throw DiaryError.staleRevision }
-        try replaceItems(proposal.items, mealID: mealID); meal.revision += 1; try saveMeal(meal)
+        meal = try commitSavedItems(mealID: mealID, items: proposal.items, expectedRevision: meal.revision)
         submission.state = .saved; try saveSubmission(submission, meal: meal)
     }
     func editItem(mealID: UUID, item: FoodItem, explicitNutrients: Set<String>, reviewSubmissionID: UUID?, expectedRevision: Int?) throws {

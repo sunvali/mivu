@@ -49,6 +49,24 @@ actor DiaryStore {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.reconcileCoachCapture(
             submissionID: submissionID, expectedManifest: expectedManifest, expectedProfileID: expectedProfileID)
     }
+    func prepareManualNutritionTarget(choice: ManualNutritionDayChoice, at: Date,
+                                      expectedSelection: DiarySelectionOwnership,
+                                      expectedProfileID: UUID) throws -> ManualNutritionTarget {
+        try validateOwnership(expectedSelection, profileID: expectedProfileID)
+        return try pagedConnection(expectedProfileID: expectedProfileID).database.prepareManualNutritionTarget(
+            choice: choice, at: at, expectedProfileID: expectedProfileID)
+    }
+    func saveManualNutrition(_ payload: ManualNutritionPayload, expectedSelection: DiarySelectionOwnership,
+                             expectedProfileID: UUID) throws -> ManualNutritionSaveResult {
+        try validateOwnership(expectedSelection, profileID: expectedProfileID)
+        return try pagedMutation(expectedProfileID) { try $0.saveManualNutrition(payload, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+    func manualNutritionResult(for payload: ManualNutritionPayload, expectedSelection: DiarySelectionOwnership,
+                               expectedProfileID: UUID) throws -> ManualNutritionSaveResult? {
+        try validateOwnership(expectedSelection, profileID: expectedProfileID)
+        return try pagedConnection(expectedProfileID: expectedProfileID).database.manualNutritionResult(
+            for: payload, expectedProfileID: expectedProfileID)
+    }
     func changes(expectedProfileID: UUID) -> AsyncStream<DiaryChanges> {
         guard pagedHead?.profile.id == expectedProfileID else { return AsyncStream { $0.finish() } }
         let id = UUID(), pair = AsyncStream<DiaryChanges>.makeStream()
@@ -327,15 +345,11 @@ actor DiaryStore {
     }
 
     func dayAssignment(at: Date = Date(), expectedProfileID: UUID? = nil) throws -> DayAssignment {
-        guard let selected = pagedHead else { throw DiaryError.noProfile }
-        let head = try diaryHead(expectedProfileID: expectedProfileID ?? selected.profile.id)
-        guard let id = head.activeDayID else { return .newDay }
-        let day = try pagedConnection(expectedProfileID: head.profile.id).database.trackingDay(id: id)
-        let localDate = diaryDateLabel(at, zone: head.profile.timeZoneID)
-        if let confirmed = head.previousDayConfirmedAt, at >= confirmed, at.timeIntervalSince(confirmed) < 4 * 3600,
-           diaryDateLabel(confirmed, zone: head.profile.timeZoneID) == localDate { return .existing(id) }
-        return day.timeZoneID == head.profile.timeZoneID && day.localDate == localDate ? .existing(id) : .ask(id)
-
+        let owner = try selectedOwner(expectedProfileID)
+        let (database, _) = try pagedConnection(expectedProfileID: owner)
+        return try database.domainRead(expectedProfileID: owner) {
+            try DiaryTransaction(database: database, head: $0).dayAssignment(at: at)
+        }
     }
 
     func confirmPreviousDay(at: Date = Date(), expectedProfileID: UUID? = nil) throws {

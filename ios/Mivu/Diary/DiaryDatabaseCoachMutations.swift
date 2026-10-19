@@ -203,13 +203,16 @@ extension DiaryTransaction {
                 submission.proposal = AnalysisOutput(profileID: head.profile.id, mealID: meal.id, submissionID: turn.id, baseRevision: meal.revision, items: proposalItems)
                 meal.dayID = day.id
                 if submission.reviewFirst || review { submission.state = .awaitingReview }
-                else { try replaceItems(proposalItems, mealID: meal.id); meal.revision += 1; submission.state = .saved }
+                else {
+                    try saveMeal(meal)
+                    meal = try commitSavedItems(mealID: meal.id, items: proposalItems, expectedRevision: meal.revision); submission.state = .saved
+                }
                 if turn.pendingMealRevision == 0 && day.id != turn.activeDayID { meal.eatenAt = day.startAt; meal.timePrecision = .dateOnly }
                 try saveMeal(meal); try saveSubmission(submission, meal: meal)
             } else if review {
                 let proposal = AnalysisOutput(profileID: head.profile.id, mealID: meal.id, submissionID: turn.id, baseRevision: 0, items: items)
                 try saveSubmission(MealSubmission(id: turn.id, baseRevision: 0, text: turn.text, photoIDs: turn.photoIDs, reviewFirst: true, state: .awaitingReview, proposal: proposal), meal: meal)
-            } else { try replaceItems(items, mealID: meal.id); meal.revision = 1; try saveMeal(meal) }
+            } else { meal = try commitSavedItems(mealID: meal.id, items: items, expectedRevision: meal.revision) }
             try addSource(kind: "meal", recordID: meal.id, turnID: turn.id, origin: isNew)
             for photo in try photoReferences(owner: .coachTurn(turn.id)) {
                 guard try photoConsumers(photoID: photo.photoID, owner: photo.owner) == [turn.id] else { throw DiaryError.invalidData }
