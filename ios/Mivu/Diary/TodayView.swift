@@ -137,7 +137,6 @@ struct DiaryRootView: View {
     #endif
     @Environment(\.scenePhase) private var phase
     @State private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
-    @State private var backgroundGeneration: UUID?
     var body: some View {
         lifecycleView
         .alert("Could not complete action", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
@@ -183,6 +182,7 @@ struct DiaryRootView: View {
                 if value == .background { companion.enterBackground() }
                 refreshCompanion()
             }
+            if value == .inactive { coach.pauseForInactiveScene() }
             if value == .background { continueInBackground() }
             if value == .active {
                 companion.attach(profileID: model.isChangingProfile ? nil : model.readModel?.profile.id,
@@ -404,22 +404,19 @@ struct DiaryRootView: View {
         }
     }
     private func continueInBackground() {
-        coach.pauseActivity()
-        guard (model.readModel?.pendingCount ?? 0) > 0 || coach.hasPendingWork else { coach.enterBackground(); connection.enterBackground(); return }
-        endBackgroundLease()
-        let generation = UUID()
-        backgroundGeneration = generation
-        backgroundLease = UIApplication.shared.beginBackgroundTask(withName: "Finish saved meal") {
-            Task { @MainActor in guard backgroundGeneration == generation else { return }; model.enterBackground(); coach.enterBackground(); connection.enterBackground(); endBackgroundLease() }
-        }
-        model.resumeWorker()
-        Task { await model.waitForWorker(); await coach.waitForWorker(); if backgroundGeneration == generation { coach.enterBackground(); connection.enterBackground(); endBackgroundLease() } }
+        coach.continueInBackground(begin: { expire in
+            backgroundLease = UIApplication.shared.beginBackgroundTask(withName: "Finish saved meal") {
+                Task { @MainActor in expire() }
+            }
+            return backgroundLease != .invalid
+        }, end: {
+            guard backgroundLease != .invalid else { return }
+            let lease = backgroundLease; backgroundLease = .invalid
+            UIApplication.shared.endBackgroundTask(lease)
+        })
     }
-    private func endBackgroundLease() {
-        guard backgroundLease != .invalid else { return }
-        let lease = backgroundLease; backgroundLease = .invalid; backgroundGeneration = nil
-        UIApplication.shared.endBackgroundTask(lease)
-    }
+    private func endBackgroundLease() { coach.endBackgroundLease() }
+
 }
 
 struct TodayView: View {

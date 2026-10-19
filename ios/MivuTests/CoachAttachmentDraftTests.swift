@@ -101,16 +101,11 @@ import Testing
         } catch { await gate.releaseAll(); _ = try? await importing.value; throw error }
     }
 
-    @Test(arguments: ["capture", "refresh"])
-    func failedSaveRetainsDraftAndOperationIdentity(stage: String) async throws {
-        let once = Task10Once()
-        let f = try await Task10Fixture.make(actionLoading: { owner, store in
-            let value = try await store.diaryReadModel(expectedProfileID: owner)
-            if stage == "refresh", await once.claim() { throw DiaryError.persistenceFailed }
-            return value
-        }); defer { f.remove() }
+    @Test
+    func failedSaveRetainsDraftAndOperationIdentity() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
         var dependencies = Task10Fixture.dependencies(f.diary)
-        if stage == "capture" { dependencies.capture = { _, _ in throw DiaryError.persistenceFailed } }
+        dependencies.capture = { _, _ in throw DiaryError.persistenceFailed }
         let photos = [MealPhoto(data: try Task10JPEG.tagged())]
         let requiredOwner = try #require(f.diary.selection)
         let draft = CoachAttachmentDraft(ownership: requiredOwner, limiter: f.diary.photoWorkLimiter,
@@ -122,20 +117,238 @@ import Testing
         #expect(draft.uncertainAttempt?.payload.submissionID == id)
         let actual = try await f.diary.store.snapshotForExport()
         #expect(actual.meals.isEmpty)
-        #expect(actual.coachTurns.count == (stage == "refresh" ? 1 : 0))
+        #expect(actual.coachTurns.isEmpty)
+    }
+
+    @Test(arguments: ["capture", "refresh"])
+    func backgroundLeaseAdmitsInFlightSendAndDrainsItsWorker(boundary: String) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let gate = Task10Gate(), analysis = Task10Gate(), lease = Task8LeaseProbe()
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture
+        if boundary == "capture" { dependencies.capture = { payload, owner in await gate.hold(0); return try await capture(payload, owner) } }
+        else { dependencies.refresh = { _ in await gate.hold(0) } }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), inference: { { _, _ in
+            await analysis.hold(0)
+            return CoachInferenceResult(model: "fixture", text: "Synthetic result", calls: [], outputItems: [])
+        } }, attachmentDependencies: dependencies)
+        defer { coach.cancel() }
+        let photo = try Task10JPEG.tagged()
+        coach.draft = MealDraft(text: "Pocket photo", photos: [photo])
+        let id = coach.draft.submissionID
+        let sending = Task10Fixture.operation(gate: gate) { await coach.send() }
+        do {
+            try await gate.waitForArrivals(1)
+            if boundary == "refresh" { #expect(coach.captureReceipt == id) }
+            coach.continueInBackground(begin: lease.begin, end: lease.end)
+            #expect(lease.begun == 1 && lease.ended == 0)
+            await gate.releaseAll()
+            #expect(try await sending.value)
+            try await analysis.waitForArrivals(1)
+            #expect(lease.ended == 0)
+            await analysis.releaseAll()
+            await coach.waitForBackgroundCompletion()
+            #expect(lease.ended == 1)
+            let stored = try await f.diary.store.snapshotForExport()
+            #expect(stored.coachTurns.map(\.id) == [id])
+            #expect(stored.coachTurns[0].photos.map(\.data) == [photo])
+        } catch { await gate.releaseAll(); await analysis.releaseAll(); _ = try? await sending.value; throw error }
+    }
+
+    @Test(arguments: [false, true])
+    func leaseStartsCaptureAcceptedWhileSceneWasInactive(refreshFails: Bool) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let refresh = Task10Gate(), lease = Task8LeaseProbe(), inference = Task8InferenceProbe()
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        dependencies.refresh = { _ in
+            if refreshFails { throw DiaryError.persistenceFailed }
+            await refresh.hold(0)
+        }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), inference: { { _, _ in
+            await inference.respond()
+        } }, attachmentDependencies: dependencies)
+        defer { coach.cancel() }
+        coach.draft.text = "Accepted during inactive transition"
+        coach.pauseForInactiveScene()
+        let sending = Task10Fixture.operation(gate: refresh) { await coach.send() }
+        do {
+            if refreshFails { #expect(try await sending.value) }
+            else { try await refresh.waitForArrivals(1) }
+            #expect(coach.captureReceipt != nil && !coach.isWorking)
+            coach.continueInBackground(begin: lease.begin, end: lease.end)
+            #expect(lease.begun == 1)
+            await refresh.releaseAll()
+            #expect(try await sending.value)
+            await coach.waitForBackgroundCompletion()
+            #expect(await inference.calls == 1)
+            #expect(lease.ended == 1)
+        } catch { await refresh.releaseAll(); _ = try? await sending.value; throw error }
+    }
+
+    @Test(arguments: ["denied", "expired"])
+    func unavailableBackgroundLeasePreservesAuthorizedLocalCapture(outcome: String) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let gate = Task10Gate(), lease = Task8LeaseProbe(allowed: outcome != "denied")
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture
+        dependencies.capture = { payload, owner in await gate.hold(0); return try await capture(payload, owner) }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), inference: { { _, _ in
+            Issue.record("Denied or expired background time must not launch inference")
+            return CoachInferenceResult(model: "fixture", text: "Synthetic result", calls: [], outputItems: [])
+        } }, attachmentDependencies: dependencies)
+        defer { coach.cancel() }
+        let photo = try Task10JPEG.tagged()
+        coach.draft = MealDraft(text: "Save despite expired time", photos: [photo])
+        let id = coach.draft.submissionID
+        let sending = Task10Fixture.operation(gate: gate) { await coach.send() }
+        do {
+            try await gate.waitForArrivals(1)
+            coach.continueInBackground(begin: lease.begin, end: lease.end)
+            #expect(lease.begun == 1)
+            if outcome == "expired" { lease.expire?() }
+            await gate.releaseAll()
+            #expect(try await sending.value)
+            await coach.waitForBackgroundCompletion(); await coach.waitForWorker()
+            #expect(coach.captureReceipt == id && coach.errorMessage == nil)
+            #expect(lease.ended == (outcome == "expired" ? 1 : 0))
+            let reopened = DiaryStore(directory: f.root)
+            _ = try await reopened.selectProfile(f.diary.selection!.identity.profileID)
+            #expect(try await reopened.snapshotForExport().coachTurns.map(\.id) == [id])
+            #expect(try await reopened.snapshotForExport().coachTurns[0].photos.map(\.data) == [photo])
+        } catch { await gate.releaseAll(); _ = try? await sending.value; throw error }
+    }
+
+    @Test func acceptedCaptureAcknowledgesSentAttemptWithoutClearingNewerDraft() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let gate = Task10Gate()
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture
+        dependencies.capture = { payload, owner in await gate.hold(0); return try await capture(payload, owner) }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), attachmentDependencies: dependencies)
+        coach.pauseForInactiveScene()
+        let photo = try Task10JPEG.tagged()
+        coach.draft = MealDraft(text: "Sent photo", photos: [photo])
+        let id = coach.draft.submissionID
+        let sending = Task10Fixture.operation(gate: gate) { await coach.send() }
+        do {
+            try await gate.waitForArrivals(1)
+            coach.draft = MealDraft(text: "Newer unsent draft", photos: [photo + Data([0])])
+            let newer = coach.draft
+            await gate.releaseAll()
+            #expect(try await sending.value)
+            #expect(coach.captureReceipt == id && coach.companionCaptureEvent?.operationID == id)
+            #expect(coach.draft == newer)
+            let stored = try await f.diary.store.snapshotForExport()
+            #expect(stored.coachTurns.map(\.id) == [id])
+            #expect(stored.coachTurns[0].text == "Sent photo" && stored.coachTurns[0].photos.map(\.data) == [photo])
+        } catch { await gate.releaseAll(); _ = try? await sending.value; throw error }
+    }
+
+    @Test func backgroundDrainDoesNotRestartExhaustedRetriesDuringLongRefresh() async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let refresh = Task10Gate(), lease = Task8LeaseProbe(), inference = Task8RetryProbe()
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        dependencies.refresh = { _ in await refresh.hold(0) }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), inference: { { _, _ in
+            try await inference.respond()
+        } }, sleep: { _ in }, attachmentDependencies: dependencies)
+        defer { coach.cancel() }
+        coach.draft.text = "Keep bounded retry budget"
+        let sending = Task10Fixture.operation(gate: refresh) { await coach.send() }
+        do {
+            try await refresh.waitForArrivals(1)
+            coach.continueInBackground(begin: lease.begin, end: lease.end)
+            await coach.waitForWorker()
+            #expect(await inference.calls == 4)
+            await refresh.releaseAll()
+            #expect(try await sending.value)
+            await coach.waitForBackgroundCompletion()
+            #expect(await inference.calls == 4)
+            #expect(lease.ended == 1)
+        } catch { await refresh.releaseAll(); _ = try? await sending.value; throw error }
+    }
+
+    @Test(arguments: ["expire", "foreground", "replacement"])
+    func backgroundCallbacksCannotInvalidateSavedInputOrNewerLease(transition: String) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let captureGate = Task10Gate(), analysis = Task10Gate(), first = Task8LeaseProbe(), second = Task8LeaseProbe()
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture
+        dependencies.capture = { payload, owner in await captureGate.hold(0); return try await capture(payload, owner) }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), inference: { { _, _ in
+            await analysis.hold(0)
+            return CoachInferenceResult(model: "fixture", text: "Synthetic result", calls: [], outputItems: [])
+        } }, attachmentDependencies: dependencies)
+        defer { coach.cancel() }
+        let photo = try Task10JPEG.tagged()
+        coach.draft = MealDraft(text: "Keep accepted input", photos: [photo])
+        let id = coach.draft.submissionID
+        let sending = Task10Fixture.operation(gate: captureGate) { await coach.send() }
+        do {
+            try await captureGate.waitForArrivals(1)
+            coach.continueInBackground(begin: first.begin, end: first.end)
+            let staleExpiration = first.expire
+            if transition != "expire" {
+                coach.endBackgroundLease()
+                if transition == "foreground" { coach.enterForeground() }
+                else { coach.continueInBackground(begin: second.begin, end: second.end) }
+                staleExpiration?()
+                #expect(first.ended == 1 && second.ended == 0)
+            }
+            await captureGate.releaseAll()
+            #expect(try await sending.value)
+            try await analysis.waitForArrivals(1)
+            if transition == "expire" { first.expire?(); #expect(first.ended == 1) }
+            if transition == "replacement" { #expect(second.ended == 0) }
+            await analysis.releaseAll()
+            await coach.waitForBackgroundCompletion(); await coach.waitForWorker()
+            #expect(coach.captureReceipt == id)
+            if transition == "replacement" { #expect(second.ended == 1) }
+            let stored = try await f.diary.store.snapshotForExport()
+            #expect(stored.coachTurns.map(\.id) == [id] && stored.coachTurns[0].photos.map(\.data) == [photo])
+            if transition == "expire" { #expect(stored.coachTurns[0].state != .completed) }
+        } catch {
+            await captureGate.releaseAll(); await analysis.releaseAll(); _ = try? await sending.value; throw error }
+    }
+
+    @Test(arguments: [false, true])
+    func committedPhotoAcknowledgesDespiteRefreshFailure(reconciled: Bool) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let once = Task10Once(), capture = dependencies.capture
+        dependencies.capture = { payload, owner in
+            let result = try await capture(payload, owner)
+            if reconciled, await once.claim() { throw DiaryError.persistenceFailed }
+            return result
+        }
+        dependencies.refresh = { _ in throw DiaryError.persistenceFailed }
+        let photo = MealPhoto(data: try Task10JPEG.tagged())
+        let draft = CoachAttachmentDraft(ownership: f.diary.selection, limiter: f.diary.photoWorkLimiter,
+            dependencies: dependencies, text: "Durable photo", attachments: [photo])
+        let id = draft.submissionID
+        if reconciled {
+            await #expect(throws: DiaryError.persistenceFailed) { _ = try await draft.send() }
+            #expect(draft.captureReceipt == nil && draft.uncertainAttempt != nil)
+        }
+        #expect(try await draft.send()?.id == id)
+        #expect(draft.captureReceipt == id && draft.text.isEmpty && draft.attachments.isEmpty)
+        #expect(draft.uncertainAttempt == nil)
+        let stored = try await f.diary.store.snapshotForExport()
+        #expect(stored.coachTurns.map(\.id) == [id] && stored.coachTurns[0].photos == [photo])
     }
 
     @Test func uncertainSaveThenEditedDraftReconcilesBeforeNewSubmission() async throws {
         let once = Task10Once(), trace = Task10SubmissionTrace()
-        let f = try await Task10Fixture.make(actionLoading: { owner, store in
-            let result = try await store.diaryReadModel(expectedProfileID: owner)
-            if await once.claim() { throw DiaryError.persistenceFailed }
-            return result
-        }); defer { f.remove() }
+        let f = try await Task10Fixture.make(); defer { f.remove() }
         var dependencies = Task10Fixture.dependencies(f.diary)
         dependencies.normalize = { bytes, _ in bytes }
         let capture = dependencies.capture, reconcile = dependencies.reconcile
-        dependencies.capture = { payload, owner in await trace.capture(payload); return try await capture(payload, owner) }
+        dependencies.capture = { payload, owner in
+            await trace.capture(payload)
+            let result = try await capture(payload, owner)
+            if await once.claim() { throw DiaryError.persistenceFailed }
+            return result
+        }
         dependencies.reconcile = { id, manifest, owner in await trace.reconcile(id, manifest); return try await reconcile(id, manifest, owner) }
         let originalPhoto = MealPhoto(data: try Task10JPEG.tagged(), createdAt: Date(timeIntervalSinceReferenceDate: 700), role: .before)
         let requiredOwner = try #require(f.diary.selection)
@@ -166,11 +379,8 @@ import Testing
 
     @Test(arguments: ["failure", "conflict"])
     func unresolvedOriginalAttemptCannotMintEditedSubmission(outcome: String) async throws {
-        let once = Task10Once(), trace = Task10SubmissionTrace()
-        let f = try await Task10Fixture.make(actionLoading: { owner, store in
-            let result = try await store.diaryReadModel(expectedProfileID: owner)
-            if await once.claim() { throw DiaryError.persistenceFailed }; return result
-        }); defer { f.remove() }
+        let trace = Task10SubmissionTrace()
+        let f = try await Task10Fixture.make(); defer { f.remove() }
         var dependencies = Task10Fixture.dependencies(f.diary)
         let capture = dependencies.capture
         dependencies.capture = { payload, owner in
@@ -181,7 +391,8 @@ import Testing
                 _ = try await capture(different, owner)
                 throw DiaryError.persistenceFailed
             }
-            return try await capture(payload, owner)
+            _ = try await capture(payload, owner)
+            throw DiaryError.persistenceFailed
         }
         if outcome == "failure" { dependencies.reconcile = { _, _, _ in throw DiaryError.persistenceFailed } }
         let requiredOwner = try #require(f.diary.selection)
@@ -247,7 +458,7 @@ import Testing
         #expect(actual.coachTurns[0].submissionManifest == manifest)
     }
 
-    @Test func actualCoachSendReconcilesCommittedOriginalBeforeSendingEditedDraft() async throws {
+    @Test func actualCoachSendAcknowledgesCommittedOriginalDespiteRefreshFailure() async throws {
         let once = Task10Once()
         let f = try await Task10Fixture.make(actionLoading: { owner, store in
             let result = try await store.diaryReadModel(expectedProfileID: owner)
@@ -257,8 +468,8 @@ import Testing
         defer { coach.cancel() }
         coach.draft.text = "Actual original"
         let id = coach.draft.submissionID
-        #expect(!(await coach.send()))
-        #expect(coach.captureReceipt == nil && coach.draft.submissionID == id)
+        #expect(await coach.send())
+        #expect(coach.captureReceipt == id && coach.draft.text.isEmpty && coach.errorMessage == nil)
         let first = try await f.diary.store.snapshotForExport()
         #expect(first.coachTurns.map(\.text) == ["Actual original"])
         coach.draft.text = "Actual edited input"
@@ -296,13 +507,17 @@ import Testing
     @Test(arguments: ["ABA", "restore"], ["capture", "captureAcknowledgement", "reconcile", "reconcileAcknowledgement"])
     func storeEntryRejectsObsoleteDraftOwnership(change: String, boundary: String) async throws {
         let once = Task10Once(), gate = Task10Gate()
-        let f = try await Task10Fixture.make(actionLoading: { owner, store in
-            let result = try await store.diaryReadModel(expectedProfileID: owner)
-            if boundary.hasPrefix("reconcile"), await once.claim() { throw DiaryError.persistenceFailed }; return result
-        }); defer { f.remove() }
+        let f = try await Task10Fixture.make(); defer { f.remove() }
         let owner = try #require(f.diary.selection)
         var dependencies = Task10Fixture.dependencies(f.diary)
         let capture = dependencies.capture, reconcile = dependencies.reconcile
+        if boundary.hasPrefix("reconcile") {
+            dependencies.capture = { payload, owner in
+                let result = try await capture(payload, owner)
+                if await once.claim() { throw DiaryError.persistenceFailed }
+                return result
+            }
+        }
         if boundary == "capture" { dependencies.capture = { payload, owner in await gate.hold(0); return try await capture(payload, owner) } }
         else if boundary == "captureAcknowledgement" { dependencies.capture = { payload, owner in let result = try await capture(payload, owner); await gate.hold(0); return result } }
         else if boundary == "reconcile" { dependencies.reconcile = { id, manifest, owner in await gate.hold(0); return try await reconcile(id, manifest, owner) } }
@@ -339,10 +554,12 @@ import Testing
         let sending = Task10Fixture.operation(gate: gate) { try await draft.send() }
         do {
             try await gate.waitForArrivals(1)
+            #expect(draft.captureReceipt == id)
+            #expect(draft.text.isEmpty && draft.attachments.isEmpty)
             draft.text = "Edited during acknowledgement"
             await gate.releaseAll(); _ = try await sending.value
-            #expect(draft.text == "Edited during acknowledgement" && draft.attachments == [photo])
-            #expect(draft.captureReceipt == nil)
+            #expect(draft.text == "Edited during acknowledgement" && draft.attachments.isEmpty)
+            #expect(draft.captureReceipt == id)
             let stored = try await f.diary.store.snapshotForExport()
             #expect(stored.coachTurns.map(\.id) == [id])
             #expect(stored.coachTurns[0].text == "Pressed send" && stored.coachTurns[0].photos == [photo])
@@ -466,4 +683,30 @@ private final class Task10SynchronousStage: Sendable {
         return data
     }
     func release() { semaphore.signal() }
+}
+
+@MainActor private final class Task8LeaseProbe {
+    let allowed: Bool
+    var begun = 0
+    var ended = 0
+    var expire: (@MainActor () -> Void)?
+    init(allowed: Bool = true) { self.allowed = allowed }
+    func begin(_ expire: @escaping @MainActor () -> Void) -> Bool { begun += 1; self.expire = expire; return allowed }
+    func end() { ended += 1 }
+}
+
+private actor Task8InferenceProbe {
+    private(set) var calls = 0
+    func respond() -> CoachInferenceResult {
+        calls += 1
+        return CoachInferenceResult(model: "fixture", text: "Synthetic result", calls: [], outputItems: [])
+    }
+}
+
+private actor Task8RetryProbe {
+    private(set) var calls = 0
+    func respond() throws -> CoachInferenceResult {
+        calls += 1
+        throw URLError(.notConnectedToInternet)
+    }
 }
