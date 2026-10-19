@@ -45,7 +45,8 @@
 | `ios/Mivu/Resources/Characters/pip/pip-rig.json` | Generated runtime rig |
 | `ios/Mivu/Design/PipRigAsset.swift` | Decodable rig + validation + SVG path → `CGPath` |
 | `ios/Mivu/Design/PipRigView.swift` | Layer tree, `apply(pose:animated:)`, breathing, face shapes |
-| `ios/Mivu/Design/PipPose.swift` | `PipPose`, `PipGesture`, the gesture library per moment |
+| `ios/Mivu/Design/PipPose.swift` | `PipPose`, `PipGesture` types and the spring player contract |
+| `ios/Mivu/Design/PipGestureLibrary.swift` | The gesture catalogue: one entry per gesture, and the single moment → gesture map (the only file to edit when adding a gesture) |
 | `ios/Mivu/Design/PipIdleScheduler.swift` | Pure idle beat selection with injected clock/RNG |
 | `ios/Mivu/Design/CompanionPresentation.swift` | + new moments, touch, welcome-back |
 | `ios/Mivu/Design/CompanionRuntime.swift` | Same API; drives `PipRigView` instead of Lottie |
@@ -158,8 +159,15 @@ Removed in Task 9: Lottie SPM package, `pip.json`, `pip-artwork*.png`, `pip-*eye
   - Saccades: gaze changes snap fast (~60 ms, slight overshoot) instead of drifting.
   - `PipRigView.blink()` and `PipRigView.look(at: CGPoint, animated: Bool)` are public so idle (Task 5) and typing (Task 7) can drive them.
 
+- Extensibility (owner: adding gestures/moves later must be easy):
+  - All gestures live in `PipGestureLibrary.swift` as `static let all: [PipGesture]`, each built with a small readable builder, e.g. `PipGesture("saved") { $0.at(0.07, \.nod(-6)); $0.at(0.19, \.pawUp(.right)); $0.settle(at: 0.45) }` — named joint helpers (`nod`, `tilt`, `earPerk`, `pawUp`, `hop`, `squash`, `tailWag`, `eyes`, `mouth`, `hearts`, `blush`, `look`) instead of raw joint dictionaries.
+  - One `static func gesture(for moment: PipMoment) -> PipGesture` switch is the only mapping from app moments; variants (e.g. tap levels, greeting by hour) are picked there.
+  - Validation tests iterate `PipGestureLibrary.all`, so any new gesture is automatically checked (ends at rest, ≤ 2 s unless a loop, squash/feet caps, unique name, recovery-safe faces) with no new test code.
+  - `PipRigPreview` lists `PipGestureLibrary.all` automatically (one button per gesture), so a new gesture is immediately reviewable on the simulator.
+
 - [ ] **Step 1: Failing tests:**
-  - `PipGestureTests.everyMomentHasAGestureEndingAtRest` — for all moments except loops, last key pose == `.rest` (same set) and duration ≤ 2.0 s.
+  - `PipGestureTests.everyLibraryGestureEndsAtRestWithinTwoSeconds` — iterates `PipGestureLibrary.all` (loops excluded): last key == `.rest` (same set), duration ≤ 2.0 s; names unique.
+  - `PipGestureTests.everyMomentMapsToALibraryGesture` — for every `PipMoment` case, `gesture(for:)` returns a gesture contained in `all`.
   - `PipGestureTests.spokenTimingsMatchSpec` — greeting 0.70 ±0.01, saved 0.45 ±0.01, reviewed 0.65 ±0.01; submitted first key ≤ 0.1 and duration ≤ 0.8.
   - `PipGestureTests.squashAndFeetStayInCaps` — every key: joint scales within 0.9…1.1; `foot-*` offsets y ≤ 0 (never below ground) and final y == 0.
   - `PipGestureTests.recoveryIsNeverCheerful` — recovery keys never use `bigOpen`, `closedHappy`, hearts or blush.
@@ -167,7 +175,7 @@ Removed in Task 9: Lottie SPM package, `pip.json`, `pip-artwork*.png`, `pip-*eye
   - `PipRigViewTests.blinkAnimatesUpperLid` — `blink()` adds a position/path animation on `lid-upper-l` and `lid-upper-r` with total duration 0.2 ±0.02 s and ends open.
   - `PipRigViewTests.interruptStartsFromPresentationValue` — play `saved`, after 0.2 s play `tapped(level: 0)`; first added animation's `fromValue` equals the head layer's presentation rotation at interrupt time (±0.001).
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement** library + `play`. **Step 4: Run** → PASS.
-- [ ] **Step 5: Add Talk/gesture buttons for every moment to `PipRigPreview`; screen-record all gestures to `docs/verification/pip-layered-rig/gestures/`.**
+- [ ] **Step 5: Make `PipRigPreview` list `PipGestureLibrary.all` as buttons; screen-record all gestures to `docs/verification/pip-layered-rig/gestures/`.**
 - [ ] **Step 6: Commit** `feat(pip): add spring-driven gesture library`.
 
 ### Task 5: Idle life and breathing
@@ -270,6 +278,7 @@ Removed in Task 9: Lottie SPM package, `pip.json`, `pip-artwork*.png`, `pip-*eye
 
 - [ ] **Step 1:** `grep -rn "Lottie\|lottie\|pip.json\|pip-artwork" ios .agents design-system` → list every reference.
 - [ ] **Step 2:** Delete files and package; fix remaining references.
+- [ ] **Step 3a: Agent and contributor files.** Update every agentic file to the new rig: `AGENTS.md` ("Companion animation work" section: native rig, no Lottie; Pip art source `rig/pip.svg`), `.agents/skills/mivu-animation/SKILL.md` (owner table, rules), `.agents/skills/mivu-animation/references/verification.md` (commands, suites), and add `.agents/skills/mivu-animation/references/adding-a-gesture.md`: a step-by-step recipe — (1) add the entry in `PipGestureLibrary.swift` with the builder, (2) if it is a new app event, add a `PipMoment` case + `CompanionPose`/event + priority slot in `CompanionPresentation`, (3) map it in `gesture(for:)`, (4) run the library tests (automatic), (5) review it in `PipRigPreview` (`-PipRigPreview`), (6) record evidence. Include a note on adding a new part/shape to `pip.svg` (ids, pivots, `build.py`, tests). Link the recipe from SKILL.md and AGENTS.md. Grep `.agents`, `AGENTS.md`, `CLAUDE.md`, `docs/development` for `Lottie|pip.json|lottie-source` and fix every live reference (leave historical docs).
 - [ ] **Step 3:** Rewrite MOTION.md to the new contract (rig, moments table, timings, loosened caps, policy); skill owner table → `rig/pip.svg`, `rig/build.py`, `PipRigView`, `PipPose`, `PipIdleScheduler`; verification recipe → `.venv/bin/python rig/build.py --png && .venv/bin/python rig/test_rig.py` and the new Swift suites; manifest hashes for new files.
 - [ ] **Step 4:** XcodeBuildMCP clean build + full `MivuTests` → PASS, zero Lottie symbols; repeat Step 1 grep → only historical docs.
 - [ ] **Step 5: Commit** `refactor(pip): remove Lottie atlas pipeline`.
