@@ -31,14 +31,14 @@ struct CompanionView: View {
         .frame(width: frame.width, height: frame.height)
         .environment(\.colorScheme, darkMode ? .dark : .light)
         .contentShape(Rectangle())
-        .gesture(TapGesture().onEnded {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            onTouch(.tap)
-        }, including: animated ? .all : .none)
+        // A hold must not also count as a tap, so the pat is tried first and the tap only follows its failure.
         .gesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             onTouch(.pat)
-        }, including: animated ? .all : .none)
+        }.exclusively(before: TapGesture().onEnded {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onTouch(.tap)
+        }), including: animated ? .all : .none)
         .accessibilityHidden(true)
     }
 }

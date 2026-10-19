@@ -166,6 +166,83 @@ import XCTest
         XCTAssertTrue(app.buttons["coachMealLink"].firstMatch.waitForExistence(timeout: 15))
     }
 
+    private func trail(_ app: XCUIApplication) -> String {
+        app.staticTexts["companionDebugPose"].value as? String ?? ""
+    }
+
+    /// Poses are brief, so the probe keeps every pose the root applied (named after CompanionPose cases).
+    private func waitForPose(_ expected: String, in app: XCUIApplication) -> Bool {
+        let probe = app.staticTexts["companionDebugPose"]
+        let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", "[" + expected + "]"), object: probe)
+        return XCTWaiter().wait(for: [match], timeout: 6) == .completed
+    }
+
+    private func pip(in app: XCUIApplication) -> XCUICoordinate {
+        let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
+        XCTAssertTrue(strip.waitForExistence(timeout: 5))
+        return strip.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5))
+    }
+
+    /// Pip is accessibility-hidden on Today, so it is reached by position within the summary card area.
+    private func todayPip(in app: XCUIApplication) -> XCUICoordinate {
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.4))
+    }
+
+    private func assertTouches(_ pip: XCUICoordinate, in app: XCUIApplication, surface: String) {
+        XCTAssertFalse(trail(app).contains("[tapped]") || trail(app).contains("[patted]"))
+        pip.tap()
+        XCTAssertTrue(waitForPose("tapped", in: app), surface + ": tap should play tapped; saw " + trail(app))
+        XCTAssertFalse(trail(app).contains("[patted]"), surface + ": a tap must not pat")
+        Thread.sleep(forTimeInterval: 1.2) // tapped pose ends
+        let tapsBeforeHold = trail(app).components(separatedBy: "[tapped]").count
+        pip.press(forDuration: 0.8)
+        XCTAssertTrue(waitForPose("patted", in: app), surface + ": hold should play patted; saw " + trail(app))
+        XCTAssertEqual(trail(app).components(separatedBy: "[tapped]").count, tapsBeforeHold, surface + ": a hold must not also tap")
+    }
+
+    func testTapAndLongPressOnPipReachTheRuntime() {
+        let app = launch()
+        assertTouches(pip(in: app), in: app, surface: "Coach")
+    }
+
+    func testTapAndLongPressOnTodayPipReachTheRuntime() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
+        Thread.sleep(forTimeInterval: 4) // let the greeting finish
+        assertTouches(todayPip(in: app), in: app, surface: "Today")
+    }
+
+    func testFirstMealOfTheDayOnTodayPlaysTheFirstMealMoment() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
+        app.buttons["logMeal"].tap()
+        let note = app.textFields["mealText"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        note.tap(); note.typeText("Synthetic breakfast")
+        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
+        app.buttons["sendMeal"].tap()
+        XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForPose("firstMealToday", in: app), "first saved meal of the day; saw " + trail(app))
+    }
+
+    func testTapOnPipDoesNotStealComposerFocus() {
+        let app = launch()
+        enter("Synthetic note", in: app)
+        let input = app.textFields["coachInput"]
+        pip(in: app).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        XCTAssertEqual(input.value as? String, "Synthetic note")
+        input.typeText(" continues")
+        XCTAssertEqual(input.value as? String, "Synthetic note continues")
+        let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
+        let pipLike = NSPredicate(format: "label CONTAINS[c] 'pip' OR identifier CONTAINS[c] 'pip' OR identifier CONTAINS[c] 'companion'")
+        XCTAssertEqual(strip.descendants(matching: .any).matching(pipLike).count, 0, "Pip must stay out of the accessibility tree")
+    }
+
     func testTypingDuringSavedReactionKeepsComposerFocused() {
         let app = launch()
         enter("Two eggs, three bread slices and salad", in: app); app.buttons["coachSend"].tap()

@@ -110,6 +110,11 @@ import UIKit
         _ = try await loader.thumbnail(for: reference, pixelSize: 64)
         await loader.purgeForMemoryPressure()
         _ = try await loader.thumbnail(for: reference, pixelSize: 64)
+        let beforeImport = outputs.count, triggersBeforeImport = runtime.triggerCount
+        #expect(triggersBeforeImport == triggers)
+        #expect(outputs[firstOutput..<beforeImport].allSatisfy {
+            $0.pose == .resting && $0.reactionID == nil && $0.playback == .animated
+        }, "Paging, eviction, seek and thumbnail delivery must remain quiet at the real root")
         let presentation = try coach.attachmentDraft.beginPresentation()
         let draftID = coach.attachmentDraft.submissionID
         let photoID = UUID()
@@ -120,10 +125,11 @@ import UIKit
         await timeline.jumpToLatest()
         #expect(coach.companionSubmission == submission && coach.companionCaptureEvent == saved)
         #expect(coach.captureReceipt == capture && diary.companionReviewEvent == reviewed)
-        #expect(runtime.triggerCount == triggers)
-        #expect(outputs.dropFirst(firstOutput).allSatisfy {
-            $0.pose == .resting && $0.reactionID == nil && $0.playback == .animated
-        }, "Paging, eviction, seek, thumbnail delivery and unsent imports must remain quiet at the real root")
+        // An accepted unsent photo is the one decorative moment: a curious look, never a saved or reviewed reaction.
+        #expect(coach.companionPhotoEvent?.kind == .photoAdded)
+        #expect(outputs.dropFirst(beforeImport).allSatisfy {
+            ($0.pose == .resting || $0.pose == .curious) && $0.playback == .animated
+        })
         #expect(try fixture.rows("SELECT COUNT(*) FROM coach_turn") == [["140"]])
     }
 
@@ -274,7 +280,7 @@ import UIKit
         try #require(await eventually { !diary.isChangingProfile && !diary.isSaving })
         let captured = await diary.capture(draft, dayID: day)
         try #require(captured, "Synthetic capture failed: \(diary.errorMessage ?? "no error"); saving=\(diary.isSaving), changing=\(diary.isChangingProfile), canceled=\(Task.isCancelled)")
-        try #require(await eventually { latest?.pose == .saved })
+        try #require(await eventually { latest?.pose == .firstMealToday })
         #expect(runtime.triggerCount == 0)
         let deadline = try #require(latest?.nextDeadline)
         if expired { try #require(await eventually { latest?.pose == .resting }) }
@@ -285,7 +291,7 @@ import UIKit
             #expect(runtime.displayedPose == .resting)
         } else {
             #expect(await eventually { runtime.triggerCount == 1 }, "A still-current save must play when the first player becomes ready")
-            #expect(runtime.displayedPose == .saved)
+            #expect(runtime.displayedPose == .firstMealToday)
         }
         #expect(diary.readModel?.meals.count == 1, "Character loading must not duplicate or lose the saved record")
     }

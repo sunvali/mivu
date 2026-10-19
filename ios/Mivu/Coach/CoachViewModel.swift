@@ -28,6 +28,7 @@ private final class CoachNavigationReadFence: Sendable {
     private(set) var captureReceipt: UUID?
     private(set) var companionCaptureEvent: CompanionEvent?
     private(set) var companionSubmission: CompanionSubmission?
+    private(set) var companionPhotoEvent: CompanionEvent?
     private(set) var isSending = false
     private(set) var isWorking = false
     private(set) var activity: CoachActivity?
@@ -65,6 +66,13 @@ private final class CoachNavigationReadFence: Sendable {
         attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter, dependencies: dependencies)
         self.inference = inference ?? { try connection.coachInference() }
         self.lookup = lookup; self.sleep = sleep
+        attachmentDraft.onPhotoAccepted = { [weak self] in
+            guard let self, let owner = self.diary.selection?.identity.profileID else { return }
+            let operation = self.attachmentDraft.submissionID
+            if self.companionPhotoEvent?.profileID != owner || self.companionPhotoEvent?.operationID != operation {
+                self.companionPhotoEvent = CompanionEvent(profileID: owner, operationID: operation, kind: .photoAdded, committedAt: Date())
+            }
+        }
     }
 
     private(set) var timeline: CoachTimelineViewModel?

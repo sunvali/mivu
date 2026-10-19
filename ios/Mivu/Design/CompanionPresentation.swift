@@ -80,6 +80,9 @@ struct CompanionContext {
     var needsRecovery: Bool
     var playback: MotionPolicy.Playback
     var draftLength: Int = 0
+
+    /// The gaze only follows the first 60 characters, so longer drafts need no further updates.
+    static func draftSignal(_ length: Int) -> Int { min(max(length, 0), 60) }
 }
 
 enum CompanionTouch { case tap, pat }
@@ -177,7 +180,7 @@ struct CompanionOutput: Equatable {
             self.pending = nil
         }
         lastContext = context
-        typingProgress = min(1, max(0, Double(context.draftLength) / 60))
+        typingProgress = Double(CompanionContext.draftSignal(context.draftLength)) / 60
         let semanticPose: CompanionPose = context.needsRecovery ? .recovery
             : context.isTyping ? .attentive : context.isProcessing ? .thinking : .resting
         let playback: MotionPolicy.Playback = profileID == nil || context.surface == nil
@@ -311,5 +314,20 @@ struct CompanionOutput: Equatable {
         CompanionOutput(pose: pose, playback: playback, reactionID: reaction?.id,
                         nextDeadline: reaction?.deadline ?? deadline,
                         tapLevel: pose == .tapped ? reaction?.tapLevel ?? 0 : 0, typingProgress: typingProgress)
+    }
+}
+
+/// Remembers when each profile last used the app, so Pip can welcome them back after a day away.
+struct CompanionLastActive {
+    let defaults: UserDefaults
+    private func key(_ profileID: UUID) -> String { "companion.lastActive." + profileID.uuidString }
+    func date(for profileID: UUID) -> Date? { defaults.object(forKey: key(profileID)) as? Date }
+    func record(_ date: Date, for profileID: UUID) { defaults.set(date, forKey: key(profileID)) }
+
+    /// Attaches the presentation with this profile's stored last-active date so a day away becomes a welcome back.
+    @MainActor func attach(_ presentation: CompanionPresentation, profileID: UUID?, existingEvents: [CompanionEvent],
+                           existingSubmissions: [CompanionSubmission], now: Date) {
+        presentation.attach(profileID: profileID, existingEvents: existingEvents, existingSubmissions: existingSubmissions,
+                            now: now, lastActiveAt: profileID.flatMap { date(for: $0) })
     }
 }

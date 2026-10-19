@@ -44,6 +44,7 @@ struct MealDraft: Equatable {
     private(set) var captureReceipt: UUID?
     private(set) var companionCaptureEvent: CompanionEvent?
     private(set) var companionReviewEvent: CompanionEvent?
+    private(set) var companionHabitEvent: CompanionEvent?
     private var companionReviewSubmissions: [UUID: Set<UUID>] = [:]
     var restoreGeneration = 0
     var backupStatus = FolderBackupStatus()
@@ -204,8 +205,16 @@ struct MealDraft: Equatable {
     }
     @discardableResult func change(_ operation: () async throws -> Void) async -> Bool {
         guard !isChangingProfile, let token = selection else { return false }
-        do { try await operation(); try await refresh(profileID: token.identity.profileID); return !Task.isCancelled && selection == token }
-        catch { if selection == token { present(error) }; return false }
+        let before = activeDay
+        do {
+            try await operation(); try await refresh(profileID: token.identity.profileID)
+            let committed = !Task.isCancelled && selection == token
+            // A day becoming complete is a habit moment; it never gates or delays the change.
+            if committed, let before, before.completeness != .complete, activeDay?.id == before.id, activeDay?.completeness == .complete {
+                companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: before.id, kind: .dayComplete, committedAt: Date())
+            }
+            return committed
+        } catch { if selection == token { present(error) }; return false }
     }
     @discardableResult func acceptReview(mealID: UUID, submissionID: UUID, expectedProfileID: UUID, currentTime: () -> Date = Date.init) async -> Bool {
         guard selection?.identity.profileID == expectedProfileID else { return false }
@@ -239,6 +248,10 @@ struct MealDraft: Equatable {
                 }
                 attempt = (token, draft, photos, prior == nil); manualCaptureAttempt = attempt
             }
+            // Known before the write: nothing has been recorded yet on the day being saved into.
+            // The view model may not have refreshed after a day was just started, so ask the store about this one day.
+            let firstOfDay = (try? await store.diaryDay(id: dayID, expectedProfileID: token.identity.profileID))
+                .map { $0.head.activeDayID == dayID && $0.meals.isEmpty } ?? false
             let saved = try await store.captureProjection(text: draft.text, photos: attempt.photos, reviewFirst: draft.reviewFirst,
                 dayID: dayID, at: at, dateOnly: dateOnly, submissionID: draft.submissionID, forCoach: !sampleMode, expectedSelection: token, expectedProfileID: token.identity.profileID)
             try await refresh(profileID: token.identity.profileID)
@@ -247,6 +260,9 @@ struct MealDraft: Equatable {
             if attempt.isNew, companionCaptureEvent?.profileID != token.identity.profileID || companionCaptureEvent?.operationID != draft.submissionID {
                 captureReceipt = draft.submissionID
                 companionCaptureEvent = CompanionEvent(profileID: token.identity.profileID, operationID: draft.submissionID, kind: .saved, committedAt: Date())
+            }
+            if attempt.isNew, firstOfDay, companionHabitEvent?.operationID != draft.submissionID {
+                companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: draft.submissionID, kind: .firstMealToday, committedAt: Date())
             }
             resumeWorker(); return true
         } catch { if selection == token { present(error) }; return false }
