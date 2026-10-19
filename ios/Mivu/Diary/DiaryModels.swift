@@ -88,6 +88,7 @@ struct MealSubmission: Codable, Equatable, Sendable, Identifiable {
     var reviewFirst: Bool
     var state: SubmissionState = .captured
     var proposal: AnalysisOutput? = nil
+    var manualAcceptance: ManualNutritionAcceptance? = nil
 }
 
 struct DiaryMeal: Codable, Equatable, Sendable, Identifiable {
@@ -293,6 +294,10 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
                       submission.photoIDs.allSatisfy({ id in meal.photos.contains { $0.id == id } })
                 else { throw DiaryError.invalidData }
                 try validateMealSubmissionFields(submission, mealID: meal.id, mealRevision: meal.revision, profileID: profile.id)
+                if let acceptance = submission.manualAcceptance {
+                    let target = acceptance.target.day
+                    guard days.contains(where: { $0.id == target.id && $0.localDate == target.localDate && $0.timeZoneID == target.timeZoneID }) else { throw DiaryError.invalidData }
+                }
             }
         }
         guard coachTurns.count <= 10_000, unique(coachTurns.map(\.id)) else { throw DiaryError.invalidData }
@@ -403,6 +408,10 @@ func validateMealSubmissionFields(_ submission: MealSubmission, mealID: UUID, me
         guard proposal.schemaVersion == 1, proposal.profileID == profileID, proposal.mealID == mealID,
               proposal.submissionID == submission.id, proposal.baseRevision == submission.baseRevision else { throw DiaryError.invalidData }
         try validateItems(proposal.items)
+    }
+    if let acceptance = submission.manualAcceptance {
+        guard mealRevision > submission.baseRevision else { throw DiaryError.invalidData }
+        try validateManualAcceptance(acceptance, submission: submission, mealID: mealID, profileID: profileID)
     }
 }
 

@@ -220,6 +220,18 @@ import Testing
         }
     }
 
+    @Test func manualAcceptanceBytesAreIncludedInPortableQuota() throws {
+        let snapshot = try ManualNutritionPayloadTests.snapshot()
+        var legacy = snapshot; legacy.meals[0].submissions[0].manualAcceptance = nil
+        #expect(try JSONEncoder().encode(snapshot).count > JSONEncoder().encode(legacy).count)
+        let url = try ChatHistoryFixture.makeDatabase(snapshot)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try DiaryDatabase(url: url).migrateForPagedStorage(maximumBytes: ChatHistoryFixture.maximumBytes)
+        #expect(try ChatHistoryFixture.strings(url, "SELECT portableBytes FROM storage_quota") == [[String(try JSONEncoder().encode(snapshot).count)]])
+        #expect(try ChatHistoryFixture.strings(url, "PRAGMA user_version") == [["1"]])
+        #expect(try ChatHistoryFixture.completeReference(databaseURL: url) == snapshot)
+    }
+
     @Test func storageBudgetMatchesPortableEncoding() throws {
         let before = ChatHistoryFixture.snapshot()
         let url = try ChatHistoryFixture.makeDatabase(before)
