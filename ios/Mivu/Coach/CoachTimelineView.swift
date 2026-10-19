@@ -19,7 +19,9 @@ struct CoachTimelineView: UIViewRepresentable {
     var diagnostics: CoachTimelineDiagnostics? = nil
     var jumpToLatest: (@MainActor () -> Void)? = nil
     typealias ViewportRefresh = @MainActor () -> Void
+    typealias AccessibilityPageRequest = @MainActor (CoachPageDirection) -> Bool
     var onViewportRefreshReady: (@MainActor (@escaping ViewportRefresh) -> Void)? = nil
+    var onAccessibilityPageRequestReady: (@MainActor (@escaping AccessibilityPageRequest) -> Void)? = nil
     let content: (CoachTimelineRow) -> AnyView
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
@@ -36,7 +38,12 @@ struct CoachTimelineView: UIViewRepresentable {
         table.onViewport = { [weak coordinator = context.coordinator] in coordinator?.reportViewport() }
         context.coordinator.table = table
         context.coordinator.baselineCompletion()
-        Task { @MainActor [weak table] in onViewportRefreshReady? { [weak table] in table?.refreshViewportNow() } }
+        Task { @MainActor [weak table, weak coordinator = context.coordinator] in
+            onViewportRefreshReady? { [weak table] in table?.refreshViewportNow() }
+            onAccessibilityPageRequestReady? { [weak coordinator] direction in
+                coordinator?.requestAccessibilityPage(direction) ?? false
+            }
+        }
         return table
     }
     func updateUIView(_ table: CoachTimelineTable, context: Context) {
@@ -58,6 +65,7 @@ struct CoachTimelineView: UIViewRepresentable {
         let typeChanged = table.typeSize != nil && table.typeSize != typeSize
         let appearanceChanged = table.typeSize != typeSize || table.colorScheme != colorScheme
         context.coordinator.updateJumpButton(in: table, appearanceChanged: appearanceChanged)
+        context.coordinator.updatePagingAccessibility(in: table)
         // A model revision carries a new command. Same-revision measurements are feedback,
         // not another scroll command to replay while the reader moves.
         if isNewRender {
@@ -187,6 +195,31 @@ struct CoachTimelineView: UIViewRepresentable {
             cell.contentConfiguration = UIHostingConfiguration {
                 owner.content(row).dynamicTypeSize(owner.typeSize).environment(\.colorScheme, owner.colorScheme)
             }.margins(.horizontal, 20).margins(.vertical, 8)
+        }
+        func updatePagingAccessibility(in table: CoachTimelineTable) {
+            table.accessibilityCustomActions = [CoachPageDirection.earlier, .later].compactMap { direction in
+                let name: String
+                switch owner.timeline.window.edgeState(direction) {
+                case .available: name = direction == .earlier ? "Load earlier messages" : "Load later messages"
+                case .failed: name = direction == .earlier ? "Retry earlier messages" : "Retry later messages"
+                case .loading, .exhausted: return nil
+                }
+                return UIAccessibilityCustomAction(name: name) { [weak self] _ in
+                    self?.requestAccessibilityPage(direction) ?? false
+                }
+            }
+        }
+        func requestAccessibilityPage(_ direction: CoachPageDirection) -> Bool {
+            guard let table, table.hasApplied(owner.timeline), !table.isApplyingRows,
+                  let anchor = table.measuredAnchor() else { return false }
+            switch owner.timeline.window.edgeState(direction) {
+            case .loading, .exhausted: return false
+            case .available, .failed: break
+            }
+            table.followsLatest = false; table.readingAnchor = anchor
+            reportViewport()
+            let request = direction == .earlier ? owner.timeline.loadEarlier(anchor: anchor) : owner.timeline.loadLater(anchor: anchor)
+            return request != nil
         }
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             guard let table = scrollView as? CoachTimelineTable else { return }

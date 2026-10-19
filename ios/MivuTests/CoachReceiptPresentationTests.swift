@@ -74,6 +74,64 @@ import UIKit
         #expect(legacy.committedMacros == nil)
         #expect(legacy.estimateLabel == nil)
     }
+
+    private func currentMeal(_ receipt: CoachCommittedReceipt, revision: Int = 1) -> MealReadModel {
+        MealReadModel(id: receipt.mealID!, dayID: receipt.dayID!, capturedAt: Date(), eatenAt: Date(), revision: revision,
+            items: receipt.items.map { FoodItem(id: $0.itemID, name: $0.name, quantity: $0.quantity, unit: $0.unit,
+                nutrition: $0.nutrition ?? NutritionValues(), provenance: $0.provenance ?? .sample, uncertain: $0.uncertain ?? true) },
+            submissions: [], photos: [])
+    }
+
+    @Test func unchangedFactsHideCurrentSectionDespiteUnrelatedRevisionChanges() {
+        let receipt = receipt()
+        var meal = currentMeal(receipt, revision: 972)
+        meal.eatenAt = .distantFuture
+        let value = CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17"))
+        #expect(value.changeNotice == nil)
+        #expect(value.targetNotice == nil)
+        #expect(value.canOpenTarget)
+    }
+
+    @Test func changedFactsFlagEditAndMoveWithoutReplacingOriginalReceipt() {
+        let receipt = receipt()
+        var meal = currentMeal(receipt)
+        meal.items[0].quantity = 5
+        meal.items[0].nutrition.kcal = 250
+        let value = CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-18"))
+        #expect(value.changeNotice == "Edited · moved to 2026-10-18")
+        #expect(value.committedItems == ["Chicken · 3 piece"])
+        #expect(value.committedDate == "2026-10-17")
+        #expect(value.committedNutrition == "Energy unknown")
+        #expect(value.currentNutrition == "250 kcal")
+    }
+
+    @Test func itemReceiptIgnoresOtherItemsAndDoesNotInventLegacyDifferences() {
+        var receipt = receipt()
+        receipt.itemID = receipt.items[0].itemID
+        var meal = currentMeal(receipt)
+        meal.items.append(FoodItem(name: "Rice", nutrition: NutritionValues(kcal: 200)))
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == nil)
+        meal.items[0].nutrition.carbs = 1
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == "Edited since this receipt")
+        receipt.items = []; receipt.targetLocalDate = nil; receipt.submissionState = nil
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == nil)
+    }
+
+    @Test func availabilityAndReviewWarningsSurviveCompaction() {
+        var receipt = receipt()
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .loading).targetNotice == "Loading current record")
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .failed).targetNotice == "Could not load current record")
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .unavailable).targetNotice == "Record unavailable")
+        var meal = currentMeal(receipt)
+        meal.submissions = [MealSubmission(baseRevision: 1, text: "Synthetic review", photoIDs: [], reviewFirst: true, state: .awaitingReview)]
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).targetNotice == "Needs review")
+        receipt.submissionState = .awaitingReview
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).targetNotice == nil)
+        meal.revision = 0
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).targetNotice == nil)
+        meal.submissions[0].state = .needsRetry
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).targetNotice == "Analysis needs retry")
+    }
 }
 
 private actor PhotoPublicationSignal {

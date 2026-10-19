@@ -1,6 +1,6 @@
 # Coach chat behavior and recovery
 
-Reviewed 2026-10-18 against the implemented Coach timeline and the approved
+Reviewed 2026-10-19 against the implemented Coach timeline and the approved
 [design](../superpowers/specs/2026-10-18-coach-chat-history-design.md) and
 [implementation plan](../superpowers/plans/2026-10-18-coach-chat-history.md).
 The production timeline is a self-sizing `UITableView` hosting SwiftUI rows
@@ -17,8 +17,14 @@ queries and mutations. This adds no chat service or runtime dependency.
   read actually exits, including after invalidation.
 - Scrolling toward a measured loaded edge automatically requests an available
   adjacent page. Capacity and interaction pins can defer reservation until the
-  gesture settles. Failed edges require explicit retry; exhausted edges do not
-  repeat reads. Load earlier/later buttons remain accessible alternatives.
+  gesture settles. Available and exhausted edges have no persistent view or
+  reserved height. Loading uses a transient spinner overlay; a failed edge has
+  a transient retry overlay. Exhausted edges do not repeat reads.
+- The existing Chat history toolbar button exposes named accessibility actions
+  for available earlier/later pages and failed-page retries. They share the
+  native measured-anchor request path and capacity checks with touch paging;
+  ordinary activation still opens history. Named rotor-action invocation is a
+  separate manual acceptance check in the verification record.
 - History is a recent-first list of at most 30 distinct conversation segments
   per page. A segment is identified by its stable ID, not its displayed date;
   repeated date labels can therefore remain separate. Date filters preserve
@@ -67,12 +73,17 @@ not claim exactly-once remote inference.
 
 ## Receipts, history and corrections
 
-Typed receipts describe committed facts: the original target date, committed
-quantities and mutation identity. Current meal status, totals, items and
-availability come from a current bounded diary read. A later edit or deletion
-does not rewrite the historical receipt. Diary totals continue to reflect the
-current record. Unknown nutrients remain unknown, and estimated values remain
-labelled.
+Show one compact, immutable receipt for a committed food operation: its
+original status, date, items and quantities, with Review / Edit opening current
+record details. Secondary macros sit behind a native disclosure; unknown
+nutrient completeness and estimation labels remain visible. Do not repeat the
+current saved meal, date or nutrition as a second block. A short notice appears
+only when known receipt facts differ from the current record; unrelated revision
+or capture timestamps do not count as changes. Current meal status, totals,
+items and availability come from a current bounded diary read. A later edit or
+deletion does not rewrite the historical receipt. Diary totals continue to
+reflect the current record. Unknown nutrients remain unknown, and estimated
+values remain labelled.
 
 A new consumption statement records new intake. An explicit edit of an existing
 meal changes that same meal. For a clear “one more”, “another” or “same again”

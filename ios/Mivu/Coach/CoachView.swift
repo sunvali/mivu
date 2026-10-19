@@ -11,8 +11,6 @@ struct CoachView: View {
     let openDestination: (CoachDestination) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var surfaceVisible = false
     @State private var showingDetail = false
     @State private var showPhotos = false
@@ -20,6 +18,7 @@ struct CoachView: View {
     @State private var retakingPhotoID: UUID?
     @State private var restoreKeyboard = false
     @State private var refreshViewport: (@MainActor () -> Void)?
+    @State private var requestAccessibilityPage: CoachTimelineView.AccessibilityPageRequest?
     @State private var diagnostics = CoachTimelineDiagnostics()
     @State private var selectedRecord: RecordDestination?
     @FocusState private var editing: Bool
@@ -44,9 +43,9 @@ struct CoachView: View {
                 #if DEBUG
                 if DiaryLaunch.isCoachHistoryFixture { diagnosticControls }
                 #endif
-                edge(.earlier, timeline: timeline)
                 CoachTimelineView(timeline: timeline, rows: timelineRows(timeline), diagnostics: fixtureDiagnostics,
-                    jumpToLatest: jumpToLatestAction(timeline), onViewportRefreshReady: { refreshViewport = $0 }) { row in
+                    jumpToLatest: jumpToLatestAction(timeline), onViewportRefreshReady: { refreshViewport = $0 },
+                    onAccessibilityPageRequestReady: { requestAccessibilityPage = $0 }) { row in
                     AnyView(timelineContent(row))
                 }
                 .dynamicTypeSize(diagnostics.largeText ? .accessibility2 : typeSize)
@@ -57,7 +56,8 @@ struct CoachView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                edge(.later, timeline: timeline)
+                .overlay(alignment: .top) { edge(.earlier, timeline: timeline) }
+                .overlay(alignment: .bottom) { edge(.later, timeline: timeline) }
                 if timeline.error != nil {
                     HStack {
                         Text(navigationError(timeline.queryError)).font(.caption).foregroundStyle(Color.diaryError)
@@ -70,7 +70,7 @@ struct CoachView: View {
             } else if coach.diary.readModel == nil {
                 ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile."))
             } else { ProgressView("Loading conversation").frame(maxWidth: .infinity, maxHeight: .infinity) }
-            if coach.diary.readModel != nil { companionStrip; composer }
+            if coach.diary.readModel != nil { composer }
         }
         .background(Color.diaryCanvas)
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
@@ -78,6 +78,12 @@ struct CoachView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Chat history", systemImage: "clock.arrow.circlepath", action: openHistory)
                     .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("coachHistory")
+                    .accessibilityActions {
+                        if let timeline = coach.timeline {
+                            accessibilityPageAction(.earlier, timeline: timeline)
+                            accessibilityPageAction(.later, timeline: timeline)
+                        }
+                    }
             }
         }
         .navigationDestination(item: $selectedRecord) { record in
@@ -146,6 +152,19 @@ struct CoachView: View {
         }
     }
 
+    @ViewBuilder private func accessibilityPageAction(_ direction: CoachPageDirection, timeline: CoachTimelineViewModel) -> some View {
+        switch timeline.window.edgeState(direction) {
+        case .available:
+            Button(direction == .earlier ? "Load earlier messages" : "Load later messages") {
+                _ = requestAccessibilityPage?(direction)
+            }
+        case .failed:
+            Button(direction == .earlier ? "Retry earlier messages" : "Retry later messages") {
+                _ = requestAccessibilityPage?(direction)
+            }
+        case .loading, .exhausted: EmptyView()
+        }
+    }
     private func jumpToLatestAction(_ timeline: CoachTimelineViewModel) -> (@MainActor @Sendable () -> Void)? {
         guard showsLatestAction(timeline) else { return nil }
         let action: @MainActor @Sendable () -> Void = { _ = Task { await timeline.jumpToLatest() } }
@@ -190,21 +209,20 @@ struct CoachView: View {
         }
     }
     @ViewBuilder private func edge(_ direction: CoachPageDirection, timeline: CoachTimelineViewModel) -> some View {
-        HStack {
-            switch timeline.window.edgeState(direction) {
-            case .loading: ProgressView(direction == .earlier ? "Loading earlier messages" : "Loading later messages")
-            case .available, .failed:
-                let failed = if case .failed = timeline.window.edgeState(direction) { true } else { false }
-                Button(failed ? "Retry conversation page" : direction == .earlier ? "Load earlier" : "Load later") {
-                    refreshViewport?()
-                    if direction == .earlier { timeline.loadEarlier(anchor: timeline.window.viewportAnchor) }
-                    else { timeline.loadLater(anchor: timeline.window.viewportAnchor) }
-                }
-                .frame(minHeight: 44)
-                .accessibilityIdentifier(failed ? "coachPageRetry" : direction == .earlier ? "coachEarlierMessages" : "coachLaterMessages")
-            case .exhausted: Color.clear.accessibilityHidden(true)
+        switch timeline.window.edgeState(direction) {
+        case .loading:
+            ProgressView(direction == .earlier ? "Loading earlier messages" : "Loading later messages")
+                .font(.subheadline).padding(.vertical, 4).allowsHitTesting(false)
+        case .failed:
+            Button(direction == .earlier ? "Retry earlier messages" : "Retry later messages") {
+                refreshViewport?()
+                if direction == .earlier { timeline.loadEarlier(anchor: timeline.window.viewportAnchor) }
+                else { timeline.loadLater(anchor: timeline.window.viewportAnchor) }
             }
-        }.font(.subheadline).frame(minHeight: 44, maxHeight: 44)
+            .font(.subheadline).frame(minHeight: 44).buttonStyle(.glass)
+            .accessibilityIdentifier("coachPageRetry")
+        case .available, .exhausted: EmptyView()
+        }
     }
     private func timelineRows(_ timeline: CoachTimelineViewModel) -> [CoachTimelineRow] {
         var result: [CoachTimelineRow] = []
@@ -226,16 +244,19 @@ struct CoachView: View {
     }
     @ViewBuilder private func timelineContent(_ row: CoachTimelineRow) -> some View {
         if let turn = row.exchange {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
                 if row.fixtureBanner { Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner") }
                 inputBubble(turn)
-                if let reply = turn.assistantText {
-                    Text(reply).textSelection(.enabled).padding(16)
-                        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 16))
-                        .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("coachReply")
+                VStack(alignment: .leading, spacing: 12) {
+                    if let reply = turn.assistantText {
+                        Text(reply).font(.body).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("coachReply")
+                    }
+                    turnActions(turn)
                 }
-                turnActions(turn)
             }
+            .padding(.vertical, 12)
             .padding(row.isHighlighted ? 8 : 0)
             .overlay {
                 if row.isHighlighted {
@@ -259,40 +280,36 @@ struct CoachView: View {
             playback: surfaceVisible && !showPhotos && !showingDetail ? .animated : .hidden))
     }
     private var companionStrip: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .center, spacing: 12) {
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                          size: editing || typeSize.isAccessibilitySize ? 88 : 148, runtime: companionRuntime, surface: .coach)
-                .frame(width: editing || typeSize.isAccessibilitySize ? 76 : 120,
-                       height: editing || typeSize.isAccessibilitySize ? 66 : 108, alignment: .top)
+                          size: 88, runtime: companionRuntime, surface: .coach)
+                .frame(width: 76, height: 66, alignment: .top)
                 .clipped()
             VStack(alignment: .leading, spacing: 4) {
+                if let day = coach.diary.activeDay {
+                    Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
+                        .accessibilityIdentifier("coachDate")
+                }
+                if let target = coach.diary.readModel?.activeGoal?.targets.kcal {
+                    Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal").font(.caption)
+                        .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachGoalSummary")
+                }
                 if let error = coach.errorMessage, companionRecovery {
                     Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
-                } else {
-                    Text(typeSize.isAccessibilitySize ? (companionRecovery ? "Input saved" : companionProcessing ? "Working…" : "Ready") : (companionRecovery ? "Your input is safe here" : companionProcessing ? "Working on your request…" : editing ? "Take your time" : "Ready when you are"))
+                } else if companionRecovery || companionProcessing {
+                    Text(companionRecovery ? "Your input is safe here" : "Working on your request…")
                         .foregroundStyle(Color.diaryText)
                 }
             }
-            .font(typeSize.isAccessibilitySize ? .caption : .subheadline)
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
+            .font(.subheadline).fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, 14)
             .transaction { $0.animation = nil }
         }
-        .padding(.horizontal, 20)
-        .animation(reduceMotion ? nil : .easeOut(duration: MivuMotion.status), value: coach.errorMessage)
-        .animation(reduceMotion ? nil : .easeInOut(duration: MivuMotion.companionTransition), value: editing)
+        .accessibilityElement(children: .contain).accessibilityIdentifier("coachCompanionStrip")
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let day = coach.diary.activeDay {
-                Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachDate")
-            }
-            if let target = coach.diary.readModel?.activeGoal?.targets.kcal {
-                Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal").font(.caption)
-                    .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachGoalSummary")
-            }
+            companionStrip
             if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
             if typeSize.isAccessibilitySize {
@@ -314,13 +331,7 @@ struct CoachView: View {
                     .font(.caption).foregroundStyle(Color.diarySecondary)
             }
         }
-        .padding(12)
-        .background {
-            if reduceTransparency { RoundedRectangle(cornerRadius: 28).fill(Color.diarySurface) }
-            else { RoundedRectangle(cornerRadius: 28).fill(.ultraThinMaterial) }
-        }
-        .overlay { RoundedRectangle(cornerRadius: 28).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
-        .padding(.horizontal, 16).padding(.bottom, 8)
+        .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)
         .disabled(coach.isSending || coach.diary.isChangingProfile)
     }
     private var composerInput: some View {
@@ -335,10 +346,9 @@ struct CoachView: View {
     private var photoAction: some View {
         Button { openCamera() } label: {
             Image(systemName: "camera.fill").font(.system(size: 19, weight: .medium))
-                .frame(width: 48, height: 48)
-                .foregroundStyle(Color.diaryText)
-                .background(Color.diarySurface, in: Circle())
+                .frame(minWidth: 44, minHeight: 44)
         }.accessibilityLabel("Add photos").accessibilityIdentifier("coachPhotos")
+            .buttonStyle(.glass).buttonBorderShape(.circle)
             .disabled(coach.attachmentDraft.attachments.count + coach.attachmentDraft.reservedAttachmentCount >= 8)
     }
     private var send: some View {
@@ -350,9 +360,8 @@ struct CoachView: View {
             }
             .frame(minWidth: 48, minHeight: 48)
             .padding(.horizontal, typeSize.isAccessibilitySize ? 12 : 0)
-            .background(coach.canSend ? Color.diaryAccent : Color.diaryRule, in: Capsule())
         }
-        .foregroundStyle(coach.canSend ? Color.diaryActionText : Color.diarySecondary)
+        .buttonStyle(.glassProminent).buttonBorderShape(.capsule).tint(Color.diaryAccent)
         .disabled(!coach.canSend)
         .accessibilityLabel("Send").accessibilityIdentifier("coachSend")
     }
@@ -386,7 +395,7 @@ struct CoachView: View {
     private func inputBubble(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
-                if !turn.text.isEmpty { Text(turn.text).textSelection(.enabled).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
+                if !turn.text.isEmpty { Text(turn.text).font(.body).textSelection(.enabled).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
                 if !turn.photos.isEmpty {
                     Label("\(turn.photos.count) attached photos", systemImage: "photo").font(.caption)
                     ForEach(turn.photos) { photo in DiaryPhotoPreview(model: coach.diary, reference: photo, height: 140) }

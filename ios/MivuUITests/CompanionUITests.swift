@@ -25,9 +25,27 @@ import XCTest
         XCTAssertTrue(element.isHittable)
     }
 
+    private func captureVisual(_ name: String, in app: XCUIApplication) {
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("coach-visual-" + UUID().uuidString + ".png")
+        do {
+            try screenshot.pngRepresentation.write(to: path)
+            print("COACH_VISUAL_PATH " + path.path)
+        } catch { XCTFail("Could not preserve native visual evidence: \(error)") }
+    }
+
     func testLottieReferenceCompositionsAndHorizontalComposerInBothAppearances() {
         for appearance in ["--proof-light", "--proof-dark"] {
             let app = launch([appearance])
+            let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
+            XCTAssertTrue(strip.waitForExistence(timeout: 5))
+            XCTAssertGreaterThan(strip.frame.height, 0)
+            XCTAssertLessThanOrEqual(strip.frame.height, 110, "The resting companion must leave the conversation most of the screen")
+            let restingHeight = strip.frame.height
+            XCTAssertFalse(app.buttons["coachEarlierMessages"].exists)
+            XCTAssertFalse(app.buttons["coachLaterMessages"].exists)
             let input = app.textFields["coachInput"]
             let camera = app.buttons["coachPhotos"]
             let send = app.buttons["coachSend"]
@@ -36,11 +54,38 @@ import XCTest
             XCTAssertGreaterThanOrEqual(camera.frame.height, 44)
             XCTAssertGreaterThanOrEqual(send.frame.height, 44)
             enter("Two eggs, three bread slices and salad", in: app)
-            XCTAssertTrue(send.isHittable); send.tap()
+            XCTAssertEqual(strip.frame.height, restingHeight, accuracy: 2, "Typing must keep the compact companion strip stable")
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            XCTAssertTrue(send.isHittable)
+            captureVisual("Compact Coach keyboard " + appearance, in: app)
+            send.tap()
             let link = app.buttons["coachMealLink"].firstMatch
             XCTAssertTrue(link.waitForExistence(timeout: 15))
-            let coach = XCTAttachment(screenshot: app.screenshot())
-            coach.name = "Pip Lottie Coach " + appearance; coach.lifetime = .keepAlways; add(coach)
+            let inputTurn = app.staticTexts.matching(NSPredicate(format: "label == %@ AND identifier BEGINSWITH %@", "Two eggs, three bread slices and salad", "coachText-")).firstMatch
+            XCTAssertTrue(inputTurn.waitForExistence(timeout: 5))
+            let exchangeID = "coachExchange-" + String(inputTurn.identifier.dropFirst("coachText-".count))
+            let exchange = app.descendants(matching: .any)[exchangeID].firstMatch
+            let receipt = exchange.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "coachReceipt-"))
+            XCTAssertEqual(receipt.count, 1, "One food operation must present one summary")
+            XCTAssertEqual(app.staticTexts.matching(identifier: "coachReceiptQuantity").count, 3)
+            XCTAssertEqual(app.staticTexts.matching(identifier: "coachReceiptDate").count, 1)
+            XCTAssertEqual(app.staticTexts.matching(identifier: "coachReceiptNutrition").count, 1)
+            XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", "Saved food")).count, 1)
+            XCTAssertFalse(app.staticTexts["Current saved meal"].exists, "The same saved food must not be repeated as a second summary")
+            XCTAssertFalse(app.staticTexts["coachReceiptChange"].exists)
+            XCTAssertFalse(app.staticTexts["coachReceiptMacros"].exists)
+            XCTAssertFalse(app.keyboards.firstMatch.exists)
+            XCTAssertGreaterThanOrEqual(app.tables["coachViewport"].frame.height, app.frame.height * 0.45,
+                "With the keyboard hidden, conversation must own at least 45% of the screen")
+            XCTAssertTrue(input.isHittable)
+            XCTAssertTrue(send.isHittable)
+            captureVisual("Compact Coach food receipt " + appearance, in: app)
+            let details = app.buttons["coachReceiptDetails"].firstMatch
+            for _ in 0..<8 where !details.isHittable { app.tables["coachViewport"].swipeUp() }
+            XCTAssertTrue(details.isHittable)
+            XCTAssertGreaterThanOrEqual(details.frame.height, 44)
+            details.tap()
+            XCTAssertTrue(app.staticTexts["coachReceiptMacros"].waitForExistence(timeout: 5), "Secondary nutrition must remain available in the native disclosure")
             app.tabBars.buttons["Today"].tap()
             let row = app.buttons["mealRow"].firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 5))
@@ -173,12 +218,48 @@ import XCTest
     func testLargestTextLightAndDarkKeepPrimaryActionsReachable() {
         for appearance in ["--proof-light", "--proof-dark"] {
             let app = launch(["--proof-largest-text", appearance])
+            let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
+            XCTAssertTrue(strip.waitForExistence(timeout: 5))
+            XCTAssertFalse(app.staticTexts["coachDate"].exists, "A first-use profile has no logging day before actual capture")
+            XCTAssertFalse(app.buttons["coachEarlierMessages"].exists)
+            XCTAssertFalse(app.buttons["coachLaterMessages"].exists)
             enter("Draft", in: app)
             XCTAssertTrue(app.buttons["coachSend"].isHittable)
             XCTAssertGreaterThanOrEqual(app.buttons["coachSend"].frame.height, 44)
-            let coachCapture = XCTAttachment(screenshot: app.screenshot())
-            coachCapture.name = "Coach largest text \(appearance)"; coachCapture.lifetime = .keepAlways; add(coachCapture)
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            captureVisual("Coach largest text keyboard " + appearance, in: app)
             app.buttons["coachSend"].tap()
+            let review = app.buttons["coachMealLink"].firstMatch
+            XCTAssertTrue(review.waitForExistence(timeout: 15))
+            let date = app.staticTexts["coachDate"]
+            XCTAssertTrue(date.waitForExistence(timeout: 5))
+            XCTAssertTrue(date.isHittable, "The actual captured logging date must remain readable at largest text")
+            XCTAssertLessThanOrEqual(date.frame.maxY, app.textFields["coachInput"].frame.minY,
+                "Rendered date text must remain above the input text")
+            XCTAssertLessThanOrEqual(date.frame.maxX, app.frame.maxX)
+            for _ in 0..<8 where !review.isHittable { app.tables["coachViewport"].swipeUp() }
+            XCTAssertTrue(review.isHittable)
+            XCTAssertGreaterThanOrEqual(review.frame.height, 44)
+            XCTAssertFalse(app.staticTexts["Current saved meal"].exists)
+            XCTAssertTrue(app.textFields["coachInput"].isHittable)
+            let receiptDate = app.staticTexts["coachReceiptDate"].firstMatch
+            let receiptEnergy = app.staticTexts["coachReceiptNutrition"].firstMatch
+            let viewport = app.tables["coachViewport"]
+            for _ in 0..<12 {
+                if receiptDate.isHittable, receiptDate.frame.minY >= viewport.frame.minY + 8,
+                   receiptEnergy.isHittable, receiptEnergy.frame.maxY <= viewport.frame.maxY - 8 { break }
+                let above = receiptDate.exists && receiptDate.frame.minY < viewport.frame.minY + 8
+                let start = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: above ? 80 : -80)),
+                    withVelocity: .slow, thenHoldForDuration: 0.2)
+            }
+            XCTAssertTrue(receiptDate.isHittable)
+            XCTAssertTrue(receiptEnergy.isHittable)
+            XCTAssertGreaterThan(receiptDate.frame.height, receiptEnergy.frame.height,
+                "The full committed date must wrap at largest text instead of truncating to one line")
+            XCTAssertGreaterThanOrEqual(receiptDate.frame.minY, viewport.frame.minY)
+            XCTAssertLessThanOrEqual(receiptEnergy.frame.maxY, viewport.frame.maxY)
+            captureVisual("Coach largest text compact receipt " + appearance, in: app)
             app.tabBars.buttons["Today"].tap()
             XCTAssertTrue(app.buttons["logMeal"].isHittable)
             XCTAssertGreaterThanOrEqual(app.buttons["logMeal"].frame.height, 44)

@@ -179,7 +179,10 @@ import XCTest
         let app = launchHistory(extra: ["--history-short-paging"])
         let initial = try metrics(app)
         XCTAssertEqual((initial["requestedPages"] as? [[Int]])?.count, 1)
-        for _ in 0..<12 where app.buttons["coachEarlierMessages"].exists {
+        XCTAssertFalse(app.buttons["coachEarlierMessages"].exists)
+        XCTAssertFalse(app.buttons["coachLaterMessages"].exists)
+        for _ in 0..<12 {
+            if Set((try metrics(app)["requestedPages"] as? [[Int]] ?? []).flatMap { $0 }) == Set(1...43) { break }
             viewport(app).swipeDown()
             _ = try waitHistory(app)
         }
@@ -193,6 +196,14 @@ import XCTest
         viewport(app).swipeDown(); viewport(app).swipeDown()
         _ = try waitHistory(app)
         XCTAssertEqual(try metrics(app)["requestedPages"] as? [[Int]], pages)
+        let newest = app.staticTexts["coachText-00000000-0000-0000-0000-000000000043"]
+        for _ in 0..<16 where !newest.isHittable {
+            viewport(app).swipeUp()
+            _ = try waitHistory(app)
+        }
+        XCTAssertTrue(newest.isHittable, "A real reverse gesture must return through the loaded conversation")
+        XCTAssertEqual(try metrics(app)["requestedPages"] as? [[Int]], pages)
+        XCTAssertFalse(app.buttons["coachLaterMessages"].exists)
     }
     func testEqualResidentPageJumpAndSeekApplyRestoration() throws {
         let previousFailurePolicy = continueAfterFailure
@@ -246,9 +257,13 @@ import XCTest
         app.buttons["mealSourceChat"].tap()
         let date = app.staticTexts["coachReceiptDate"]
         XCTAssertTrue(date.waitForExistence(timeout: 10)); XCTAssertTrue(date.label.contains("2027-01-15"))
-        let unknownNutritionWasRenderedAsZero = app.staticTexts["coachReceiptUnknown"].label == "0"
+        let details = app.descendants(matching: .any)["coachReceiptDetails"].firstMatch
+        reveal(details, app: app); details.tap()
+        let unknown = app.staticTexts["coachReceiptUnknown"].firstMatch
+        reveal(unknown, app: app)
+        let unknownNutritionWasRenderedAsZero = unknown.label == "0"
         XCTAssertFalse(unknownNutritionWasRenderedAsZero)
-        XCTAssertTrue(app.staticTexts["coachReceiptUnknown"].label.contains("unknown"))
+        XCTAssertTrue(unknown.label.contains("unknown"))
         XCTAssertTrue(app.staticTexts["Estimated nutrition"].exists)
         let receipt = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == %@",
             "coachReceipt-00000000-0000-0000-0000-000000000001/food/2027-01-15")).firstMatch
@@ -321,9 +336,15 @@ import XCTest
         XCTAssertTrue(quantity.waitForExistence(timeout: 10))
         let committedReceiptShowsThreePiecesAndCapturedYesterday = quantity.exists && app.staticTexts["coachReceiptDate"].label.contains("2027-01-15")
         XCTAssertTrue(committedReceiptShowsThreePiecesAndCapturedYesterday)
-        let unknownNutritionWasRenderedAsZero = app.staticTexts["coachReceiptUnknown"].label == "0"
+        let details = app.descendants(matching: .any)["coachReceiptDetails"].firstMatch
+        reveal(details, app: app); details.tap()
+        let unknown = app.staticTexts["coachReceiptUnknown"].firstMatch
+        reveal(unknown, app: app)
+        let unknownNutritionWasRenderedAsZero = unknown.label == "0"
         XCTAssertFalse(unknownNutritionWasRenderedAsZero)
-        app.buttons["coachMealLink"].firstMatch.tap()
+        XCTAssertTrue(unknown.label.contains("unknown"))
+        let review = app.buttons["coachMealLink"].firstMatch
+        reveal(review, app: app); review.tap()
         XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
     }
 

@@ -165,7 +165,6 @@ import XCTest
         let tab = app.tabBars.buttons["Diary"]
         guard tab.isHittable else { XCTFail("Diary tab must be visible after keyboard dismissal"); return false }
         tab.tap()
-        guard tab.isSelected else { XCTFail("Diary tab selection did not complete"); return false }
         for _ in 0..<3 where !app.navigationBars["Diary"].exists {
             guard !app.navigationBars["Coach"].exists else { XCTFail("Diary navigation is not active"); return false }
             let back = app.navigationBars.buttons.firstMatch
@@ -174,6 +173,7 @@ import XCTest
         }
         let ready = app.navigationBars["Diary"].waitForExistence(timeout: 5)
         XCTAssertTrue(ready)
+        if ready { XCTAssertTrue(app.tabBars.buttons["Diary"].isSelected) }
         return ready
     }
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
