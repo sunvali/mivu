@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.yakov103.mivu.log-food</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Log Food</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>camera</string>
+		</dict>
+	</array>
+</dict>
+</plist>

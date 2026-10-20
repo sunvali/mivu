@@ -1,1 +1,2 @@
 #include "Shared.xcconfig"
+INFOPLIST_FILE = Config/Info.plist
