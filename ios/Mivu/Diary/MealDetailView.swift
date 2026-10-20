@@ -243,14 +243,14 @@ struct MealDetailView: View {
         if deleted { dismiss() }
         return deleted
     }
-    /// Opens Coach at this meal's conversation (or its day) with an unsent message about the meal or one food.
+    /// Opens Coach at this meal's conversation (or its day); a specific food also gets an unsent message naming it.
     private func askPip(about item: FoodItem?, in meal: MealReadModel) {
         guard let selection = model.selection else { return }
         let day = model.day(meal.dayID).map { " from \(DiaryWeek.format($0.localDate, "EEE d MMM"))" } ?? ""
-        let subject = item.map { "the \($0.name)" } ?? displayTitle(meal)
+        let draft = item.map { "About the \($0.name)\(day): " }
         let target: CoachSeekTarget = meal.sourceTurnID.map { .turn($0) } ?? .day(meal.dayID)
         editedItem = nil
-        if openChat(target, draft: "About \(subject)\(day): ", expectedSelection: selection) { dismiss() }
+        if openChat(target, draft: draft, expectedSelection: selection) { dismiss() }
     }
     private func foodRow(_ item: FoodItem, meal: MealReadModel) -> some View {
         HStack(spacing: 12) {
