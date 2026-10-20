@@ -113,6 +113,9 @@ extension DiaryDatabase {
     func editItem(mealID: UUID, item: FoodItem, explicitNutrients: Set<String>, reviewSubmissionID: UUID? = nil, expectedRevision: Int? = nil, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.editItem(mealID: mealID, item: item, explicitNutrients: explicitNutrients, reviewSubmissionID: reviewSubmissionID, expectedRevision: expectedRevision) }
     }
+    func deleteItem(mealID: UUID, itemID: UUID, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
+        try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.deleteItem(mealID: mealID, itemID: itemID, expectedRevision: expectedRevision) }
+    }
     func addPhotos(mealID: UUID, photos: [MealPhoto], expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
             _ = try transaction.mealRecord(id: mealID)
@@ -416,6 +419,19 @@ extension DiaryTransaction {
         let id = UUID(), output = AnalysisOutput(profileID: head.profile.id, mealID: mealID, submissionID: id, baseRevision: meal.revision, items: items)
         let saved = MealSubmission(id: id, baseRevision: meal.revision, text: "Direct item edit", photoIDs: [], reviewFirst: false, state: .saved, proposal: output)
         meal.revision += 1; try saveMeal(meal); try saveSubmission(saved, meal: meal)
+    }
+    func deleteItem(mealID: UUID, itemID: UUID, expectedRevision: Int?) throws {
+        let meal = try mealRecord(id: mealID)
+        guard expectedRevision == nil || expectedRevision == meal.revision else { throw DiaryError.staleRevision }
+        var items = try mealItems(id: mealID)
+        guard let index = items.firstIndex(where: { $0.id == itemID }) else { throw DiaryError.notFound }
+        // A meal keeps at least one food; removing the last one is deleting the meal.
+        guard items.count > 1 else { throw DiaryError.invalidData }
+        items.remove(at: index)
+        let id = UUID(), output = AnalysisOutput(profileID: head.profile.id, mealID: mealID, submissionID: id, baseRevision: meal.revision, items: items)
+        let saved = MealSubmission(id: id, baseRevision: meal.revision, text: "Direct item delete", photoIDs: [], reviewFirst: false, state: .saved, proposal: output)
+        let committed = try commitSavedItems(mealID: mealID, items: items, expectedRevision: meal.revision)
+        try saveSubmission(saved, meal: committed)
     }
     func moveMeal(_ mealID: UUID, to dayID: UUID, eatenAt: Date?, expectedRevision: Int?, expectedDayID: UUID?) throws {
         var meal = try mealRecord(id: mealID); let day = try database.trackingDay(id: dayID)
