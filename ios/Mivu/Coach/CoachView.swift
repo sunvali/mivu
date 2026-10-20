@@ -22,6 +22,7 @@ struct CoachView: View {
     @State private var requestAccessibilityPage: CoachTimelineView.AccessibilityPageRequest?
     @State private var diagnostics = CoachTimelineDiagnostics()
     @State private var selectedRecord: RecordDestination?
+    @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @FocusState private var editing: Bool
     private enum RecordDestination: Hashable, Identifiable {
         case meal(UUID), workout(UUID)
@@ -71,7 +72,8 @@ struct CoachView: View {
             } else if coach.diary.readModel == nil {
                 ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile."))
             } else { ProgressView("Loading conversation").frame(maxWidth: .infinity, maxHeight: .infinity) }
-            if coach.diary.readModel != nil { composer }
+            // The composer takes its full height first (up to four lines); the timeline above gives way.
+            if coach.diary.readModel != nil { composer.fixedSize(horizontal: false, vertical: true) }
         }
         .background(Color.diaryCanvas)
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
@@ -313,6 +315,14 @@ struct CoachView: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if !editing, let day = coach.diary.activeDay, let recap = coach.diary.morningRecap, coach.diary.todaysMeals.isEmpty,
+               dismissedMorningDay != day.id.uuidString {
+                MorningCheckInCard(model: coach.diary, day: day, previous: recap.previous, previousTarget: recap.target,
+                                   todayWeight: coach.diary.readModel?.weight, compact: true,
+                                   onTellCoach: { coach.attachmentDraft.text = "My weight this morning is "; editing = true }) {
+                    withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
+                }.transition(.opacity)
+            }
             companionStrip.zIndex(1) // the paws overlap the field's top edge
             if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
@@ -340,7 +350,8 @@ struct CoachView: View {
     }
     private var composerInput: some View {
         TextField("Message Coach", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }), axis: .vertical)
-            .lineLimit(1...(typeSize.isAccessibilitySize ? 2 : 5)).focused($editing)
+            // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
+            .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
             .accessibilityIdentifier("coachInput")
             .padding(.horizontal, 16).padding(.vertical, 10)
             .frame(minHeight: 48)

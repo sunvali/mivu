@@ -40,19 +40,27 @@ This design adds a predictable automatic trigger.
    to the other day using the existing meal move. The toast shows only when the
    meal landed on a day whose date differs from the calendar date of the moment
    it was eaten.
-   - Coach's `needsDayChoice` clarification goes away in the same way. Coach saves
-     to the active day and says which day.
-   - The four-hour `previousDayConfirmedAt` window is no longer needed for new
-     decisions. The field stays readable for old diaries and backups.
-4. **Time zone change.** The existing behavior stays: the profile zone decides.
+   - Coach saves food captured before the cutoff to the active waking day, so it
+     no longer asks. Old pending turns that already ask can still be answered.
+   - The four-hour `previousDayConfirmedAt` window is removed from decisions. The
+     field stays readable for old diaries and backups.
+   - An explicit "Start new day" before the cutoff, while the waking day is already
+     active, opens the calendar date (for night shifts).
+4. **Early morning (cutoff to cutoff + 3 h, 4–7 AM by default): ChatGPT decides.** The analysis already picks
+   the date through `log_food`. In this window its instructions say: late-night intake such as alcohol, fast
+   food or party snacks belongs to the night before; breakfast or anything else belongs to the new day. It
+   decides without asking. A meal it moves gets the same "Added to … · Move to …" receipt, so one tap undoes it.
+   Outside the window, Coach is told the current waking day.
+5. **Time zone change.** A day in another zone starts a new day; history is kept. The existing behavior stays: the profile zone decides.
    The cutoff applies in that zone.
 
 ## Morning card
 
-- **When it shows:** at the top of Today, after a rollover, until the first meal
+- **When it shows:** at the top of Today, above the summary, after a rollover, until the first meal
   of the new day is saved or the user dismisses it. The dismiss button is an
   X, and it hides the card for that day only.
-- **Pip:** says "Good morning". It uses the `greeting` gesture, then `attentive`.
+- **Greeting:** "Good morning / afternoon / evening" by the hour. Pip stays in the summary
+  below and nods when the weight is saved.
 - **Yesterday:** the kcal total against the target, with a progress bar. Numbers
   only, with no ChatGPT, so it works offline. If yesterday has no target, it
   shows just the total.
@@ -66,9 +74,8 @@ This design adds a predictable automatic trigger.
     unit used and is prefilled with the last weight as a placeholder. There is
     a Save button and a Skip button.
   - On save, Pip nods (`saved`). The card then shows the 7-day trend, for example
-    "−0.4 kg this week": the average of the last 7 days minus the average of the
-    7 days before. The trend shows only with at least two weigh-ins in each
-    window. Otherwise it shows "Saved".
+    "−0.4 kg this week", reusing Progress's existing 7-day change (it needs at
+    least three weigh-ins in each week). Otherwise it shows the saved weight only.
   - The weight is recorded on the new day: `recordWeight(startNewDay: false)`,
     since the day is already open.
 - **Done state:** when both the question and the weight are answered or skipped,
@@ -78,6 +85,16 @@ This design adds a predictable automatic trigger.
   haptics on save. It has 44-pt targets, VoiceOver labels and Dynamic Type
   (Pip shrinks at accessibility sizes).
 
+## On the Coach tab
+
+- The same check-in shows as a short bubble above Pip and the composer, one question at a time:
+  "Did you log everything yesterday?" (Yes / Not quite), then "Weighed in yet?" with an inline
+  weight field, Save and Skip.
+- "Tell Coach instead" fills the message field with "My weight this morning is " and focuses it,
+  so the weight can go in as a normal Coach message.
+- It hides while typing, once nothing is left to ask, after the first meal, or when dismissed.
+  Answers and dismissal are shared with Today.
+
 ## Morning reminder
 
 - In Settings: a "Morning check-in" toggle, off by default, with a time (default
@@ -86,6 +103,7 @@ This design adds a predictable automatic trigger.
 - It is one repeating local notification: "Good morning — log your weight or
   breakfast." Tapping it opens Today.
 - It is local only: no server and no push service.
+- Tapping it opens the app where it was left (opening Today directly is a follow-up).
 
 ## Settings
 

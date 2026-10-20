@@ -28,7 +28,7 @@ enum DayCompleteness: String, Codable, CaseIterable, Sendable { case unknown, co
 enum PhotoRole: String, Codable, CaseIterable, Sendable { case unspecified, before, after }
 enum NutritionProvenance: String, Codable, Sendable { case sample, user, confirmedLabel, identifiedSource, estimate }
 enum SubmissionState: String, Codable, Sendable { case captured, waitingForConnection, analyzing, awaitingReview, saved, needsRetry, cancelled }
-enum DayAssignment: Equatable, Sendable { case existing(UUID), newDay, ask(UUID) }
+enum DayAssignment: Equatable, Sendable { case existing(UUID), newDay }
 
 enum DiaryError: Error, Equatable, LocalizedError {
     case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, notFound, emptyCapture, ambiguousDay, staleArchive
@@ -42,7 +42,7 @@ enum DiaryError: Error, Equatable, LocalizedError {
         case .staleRevision: "This meal changed. Please retry the correction."
         case .notFound: "This diary entry no longer exists."
         case .emptyCapture: "Add a photo or a meal description."
-        case .ambiguousDay: "Choose the previous waking day or start a new day."
+        case .ambiguousDay: "Your day just changed. Save again to add this to the new day."
         case .staleArchive: "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover."
         }
     }

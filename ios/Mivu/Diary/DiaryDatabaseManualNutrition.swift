@@ -51,11 +51,11 @@ extension DiaryDatabase {
             }
             let assignment = try transaction.dayAssignment(at: at)
             switch (choice, assignment) {
-            case let (.current, .existing(id)), let (.previous, .ask(id)):
+            case let (.current, .existing(id)):
                 let day = try trackingDay(id: id)
-                return .active(dayID: id, localDate: day.localDate, timeZoneID: day.timeZoneID, confirmPrevious: choice == .previous)
-            case (.newCurrent, .newDay), (.newCurrent, .ask):
-                let date = diaryDateLabel(at, zone: head.profile.timeZoneID)
+                return .active(dayID: id, localDate: day.localDate, timeZoneID: day.timeZoneID, confirmPrevious: false)
+            case (.newCurrent, .newDay):
+                let date = try transaction.newDayLabel(at: at)
                 let day = try transaction.manualDay(localDate: date, timeZoneID: head.profile.timeZoneID)
                 return .newCurrent(dayID: day?.id ?? UUID(), localDate: date, timeZoneID: head.profile.timeZoneID, previousActiveDayID: head.activeDayID)
             default: throw DiaryError.ambiguousDay
@@ -107,26 +107,20 @@ extension DiaryTransaction {
     func dayAssignment(at: Date) throws -> DayAssignment {
         guard at.timeIntervalSinceReferenceDate.isFinite else { throw DiaryError.invalidData }
         guard let id = head.activeDayID else { return .newDay }
-        let day = try database.trackingDay(id: id), date = diaryDateLabel(at, zone: head.profile.timeZoneID)
-        if let confirmed = head.previousDayConfirmedAt, at >= confirmed, at.timeIntervalSince(confirmed) < 4 * 3600,
-           diaryDateLabel(confirmed, zone: head.profile.timeZoneID) == date { return .existing(id) }
-        return day.timeZoneID == head.profile.timeZoneID && day.localDate == date ? .existing(id) : .ask(id)
+        // The active day holds until the cutoff passes; then the next activity starts a new day, so logging never asks.
+        let day = try database.trackingDay(id: id)
+        return day.timeZoneID == head.profile.timeZoneID && day.localDate >= wakingDateLabel(at, zone: head.profile.timeZoneID) ? .existing(id) : .newDay
     }
     func resolveManualNutritionDay(_ target: ManualNutritionTarget, capturedAt: Date) throws -> TrackingDay {
         switch target {
         case .recorded: return try manualRecordedDay(target)
-        case let .active(id, _, _, confirmPrevious):
+        case let .active(id, _, _, _):
             let day = try manualRecordedDay(target)
-            guard head.activeDayID == id,
-                  try dayAssignment(at: capturedAt) == (confirmPrevious ? .ask(id) : .existing(id)) else { throw DiaryError.ambiguousDay }
-            if confirmPrevious {
-                head.previousDayConfirmedAt = capturedAt
-                try resolveDayChoices(at: capturedAt, dayID: day.id)
-            }
+            guard head.activeDayID == id, try dayAssignment(at: capturedAt) == .existing(id) else { throw DiaryError.ambiguousDay }
             return day
         case let .newCurrent(id, date, zone, previous):
             guard head.activeDayID == previous, zone == head.profile.timeZoneID,
-                  date == diaryDateLabel(capturedAt, zone: zone),
+                  date == (try newDayLabel(at: capturedAt)),
                   try head.activeDayID.map({ try database.trackingDay(id: $0).startAt <= capturedAt }) ?? true else { throw DiaryError.ambiguousDay }
             if case .existing = try dayAssignment(at: capturedAt) { throw DiaryError.ambiguousDay }
             let day = try resolveDay(localDate: date, timeZoneID: zone, at: capturedAt, newDayID: id)

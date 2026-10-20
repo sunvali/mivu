@@ -61,7 +61,6 @@ struct ManualNutritionView: View {
     @State private var ownership: DiarySelectionOwnership?
     @State private var saving = false
     @State private var showDiscard = false
-    @State private var showDayQuestion = false
     @State private var message: String?
     @State private var reconciledMealID: UUID?
     @FocusState private var editingField: String?
@@ -121,11 +120,6 @@ struct ManualNutritionView: View {
                 Button("Discard changes", role: .destructive) { dismiss() }
                 Button("Keep editing", role: .cancel) {}
             } message: { Text("Your unsaved food and nutrition will be discarded.") }
-            .confirmationDialog("Which waking day?", isPresented: $showDayQuestion, titleVisibility: .visible) {
-                Button("Previous day") { Task { await save(choice: .previous) } }
-                Button("New day") { Task { await save(choice: .newCurrent) } }
-                Button("Keep editing", role: .cancel) {}
-            } message: { Text("Your active day began on an earlier date. A late meal can stay in that day.") }
             .task { if ownership == nil { ownership = model.selection } }
         }
         .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
@@ -177,10 +171,10 @@ struct ManualNutritionView: View {
             }
             if let result = await model.saveManualNutrition(payload, expectedSelection: token), model.selection == token {
                 onSaved(result.meal.id); dismiss()
-            } else if model.selection == token, model.manualDayChoiceNeeded {
-                draft.releaseUncommittedIdentity(); showDayQuestion = true // nothing was saved; re-resolve the day
+            } else if model.selection == token, model.manualDayChanged {
+                draft.releaseUncommittedIdentity(); message = DiaryError.ambiguousDay.localizedDescription // nothing was saved; the next Save re-resolves the day
             } else if model.selection == token { message = model.errorMessage ?? "Could not confirm this save. Retry with the same food to check it safely." }
-        } catch DiaryError.ambiguousDay { showDayQuestion = true }
+        } catch DiaryError.ambiguousDay { draft.releaseUncommittedIdentity(); message = DiaryError.ambiguousDay.localizedDescription }
         catch { if model.selection == token { message = error.localizedDescription } }
     }
 }

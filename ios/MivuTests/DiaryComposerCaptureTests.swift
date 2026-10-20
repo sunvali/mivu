@@ -91,21 +91,6 @@ import Testing
         #expect(model.meal(id)?.dayID == yesterday.id)
     }
 
-    @Test func ambiguousDayEndsProtectionWithoutCapturingUntilUserChooses() async throws {
-        let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
-        let protection = ComposerProtectionProbe()
-        let model = DiaryViewModel(store: f.store, beginCaptureProtection: protection.begin, captureDayAssignment: { _, _ in .ask(f.meal.dayID) })
-        await model.load(createDefaultProfile: false)
-        var draft = MealDraft(); draft.text = "Synthetic ambiguous photo"; draft.photos = [SyntheticConnectionProbe.image]
-        #expect(await model.capture(draft, destination: .automatic) == .needsDayChoice(f.meal.dayID))
-        #expect(protection.begun == 1 && protection.ended == 1 && !model.hasCaptureInFlight)
-        #expect(model.captureReceipt == nil && model.savedMealID == nil)
-        let owner = try #require(model.selection)
-        #expect(try await f.store.capturedMeal(submissionID: draft.submissionID, expectedSelection: owner, expectedProfileID: f.profile.id) == nil)
-        #expect(await model.capture(draft, destination: .day(f.meal.dayID, dateOnly: false)) != .failed)
-        #expect(protection.begun == 2 && protection.ended == 2 && model.captureReceipt == draft.submissionID)
-    }
-
     @Test func correctionRetryKeepsOriginalCaptureClockAfterMidnight() async throws {
         let path = URL.temporaryDirectory.appending(path: "ComposerClock-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }

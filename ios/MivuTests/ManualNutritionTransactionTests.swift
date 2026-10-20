@@ -239,26 +239,6 @@ import Testing
         #expect(try f.rows("SELECT COUNT(*) FROM day") == [[String(source.days.count)]])
     }
 
-    @Test func previousDayConfirmationRollsBackWithFailedMealAndCommitsWithSuccess() async throws {
-        var source = ChatHistoryFixture.snapshot(exchanges: 1); source.profile.timeZoneID = "UTC"; source.previousDayConfirmedAt = nil
-        let at = try diaryDateOnlyInstant("2027-01-17", zone: "UTC")
-        let f = try CaptureFixture(snapshot: source); defer { f.remove() }
-        let store = DiaryStore(directory: f.root)
-        _ = try await store.selectPagedProfile(f.profileID)
-        let selection = try await store.selectionOwnership(expectedProfileID: f.profileID)
-        await #expect(throws: DiaryError.ambiguousDay) { _ = try await store.prepareManualNutritionTarget(choice: .current, at: at, expectedSelection: selection, expectedProfileID: f.profileID) }
-        let target = try await store.prepareManualNutritionTarget(choice: .previous, at: at, expectedSelection: selection, expectedProfileID: f.profileID)
-        let raw = manualPayload(f, target: target)
-        let payload = ManualNutritionPayload(profileID: raw.profileID, mealID: raw.mealID, submissionID: raw.submissionID,
-            operation: raw.operation, target: target, capturedAt: at, eatenAt: at, timePrecision: .exact, expectedMealRevision: nil, items: raw.items)
-        let db = try DiaryDatabase(url: f.url), beforeState = try manualState(f)
-        #expect(throws: DiaryError.invalidData) { _ = try save(db, f, payload, maximumBytes: 1) }
-        #expect(try manualState(f) == beforeState)
-        _ = try save(db, f, payload)
-        let head = try db.readHead(expectedProfileID: f.profileID)
-        #expect(head.previousDayConfirmedAt == at && head.activeDayID == source.activeDayID)
-    }
-
     @Test func receiptIdentityCannotBeReusedForAnotherMeal() throws {
         let f = try CaptureFixture(); defer { f.remove() }
         let db = try DiaryDatabase(url: f.url), original = manualPayload(f)

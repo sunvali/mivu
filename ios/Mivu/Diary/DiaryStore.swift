@@ -333,10 +333,6 @@ actor DiaryStore {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)
         return try startDay(at: at, expectedProfileID: expectedProfileID)
     }
-    func confirmPreviousDay(at: Date = Date(), expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws {
-        try validateOwnership(expectedSelection, profileID: expectedProfileID)
-        try confirmPreviousDay(at: at, expectedProfileID: expectedProfileID)
-    }
     func dayAssignment(at: Date = Date(), expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws -> DayAssignment {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)
         return try dayAssignment(at: at, expectedProfileID: expectedProfileID)
@@ -351,10 +347,6 @@ actor DiaryStore {
         return try database.domainRead(expectedProfileID: owner) {
             try DiaryTransaction(database: database, head: $0).dayAssignment(at: at)
         }
-    }
-
-    func confirmPreviousDay(at: Date = Date(), expectedProfileID: UUID? = nil) throws {
-        return try pagedMutation(expectedProfileID) { try $0.confirmPreviousDay(at: at, expected: $1, maximumBytes: maximumFileBytes) }
     }
 
     func processPending(expectedProfileID: UUID? = nil) throws {

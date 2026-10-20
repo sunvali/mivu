@@ -210,7 +210,6 @@ import Testing
         #expect(throws: DiaryError.persistenceFailed) { try f.database.startDay(at: f.instant.addingTimeInterval(86400), expected: f.head(), maximumBytes: f.maximum) }
         #expect(try f.durableState() == before)
         try f.execute("DROP TRIGGER fail_day")
-        _ = try f.database.confirmPreviousDay(at: f.instant.addingTimeInterval(60), expected: f.head(), maximumBytes: f.maximum)
         #expect(try f.head().activeConversationSegmentID == nil)
         try f.assertAccounting()
     }

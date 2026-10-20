@@ -11,10 +11,10 @@ struct MealDraft: Equatable {
 }
 
 enum DiaryCaptureDestination: Equatable, Sendable {
-    case automatic, day(UUID, dateOnly: Bool), previousDay(UUID), newDay, meal(UUID)
+    case automatic, day(UUID, dateOnly: Bool), newDay, meal(UUID)
 }
 enum DiaryCaptureResult: Equatable, Sendable {
-    case saved(UUID), needsDayChoice(UUID), failed
+    case saved(UUID), failed
 }
 
 @MainActor @Observable final class DiaryViewModel {
@@ -61,7 +61,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     var retryCoachMeal: ((UUID) -> Void)?
     var profiles: [DiaryProfile] = []
     var errorMessage: String?
-    var manualDayChoiceNeeded = false
+    var manualDayChanged = false
     var isSaving = false
     private(set) var isChangingProfile = false
     private(set) var captureReceipt: UUID?
@@ -240,6 +240,29 @@ enum DiaryCaptureResult: Equatable, Sendable {
         if let index = profiles.firstIndex(where: { $0.id == profileID }) { profiles[index] = updated.head.profile }
         queueBackup()
     }
+    struct MorningRecap: Equatable { var previous: DiaryDaySummary; var target: Double? }
+    /// The day before the active one, for the morning check-in on Today and Coach; nil on a diary's first day.
+    private(set) var morningRecap: MorningRecap?
+    func loadMorningRecap() async {
+        guard let day = activeDay, let owner = readModel?.profile.id,
+              let page = try? await store.diaryHistory(limit: 2, expectedProfileID: owner) else { morningRecap = nil; return }
+        guard let previous = page.days.first(where: { $0.day.id != day.id && $0.day.localDate < day.localDate }) else { morningRecap = nil; return }
+        let target = (try? await store.goal(on: previous.day.localDate, expectedProfileID: owner))??.targets.kcal
+        if activeDay?.id == day.id { morningRecap = MorningRecap(previous: previous, target: target) }
+    }
+    /// Starts the new waking day once the cutoff has passed, so logging never has to ask which day.
+    func rollOverDay(at: Date = Date()) async {
+        guard !isChangingProfile, let token = selection, activeDay != nil,
+              (try? await store.dayAssignment(at: at, expectedSelection: token, expectedProfileID: token.identity.profileID)) == .newDay else { return }
+        await change { _ = try await store.startDay(at: at, expectedSelection: token, expectedProfileID: token.identity.profileID) }
+    }
+    /// The morning weigh-in records on the day that is already open; Pip nods once it is saved.
+    func saveMorningWeight(kg: Double) async -> Bool {
+        guard let token = selection else { return false }
+        let saved = await change { _ = try await store.recordWeight(value: (kg * 10).rounded() / 10, startNewDay: false, expectedProfileID: token.identity.profileID) }
+        if saved { companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: UUID(), kind: .saved, committedAt: Date()) }
+        return saved
+    }
     @discardableResult func change(_ operation: () async throws -> Void) async -> Bool {
         guard !isChangingProfile, let token = selection else { return false }
         let before = activeDay
@@ -319,16 +342,10 @@ enum DiaryCaptureResult: Equatable, Sendable {
                     case .newDay:
                         let day = try await store.startDay(at: attempt.at, expectedSelection: token, expectedProfileID: token.identity.profileID)
                         attempt.resolvedDestination = .day(day.id, dateOnly: false)
-                    case .ask(let id):
-                        manualCaptureAttempt = nil
-                        return .needsDayChoice(id)
                     }
                 case .newDay:
                     let day = try await store.startDay(at: attempt.at, expectedSelection: token, expectedProfileID: token.identity.profileID)
                     attempt.resolvedDestination = .day(day.id, dateOnly: false)
-                case .previousDay(let id):
-                    try await store.confirmPreviousDay(at: attempt.at, expectedSelection: token, expectedProfileID: token.identity.profileID)
-                    attempt.resolvedDestination = .day(id, dateOnly: false)
                 case .day, .meal: attempt.resolvedDestination = destination
                 }
                 manualCaptureAttempt = attempt
@@ -404,7 +421,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard !isSaving, !isChangingProfile, selection == expectedSelection,
               payload.profileID == expectedSelection.identity.profileID else { return nil }
         isSaving = true; defer { isSaving = false }
-        manualDayChoiceNeeded = false
+        manualDayChanged = false
         let generation = changeGeneration
         do {
             let result = try await manualNutritionSaving(payload, expectedSelection)
@@ -435,7 +452,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             do { try await store.validateSelectionOwnership(expectedSelection) }
             catch DiaryError.wrongOwner, DiaryError.noProfile { return nil }
             catch { /* Storage failure does not prove that the selected owner changed. */ }
-            if error as? DiaryError == .ambiguousDay { manualDayChoiceNeeded = true } else { present(error) }
+            if error as? DiaryError == .ambiguousDay { manualDayChanged = true } else { present(error) }
             return nil
         }
     }
@@ -569,6 +586,8 @@ enum DiaryLaunch {
         return UUID(uuidString: args[index + 1])
     }
     static var isUITest: Bool { testID != nil }
+    /// UI tests run at any wall-clock time, so fixtures keep their day unless a test asks for the rollover.
+    static var rollsOverDays: Bool { !isUITest || ProcessInfo.processInfo.arguments.contains("--rollover-ui-test") }
     #if DEBUG
     static var isCoachHistoryFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-history-fixture") }
     #endif

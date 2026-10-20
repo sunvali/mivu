@@ -71,13 +71,6 @@ extension DiaryDatabase {
     func startDay(at: Date, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<TrackingDay> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.startDay(at: at) }
     }
-    func confirmPreviousDay(at: Date, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
-        try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
-            guard let dayID = transaction.head.activeDayID else { throw DiaryError.notFound }
-            transaction.head.previousDayConfirmedAt = at
-            try transaction.resolveDayChoices(at: at, dayID: dayID)
-        }
-    }
     func captureProjection(text: String, photos: [MealPhoto], reviewFirst: Bool, dayID: UUID, at: Date, dateOnly: Bool = false, submissionID: UUID = UUID(), forCoach: Bool = false, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<MealReadModel> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
             if let prior = try transaction.submissionParent(id: submissionID) {
@@ -291,8 +284,14 @@ extension DiaryTransaction {
     }
     func startDay(at: Date) throws -> TrackingDay {
         guard at.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
-        let day = try resolveDay(localDate: diaryDateLabel(at, zone: head.profile.timeZoneID), timeZoneID: head.profile.timeZoneID, at: at)
+        let day = try resolveDay(localDate: newDayLabel(at: at), timeZoneID: head.profile.timeZoneID, at: at)
         try activateDay(day); try resolveDayChoices(at: at, dayID: day.id); return day
+    }
+    /// The waking date, unless the active day already covers it: then an explicit start before the cutoff opens the calendar date.
+    func newDayLabel(at: Date) throws -> String {
+        let zone = head.profile.timeZoneID, waking = wakingDateLabel(at, zone: zone)
+        let active = try head.activeDayID.map { try database.trackingDay(id: $0) }
+        return active.map { $0.localDate >= waking } == true ? diaryDateLabel(at, zone: zone) : waking
     }
     func saveDay(_ day: TrackingDay) throws {
         try validateTrackingDayFields(day); _ = try database.trackingDay(id: day.id)
@@ -617,6 +616,17 @@ func diaryDateLabel(_ at: Date, zone: String) -> String {
     return formatter.string(from: at)
 }
 
+/// The waking day an instant belongs to: before the cutoff hour it still counts for the previous date.
+func wakingDateLabel(_ at: Date, zone: String, cutoffHour: Int = DayCutoff.hour) -> String {
+    diaryDateLabel(at.addingTimeInterval(-Double(cutoffHour) * 3600), zone: zone)
+}
+
+enum DayCutoff {
+    static let key = "dayStartHour"
+    // shortcut: a per-device preference read by the store; move it into the profile if days must agree across devices.
+    static var hour: Int { UserDefaults.standard.object(forKey: key) as? Int ?? 4 }
+}
+
 private func diaryPhotoScope(_ owner: DiaryPhotoOwner) -> (table: String, kind: String, parent: UUID) {
     switch owner { case .meal(let id): ("photo", "meal", id); case .coachTurn(let id): ("coach_photo", "coachTurn", id) }
 }
@@ -675,4 +685,18 @@ private func diaryUnitConversion(from previous: String, to edited: String) -> Do
     }
     guard let from = unit(previous), let to = unit(edited), from.family == to.family else { return nil }
     return to.factor / from.factor
+}
+
+/// Tells Coach which waking day new intake goes to. In the first three hours after the cutoff it lets the model
+/// judge from the food: a late drink or fast food belongs to the night before, breakfast to the new day.
+enum WakingDayInstruction {
+    static func text(capturedAt: Date, zone: String, cutoffHour: Int = DayCutoff.hour) -> String {
+        let today = wakingDateLabel(capturedAt, zone: zone, cutoffHour: cutoffHour)
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
+        guard (cutoffHour..<cutoffHour + 3).contains(calendar.component(.hour, from: capturedAt)) else {
+            return "The current waking day is \(today); log new intake to it unless the person names another day."
+        }
+        let previous = wakingDateLabel(capturedAt.addingTimeInterval(-86_400), zone: zone, cutoffHour: cutoffHour)
+        return "This was captured early in the morning, so choose the waking day from the food without asking: late-night intake such as alcohol, fast food or party snacks belongs to the night before (\(previous)); breakfast or anything else belongs to \(today)."
+    }
 }
