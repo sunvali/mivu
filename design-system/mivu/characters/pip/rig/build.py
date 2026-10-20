@@ -105,7 +105,8 @@ def collect(node, matrix, parent, part_set, parts, hidden=False, view=None):
             continue
         m = multiply(matrix, parse_transform(child.get("transform")))
         child_set = child.get("data-set") or part_set
-        child_hidden = hidden or child.get("display") == "none"
+        # A view group is display="none" only so the SVG previews one head; the runtime picks the view.
+        child_hidden = hidden or (child.get("display") == "none" and not child.get("data-view"))
         child_view = child.get("data-view") or view
         if child.get("data-mirror-of"):
             mirror_view(parts, child.get("data-mirror-of"), child_view, child_hidden)
