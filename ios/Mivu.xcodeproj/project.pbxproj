@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		610001000000000000000001 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 610001000000000000000003 /* JOSESwift */; };
-		640001000000000000000001 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 640001000000000000000003 /* Lottie */; };
 		610001000000000000000002 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 610001000000000000000004 /* JOSESwift */; };
 /* End PBXBuildFile section */
 
@@ -88,7 +87,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				610001000000000000000001 /* JOSESwift in Frameworks */,
-				640001000000000000000001 /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -175,7 +173,6 @@
 			name = Mivu;
 			packageProductDependencies = (
 				610001000000000000000003 /* JOSESwift */,
-				640001000000000000000003 /* Lottie */,
 			);
 			productName = Mivu;
 			productReference = 8B41F6452DEDD0D5001A66F9 /* Mivu.app */;
@@ -236,7 +233,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */,
-				640001000000000000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8B41F6462DEDD0D5001A66F9 /* Products */;
@@ -581,11 +577,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		640001000000000000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/airbnb/lottie-spm.git";
-			requirement = {kind = exactVersion; version = 4.6.1; };
-		};
 		610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/airsidemobile/JOSESwift.git";
@@ -597,7 +588,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		640001000000000000000003 /* Lottie */ = {isa = XCSwiftPackageProductDependency; package = 640001000000000000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */; productName = Lottie; };
 		610001000000000000000003 /* JOSESwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 610001000000000000000005 /* XCRemoteSwiftPackageReference "JOSESwift" */;

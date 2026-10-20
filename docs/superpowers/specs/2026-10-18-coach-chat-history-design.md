@@ -409,7 +409,7 @@ announces completion of a requested page once, preserves the focused message,
 and has explicit Load earlier/Load later/Jump to latest actions. Loading itself
 does not seize focus or repeatedly announce day dividers.
 
-Pip remains a decorative living companion with current Lottie assets and policy.
+Pip remains a decorative living companion with the current rig and policy.
 History requests and thumbnail loads do not emit submit/saved gestures. Only
 accepted input and durable receipts follow the existing feedback contract. Hidden,
 camera-covered, background, reduced-motion, low-power and thermal policy still

@@ -6,7 +6,7 @@
 
 **Architecture:** Keep profile-local SQLite and DiaryStore as the sole live writer. Introduce indexed metadata, explicit screen projections and targeted transactions before activating a coordinated storage cutover; render a bounded, anchored timeline independently of worker context. Reuse existing diary rules, analysis, photo normalization, native editors, Precision Glass and painted Lottie Pip.
 
-**Tech Stack:** Swift 6, iOS 26+, SwiftUI, SQLite3, AVFoundation, PhotosPicker, existing Lottie runtime, Swift Testing/XCTest, XcodeBuildMCP. No new dependency or hosted service.
+**Tech Stack:** Swift 6, iOS 26+, SwiftUI, SQLite3, AVFoundation, PhotosPicker, existing companion runtime, Swift Testing/XCTest, XcodeBuildMCP. No new dependency or hosted service.
 
 **Spec:** [Approved design](../specs/2026-10-18-coach-chat-history-design.md). Read it with this plan; its examples and acceptance table remain requirements.
 
@@ -487,7 +487,7 @@ This is **planned future native work**, not an instruction to run it during this
   ```
 - [ ] **2. Run RED:** relevant companion/activity suites and `MivuUITests/CoachHistoryUITests`.
 - [ ] **3. Implement lifecycle/accessibility adjustments.** Hidden/camera-covered/background surfaces pause using existing policy; retain Reduce Motion/low-power/thermal behavior and typing quietness. Save feedback only after durable capture/receipt, accepted-submit gesture before inference await. No animation-asset changes. VoiceOver has explicit Load earlier/later, Retry and Jump to latest; announce requested-page completion once and retain focus. Test largest text with composer/library/editor actions reachable and status understandable without color.
-- [ ] **4. Run GREEN:** focused suites plus existing companion mount/selection/Lottie preview regressions. Visually inspect Today/Coach for unrelated-pose flashes through camera/background/navigation; apply repository animation verification recipe if lifecycle changed.
+- [ ] **4. Run GREEN:** focused suites plus existing companion mount/selection/rig preview regressions. Visually inspect Today/Coach for unrelated-pose flashes through camera/background/navigation; apply repository animation verification recipe if lifecycle changed.
 - [ ] **5. Commit:** `fix: preserve accessible chat and companion lifecycle`.
 
 ## Task 15: Performance evidence and delivery review

@@ -19,3 +19,6 @@ xcuserdata/
 
 # Execution scratch
 .superpowers/
+
+# Local Python tooling
+.venv/

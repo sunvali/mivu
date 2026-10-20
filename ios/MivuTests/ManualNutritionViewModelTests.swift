@@ -59,6 +59,17 @@ import Testing
         #expect(replay?.replayed == true)
         #expect(model.captureReceipt == receipt && model.companionCaptureEvent == reaction)
     }
+    @Test func firstManualMealOfTheDayPlaysTheFirstMealMoment() async throws {
+        let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
+        let model = DiaryViewModel(store: f.store)
+        await model.load(createDefaultProfile: false)
+        let owner = try #require(model.selection)
+        #expect(await model.saveManualNutrition(f.payload, expectedSelection: owner)?.replayed == false)
+        let event = try #require(model.companionHabitEvent)
+        #expect(event.kind == .firstMealToday && event.operationID == f.payload.submissionID)
+        _ = await model.saveManualNutrition(f.payload, expectedSelection: owner)
+        #expect(model.companionHabitEvent == event, "a replay is not a new first meal")
+    }
     @Test func obsoleteManualSaveCannotPublishOrDismissAnotherProfile() async throws {
         let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
         let other = DiaryProfile(name: "Synthetic other", timeZoneID: "UTC")

@@ -1,26 +1,22 @@
 import Foundation
 import Testing
 import UIKit
-import Lottie
 @testable import Mivu
 
 @Suite(.serialized) @MainActor struct CompanionAssetTests {
-    @Test func bundledAssetLoadsSupportedCoreAnimationAndApprovedSegments() async throws {
+    @Test func bundledRigLoadsWithTheTodayCrop() async throws {
         let runtime = try await ready()
-        let player = try #require(runtime.player)
-        #expect(player.animation != nil)
+        let rig = try #require(runtime.rig)
+        let asset = try PipRigAsset.load(PipRigAssetTests.bundledData())
+        #expect(rig.visibleRect == asset.frames["today"])
         #expect(runtime.displayedPose == .resting)
-        #expect(player.currentRenderingEngine == .coreAnimation)
-        for name in ["resting", "blink", "attentive", "thinking", "saved", "reviewed", "recovery", "greeting", "submitted"] {
-            #expect(player.animation?.frameTime(forMarker: name) != nil)
-        }
     }
 }
 
 extension CompanionAssetTests {
     private var pip: CharacterDescriptor { CharacterCatalog.bundled.resolve("pip") }
     private var second: CharacterDescriptor {
-        CharacterDescriptor(id: "test-second", displayName: "Test Second", schemaVersion: 1,
+        CharacterDescriptor(id: "test-second", displayName: "Test Second", schemaVersion: 2,
                             animationResourcePath: pip.animationResourcePath, fallbackAssetPrefix: "Second",
                             previewAssetName: "TestPreview")
     }
@@ -47,13 +43,13 @@ extension CompanionAssetTests {
         return runtime
     }
 
-    private func mount(_ player: LottieAnimationView) throws -> UIWindow {
+    private func mount(_ player: PipRigView) throws -> UIWindow {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 160, height: 160)
         let controller = UIViewController()
         let view = UIView()
-        CompanionLottieView.install(player, in: view)
+        CompanionRigHost.install(player, in: view)
         view.frame = CGRect(x: 0, y: 0, width: 160, height: 160)
         window.rootViewController = controller
         controller.view.addSubview(view)
@@ -65,7 +61,7 @@ extension CompanionAssetTests {
     @Test func allPosesAndRepeatedReactCanBeApplied() async throws {
         let runtime = try await ready()
         for pose in CompanionPose.allCases {
-            let reaction = [.submitted, .saved, .reviewed, .greeting].contains(pose) ? UUID() : nil
+            let reaction = ![.resting, .attentive, .thinking, .recovery].contains(pose) ? UUID() : nil
             await runtime.apply(output(pose, reaction: reaction), darkMode: true)
             #expect(runtime.displayedPose == pose)
         }
@@ -81,26 +77,25 @@ extension CompanionAssetTests {
             await runtime.select(pip)
             await runtime.attach(eligible: true)
             #expect(runtime.loadFailed && !runtime.isReady)
-            #expect(runtime.player == nil)
-            #expect(runtime.fallbackAssetName(for: .recovery) == "PipRecovery")
+            #expect(runtime.rig == nil)
+            #expect(runtime.fallbackAssetName(for: .today) == "PipResting" && runtime.fallbackAssetName(for: .coach) == "PipCoach")
         }
-        var wrongBindings = try bytes()
-        let nameRange = try #require(wrongBindings.range(of: Data("\"cm\":\"saved\"".utf8)))
-        wrongBindings.replaceSubrange(nameRange, with: Data("\"cm\":\"wrong\"".utf8))
-        let wrongModel = CompanionRuntime(load: { _ in wrongBindings })
+        let wrongVersion = Data(try #require(String(data: bytes(), encoding: .utf8))
+            .replacingOccurrences(of: "\"version\":2", with: "\"version\":1").utf8)
+        let wrongModel = CompanionRuntime(load: { _ in wrongVersion })
         await wrongModel.select(pip)
         await wrongModel.attach(eligible: true)
-        #expect(wrongModel.loadFailed && wrongModel.player == nil)
+        #expect(wrongModel.loadFailed && wrongModel.rig == nil)
 
         var calls = 0
         let runtime = CompanionRuntime(load: { _ in calls += 1; return try bytes() })
-        let incompatible = CharacterDescriptor(id: "bad-schema", displayName: "Bad Schema", schemaVersion: 2,
+        let incompatible = CharacterDescriptor(id: "bad-schema", displayName: "Bad Schema", schemaVersion: 1,
                                              animationResourcePath: pip.animationResourcePath,
                                              fallbackAssetPrefix: "Bad", previewAssetName: "BadPreview")
         await runtime.select(incompatible)
         await runtime.attach(eligible: true)
         #expect(runtime.loadFailed && calls == 0)
-        #expect(runtime.fallbackAssetName(for: .resting) == "BadResting")
+        #expect(runtime.fallbackAssetName(for: .today) == "BadResting")
     }
 
     @Test func hiddenOutputPausesAndCancelsReaction() async throws {
@@ -110,7 +105,7 @@ extension CompanionAssetTests {
         #expect(runtime.isPaused)
         #expect(runtime.displayedPose == .resting)
         await runtime.apply(output(.thinking, playback: .hidden), darkMode: false)
-        #expect(runtime.player?.isAnimationPlaying == false)
+        #expect(runtime.rig.map { animationKeys(in: $0.layer).isEmpty } == true && !runtime.isIdleScheduled)
     }
 
     @Test func rapidLoadCancellationCannotAttachStalePlayer() async throws {
@@ -125,10 +120,10 @@ extension CompanionAssetTests {
         try await gate.waitForCalls(2)
         gate.complete(1, with: data)
         await latest.value
-        let player = try #require(runtime.player)
+        let rig = try #require(runtime.rig)
         gate.complete(0, with: data)
         await old.value
-        #expect(runtime.player === player)
+        #expect(runtime.rig === rig)
         #expect(runtime.isReady && !runtime.isPaused)
     }
 
@@ -140,24 +135,24 @@ extension CompanionAssetTests {
         let old = Task { await runtime.attach(eligible: true) }
         try await gate.waitForCalls(1)
         await runtime.select(second)
-        #expect(runtime.player == nil && !runtime.isReady)
+        #expect(runtime.rig == nil && !runtime.isReady)
         let latest = Task { await runtime.attach(eligible: true) }
         try await gate.waitForCalls(2)
         gate.complete(1, with: data)
         await latest.value
-        let player = try #require(runtime.player)
+        let rig = try #require(runtime.rig)
         gate.complete(0, with: data)
         await old.value
-        #expect(runtime.character.id == second.id && runtime.player === player)
+        #expect(runtime.character.id == second.id && runtime.rig === rig)
     }
 
     @Test func switchClearsOldReactionAndStartsNewResting() async throws {
         let runtime = try await ready()
         await runtime.apply(output(.reviewed, reaction: UUID()), darkMode: false)
-        weak let oldPlayer = runtime.player
+        weak let oldRig = runtime.rig
         await runtime.select(second)
-        #expect(runtime.player == nil && runtime.isPaused)
-        #expect(oldPlayer == nil)
+        #expect(runtime.rig == nil && runtime.isPaused)
+        #expect(oldRig == nil)
         await runtime.attach(eligible: true)
         #expect(runtime.triggerCount == 0)
         #expect(runtime.displayedPose == .resting)
@@ -173,8 +168,8 @@ extension CompanionAssetTests {
         #expect(runtime.isReady)
         await runtime.select(second)
         await runtime.attach(eligible: true)
-        #expect(runtime.loadFailed && runtime.player == nil)
-        #expect(runtime.fallbackAssetName(for: .thinking) == "SecondThinking")
+        #expect(runtime.loadFailed && runtime.rig == nil)
+        #expect(runtime.fallbackAssetName(for: .coach) == "SecondCoach")
     }
 
     @Test func failedLoadRetriesOnceOnNextEligibleAttachmentOnly() async throws {
@@ -225,34 +220,31 @@ extension CompanionAssetTests {
         await runtime.attach(eligible: false)
         gate.complete(0, with: data)
         await pending.value
-        #expect(runtime.player == nil && !runtime.isReady && runtime.isPaused)
+        #expect(runtime.rig == nil && !runtime.isReady && runtime.isPaused)
     }
 
     @Test func actualRepeatedGesturesAdvanceAndSettleWithoutHostTimer() async throws {
         let runtime = try await ready()
-        let player = try #require(runtime.player)
-        let window = try mount(player)
+        let rig = try #require(runtime.rig)
+        let window = try mount(rig)
         defer { runtime.stop(); window.isHidden = true }
-        for pose in [CompanionPose.submitted, .saved, .saved, .reviewed, .greeting, .resting] {
-            let duration: Double = pose == .submitted ? MivuMotion.submitted : pose == .saved ? MivuMotion.saved : pose == .reviewed
-                ? MivuMotion.reviewed : pose == .greeting ? MivuMotion.greeting : MivuMotion.blink
+        let hour = Calendar.current.component(.hour, from: Date())
+        let moments: [(CompanionPose, PipMoment)] = [(.submitted, .submitted), (.saved, .saved), (.saved, .saved),
+                                                     (.reviewed, .reviewed), (.greeting, .greeting(hour: hour))]
+        for (pose, moment) in moments {
+            let duration = PipGestureLibrary.gesture(for: moment).duration
             let began = ContinuousClock.now
             await runtime.apply(output(pose, reaction: UUID()), darkMode: false)
-            #expect(player.isAnimationPlaying)
-            let frame = player.realtimeAnimationFrame
-            try await Task.sleep(for: .milliseconds(50))
-            #expect(player.isAnimationPlaying)
-            #expect(player.realtimeAnimationFrame != frame)
-            let restStart = try #require(player.animation?.frameTime(forMarker: "resting"))
-            let restEnd = restStart + (try #require(player.animation?.durationFrameTime(forMarker: "resting")))
-            while !(player.realtimeAnimationFrame >= restStart && player.realtimeAnimationFrame < restEnd), began.duration(to: .now) < .seconds(3.5) {
+            #expect(runtime.displayedPose == pose)
+            #expect(!animationKeys(in: rig.layer).isEmpty)
+            while runtime.displayedPose != .resting, began.duration(to: .now) < .seconds(3.5) {
                 try await Task.sleep(for: .milliseconds(10))
             }
-            #expect(player.isAnimationPlaying, "Completed gestures must settle into living idle")
-            #expect(began.duration(to: .now) >= .seconds(duration - 0.04))
             #expect(runtime.displayedPose == .resting)
+            #expect(began.duration(to: .now) >= .seconds(duration - 0.04))
+            #expect(animationKeys(in: rig.layer).contains("breath"), "Completed gestures settle into gentle breathing")
         }
-        #expect(runtime.triggerCount == 6)
+        #expect(runtime.triggerCount == 5)
     }
 
     @Test func ordinaryPoseUpdatesDoNotCreateReactions() async throws {
@@ -279,11 +271,11 @@ extension CompanionAssetTests {
         await runtime.apply(action, darkMode: false)
         #expect(runtime.triggerCount == 1)
         #expect(runtime.displayedPose == .resting)
-        let player = try #require(runtime.player)
-        let window = try mount(player)
+        let rig = try #require(runtime.rig)
+        let window = try mount(rig)
         defer { runtime.stop(); window.isHidden = true }
         try await Task.sleep(for: .milliseconds(80))
-        #expect(player.isAnimationPlaying, "Reattachment resumes living idle without replaying the consumed reaction")
+        #expect(animationKeys(in: rig.layer).contains("breath"), "Reattachment resumes breathing without replaying the consumed reaction")
         #expect(runtime.displayedPose == .resting)
     }
 
@@ -298,40 +290,40 @@ extension CompanionAssetTests {
 
     @Test func obsoleteViewTeardownPreservesReplacementAndFreshGesture() async throws {
         let runtime = try await ready()
-        let player = try #require(runtime.player)
-        let oldWindow = try mount(player)
-        let oldContainer = try #require(player.superview)
-        let newWindow = try mount(player)
-        let newContainer = try #require(player.superview)
+        let rig = try #require(runtime.rig)
+        let oldWindow = try mount(rig)
+        let oldContainer = try #require(rig.superview)
+        let newWindow = try mount(rig)
+        let newContainer = try #require(rig.superview)
         #expect(oldContainer !== newContainer)
         defer { runtime.stop(); oldWindow.isHidden = true; newWindow.isHidden = true }
-        CompanionLottieView.dismantleUIView(oldContainer, coordinator: player)
-        #expect(player.superview === newContainer)
+        CompanionRigHost.dismantleUIView(oldContainer, coordinator: rig)
+        #expect(rig.superview === newContainer)
         await runtime.apply(output(.saved, reaction: UUID()), darkMode: false)
         try await Task.sleep(for: .milliseconds(50))
-        #expect(player.isAnimationPlaying)
-        #expect(player.superview === newContainer)
+        #expect(!animationKeys(in: rig.layer).isEmpty)
+        #expect(rig.superview === newContainer)
     }
 
     @Test func interruptionBeforeFirstFrameDropsTheCanceledReaction() async throws {
         let runtime = try await ready()
         await runtime.apply(output(.saved, reaction: UUID()), darkMode: false)
         await runtime.apply(output(.attentive), darkMode: false)
-        let player = try #require(runtime.player)
-        let window = try mount(player)
+        let rig = try #require(runtime.rig)
+        let window = try mount(rig)
         defer { runtime.stop(); window.isHidden = true }
         try await Task.sleep(for: .milliseconds(500))
         #expect(runtime.displayedPose == .attentive)
-        await runtime.reconcileMount(player)
-        #expect(player.isAnimationPlaying, "Quiet typing keeps gentle breathing instead of freezing")
+        await runtime.reconcileMount(rig)
+        #expect(animationKeys(in: rig.layer).contains("breath"), "Quiet typing keeps gentle breathing instead of freezing")
     }
 
     @Test func allFallbacksHaveBothAppearanceVariantsWithIdenticalBounds() throws {
         let runtime = CompanionRuntime()
         var size: CGSize?
-        for pose in CompanionPose.allCases {
+        for surface in [CompanionSurface.today, .coach] {
             for style in [UIUserInterfaceStyle.light, .dark] {
-                let image = try #require(UIImage(named: runtime.fallbackAssetName(for: pose), in: .main,
+                let image = try #require(UIImage(named: runtime.fallbackAssetName(for: surface), in: .main,
                                                compatibleWith: UITraitCollection(userInterfaceStyle: style)))
                 if let size { #expect(image.size == size) } else { size = image.size }
                 #expect(image.size.width == image.size.height)
@@ -355,5 +347,3 @@ private enum TestAssetError: Error { case missing }
     }
     func complete(_ index: Int, with data: Data) { continuations[index].resume(returning: data) }
 }
-
-@MainActor private final class SettleProbe { var count = 0 }

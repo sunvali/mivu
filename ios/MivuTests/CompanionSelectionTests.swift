@@ -12,7 +12,7 @@ import Testing
         let second = CharacterDescriptor(
             id: "test-companion",
             displayName: "Test Companion",
-            schemaVersion: 1,
+            schemaVersion: 2,
             animationResourcePath: pip.animationResourcePath,
             fallbackAssetPrefix: pip.fallbackAssetPrefix,
             previewAssetName: pip.previewAssetName

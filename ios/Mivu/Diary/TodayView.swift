@@ -68,6 +68,10 @@ struct DiaryRootView: View {
     @State private var hasLoaded = false
     @State private var companion = CompanionPresentation()
     @State private var companionRuntime: CompanionRuntime
+    #if DEBUG
+    @State private var poseTrail = ""
+    #endif
+    @State private var lastActive = CompanionLastActive(defaults: DiaryLaunch.defaults)
     @State private var companionSelection: CompanionSelection
     @State private var companionContext = CompanionContext(surface: nil, isTyping: false, isProcessing: false, needsRecovery: false, playback: .hidden)
     @State private var companionOutput = CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil)
@@ -131,6 +135,7 @@ struct DiaryRootView: View {
         _selectedTab = State(initialValue: testTab)
         _restoredTab = AppStorage(wrappedValue: testTab, "diarySelectedTab", store: testDefaults)
         _companionSelection = State(initialValue: CompanionSelection(catalog: .bundled, defaults: testDefaults))
+        _lastActive = State(initialValue: CompanionLastActive(defaults: testDefaults))
         self.observeCompanionOutput = observeCompanionOutput
         self.observeCompanionApplication = observeCompanionApplication
     }
@@ -179,14 +184,16 @@ struct DiaryRootView: View {
         .onChange(of: phase) { _, value in
             if value != .active {
                 companionRuntime.stop()
-                if value == .background { companion.enterBackground() }
+                if value == .background {
+                    if let id = model.readModel?.profile.id { lastActive.record(Date(), for: id) }
+                    companion.enterBackground()
+                }
                 refreshCompanion()
             }
             if value == .inactive { coach.pauseForInactiveScene() }
             if value == .background { continueInBackground() }
             if value == .active {
-                companion.attach(profileID: model.isChangingProfile ? nil : model.readModel?.profile.id,
-                                 existingEvents: companionEvents, existingSubmissions: companionSubmissions, now: Date())
+                attachCompanion()
                 refreshCompanion()
             }
             if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
@@ -211,9 +218,11 @@ struct DiaryRootView: View {
             refreshCompanion()
         }
         .onChange(of: model.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: model.companionHabitEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: model.companionReviewEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionSubmission) { _, _ in receiveCompanionSubmission() }
         .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: coach.companionPhotoEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: [coach.isSending, coach.companionNeedsRecovery, coach.companionIsProcessing]) { _, _ in refreshCompanion() }
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
@@ -229,7 +238,7 @@ struct DiaryRootView: View {
             }
             await companionRuntime.select(companionSelection.selectedCharacter)
             guard !Task.isCancelled, update == runtimeUpdate else { return }
-            await companionRuntime.attach(eligible: companionOutput.playback == .animated)
+            await companionRuntime.attach(eligible: companionOutput.playback != .hidden)
             guard !Task.isCancelled, update == runtimeUpdate else { return }
             await companionRuntime.apply(companionOutput, darkMode: colorScheme == .dark, surface: selectedCompanionSurface ?? .today)
             #if DEBUG
@@ -249,6 +258,16 @@ struct DiaryRootView: View {
     private var routedContent: some View {
         rootContent
         .tint(.diaryAccent)
+        #if DEBUG
+        .overlay(alignment: .topLeading) {
+            // UI tests cannot see Pip (accessibility-hidden), so the applied pose is mirrored here.
+            if DiaryLaunch.isUITest {
+                Text("pose:\(String(describing: companionOutput.pose))").font(.system(size: 1)).opacity(0.01)
+                    .allowsHitTesting(false).accessibilityIdentifier("companionDebugPose")
+                    .accessibilityValue(poseTrail)
+            }
+        }
+        #endif
         .foregroundStyle(Color.diaryText)
         .environment(\.diarySettingsRoutes, routes)
         .environment(\.diaryPhotoLimiter, model.photoWorkLimiter)
@@ -281,7 +300,8 @@ struct DiaryRootView: View {
             Tab("Today", systemImage: "fork.knife", value: "today") {
                 NavigationStack {
                     TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
-                              onCompanionContextChanged: updateCompanionContext).toolbar { profileControl }
+                              onCompanionContextChanged: updateCompanionContext,
+                              onCompanionTouch: touchCompanion).toolbar { profileControl }
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
@@ -294,6 +314,7 @@ struct DiaryRootView: View {
                 NavigationStack {
                     CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
                               onCompanionContextChanged: updateCompanionContext,
+                              onCompanionTouch: touchCompanion,
                               navigationRequest: coachRoutes.request,
                               onNavigationConsumed: { coachRoutes.consume($0) },
                               openHistory: openCoachHistory) { destination in
@@ -319,7 +340,7 @@ struct DiaryRootView: View {
         coachHistory = CoachHistoryPresentation(origin: origin, timeZoneID: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
     private var companionEvents: [CompanionEvent] {
-        [model.companionCaptureEvent, model.companionReviewEvent, coach.companionCaptureEvent].compactMap { $0 }
+        [model.companionCaptureEvent, model.companionHabitEvent, model.companionReviewEvent, coach.companionCaptureEvent, coach.companionPhotoEvent].compactMap { $0 }
     }
     private var companionSubmissions: [CompanionSubmission] { [coach.companionSubmission].compactMap { $0 } }
     private var selectedCompanionSurface: CompanionSurface? {
@@ -339,8 +360,16 @@ struct DiaryRootView: View {
     private func resetCompanionProfile() {
         companionRuntime.stop()
         companion.enterBackground()
-        companion.attach(profileID: model.isChangingProfile ? nil : model.readModel?.profile.id,
-                         existingEvents: companionEvents, existingSubmissions: companionSubmissions, now: Date())
+        attachCompanion()
+        refreshCompanion()
+    }
+    private func attachCompanion() {
+        let profileID = model.isChangingProfile ? nil : model.readModel?.profile.id
+        lastActive.attach(companion, profileID: profileID, existingEvents: companionEvents,
+                          existingSubmissions: companionSubmissions, now: Date())
+    }
+    private func touchCompanion(_ touch: CompanionTouch) {
+        if !companion.touch(touch, now: Date()) { companionRuntime.earTwitch() }
         refreshCompanion()
     }
     private func receiveCompanionEvent(_ event: CompanionEvent?) {
@@ -373,25 +402,36 @@ struct DiaryRootView: View {
             visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || model.errorMessage != nil)
         let output = companion.resolve(context: context, now: Date())
         if companionOutput.playback == .animated && output.playback != .animated { companionRuntime.stop() }
+        #if DEBUG
+        if DiaryLaunch.isUITest, output.pose != companionOutput.pose || poseTrail.isEmpty { poseTrail += "[\(String(describing: output.pose))]" }
+        #endif
         companionOutput = output
         #if DEBUG
         observeCompanionOutput?(output)
         #endif
     }
-    private struct RuntimeUpdate: Hashable {
+    /// What `.task(id:)` watches: any change here re-applies the output to the runtime.
+    struct RuntimeUpdate: Hashable {
         let surface: CompanionSurface?
         let characterID: String
         let pose: Int
         let animated: Bool
         let reactionID: UUID?
+        /// The draft grows while the pose stays attentive; the eyes follow it.
+        let typing: Double
         let darkMode: Bool
         let loaded: Bool
         // Loading can outlive its requesting task; readiness reconciles the latest output.
         let ready: Bool
+
+        init(output: CompanionOutput, surface: CompanionSurface?, characterID: String, darkMode: Bool, loaded: Bool, ready: Bool) {
+            self.surface = surface; self.characterID = characterID; pose = output.pose.rawValue
+            animated = output.playback == .animated; reactionID = output.reactionID; typing = output.typingProgress
+            self.darkMode = darkMode; self.loaded = loaded; self.ready = ready
+        }
     }
     private var runtimeUpdate: RuntimeUpdate {
-        RuntimeUpdate(surface: selectedCompanionSurface, characterID: companionSelection.selectedCharacterID, pose: companionOutput.pose.rawValue,
-                      animated: companionOutput.playback == .animated, reactionID: companionOutput.reactionID,
+        RuntimeUpdate(output: companionOutput, surface: selectedCompanionSurface, characterID: companionSelection.selectedCharacterID,
                       darkMode: colorScheme == .dark, loaded: hasLoaded, ready: companionRuntime.isReady)
     }
     private var profileControl: some ToolbarContent {
@@ -424,6 +464,7 @@ struct TodayView: View {
     let companionOutput: CompanionOutput
     let companionRuntime: CompanionRuntime
     let onCompanionContextChanged: (CompanionContext) -> Void
+    var onCompanionTouch: (CompanionTouch) -> Void = { _ in }
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
     @State private var companionVisible = false
@@ -564,9 +605,9 @@ struct TodayView: View {
         return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
     private var companionArt: some View {
+        // 186 keeps the hero's old height; taller pushes the first meal row under the floating Log meal bar.
         CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                      size: typeSize.isAccessibilitySize ? 144 : 200, runtime: companionRuntime)
-            .frame(width: 144, height: typeSize.isAccessibilitySize ? 144 : 186, alignment: .top)
+                      size: typeSize.isAccessibilitySize ? 144 : 186, runtime: companionRuntime, onTouch: onCompanionTouch)
             .onScrollVisibilityChange(threshold: 0.5) { visible in
                 companionVisible = visible; reportCompanionContext()
             }

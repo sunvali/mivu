@@ -1,5 +1,4 @@
 import SwiftUI
-import Lottie
 
 struct CompanionView: View {
     let presentation: CompanionOutput
@@ -7,54 +6,75 @@ struct CompanionView: View {
     let size: CGFloat
     let runtime: CompanionRuntime
     var surface: CompanionSurface = .today
+    var onTouch: (CompanionTouch) -> Void = { _ in }
 
-    private var fallbackPose: CompanionPose {
-        presentation.playback == .animated && !runtime.isReady && !runtime.loadFailed ? .resting : presentation.pose
+    /// Coach is `size` wide; Today is `size` tall. Both match the rig's crop so nothing overflows.
+    private var frame: CGSize {
+        let aspect = runtime.cropAspect(for: surface)
+        return surface == .coach ? CGSize(width: size, height: size / aspect) : CGSize(width: size * aspect, height: size)
     }
+
+    private var animated: Bool { presentation.playback == .animated }
 
     var body: some View {
         Group {
-            if presentation.playback == .animated, let player = runtime.player {
-                CompanionLottieView(player: player, paused: runtime.isPaused)
-                    .id(ObjectIdentifier(player))
-                    .task { await runtime.reconcileMount(player) }
+            if presentation.playback != .hidden, let rig = runtime.rig {
+                CompanionRigHost(rig: rig, onWindow: runtime.resumeBreathing)
+                    .id(ObjectIdentifier(rig))
+                    .task { await runtime.reconcileMount(rig) }
             } else {
-                Image(surface == .coach ? runtime.character.fallbackAssetPrefix + "Coach" : runtime.fallbackAssetName(for: fallbackPose)).resizable().scaledToFit()
+                // Only while the rig loads or when it failed to load. The square fallback overflows its crop by transparent margin only, like the rig's framing.
+                Image(runtime.fallbackAssetName(for: surface)).resizable().scaledToFit()
+                    .frame(width: max(frame.width, frame.height), height: max(frame.width, frame.height))
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: frame.width, height: frame.height)
         .environment(\.colorScheme, darkMode ? .dark : .light)
+        .contentShape(Rectangle())
+        // A hold must not also count as a tap, so the pat is tried first and the tap only follows its failure.
+        .gesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            onTouch(.pat)
+        }.exclusively(before: TapGesture().onEnded {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onTouch(.tap)
+        }), including: animated ? .all : .none)
         .accessibilityHidden(true)
     }
 }
 
-struct CompanionLottieView: UIViewRepresentable {
-    let player: LottieAnimationView
-    let paused: Bool
+struct CompanionRigHost: UIViewRepresentable {
+    let rig: PipRigView
+    var onWindow: () -> Void = {}
 
-    func makeCoordinator() -> LottieAnimationView { player }
+    final class Container: UIView {
+        var onWindow: () -> Void = {}
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { onWindow() }
+        }
+    }
+
+    func makeCoordinator() -> PipRigView { rig }
     func makeUIView(context: Context) -> UIView {
-        let container = UIView()
-        Self.install(player, in: container)
+        let container = Container()
+        container.onWindow = onWindow
+        Self.install(rig, in: container)
         return container
     }
-    func updateUIView(_ view: UIView, context: Context) {
-        Self.install(player, in: view)
-        if paused { player.pause() }
-    }
-    static func install(_ player: LottieAnimationView, in container: UIView) {
-        guard player.superview !== container else { return }
-        player.removeFromSuperview()
-        player.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(player)
+    func updateUIView(_ view: UIView, context: Context) { Self.install(rig, in: view) }
+    static func install(_ rig: PipRigView, in container: UIView) {
+        guard rig.superview !== container else { return }
+        rig.removeFromSuperview()
+        rig.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(rig)
         NSLayoutConstraint.activate([
-            player.leadingAnchor.constraint(equalTo: container.leadingAnchor), player.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            player.topAnchor.constraint(equalTo: container.topAnchor), player.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            rig.leadingAnchor.constraint(equalTo: container.leadingAnchor), rig.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            rig.topAnchor.constraint(equalTo: container.topAnchor), rig.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
     }
-    static func dismantleUIView(_ view: UIView, coordinator: LottieAnimationView) {
+    static func dismantleUIView(_ view: UIView, coordinator: PipRigView) {
         guard coordinator.superview === view else { return }
-        coordinator.pause()
         coordinator.removeFromSuperview()
     }
 }

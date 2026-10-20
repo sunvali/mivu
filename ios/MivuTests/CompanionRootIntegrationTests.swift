@@ -2,7 +2,6 @@ import Foundation
 import SwiftUI
 import Testing
 import UIKit
-import Lottie
 @testable import Mivu
 
 @MainActor private final class CompanionRootLoadGate {
@@ -111,6 +110,11 @@ import Lottie
         _ = try await loader.thumbnail(for: reference, pixelSize: 64)
         await loader.purgeForMemoryPressure()
         _ = try await loader.thumbnail(for: reference, pixelSize: 64)
+        let beforeImport = outputs.count, triggersBeforeImport = runtime.triggerCount
+        #expect(triggersBeforeImport == triggers)
+        #expect(outputs[firstOutput..<beforeImport].allSatisfy {
+            $0.pose == .resting && $0.reactionID == nil && $0.playback == .animated
+        }, "Paging, eviction, seek and thumbnail delivery must remain quiet at the real root")
         let presentation = try coach.attachmentDraft.beginPresentation()
         let draftID = coach.attachmentDraft.submissionID
         let photoID = UUID()
@@ -121,10 +125,11 @@ import Lottie
         await timeline.jumpToLatest()
         #expect(coach.companionSubmission == submission && coach.companionCaptureEvent == saved)
         #expect(coach.captureReceipt == capture && diary.companionReviewEvent == reviewed)
-        #expect(runtime.triggerCount == triggers)
-        #expect(outputs.dropFirst(firstOutput).allSatisfy {
-            $0.pose == .resting && $0.reactionID == nil && $0.playback == .animated
-        }, "Paging, eviction, seek, thumbnail delivery and unsent imports must remain quiet at the real root")
+        // An accepted unsent photo is the one decorative moment: a curious look, never a saved or reviewed reaction.
+        #expect(coach.companionPhotoEvent?.kind == .photoAdded)
+        #expect(outputs.dropFirst(beforeImport).allSatisfy {
+            ($0.pose == .resting || $0.pose == .curious) && $0.playback == .animated
+        })
         #expect(try fixture.rows("SELECT COUNT(*) FROM coach_turn") == [["140"]])
     }
 
@@ -275,7 +280,7 @@ import Lottie
         try #require(await eventually { !diary.isChangingProfile && !diary.isSaving })
         let captured = await diary.capture(draft, dayID: day)
         try #require(captured, "Synthetic capture failed: \(diary.errorMessage ?? "no error"); saving=\(diary.isSaving), changing=\(diary.isChangingProfile), canceled=\(Task.isCancelled)")
-        try #require(await eventually { latest?.pose == .saved })
+        try #require(await eventually { latest?.pose == .firstMealToday })
         #expect(runtime.triggerCount == 0)
         let deadline = try #require(latest?.nextDeadline)
         if expired { try #require(await eventually { latest?.pose == .resting }) }
@@ -286,7 +291,7 @@ import Lottie
             #expect(runtime.displayedPose == .resting)
         } else {
             #expect(await eventually { runtime.triggerCount == 1 }, "A still-current save must play when the first player becomes ready")
-            #expect(runtime.displayedPose == .saved)
+            #expect(runtime.displayedPose == .firstMealToday)
         }
         #expect(diary.readModel?.meals.count == 1, "Character loading must not duplicate or lose the saved record")
     }
@@ -353,9 +358,7 @@ import Lottie
                 && outputs.last?.pose == .resting && outputs.last?.playback == .animated
                 && outputs.last?.reactionID == nil && runtime.displayedPose == .resting
         })
-        let player = try #require(runtime.player)
-        let restStart = try #require(player.animation?.frameTime(forMarker: "resting"))
-        let restEnd = restStart + (try #require(player.animation?.durationFrameTime(forMarker: "resting")))
+        let rig = try #require(runtime.rig)
         let triggers = runtime.triggerCount
         let firstOutput = outputs.count
         gate.armed = true
@@ -374,9 +377,7 @@ import Lottie
         }, timeout: 0.25)
         #expect(!changedPose, "A background check with no input must not make untouched Today flash another pose")
         #expect(outputs.last?.pose == .resting && outputs.last?.reactionID == nil)
-        #expect(player.isAnimationPlaying && player.realtimeAnimationFrame >= restStart
-                && player.realtimeAnimationFrame < restEnd,
-                "The warm production player must keep its existing breathing loop")
+        #expect(animationKeys(in: rig.layer).contains("breath"), "The warm production rig must keep breathing")
 
         gate.release()
         await coach.waitForWorker()

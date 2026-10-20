@@ -67,6 +67,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var captureReceipt: UUID?
     private(set) var companionCaptureEvent: CompanionEvent?
     private(set) var companionReviewEvent: CompanionEvent?
+    private(set) var companionHabitEvent: CompanionEvent?
     private var companionReviewSubmissions: [UUID: Set<UUID>] = [:]
     var restoreGeneration = 0
     var backupStatus = FolderBackupStatus()
@@ -241,8 +242,16 @@ enum DiaryCaptureResult: Equatable, Sendable {
     }
     @discardableResult func change(_ operation: () async throws -> Void) async -> Bool {
         guard !isChangingProfile, let token = selection else { return false }
-        do { try await operation(); try await refresh(profileID: token.identity.profileID); return !Task.isCancelled && selection == token }
-        catch { if selection == token { present(error) }; return false }
+        let before = activeDay
+        do {
+            try await operation(); try await refresh(profileID: token.identity.profileID)
+            let committed = !Task.isCancelled && selection == token
+            // A day becoming complete is a habit moment; it never gates or delays the change.
+            if committed, let before, before.completeness != .complete, activeDay?.id == before.id, activeDay?.completeness == .complete {
+                companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: before.id, kind: .dayComplete, committedAt: Date())
+            }
+            return committed
+        } catch { if selection == token { present(error) }; return false }
     }
     @discardableResult func acceptReview(mealID: UUID, submissionID: UUID, expectedProfileID: UUID, currentTime: () -> Date = Date.init) async -> Bool {
         guard selection?.identity.profileID == expectedProfileID else { return false }
@@ -360,6 +369,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
                 exactMeals[saved.id] = latest
             }
             if meal(saved.id) == nil { refreshNeeded = true }
+            if attempt.isNew, !refreshNeeded { noteFirstMealOfDay(saved, profileID: token.identity.profileID, operationID: draft.submissionID) }
             errorMessage = refreshNeeded ? "Saved on this iPhone. Reload the diary to refresh totals." : nil
             return .saved(saved.id)
         } catch {
@@ -374,6 +384,12 @@ enum DiaryCaptureResult: Equatable, Sendable {
             present(error)
             return .failed
         }
+    }
+    /// Decided after the durable write, from refreshed state: a new meal that is the active day's only one.
+    private func noteFirstMealOfDay(_ meal: MealReadModel, profileID: UUID, operationID: UUID) {
+        guard meal.submissions.count == 1, readModel?.activeDay?.id == meal.dayID, readModel?.meals.map(\.id) == [meal.id],
+              companionHabitEvent?.profileID != profileID || companionHabitEvent?.operationID != operationID else { return }
+        companionHabitEvent = CompanionEvent(profileID: profileID, operationID: operationID, kind: .firstMealToday, committedAt: Date())
     }
     private func loadSavedMealIfNeeded(_ id: UUID) async {
         // One bounded retry when a newer projection invalidates an in-flight detail read.
@@ -412,6 +428,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
                 captureReceipt = result.submissionID
                 companionCaptureEvent = CompanionEvent(profileID: payload.profileID, operationID: result.submissionID, kind: .saved, committedAt: Date())
             }
+            if !result.replayed, !refreshNeeded { noteFirstMealOfDay(result.meal, profileID: payload.profileID, operationID: result.submissionID) }
             return result
         } catch {
             guard selection == expectedSelection, !isChangingProfile else { return nil }
@@ -436,7 +453,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     func signOut() async { guard beginProfileTransition() else { return }; defer { finishProfileTransition() }; await clearProfileSelection() }
     func deleteCurrentProfile() async {
         guard let owner = readModel?.head.profile.id, beginProfileTransition() else { return }; defer { finishProfileTransition() }
-        do { try await backup?.removeProfile(owner); try await store.deleteProfile(owner); await clearProfileSelection(); profiles = try await store.profiles() }
+        do { try await backup?.removeProfile(owner); try await store.deleteProfile(owner); preferences.map { CompanionLastActive(defaults: $0).forget(owner) }; await clearProfileSelection(); profiles = try await store.profiles() }
         catch { present(error) }
     }
     private func beginProfileTransition() -> Bool {

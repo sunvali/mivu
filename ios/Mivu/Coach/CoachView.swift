@@ -5,6 +5,7 @@ struct CoachView: View {
     let companionOutput: CompanionOutput
     let companionRuntime: CompanionRuntime
     let onCompanionContextChanged: (CompanionContext) -> Void
+    var onCompanionTouch: (CompanionTouch) -> Void = { _ in }
     var navigationRequest: CoachNavigationRequest? = nil
     var onNavigationConsumed: (UUID) -> Void = { _ in }
     var openHistory: () -> Void = {}
@@ -147,6 +148,7 @@ struct CoachView: View {
             diagnostics.observeFocusNotification(event)
         }
         .onChange(of: [editing, showPhotos, showingDetail, companionProcessing, companionRecovery]) { _, _ in reportCompanionContext() }
+        .onChange(of: CompanionContext.draftSignal(coach.attachmentDraft.text.count)) { _, _ in reportCompanionContext() }
         .onChange(of: coach.diary.selection) { _, _ in
             coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; selectedRecord = nil
         }
@@ -277,14 +279,13 @@ struct CoachView: View {
     private func reportCompanionContext() {
         onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: editing && !coach.isSending,
             isProcessing: companionProcessing, needsRecovery: companionRecovery,
-            playback: surfaceVisible && !showPhotos && !showingDetail ? .animated : .hidden))
+            playback: surfaceVisible && !showPhotos && !showingDetail ? .animated : .hidden,
+            draftLength: coach.attachmentDraft.text.count))
     }
     private var companionStrip: some View {
         HStack(alignment: .center, spacing: 12) {
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                          size: 88, runtime: companionRuntime, surface: .coach)
-                .frame(width: 76, height: 66, alignment: .top)
-                .clipped()
+                          size: 76, runtime: companionRuntime, surface: .coach, onTouch: onCompanionTouch)
             VStack(alignment: .leading, spacing: 4) {
                 if let day = coach.diary.activeDay {
                     Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)

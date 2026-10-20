@@ -9,10 +9,10 @@ import Testing
     private func context(
         surface: CompanionSurface? = .today, typing: Bool = false,
         processing: Bool = false, recovery: Bool = false,
-        playback: MotionPolicy.Playback = .animated
+        playback: MotionPolicy.Playback = .animated, draftLength: Int = 0
     ) -> CompanionContext {
         CompanionContext(surface: surface, isTyping: typing, isProcessing: processing,
-                         needsRecovery: recovery, playback: playback)
+                         needsRecovery: recovery, playback: playback, draftLength: draftLength)
     }
 
     private func event(kind: CompanionEvent.Kind = .saved, at: Date? = nil) -> CompanionEvent {
@@ -169,12 +169,12 @@ import Testing
         #expect(resumed.nextDeadline == nil)
     }
 
-    @Test func savedAcknowledgementReturnsToQuietProcessingAfterEightTenths() {
+    @Test func savedAcknowledgementReturnsToQuietProcessingAfterSavedDuration() {
         let presentation = attached()
         presentation.receive(event(), now: t)
         #expect(presentation.resolve(context: context(processing: true), now: t).pose == .saved)
-        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.799)).pose == .saved)
-        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(0.8)).pose == .thinking)
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(MivuMotion.saved - 0.001)).pose == .saved)
+        #expect(presentation.resolve(context: context(processing: true), now: t.addingTimeInterval(MivuMotion.saved)).pose == .thinking)
     }
 
     @Test func acceptedSubmissionPrecedesACoalescedDurableReceipt() {
@@ -448,4 +448,142 @@ import Testing
         #expect(visible.pose != .reviewed)
     }
 
+
+    // MARK: Affection, habit and touch moments
+
+    @Test(arguments: [true, false])
+    func tapDuringRecoveryOrProcessingOnlyTwitches(recovery: Bool) {
+        let presentation = resting()
+        let busy = context(processing: !recovery, recovery: recovery)
+        let before = presentation.resolve(context: busy, now: t)
+        #expect(presentation.touch(.tap, now: t) == false)
+        let after = presentation.resolve(context: busy, now: t.addingTimeInterval(0.1))
+        #expect(after.pose == (recovery ? .recovery : .thinking) && after.pose == before.pose)
+    }
+
+    @Test func touchIsRefusedUnlessAnimatedAndNotTyping() {
+        let presentation = resting()
+        _ = presentation.resolve(context: context(playback: .staticPose), now: t)
+        #expect(presentation.touch(.pat, now: t) == false)
+        _ = presentation.resolve(context: context(typing: true), now: t)
+        #expect(presentation.touch(.pat, now: t) == false)
+        _ = presentation.resolve(context: context(playback: .hidden), now: t)
+        #expect(presentation.touch(.pat, now: t) == false)
+        _ = presentation.resolve(context: context(surface: nil), now: t)
+        #expect(presentation.touch(.pat, now: t) == false)
+    }
+
+    @Test func welcomeBackDoesNotLeakAcrossProfilesOrBackground() {
+        let presentation = CompanionPresentation(calendar: utc)
+        presentation.attach(profileID: owner, existingEvents: [], now: t, lastActiveAt: t.addingTimeInterval(-26 * 3600))
+        presentation.attach(profileID: UUID(), existingEvents: [], now: t)
+        #expect(presentation.resolve(context: context(), now: t).pose == .greeting)
+
+        presentation.attach(profileID: owner, existingEvents: [], now: t, lastActiveAt: t.addingTimeInterval(-26 * 3600))
+        presentation.enterBackground()
+        presentation.attach(profileID: owner, existingEvents: [], now: t)
+        #expect(presentation.resolve(context: context(), now: t).pose == .greeting)
+    }
+
+    @Test func rapidTapsEscalateOnceThenShakeOff() {
+        let presentation = resting()
+        var levels: [Int] = []
+        var ids: Set<UUID> = []
+        for i in 0..<6 {
+            let at = t.addingTimeInterval(0.3 * Double(i))
+            _ = presentation.resolve(context: context(), now: at)
+            #expect(presentation.touch(.tap, now: at))
+            let out = presentation.resolve(context: context(), now: at)
+            #expect(out.pose == .tapped)
+            levels.append(out.tapLevel)
+            ids.insert(out.reactionID!)
+        }
+        #expect(levels == [0, 1, 2, 3, 4, 0])
+        #expect(ids.count == 6)
+        let late = presentation.resolve(context: context(), now: t.addingTimeInterval(5))
+        #expect(late.pose == .resting && late.tapLevel == 0)
+    }
+
+    @Test func slowTapsRotateThroughTheFourReactions() {
+        let presentation = resting()
+        var levels: [Int] = []
+        for i in 0..<5 {
+            let at = t.addingTimeInterval(2 * Double(i))
+            _ = presentation.resolve(context: context(), now: at)
+            #expect(presentation.touch(.tap, now: at))
+            levels.append(presentation.resolve(context: context(), now: at).tapLevel)
+        }
+        #expect(levels == [0, 1, 2, 3, 0])
+    }
+
+    @Test func patPlaysPattedWithoutTapLevel() {
+        let presentation = resting()
+        #expect(presentation.touch(.pat, now: t))
+        let out = presentation.resolve(context: context(), now: t)
+        #expect(out.pose == .patted && out.tapLevel == 0)
+        #expect(out.nextDeadline == t.addingTimeInterval(MivuMotion.patted))
+    }
+
+    @Test func freshSuccessOutranksTap() {
+        let presentation = resting()
+        #expect(presentation.touch(.tap, now: t))
+        #expect(presentation.resolve(context: context(), now: t).pose == .tapped)
+        presentation.receive(event(at: t.addingTimeInterval(0.1)), now: t.addingTimeInterval(0.1))
+        let out = presentation.resolve(context: context(), now: t.addingTimeInterval(0.1))
+        #expect(out.pose == .saved && out.tapLevel == 0)
+        #expect(presentation.touch(.tap, now: t.addingTimeInterval(0.2)) == false)
+    }
+
+    @Test(arguments: [(CompanionEvent.Kind.firstMealToday, CompanionPose.firstMealToday),
+                      (.dayComplete, .dayComplete), (.photoAdded, .curious)])
+    func habitMomentsDedupeAndExpireLikeSaved(kind: CompanionEvent.Kind, pose: CompanionPose) {
+        let presentation = resting()
+        let first = event(kind: kind)
+        presentation.receive(first, now: t)
+        let out = presentation.resolve(context: context(), now: t)
+        #expect(out.pose == pose && out.reactionID != nil)
+        presentation.receive(first, now: t.addingTimeInterval(0.01))
+        let settled = presentation.resolve(context: context(), now: t.addingTimeInterval(5))
+        #expect(settled.pose == .resting && settled.reactionID == nil)
+        let stale = event(kind: kind, at: t)
+        presentation.receive(stale, now: t.addingTimeInterval(MivuMotion.feedbackLifetime))
+        #expect(presentation.resolve(context: context(), now: t.addingTimeInterval(MivuMotion.feedbackLifetime)).pose == .resting)
+    }
+
+    private var utc: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    @Test func welcomeBackAfterADayAway() {
+        let away = CompanionPresentation(calendar: utc)
+        away.attach(profileID: owner, existingEvents: [], now: t, lastActiveAt: t.addingTimeInterval(-26 * 3600))
+        let back = away.resolve(context: context(), now: t)
+        #expect(back.pose == .welcomeBack)
+        #expect(back.nextDeadline == t.addingTimeInterval(MivuMotion.welcomeBack))
+        let recent = CompanionPresentation(calendar: utc)
+        recent.attach(profileID: owner, existingEvents: [], now: t, lastActiveAt: t.addingTimeInterval(-2 * 3600))
+        #expect(recent.resolve(context: context(), now: t).pose == .greeting)
+    }
+
+    @Test func welcomeBackCountsCalendarDaysAcrossMidnight() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let late = try #require(calendar.date(from: DateComponents(year: 2027, month: 3, day: 1, hour: 23, minute: 59)))
+        let early = late.addingTimeInterval(120)
+        let nextDay = CompanionPresentation(calendar: calendar)
+        nextDay.attach(profileID: owner, existingEvents: [], now: early, lastActiveAt: late)
+        #expect(nextDay.resolve(context: context(), now: early).pose == .welcomeBack)
+        let sameDay = CompanionPresentation(calendar: calendar)
+        sameDay.attach(profileID: owner, existingEvents: [], now: late.addingTimeInterval(30), lastActiveAt: late)
+        #expect(sameDay.resolve(context: context(), now: late.addingTimeInterval(30)).pose == .greeting)
+    }
+
+    @Test func typingProgressClampsAtSixtyCharacters() {
+        let presentation = attached()
+        #expect(presentation.resolve(context: context(typing: true, draftLength: 30), now: t).typingProgress == 0.5)
+        #expect(presentation.resolve(context: context(typing: true, draftLength: 600), now: t).typingProgress == 1)
+        #expect(presentation.resolve(context: context(typing: true, draftLength: -4), now: t).typingProgress == 0)
+    }
 }

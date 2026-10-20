@@ -58,6 +58,7 @@ import Observation
     private var reservations: [UUID: Reservation] = [:]
     private var order: [UUID: Int] = [:]
     private var nextOrder = 0
+    @ObservationIgnored var onPhotoAccepted: (() -> Void)?
     @ObservationIgnored private let limiter: PhotoWorkLimiter
     @ObservationIgnored private let dependencies: Dependencies
 
@@ -169,6 +170,7 @@ import Observation
                     case .success(let bytes):
                         attachments.append(MealPhoto(id: id, data: bytes))
                         attachments.sort { (order[$0.id] ?? 0) < (order[$1.id] ?? 0) }
+                        onPhotoAccepted?()
                     case .failure: failed.append(id)
                     }
                 } catch { }
