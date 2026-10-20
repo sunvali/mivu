@@ -15,6 +15,8 @@ struct CoachView: View {
     @State private var surfaceVisible = false
     @State private var showingDetail = false
     @State private var showPhotos = false
+    @State private var inputWraps = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var cameraPresentationID: UUID?
     @State private var retakingPhotoID: UUID?
     @State private var restoreKeyboard = false
@@ -290,7 +292,9 @@ struct CoachView: View {
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
                           size: typeSize.isAccessibilitySize ? 76 : 112, runtime: companionRuntime, surface: .coach,
                           onTouch: onCompanionTouch)
-                .offset(y: 20)
+                // Paws rest on the field's top edge; once the text wraps, Pip steps up so the first line stays clear.
+                .offset(y: inputWraps ? 0 : 20)
+                .animation(reduceMotion ? nil : .snappy, value: inputWraps)
             VStack(alignment: .leading, spacing: 4) {
                 if let day = coach.diary.activeDay {
                     Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
@@ -355,6 +359,7 @@ struct CoachView: View {
             .accessibilityIdentifier("coachInput")
             .padding(.horizontal, 16).padding(.vertical, 10)
             .frame(minHeight: 48)
+            .onGeometryChange(for: Bool.self) { $0.size.height > 56 } action: { inputWraps = $0 }
             .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
             .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
     }

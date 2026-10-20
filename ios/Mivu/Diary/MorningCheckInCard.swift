@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shown after a new waking day starts: the last day's recap, a coverage question and an optional weigh-in.
+/// Shown after a new waking day starts: the last day's recap and an optional weigh-in.
 /// Nothing here blocks logging; the first meal of the day hides it.
 struct MorningCheckInCard: View {
     @Bindable var model: DiaryViewModel
@@ -22,7 +22,6 @@ struct MorningCheckInCard: View {
     @FocusState private var weightFocused: Bool
 
     private var showsRecap: Bool { previous.mealCount > 0 }
-    private var askingCoverage: Bool { showsRecap && previous.day.completeness == .unknown }
     private var askingWeight: Bool { todayWeight == nil && skippedDay != day.id.uuidString }
     private var enteredKg: Double? {
         guard let value = ProgressDate.number(weight), value > 0 else { return nil }
@@ -32,41 +31,33 @@ struct MorningCheckInCard: View {
 
     var body: some View {
         if !compact { card }
-        else if askingCoverage || askingWeight { compactCard }
+        else if askingWeight { compactCard }
     }
 
-    /// Coach: one question at a time in a short bubble above Pip, so the conversation stays visible.
+    /// Coach: a short weigh-in bubble above Pip, so the conversation stays visible.
     private var compactCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text(askingCoverage ? "\(greeting). Did you log everything yesterday?" : "\(greeting). Weighed in yet?")
+                Text("\(greeting). Weighed in yet?")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
                     .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("morningCheckIn")
                 Spacer(minLength: 4)
                 dismissButton
             }
-            if askingCoverage {
-                HStack(spacing: 8) {
-                    coverageButton("Yes", .complete, id: "morningCoverageYes")
-                    coverageButton("Not quite", .partial, id: "morningCoverageNo")
-                }
-            } else {
-                HStack(spacing: 8) {
-                    weightField.padding(.horizontal, 12).background(Capsule().fill(Color.diaryCanvas))
-                    saveButton.fixedSize()
-                }
-                HStack {
-                    if let onTellCoach {
-                        Button("Tell Coach instead", action: onTellCoach).accessibilityIdentifier("morningTellCoach")
-                    }
-                    Spacer()
-                    skipButton
-                }.font(.subheadline).foregroundStyle(Color.diaryAccent)
+            HStack(spacing: 8) {
+                weightField.padding(.horizontal, 12).background(Capsule().fill(Color.diaryCanvas))
+                saveButton.fixedSize()
             }
+            HStack {
+                if let onTellCoach {
+                    Button("Tell Coach instead", action: onTellCoach).accessibilityIdentifier("morningTellCoach")
+                }
+                Spacer()
+                skipButton
+            }.font(.subheadline).foregroundStyle(Color.diaryAccent)
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 20).fill(Color.diarySurface).shadow(color: .black.opacity(0.06), radius: 8, y: 3))
-        .animation(reduceMotion ? nil : .snappy, value: askingCoverage)
     }
 
     private var card: some View {
@@ -79,13 +70,12 @@ struct MorningCheckInCard: View {
             if showsRecap { recap }
             if askingWeight { weightEntry }
             else if let todayWeight { weightResult(todayWeight) }
-            if !askingCoverage && !askingWeight {
+            if !askingWeight {
                 Label("You're set for today", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.medium)).foregroundStyle(Color.diarySuccess)
             }
         }
         .diarySummaryCard()
-        .animation(reduceMotion ? nil : .snappy, value: askingCoverage)
         .animation(reduceMotion ? nil : .snappy, value: askingWeight)
         .sensoryFeedback(.success, trigger: todayWeight?.id)
         .task(id: todayWeight?.revision) { await loadWeights() }
@@ -114,30 +104,7 @@ struct MorningCheckInCard: View {
                 ProgressView(value: min(kcal / target, 1)).tint(Color.diaryEnergy)
                     .accessibilityLabel("Intake toward that day's goal")
             }
-            if askingCoverage { coverageQuestion("Did you log everything?").padding(.top, 4) }
-            else if previous.day.completeness != .unknown {
-                Label(previous.day.completeness == .complete ? "Logged in full" : "Partly logged",
-                      systemImage: previous.day.completeness == .complete ? "checkmark.seal" : "circle.lefthalf.filled")
-                    .font(.caption).foregroundStyle(Color.diarySecondary)
-            }
         }
-    }
-
-    private func coverageQuestion(_ question: LocalizedStringKey) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(question).font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryText)
-            HStack(spacing: 10) {
-                coverageButton("Yes", .complete, id: "morningCoverageYes")
-                coverageButton("Not quite", .partial, id: "morningCoverageNo")
-            }
-        }
-    }
-
-    private func coverageButton(_ title: LocalizedStringKey, _ value: DayCompleteness, id: String) -> some View {
-        Button {
-            Task { await model.change { try await model.store.setCompleteness(dayID: previous.day.id, value, expectedProfileID: model.readModel?.profile.id) } }
-        } label: { Text(title).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44) }
-            .buttonStyle(.bordered).tint(Color.diaryAccent).accessibilityIdentifier(id)
     }
 
     private var dismissButton: some View {

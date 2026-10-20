@@ -64,11 +64,9 @@ This design adds a predictable automatic trigger.
 - **Yesterday:** the kcal total against the target, with a progress bar. Numbers
   only, with no ChatGPT, so it works offline. If yesterday has no target, it
   shows just the total.
-  - Then a question: "Did you log everything yesterday?" with **Yes** and
-    **Not quite**. The answer sets that day's completeness (`complete` or
-    `incomplete`) through the existing `setCompleteness`. If the user doesn't
-    answer, the day stays `unknown`.
-  - If yesterday has no meals, the recap and question are hidden.
+  - If yesterday has no meals, the recap is hidden.
+  - No coverage question: an earlier "Did you log everything?" was removed after
+    trying it on a phone, because it was not clear. "Finish day" stays where it was.
 - **Weight:** shown every morning, always optional.
   - A large weight field with a unit menu (kg or lb). It defaults to the last
     unit used and is prefilled with the last weight as a placeholder. There is
@@ -78,7 +76,7 @@ This design adds a predictable automatic trigger.
     least three weigh-ins in each week). Otherwise it shows the saved weight only.
   - The weight is recorded on the new day: `recordWeight(startNewDay: false)`,
     since the day is already open.
-- **Done state:** when both the question and the weight are answered or skipped,
+- **Done state:** when the weight is saved or skipped,
   the card collapses to one line. It goes away at the first meal.
 - Polish bar: Apple/Airbnb level. The card uses `DiarySummaryCardStyle`, has
   smooth insert and remove transitions (opacity only under Reduce Motion), and
@@ -87,9 +85,8 @@ This design adds a predictable automatic trigger.
 
 ## On the Coach tab
 
-- The same check-in shows as a short bubble above Pip and the composer, one question at a time:
-  "Did you log everything yesterday?" (Yes / Not quite), then "Weighed in yet?" with an inline
-  weight field, Save and Skip.
+- The weigh-in shows as a short bubble above Pip and the composer: "Weighed in yet?" with an
+  inline weight field, Save and Skip.
 - "Tell Coach instead" fills the message field with "My weight this morning is " and focuses it,
   so the weight can go in as a normal Coach message.
 - It hides while typing, once nothing is left to ask, after the first meal, or when dismissed.

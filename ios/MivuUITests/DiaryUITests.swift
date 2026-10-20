@@ -67,12 +67,10 @@ import XCTest
         let card = app.descendants(matching: .any)["morningCheckIn"]
         XCTAssertTrue(card.waitForExistence(timeout: 10), "The fixture's old active day must roll over to a new day")
         XCTAssertTrue(app.buttons["logMeal"].isHittable)
-        app.buttons["morningCoverageYes"].tap()
-        XCTAssertTrue(app.staticTexts["Logged in full"].waitForExistence(timeout: 5))
-        // Coach asks what is still open, and the weight can go in a message instead.
+        XCTAssertTrue(app.buttons["morningWeightSkip"].exists, "The weigh-in is optional")
+        // Coach asks the same weigh-in, and the weight can go in a message instead.
         app.tabBars.buttons["Coach"].tap()
         XCTAssertTrue(card.waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["morningCoverageYes"].exists)
         app.buttons["morningTellCoach"].tap()
         XCTAssertEqual(app.descendants(matching: .any)["coachInput"].value as? String, "My weight this morning is ")
         XCTAssertFalse(card.exists, "The check-in steps aside while typing")
