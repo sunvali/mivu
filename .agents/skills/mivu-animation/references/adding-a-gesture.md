@@ -39,15 +39,26 @@ arrives at by `at` seconds; unlisted joints rest. Build keys with the builder in
 2. **If it is a new app event**, add it in four places:
    - `PipMoment` case in `PipGesture.swift`.
    - A duration in `MivuMotion.swift` (e.g. `static let proud: TimeInterval = 0.8`).
+     It must be at least the gesture's duration (and within 0.3 s of it), or the
+     presenter returns to rest mid-settle; add the moment to
+     `everyReactionLivesAtLeastAsLongAsItsGesture`.
    - A `CompanionPose` case in `CompanionPresentation.swift`, plus a
      `CompanionEvent.Kind` case (its `pose` and `duration` switches) if it is a
      fresh-success signal. Fresh success
      (including affection/habit) ranks above processing and tap/pat; give it a
      deadline from `MivuMotion` and keep dedupe by profile/operation(/attempt).
+   - A new event source also needs a case in `DiaryRootView.companionEvents` and
+     its own `.onChange` calling `receiveCompanionEvent`.
    - A case in `CompanionRuntime.moment(for:tapLevel:hour:)` (the `isOneShot`
      list there needs no change for a one-shot).
 
    If it is only a new variant of an existing moment, skip this step.
+
+   Idle beats (see `PipIdleScheduler`) instead need a case in
+   `PipGestureLibrary.gesture(forIdle:curled:)`.
+
+   Under Reduce Motion the rig holds the gesture's key before its final settle
+   (`PipGestureLibrary.stillPose(for:)`), so make that key read as the moment.
 
 3. **Map it** in `PipGestureLibrary.gesture(for:)`: `case .proud: return named("proud")`.
    Variants (hour of day, tap level) are chosen in this one switch.
