@@ -50,7 +50,7 @@ Re-verification on source `464a3a8724025f79c7707fbe9889a02a9a7f2207` plus the fi
 | `MivuTests` full (856 discovered) | 855 passed, 0 failed, 1 skipped (same skip as above) |
 | `CompanionUITests` Today and Coach tap/long-press | 2 passed |
 
-Open: `testSpikeBidirectionalEvictionAndBackgroundReplyPreserveReader` passed in the earlier full run (e2e92b1) but failed here, in the full run and in two isolated runs (one with the fix stashed, so it is not caused by the fix; commits since e2e92b1 are docs only). Cause not investigated; not counted as passing.
+Classified pre-existing/environmental, not a branch regression: `testSpikeBidirectionalEvictionAndBackgroundReplyPreserveReader` fails identically (`waitForReply` times out at 40 s, then `fixtureFacts` XCTUnwrap and the anchorID assertion) on baseline 5af19d4 (2 of 2 isolated runs, 1 test executed each, clean worktree, own derived data) and on 22bd8d5 (3 failures earlier plus 1 more, 1 test executed). It passed earlier at e2e92b1, so the cause is simulator or environment state; no product code changed. Still not counted as passing.
 
 ## Evidence
 
@@ -70,6 +70,6 @@ Limits: recordings were driven by manual taps, so typing-gaze and thinking phase
 ## Blocked / not verified
 
 - Physical iPhone performance: device "Yaakov’s IPhone" was offline. Instruments Animation Hitches (target under 5 ms/s) and idle CPU/energy were **not run**.
-- `CoachScrollSpikeUITests` failure above is unresolved.
+- `CoachScrollSpikeUITests` failure above is pre-existing (reproduces on 5af19d4), not caused by this branch; still unresolved.
 - Reduce Motion in dark appearance, VoiceOver and Dynamic Type recordings were not made; Dynamic Type and accessibility coverage is only what the UI suite asserts.
 - Hosted CI, signing and packaging: not part of this record.
