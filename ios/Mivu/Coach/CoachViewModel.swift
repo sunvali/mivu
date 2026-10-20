@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Observation
 import Network
 import os
@@ -39,9 +40,17 @@ private final class CoachNavigationReadFence: Sendable {
     private var errorRevision = 0
     private var sendingErrorRevision = 0
     @ObservationIgnored private let timelinePageLoading: (@Sendable (CoachPageRequest, DiarySelectionOwnership) async throws -> CoachPage)?
+    @ObservationIgnored private let beginCaptureProtection: @MainActor () -> (@MainActor () -> Void)
     @ObservationIgnored private let inference: () throws -> Inference
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let lookup: @Sendable (String) async throws -> [FoodEvidenceRecord]
+    @ObservationIgnored private var sending: Task<Bool, Never>?
+    @ObservationIgnored private var captureNeedsProcessing = false
+    @ObservationIgnored private var acceptedDiaryCapture: UUID?
+    @ObservationIgnored private var acceptedDiaryCaptureOwner: DiarySelectionOwnership?
+    @ObservationIgnored private var backgroundCompletion: Task<Void, Never>?
+    @ObservationIgnored private var backgroundGeneration: UUID?
+    @ObservationIgnored private var backgroundEnd: (@MainActor () -> Void)?
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var workerID: UUID?
     @ObservationIgnored private let monitor = NWPathMonitor()
@@ -52,7 +61,9 @@ private final class CoachNavigationReadFence: Sendable {
     init(diary: DiaryViewModel, connection: ChatGPTConnection, inference: (() throws -> Inference)? = nil,
          lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured },
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-         timelinePageLoading: (@Sendable (CoachPageRequest, DiarySelectionOwnership) async throws -> CoachPage)? = nil) {
+         timelinePageLoading: (@Sendable (CoachPageRequest, DiarySelectionOwnership) async throws -> CoachPage)? = nil,
+         attachmentDependencies: CoachAttachmentDraft.Dependencies? = nil,
+         beginCaptureProtection: @escaping @MainActor () -> (@MainActor () -> Void) = { CoachCaptureProtection.begin() }) {
         self.diary = diary; self.connection = connection; self.timelinePageLoading = timelinePageLoading
         var dependencies = CoachAttachmentDraft.Dependencies(store: diary.store,
             refresh: { selected in try await diary.refresh(profileID: selected.identity.profileID) })
@@ -63,9 +74,10 @@ private final class CoachNavigationReadFence: Sendable {
             }
         }
         #endif
-        attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter, dependencies: dependencies)
+        attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter, dependencies: attachmentDependencies ?? dependencies)
         self.inference = inference ?? { try connection.coachInference() }
         self.lookup = lookup; self.sleep = sleep
+        self.beginCaptureProtection = beginCaptureProtection
         attachmentDraft.onPhotoAccepted = { [weak self] in
             guard let self, let owner = self.diary.selection?.identity.profileID else { return }
             let operation = self.attachmentDraft.submissionID
@@ -144,8 +156,15 @@ private final class CoachNavigationReadFence: Sendable {
         guard let owner = diary.selection, !diary.isChangingProfile else { return }
         // Subscribe before the initial read so an accepted mutation cannot fall in the gap.
         let stream = await diary.store.changes(expectedProfileID: owner.identity.profileID)
+        let reusingTimeline = timelineOwnership == owner && timeline != nil
         await loadTimelineIfNeeded()
         guard diary.selection == owner, let model = timeline, !Task.isCancelled else { return }
+        if reusingTimeline {
+            let changed = Set(model.exchanges.map(\.id))
+            await model.apply(DiaryChanges(turnIDs: changed, coachLatestChanged: true))?.value
+            guard diary.selection == owner, !diary.isChangingProfile, !Task.isCancelled else { return }
+            await refreshLinks()
+        }
         for await changes in stream {
             guard diary.selection == owner, !diary.isChangingProfile, !Task.isCancelled else { return }
             model.apply(changes)
@@ -264,26 +283,38 @@ private final class CoachNavigationReadFence: Sendable {
 
     func synchronizeDraftOwnership() { attachmentDraft.synchronizeOwnership(diary.selection) }
     @discardableResult func send() async -> Bool {
+        guard sending == nil else { return false }
+        let task = Task { await performSend() }
+        sending = task
+        defer { sending = nil }
+        return await task.value
+    }
+    private func performSend() async -> Bool {
         synchronizeDraftOwnership()
         guard canSend, let token = diary.selection else { return false }
+        let endCaptureProtection = beginCaptureProtection()
+        defer { endCaptureProtection() }
         let owner = token.identity.profileID
         let followsLatest = timeline.map { if case .latest = $0.window.viewport { true } else { false } } ?? true
         sendingErrorRevision = errorRevision; isSending = true; diary.isSaving = true
         defer { isSending = false; diary.isSaving = false }
         companionSubmission = CompanionSubmission(profileID: owner, operationID: attachmentDraft.submissionID, acceptedAt: Date())
         do {
-            guard let result = try await attachmentDraft.send() else { return false }
-            guard !Task.isCancelled, diary.selection == token, !diary.isChangingProfile else { return false }
-            resume()
-            guard attachmentDraft.captureReceipt == result.id else { return false }
-            captureReceipt = result.id
-            if companionSubmission?.operationID != result.id {
-                companionSubmission = CompanionSubmission(profileID: owner, operationID: result.id, acceptedAt: Date())
-            }
-            if companionCaptureEvent?.profileID != owner || companionCaptureEvent?.operationID != result.id {
-                companionCaptureEvent = CompanionEvent(profileID: owner, operationID: result.id, kind: .saved, committedAt: Date())
-            }
-            if errorRevision == sendingErrorRevision { errorMessage = nil }
+            guard let result = try await attachmentDraft.send(onAccepted: { result in
+                guard diary.selection == token, !diary.isChangingProfile else { return }
+                captureNeedsProcessing = true
+                resume()
+                guard attachmentDraft.captureReceipt == result.id else { return }
+                captureReceipt = result.id
+                if companionSubmission?.operationID != result.id {
+                    companionSubmission = CompanionSubmission(profileID: owner, operationID: result.id, acceptedAt: Date())
+                }
+                if companionCaptureEvent?.profileID != owner || companionCaptureEvent?.operationID != result.id {
+                    companionCaptureEvent = CompanionEvent(profileID: owner, operationID: result.id, kind: .saved, committedAt: Date())
+                }
+                if errorRevision == sendingErrorRevision { errorMessage = nil }
+            }) else { return false }
+            guard diary.selection == token, !diary.isChangingProfile, captureReceipt == result.id else { return false }
             if followsLatest, let timeline { await timeline.jumpToLatest() }
             return true
         } catch {
@@ -293,72 +324,107 @@ private final class CoachNavigationReadFence: Sendable {
     }
 
     func resume() {
+        if let receipt = diary.captureReceipt, let owner = diary.selection, !diary.isChangingProfile,
+           diary.companionCaptureEvent?.profileID == owner.identity.profileID,
+           receipt != acceptedDiaryCapture || owner != acceptedDiaryCaptureOwner {
+            acceptedDiaryCapture = receipt; acceptedDiaryCaptureOwner = owner; captureNeedsProcessing = true
+        }
         guard active, worker == nil, !diary.isChangingProfile, let selected = diary.selection else { return }
         let owner = selected.identity.profileID
         let id = UUID(); workerID = id; isWorking = true
         worker = Task {
             defer { if workerID == id { worker = nil; workerID = nil; isWorking = false; activity = nil; activityTurnID = nil } }
-            do {
-                try await recoverLegacyCaptures(owner: owner)
-                while !Task.isCancelled {
-                    guard let turn = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, expectedProfileID: owner) else { break }
-                    activity = nil; activityTurnID = nil
-                    if turn.state == .analyzing {
-                        try await diary.store.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: owner)
-                    }
-                    if turn.pendingMealID != nil, turn.receipts.isEmpty {
-                        _ = try await diary.store.preparePendingCoachTurn(turnID: turn.id, expectedProfileID: owner)
-                    }
-                    let bound: Inference
-                    do { bound = try inference() }
-                    catch {
-                        try await diary.store.setCoachTurnState(turnID: turn.id, state: .waitingForConnection, expectedProfileID: owner)
-                        try await diary.refresh(profileID: owner)
-                        break
-                    }
-                    let sleep = sleep
-                    let store = diary.store
-                    let epoch = try await store.selectionEpoch(expectedProfileID: owner)
-                    let resilient: Inference = { input, tools in
-                        func validate() async throws {
-                            try Task.checkCancellation()
-                            try await store.validateSelection(epoch: epoch, expectedProfileID: owner)
+            var capturedOnly = false
+            repeat {
+                guard active, !Task.isCancelled, diary.selection == selected, !diary.isChangingProfile else { break }
+                let acceptedCaptureAtPassStart = captureReceipt
+                let acceptedDiaryCaptureAtPassStart = diary.captureReceipt
+                var processingFailed = false
+                do {
+                    try await recoverLegacyCaptures(owner: owner)
+                    while !Task.isCancelled {
+                        guard active, diary.selection == selected, !diary.isChangingProfile else { break }
+                        let pendingCaptureWake = captureNeedsProcessing
+                        captureNeedsProcessing = false
+                        let next: CoachTurnResult?
+                        do {
+                            next = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, capturedOnly: capturedOnly, expectedProfileID: owner)
+                        } catch {
+                            captureNeedsProcessing = captureNeedsProcessing || pendingCaptureWake
+                            throw error
                         }
-                        let delays: [Duration] = [.seconds(1), .seconds(2), .seconds(4)]
-                        var attempt = 0
-                        while true {
-                            try await validate()
-                            do {
-                                let result = try await bound(input, tools)
-                                try await validate()
-                                return result
+                        guard let turn = next else {
+                            if captureNeedsProcessing { continue }
+                            break
+                        }
+                        activity = nil; activityTurnID = nil
+                        if turn.state == .analyzing {
+                            try await diary.store.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: owner)
+                        }
+                        if turn.pendingMealID != nil, turn.receipts.isEmpty {
+                            _ = try await diary.store.preparePendingCoachTurn(turnID: turn.id, expectedProfileID: owner)
+                        }
+                        let bound: Inference
+                        do { bound = try inference() }
+                        catch {
+                            processingFailed = true
+                            try await diary.store.setCoachTurnState(turnID: turn.id, state: .waitingForConnection, expectedProfileID: owner)
+                            try await diary.refresh(profileID: owner)
+                            break
+                        }
+                        let sleep = sleep
+                        let store = diary.store
+                        let epoch = try await store.selectionEpoch(expectedProfileID: owner)
+                        let resilient: Inference = { input, tools in
+                            func validate() async throws {
+                                try Task.checkCancellation()
+                                try await store.validateSelection(epoch: epoch, expectedProfileID: owner)
                             }
-                            catch {
+                            let delays: [Duration] = [.seconds(1), .seconds(2), .seconds(4)]
+                            var attempt = 0
+                            while true {
                                 try await validate()
-                                guard attempt < delays.count, ProbeRunner.isTransient(error) else { throw error }
-                                try await sleep(delays[attempt])
-                                try await validate()
-                                attempt += 1
+                                do {
+                                    let result = try await bound(input, tools)
+                                    try await validate()
+                                    return result
+                                }
+                                catch {
+                                    try await validate()
+                                    guard attempt < delays.count, ProbeRunner.isTransient(error) else { throw error }
+                                    try await sleep(delays[attempt])
+                                    try await validate()
+                                    attempt += 1
+                                }
                             }
                         }
-                    }
-                    let photoLimiter = diary.photoWorkLimiter
-                    do {
-                        _ = try await CoachEngine(store: diary.store, infer: resilient, lookup: lookup, prepareImages: { originals in
-                            try await photoLimiter.withPermit { try PhotoImport.visionCopies(originals) }
-                        }, onActivity: { phase in
-                            await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
-                        }).run(turnID: turn.id, expectedProfileID: owner)
-                    } catch {
+                        let photoLimiter = diary.photoWorkLimiter
+                        do {
+                            _ = try await CoachEngine(store: diary.store, infer: resilient, lookup: lookup, prepareImages: { originals in
+                                try await photoLimiter.withPermit { try PhotoImport.visionCopies(originals) }
+                            }, onActivity: { phase in
+                                await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
+                            }).run(turnID: turn.id, expectedProfileID: owner)
+                        } catch {
+                            guard !Task.isCancelled, diary.selection == selected else { break }
+                            errorMessage = message(for: error)
+                            processingFailed = true
+                            break
+                        }
                         guard !Task.isCancelled, diary.selection == selected else { break }
-                        errorMessage = message(for: error)
-                        break
+                        try await diary.refresh(profileID: owner)
                     }
-                    guard !Task.isCancelled, diary.selection == selected else { break }
-                    try await diary.refresh(profileID: owner)
+                } catch {
+                    processingFailed = true
+                    if !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) }
                 }
-            } catch { if !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) } }
-            if diary.selection == selected, !diary.isChangingProfile { try? await diary.refresh(profileID: owner) }
+                if diary.selection == selected, !diary.isChangingProfile { try? await diary.refresh(profileID: owner) }
+                if processingFailed {
+                    guard captureReceipt != acceptedCaptureAtPassStart || diary.captureReceipt != acceptedDiaryCaptureAtPassStart else { break }
+                    capturedOnly = true
+                }
+                // A capture can arrive during the final refresh while this worker is still owned.
+            } while captureNeedsProcessing && active && !Task.isCancelled && diary.selection == selected && !diary.isChangingProfile
         }
     }
 
@@ -421,6 +487,51 @@ private final class CoachNavigationReadFence: Sendable {
         }
         monitor.start(queue: DispatchQueue(label: "Mivu.CoachConnectivity"))
     }
+    func continueInBackground(begin: (@escaping @MainActor () -> Void) -> Bool,
+                              end: @escaping @MainActor () -> Void,
+                              onWorkerDrain: @escaping @MainActor () -> Void = {}) {
+        pauseActivity()
+        endBackgroundLease()
+        guard diary.hasCaptureInFlight || sending != nil || isSending || captureNeedsProcessing || hasPendingWork || (diary.readModel?.pendingCount ?? 0) > 0,
+              let owner = diary.selection else { diary.enterBackground(); enterBackground(); connection.enterBackground(); return }
+        let generation = UUID()
+        backgroundGeneration = generation
+        guard begin({ [weak self] in
+            guard let self, backgroundGeneration == generation else { return }
+            guard diary.selection == owner, !diary.isChangingProfile else { endBackgroundLease(); return }
+            diary.enterBackground(); enterBackground(); connection.enterBackground(); endBackgroundLease()
+        }) else {
+            backgroundGeneration = nil
+            diary.enterBackground(); enterBackground(); connection.enterBackground()
+            return
+        }
+        backgroundEnd = end
+        active = true
+        diary.resumeWorker(allowProcessing: true)
+        backgroundCompletion = Task {
+            _ = await sending?.value
+            await diary.waitForCapture()
+            guard backgroundGeneration == generation else { return }
+            guard diary.selection == owner, !diary.isChangingProfile else { endBackgroundLease(); return }
+            if captureNeedsProcessing { resume() }
+            await diary.waitForWorker()
+            guard backgroundGeneration == generation else { return }
+            guard diary.selection == owner, !diary.isChangingProfile else { endBackgroundLease(); return }
+            onWorkerDrain()
+            await waitForWorker()
+            guard backgroundGeneration == generation else { return }
+            if diary.selection == owner, !diary.isChangingProfile { diary.enterBackground(); enterBackground(); connection.enterBackground() }
+            endBackgroundLease()
+        }
+    }
+    func endBackgroundLease() {
+        backgroundGeneration = nil
+        backgroundCompletion?.cancel(); backgroundCompletion = nil
+        let end = backgroundEnd; backgroundEnd = nil
+        end?()
+    }
+    func waitForBackgroundCompletion() async { await backgroundCompletion?.value }
+    func pauseForInactiveScene() { active = false; pauseActivity() }
     func pauseActivity() { presentationActive = false; activity = nil; activityTurnID = nil }
     func enterBackground() { active = false; pauseActivity(); cancel() }
     func enterForeground() { active = true; presentationActive = true; resume() }
@@ -508,8 +619,37 @@ private final class CoachNavigationReadFence: Sendable {
         if error is CancellationError || error as? SessionError == .sessionChanged { return "Analysis paused after the connection changed. Your input is saved. Retry when ready." }
         if error as? ResponsesClient.Failure == .quotaReached { return "Your ChatGPT usage limit was reached. Your input is saved. Check ChatGPT usage settings in Settings and retry when usage is available." }
         if error as? DiaryError == .staleRevision { return "A meal, weigh-in or workout changed while analysis was running. Review the latest record before retrying." }
+        if error as? DiaryError == .invalidAmountUnitChange { return error.localizedDescription }
         if error as? DiaryError == .ambiguousDay { return "Choose which waking day this capture belongs to. Your input is saved." }
         if error as? CoachError == .ungroundedConfirmation { return "More details are needed before a meal, weigh-in or workout can be logged. Your input is saved." }
         if error as? DiaryError == .persistenceFailed { return "Could not update the diary on this iPhone. Your captured input is saved; retry when ready." }
         return "Analysis could not finish. Your input is saved. Check your connection or retry when ready." }
+}
+
+@MainActor enum CoachCaptureProtection {
+    static func begin(
+        begin: (@escaping @MainActor () -> Void) -> UIBackgroundTaskIdentifier = { expire in
+            UIApplication.shared.beginBackgroundTask(withName: "Save Coach input") {
+                expire()
+            }
+        },
+        end: @escaping @MainActor (UIBackgroundTaskIdentifier) -> Void = { UIApplication.shared.endBackgroundTask($0) }
+    ) -> @MainActor () -> Void {
+        var identifier = UIBackgroundTaskIdentifier.invalid
+        var finished = false
+        func finish() {
+            guard !finished else { return }
+            finished = true
+            guard identifier != .invalid else { return }
+            let ending = identifier; identifier = .invalid
+            end(ending)
+        }
+        identifier = begin(finish)
+        // Expiration may arrive before acquisition returns its identifier.
+        if finished, identifier != .invalid {
+            let ending = identifier; identifier = .invalid
+            end(ending)
+        }
+        return finish
+    }
 }

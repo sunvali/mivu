@@ -209,13 +209,13 @@ import Observation
         guard ownership == owner else { throw DiaryError.wrongOwner }
     }
     private func accepted(_ attempt: Attempt, result: CoachExchangeSummary) {
-        lastAcceptedAttempt = attempt; uncertainAttempt = nil
+        lastAcceptedAttempt = attempt; uncertainAttempt = nil; captureReceipt = result.id
         if snapshot == attempt.snapshot {
-            text = ""; attachments = []; order = [:]; nextOrder = 0; submissionID = UUID(); captureReceipt = result.id
+            text = ""; attachments = []; order = [:]; nextOrder = 0; submissionID = UUID()
         } else if submissionID == attempt.payload.submissionID { submissionID = UUID() }
     }
 
-    func send() async throws -> CoachExchangeSummary? {
+    func send(onAccepted: (CoachExchangeSummary) -> Void = { _ in }) async throws -> CoachExchangeSummary? {
         guard !isSending, !isPreparing else { throw Failure.busy }
         guard let owner = ownership else { throw DiaryError.noProfile }
         guard isValid else { throw DiaryError.emptyCapture }
@@ -230,8 +230,9 @@ import Observation
             case .conflictingPayload: throw Failure.conflictingPayload
             case .accepted(let result):
                 if snapshot == previous.snapshot {
-                    try await dependencies.refresh(owner); try await validateSend(owner)
-                    accepted(previous, result: result); return result
+                    accepted(previous, result: result); onAccepted(result)
+                    try? await dependencies.refresh(owner)
+                    return result
                 }
                 uncertainAttempt = nil
                 if submissionID == previous.payload.submissionID { submissionID = UUID() }
@@ -253,9 +254,8 @@ import Observation
         uncertainAttempt = attempt
         let result = try await dependencies.capture(attempt.payload, attempt.ownership)
         try await validateSend(owner)
-        try await dependencies.refresh(owner)
-        try await validateSend(owner)
-        accepted(attempt, result: result)
+        accepted(attempt, result: result); onAccepted(result)
+        try? await dependencies.refresh(owner)
         return result
     }
     nonisolated static func normalize(_ data: Data, source: PhotoSource) async throws -> Data {

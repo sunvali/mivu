@@ -8,7 +8,7 @@ import Testing
 
     private func fixture() async throws -> (DiaryStore, DiaryProfile, URL) {
         let root = URL.temporaryDirectory.appending(path: "ProgressStore-" + UUID().uuidString)
-        let profile = DiaryProfile(name: "Synthetic progress")
+        let profile = DiaryProfile(name: "Synthetic progress", timeZoneID: "Asia/Jerusalem")
         let store = DiaryStore(directory: root)
         _ = try await store.createProfile(profile)
         return (store, profile, root)

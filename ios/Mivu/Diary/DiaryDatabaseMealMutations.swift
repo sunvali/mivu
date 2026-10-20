@@ -117,8 +117,8 @@ extension DiaryDatabase {
     func acceptReview(mealID: UUID, submissionID: UUID, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.acceptReview(mealID: mealID, submissionID: submissionID) }
     }
-    func editItem(mealID: UUID, item: FoodItem, reviewSubmissionID: UUID? = nil, expectedRevision: Int? = nil, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
-        try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.editItem(mealID: mealID, item: item, reviewSubmissionID: reviewSubmissionID, expectedRevision: expectedRevision) }
+    func editItem(mealID: UUID, item: FoodItem, explicitNutrients: Set<String>, reviewSubmissionID: UUID? = nil, expectedRevision: Int? = nil, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
+        try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.editItem(mealID: mealID, item: item, explicitNutrients: explicitNutrients, reviewSubmissionID: reviewSubmissionID, expectedRevision: expectedRevision) }
     }
     func addPhotos(mealID: UUID, photos: [MealPhoto], expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
@@ -262,10 +262,16 @@ extension DiaryTransaction {
     func nextOrdinal(_ table: String, parent: UUID? = nil) throws -> Int {
         try database.mutationInteger("SELECT COALESCE(MAX(ordinal) + 1, 0) FROM \(table) \(parent == nil ? "" : "WHERE parent = ?")", parent.map { [.text($0.uuidString)] } ?? [])
     }
-    func resolveDay(localDate: String, timeZoneID: String, at: Date) throws -> TrackingDay {
+    func resolveDay(localDate: String, timeZoneID: String, at: Date, newDayID: UUID? = nil) throws -> TrackingDay {
         let row = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND json_extract(CAST(payload AS TEXT), '$.timeZoneID') = ?", values: [.text(localDate), .text(timeZoneID)], limit: 1).first
-        if let row { let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day }
-        let day = TrackingDay(localDate: localDate, timeZoneID: timeZoneID, startAt: at)
+        if let row {
+            let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day)
+            guard newDayID == nil || newDayID == day.id else { throw DiaryError.invalidData }; return day
+        }
+        if let newDayID {
+            guard try records("day", clause: "id = ?", values: [.text(newDayID.uuidString)], limit: 1).isEmpty else { throw DiaryError.invalidData }
+        }
+        let day = TrackingDay(id: newDayID ?? UUID(), localDate: localDate, timeZoneID: timeZoneID, startAt: at)
         try validateTrackingDayFields(day)
         let payload = try JSONEncoder().encode(day)
         try database.execute("INSERT INTO day(id, ordinal, payload) VALUES (?, ?, ?)", [.text(day.id.uuidString), .integer(nextOrdinal("day")), .blob(payload)])
@@ -343,7 +349,11 @@ extension DiaryTransaction {
     }
     func saveSubmission(_ submission: MealSubmission, meal: DiaryMeal) throws {
         try validateMealSubmissionFields(submission, mealID: meal.id, mealRevision: meal.revision, profileID: head.profile.id)
-        if let parent = try submissionParent(id: submission.id) { guard parent == meal.id else { throw DiaryError.invalidData } }
+        if let parent = try submissionParent(id: submission.id) {
+            guard parent == meal.id else { throw DiaryError.invalidData }
+            let original = try self.submission(id: submission.id, mealID: meal.id)
+            guard original.manualAcceptance == nil || original == submission else { throw DiaryError.invalidData }
+        }
         let payload = try JSONEncoder().encode(submission)
         try database.execute("INSERT INTO submission(id, parent, ordinal, payload) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
             [.text(submission.id.uuidString), .text(meal.id.uuidString), .integer(nextOrdinal("submission", parent: meal.id)), .blob(payload)])
@@ -377,7 +387,7 @@ extension DiaryTransaction {
         guard output.baseRevision == meal.revision, output.baseRevision == submission.baseRevision else { throw DiaryError.staleRevision }
         submission.proposal = output
         if submission.reviewFirst { submission.state = .awaitingReview }
-        else { try replaceItems(output.items, mealID: meal.id); meal.revision += 1; try saveMeal(meal); submission.state = .saved }
+        else { meal = try commitSavedItems(mealID: meal.id, items: output.items, expectedRevision: meal.revision); submission.state = .saved }
         try saveSubmission(submission, meal: meal)
     }
     func acceptReview(mealID: UUID, submissionID: UUID) throws {
@@ -385,22 +395,22 @@ extension DiaryTransaction {
         if submission.state == .saved { return }
         guard submission.state == .awaitingReview, let proposal = submission.proposal else { throw DiaryError.invalidData }
         guard meal.revision == proposal.baseRevision else { throw DiaryError.staleRevision }
-        try replaceItems(proposal.items, mealID: mealID); meal.revision += 1; try saveMeal(meal)
+        meal = try commitSavedItems(mealID: mealID, items: proposal.items, expectedRevision: meal.revision)
         submission.state = .saved; try saveSubmission(submission, meal: meal)
     }
-    func editItem(mealID: UUID, item: FoodItem, reviewSubmissionID: UUID?, expectedRevision: Int?) throws {
+    func editItem(mealID: UUID, item: FoodItem, explicitNutrients: Set<String>, reviewSubmissionID: UUID?, expectedRevision: Int?) throws {
         var meal = try mealRecord(id: mealID)
         guard expectedRevision == nil || expectedRevision == meal.revision else { throw DiaryError.staleRevision }
         if let reviewSubmissionID {
             var submission = try submission(id: reviewSubmissionID, mealID: mealID)
             guard submission.state == .awaitingReview, var proposal = submission.proposal, let index = proposal.items.firstIndex(where: { $0.id == item.id }) else { throw DiaryError.notFound }
             guard submission.baseRevision == meal.revision else { throw DiaryError.staleRevision }
-            proposal.items[index] = try diaryCorrectedItem(item, previous: proposal.items[index]); try validateItems(proposal.items)
+            proposal.items[index] = try diaryCorrectedItem(item, previous: proposal.items[index], explicitNutrients: explicitNutrients); try validateItems(proposal.items)
             submission.proposal = proposal; try saveSubmission(submission, meal: meal); return
         }
         var items = try mealItems(id: mealID)
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { throw DiaryError.notFound }
-        items[index] = try diaryCorrectedItem(item, previous: items[index]); try validateItems(items)
+        items[index] = try diaryCorrectedItem(item, previous: items[index], explicitNutrients: explicitNutrients); try validateItems(items)
         let physicalID = mealID.uuidString + "/" + item.id.uuidString, payload = try JSONEncoder().encode(items[index])
         try database.execute("UPDATE item SET payload = ? WHERE id = ?", [.blob(payload), .text(physicalID)])
         try contribution(table: "item", rowID: physicalID, parentID: mealID.uuidString, encodedBytes: payload.count)
@@ -611,21 +621,58 @@ private func diaryPhotoScope(_ owner: DiaryPhotoOwner) -> (table: String, kind: 
     switch owner { case .meal(let id): ("photo", "meal", id); case .coachTurn(let id): ("coach_photo", "coachTurn", id) }
 }
 
-func diaryCorrectedItem(_ item: FoodItem, previous: FoodItem) throws -> FoodItem {
-    var edited = item; edited.nutrientSources = previous.nutrientSources
-    let nutrients: [(String, KeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("carbs", \.carbs), ("protein", \.protein), ("fat", \.fat)]
-    let quantityOnly = item.quantity != previous.quantity && item.nutrition == previous.nutrition && item.name == previous.name && item.unit == previous.unit
+func diaryCorrectedItem(_ item: FoodItem, previous: FoodItem, explicitNutrients: Set<String>) throws -> FoodItem {
+    try validateItems([item])
+    let nutrients: [(String, WritableKeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("carbs", \.carbs), ("protein", \.protein), ("fat", \.fat)]
+    guard explicitNutrients.isSubset(of: Set(nutrients.map(\.0))) else { throw DiaryError.invalidData }
+    let conversion = diaryUnitConversion(from: previous.unit, to: item.unit)
+    var edited = item
+    edited.nutrientSources = previous.nutrientSources
+    var basis = NutritionValues()
     for (name, field) in nutrients {
-        if item.nutrition[keyPath: field] != previous.nutrition[keyPath: field] { edited.nutrientSources[name] = .user }
-        else if previous.nutrition[keyPath: field] != nil && !(quantityOnly && !previous.nutrientSources.isEmpty) {
-            edited.nutrientSources[name] = previous.nutrientSources[name] ?? previous.provenance
+        let explicit = explicitNutrients.contains(name)
+        guard explicit || item.nutrition[keyPath: field] == previous.nutrition[keyPath: field] else { throw DiaryError.invalidData }
+        let oldValue = previous.nutrition[keyPath: field]
+        let oldBasis = previous.quantity > 0 ? oldValue.map { $0 / previous.quantity } : previous.nutritionBasis?[keyPath: field]
+        if explicit {
+            edited.nutrientSources[name] = .user
+        } else {
+            guard let conversion else {
+                guard oldValue == nil else { throw DiaryError.invalidAmountUnitChange }
+                edited.nutrition[keyPath: field] = nil
+                continue
+            }
+            let convertedBasis = oldBasis.map { $0 * conversion }
+            if item.quantity > 0 {
+                guard oldValue == nil || convertedBasis != nil else { throw DiaryError.invalidAmountUnitChange }
+                edited.nutrition[keyPath: field] = oldValue == nil ? nil : convertedBasis.map { $0 * item.quantity }
+            } else {
+                edited.nutrition[keyPath: field] = oldValue.map { _ in 0 }
+                basis[keyPath: field] = convertedBasis
+            }
+            if oldValue != nil && !explicitNutrients.isEmpty { edited.nutrientSources[name] = previous.nutrientSources[name] ?? previous.provenance }
         }
+        if item.quantity > 0 { basis[keyPath: field] = edited.nutrition[keyPath: field].map { $0 / item.quantity } }
     }
-    if edited.quantity != previous.quantity && edited.nutrition == previous.nutrition {
-        let basis = previous.nutritionBasis ?? (previous.quantity > 0 ? previous.nutrition.scaled(by: 1 / previous.quantity) : nil)
-        guard let basis else { throw DiaryError.invalidData }; edited.nutrition = basis.scaled(by: edited.quantity); edited.nutritionBasis = basis
-    } else if edited.quantity > 0 { edited.nutritionBasis = edited.nutrition.scaled(by: 1 / edited.quantity) }
-    edited.provenance = .user; edited.reference = previous.reference
+    edited.nutritionBasis = basis
+    edited.provenance = explicitNutrients.isEmpty ? previous.provenance : .user
+    edited.reference = previous.reference
     edited.uncertain = previous.uncertain || edited.nutrientSources.values.contains { [.sample, .estimate].contains($0) }
     return edited
+}
+
+private func diaryUnitConversion(from previous: String, to edited: String) -> Double? {
+    if previous == edited { return 1 }
+    func unit(_ label: String) -> (family: String, factor: Double)? {
+        switch label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "mg", "milligram", "milligrams": ("mass", 0.001)
+        case "g", "gram", "grams": ("mass", 1)
+        case "kg", "kilogram", "kilograms": ("mass", 1000)
+        case "ml", "milliliter", "milliliters", "millilitre", "millilitres": ("volume", 1)
+        case "l", "liter", "liters", "litre", "litres": ("volume", 1000)
+        default: nil
+        }
+    }
+    guard let from = unit(previous), let to = unit(edited), from.family == to.family else { return nil }
+    return to.factor / from.factor
 }

@@ -353,6 +353,125 @@ import Testing
             throw error
         }
     }
+    private func waitForReconnectEvidence(_ message: String, _ condition: () -> Bool) async throws {
+        let clock = ContinuousClock(), deadline = ContinuousClock().now.advanced(by: .seconds(10))
+        while !condition() {
+            guard clock.now < deadline else {
+                Issue.record(Comment(rawValue: message))
+                throw DiaryError.persistenceFailed
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func reconnectCatchesExternalTailWithoutAnotherInitialLoad(initiallyEmpty: Bool) async throws {
+        let f = try await NavigationFixture.make(snapshot: ChatHistoryFixture.pagingSnapshot(exchanges: initiallyEmpty ? 0 : 100))
+        defer { f.remove() }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection())
+        var connection: Task<Void, Never>? = Task { await coach.connectTimeline() }
+        do {
+            try await waitForReconnectEvidence("Initial Coach timeline did not load") { coach.timeline?.window.identity != nil }
+            connection?.cancel(); await connection?.value
+            let timeline = try #require(coach.timeline), owner = try #require(f.diary.selection)
+            let preparation = try await f.diary.store.coachCapturePreparation(at: f.snapshot.days[0].startAt,
+                expectedProfileID: owner.identity.profileID)
+            let id = UUID()
+            let payload = try CoachSubmissionPayload(submissionID: id, text: "Captured from Today while Coach is absent",
+                attachments: [], context: preparation.context)
+            _ = try await f.diary.store.captureCoachSubmission(payload, expectedSelection: owner,
+                expectedProfileID: owner.identity.profileID)
+            try await f.diary.store.completeCoachTurn(turnID: id, assistantText: "External capture completed",
+                expectedProfileID: owner.identity.profileID)
+            #expect(!timeline.exchanges.contains { $0.id == id })
+            f.metrics.reset()
+            connection = Task { await coach.connectTimeline() }
+            try await waitForReconnectEvidence("Reconnected Coach missed the offscreen external capture") {
+                timeline.exchanges.contains { $0.id == id && $0.assistantText == "External capture completed" } && timeline.refreshTask == nil
+            }
+            #expect(coach.timeline === timeline)
+            #expect(timeline.window.viewport == .latest)
+            #expect(timeline.window.pages.last?.hasLater == false)
+            #expect(f.metrics.counters.coachPageReads == 1)
+            #expect(f.metrics.counters.decodedTurnPayloads <= 40)
+            #expect(f.metrics.counters.completeReads == 0)
+            #expect(timeline.window.residentCount <= 20 && timeline.window.reservedCapacity == 0)
+            connection?.cancel(); await connection?.value
+        } catch {
+            connection?.cancel(); await connection?.value
+            throw error
+        }
+    }
+
+    @Test func reconnectRefreshesMissedResidentReplyAndPreservesHistory() async throws {
+        let f = try await NavigationFixture.make(); defer { f.remove() }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection())
+        var connection: Task<Void, Never>? = Task { await coach.connectTimeline() }
+        do {
+            try await waitForReconnectEvidence("Initial Coach timeline did not load") { coach.timeline?.window.identity != nil }
+            connection?.cancel(); await connection?.value
+            let timeline = try #require(coach.timeline), owner = try #require(f.diary.selection)
+            await timeline.seek(.turn(f.snapshot.coachTurns[40].id))
+            let id = try #require(timeline.exchanges.dropFirst(5).first?.id)
+            let anchor = CoachViewportAnchor(rowID: id, offset: -11.5, focusedExchangeID: id)
+            timeline.setViewport(.history(anchor), visibleIDs: [id], measuredAnchor: anchor)
+            let beforeIDs = timeline.exchanges.map(\.id)
+            try await f.diary.store.completeCoachTurn(turnID: id, assistantText: "Completed while Coach was absent",
+                expectedProfileID: owner.identity.profileID)
+            let preparation = try await f.diary.store.coachCapturePreparation(at: f.snapshot.days[0].startAt,
+                expectedProfileID: owner.identity.profileID)
+            let external = UUID()
+            let payload = try CoachSubmissionPayload(submissionID: external, text: "New external tail",
+                attachments: [], context: preparation.context)
+            _ = try await f.diary.store.captureCoachSubmission(payload, expectedSelection: owner,
+                expectedProfileID: owner.identity.profileID)
+            f.metrics.reset()
+            connection = Task { await coach.connectTimeline() }
+            try await waitForReconnectEvidence("Reconnected Coach missed a resident completion") {
+                timeline.exchanges.first { $0.id == id }?.assistantText == "Completed while Coach was absent" && timeline.refreshTask == nil
+            }
+            #expect(coach.timeline === timeline)
+            #expect(timeline.exchanges.map(\.id) == beforeIDs)
+            #expect(!timeline.exchanges.contains { $0.id == external })
+            #expect(timeline.window.viewport == .history(anchor))
+            #expect(timeline.restoration == .preserve(anchor))
+            #expect(timeline.window.pages.last?.hasLater == true)
+            #expect(f.metrics.counters.coachPageReads == 0)
+            #expect(f.metrics.counters.decodedTurnPayloads <= 20)
+            #expect(f.metrics.counters.completeReads == 0)
+            connection?.cancel(); await connection?.value
+        } catch {
+            connection?.cancel(); await connection?.value
+            throw error
+        }
+    }
+
+    @Test func unchangedReconnectRefreshesOnlyBoundedResidents() async throws {
+        let f = try await NavigationFixture.make(); defer { f.remove() }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection())
+        var connection: Task<Void, Never>? = Task { await coach.connectTimeline() }
+        do {
+            try await waitForReconnectEvidence("Initial Coach timeline did not load") { coach.timeline?.window.identity != nil }
+            connection?.cancel(); await connection?.value
+            let timeline = try #require(coach.timeline), revision = timeline.revision, before = timeline.exchanges
+            f.metrics.reset()
+            connection = Task { await coach.connectTimeline() }
+            try await waitForReconnectEvidence("Reconnected Coach did not reconcile bounded residents") {
+                timeline.revision > revision && timeline.refreshTask == nil
+            }
+            #expect(coach.timeline === timeline && timeline.exchanges == before)
+            #expect(f.metrics.counters.coachPageReads == 0)
+            #expect(f.metrics.counters.decodedTurnPayloads <= before.count)
+            #expect(f.metrics.counters.completeReads == 0)
+            #expect(timeline.window.reservedCapacity == 0)
+            connection?.cancel(); await connection?.value
+        } catch {
+            connection?.cancel(); await connection?.value
+            throw error
+        }
+    }
+
+
 }
 
 private actor NavigationPageTrace {

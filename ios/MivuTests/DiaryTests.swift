@@ -93,7 +93,7 @@ struct DiaryTests {
         let input = try await store.analysisInput(mealID: meal.id, submissionID: pending.submissions.last!.id)
         var item = try await store.snapshotForExport().meals[0].items[0]
         item.nutrition.kcal = 123
-        try await store.editItem(mealID: meal.id, item: item)
+        try await store.editItem(mealID: meal.id, item: item, explicitNutrients: ["kcal"])
         await #expect(throws: DiaryError.staleRevision) { try await store.applyAnalysis(SampleAnalyzer().analyze(input)) }
         #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == 123)
         #expect(try await store.snapshotForExport().meals[0].items[0].provenance == .user)
@@ -105,7 +105,7 @@ struct DiaryTests {
         let originalMeal = try #require(try await store.snapshotForExport().meals.first)
         let destination = try await store.startDay(at: originalDay.startAt.addingTimeInterval(86_400))
         var item = try #require(originalMeal.items.first); item.nutrition.kcal = 123
-        try await store.editItem(mealID: captured.id, item: item, expectedRevision: originalMeal.revision, expectedProfileID: profile.id)
+        try await store.editItem(mealID: captured.id, item: item, explicitNutrients: ["kcal"], expectedRevision: originalMeal.revision, expectedProfileID: profile.id)
         let before = try await store.snapshotForExport()
         await #expect(throws: DiaryError.staleRevision) {
             try await store.moveMeal(captured.id, to: destination.id, expectedRevision: originalMeal.revision,
@@ -214,7 +214,7 @@ struct DiaryTests {
         _ = try await correctedMeal(store, mealID: meal.id, text: "half")
         var item = try await store.snapshotForExport().meals[0].items[0]
         item.nutrition.kcal = 200
-        try await store.editItem(mealID: meal.id, item: item)
+        try await store.editItem(mealID: meal.id, item: item, explicitNutrients: ["kcal"])
         try await store.processPending()
         #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == 100)
         #expect(try await store.snapshotForExport().pendingCount == 0)
@@ -225,7 +225,7 @@ struct DiaryTests {
         try await store.processPending()
         var item = try await store.snapshotForExport().meals[0].submissions[0].proposal!.items[0]
         item.nutrition.kcal = 50
-        try await store.editItem(mealID: meal.id, item: item, reviewSubmissionID: meal.submissions[0].id)
+        try await store.editItem(mealID: meal.id, item: item, explicitNutrients: ["kcal"], reviewSubmissionID: meal.submissions[0].id)
         #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == nil)
         try await store.acceptReview(mealID: meal.id, submissionID: meal.submissions[0].id)
         #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == 50)
@@ -276,11 +276,11 @@ struct DiaryTests {
         try await store.processPending()
         var item = try await store.snapshotForExport().meals[0].items[0]
         item.quantity = 0
-        try await store.editItem(mealID: meal.id, item: item)
+        try await store.editItem(mealID: meal.id, item: item, explicitNutrients: [])
         #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == 0)
         item = try await store.snapshotForExport().meals[0].items[0]
         item.quantity = 2
-        try await store.editItem(mealID: meal.id, item: item)
+        try await store.editItem(mealID: meal.id, item: item, explicitNutrients: [])
         #expect(try await store.snapshotForExport().totals(dayID: day.id).kcal == 190)
     }
 
@@ -290,7 +290,7 @@ struct DiaryTests {
         try await store.processPending()
         var item = try await store.snapshotForExport().meals[0].items[0]
         item.nutrition.kcal = 123
-        try await store.editItem(mealID: meal.id, item: item)
+        try await store.editItem(mealID: meal.id, item: item, explicitNutrients: ["kcal"])
         let edited = try await store.snapshotForExport().meals[0].items[0]
         #expect(edited.nutrientSources["kcal"] == .user)
         #expect(edited.nutrientSources["protein"] == .sample)
@@ -385,15 +385,15 @@ struct DiaryTests {
         let reviewID = correction.submissions.last!.id
         var committed = try await store.snapshotForExport().meals[0].items[0]
         committed.nutrition.kcal = 150
-        try await store.editItem(mealID: meal.id, item: committed)
+        try await store.editItem(mealID: meal.id, item: committed, explicitNutrients: ["kcal"])
         let saved = try await store.snapshotForExport().meals[0]
         #expect(saved.totals.kcal == 150)
         #expect(saved.submissions.first { $0.id == reviewID }!.proposal!.items[0].nutrition.kcal == 47.5)
         var reviewItem = saved.submissions.first { $0.id == reviewID }!.proposal!.items[0]
         reviewItem.nutrition.kcal = 30
-        await #expect(throws: DiaryError.staleRevision) { try await store.editItem(mealID: meal.id, item: reviewItem, reviewSubmissionID: reviewID) }
+        await #expect(throws: DiaryError.staleRevision) { try await store.editItem(mealID: meal.id, item: reviewItem, explicitNutrients: ["kcal"], reviewSubmissionID: reviewID) }
         committed.nutrition.kcal = 160
-        try await store.editItem(mealID: meal.id, item: committed)
+        try await store.editItem(mealID: meal.id, item: committed, explicitNutrients: ["kcal"])
         #expect(try await store.snapshotForExport().meals[0].totals.kcal == 160)
     }
     @Test func editorRevisionGuardRejectsStaleDirectEdit() async throws {
@@ -403,9 +403,9 @@ struct DiaryTests {
         let original = try await store.snapshotForExport().meals[0]
         var item = original.items[0]
         item.nutrition.kcal = 200
-        try await store.editItem(mealID: meal.id, item: item, expectedRevision: original.revision)
+        try await store.editItem(mealID: meal.id, item: item, explicitNutrients: ["kcal"], expectedRevision: original.revision)
         item.nutrition.kcal = 50
-        await #expect(throws: DiaryError.staleRevision) { try await store.editItem(mealID: meal.id, item: item, expectedRevision: original.revision) }
+        await #expect(throws: DiaryError.staleRevision) { try await store.editItem(mealID: meal.id, item: item, explicitNutrients: ["kcal"], expectedRevision: original.revision) }
         #expect(try await store.snapshotForExport().meals[0].totals.kcal == 200)
     }
     @Test func encodedSizeRejectionPreservesFileMemoryAndReopenability() async throws {
@@ -431,7 +431,7 @@ struct DiaryTests {
         var item = try await store.snapshotForExport().meals[0].items[0]
         let originalReference = item.reference
         item.nutrition.kcal = 110
-        try await store.editItem(mealID: meal.id, item: item)
+        try await store.editItem(mealID: meal.id, item: item, explicitNutrients: ["kcal"])
         #expect(try await store.snapshotForExport().meals[0].items[0].reference == originalReference)
     }
 

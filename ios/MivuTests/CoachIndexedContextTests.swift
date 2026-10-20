@@ -129,7 +129,7 @@ import Testing
         let store = try await f.store(), accepted = try await f.accept(store)
         let transport = CoachJourneyTransport(mixedWrite: true, beforeCorrection: {
             var item = try await store.meal(id: f.mealID, expectedProfileID: f.owner).items[1]; item.name = "Manually edited rice"
-            try await store.editItem(mealID: f.mealID, item: item, expectedRevision: 1, expectedProfileID: f.owner)
+            try await store.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 1, expectedProfileID: f.owner)
             try f.clearApplications()
         })
         await #expect(throws: DiaryError.staleRevision) { try await f.run(store, accepted.id, transport) }
@@ -157,7 +157,7 @@ import Testing
         let otherID = f.source.meals[1].id
         let transport = CoachJourneyTransport(beforeCorrection: {
             var item = try await store.meal(id: otherID, expectedProfileID: f.owner).items[1]; item.name = "Independent rice edit"
-            try await store.editItem(mealID: otherID, item: item, expectedRevision: 1, expectedProfileID: f.owner)
+            try await store.editItem(mealID: otherID, item: item, explicitNutrients: [], expectedRevision: 1, expectedProfileID: f.owner)
         })
         _ = try await f.run(store, accepted.id, transport)
         #expect(try await store.meal(id: f.mealID, expectedProfileID: f.owner).items[0].quantity == 3)

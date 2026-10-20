@@ -321,7 +321,7 @@ extension CoachFlowTests {
         let photo = MealPhoto(data: SyntheticConnectionProbe.image)
         _ = try await correctedMeal(diary.store, mealID: saved.id, text: "Half of the current bread", photos: [photo], submissionID: pendingID, expectedProfileID: owner)
         var edited = try #require(saved.items.first); edited.quantity = 3
-        try await diary.store.editItem(mealID: saved.id, item: edited, expectedRevision: saved.revision, expectedProfileID: owner)
+        try await diary.store.editItem(mealID: saved.id, item: edited, explicitNutrients: [], expectedRevision: saved.revision, expectedProfileID: owner)
         try await diary.refresh(profileID: owner)
         let current = try #require(diary.readModel?.meals.first)
         let arguments = "{\"meal_id\":\"\(current.id)\",\"item_id\":\"\(edited.id)\",\"expected_revision\":\(current.revision),\"quantity\":1.5}"

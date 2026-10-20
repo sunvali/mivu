@@ -1,6 +1,67 @@
 import XCTest
 
 @MainActor final class DiaryUITests: XCTestCase {
+    func testDiaryOlderNewerLatestAndDateFilterRemainReversible() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Diary"].tap()
+        let days = app.buttons.matching(identifier: "diaryDay")
+        func firstDay(_ date: String) -> XCUIElement {
+            days.matching(NSPredicate(format: "value == %@", date + " UTC")).firstMatch
+        }
+        func observedDays() -> String {
+            days.allElementsBoundByIndex.map { "\($0.value ?? "nil"): \($0.label)" }.joined(separator: " | ")
+        }
+        func assertTop(_ date: String) -> Bool {
+            let anchor = firstDay(date)
+            for _ in 0..<10 {
+                if anchor.exists && anchor.isHittable { break }
+                app.swipeDown(velocity: .fast)
+            }
+            guard anchor.exists && anchor.isHittable else {
+                XCTFail("Expected page anchor \(date); observed \(observedDays())")
+                return false
+            }
+            XCTAssertEqual(anchor.value as? String, date + " UTC")
+            return true
+        }
+        func tapPage(_ id: String, first date: String) -> Bool {
+            let button = app.buttons[id]
+            for _ in 0..<10 { if button.exists && button.isHittable { break }; app.swipeUp(velocity: .fast) }
+            guard button.exists && button.isHittable && button.isEnabled else {
+                XCTFail("Page action \(id) unavailable; observed \(observedDays())")
+                return false
+            }
+            let previous = days.firstMatch.value as? String
+            button.tap()
+            let changed = NSPredicate { _, _ in (days.firstMatch.value as? String) != previous }
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: changed, object: nil)], timeout: 10), .completed)
+            return assertTop(date)
+        }
+        XCTAssertTrue(days.firstMatch.waitForExistence(timeout: 10))
+        print("HISTORY_INITIAL_ROWS " + observedDays())
+        guard assertTop("2026-10-19"),
+              tapPage("earlierDiaryDays", first: "2026-09-19"),
+              tapPage("earlierDiaryDays", first: "2026-08-20"),
+              tapPage("newerDiaryDays", first: "2026-09-19"),
+              tapPage("latestDiaryDays", first: "2026-10-19") else { return }
+        app.buttons["chooseDiaryDate"].tap(); app.buttons["applyDiaryDate"].tap()
+        XCTAssertTrue(app.buttons["showAllDiaryDays"].waitForExistence(timeout: 5))
+        let filtered = NSPredicate { _, _ in days.count == 1 }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: filtered, object: nil)], timeout: 10), .completed)
+        XCTAssertEqual(days.count, 1)
+        days.firstMatch.tap()
+        XCTAssertTrue(app.buttons["logMealForDay"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["showAllDiaryDays"].waitForExistence(timeout: 5))
+        XCTAssertEqual(days.count, 1)
+        app.buttons["showAllDiaryDays"].tap()
+        let unfiltered = NSPredicate { _, _ in days.count > 1 }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: unfiltered, object: nil)], timeout: 10), .completed)
+        _ = assertTop("2026-10-19")
+    }
     func testFirstRunCreatesNamedDiaryWithoutInventingRecords() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--proof-english"]
@@ -134,7 +195,7 @@ import XCTest
         XCTAssertTrue(row.waitForExistence(timeout: 10)); reveal(row, in: app); row.tap()
         XCTAssertFalse(app.tabBars.buttons["Today"].isHittable, "Focused meal details must hide the tab bar")
         let accept = app.buttons["acceptReview"]
-        XCTAssertTrue(accept.waitForExistence(timeout: 10)); reveal(accept, in: app); accept.tap()
+        reveal(accept, in: app); XCTAssertTrue(accept.waitForExistence(timeout: 10)); accept.tap()
         let half = app.buttons["halfPortion"]
         reveal(half, in: app); XCTAssertTrue(half.isEnabled); half.tap()
         let edit = app.buttons["editItem"].firstMatch
@@ -162,7 +223,7 @@ import XCTest
         XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap()
         XCTAssertFalse(app.tabBars.buttons["Diary"].isHittable)
         let savedWeight = app.staticTexts["Morning weight, 70 kg"]
-        XCTAssertTrue(savedWeight.waitForExistence(timeout: 5)); reveal(savedWeight, in: app)
+        reveal(savedWeight, in: app); XCTAssertTrue(savedWeight.waitForExistence(timeout: 5))
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "Synthetic diary history"; attachment.lifetime = .keepAlways; add(attachment)
     }
 

@@ -27,6 +27,27 @@ struct ArchiveTests {
         return next
     }
 
+    @Test func version4RoundTripRetainsManualAcceptance() throws {
+        let originalSnapshot = try ManualNutritionPayloadTests.snapshot()
+        let data = try DiaryArchive.encode(originalSnapshot)
+        let envelope = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(envelope["version"] as? Int == 4)
+        let decoded = try DiaryArchive.decode(data)
+        #expect(decoded == originalSnapshot)
+    }
+
+    @Test(arguments: [1, 2, 3]) func legacyEnvelopeCannotClaimVerifiedAcceptance(version: Int) throws {
+        let original = try ManualNutritionPayloadTests.snapshot()
+        var envelope = try #require(JSONSerialization.jsonObject(with: DiaryArchive.encode(original)) as? [String: Any])
+        envelope["version"] = version
+        #expect(throws: DiaryError.invalidData) { try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope)) }
+        var legacy = original
+        legacy.meals[0].submissions[0].manualAcceptance = nil
+        envelope = try #require(JSONSerialization.jsonObject(with: DiaryArchive.encode(legacy)) as? [String: Any])
+        envelope["version"] = version
+        #expect(try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope)) == legacy)
+    }
+
     @Test func archiveRoundTripRetainsPhotoPendingAndRevision() throws {
         let snapshot = fixture()
         let data = try DiaryArchive.encode(snapshot)
@@ -37,7 +58,7 @@ struct ArchiveTests {
         #expect(!json.contains("refreshToken"))
     }
 
-    @Test func versionThreeRoundTripKeepsProgressAndPendingCoachMedia() throws {
+    @Test func versionFourRoundTripKeepsProgressAndPendingCoachMedia() throws {
         var snapshot = fixture()
         let photo = MealPhoto(data: Data([5, 6, 7]), role: .before)
         snapshot.coachTurns = [CoachTurn(capturedAt: snapshot.days[0].startAt, text: "Synthetic pending turn",
@@ -51,7 +72,7 @@ struct ArchiveTests {
                                             durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil)]
         let data = try DiaryArchive.encode(snapshot)
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(json["version"] as? Int == 3)
+        #expect(json["version"] as? Int == 4)
         #expect(try DiaryArchive.decode(data) == snapshot)
     }
 

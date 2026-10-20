@@ -15,6 +15,10 @@ import XCTest
     }
     func testSpikeBidirectionalEvictionAndBackgroundReplyPreserveReader() throws {
         let app = launchHistory()
+        let appBounds = app.windows.firstMatch.frame
+        guard !appBounds.isEmpty, appBounds.width > 100, appBounds.height > 100 else {
+            XCTFail("The launched native window must provide valid screen bounds: \(appBounds)"); return
+        }
         for _ in 0..<6 {
             app.buttons["historyMeasureStart"].tap(); _ = try waitHistory(app); try partialRow(app)
             app.buttons["historyMeasureEarlier"].tap(); try preserved(waitHistory(app, complete: true))
@@ -29,13 +33,57 @@ import XCTest
         let ranges = try XCTUnwrap(try metrics(app)["requestedPages"] as? [[Int]])
         XCTAssertEqual(ranges.filter { $0 == Array(121...140) }.count, 2)
         let anchorID = try XCTUnwrap(try metrics(app)["anchorID"] as? String)
-        enter("Synthetic delayed weekly report", app: app); app.buttons["coachSend"].tap()
+        let message = "Synthetic delayed weekly report"
+        enter(message, app: app)
+        guard sendAfterKeyboardSettles(app, text: message, appBounds: appBounds) else { return }
         XCTAssertTrue(app.buttons["Jump to latest"].waitForExistence(timeout: 10))
         let facts = try waitForReply(app, text: "Synthetic delayed weekly report")
         let completed = try waitHistory(app, complete: true)
         XCTAssertEqual(completed["anchorID"] as? String, anchorID)
         XCTAssertEqual(completed["completedReplyID"] as? String, facts["latestTurnID"] as? String)
         try preserved(completed)
+    }
+    private func sendAfterKeyboardSettles(_ app: XCUIApplication, text: String, appBounds: CGRect) -> Bool {
+        let input = app.textFields["coachInput"], send = app.buttons["coachSend"], keyboard = app.keyboards.firstMatch
+        var previous: [CGRect] = [], stableSamples = 0, samples = 0
+        var stage = "not sampled", flags = "", geometry = "", stability = ""
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            samples += 1
+            let inputExists = input.exists, sendExists = send.exists, keyboardExists = keyboard.exists
+            let value = inputExists ? input.value as? String : nil
+            let inputHittable = inputExists && input.isHittable
+            let sendEnabled = sendExists && send.isEnabled, sendHittable = sendExists && send.isHittable
+            flags = "inputExists=\(inputExists) value=\(String(describing: value)) exactText=\(value == text) inputHittable=\(inputHittable) sendExists=\(sendExists) sendEnabled=\(sendEnabled) sendHittable=\(sendHittable) keyboardExists=\(keyboardExists)"
+            guard inputExists, value == text, inputHittable, sendExists, sendEnabled, sendHittable, keyboardExists else {
+                stage = "controls"; previous = []; stableSamples = 0; return false
+            }
+            let frames = [keyboard.frame, input.frame, send.frame]
+            let visibleKeyboard = frames[0].intersection(appBounds)
+            geometry = "bounds=\(appBounds) keyboard=\(frames[0]) visibleKeyboard=\(visibleKeyboard) input=\(frames[1]) send=\(frames[2])"
+            guard frames[0].height > 100, visibleKeyboard.height > 100,
+                  frames[1].maxY <= frames[0].minY + 2, frames[2].maxY <= frames[0].minY + 2 else {
+                stage = "geometry"; previous = []; stableSamples = 0; return false
+            }
+            let unchanged = previous.count == frames.count && zip(previous, frames).allSatisfy { before, after in
+                abs(before.minX - after.minX) <= 0.5 && abs(before.minY - after.minY) <= 0.5 &&
+                abs(before.width - after.width) <= 0.5 && abs(before.height - after.height) <= 0.5
+            }
+            stability = "previous=\(previous) unchanged=\(unchanged) priorStableSamples=\(stableSamples)"
+            stableSamples = unchanged ? stableSamples + 1 : 1
+            previous = frames; stage = "stability"
+            return stableSamples >= 3
+        }, object: nil)
+        // Stress-fixture AX samples take several seconds; wait for geometry, never a fixed delay.
+        let result = XCTWaiter.wait(for: [ready], timeout: 30)
+        let proofText = "stage=\(stage) samples=\(samples) stableSamples=\(stableSamples) \(flags) \(geometry) \(stability)"
+        XCTAssertEqual(result, .completed, "Send requires the exact draft and a settled on-screen keyboard/composer: " + proofText)
+        guard result == .completed else {
+            let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Unsettled Send geometry"; proof.lifetime = .keepAlways; add(proof)
+            return false
+        }
+        print("COACH_SEND_READY " + proofText)
+        send.tap()
+        return true
     }
     func testSpikeDynamicTypePreservesSemanticPosition() throws {
         let app = launchHistory()

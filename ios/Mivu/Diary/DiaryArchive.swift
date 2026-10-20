@@ -7,7 +7,7 @@ enum DiaryArchive {
     static let maximumBytes = 350_000_000
     private struct Envelope: Codable {
         var format = "mivu-diary"
-        var version = 3
+        var version = 4
         var profileID: UUID
         var snapshot: DiarySnapshot
     }
@@ -25,9 +25,10 @@ enum DiaryArchive {
         guard !data.isEmpty, data.count <= maximumBytes else { throw DiaryError.invalidData }
         do {
             let envelope = try JSONDecoder().decode(Envelope.self, from: data)
-            guard envelope.format == "mivu-diary", [1, 2, 3].contains(envelope.version) else { throw DiaryError.invalidData }
+            guard envelope.format == "mivu-diary", [1, 2, 3, 4].contains(envelope.version) else { throw DiaryError.invalidData }
             guard envelope.profileID == envelope.snapshot.profile.id,
                   expectedProfileID == nil || expectedProfileID == envelope.profileID else { throw DiaryError.wrongOwner }
+            guard envelope.version == 4 || envelope.snapshot.meals.allSatisfy({ $0.submissions.allSatisfy { $0.manualAcceptance == nil } }) else { throw DiaryError.invalidData }
             try validate(envelope.snapshot)
             return envelope.snapshot
         } catch let error as DiaryError { throw error }
