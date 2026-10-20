@@ -14,17 +14,24 @@ import UserNotifications
         (userInfo[mealKey] as? String).flatMap(UUID.init(uuidString:))
     }
 
-    nonisolated static func text(for meal: MealReadModel) -> (title: String, body: String) {
-        guard !meal.items.isEmpty else { return ("Couldn't recognize your meal", "Tap to add a note so Mivu can log it.") }
-        let names = meal.items.map(\.name)
+    /// Nil for meals that will be retried or were stopped: they say nothing about what the food was.
+    nonisolated static func text(for meal: MealReadModel) -> (title: String, body: String)? {
+        let review = meal.state == .awaitingReview
+        // An estimate awaiting review lives in the submission's proposal until it is accepted.
+        let items = review ? meal.submissions.last?.proposal?.items ?? [] : meal.items
+        guard !items.isEmpty else {
+            return [.captured, .saved].contains(meal.state) ? ("Couldn't recognize your meal", "Tap to add a note so Mivu can log it.") : nil
+        }
+        let names = items.map(\.name)
         let name = names.count <= 2 ? names.joined(separator: " and ") : names.prefix(2).joined(separator: ", ") + " and \(names.count - 2) more"
-        let calories = meal.totals.kcal.map { "\(Int($0.rounded())) kcal" }
-        if meal.state == .awaitingReview { return ("\(name) is ready to review", (calories.map { "About \($0) · " } ?? "") + "Tap to review") }
+        let calories = nutritionTotals(items).kcal.map { "\(Int($0.rounded())) kcal" }
+        if review { return ("\(name) is ready to review", (calories.map { "About \($0) · " } ?? "") + "Tap to review") }
         return ("\(name) logged", calories ?? "Calories not known yet")
     }
 
     nonisolated static func post(_ meal: MealReadModel) {
-        let text = text(for: meal), content = UNMutableNotificationContent()
+        guard let text = text(for: meal) else { return }
+        let content = UNMutableNotificationContent()
         content.title = text.title; content.body = text.body
         content.userInfo = [mealKey: meal.id.uuidString]; content.threadIdentifier = "meals"
         // Keyed by meal, so a later analysis of the same meal replaces this one instead of stacking.
