@@ -11,7 +11,7 @@ struct MealDetailView: View {
     @State private var editedItem: FoodItem?
     @State private var editingRevision: Int?
     @State private var editingSubmissionID: UUID?
-    private enum Deletion { case meal, photo(UUID) }
+    private enum Deletion { case meal, photo(UUID), food(FoodItem) }
     @State private var deletion: Deletion?
     @State private var showMove = false
     @State private var movedDayID: UUID?
@@ -21,23 +21,19 @@ struct MealDetailView: View {
         Group {
             if let meal = model.meal(mealID), let snapshot = model.readModel {
                 List {
-                    Section {
-                        mealSummary(meal, snapshot: snapshot).listRowBackground(Color.diarySummarySurface)
-                    }.listRowBackground(Color.clear)
-                    Section("Source conversation") {
-                        if let source = meal.sourceTurnID {
-                            let selection = model.selection
-                            Button {
-                                guard let selection, openChat(.turn(source), expectedSelection: selection) else { return }
-                                dismiss()
-                            } label: { Label("Open source chat", systemImage: "bubble.left").frame(minHeight: 44) }
-                                .disabled(selection == nil || model.isChangingProfile || openChat.origin?.selection != selection)
-                                .accessibilityIdentifier("mealSourceChat")
-                        } else {
-                            Text("No source conversation is recorded for this meal.")
-                                .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("mealSourceUnavailable")
+                    if let photo = meal.photos.first {
+                        Section {
+                            Button { viewingPhoto = photo } label: {
+                                DiaryPhotoPreview(model: model, reference: photo, height: 240)
+                                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                            }
+                            .buttonStyle(.plain).accessibilityLabel("Meal photo")
+                            .accessibilityHint("Open full-screen photo viewer").accessibilityIdentifier("viewMealPhoto")
+                            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 0, trailing: 20))
+                            .listRowSeparator(.hidden).listRowBackground(Color.clear)
                         }
-                    }.listRowBackground(Color.clear)
+                    }
+                    Section { mealSummary(meal, snapshot: snapshot).diarySummaryCard() }
                     if let review = meal.submissions.last(where: { $0.state == .awaitingReview }), let proposal = review.proposal {
                         Section("Review estimate") {
                             Text("Check the portions before marking this reviewed. This proposal does not count in totals until you save it.")
@@ -51,7 +47,7 @@ struct MealDetailView: View {
                             .accessibilityIdentifier("acceptReview")
                         }.listRowBackground(Color.diarySurface)
                     }
-                    if !meal.photos.isEmpty {
+                    if meal.photos.count > 1 {
                         Section("Attached photos") {
                             ForEach(meal.photos, id: \.id) { photo in
                                 VStack(alignment: .leading, spacing: 8) {
@@ -69,10 +65,21 @@ struct MealDetailView: View {
                             }
                         }.listRowBackground(Color.clear)
                     }
-                    Section("Ingredients") {
-                        if meal.items.isEmpty { Text("No saved items yet").foregroundStyle(Color.diarySecondary) }
-                        ForEach(meal.items, id: \.id) { item in itemRow(item, editable: true) }
-                    }.listRowBackground(Color.clear)
+                    Section {
+                        if meal.items.isEmpty { Text("No saved items yet").foregroundStyle(Color.diarySecondary).listRowBackground(Color.clear) }
+                        ForEach(meal.items, id: \.id) { item in
+                            foodRow(item, meal: meal)
+                                .diarySummaryCard()
+                                .swipeActions(edge: .trailing) {
+                                    if meal.items.count > 1 && meal.state == .saved {
+                                        Button("Delete", systemImage: "trash", role: .destructive) { deletion = .food(item) }
+                                    }
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button("Ask Pip", systemImage: "sparkles") { askPip(about: item, in: meal) }.tint(.diaryAccent)
+                                }
+                        }
+                    } header: { Text("Foods").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
                     Section {
                         Button { showCorrection = true } label: {
                             Label("Add note or photo", systemImage: "note.text.badge.plus").frame(minHeight: 44)
@@ -151,13 +158,23 @@ struct MealDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom) {
-            if let movedDayID, let day = model.day(movedDayID) {
-                // The Diary tab shows the destination day; this only confirms the move.
-                Label("Moved to \(DiaryWeek.format(day.localDate, "EEEE, d MMM"))", systemImage: "checkmark.circle")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySuccess)
-                    .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                    .accessibilityIdentifier("movedMealDayReceipt")
-                    .padding(.horizontal, 20).background(Color.diaryCanvas)
+            if let meal = model.meal(mealID) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let movedDayID, let day = model.day(movedDayID) {
+                        // The Diary tab shows the destination day; this only confirms the move.
+                        Label("Moved to \(DiaryWeek.format(day.localDate, "EEEE, d MMM"))", systemImage: "checkmark.circle")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySuccess)
+                            .frame(minHeight: 44).accessibilityIdentifier("movedMealDayReceipt")
+                    }
+                    Button { askPip(about: nil, in: meal) } label: {
+                        Label("Ask Pip about this meal", systemImage: "sparkles").font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                    }
+                    .buttonStyle(.glass).tint(.diaryAccent)
+                    .disabled(model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
+                    // Keeps the identifier Coach navigation tests use for the source-conversation route.
+                    .accessibilityIdentifier(meal.sourceTurnID != nil ? "mealSourceChat" : "mealAskPip")
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12).background(Color.diaryCanvas)
             }
         }
         .fullScreenCover(item: $viewingPhoto) { photo in
@@ -173,17 +190,23 @@ struct MealDetailView: View {
             }
         }
         .sheet(isPresented: $showCorrection) { MealComposerView(model: model, correctingMealID: mealID) }
-        .sheet(item: $editedItem) { item in FoodItemEditor(item: item, errorMessage: { model.errorMessage }) { updated, explicitNutrients in
+        .sheet(item: $editedItem) { item in
+            let meal = model.meal(mealID)
+            let saved = editingSubmissionID == nil && meal?.state == .saved
+            let several = (meal?.items.count ?? 0) > 1
+            FoodItemEditor(item: item, errorMessage: { model.errorMessage },
+                           deleteFood: saved && several ? { await deleteFood(item) } : nil,
+                           deleteMeal: saved && !several ? { await deleteMeal() } : nil,
+                           askPip: meal.map { meal in { askPip(about: item, in: meal) } }) { updated, explicitNutrients in
             guard let owner = model.readModel?.profile.id else { return false }
             return await model.change { try await model.store.editItem(mealID: mealID, item: updated, explicitNutrients: explicitNutrients, reviewSubmissionID: editingSubmissionID, expectedRevision: editingRevision, expectedProfileID: owner) }
         } }
         .alert(deletionTitle, isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), presenting: deletion) { target in
             switch target {
             case .meal:
-                Button("Delete meal", role: .destructive) {
-                    guard let owner = model.readModel?.profile.id else { return }
-                    Task { if await model.change({ try await model.store.deleteMeal(mealID, expectedProfileID: owner) }) { dismiss() } }
-                }
+                Button("Delete meal", role: .destructive) { Task { await deleteMeal() } }
+            case .food(let item):
+                Button("Delete food", role: .destructive) { Task { await deleteFood(item) } }.accessibilityIdentifier("confirmDeleteFood")
             case .photo(let photoID):
                 Button("Delete photo", role: .destructive) {
                     guard let owner = model.readModel?.profile.id else { return }
@@ -195,6 +218,7 @@ struct MealDetailView: View {
             switch target {
             case .meal: Text("This removes the meal and its attached photos from this diary.")
             case .photo: Text("Only this photo will be removed. The meal and its notes are kept.")
+            case .food: Text("Only this food is removed. The meal keeps its other foods.")
             }
         }
         .sheet(isPresented: $showMove) {
@@ -205,8 +229,57 @@ struct MealDetailView: View {
     }
     private var deletionTitle: String {
         if case .some(.photo(_)) = deletion { return "Delete this photo?" }
+        if case .some(.food(let item)) = deletion { return "Delete \(item.name)?" }
         guard let meal = model.meal(mealID), let day = model.day(meal.dayID) else { return "Delete meal?" }
         return "Delete “\(displayTitle(meal))” on \(day.localDate)?"
+    }
+    private func deleteFood(_ item: FoodItem) async -> Bool {
+        guard let owner = model.readModel?.profile.id, let meal = model.meal(mealID) else { return false }
+        return await model.change { try await model.store.deleteItem(mealID: mealID, itemID: item.id, expectedRevision: meal.revision, expectedProfileID: owner) }
+    }
+    private func deleteMeal() async -> Bool {
+        guard let owner = model.readModel?.profile.id else { return false }
+        let deleted = await model.change { try await model.store.deleteMeal(mealID, expectedProfileID: owner) }
+        if deleted { dismiss() }
+        return deleted
+    }
+    /// Opens Coach at this meal's conversation (or its day) with an unsent message about the meal or one food.
+    private func askPip(about item: FoodItem?, in meal: MealReadModel) {
+        guard let selection = model.selection else { return }
+        let day = model.day(meal.dayID).map { " from \(DiaryWeek.format($0.localDate, "EEE d MMM"))" } ?? ""
+        let subject = item.map { "the \($0.name)" } ?? displayTitle(meal)
+        let target: CoachSeekTarget = meal.sourceTurnID.map { .turn($0) } ?? .day(meal.dayID)
+        editedItem = nil
+        if openChat(target, draft: "About \(subject)\(day): ", expectedSelection: selection) { dismiss() }
+    }
+    private func foodRow(_ item: FoodItem, meal: MealReadModel) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                editingRevision = meal.revision; editingSubmissionID = nil; editedItem = item
+            } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.semibold))
+                        Text("\(item.quantity.formatted()) \(item.unit)").font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
+                        if item.uncertain { Text("Portion or nutrients are uncertain").font(.caption).foregroundStyle(Color.diarySecondary) }
+                    }
+                    Spacer(minLength: 8)
+                    Text(item.nutrition.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "— kcal")
+                        .font(.subheadline.weight(.medium)).monospacedDigit()
+                }
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).accessibilityIdentifier("editItem")
+            .accessibilityHint("Edit amount, nutrition or delete")
+            Button { askPip(about: item, in: meal) } label: {
+                Image(systemName: "sparkles").font(.body.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.diarySummarySurface))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ask Pip about \(item.name)")
+            .accessibilityIdentifier("askPipFood")
+        }
     }
     private func displayTitle(_ meal: MealReadModel) -> String {
         if let item = meal.items.first { return item.provenance == .sample ? "Apple (sample)" : item.name }
@@ -357,7 +430,13 @@ private struct FoodItemEditor: View {
     let item: FoodItem
     let save: (FoodItem, Set<String>) async -> Bool
     let errorMessage: () -> String?
+    /// Nil for estimate items under review; set exactly one of the two deletes for saved foods.
+    var deleteFood: (() async -> Bool)? = nil
+    var deleteMeal: (() async -> Bool)? = nil
+    var askPip: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var showDetails = false
+    @State private var confirmDelete = false
     @State private var name: String
     @State private var quantity: String
     @State private var unit: String
@@ -370,8 +449,10 @@ private struct FoodItemEditor: View {
     @State private var showDiscard = false
     @FocusState private var editingField: String?
     @Environment(\.dynamicTypeSize) private var typeSize
-    init(item: FoodItem, errorMessage: @escaping () -> String?, save: @escaping (FoodItem, Set<String>) async -> Bool) {
+    init(item: FoodItem, errorMessage: @escaping () -> String?, deleteFood: (() async -> Bool)? = nil, deleteMeal: (() async -> Bool)? = nil,
+         askPip: (() -> Void)? = nil, save: @escaping (FoodItem, Set<String>) async -> Bool) {
         self.item = item; self.save = save; self.errorMessage = errorMessage
+        self.deleteFood = deleteFood; self.deleteMeal = deleteMeal; self.askPip = askPip
         _name = State(initialValue: item.name); _quantity = State(initialValue: String(item.quantity)); _unit = State(initialValue: item.unit)
         _kcal = State(initialValue: item.nutrition.kcal.map { String($0) } ?? "")
         _carbs = State(initialValue: item.nutrition.carbs.map { String($0) } ?? "")
@@ -382,29 +463,64 @@ private struct FoodItemEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Name", text: $name).focused($editingField, equals: "Name")
-                        .font(.title2.weight(.semibold)).padding(.vertical, 8)
+                    Text(name.isEmpty ? item.name : name).font(.title2.weight(.semibold)).padding(.vertical, 4)
                     nutrientField("Amount", text: $quantity, identifier: "itemQuantity")
                     LabeledContent("Unit") { TextField("Unit", text: $unit).multilineTextAlignment(.trailing).focused($editingField, equals: "Unit") }
-                } header: { Text("Ingredient") }
+                    portionChips
+                } header: { Text("Portion") }
+                Section { preview } header: { Text("This food") }
                 Section {
-                    nutrientField("Energy (kcal)", text: nutrientBinding("kcal", $kcal), identifier: "itemCalories")
-                    nutrientField("Protein (g)", text: nutrientBinding("protein", $protein))
-                    nutrientField("Carbs (g)", text: nutrientBinding("carbs", $carbs))
-                    nutrientField("Fat (g)", text: nutrientBinding("fat", $fat))
-                } header: { Text("Nutrition for this amount") } footer: {
-                    Text("Leave unknown values blank. Changing only quantity scales the recorded nutrients. Changes update this meal only.")
-                }
-                Section("Source") {
-                    Text(item.provenance.description).foregroundStyle(Color.diarySecondary)
-                    if !item.reference.isEmpty {
-                        DisclosureGroup("View source details") { Text(item.reference).font(.subheadline).padding(.vertical, 8) }
+                    Button { withAnimation(.snappy) { showDetails.toggle() } } label: {
+                        HStack {
+                            Text("More details")
+                            Spacer()
+                            Image(systemName: "chevron.down").rotationEffect(.degrees(showDetails ? 180 : 0)).accessibilityHidden(true)
+                        }.frame(minHeight: 44)
                     }
-                    if item.uncertain { Label("Portion or nutrients are uncertain", systemImage: "info.circle").font(.subheadline).foregroundStyle(Color.diarySecondary) }
+                    .accessibilityValue(showDetails ? "Expanded" : "Collapsed").accessibilityIdentifier("foodMoreDetails")
+                    if showDetails {
+                        TextField("Name", text: $name).focused($editingField, equals: "Name")
+                        nutrientField("Energy (kcal)", text: nutrientBinding("kcal", $kcal), identifier: "itemCalories")
+                        nutrientField("Protein (g)", text: nutrientBinding("protein", $protein))
+                        nutrientField("Carbs (g)", text: nutrientBinding("carbs", $carbs))
+                        nutrientField("Fat (g)", text: nutrientBinding("fat", $fat))
+                        Text(item.provenance.description).foregroundStyle(Color.diarySecondary)
+                        if !item.reference.isEmpty { Text(item.reference).font(.subheadline).foregroundStyle(Color.diarySecondary) }
+                        if item.uncertain { Label("Portion or nutrients are uncertain", systemImage: "info.circle").font(.subheadline).foregroundStyle(Color.diarySecondary) }
+                    }
+                } footer: {
+                    if showDetails { Text("Leave unknown values blank. Changing only the amount scales the recorded nutrients. Changes update this meal only.") }
+                }
+                if askPip != nil || deleteFood != nil || deleteMeal != nil {
+                    Section {
+                        if let askPip {
+                            Button { dismiss(); askPip() } label: { Label("Ask Pip to fix this", systemImage: "sparkles").frame(minHeight: 44) }
+                                .accessibilityIdentifier("askPipAboutFood")
+                        }
+                        if deleteFood != nil {
+                            Button("Delete food", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                                .frame(minHeight: 44).accessibilityIdentifier("deleteFood")
+                        } else if deleteMeal != nil {
+                            Button("Delete meal", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                                .frame(minHeight: 44).accessibilityIdentifier("deleteMealFromFood")
+                        }
+                    } footer: {
+                        if deleteFood == nil && deleteMeal != nil { Text("This is the meal’s only food, so deleting it deletes the meal.") }
+                    }
                 }
                 if let message = errorMessage() {
                     Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
                 }
+            }
+            .confirmationDialog(deleteFood != nil ? "Delete \(item.name)?" : "Delete this meal?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button(deleteFood != nil ? "Delete food" : "Delete meal", role: .destructive) {
+                    Task {
+                        saving = true; defer { saving = false }
+                        if await (deleteFood ?? deleteMeal)?() == true { dismiss() }
+                    }
+                }.accessibilityIdentifier("confirmDeleteFood")
+            } message: {
+                Text(deleteFood != nil ? "Only this food is removed. The meal keeps its other foods." : "This removes the meal and its attached photos from this diary.")
             }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
@@ -433,6 +549,56 @@ private struct FoodItemEditor: View {
         }
         .environment(\.locale, Locale(identifier: "en"))
         .environment(\.layoutDirection, .leftToRight)
+    }
+    private var portionChips: some View {
+        HStack(spacing: 8) {
+            ForEach([(0.5, "½×", "Half"), (1, "1×", "Original"), (1.5, "1½×", "One and a half"), (2, "2×", "Double")], id: \.0) { factor, title, spoken in
+                let value = item.quantity * factor
+                let selected = number(quantity) == value
+                Button {
+                    quantity = String(value)
+                } label: {
+                    Text(title).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(selected ? Color.diaryActionText : Color.diaryText)
+                        .background(Capsule().fill(selected ? Color.diaryAccent : Color.diarySummarySurface))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(spoken) portion")
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("foodScale" + (factor == 1.5 ? "1.5" : factor == 0.5 ? "0.5" : String(Int(factor))))
+            }
+        }
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+    }
+    /// What saving would record, using the same scaling rule as the store.
+    private var preview: some View {
+        let result = edited.flatMap { try? diaryCorrectedItem($0, previous: item, explicitNutrients: explicitNutrients) }
+        let kcalText = result?.nutrition.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—"
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(kcalText).font(.largeTitle.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diaryEnergy)
+                    .contentTransition(.numericText())
+                Text("kcal").foregroundStyle(Color.diarySecondary)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(kcalText) kcal")
+            .accessibilityIdentifier("foodPreviewCalories")
+            if let result {
+                HStack(spacing: 16) {
+                    macro("Protein", result.nutrition.protein, .diaryProtein)
+                    macro("Carbs", result.nutrition.carbs, .diaryCarbs)
+                    macro("Fat", result.nutrition.fat, .diaryFat)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+    private func macro(_ title: String, _ value: Double?, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(color)
+            Text(value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "—").font(.subheadline.weight(.medium)).monospacedDigit()
+        }
+        .accessibilityElement(children: .combine)
     }
     private var hasChanges: Bool {
         !explicitNutrients.isEmpty || name != item.name || quantity != String(item.quantity) || unit != item.unit

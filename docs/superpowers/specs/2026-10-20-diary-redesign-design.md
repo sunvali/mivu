@@ -29,6 +29,7 @@ by asking Pip.
 | Delete single food | Included now, with manual and Coach parity |
 | Empty date | "Nothing logged" empty state. Log meal works only when the date already has a recorded day; otherwise the bottom bar shows **Ask Pip** only (Coach can already log to a target date) |
 | Ask Pip context | Opens Coach with the composer prefilled and unsent: "For Tuesday, 14 Oct: " for an empty date, "About the toast in Lunch: " from the food sheet. The person finishes and sends |
+| Per-food Coach button | Every food row on meal detail has its own visible ✦ Ask Pip button (44 pt) that opens Coach with "About the <food> in <meal>: " prefilled; tapping the row itself opens the manual edit sheet (owner, 2026-10-21) |
 | Coach removes the last food | Pip asks whether to delete the whole meal; nothing changes until the person confirms |
 | Review | Build in SwiftUI, then show light/dark simulator screenshots |
 
