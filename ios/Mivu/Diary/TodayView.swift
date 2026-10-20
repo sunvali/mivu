@@ -80,6 +80,8 @@ struct DiaryRootView: View {
     @State private var quickLogOwner: DiarySelectionOwnership?
     @State private var loggedMealID: UUID?
     @State private var noteMealID: UUID?
+    @State private var mealNotifications = MealNotification.shared
+    @State private var notifiedMealID: UUID?
     @State private var companion = CompanionPresentation()
     @State private var companionRuntime: CompanionRuntime
     #if DEBUG
@@ -188,7 +190,8 @@ struct DiaryRootView: View {
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
         .onOpenURL { if $0.host == "today" { selectedTab = "today" } }
-        .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest() }
+        .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest(); openNotifiedMeal() }
+        .onChange(of: mealNotifications.openedMealID, initial: true) { _, _ in openNotifiedMeal() }
         .onChange(of: model.isChangingProfile) { _, changing in
             coachRoutes.synchronize(selection: model.selection, isChangingProfile: changing)
             if changing { coachHistory = nil }
@@ -312,11 +315,21 @@ struct DiaryRootView: View {
                     quickLogOwner = nil; selectedTab = "today"
                     withAnimation { loggedMealID = id }
                     AccessibilityNotification.Announcement("Meal logged").post()
+                    Task { await MealNotification.requestPermissionIfNeeded() }
                 }
             }
         }
         .sheet(isPresented: Binding(get: { noteMealID != nil }, set: { if !$0 { noteMealID = nil } })) {
             if let id = noteMealID { MealComposerView(model: model, correctingMealID: id) }
+        }
+        .sheet(isPresented: Binding(get: { notifiedMealID != nil }, set: { if !$0 { notifiedMealID = nil } })) {
+            if let id = notifiedMealID {
+                NavigationStack {
+                    MealDetailView(model: model, mealID: id).toolbar {
+                        ToolbarItem(placement: .confirmationAction) { Button("Done") { notifiedMealID = nil } }
+                    }
+                }
+            }
         }
         .sheet(item: $coachHistory) { presentation in
             CoachHistoryView(model: model, routes: coachRoutes, presentation: presentation,
@@ -384,6 +397,13 @@ struct DiaryRootView: View {
         guard model.selection != nil, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
         routes.route = nil; coachHistory = nil; noteMealID = nil
         selectedTab = "coach"
+    }
+    private func openNotifiedMeal() {
+        guard let id = mealNotifications.openedMealID, hasLoaded else { return }
+        mealNotifications.openedMealID = nil
+        guard model.readModel != nil, !showOnboarding, !model.isChangingProfile, quickLogOwner == nil else { return }
+        routes.route = nil; coachHistory = nil; noteMealID = nil
+        selectedTab = "today"; notifiedMealID = id
     }
     private func quickLogToast(_ id: UUID) -> some View {
         HStack(spacing: 12) {
