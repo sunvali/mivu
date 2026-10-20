@@ -12,7 +12,7 @@ extension View {
             Button("Agree and Continue") { connection.recordSharingConsent(); onAgree() }
             Button("Not Now", role: .cancel) {}
         } message: {
-            Text("To estimate nutrition and answer Coach, Mivu sends your meal photos, meal notes, Coach messages and the profile details you enter (height, weight, age, sex, goal, diet and notes) to OpenAI through your ChatGPT account. OpenAI handles them under its privacy policy. Your diary stays on this iPhone. You can disconnect any time in Settings.")
+            Text("To estimate nutrition and answer Coach, Mivu sends OpenAI, through your ChatGPT account, what you record: meals, photos, messages, weights, workouts, goals and profile details. If you add a USDA key, food searches go to USDA FoodData Central. Your diary stays on this iPhone, and you can disconnect any time in Settings.")
         }
     }
 }

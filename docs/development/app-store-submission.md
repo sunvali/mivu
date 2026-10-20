@@ -7,7 +7,7 @@ submit.
 ## Done in the app
 
 - `PrivacyInfo.xcprivacy`: UserDefaults (CA92.1) and disk space (E174.1).
-  Photos, health and user content are declared as collected for app
+  Photos, health, fitness and user content are declared as collected for app
   functionality, linked to the user and not used for tracking.
 - OpenAI sharing consent appears before connecting ChatGPT. A connection saved
   before consent stays unused until the person agrees and reconnects.
@@ -41,7 +41,8 @@ submit.
 | Data type | Collected | Linked to user | Tracking | Purpose |
 |---|---|---|---|---|
 | Photos or Videos (meal photos) | Yes | Yes | No | App Functionality |
-| Health (height, weight, age, sex, goal, diet notes) | Yes | Yes | No | App Functionality |
+| Health (height, weight history, age, sex, goal, diet notes) | Yes | Yes | No | App Functionality |
+| Fitness (logged workouts) | Yes | Yes | No | App Functionality |
 | Other User Content (meal notes, Coach messages) | Yes | Yes | No | App Functionality |
 
 No analytics, advertising, location, contacts or identifiers are collected.
