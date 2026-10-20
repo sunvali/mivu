@@ -184,6 +184,7 @@ struct DiaryRootView: View {
             coach.startMonitoring(); coach.resume()
         }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
+        .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel) }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: hasLoaded) { _, _ in openQuickLog() }
         .onChange(of: model.isChangingProfile) { _, changing in

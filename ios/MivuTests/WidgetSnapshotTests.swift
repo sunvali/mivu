@@ -38,3 +38,29 @@ import Testing
         #expect(next == ISO8601DateFormatter().date(from: "2026-10-21T01:00:00Z"))
     }
 }
+
+@Suite struct WidgetSnapshotWriterTests {
+    @Test func noSelectedDiaryMeansSetUp() {
+        let snapshot = WidgetSnapshot(readModel: nil, now: .now, cutoffHour: 4)
+        #expect(!snapshot.hasDiary && snapshot.eaten == 0 && snapshot.target == nil)
+    }
+
+    @Test func snapshotMatchesTodaysReport() throws {
+        let start = try #require(ISO8601DateFormatter().date(from: "2026-10-20T05:00:00Z"))
+        let day = TrackingDay(localDate: "2026-10-20", timeZoneID: "Asia/Jerusalem", startAt: start)
+        let meal = MealReadModel(id: UUID(), dayID: day.id, capturedAt: start, eatenAt: start, revision: 1, timePrecision: nil,
+                                 items: [FoodItem(name: "Synthetic bowl", nutrition: NutritionValues(kcal: 1360))],
+                                 submissions: [], photos: [], sourceTurnID: nil)
+        let goal = GoalRecord(effectiveLocalDate: "2026-10-01", timeZoneID: "Asia/Jerusalem", targets: NutritionValues(kcal: 2000),
+                              goalWeightKg: nil, exerciseCreditEnabled: false)
+        let head = DiaryHead(profile: DiaryProfile(name: "Synthetic widget", timeZoneID: "Asia/Jerusalem"), revision: 1,
+                             lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
+        let model = DiaryReadModel(head: head, activeDay: day, meals: [meal], weight: nil, workouts: [], activeGoal: goal, pendingAnalysisCount: 0)
+        let snapshot = WidgetSnapshot(readModel: model, now: start, cutoffHour: 4)
+        let report = ProgressAnalytics.daily(readModel: model)
+        #expect(snapshot.hasDiary && snapshot.day == "2026-10-20")
+        #expect(snapshot.eaten == 1360 && snapshot.eaten == report.foodTotals?.kcal)
+        #expect(snapshot.target == 2000)
+        #expect(snapshot.rolloverAt == WidgetSnapshot.nextRollover(after: start, timeZoneID: "Asia/Jerusalem", cutoffHour: 4))
+    }
+}
