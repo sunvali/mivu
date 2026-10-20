@@ -282,11 +282,11 @@ struct CaptureFixture: Sendable {
     func photo(bytes: Data = Data([255, 255, 255, 0])) -> MealPhoto {
         MealPhoto(data: bytes, createdAt: Date(timeIntervalSinceReferenceDate: 800_000_000.125))
     }
-    func payload(head: DiaryHead, id: UUID = UUID(), text: String = "Synthetic capture", photos: [MealPhoto] = [], context: CoachCaptureContext? = nil) throws -> CoachSubmissionPayload {
+    func payload(head: DiaryHead, id: UUID = UUID(), text: String = "Synthetic capture", photos: [MealPhoto] = [], context: CoachCaptureContext? = nil, reply: CoachReply? = nil) throws -> CoachSubmissionPayload {
         try CoachSubmissionPayload(submissionID: id, text: text, attachments: photos,
             context: context ?? CoachCaptureContext(capturedAt: Date(timeIntervalSinceReferenceDate: 800_000_000.125),
                 timeZoneID: head.profile.timeZoneID, activeDayID: head.activeDayID, previousDayConfirmedAt: head.previousDayConfirmedAt,
-                activeConversationSegmentID: head.effectiveConversationSegmentID))
+                activeConversationSegmentID: head.effectiveConversationSegmentID), reply: reply)
     }
     func durableState(databaseURL: URL? = nil) throws -> [[[String]]] {
         try ["storage_head", "coach_turn", "coach_photo", "photo", "coach_index", "coach_segment", "photo_content", "photo_consumer", "storage_contribution", "storage_row_count", "storage_quota"].map { table in

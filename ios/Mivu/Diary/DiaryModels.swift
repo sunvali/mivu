@@ -448,7 +448,8 @@ func validateCoachTurnFields(_ turn: CoachTurn) throws -> TimeZone {
           unique(turn.photoIDs), turn.photoIDs.count <= 30,
           turn.assistantText == nil || turn.assistantText!.utf8.count <= 65_536,
           turn.receipts.count <= 16, Set(turn.receipts.map(\.operationKey)).count == turn.receipts.count,
-          turn.pendingMealRevision == nil || turn.pendingMealRevision! >= 0 else { throw DiaryError.invalidData }
+          turn.pendingMealRevision == nil || turn.pendingMealRevision! >= 0,
+          turn.submissionManifest?.reply?.isValid != false else { throw DiaryError.invalidData }
     return zone
 }
 

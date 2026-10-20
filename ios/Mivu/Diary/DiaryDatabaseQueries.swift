@@ -203,7 +203,7 @@ extension DiaryDatabase {
             displayLocalDate: row.displayLocalDate, displayTimeZoneID: row.displayTimeZoneID,
             text: turn.text, assistantText: turn.assistantText, state: row.state,
             photos: try coachPhotoReferences(turn: turn, profileID: context.identity.profileID), receipts: receipts,
-            pendingMealID: turn.pendingMealID, needsDayChoice: turn.needsDayChoice == true)
+            pendingMealID: turn.pendingMealID, needsDayChoice: turn.needsDayChoice == true, reply: turn.submissionManifest?.reply)
     }
 
     private func coachPhotoReferences(turn: CoachTurn, profileID: UUID) throws -> [DiaryPhotoReference] {
