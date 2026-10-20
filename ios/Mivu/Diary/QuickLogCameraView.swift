@@ -9,7 +9,7 @@ struct QuickLogCameraView: View {
     @State private var camera = CoachCameraSession()
     @State private var state = CoachCameraSession.State()
     @State private var presentationID = UUID()
-    @State private var unsaved: Data?
+    @State private var unsaved: MealDraft?
     @State private var saving = false
     @State private var error: String?
     @AppStorage("quickLogFlash") private var flash = AVCaptureDevice.FlashMode.auto.rawValue
@@ -61,7 +61,7 @@ struct QuickLogCameraView: View {
     private var controls: some View {
         VStack {
             HStack {
-                Button("Close") { dismiss() }.frame(minWidth: 64, minHeight: 44).accessibilityIdentifier("quickLogClose")
+                Button("Close") { dismiss() }.frame(minWidth: 64, minHeight: 44).disabled(saving).accessibilityIdentifier("quickLogClose")
                 Spacer()
                 if state.hasFlash { flashButton }
             }
@@ -70,7 +70,7 @@ struct QuickLogCameraView: View {
             else { Text("Snap your meal to log it").font(.subheadline).shadow(radius: 4).accessibilityHidden(true) }
             shutterButton.padding(.top, 12)
             if (DiaryLaunch.isSampleMode || DiaryLaunch.isUITest), state.phase == .unavailable {
-                Button("Add synthetic test photo") { if let data = PhotoImport.syntheticApple() { save(data) } }
+                Button("Add synthetic test photo") { if let data = PhotoImport.syntheticApple() { save(MealDraft(photos: [data])) } }
                     .frame(minHeight: 44).disabled(saving).accessibilityIdentifier("quickLogSyntheticPhoto")
             }
         }.padding(24)
@@ -112,14 +112,17 @@ struct QuickLogCameraView: View {
     private func shutter() {
         saving = true
         Task {
-            do { save(try await CoachAttachmentDraft.normalize(try await camera.capture(flash: AVCaptureDevice.FlashMode(rawValue: flash) ?? .auto), source: .camera)) }
-            catch { saving = false; self.error = "Could not take photo. Try again." }
+            do {
+                let photo = try await camera.capture(flash: AVCaptureDevice.FlashMode(rawValue: flash) ?? .auto)
+                save(MealDraft(photos: [try await CoachAttachmentDraft.normalize(photo, source: .camera)]))
+            } catch { saving = false; self.error = "Could not take photo. Try again." }
         }
     }
-    private func save(_ photo: Data) {
-        saving = true; unsaved = photo
+    // Try Again resends the same draft, so its submission ID lets the diary recognise a save that already landed.
+    private func save(_ draft: MealDraft) {
+        saving = true; unsaved = draft
         Task {
-            let result = await model.capture(MealDraft(photos: [photo]), destination: .automatic, expectedSelection: ownership)
+            let result = await model.capture(draft, destination: .automatic, expectedSelection: ownership)
             saving = false
             if case .saved(let id) = result { unsaved = nil; onLogged(id); return }
             // Shown here because the root alert cannot appear over this full-screen camera.
