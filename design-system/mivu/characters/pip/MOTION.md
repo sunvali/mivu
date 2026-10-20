@@ -25,7 +25,9 @@ any other without a jump. Body springs settle with little wobble; ears, tail and
 scarf follow 60 ms later on softer, bouncier springs. A head view swap lands inside
 a blink, so a turn never reads as a cut. Ears are rooted under the head and front
 legs under the chest, so no joint opens a gap: lifted legs bend at the elbow and
-uncover plain body, never hidden layer edges.
+uncover plain body, never hidden layer edges. The lower leg and paw trail the upper
+leg, and lifting one paw shifts the weight back a touch. The neck is hidden by every
+head view, so a turn never shows a seam.
 A gesture is a list of timed poses (`PipGesture`); `PipGestureLibrary` holds them
 all and `gesture(for:)` is the only moment-to-gesture mapping. Adding one:
 [adding-a-gesture](../../../../.agents/skills/mivu-animation/references/adding-a-gesture.md).
@@ -84,7 +86,7 @@ carries meaning and never relies on color or motion alone.
 
 ## Living eyes and idle
 
-Eyes blink on their own and follow `look(at:)` (gaze leads, then the head turns for
+Eyes blink on their own (a drawn blink: half-shut, shut, half-shut, open in 160 ms) and follow `look(at:)` (gaze leads, then the head turns for
 a larger glance or a head view swap). `PipIdleScheduler` picks a beat every 2-6 s:
 blink, double blink, glance, ear flick, weight shift; yawn and stretch after 30 s
 of quiet; on Today a tail hug and then curl-up after 90 s. A curled Pip only

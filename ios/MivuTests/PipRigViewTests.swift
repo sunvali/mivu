@@ -97,32 +97,30 @@ import UIKit
         }
     }
 
-    @Test func blinkAnimatesUpperLid() throws {
+    @Test func blinkSwapsThroughHalfAndShutEyes() throws {
         let view = try rig()
         view.blink()
         for side in ["l", "r"] {
-            let layer = try #require(view.layer(named: "lid-upper-\(side)@right"))
-            let animation = try #require(layer.animation(forKey: "blink") as? CAKeyframeAnimation)
-            #expect(abs(animation.duration - 0.2) <= 0.02)
-            #expect(CATransform3DIsIdentity(layer.transform), "model stays open")
-            // Close 70 ms, hold 40 ms, open 90 ms.
-            #expect(animation.keyTimes == [0, 0.35, 0.55, 1])
-            let closed = try #require((animation.values?[1] as? NSValue)?.caTransform3DValue)
-            let lidBox = (layer.sublayers!.first as! CAShapeLayer).path!.boundingBoxOfPath
-            #expect(abs(lidBox.maxY + closed.m42 - whiteBox(view, side).maxY) < 0.5, "the lid sweeps down to the lower edge of the eye white")
-            let rim = try #require((view.layer(named: "eye-\(side).open@right")?.animation(forKey: "blink") as? CAKeyframeAnimation)?.values?[1] as? NSValue)
-            #expect(abs(rim.caTransform3DValue.m22 - 0.97) < 0.001, "3% eye squash")
+            // Phases: half-shut, shut, half-shut, open; `hidden` per phase for each painted shape.
+            for (shape, hidden) in [("open", [true, true, true, false]), ("half", [false, true, false, true]), ("closedSleepy", [true, false, true, true])] {
+                let layer = try #require(view.layer(named: "eye-\(side).\(shape)@right"))
+                let animation = try #require(layer.animation(forKey: "blink") as? CAKeyframeAnimation, "\(shape)")
+                #expect(animation.calculationMode == .discrete)
+                #expect(animation.values as? [Bool] == hidden, "\(side) \(shape)")
+                #expect(abs(animation.duration - PipRigView.blinkDuration) < 0.001)
+            }
+            #expect(view.layer(named: "eye-\(side).open@right")?.isHidden == false, "model stays open")
+            #expect(view.layer(named: "eye-\(side).closedSleepy@right")?.isHidden == true, "model stays open")
         }
     }
 
-    @Test func doubleBlinkPlaysTwoLidCycles() throws {
+    @Test func doubleBlinkPlaysTwoCycles() throws {
         let view = try rig()
         view.blink(double: true)
-        let lid = try #require(view.layer(named: "lid-upper-l@right"))
-        let first = try #require(lid.animation(forKey: "blink"))
-        let second = try #require(lid.animation(forKey: "blink2"))
+        let shut = try #require(view.layer(named: "eye-l.closedSleepy@right"))
+        let first = try #require(shut.animation(forKey: "blink"))
+        let second = try #require(shut.animation(forKey: "blink2"))
         #expect(second.beginTime > first.beginTime + first.duration, "second cycle starts after the first ends")
-        #expect(abs(second.duration - 0.2) <= 0.02)
     }
 
     @Test func interruptStartsFromPresentationValue() async throws {

@@ -82,6 +82,8 @@ extension PipPose {
                 .edited(["forearm-\(s)@seated"]) { $0.rotation = Self.radians(-lift * 0.35 * reach) }
                 .edited(["paw-\(s)@seated"]) { $0.rotation = 0 }
         }
+        // Lifting one paw shifts the weight back a touch; added, so a gesture's own tilt still applies.
+        if side != .both { copy.joints["body", default: Joint()].rotation -= Self.radians(1.2) }
         return copy
     }
     func hop(_ height: CGFloat) -> PipPose {

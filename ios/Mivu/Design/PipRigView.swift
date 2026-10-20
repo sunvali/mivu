@@ -299,7 +299,7 @@ extension PipRigView {
         var glance = pose
         glance.gaze = CGPoint(x: target.headTurn > pose.headTurn ? 1 : -1, y: target.gaze.y)
         transition(to: glance, period: period)
-        // A view swap lands while the lids are shut (70 ms down), so it reads as a quick turn instead of a cut.
+        // A view swap lands while the eyes are shut (40-110 ms into the blink), so it reads as a quick turn, not a cut.
         if Self.view(for: target.headTurn).0 != Self.view(for: pose.headTurn).0 { blink() }
         after(Self.eyesLead, run) { [unowned self] in transition(to: target, period: period - Self.eyesLead) }
     }
@@ -328,53 +328,34 @@ extension PipRigView {
         if animated { transition(to: next, period: 0.06) } else { apply(next, animated: false) }
     }
 
-    /// Upper lid sweeps down (70 ms), holds (40 ms), opens (90 ms); the eye white and iris close under it and
-    /// the whole eye squashes 3%. `double` blinks twice.
+    /// A drawn cartoon blink: half-shut (40 ms), shut (70 ms), half-shut (40 ms), open. It swaps the painted eye
+    /// shapes instead of squashing the open eye, which read as a glitch. The model never changes. `double` blinks twice.
     func blink(double: Bool = false) {
         guard pose.eyes == .open else { return }
         let view = Self.view(for: pose.headTurn).0
-        func part(_ id: String) -> PipRigAsset.Part? { asset.parts.first { $0.id == id } }
+        // Which shape shows in each phase: half, shut, half, then open again for the last 5%.
+        let phases: [(shape: String, shown: [Bool])] = [
+            ("open", [false, false, false, true]), ("half", [true, false, true, false]), ("closedSleepy", [false, true, false, false]),
+        ]
         for side in ["l", "r"] {
-            let rim = "eye-\(side).open@\(view)"
-            guard let white = shapes["eye-\(side)@\(view)"]?.path?.boundingBoxOfPath,
-                  let lid = shapes["lid-upper-\(side)@\(view)"]?.path?.boundingBoxOfPath else { continue }
-            let bottom = white.maxY
-            let targets: [(id: String, closed: CATransform3D)] = [
-                (rim, Self.squash(y: 0.97, x: 1.03, pivot: part(rim), bottom: bottom)),
-                ("eye-\(side)@\(view)", Self.squash(y: 0.08, x: 1, pivot: part("eye-\(side)@\(view)"), bottom: bottom)),
-                ("iris-\(side)@\(view)", Self.squash(y: 0.08, x: 1, pivot: part("iris-\(side)@\(view)"), bottom: bottom)),
-                ("lid-upper-\(side)@\(view)", CATransform3DMakeTranslation(0, bottom - lid.maxY, 0)),
-            ]
-            for offset in double ? [0, 0.3] : [0] {
-                for target in targets {
-                    guard let layer = containers[target.id] else { continue }
-                    addBlink(to: layer, closed: target.closed, delay: offset)
+            for (shape, shown) in phases {
+                for part in asset.parts where part.view == view && slots[part.id] == "eye-\(side).\(shape)" {
+                    guard let layer = containers[part.id] else { continue }
+                    for (i, offset) in (double ? [0, 0.3] : [0]).enumerated() {
+                        let blink = CAKeyframeAnimation(keyPath: "hidden")
+                        blink.calculationMode = .discrete
+                        blink.values = shown.map { NSNumber(value: !$0) }
+                        blink.keyTimes = [0, 0.25, 0.7, 0.95, 1]
+                        blink.duration = Self.blinkDuration
+                        if offset > 0 { blink.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + offset }
+                        layer.add(blink, forKey: i == 0 ? "blink" : "blink2")
+                    }
                 }
             }
         }
     }
 
-    /// Scales about the eye's lower edge (in the layer's pivot-relative coordinates).
-    private static func squash(y: CGFloat, x: CGFloat, pivot: PipRigAsset.Part?, bottom: CGFloat) -> CATransform3D {
-        let d = bottom - (pivot?.pivot[1] ?? bottom)
-        var t = CATransform3DMakeTranslation(0, -d, 0)
-        t = CATransform3DConcat(t, CATransform3DMakeScale(x, y, 1))
-        return CATransform3DConcat(t, CATransform3DMakeTranslation(0, d, 0))
-    }
-
-    private func addBlink(to layer: CALayer, closed: CATransform3D, delay: TimeInterval) {
-        let blink = CAKeyframeAnimation(keyPath: "transform")
-        blink.values = [CATransform3DIdentity, closed, closed, CATransform3DIdentity].map(NSValue.init)
-        blink.keyTimes = [0, 0.35, 0.55, 1]
-        blink.timingFunctions = [CAMediaTimingFunction(name: .easeIn), CAMediaTimingFunction(name: .linear), CAMediaTimingFunction(name: .easeOut)]
-        blink.duration = 0.2
-        blink.isAdditive = true
-        if delay > 0 {
-            blink.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + delay
-            blink.fillMode = .backwards
-        }
-        layer.add(blink, forKey: delay > 0 ? "blink2" : "blink")
-    }
+    static let blinkDuration: TimeInterval = 0.16
 
     /// Moves to `target` with one spring per changed joint component, each starting from what is on screen now.
     private func transition(to target: PipPose, period: TimeInterval) {
@@ -390,7 +371,8 @@ extension PipRigView {
         apply(target, animated: false)
         for part in asset.parts {
             guard let container = containers[part.id], !container.isHidden, !wasHidden.contains(part.id), let from = before[part.id] else { continue }
-            let follower = ["ear-", "tail-2", "tail-3", "tail-4", "scarf-end-"].contains { part.name.hasPrefix($0) }
+            // Lower legs and paws trail the upper leg, like ears, tail and scarf trail the body (overlapping action).
+            let follower = ["ear-", "tail-2", "tail-3", "tail-4", "scarf-end-", "forearm-", "paw-"].contains { part.name.hasPrefix($0) }
             let gazePart = irisReach[part.id] != nil || pupilReach[part.id] != nil || glintIris[part.id] != nil
             for (i, component) in Self.components.enumerated() {
                 let to = Float((container.value(forKeyPath: component.path) as? NSNumber)?.floatValue ?? 0)
