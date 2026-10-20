@@ -286,7 +286,8 @@ struct CoachView: View {
         HStack(alignment: .center, spacing: 12) {
             // Pip peeks over the composer (character sheet): the crop's bottom is the bar line his paws rest on.
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                          size: 112, runtime: companionRuntime, surface: .coach, onTouch: onCompanionTouch)
+                          size: typeSize.isAccessibilitySize ? 76 : 112, runtime: companionRuntime, surface: .coach,
+                          onTouch: onCompanionTouch)
                 .offset(y: 20)
             VStack(alignment: .leading, spacing: 4) {
                 if let day = coach.diary.activeDay {
