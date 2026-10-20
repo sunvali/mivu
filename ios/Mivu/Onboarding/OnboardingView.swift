@@ -380,12 +380,14 @@ struct OnboardingView: View {
     private func save() async {
         guard let answers, let profile = model.readModel?.profile else { return }
         saving = true
-        var updated = profile
-        updated.about = answers.about
         let today = ProgressDate.label(Date(), zone: profile.timeZoneID), targets = targets
         let savedWeight = model.readModel?.weight.map { $0.unit == "lb" ? $0.value * Self.kgPerLb : $0.value }
         let saved = await model.change {
-            try await model.store.updateProfile(updated, expectedProfile: profile, expectedProfileID: profile.id)
+            // The stored profile, not the cached one: Coach may have edited it, or a failed save already wrote `about`.
+            let latest = try await model.store.diaryHead(expectedProfileID: profile.id).profile
+            var updated = latest
+            updated.about = answers.about
+            try await model.store.updateProfile(updated, expectedProfile: latest, expectedProfileID: profile.id)
             if savedWeight.map({ abs($0 - answers.weightKg) >= 0.05 }) ?? true {
                 _ = try await model.store.recordWeight(value: (answers.weightKg * 10).rounded() / 10, expectedProfileID: profile.id)
             }
