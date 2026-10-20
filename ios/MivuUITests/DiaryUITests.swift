@@ -62,17 +62,11 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: unfiltered, object: nil)], timeout: 10), .completed)
         _ = assertTop("2026-10-19")
     }
-    func testFirstRunCreatesNamedDiaryWithoutInventingRecords() {
+    func testFirstRunOpensSetupWithoutInventingRecords() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--proof-english"]
         app.launch()
-        let name = app.textFields["newDiaryName"]
-        XCTAssertTrue(name.waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["createDiary"].isEnabled)
-        XCTAssertTrue(app.buttons["Restore from diary archive"].exists)
-        name.tap(); name.typeText("Synthetic diary")
-        app.buttons["createDiary"].tap()
-        // Pip's onboarding follows: answer, skip ChatGPT, and save the formula estimate.
+        // No name to invent: the first diary is created and Pip's setup opens. Answer, skip ChatGPT, save the estimate.
         let next = app.buttons["onboardingNext"]
         XCTAssertTrue(next.waitForExistence(timeout: 10))
         next.tap()
@@ -96,7 +90,7 @@ import XCTest
         XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
         XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, 0)
         app.buttons["profileSettings"].tap()
-        XCTAssertTrue(app.buttons["localProfiles"].label.contains("Synthetic diary"))
+        XCTAssertTrue(app.buttons["localProfiles"].label.contains("My diary"))
     }
     func testPrecisionGlassReferenceScreensInBothAppearances() {
         for mode in ["light", "dark"] {
