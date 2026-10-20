@@ -64,10 +64,10 @@ Coach, through the same store operation and revision checks. Existing tools
 already cover: food edit (`edit_item`, `correct_item`), `move_meal`,
 `delete_meal`, coverage (`close_day`), weight (`log_weight`, `delete_weight`)
 and workouts (`log_workout`, `edit_workout`, `delete_workout`). This delivery
-adds `delete_item`. The plan must audit the remaining manual controls (mark
-estimate reviewed, add note or photo, "I ate half", photo delete) and either
-point to the existing Coach path or add the tool in this delivery; a manual
-control without a Coach path does not ship.
+adds `delete_item`. Planning audited the remaining manual controls (mark
+estimate reviewed, add note or photo, "I ate half", photo delete); a manual
+control without a Coach path does not ship. Result: all are covered by
+`accept_review`, `attach_photos`, `edit_item` (quantity) and `delete_photo`.
 
 ## Builder calls (settled, not owner decisions)
 
