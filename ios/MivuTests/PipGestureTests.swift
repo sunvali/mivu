@@ -33,7 +33,7 @@ import Testing
 
     @Test func onlyCurlUpAndWakeChangeTheBodySet() {
         #expect(Set(PipGestureLibrary.all.filter { $0.endSet != nil }.map(\.name)) == Self.setChangers)
-        #expect(PipGestureLibrary.wake.endSet == .standing && PipGesture.forIdle(.curlUp)?.endSet == .curled)
+        #expect(PipGestureLibrary.wake.endSet == .standing && PipGestureLibrary.gesture(forIdle: .curlUp)?.endSet == .curled)
         for gesture in PipGestureLibrary.all where !Self.setChangers.contains(gesture.name) {
             #expect(gesture.keys.allSatisfy { $0.pose.set == .standing }, "\(gesture.name)")
         }
@@ -41,31 +41,31 @@ import Testing
 
     @Test func idleBeatsMapToSmallGestures() {
         let beats: [PipIdleScheduler.Beat] = [.earFlick, .weightShift, .yawn, .stretch, .hugTail, .curlUp]
-        for beat in beats { #expect(PipGesture.forIdle(beat).map { PipGestureLibrary.all.map(\.name).contains($0.name) } == true, "\(beat)") }
-        #expect(PipGesture.forIdle(.yawn)?.keys.contains { $0.pose.mouth == .yawn } == true)
-        #expect(PipGesture.forIdle(.earFlick, curled: true)?.name == "curled-ear-flick")
-        #expect(PipGesture.forIdle(.earFlick, curled: true)?.keys.allSatisfy { $0.pose.eyes == .closedSleepy } == true)
-        for beat in [PipIdleScheduler.Beat.blink, .doubleBlink, .glance(.zero)] { #expect(PipGesture.forIdle(beat) == nil) }
+        for beat in beats { #expect(PipGestureLibrary.gesture(forIdle: beat).map { PipGestureLibrary.all.map(\.name).contains($0.name) } == true, "\(beat)") }
+        #expect(PipGestureLibrary.gesture(forIdle: .yawn)?.keys.contains { $0.pose.mouth == .yawn } == true)
+        #expect(PipGestureLibrary.gesture(forIdle: .earFlick, curled: true)?.name == "curled-ear-flick")
+        #expect(PipGestureLibrary.gesture(forIdle: .earFlick, curled: true)?.keys.allSatisfy { $0.pose.eyes == .closedSleepy } == true)
+        for beat in [PipIdleScheduler.Beat.blink, .doubleBlink, .glance(.zero)] { #expect(PipGestureLibrary.gesture(forIdle: beat) == nil) }
     }
 
     @Test func everyMomentMapsToALibraryGesture() {
         let names = Set(PipGestureLibrary.all.map(\.name))
         for moment in Self.moments {
-            #expect(names.contains(PipGesture.for(moment).name), "\(moment)")
+            #expect(names.contains(PipGestureLibrary.gesture(for: moment).name), "\(moment)")
         }
-        #expect(PipGesture.loopFor(.thinking)?.loops == true)
-        #expect(PipGesture.loopFor(.attentive)?.loops == true)
-        #expect(PipGesture.loopFor(.saved) == nil)
+        #expect(PipGestureLibrary.loop(for: .thinking)?.loops == true)
+        #expect(PipGestureLibrary.loop(for: .attentive)?.loops == true)
+        #expect(PipGestureLibrary.loop(for: .saved) == nil)
     }
 
     @Test func spokenTimingsMatchSpec() {
-        func gesture(_ moment: PipMoment) -> PipGesture { PipGesture.for(moment) }
+        func gesture(_ moment: PipMoment) -> PipGesture { PipGestureLibrary.gesture(for: moment) }
         #expect(abs(gesture(.greeting(hour: 14)).duration - 0.70) <= 0.01)
         #expect(abs(gesture(.saved).duration - 0.45) <= 0.01)
         #expect(abs(gesture(.reviewed).duration - 0.65) <= 0.01)
         #expect(gesture(.submitted).keys[0].at <= 0.1)
         #expect(gesture(.submitted).duration <= 0.8)
-        #expect(abs(PipGesture.loopFor(.thinking)!.duration - 1.4) <= 0.01)
+        #expect(abs(PipGestureLibrary.loop(for: .thinking)!.duration - 1.4) <= 0.01)
     }
 
     @Test func squashAndFeetStayInCaps() {
@@ -83,7 +83,7 @@ import Testing
     }
 
     @Test func recoveryIsNeverCheerful() {
-        for key in PipGesture.for(.recovery).keys {
+        for key in PipGestureLibrary.gesture(for: .recovery).keys {
             #expect(key.pose.eyes != .closedHappy && key.pose.eyes != .heart)
             #expect(key.pose.mouth != .bigOpen && key.pose.mouth != .smallOpen)
             #expect(key.pose.hearts == 0 && !key.pose.blush)
@@ -91,9 +91,9 @@ import Testing
     }
 
     @Test func affectionGesturesShowHeartsAndBlush() {
-        #expect(PipGesture.for(.patted).keys.contains { $0.pose.blush && $0.pose.hearts == 1 && $0.pose.eyes == .closedHappy })
-        #expect(PipGesture.for(.firstMealToday).keys.contains { $0.pose.hearts == 1 && $0.pose.eyes == .heart })
-        #expect(PipGesture.for(.dayComplete).keys.contains { $0.pose.hearts == 2 && $0.pose.blush })
+        #expect(PipGestureLibrary.gesture(for: .patted).keys.contains { $0.pose.blush && $0.pose.hearts == 1 && $0.pose.eyes == .closedHappy })
+        #expect(PipGestureLibrary.gesture(for: .firstMealToday).keys.contains { $0.pose.hearts == 1 && $0.pose.eyes == .heart })
+        #expect(PipGestureLibrary.gesture(for: .dayComplete).keys.contains { $0.pose.hearts == 2 && $0.pose.blush })
     }
 
     @Test func everyJointNameExistsInTheStandingSet() throws {

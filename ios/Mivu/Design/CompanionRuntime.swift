@@ -43,14 +43,10 @@ import UIKit
     private static let logger = Logger(subsystem: "com.yakov103.mivu", category: "Companion")
     private static let restGesture = PipGesture(name: "rest", keys: [(0.3, .rest)])
 
-    init(bundle: Bundle = .main, clock: @escaping () -> Date = Date.init,
+    convenience init(bundle: Bundle = .main, clock: @escaping () -> Date = Date.init,
          sleep: @escaping (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) },
          random: any RandomNumberGenerator = SystemRandomNumberGenerator()) {
-        self.clock = clock
-        self.sleep = sleep
-        scheduler = PipIdleScheduler(random: random)
-        lastInput = clock()
-        load = { character in
+        self.init(clock: clock, sleep: sleep, random: random) { character in
             guard let url = bundle.url(forResource: character.animationResourcePath, withExtension: nil) else {
                 throw AssetError.missing
             }
@@ -149,7 +145,7 @@ import UIKit
                     guard let self, token == self.playbackGeneration else { return }
                     if oneShot { self.displayedPose = .resting }
                 }
-                if let typingGaze { gaze = typingGaze; rig.look(at: typingGaze) }
+                if let typingGaze { gaze = typingGaze }
             } else if curled {
                 // A quiet re-render does not wake a sleeping Pip.
             } else {
@@ -264,6 +260,7 @@ import UIKit
         lastGestureName = gesture.name
         if curled && wakes { playedGestures.append(PipGestureLibrary.wake.name) }
         playedGestures.append(gesture.name)
+        playedGestures = Array(playedGestures.suffix(8)) // a test probe; never grows for the session
         let finish: (Bool) -> Void = { [weak self] finished in
             if let self, token == self.gestureToken {
                 self.gestureActive = false // an interrupted gesture must not leave the idle loop waiting

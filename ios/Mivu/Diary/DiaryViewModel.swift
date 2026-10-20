@@ -279,7 +279,7 @@ struct MealDraft: Equatable {
     func signOut() async { guard beginProfileTransition() else { return }; defer { finishProfileTransition() }; await clearProfileSelection() }
     func deleteCurrentProfile() async {
         guard let owner = readModel?.head.profile.id, beginProfileTransition() else { return }; defer { finishProfileTransition() }
-        do { try await backup?.removeProfile(owner); try await store.deleteProfile(owner); await clearProfileSelection(); profiles = try await store.profiles() }
+        do { try await backup?.removeProfile(owner); try await store.deleteProfile(owner); preferences.map { CompanionLastActive(defaults: $0).forget(owner) }; await clearProfileSelection(); profiles = try await store.profiles() }
         catch { present(error) }
     }
     private func beginProfileTransition() -> Bool {

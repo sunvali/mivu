@@ -375,11 +375,13 @@ extension PipRigView {
     /// Moves to `target` with one spring per changed joint component, each starting from what is on screen now.
     private func transition(to target: PipPose, period: TimeInterval) {
         var before: [String: [Float]] = [:]
+        var model: [String: [Float]] = [:]
         // A layer that was hidden has no meaningful presentation value: it snaps to its pose instead of springing.
         let wasHidden = Set(containers.filter { $0.value.isHidden }.keys)
         for (id, container) in containers {
             let live = container.presentation() ?? container
             before[id] = Self.components.map { Float((live.value(forKeyPath: $0.path) as? NSNumber)?.floatValue ?? 0) } + [live.opacity]
+            model[id] = Self.components.map { Float((container.value(forKeyPath: $0.path) as? NSNumber)?.floatValue ?? 0) } + [container.opacity]
         }
         apply(target, animated: false)
         for part in asset.parts {
@@ -388,10 +390,12 @@ extension PipRigView {
             let gazePart = irisReach[part.id] != nil || pupilReach[part.id] != nil || glintIris[part.id] != nil
             for (i, component) in Self.components.enumerated() {
                 let to = Float((container.value(forKeyPath: component.path) as? NSNumber)?.floatValue ?? 0)
+                // Only a changed target springs; a running spring, and the additive breath on top of it, are left alone.
+                guard let old = model[part.id]?[i], abs(old - to) > 0.0005 else { continue }
                 guard abs(from[i] - to) > 0.0005 else { container.removeAnimation(forKey: component.key); continue }
                 container.add(spring(from: from[i], to: to, period: period, follower: follower, saccade: gazePart, on: container, path: component.path), forKey: component.key)
             }
-            guard Self.opacity(of: part, in: pose) != nil else { continue }
+            guard Self.opacity(of: part, in: pose) != nil, model[part.id]?[Self.components.count] != container.opacity else { continue }
             let fade = CABasicAnimation(keyPath: "opacity")
             fade.fromValue = from[Self.components.count]
             fade.toValue = container.opacity

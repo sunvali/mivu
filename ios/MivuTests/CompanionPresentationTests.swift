@@ -504,14 +504,16 @@ import Testing
         #expect(late.pose == .resting && late.tapLevel == 0)
     }
 
-    @Test func slowTapsDoNotEscalate() {
+    @Test func slowTapsRotateThroughTheFourReactions() {
         let presentation = resting()
-        for i in 0..<3 {
+        var levels: [Int] = []
+        for i in 0..<5 {
             let at = t.addingTimeInterval(2 * Double(i))
             _ = presentation.resolve(context: context(), now: at)
             #expect(presentation.touch(.tap, now: at))
-            #expect(presentation.resolve(context: context(), now: at).tapLevel == 0)
+            levels.append(presentation.resolve(context: context(), now: at).tapLevel)
         }
+        #expect(levels == [0, 1, 2, 3, 0])
     }
 
     @Test func patPlaysPattedWithoutTapLevel() {

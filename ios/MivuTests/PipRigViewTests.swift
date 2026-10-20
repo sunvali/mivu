@@ -126,14 +126,14 @@ import UIKit
         let view = try rig()
         var window: UIWindow? = try window(holding: view)
         defer { window?.isHidden = true; window = nil }
-        view.play(PipGesture.for(.saved)) { _ in }
+        view.play(PipGestureLibrary.gesture(for: .saved)) { _ in }
         try await Task.sleep(for: .milliseconds(200))
         // Freeze the timeline so the comparison cannot drift under load.
         view.layer.timeOffset = view.layer.convertTime(CACurrentMediaTime(), from: nil)
         view.layer.speed = 0
         let head = try #require(view.layer(named: "head@right"))
         let live = try #require(head.presentation()?.value(forKeyPath: "transform.rotation.z") as? CGFloat)
-        view.play(PipGesture.for(.tapped(level: 0))) { _ in }
+        view.play(PipGestureLibrary.gesture(for: .tapped(level: 0))) { _ in }
         let from = try #require((head.animation(forKey: "pip.rotation") as? CABasicAnimation)?.fromValue as? CGFloat)
         #expect(abs(from - live) < 0.001)
     }
@@ -141,8 +141,8 @@ import UIKit
     @Test func playCompletionReportsInterruption() async throws {
         let view = try rig()
         var results: [Bool] = []
-        view.play(PipGesture.for(.saved)) { results.append($0) }
-        view.play(PipGesture.for(.earTwitch)) { results.append($0) }
+        view.play(PipGestureLibrary.gesture(for: .saved)) { results.append($0) }
+        view.play(PipGestureLibrary.gesture(for: .earTwitch)) { results.append($0) }
         await spin { results.count == 2 }
         #expect(results == [false, true])
     }
@@ -163,7 +163,7 @@ import UIKit
     @Test func finishedGestureFreesItsPlayback() async throws {
         let view = try rig()
         var finished = false
-        weak var probe = play(PipGesture.for(.earTwitch), on: view) { finished = $0 }
+        weak var probe = play(PipGestureLibrary.gesture(for: .earTwitch), on: view) { finished = $0 }
         await spin { finished && probe == nil }
         #expect(finished)
         #expect(probe == nil, "a played-out gesture must not stay alive through its own timers")
@@ -173,7 +173,7 @@ import UIKit
     @Test func interruptedGestureFreesItsPlayback() async throws {
         let view = try rig()
         var results: [Bool] = []
-        weak var probe = play(PipGesture.for(.reviewed), on: view) { results.append($0) }
+        weak var probe = play(PipGestureLibrary.gesture(for: .reviewed), on: view) { results.append($0) }
         view.removeAllMotion()
         #expect(results == [false] && view.pendingWorkCount == 0)
         await spin { probe == nil }
@@ -183,7 +183,7 @@ import UIKit
     @Test func deallocatedRigEndsItsGesture() async throws {
         var view: PipRigView? = try rig()
         var results: [Bool] = []
-        weak var probe = play(PipGesture.for(.dayComplete), on: try #require(view)) { results.append($0) }
+        weak var probe = play(PipGestureLibrary.gesture(for: .dayComplete), on: try #require(view)) { results.append($0) }
         view = nil
         #expect(results == [false], "deallocation reports the interruption")
         await spin { probe == nil }
@@ -223,7 +223,7 @@ import UIKit
     func gesturesKeepTheActiveBodySet(set: PipPose.BodySet, moment: PipMoment) async throws {
         let view = PipRigView(asset: try PipRigAsset.load(PipRigAssetTests.bundledData()), set: set)
         view.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
-        let gesture = PipGesture.for(moment)
+        let gesture = PipGestureLibrary.gesture(for: moment)
         var finished = false
         view.play(gesture) { _ in finished = true }
         func check(_ when: String) throws {
@@ -268,7 +268,7 @@ import UIKit
         var window: UIWindow? = try window(holding: view)
         defer { window?.isHidden = true; window = nil }
         view.setBreathing(true)
-        view.play(PipGesture.for(.saved)) { _ in }
+        view.play(PipGestureLibrary.gesture(for: .saved)) { _ in }
         view.blink()
         let head = try #require(view.layer(named: "head@right"))
         #expect(head.animation(forKey: "breath") != nil, "precondition: breathing is running")
@@ -289,12 +289,28 @@ import UIKit
         #expect(abs(breath.duration - 4.5) < 0.001)
         #expect(view.layer(named: "chest@seated")?.animation(forKey: "breath") != nil)
         var done = false
-        view.play(PipGesture.for(.earTwitch)) { _ in done = true }
+        view.play(PipGestureLibrary.gesture(for: .earTwitch)) { _ in done = true }
         await spin { done }
         #expect(done)
         #expect(head.animation(forKey: "breath") != nil)
         view.setBreathing(false)
         #expect(head.animation(forKey: "breath") == nil)
+    }
+
+    @Test func glanceMidGestureLeavesSpringsAndBreathAlone() async throws {
+        let view = try rig()
+        var window: UIWindow? = try window(holding: view)
+        defer { window?.isHidden = true; window = nil }
+        view.setBreathing(true)
+        view.play(PipGestureLibrary.gesture(for: .saved)) { _ in }
+        let head = try #require(view.layer(named: "head@right"))
+        let chest = try #require(view.layer(named: "chest@seated"))
+        await spin { head.animation(forKey: "pip.rotation") != nil }
+        let spring = try #require(head.animation(forKey: "pip.rotation"))
+        view.look(at: CGPoint(x: 0.5, y: 0))
+        #expect(head.animation(forKey: "pip.rotation") === spring, "a gaze change does not respring the head")
+        #expect(head.animation(forKey: "pip.scaleY") == nil && chest.animation(forKey: "pip.scaleY") == nil, "the breath is never flattened")
+        #expect(head.animation(forKey: "breath") != nil && chest.animation(forKey: "breath") != nil)
     }
 
     @Test func curledIdleBeatsKeepTheSleepyFace() async throws {
@@ -305,7 +321,7 @@ import UIKit
         asleep.eyes = .closedSleepy
         view.apply(asleep, animated: false)
         var done = false
-        view.play(try #require(PipGesture.forIdle(.earFlick, curled: true))) { _ in done = true }
+        view.play(try #require(PipGestureLibrary.gesture(forIdle: .earFlick, curled: true))) { _ in done = true }
         view.blink()
         view.blink(double: true)
         await spin { done }

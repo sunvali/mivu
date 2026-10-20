@@ -45,11 +45,6 @@ struct PipGesture {
             endSet = set
         }
     }
-
-    static func `for`(_ moment: PipMoment) -> PipGesture { PipGestureLibrary.gesture(for: moment) }
-    /// `curled` is true while Pip sleeps: the beat then keeps its eyes closed.
-    static func forIdle(_ beat: PipIdleScheduler.Beat, curled: Bool = false) -> PipGesture? { PipGestureLibrary.gesture(forIdle: beat, curled: curled) }
-    static func loopFor(_ moment: PipMoment) -> PipGesture? { PipGestureLibrary.loop(for: moment) }
 }
 
 /// Named joint helpers. Angles are degrees; +nod is down, +tilt leans toward the snout, +earPerk lifts the tip.

@@ -83,6 +83,8 @@ import Testing
         store.record(when, for: a)
         #expect(store.date(for: a) == when)
         #expect(store.date(for: b) == nil)
+        store.forget(a)
+        #expect(store.date(for: a) == nil)
     }
 
     @Test func storedLastActiveFromAnEarlierDayYieldsWelcomeBack() throws {

@@ -118,6 +118,7 @@ struct CompanionOutput: Equatable {
     private var typingProgress = 0.0
     private var lastTapAt: Date?
     private var tapCount = 0
+    private var tapTurn = 0
     private let calendar: Calendar
     private var showRestAfterCharacterChange = false
 
@@ -133,6 +134,7 @@ struct CompanionOutput: Equatable {
             showRestAfterCharacterChange = false
             welcomeBackDue = false
             tapCount = 0
+            tapTurn = 0
             lastTapAt = nil
         }
         self.profileID = profileID
@@ -273,8 +275,10 @@ struct CompanionOutput: Equatable {
         case .tap:
             let rapid = lastTapAt.map { now.timeIntervalSince($0) <= 1.5 } ?? false
             tapCount = rapid ? tapCount + 1 : 0
-            reaction = Reaction(pose: .tapped, deadline: now.addingTimeInterval(MivuMotion.tapped), tapLevel: tapCount)
-            lastTapAt = tapCount == 4 ? nil : now // the shake-off resets the run
+            let shakeOff = tapCount == 4 // a rapid burst ends in the shake-off; every other tap takes the next reaction in the set
+            reaction = Reaction(pose: .tapped, deadline: now.addingTimeInterval(MivuMotion.tapped), tapLevel: shakeOff ? 4 : tapTurn % 4)
+            if !shakeOff { tapTurn += 1 }
+            lastTapAt = shakeOff ? nil : now // the shake-off resets the run
         }
         active = reaction
         return true
@@ -292,6 +296,7 @@ struct CompanionOutput: Equatable {
         lastTapAt = nil
         welcomeBackDue = false
         tapCount = 0
+        tapTurn = 0
         showRestAfterCharacterChange = false
     }
 
@@ -323,6 +328,7 @@ struct CompanionLastActive {
     private func key(_ profileID: UUID) -> String { "companion.lastActive." + profileID.uuidString }
     func date(for profileID: UUID) -> Date? { defaults.object(forKey: key(profileID)) as? Date }
     func record(_ date: Date, for profileID: UUID) { defaults.set(date, forKey: key(profileID)) }
+    func forget(_ profileID: UUID) { defaults.removeObject(forKey: key(profileID)) }
 
     /// Attaches the presentation with this profile's stored last-active date so a day away becomes a welcome back.
     @MainActor func attach(_ presentation: CompanionPresentation, profileID: UUID?, existingEvents: [CompanionEvent],

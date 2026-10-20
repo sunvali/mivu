@@ -184,10 +184,15 @@ func animationKeys(in layer: CALayer) -> [String] {
         await runtime.apply(output(), darkMode: false)
         #expect(await eventually(60) { runtime.curled }, "a quiet Pip eventually curls up")
         harness.fast = false
-        let start = runtime.playedGestures.count
         await runtime.apply(output(.attentive, typing: 0.1), darkMode: false)
-        #expect(runtime.playedGestures[start...].first == "wake", "a sleeping Pip wakes before it reacts")
-        #expect(await eventually { runtime.playedGestures.last == "attentive" && !runtime.curled })
+        #expect(await eventually { runtime.playedGestures.suffix(2) == ["wake", "attentive"] && !runtime.curled },
+                "a sleeping Pip wakes before it reacts")
+    }
+
+    @Test func playedGesturesKeepOnlyTheLastEight() async {
+        let runtime = await ready()
+        for i in 0..<12 { await runtime.apply(output(.tapped, reaction: UUID(), tapLevel: i % 4), darkMode: false) }
+        #expect(runtime.gestureStarts >= 12 && runtime.playedGestures.count == 8)
     }
 
     @Test func typingMovesTheEyesWithoutRestartingTheGesture() async {
