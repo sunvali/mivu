@@ -30,6 +30,29 @@ import Testing
         #expect(await trace.requests == [.latest, exactRequest])
     }
 
+    @Test func queuedDraftReachesRequest() async throws {
+        let f = try await NavigationFixture.make(); defer { f.remove() }
+        let owner = try #require(f.diary.selection), routes = f.routes()
+        let origin = try #require(routes.origin(selection: owner, isChangingProfile: false))
+        #expect(routes.queue(nil, draft: "For Tuesday, 14 Oct: ", from: origin, selection: owner, isChangingProfile: false))
+        #expect(routes.request?.draft == "For Tuesday, 14 Oct: " && routes.request?.target == nil)
+    }
+
+    @Test func prefillFillsEmptyDraft() async throws {
+        let f = try await NavigationFixture.make(); defer { f.remove() }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection())
+        #expect(coach.prefill("About the toast in Breakfast: "))
+        #expect(coach.draft.text == "About the toast in Breakfast: ")
+    }
+
+    @Test func prefillNeverOverwritesUnsentText() async throws {
+        let f = try await NavigationFixture.make(); defer { f.remove() }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection())
+        coach.draft = MealDraft(text: "two eggs")
+        #expect(!coach.prefill("For Tuesday, 14 Oct: "))
+        #expect(coach.draft.text == "two eggs")
+    }
+
     @Test func seekWaitsForConcurrentInitialReadWithoutLosingRequest() async throws {
         let f = try await NavigationFixture.make(); defer { f.remove() }
         let owner = try #require(f.diary.selection), gate = Task10Gate(), trace = NavigationPageTrace()

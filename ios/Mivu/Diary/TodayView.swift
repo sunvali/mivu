@@ -423,8 +423,8 @@ struct DiaryRootView: View {
         coachAction(from: coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile))
     }
     private func coachAction(from origin: CoachNavigationOrigin?) -> OpenDiaryCoachAction {
-        OpenDiaryCoachAction(origin: origin) { target, captured in
-            guard coachRoutes.queue(target, from: captured, selection: model.selection,
+        OpenDiaryCoachAction(origin: origin) { target, draft, captured in
+            guard coachRoutes.queue(target, draft: draft, from: captured, selection: model.selection,
                                     isChangingProfile: model.isChangingProfile) else { return false }
             selectedTab = "coach"
             return true
