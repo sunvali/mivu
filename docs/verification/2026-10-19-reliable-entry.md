@@ -181,3 +181,7 @@ Frame-warning attribution: every app-owned `.frame` size is a constant, clamped 
 5. External/device gates remain: physical camera → Send → immediate lock, durable acknowledgement latency, live-provider quality, expiration/reopen recovery, actual VoiceOver, hardware frame pacing and interactive authentication where applicable.
 
 No merge, publication or release acceptance is implied. Owner-authorized physical signing, installation and launch succeeded as recorded above; broader device/provider acceptance remains open. Ordered execution decisions and their stated costs are preserved in [the decision ledger](2026-10-19-reliable-entry-decisions.md).
+
+## Review fixes (2026-10-20)
+
+Source `9f9ca41` (main `84f754e` merged in). Fixes from the pre-merge Ponytail Review: manual entries no longer recompute their fingerprint on read, the background lease ends synchronously on expiry, and a day-change race during manual save asks for the day instead of dead-ending. Focused run of `ManualNutritionPayloadTests`, `ManualNutritionTransactionTests` and `ManualNutritionViewModelTests` on the iPhone 18 Pro iOS 27.0 simulator: 39 passed, 0 failed, 0 skipped (`test_sim_2026-10-20T07-30-26-751Z_pid48197_212f70ee.xcresult`). The full UI suite was intentionally not re-run at the owner's request; the pre-push hook runs the unit suite. Physical device journeys remain unverified. The "Invalid frame dimension" warning predates this PR (present on main) and is attributed to SwiftUI keyboard-toolbar layout; it does not block.
