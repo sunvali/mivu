@@ -45,6 +45,9 @@ import UIKit
             pose.headTurn = turn
             let view = try rig(pose)
             #expect(view.visibleViews == [shown])
+            for part in ["head", "muzzle", "nose", "eye-l.open", "mouth.closedSmile"] {
+                #expect(view.layer(named: "\(part)@\(shown)")?.isHidden == false, "\(part)@\(shown) drawn")
+            }
         }
         let right = try rig(.rest)
         pose.headTurn = 0.8

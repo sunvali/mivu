@@ -171,6 +171,7 @@ final class PipRigView: UIView {
             container.anchorPoint = CGPoint(x: part.pivot[0] / asset.artboard, y: part.pivot[1] / asset.artboard)
             container.position = CGPoint(x: part.pivot[0], y: part.pivot[1])
             container.zPosition = CGFloat(part.z)
+            container.actions = ["hidden": NSNull()] // views and slots swap instantly; a crossfade shows both heads see-through
             let shape = CAShapeLayer()
             shape.frame = root.bounds
             shape.zPosition = CGFloat(part.z)

@@ -65,8 +65,11 @@ class RigTests(unittest.TestCase):
                 self.assertIn(shape, {p["shape"] for p in parts}, view)
         self.assertEqual(len(self.ids), len(self.parts), "part ids must be unique")
 
-    def test_one_view_visible_by_default(self):
-        self.assertEqual({p["view"] for p in self.parts if p["visible"]} - {None}, {"right"})
+    def test_every_view_shows_its_rest_parts(self):
+        # The runtime picks the view; `visible` only says which slot alternatives show at rest.
+        rest = lambda view: {name(p["id"]) for p in self.parts if p["view"] == view and p["visible"]}
+        for view in VIEWS:
+            self.assertTrue({"head", "muzzle", "nose", "eye-l.open", "mouth.closedSmile"} <= rest(view), view)
 
     def test_left_view_mirrors_right(self):
         by_id = {p["id"]: p for p in self.parts}
@@ -151,10 +154,11 @@ class RigTests(unittest.TestCase):
                 self.assertTrue(0 <= value <= 512, p["id"])
 
     def test_one_default_shape_per_slot(self):
-        for slot in ("mouth", "eye-l", "eye-r"):
-            shown = [p["id"] for p in self.parts
-                     if p["shape"] and p["shape"].split(".")[0] == slot and p["visible"]]
-            self.assertEqual(len(shown), 1, slot)
+        for view in VIEWS:
+            for slot in ("mouth", "eye-l", "eye-r"):
+                shown = [p["id"] for p in self.parts if p["view"] == view
+                         and p["shape"] and p["shape"].split(".")[0] == slot and p["visible"]]
+                self.assertEqual(len(shown), 1, f"{slot}@{view}")
 
     def test_parts_under_hidden_shapes_are_hidden(self):
         by_id = {p["id"]: p for p in self.parts}
