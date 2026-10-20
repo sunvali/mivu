@@ -135,6 +135,11 @@ struct DiaryDaySummary: Equatable, Sendable {
     var savedMealCount: Int
     var pendingMealCount: Int
 }
+struct DiaryWeekPage: Equatable, Sendable {
+    var days: [DiaryDaySummary]
+    var earliestLocalDate: String?
+}
+
 struct DiaryHistoryPage: Equatable, Sendable {
     var days: [DiaryDaySummary]
     var cursor: DiaryHistoryCursor?
