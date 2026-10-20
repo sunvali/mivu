@@ -98,7 +98,8 @@ import Testing
 
     @Test func everyJointNameExistsInTheStandingSet() throws {
         let asset = try PipRigAsset.load(PipRigAssetTests.bundledData())
-        let standing = Set(asset.parts.filter { $0.set == nil || $0.set == "standing" }.map(\.name))
+        // Plain names address the standing (and shared) parts; a full id like `arm-r@seated` addresses one set's part.
+        let standing = Set(asset.parts.filter { $0.set == nil || $0.set == "standing" }.map(\.name)).union(asset.parts.map(\.id))
         for gesture in PipGestureLibrary.all {
             for key in gesture.keys {
                 for name in key.pose.joints.keys { #expect(standing.contains(name), "\(gesture.name) moves unknown joint \(name)") }

@@ -11,7 +11,8 @@ struct CompanionView: View {
     /// Coach is `size` wide; Today is `size` tall. Both match the rig's crop so nothing overflows.
     private var frame: CGSize {
         let aspect = runtime.cropAspect(for: surface)
-        return surface == .coach ? CGSize(width: size, height: size / aspect) : CGSize(width: size * aspect, height: size)
+        // Whole points, so the composer below lands on pixel boundaries.
+        return surface == .coach ? CGSize(width: size, height: (size / aspect).rounded()) : CGSize(width: size * aspect, height: size)
     }
 
     private var animated: Bool { presentation.playback == .animated }

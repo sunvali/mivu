@@ -13,7 +13,8 @@ arrives at by `at` seconds; unlisted joints rest. Build keys with the builder in
 - `$0.settle(at:)` returns to rest. One-shots must end in `.rest`.
 - `$0.end(in: .curled, at:)` ends in another body set (only `curl-up` / `wake`).
 - Helpers (degrees; +nod is down): `nod`, `tilt`, `earPerk(_, .left/.right/.both)`,
-  `pawUp(_ side, _ degrees, elbow:)`, `hop`, `squash` (keep <= 0.10), `tailWag`,
+  `pawUp(_ side, _ degrees, elbow:)` (standing: the elbow rises and the paw curls under;
+  seated: a small forward reach; the far leg swings a third as much), `hop`, `squash` (keep <= 0.10), `tailWag`,
   `scarf`, `eyes(.open/.half/.closedHappy/.closedSleepy/.wide/.heart)`,
   `mouth(.closedSmile/.smallOpen/.bigOpen/.o/.concerned/.yawn)`, `look(x, y)`,
   `turn`, `blushing()`, `hearts(count, drift:)`.
@@ -66,7 +67,8 @@ arrives at by `at` seconds; unlisted joints rest. Build keys with the builder in
 4. **Tests.** Only the per-library-entry checks are automatic: `PipGestureTests`
    loops over `PipGestureLibrary.all` and checks that each gesture ends at rest
    within two seconds, only `curl-up`/`wake` change the body set, squash and feet
-   stay in caps, and every joint name exists in the standing set. Moment mapping is
+   stay in caps, and every joint name exists in the standing set (or is a full part
+   id such as `arm-r@seated`, which moves only that set's part). Moment mapping is
    **not** automatic: for a new `PipMoment`, append the case to
    `PipGestureTests.moments` (the compiler only enforces the `gesture(for:)`
    switch, not that list). Add other named tests only for new behaviour: priority/

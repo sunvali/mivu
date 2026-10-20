@@ -284,8 +284,11 @@ struct CoachView: View {
     }
     private var companionStrip: some View {
         HStack(alignment: .center, spacing: 12) {
+            // Pip peeks over the composer (character sheet): the crop's bottom is the bar line his paws rest on.
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                          size: 76, runtime: companionRuntime, surface: .coach, onTouch: onCompanionTouch)
+                          size: typeSize.isAccessibilitySize ? 76 : 112, runtime: companionRuntime, surface: .coach,
+                          onTouch: onCompanionTouch)
+                .offset(y: 20)
             VStack(alignment: .leading, spacing: 4) {
                 if let day = coach.diary.activeDay {
                     Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
@@ -310,7 +313,7 @@ struct CoachView: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            companionStrip
+            companionStrip.zIndex(1) // the paws overlap the field's top edge
             if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
             if typeSize.isAccessibilitySize {

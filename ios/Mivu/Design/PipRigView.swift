@@ -17,6 +17,7 @@ final class PipRigView: UIView {
     /// Glint part id -> its iris; the glint counter-shifts so the light seems fixed.
     private var glintIris: [String: String] = [:]
     private var playback: Playback?
+    private var lookFollow: DispatchWorkItem?
     private var playbackTick = 0
 
     /// Timers still waiting for the current gesture; bounded by one pass of its keys, even for a loop.
@@ -57,6 +58,7 @@ final class PipRigView: UIView {
 
     func removeAllMotion() {
         stopPlayback()
+        lookFollow?.cancel()
         root.removeAllAnimations()
         containers.values.forEach { $0.removeAllAnimations() }
         shapes.values.forEach { $0.removeAllAnimations() }
@@ -107,7 +109,8 @@ final class PipRigView: UIView {
     // MARK: - Pose resolution
 
     private func joint(of part: PipRigAsset.Part, in pose: PipPose, slide local: CGFloat) -> PipPose.Joint {
-        var joint = pose.joints[part.name] ?? PipPose.Joint()
+        // A joint keyed by the full id (`arm-r@seated`) moves only that set's part; a plain name moves every set's.
+        var joint = pose.joints[part.id] ?? pose.joints[part.name] ?? PipPose.Joint()
         let gaze = Self.clamped(pose.gaze)
         if let reach = pupilReach[part.id] {
             joint.offset.x += gaze.x * (gaze.x < 0 ? -reach.lo.x : reach.hi.x)
@@ -195,7 +198,7 @@ final class PipRigView: UIView {
                 wrapper.mask = mask
                 wrapper.addSublayer(containers[part.id]!)
                 parent.addSublayer(wrapper)
-                irisReach[part.id] = CGSize(width: 0.3 * box.width, height: 0.25 * box.height)
+                irisReach[part.id] = CGSize(width: 0.3 * box.width, height: 0.4 * box.height) // enough to read as looking down at the text
             } else {
                 parent.addSublayer(containers[part.id]!)
             }
@@ -298,6 +301,8 @@ extension PipRigView {
         var glance = pose
         glance.gaze = CGPoint(x: target.headTurn > pose.headTurn ? 1 : -1, y: target.gaze.y)
         transition(to: glance, period: period)
+        // A view swap lands while the eyes are shut (40-110 ms into the blink), so it reads as a quick turn, not a cut.
+        if Self.view(for: target.headTurn).0 != Self.view(for: pose.headTurn).0 { blink() }
         after(Self.eyesLead, run) { [unowned self] in transition(to: target, period: period - Self.eyesLead) }
     }
 
@@ -318,60 +323,56 @@ extension PipRigView {
         }
     }
 
-    /// Saccade to `point` (unit disc, +y down) for idle glances and typing.
+    /// Saccade to `point` (unit disc, +y down) for idle glances and typing. With no gesture playing the head follows a
+    /// beat later and slower: the face slides toward the look inside the current view (never a view swap, which reads as
+    /// a pop) and nods up to 3 degrees, as the character sheet's "tiny gaze changes" ask.
     func look(at point: CGPoint, animated: Bool = true) {
         var next = pose
         next.gaze = point
-        if animated { transition(to: next, period: 0.06) } else { apply(next, animated: false) }
+        guard animated else { apply(next, animated: false); return }
+        transition(to: next, period: 0.06)
+        lookFollow?.cancel()
+        guard playback == nil else { return }
+        var follow = next
+        follow.headTurn = 1 + 0.35 * point.x // 0.65...1.35 stays in the right view
+        // A pose that already bows the head (typing looks down at the text) keeps its nod.
+        if (follow.joints["head"]?.rotation ?? 0) == 0 { follow.joints["head", default: PipPose.Joint()].rotation = 3 * .pi / 180 * point.y }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, playback == nil, pose == next else { return }
+            transition(to: follow, period: 0.45)
+        }
+        lookFollow = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
     }
 
-    /// Upper lid sweeps down (70 ms), holds (40 ms), opens (90 ms); the eye white and iris close under it and
-    /// the whole eye squashes 3%. `double` blinks twice.
+    /// A drawn cartoon blink: half-shut (40 ms), shut (70 ms), half-shut (40 ms), open. It swaps the painted eye
+    /// shapes instead of squashing the open eye, which read as a glitch. The model never changes. `double` blinks twice.
     func blink(double: Bool = false) {
         guard pose.eyes == .open else { return }
         let view = Self.view(for: pose.headTurn).0
-        func part(_ id: String) -> PipRigAsset.Part? { asset.parts.first { $0.id == id } }
+        // Which shape shows in each phase: half, shut, half, then open again for the last 5%.
+        let phases: [(shape: String, shown: [Bool])] = [
+            ("open", [false, false, false, true]), ("half", [true, false, true, false]), ("closedSleepy", [false, true, false, false]),
+        ]
         for side in ["l", "r"] {
-            let rim = "eye-\(side).open@\(view)"
-            guard let white = shapes["eye-\(side)@\(view)"]?.path?.boundingBoxOfPath,
-                  let lid = shapes["lid-upper-\(side)@\(view)"]?.path?.boundingBoxOfPath else { continue }
-            let bottom = white.maxY
-            let targets: [(id: String, closed: CATransform3D)] = [
-                (rim, Self.squash(y: 0.97, x: 1.03, pivot: part(rim), bottom: bottom)),
-                ("eye-\(side)@\(view)", Self.squash(y: 0.08, x: 1, pivot: part("eye-\(side)@\(view)"), bottom: bottom)),
-                ("iris-\(side)@\(view)", Self.squash(y: 0.08, x: 1, pivot: part("iris-\(side)@\(view)"), bottom: bottom)),
-                ("lid-upper-\(side)@\(view)", CATransform3DMakeTranslation(0, bottom - lid.maxY, 0)),
-            ]
-            for offset in double ? [0, 0.3] : [0] {
-                for target in targets {
-                    guard let layer = containers[target.id] else { continue }
-                    addBlink(to: layer, closed: target.closed, delay: offset)
+            for (shape, shown) in phases {
+                for part in asset.parts where part.view == view && slots[part.id] == "eye-\(side).\(shape)" {
+                    guard let layer = containers[part.id] else { continue }
+                    for (i, offset) in (double ? [0, 0.3] : [0]).enumerated() {
+                        let blink = CAKeyframeAnimation(keyPath: "hidden")
+                        blink.calculationMode = .discrete
+                        blink.values = shown.map { NSNumber(value: !$0) }
+                        blink.keyTimes = [0, 0.25, 0.7, 0.95, 1]
+                        blink.duration = Self.blinkDuration
+                        if offset > 0 { blink.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + offset }
+                        layer.add(blink, forKey: i == 0 ? "blink" : "blink2")
+                    }
                 }
             }
         }
     }
 
-    /// Scales about the eye's lower edge (in the layer's pivot-relative coordinates).
-    private static func squash(y: CGFloat, x: CGFloat, pivot: PipRigAsset.Part?, bottom: CGFloat) -> CATransform3D {
-        let d = bottom - (pivot?.pivot[1] ?? bottom)
-        var t = CATransform3DMakeTranslation(0, -d, 0)
-        t = CATransform3DConcat(t, CATransform3DMakeScale(x, y, 1))
-        return CATransform3DConcat(t, CATransform3DMakeTranslation(0, d, 0))
-    }
-
-    private func addBlink(to layer: CALayer, closed: CATransform3D, delay: TimeInterval) {
-        let blink = CAKeyframeAnimation(keyPath: "transform")
-        blink.values = [CATransform3DIdentity, closed, closed, CATransform3DIdentity].map(NSValue.init)
-        blink.keyTimes = [0, 0.35, 0.55, 1]
-        blink.timingFunctions = [CAMediaTimingFunction(name: .easeIn), CAMediaTimingFunction(name: .linear), CAMediaTimingFunction(name: .easeOut)]
-        blink.duration = 0.2
-        blink.isAdditive = true
-        if delay > 0 {
-            blink.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + delay
-            blink.fillMode = .backwards
-        }
-        layer.add(blink, forKey: delay > 0 ? "blink2" : "blink")
-    }
+    static let blinkDuration: TimeInterval = 0.16
 
     /// Moves to `target` with one spring per changed joint component, each starting from what is on screen now.
     private func transition(to target: PipPose, period: TimeInterval) {
@@ -387,7 +388,8 @@ extension PipRigView {
         apply(target, animated: false)
         for part in asset.parts {
             guard let container = containers[part.id], !container.isHidden, !wasHidden.contains(part.id), let from = before[part.id] else { continue }
-            let follower = ["ear-", "tail-2", "tail-3", "tail-4", "scarf-end-"].contains { part.name.hasPrefix($0) }
+            // Lower legs and paws trail the upper leg, like ears, tail and scarf trail the body (overlapping action).
+            let follower = ["ear-", "tail-2", "tail-3", "tail-4", "scarf-end-", "forearm-", "paw-"].contains { part.name.hasPrefix($0) }
             let gazePart = irisReach[part.id] != nil || pupilReach[part.id] != nil || glintIris[part.id] != nil
             for (i, component) in Self.components.enumerated() {
                 let to = Float((container.value(forKeyPath: component.path) as? NSNumber)?.floatValue ?? 0)
@@ -418,19 +420,20 @@ extension PipRigView {
         ("transform.scale.x", "pip.scaleX"), ("transform.scale.y", "pip.scaleY"),
     ]
 
-    /// Natural frequency is chosen so the first overshoot lands near the key time; followers are 40% softer and 40 ms late.
+    /// Natural frequency is chosen so the first overshoot lands near the key time, capped so short keys ease instead of snap.
+    /// The body settles with little wobble; followers are 40% softer, bouncier and 60 ms late, which reads as follow-through.
     private func spring(from: Float, to: Float, period: TimeInterval, follower: Bool, saccade: Bool, on layer: CALayer, path: String) -> CASpringAnimation {
         let animation = CASpringAnimation(keyPath: path)
         animation.fromValue = from
         animation.toValue = to
-        var omega = saccade ? Self.saccadeOmega : min(max(3.76 / CGFloat(max(period, 0.05)), 14), 90)
+        var omega = saccade ? Self.saccadeOmega : min(max(3.76 / CGFloat(max(period, 0.05)), 14), 60)
         if follower { omega *= 0.6.squareRoot() }
         animation.mass = 1
         animation.stiffness = omega * omega
-        animation.damping = 2 * (saccade ? 0.6 : 0.55) * omega
+        animation.damping = 2 * (saccade ? 0.6 : follower ? 0.5 : 0.68) * omega
         animation.duration = animation.settlingDuration
         if follower {
-            animation.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + 0.04
+            animation.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + 0.06
             animation.fillMode = .backwards
         }
         return animation
