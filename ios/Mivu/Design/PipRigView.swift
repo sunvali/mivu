@@ -198,7 +198,7 @@ final class PipRigView: UIView {
                 wrapper.mask = mask
                 wrapper.addSublayer(containers[part.id]!)
                 parent.addSublayer(wrapper)
-                irisReach[part.id] = CGSize(width: 0.3 * box.width, height: 0.25 * box.height)
+                irisReach[part.id] = CGSize(width: 0.3 * box.width, height: 0.4 * box.height) // enough to read as looking down at the text
             } else {
                 parent.addSublayer(containers[part.id]!)
             }
@@ -335,7 +335,8 @@ extension PipRigView {
         guard playback == nil else { return }
         var follow = next
         follow.headTurn = 1 + 0.35 * point.x // 0.65...1.35 stays in the right view
-        follow.joints["head", default: PipPose.Joint()].rotation = 3 * .pi / 180 * point.y
+        // A pose that already bows the head (typing looks down at the text) keeps its nod.
+        if (follow.joints["head"]?.rotation ?? 0) == 0 { follow.joints["head", default: PipPose.Joint()].rotation = 3 * .pi / 180 * point.y }
         let item = DispatchWorkItem { [weak self] in
             guard let self, playback == nil, pose == next else { return }
             transition(to: follow, period: 0.45)

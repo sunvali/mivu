@@ -184,7 +184,7 @@ import UIKit
     /// Width over height of the artboard crop each surface shows (the asset's frames), with the shipped values until loaded.
     func cropAspect(for surface: CompanionSurface) -> CGFloat {
         let frame = asset?.frames[surface == .coach ? "coach" : "today"]
-        return frame.map { $0.width / $0.height } ?? (surface == .coach ? 398.6 / 353.8 : 399.8 / 455.5)
+        return frame.map { $0.width / $0.height } ?? (surface == .coach ? 281.0 / 288.8 : 399.8 / 455.5)
     }
 
     func fallbackAssetName(for surface: CompanionSurface = .today) -> String {
@@ -215,15 +215,20 @@ import UIKit
         ![.resting, .attentive, .thinking, .recovery].contains(pose)
     }
 
-    /// Sweeps the eyes left to right as the draft grows, slightly down toward the text.
+    /// Looks down at the field below Pip's paws and follows the caret left to right as the draft grows.
     private static func typingGaze(_ progress: Double) -> CGPoint {
-        CGPoint(x: -0.8 + 1.6 * min(max(progress, 0), 1), y: 0.25)
+        CGPoint(x: -0.3 + 1.3 * min(max(progress, 0), 1), y: 0.8)
     }
 
-    /// Typing holds the attentive loop's first pose: a loop's later glances would pull the eyes off the text.
+    /// Typing holds the attentive loop's first pose, head bowed 14 degrees toward the text and turned with it: a loop's
+    /// later glances would pull the eyes off the text.
     private static func looking(_ gesture: PipGesture, at point: CGPoint) -> PipGesture {
-        PipGesture(name: gesture.name, keys: gesture.keys.prefix(1).map { key in var pose = key.pose; pose.gaze = point; return (key.at, pose) },
-                   loops: false, endSet: gesture.endSet)
+        PipGesture(name: gesture.name, keys: gesture.keys.prefix(1).map { key in
+            var pose = key.pose.nod(14)
+            pose.gaze = point
+            pose.headTurn = 1 + 0.35 * point.x
+            return (key.at, pose)
+        }, loops: false, endSet: gesture.endSet)
     }
 
     private func restPose(_ surface: CompanionSurface) -> PipPose {

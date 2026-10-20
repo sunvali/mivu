@@ -34,8 +34,8 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip-rig.json",
-    "sha256": "de2a8092a39d03035bcf5324460fc82fcfa0ad83fd294d6254a9553a33170596",
-    "bytes": 302754,
+    "sha256": "fb6119101be3526c4ced923b494f208ddc759c4e1a9ac6e346af2da18efaca73",
+    "bytes": 309518,
     "formatVersion": 2,
     "canvas": [
       512,
@@ -57,21 +57,21 @@
     {
       "name": "PipResting",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipResting.imageset/pip.png",
-      "sha256": "c42fcc4bb7a2f1f7b20131afb4045746e6047c796bf1e3d9b79eb468b3a32f78",
+      "sha256": "03f6eedf064e9f6919846276e978c6608c4a2d31e4e6f900281900d16eec9ca8",
       "bytes": 41422,
       "appearances": "same original artwork for light and dark"
     },
     {
       "name": "PipCoach",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipCoach.imageset/pip.png",
-      "sha256": "85e532831abf35dfc2154685ed63aa6f4c7f7153267b56ae34ff59e03e093f80",
-      "bytes": 42725,
+      "sha256": "c530069a260cf0b476e9b1b3771bc68814925de6a76b2192adfe11a18c7a96ed",
+      "bytes": 52271,
       "appearances": "original context-matched seated art"
     },
     {
       "name": "PipPreview",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/pip.png",
-      "sha256": "c42fcc4bb7a2f1f7b20131afb4045746e6047c796bf1e3d9b79eb468b3a32f78",
+      "sha256": "03f6eedf064e9f6919846276e978c6608c4a2d31e4e6f900281900d16eec9ca8",
       "bytes": 41422,
       "appearances": "same original artwork for light and dark"
     }
@@ -110,8 +110,8 @@
   "authoringSources": [
     {
       "path": "design-system/mivu/characters/pip/rig/pip.svg",
-      "sha256": "2f61090a7fb95d2936c5ff00e9911774ed1c288d7fd5281cb3cdf0c146757fa0",
-      "bytes": 212805,
+      "sha256": "7490bd903974b83f5d01c66fb3402586340fef30f73d0db5388a9dcf6f88b44f",
+      "bytes": 219927,
       "role": "Editable layered vector Pip"
     },
     {
@@ -122,7 +122,7 @@
     },
     {
       "path": "design-system/mivu/characters/pip/rig/test_rig.py",
-      "sha256": "90cf26866bae65b753dd29a2a2478b07b561fa0eaa0e2092d98177d70c9c2b7f",
+      "sha256": "8833a561c7d5c6aeda6f500aa075cc476f84bdeab396e1a0592352456cb42c1d",
       "bytes": 8617,
       "role": "Rig asset regression checks"
     },

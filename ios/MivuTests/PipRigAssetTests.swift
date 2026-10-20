@@ -15,7 +15,7 @@ import Testing
         #expect(asset.parts.contains { $0.id.hasPrefix("pupil-l") })
         #expect(asset.frames["today"].map { CGRect(x: 0, y: 0, width: 512, height: 512).intersects($0) } == true)
         // Coach is a bust peeking over the composer: the crop ends on the bar line where the seated paws rest.
-        #expect(asset.frames["coach"].map { abs($0.maxY - 383) < 0.5 && $0.height < 380 } == true)
+        #expect(asset.frames["coach"].map { abs($0.maxY - 318) < 0.5 && $0.height < 320 } == true)
     }
 
     @Test func rejectsOversizeWrongVersionAndBadPath() throws {

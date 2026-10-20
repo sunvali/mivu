@@ -144,12 +144,12 @@ class RigTests(unittest.TestCase):
     def test_coach_frame_contains_seated_set(self):
         # Coach is a bust: everything above the bar line fits, the crop ends on it, and both paws rest on it.
         x, y, w, h = self.rig["frames"]["coach"]
-        x0, y0, x1, _ = set_bounds(self.parts, "seated", below=383)
+        x0, y0, x1, _ = set_bounds(self.parts, "seated", below=318)
         self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w)
-        self.assertAlmostEqual(y + h, 383, delta=0.5)
+        self.assertAlmostEqual(y + h, 318, delta=0.5)
         for paw in ("paw-l@seated", "paw-r@seated"):
             part = next(p for p in self.parts if p["id"] == paw)
-            self.assertAlmostEqual(max(points(part["path"])[1]), 383, delta=2, msg=paw)
+            self.assertAlmostEqual(max(points(part["path"])[1]), 318, delta=2, msg=paw)
         x, y, w, h = self.rig["frames"]["today"]
         x0, y0, x1, y1 = set_bounds(self.parts, "standing")
         self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w and y1 <= y + h)

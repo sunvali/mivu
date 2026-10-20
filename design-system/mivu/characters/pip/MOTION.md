@@ -12,7 +12,8 @@ Pip is a layered vector drawn by us, traced from the paintings and checked by
 overlay. Artboard 512x512, ground line y 472, content inside x 40-472 / y 32-472;
 it must read at 40, 64, 88 and 200 pt in light and dark. Today shows the standing
 set; Coach peeks over the composer (character sheet p. 2): the seated set cropped at the
-`data-peek` bar line (y 383), paws resting on it and on the field's top edge; long idle on
+`data-peek` bar line (y 318, just under the scarf), paws together under the chin and tail
+curling up on the left as on the sheet; paws resting on the bar and on the field's top edge; long idle on
 Today the curled set. Native text, keyboard, controls and navigation remain SwiftUI-owned,
 and feet stay on the ground line. Pip is decorative: `accessibilityHidden(true)`.
 
