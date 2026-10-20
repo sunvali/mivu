@@ -29,13 +29,18 @@ struct DayProgressAttributes: ActivityAttributes {
         }
 
         static func macroLabel(_ letter: String, _ value: Double?, _ target: Double?) -> String {
-            let eaten = number(value ?? 0)
-            return target.map { "\(letter) \(eaten)/\(number($0))g" } ?? "\(letter) \(eaten)g"
+            "\(letter) \(macroAmount(value, target))"
+        }
+
+        /// "80/120g"; an unknown amount shows a dash, never a zero that looks recorded.
+        static func macroAmount(_ value: Double?, _ target: Double?) -> String {
+            let eaten = value.map(number) ?? "–"
+            return target.map { "\(eaten)/\(number($0))g" } ?? (value == nil ? eaten : "\(eaten)g")
         }
 
         static func fraction(_ value: Double?, _ target: Double?) -> Double? {
-            guard let target, target > 0 else { return nil }
-            return min(max((value ?? 0) / target, 0), 1)
+            guard let value, let target, target > 0 else { return nil }
+            return min(max(value / target, 0), 1)
         }
 
         static func number(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0))) }

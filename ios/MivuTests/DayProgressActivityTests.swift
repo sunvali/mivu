@@ -78,4 +78,10 @@ import Testing
     @Test func noneRunningStarts() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 0) == .start) }
     @Test func oneRunningUpdates() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1) == .update(endingExtra: 0)) }
     @Test func extrasEnd() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 3) == .update(endingExtra: 2)) }
+
+    @Test func unknownMacroIsNeverZero() {
+        #expect(State.macroLabel("P", nil, 120) == "P –/120g")
+        #expect(State.macroLabel("P", nil, nil) == "P –")
+        #expect(State.fraction(nil, 120) == nil)
+    }
 }

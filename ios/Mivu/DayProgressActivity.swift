@@ -35,13 +35,23 @@ private let liveActivityLog = Logger(subsystem: "com.yakov103.mivu", category: "
     let defaults = UserDefaults.standard
     let enabled = defaults.bool(forKey: DayProgressSync.enabledKey)
     let hide = defaults.object(forKey: DayProgressSync.hideWhenLockedKey) as? Bool ?? true
-    let content = readModel.flatMap { model in
+    var content = readModel.flatMap { model in
         model.activeDay.map { day in
             // Past the cutoff the numbers belong to yesterday, so the island asks to open Mivu instead.
             ActivityContent(state: DayProgressAttributes.ContentState(report: ProgressAnalytics.daily(readModel: model), hideWhenLocked: hide),
                             staleDate: WidgetSnapshot.nextRollover(after: Date(), timeZoneID: day.timeZoneID, cutoffHour: DayCutoff.hour))
         }
     }
+    #if DEBUG
+    // Visual checks need a full day with targets; the synthetic diaries have neither.
+    let arguments = ProcessInfo.processInfo.arguments
+    if let index = arguments.firstIndex(of: "--live-activity-sample"), arguments.indices.contains(index + 1),
+       let eaten = Double(arguments[index + 1]) {
+        content = ActivityContent(state: .init(kcalEaten: eaten, kcalTarget: 2000, protein: eaten * 0.06, proteinTarget: 120,
+                                               carbs: eaten * 0.11, carbsTarget: 200, fat: eaten * 0.03, fatTarget: 60,
+                                               hasPending: false, hideWhenLocked: hide), staleDate: nil)
+    }
+    #endif
     let authorized = ActivityAuthorizationInfo().areActivitiesEnabled
     // Each sync waits for the previous one, so a burst of diary changes lands in order.
     let previous = DayProgressSync.lastSync

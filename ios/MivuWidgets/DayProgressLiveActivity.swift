@@ -2,98 +2,163 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
+private typealias DayState = DayProgressAttributes.ContentState
+
 /// Calories left in the Dynamic Island and on the Lock Screen; every value arrives in the activity's state.
 struct DayProgressLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: DayProgressAttributes.self) { context in
-            DayProgressSummary(state: context.state, isStale: context.isStale, pipHeight: 56)
-                .padding(16)
+            LockScreenProgress(state: context.state, isStale: context.isStale)
                 .activityBackgroundTint(Color.diarySurface)
                 .activitySystemActionForegroundColor(Color.diaryText)
                 .widgetURL(URL(string: "mivu://today"))
         } dynamicIsland: { context in
-            DynamicIsland {
+            let state = context.state, stale = context.isStale
+            return DynamicIsland {
+                // Pip and the ring are the same size, so the figure sits on the island's centre line.
+                DynamicIslandExpandedRegion(.leading) {
+                    PipMark(size: 52).frame(maxHeight: .infinity)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    CalorieRing(state: state, isStale: stale, size: 52).frame(maxHeight: .infinity)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    Headline(state: state, isStale: stale, primary: .white, figureFont: .system(.title, design: .rounded, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                }
                 DynamicIslandExpandedRegion(.bottom) {
-                    DayProgressSummary(state: context.state, isStale: context.isStale, pipHeight: 48)
+                    if !stale { MacroRow(state: state).padding(.top, 6).padding(.horizontal, 12).padding(.bottom, 4) }
                 }
             } compactLeading: {
-                pip(height: 22)
+                PipMark(size: 24)
             } compactTrailing: {
-                figure(context.isStale ? "–" : context.state.compact, state: context.state).font(.subheadline.weight(.semibold))
+                Text(stale ? "–" : state.compact)
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .foregroundStyle(state.isOver ? Color.diarySecondary : Color.diaryAccent)
+                    .privacySensitive(state.hideWhenLocked)
+                    .accessibilityLabel(stale ? "Open Mivu for today" : state.spoken)
             } minimal: {
-                figure(context.isStale ? "–" : context.state.figure, state: context.state).font(.caption.weight(.semibold))
+                CalorieRing(state: state, isStale: stale, size: 22)
             }
             .widgetURL(URL(string: "mivu://today"))
             .keylineTint(Color.diaryAccent)
         }
     }
-
-    private func figure(_ text: String, state: DayProgressAttributes.ContentState) -> some View {
-        Text(text).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-            .foregroundStyle(state.isOver ? Color.diarySecondary : Color.diaryAccent)
-            .privacySensitive(state.hideWhenLocked)
-            .accessibilityLabel(state.spoken)
-    }
 }
 
-private func pip(height: CGFloat) -> some View {
-    // The approved painted Pip already used by the Home Screen widget; never redacted.
-    Image("PipWave").resizable().scaledToFit().frame(height: height).accessibilityHidden(true)
-}
-
-/// The expanded island and Lock Screen layout: Pip, the big figure, then protein, carbs and fat.
-private struct DayProgressSummary: View {
-    let state: DayProgressAttributes.ContentState
+/// The Lock Screen banner mirrors the expanded island: Pip, figure, ring, then the macros.
+private struct LockScreenProgress: View {
+    let state: DayState
     let isStale: Bool
-    let pipHeight: CGFloat
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            pip(height: pipHeight)
-            if isStale {
-                Text("Open Mivu for today").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(state.figure).font(.title.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-                            .foregroundStyle(state.isOver ? Color.diarySecondary : .primary)
-                        Text(state.word).font(.headline).foregroundStyle(Color.diarySecondary)
-                        if state.hasPending {
-                            Text("+ pending").font(.caption).foregroundStyle(Color.diarySecondary)
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(state.spoken + (state.hasPending ? " More meals pending." : ""))
-                    HStack(spacing: 10) {
-                        macro("P", state.protein, state.proteinTarget, Color.diaryProtein)
-                        macro("C", state.carbs, state.carbsTarget, Color.diaryCarbs)
-                        macro("F", state.fat, state.fatTarget, Color.diaryFat)
-                    }
-                    .accessibilityHidden(true)
-                }
-                .privacySensitive(state.hideWhenLocked)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: 14) {
+            HStack(spacing: 16) {
+                PipMark(size: 56)
+                Headline(state: state, isStale: isStale, primary: Color.diaryText,
+                         figureFont: .system(.largeTitle, design: .rounded, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                CalorieRing(state: state, isStale: isStale, size: 56)
             }
+            if !isStale { MacroRow(state: state) }
         }
-    }
-
-    private func macro(_ letter: String, _ value: Double?, _ target: Double?, _ tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(DayProgressAttributes.ContentState.macroLabel(letter, value, target))
-                .font(.caption2.weight(.medium)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-                .foregroundStyle(Color.diarySecondary)
-            if let fraction = DayProgressAttributes.ContentState.fraction(value, target) {
-                Capsule().fill(tint.opacity(0.2)).frame(height: 4)
-                    .overlay(alignment: .leading) {
-                        GeometryReader { proxy in Capsule().fill(tint).frame(width: proxy.size.width * fraction) }
-                    }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18).padding(.vertical, 16)
     }
 }
 
-private extension DayProgressAttributes.ContentState {
+private struct PipMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        // A small cut of the approved painted Pip; Live Activity images must stay near their display size.
+        Image("PipIsland").resizable().scaledToFit().frame(width: size, height: size).accessibilityHidden(true)
+    }
+}
+
+private struct Headline: View {
+    let state: DayState
+    let isStale: Bool
+    let primary: Color
+    let figureFont: Font
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if isStale {
+                Text("Open Mivu for today").font(.headline).foregroundStyle(primary)
+                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+            } else {
+                Text(state.figure).font(figureFont).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    .foregroundStyle(state.isOver ? Color.diarySecondary : primary)
+                    .privacySensitive(state.hideWhenLocked)
+                Text(state.hasPending ? "kcal \(state.word) · pending" : "kcal \(state.word)")
+                    .font(.footnote.weight(.medium)).foregroundStyle(Color.diarySecondary).lineLimit(1)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isStale ? "Open Mivu for today" : state.spoken + (state.hasPending ? " More meals pending." : ""))
+    }
+}
+
+private struct CalorieRing: View {
+    let state: DayState
+    let isStale: Bool
+    let size: CGFloat
+
+    var body: some View {
+        let fraction = isStale ? 0 : DayState.fraction(state.kcalEaten, state.kcalTarget) ?? 0
+        let line = max(size / 10, 2.5)
+        ZStack {
+            Circle().stroke(Color.diaryAccent.opacity(0.22), lineWidth: line)
+            Circle().trim(from: 0, to: fraction)
+                .stroke(state.isOver ? Color.diarySecondary : Color.diaryAccent, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            if size >= 40 {
+                Image(systemName: "flame.fill").font(.system(size: size * 0.32)).foregroundStyle(Color.diaryAccent)
+            }
+        }
+        .padding(line / 2)
+        .frame(width: size, height: size)
+        .privacySensitive(state.hideWhenLocked)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Three equal columns, so protein, carbs and fat line up under the figure.
+private struct MacroRow: View {
+    let state: DayState
+
+    var body: some View {
+        HStack(spacing: 14) {
+            column("Protein", state.protein, state.proteinTarget, Color.diaryProtein)
+            column("Carbs", state.carbs, state.carbsTarget, Color.diaryCarbs)
+            column("Fat", state.fat, state.fatTarget, Color.diaryFat)
+        }
+        .privacySensitive(state.hideWhenLocked)
+        .accessibilityHidden(true)
+    }
+
+    private func column(_ name: String, _ value: Double?, _ target: Double?, _ tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Capsule().fill(tint.opacity(0.22)).frame(height: 5)
+                .overlay(alignment: .leading) {
+                    GeometryReader { proxy in
+                        Capsule().fill(tint).frame(width: proxy.size.width * (DayState.fraction(value, target) ?? 0))
+                    }
+                }
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(name).font(.caption2.weight(.semibold)).foregroundStyle(tint)
+                Spacer(minLength: 0)
+                Text(DayState.macroAmount(value, target)).font(.caption2.weight(.medium)).monospacedDigit()
+                    .foregroundStyle(Color.diarySecondary)
+            }
+            .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private extension DayState {
     static let under = Self(kcalEaten: 1360, kcalTarget: 2000, protein: 80, proteinTarget: 120, carbs: 150, carbsTarget: 200,
                             fat: 40, fatTarget: 60, hasPending: false, hideWhenLocked: true)
     static let over = Self(kcalEaten: 2300, kcalTarget: 2000, protein: 130, proteinTarget: 120, carbs: 260, carbsTarget: 200,
