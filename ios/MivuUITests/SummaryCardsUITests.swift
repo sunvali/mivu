@@ -52,8 +52,9 @@ import XCTest
 
         app.tabBars.buttons["Diary"].tap()
         XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["historyMeal"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.diaryPills.firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.diaryPills.matching(NSPredicate(format: "selected == true")).firstMatch.label.contains("1 meal"))
+        reveal(app.buttons["historyMeal"].firstMatch, in: app)
         try capture("Diary day card " + variant, in: app)
 
         app.tabBars.buttons["Progress"].tap()

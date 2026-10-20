@@ -84,7 +84,7 @@ struct HistoryView: View {
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .safeAreaInset(edge: .bottom) {
             if model.readModel != nil, !selected.isEmpty {
-                AnyLayout(typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
+                HStack(spacing: 12) {
                     // The composer names its destination from the loaded day, so wait for it.
                     if let day = recordedDay, model.dayDetail(day.id) != nil { DiaryCaptureAction(identifier: "logMealForDay") { showMeal = true } }
                     askPip
@@ -141,9 +141,15 @@ struct HistoryView: View {
 
     @ViewBuilder private var askPip: some View {
         let button = Button(action: askPipAction) {
-            Label("Ask Pip", systemImage: "sparkles").font(.headline)
-                .frame(maxWidth: recordedDay == nil || typeSize.isAccessibilitySize ? .infinity : nil, minHeight: 52)
-                .padding(.horizontal, 8)
+            Group {
+                // Beside Log meal at accessibility sizes, an icon keeps the bar to one row.
+                if recordedDay != nil && typeSize.isAccessibilitySize {
+                    Image(systemName: "sparkles").accessibilityLabel("Ask Pip")
+                } else { Label("Ask Pip", systemImage: "sparkles") }
+            }
+            .font(.headline)
+            .frame(maxWidth: recordedDay == nil ? .infinity : nil, minHeight: 52)
+            .padding(.horizontal, 8)
         }
         .tint(.diaryAccent)
         .disabled(model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)

@@ -390,7 +390,7 @@ import XCTest
         XCTAssertEqual(app.buttons["mealRow"].firstMatch.label, originalLabel, "Viewing a photo must not change its meal")
     }
 
-    func testLogMealFromSelectedHistoricalDayKeepsTodaySeparate() {
+    func testLogMealFromSelectedHistoricalDayKeepsTodaySeparate() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
         app.launch()
@@ -399,18 +399,22 @@ import XCTest
         input.tap(); input.typeText("Yesterday I had dessert"); app.buttons["coachSend"].tap()
         let receipt = app.buttons["coachMealLink"].firstMatch
         XCTAssertTrue(receipt.waitForExistence(timeout: 15))
+        app.tabBars.buttons["Today"].tap()
+        let todayMeals = app.buttons.matching(identifier: "mealRow").count
         app.tabBars.buttons["Diary"].tap()
-        // "Yesterday" is relative to the waking day, which can differ from the clock after midnight.
         XCTAssertTrue(app.diaryPills.firstMatch.waitForExistence(timeout: 10))
-        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = .gmt; formatter.dateFormat = "yyyy-MM-dd"
-        let waking = formatter.date(from: app.selectedDiaryDate ?? "") ?? Date()
-        let yesterday = formatter.string(from: waking.addingTimeInterval(-86_400))
-        XCTAssertTrue(app.selectDiaryDate(yesterday))
+        let active = app.selectedDiaryDate
+        // The dessert's day is the one recorded pill; after midnight it can be the active waking day itself.
+        let dessertDay = app.diaryPills.matching(NSPredicate(format: "label CONTAINS %@", "1 meal")).firstMatch
+        XCTAssertTrue(dessertDay.waitForExistence(timeout: 10))
+        let date = try XCTUnwrap(dessertDay.value as? String)
+        try XCTSkipIf(date == active, "Coach logged yesterday's dessert on the active waking day (run after midnight)")
+        XCTAssertTrue(app.selectDiaryDate(date))
         let log = app.buttons["logMealForDay"]
         XCTAssertTrue(log.waitForExistence(timeout: 5)); log.tap()
         let note = app.textFields["mealText"]
         XCTAssertTrue(note.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts[yesterday].exists, "The composer must show its selected destination")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", date)).firstMatch.exists, "The composer must show its selected destination")
         note.tap(); note.typeText("Synthetic selected-day meal")
         if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
         let review = app.switches["reviewFirst"].switches.firstMatch
@@ -419,10 +423,10 @@ import XCTest
         let meal = app.buttons["savedDayMealReceipt"]
         XCTAssertTrue(meal.waitForExistence(timeout: 10)); reveal(meal, in: app); meal.tap()
         XCTAssertTrue(app.staticTexts["Time unspecified"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts[yesterday].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", date)).firstMatch.exists)
         app.navigationBars.buttons.firstMatch.tap()
         app.tabBars.buttons["Today"].tap()
-        XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists, "Historical capture must not move records into Today")
+        XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, todayMeals, "Historical capture must not move records into Today")
     }
 
     func testEnglishDarkLargeTextRendering() {
