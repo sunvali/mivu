@@ -67,12 +67,9 @@ private actor OrderedReceiptRefreshes {
     func releaseAll() { let pending = continuations.values; continuations = [:]; for continuation in pending { continuation.resume() } }
 }
 
-private actor ReceiptRefreshFailureOnce {
+private actor ReceiptCaptureAckFailureOnce {
     private var shouldFail = true
-    func snapshot(_ store: DiaryStore, owner: UUID) async throws -> DiaryReadModel {
-        if shouldFail { shouldFail = false; throw DiaryError.persistenceFailed }
-        return try await store.diaryReadModel(expectedProfileID: owner)
-    }
+    func claim() -> Bool { defer { shouldFail = false }; return shouldFail }
 }
 
 @Suite @MainActor struct CompanionReceiptTests {
@@ -134,7 +131,7 @@ private actor ReceiptRefreshFailureOnce {
         #expect(try await store.snapshotForExport().coachTurns.map(\.id) == [draft.submissionID])
     }
 
-    @Test func acceptedSendSignalsBeforeRefreshAndRetainsPriorErrorUntilSaved() async throws {
+    @Test func acceptedSendPublishesDurableFeedbackBeforeRefresh() async throws {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let gate = ReceiptRefreshGate()
@@ -156,8 +153,9 @@ private actor ReceiptRefreshFailureOnce {
         #expect(submission.profileID == profile.id && submission.operationID == operation)
         #expect(submission.acceptedAt >= before && submission.acceptedAt <= Date())
         #expect(coach.isSending && coach.companionIsProcessing && !coach.companionNeedsRecovery)
-        #expect(coach.errorMessage == "Synthetic prior failure")
-        #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
+        #expect(coach.errorMessage == nil)
+        #expect(coach.companionCaptureEvent?.operationID == operation && coach.captureReceipt == operation)
+        #expect(coach.draft.text.isEmpty)
         #expect(!(await coach.send()))
         #expect(coach.companionSubmission == submission)
         await gate.release()
@@ -182,17 +180,23 @@ private actor ReceiptRefreshFailureOnce {
         #expect(coach.companionNeedsRecovery && !coach.companionIsProcessing)
     }
 
-    @Test func acceptedRetryAfterRefreshFailurePublishesANewGestureWithoutDuplicatingCapture() async throws {
+    @Test func acceptedRetryAfterUncertainCapturePublishesANewGestureWithoutDuplicatingCapture() async throws {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let refresh = ReceiptRefreshFailureOnce()
-        let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
-            try await refresh.snapshot(store, owner: id)
-        })
+        let failure = ReceiptCaptureAckFailureOnce()
+        let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)
-        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
+        var dependencies = CoachAttachmentDraft.Dependencies(store: store,
+            refresh: { owner in try await diary.refresh(profileID: owner.identity.profileID) })
+        let capture = dependencies.capture
+        dependencies.capture = { payload, owner in
+            let result = try await capture(payload, owner)
+            if await failure.claim() { throw DiaryError.persistenceFailed }
+            return result
+        }
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), attachmentDependencies: dependencies)
         coach.enterBackground()
-        coach.draft.text = "Synthetic capture retried after refresh failure"
+        coach.draft.text = "Synthetic capture retried after uncertain acknowledgement"
         let operation = coach.draft.submissionID
         #expect(!(await coach.send()))
         let first = try #require(coach.companionSubmission)
@@ -352,21 +356,21 @@ private actor ReceiptRefreshFailureOnce {
         #expect(committed.meals.first?.state == .saved)
     }
 
-    @Test func captureRefreshFailureDoesNotEmit() async throws {
+    @Test func captureRefreshFailureStillAcknowledgesDurableSave() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let model = DiaryViewModel(store: store, actionReadModelLoading: { _ in throw DiaryError.persistenceFailed })
         await model.load(createDefaultProfile: false)
         var draft = MealDraft(); draft.text = "Synthetic durable capture"
-        #expect(!(await model.capture(draft, dayID: day.id)))
-        #expect(model.companionCaptureEvent == nil && model.captureReceipt == nil)
+        #expect(await model.capture(draft, dayID: day.id))
+        #expect(model.companionCaptureEvent?.operationID == draft.submissionID && model.captureReceipt == draft.submissionID)
         #expect(draft.text == "Synthetic durable capture" && model.readModel?.profile.id == profile.id)
-        // A subscriber may display the durable capture; the failed action still emits no feedback.
+        // Presentation failure cannot turn an already durable save into a failed capture.
         let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.meals.first?.submissions.first?.id == draft.submissionID)
     }
 
-    @Test func sendRefreshFailureDoesNotEmit() async throws {
+    @Test func sendRefreshFailureStillEmitsDurableSavedFeedback() async throws {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let diary = DiaryViewModel(store: store, actionReadModelLoading: { _ in throw DiaryError.persistenceFailed })
@@ -374,14 +378,15 @@ private actor ReceiptRefreshFailureOnce {
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         coach.enterBackground(); coach.draft.text = "Synthetic durable turn"
         let submissionID = coach.draft.submissionID
-        #expect(!(await coach.send()))
-        #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
-        #expect(coach.draft.text == "Synthetic durable turn" && coach.draft.submissionID == submissionID)
+        #expect(await coach.send())
+        #expect(coach.companionCaptureEvent?.operationID == submissionID && coach.captureReceipt == submissionID)
+        #expect(coach.draft.text.isEmpty && coach.draft.submissionID != submissionID)
+        #expect(coach.errorMessage == nil)
         let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.coachTurns.map(\.id) == [submissionID])
     }
 
-    @Test func cancelledCaptureDoesNotEmitAfterDurableCommit() async throws {
+    @Test func cancelledCaptureWaiterKeepsDurableAcknowledgement() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let other = DiaryProfile(name: "Synthetic second owner")
@@ -397,21 +402,22 @@ private actor ReceiptRefreshFailureOnce {
         var draft = MealDraft(); draft.text = "Synthetic cancelled capture"
         let capture = Task { await model.capture(draft, dayID: day.id) }
         try await gate.waitUntilPaused()
+        #expect(model.captureReceipt == draft.submissionID)
         capture.cancel()
         await gate.release()
-        #expect(!(await capture.value))
-        #expect(model.companionCaptureEvent == nil && model.captureReceipt == nil)
+        #expect(await capture.value)
+        #expect(model.companionCaptureEvent?.operationID == draft.submissionID && model.captureReceipt == draft.submissionID)
         #expect(try await store.snapshotForExport().meals.first?.submissions.first?.id == draft.submissionID)
         await model.switchProfile(other.id)
         #expect(model.readModel?.profile.id == other.id && model.readModel?.meals.isEmpty == true)
         let otherSnapshot = try await store.snapshotForExport()
         #expect(otherSnapshot.profile.id == other.id && otherSnapshot.meals.isEmpty)
-        #expect(model.companionCaptureEvent == nil)
+        #expect(model.companionCaptureEvent?.profileID == profile.id && model.companionCaptureEvent?.profileID != other.id)
         let original = try await completeSelectedProfile(store, profile.id)
         #expect(original.meals.count == 1)
     }
 
-    @Test func cancelledSendKeepsDraftAndDoesNotEmitAfterDurableCommit() async throws {
+    @Test func cancelledSendWaiterStillAcknowledgesDurableCommitAndPreservesNewerDraft() async throws {
         let (path, store, profile, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let gate = ReceiptRefreshGate()
@@ -426,10 +432,14 @@ private actor ReceiptRefreshFailureOnce {
         coach.enterBackground(); coach.draft.text = "Synthetic cancelled turn"
         let submissionID = coach.draft.submissionID
         let sending = Task { await coach.send() }
-        try await gate.waitUntilPaused(); sending.cancel(); await gate.release()
-        #expect(!(await sending.value))
-        #expect(coach.companionCaptureEvent == nil && coach.captureReceipt == nil)
-        #expect(coach.draft.text == "Synthetic cancelled turn" && coach.draft.submissionID == submissionID)
+        try await gate.waitUntilPaused()
+        #expect(coach.captureReceipt == submissionID && coach.draft.text.isEmpty)
+        coach.draft = MealDraft(text: "Synthetic newer unsent draft")
+        let newer = coach.draft
+        sending.cancel(); await gate.release()
+        #expect(await sending.value)
+        #expect(coach.companionCaptureEvent?.operationID == submissionID && coach.captureReceipt == submissionID)
+        #expect(coach.draft == newer)
         let durable = try await completeSelectedProfile(DiaryStore(directory: path), profile.id)
         #expect(durable.coachTurns.map(\.id) == [submissionID])
     }

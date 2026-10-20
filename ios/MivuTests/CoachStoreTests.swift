@@ -33,7 +33,8 @@ import Testing
         let meal = try await store.snapshotForExport().meals.first!
         #expect(meal.items[0] == items[0]); #expect(meal.items[2] == items[2])
         #expect(meal.items[1].nutrition.kcal == 120); #expect(meal.totals.kcal == 300)
-        #expect(meal.items[1].nutrientSources["kcal"] == .estimate)
+        #expect(meal.items[1].nutrientSources == items[1].nutrientSources)
+        #expect(meal.items[1].provenance == items[1].provenance)
     }
     @Test func idempotentFoodRetryAfterRelaunchDoesNotResurrectDeletedMeal() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
@@ -66,7 +67,7 @@ import Testing
         let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [item], expectedProfileID: profile.id)
         let correction = try await capturedTurn(store, text: "Half", photos: [], at: now, expectedProfileID: profile.id)
         var edited = item; edited.quantity = 2
-        try await store.editItem(mealID: receipt.mealID!, item: edited)
+        try await store.editItem(mealID: receipt.mealID!, item: edited, explicitNutrients: [])
         let before = try await store.snapshotForExport()
         await #expect(throws: DiaryError.staleRevision) { try await store.applyCoachItemCorrection(turnID: correction.id, mealID: receipt.mealID!, item: item, expectedRevision: 1, expectedProfileID: profile.id) }
         await #expect(throws: DiaryError.wrongOwner) { try await store.coachContext(turnID: turn.id, expectedProfileID: UUID()) }
@@ -112,9 +113,11 @@ import Testing
         _ = try await capturedTurn(store, text: "Pending", photos: [MealPhoto(data: Data([1,2,3]))], at: now, expectedProfileID: profile.id)
         let current = try await store.snapshotForExport()
         let data = try DiaryArchive.encode(current)
-        let envelope = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        #expect(envelope["version"] as? Int == 3)
+        var envelope = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        #expect(envelope["version"] as? Int == 4)
         #expect(try DiaryArchive.decode(data) == current)
+        envelope["version"] = 3
+        #expect(try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope)) == current)
     }
     @Test func atomicManualCoachCaptureFailureAndRetryStayOneRecord() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
@@ -240,7 +243,7 @@ import Testing
         let summary = try await store.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id)
         #expect(summary.contains("150 g")); #expect(summary.contains("1.5 portion"))
         var corrected = yogurt; corrected.quantity = 75
-        try await store.editItem(mealID: receipt.mealID!, item: corrected)
+        try await store.editItem(mealID: receipt.mealID!, item: corrected, explicitNutrients: [])
         let restored = DiaryStore(directory: root); _ = try await restored.selectProfile(profile.id)
         let updated = try await restored.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id)
         #expect(updated.contains("75 g")); #expect(!updated.contains("150 g"))
@@ -420,7 +423,8 @@ import Testing
         _ = try await store.applyCoachItemCorrection(turnID: correction.id, mealID: receipt.mealID!, item: half, expectedRevision: 1, expectedProfileID: profile.id)
         let saved = try #require(await store.snapshotForExport().meals.first?.items.first)
         #expect(saved.nutrition.kcal == 250); #expect(saved.uncertain)
-        #expect(saved.nutrientSources["kcal"] == .identifiedSource)
+        #expect(saved.nutrientSources == item.nutrientSources)
+        #expect(saved.provenance == item.provenance)
     }
     @Test func pendingManualCorrectionRejectsAnotherOwnedMeal() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }

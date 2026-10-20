@@ -78,7 +78,7 @@ import Testing
         let store = try await f.store(), accepted = try await f.accept(store)
         let transport = CoachJourneyTransport(beforeCorrection: {
             var item = try await store.meal(id: f.mealID, expectedProfileID: f.owner).items[0]; item.quantity = 5
-            try await store.editItem(mealID: f.mealID, item: item, expectedRevision: 1, expectedProfileID: f.owner)
+            try await store.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 1, expectedProfileID: f.owner)
             try f.clearApplications()
         })
         await #expect(throws: DiaryError.staleRevision) { try await f.run(store, accepted.id, transport) }
@@ -95,7 +95,7 @@ import Testing
         let f = try CoachLunchFixture(); defer { f.remove() }
         let store = try await f.store(), accepted = try await f.accept(store)
         var item = try await store.meal(id: f.mealID, expectedProfileID: f.owner).items[0]; item.quantity = 4
-        try await store.editItem(mealID: f.mealID, item: item, expectedRevision: 1, expectedProfileID: f.owner)
+        try await store.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 1, expectedProfileID: f.owner)
         try f.clearApplications()
         let transport = CoachJourneyTransport()
         _ = try await f.run(store, accepted.id, transport)
@@ -122,7 +122,7 @@ import Testing
         #expect(try await recovery.meal(id: f.mealID, expectedProfileID: f.owner).items[0].quantity == 3)
         // Historical result facts survive later manual edits and another lost notification.
         var manual = try await recovery.meal(id: f.mealID, expectedProfileID: f.owner).items[0]; manual.quantity = 5
-        try await recovery.editItem(mealID: f.mealID, item: manual, expectedRevision: 2, expectedProfileID: f.owner)
+        try await recovery.editItem(mealID: f.mealID, item: manual, explicitNutrients: [], expectedRevision: 2, expectedProfileID: f.owner)
         let applications = try f.applications()
         try await recovery.setCoachTurnState(turnID: accepted.id, state: .captured, expectedProfileID: f.owner)
         let again = try await f.store()

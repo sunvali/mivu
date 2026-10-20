@@ -4,7 +4,7 @@ import XCTest
     func testColdDiarySourceRouteBeforeCoachMountOpensExactSource() {
         let app = launch(["--coach-navigation-start-today"], initialTab: "Today")
         XCTAssertFalse(app.tables["coachViewport"].exists, "Coach has not mounted before this Diary source route")
-        openDay(901, in: app)
+        guard openDay(901, in: app) else { return }
         let meal = app.buttons.matching(identifier: "historyMeal").firstMatch
         reveal(meal, in: app); meal.tap()
         let source = app.buttons["mealSourceChat"]
@@ -77,12 +77,12 @@ import XCTest
     func testDiaryDayAndBackdatedMealUseSameCoachAndHonestNoChat() {
         let app = launch()
         app.textFields["coachInput"].tap(); app.textFields["coachInput"].typeText("Keep across diary links")
-        openDay(901, in: app)
+        guard openDay(901, in: app) else { return }
         let chat = app.buttons["diaryDayOpenChat"]
         XCTAssertTrue(chat.waitForExistence(timeout: 5)); chat.tap()
         assertTarget(5, in: app)
         XCTAssertEqual(app.textFields["coachInput"].value as? String, "Keep across diary links")
-        openDay(901, in: app)
+        guard openDay(901, in: app) else { return }
         let meal = app.buttons.matching(identifier: "historyMeal").firstMatch
         reveal(meal, in: app); meal.tap()
         let source = app.buttons["mealSourceChat"]
@@ -94,7 +94,7 @@ import XCTest
         XCTAssertTrue(app.buttons["mealSourceChat"].waitForExistence(timeout: 5))
         app.buttons["mealSourceChat"].tap(); assertTarget(1, in: app)
         XCTAssertEqual(app.textFields["coachInput"].value as? String, "Keep across diary links")
-        openDay(904, in: app)
+        guard openDay(904, in: app) else { return }
         app.buttons["diaryDayOpenChat"].tap()
         let unavailable = app.staticTexts["coachTimelineError"]
         XCTAssertTrue(unavailable.waitForExistence(timeout: 5))
@@ -125,12 +125,14 @@ import XCTest
         XCTAssertTrue(selected.isHittable)
         XCTAssertEqual(selected.value as? String, "Selected source message")
     }
-    private func openDay(_ number: Int, in app: XCUIApplication) {
-        guard openDiaryRoot(app) else { return }
+    private func openDay(_ number: Int, in app: XCUIApplication) -> Bool {
+        guard openDiaryRoot(app) else { return false }
         let label = number == 904 ? "2027-01-21 UTC" : "2027-01-15 UTC"
         let day = app.buttons.matching(identifier: "diaryDay").matching(NSPredicate(format: "value == %@", label)).firstMatch
         reveal(day, in: app); day.tap()
-        XCTAssertTrue(app.buttons["diaryDayOpenChat"].waitForExistence(timeout: 5))
+        let ready = app.buttons["diaryDayOpenChat"].waitForExistence(timeout: 5)
+        XCTAssertTrue(ready)
+        return ready
     }
     private func openChatHistory(_ app: XCUIApplication) {
         if !app.buttons["coachHistory"].exists, app.buttons["OverflowBarButtonItem"].exists { app.buttons["OverflowBarButtonItem"].tap() }
@@ -141,26 +143,49 @@ import XCTest
         let input = app.textFields["coachInput"]
         let draft = input.exists ? input.value as? String : nil
         let keyboard = app.keyboards.firstMatch
-        if keyboard.exists {
+        if keyboard.exists && keyboard.frame.intersects(app.frame) {
             let table = app.tables["coachViewport"]
-            let appFrame = app.frame, keyboardFrame = keyboard.frame
-            let aboveKeyboard = CGRect(x: appFrame.minX, y: appFrame.minY, width: appFrame.width,
-                height: max(0, keyboardFrame.minY - appFrame.minY))
-            let visible = table.frame.intersection(aboveKeyboard)
-            guard table.isHittable, !visible.isNull, visible.height > 24, !keyboardFrame.isEmpty else {
-                XCTFail("A visible table and keyboard are required for native interactive dismissal"); return false
+            var previous: [CGRect] = []
+            var settled: [CGRect] = []
+            let layout = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                guard keyboard.exists, table.exists, input.exists else { previous = []; return false }
+                let frames = [app.frame, table.frame, keyboard.frame, input.frame]
+                let onScreenKeyboard = frames[0].intersection(frames[2])
+                guard table.isHittable, !onScreenKeyboard.isNull,
+                      onScreenKeyboard.height >= 44, frames[1].height > 24,
+                      frames[1].maxY <= frames[3].minY, frames[3].maxY <= frames[2].minY else {
+                    previous = []; return false
+                }
+                defer { previous = frames }
+                guard frames == previous else { return false }
+                settled = frames
+                return true
+            }, object: app)
+            let layoutResult = XCTWaiter.wait(for: [layout], timeout: 5)
+            XCTAssertEqual(layoutResult, .completed, "Keyboard, composer, and timeline must settle before native dismissal")
+            guard layoutResult == .completed, settled.count == 4 else { return false }
+            let appFrame = settled[0], tableFrame = settled[1], keyboardFrame = settled[2]
+            let visible = tableFrame.intersection(CGRect(x: appFrame.minX, y: appFrame.minY,
+                width: appFrame.width, height: min(settled[3].minY, keyboardFrame.minY) - appFrame.minY))
+            guard !visible.isNull, visible.height > 24 else {
+                XCTFail("A visible timeline interior is required for native interactive dismissal"); return false
             }
-            // Cross the keyboard's measured top and bottom, rather than ending inside the short table.
+            print("COACH_KEYBOARD_DISMISS app=\(appFrame) table=\(tableFrame) keyboard=\(keyboardFrame) input=\(settled[3])")
+            // Begin well inside the settled table, away from the composer and predictive text.
             let origin = app.coordinate(withNormalizedOffset: .zero)
-            let start = origin.withOffset(CGVector(dx: visible.midX - appFrame.minX, dy: visible.maxY - 12 - appFrame.minY))
+            let start = origin.withOffset(CGVector(dx: visible.midX - appFrame.minX, dy: visible.midY - appFrame.minY))
             let finish = origin.withOffset(CGVector(dx: visible.midX - appFrame.minX,
                 dy: min(appFrame.maxY, keyboardFrame.maxY) - 4 - appFrame.minY))
             start.press(forDuration: 0.05, thenDragTo: finish)
-            let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: keyboard)
+            // UIKit can retain an offscreen keyboard in the accessibility hierarchy.
+            let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                !keyboard.exists || (!keyboard.isHittable && !keyboard.frame.intersects(app.frame))
+            }, object: app)
             let result = XCTWaiter.wait(for: [dismissed], timeout: 5)
             XCTAssertEqual(result, .completed)
-            XCTAssertEqual(input.value as? String, draft)
-            guard result == .completed else { return false }
+            let preserved = input.value as? String == draft
+            XCTAssertEqual(input.value as? String, draft, "Native keyboard dismissal must preserve the exact draft")
+            guard result == .completed, preserved else { return false }
         }
         let tab = app.tabBars.buttons["Diary"]
         guard tab.isHittable else { XCTFail("Diary tab must be visible after keyboard dismissal"); return false }

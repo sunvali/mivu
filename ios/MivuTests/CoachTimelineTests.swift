@@ -525,4 +525,220 @@ private actor SuspendedCoachTimelineSource {
         #expect(model.error == nil && model.queryError == nil)
     }
 
+    @Test(arguments: [false, true])
+    func incomingReplyHonorsSemanticViewportWithMeasuredAnchor(readingHistory: Bool) async throws {
+        let source = SuspendedCoachTimelineSource()
+        let model = model(source)
+        await open(model, source: source, page: Data.page(141...160))
+        let anchor = Data.anchor(150)
+        let viewport: CoachViewportMode = readingHistory ? .history(anchor) : .latest
+        model.setViewport(viewport, visibleIDs: [Data.id(150)], measuredAnchor: anchor)
+        #expect(model.window.viewportAnchor == anchor)
+        let result = model.apply(DiaryChanges(turnIDs: [Data.id(160)]))
+        let refresh = try #require(result)
+        #expect(await source.refreshRequest(0) == [Data.id(160)])
+        var changed = Data.row(160)
+        changed.assistantText = "Completed incoming reply"
+        await source.finishRefresh(0, CoachTimelineRefresh(identity: Data.identity, exchanges: [changed],
+            latestCursor: Data.cursor(160), latestEmptySegment: nil))
+        await refresh.value
+        #expect(model.exchanges.first { $0.id == changed.id }?.assistantText == changed.assistantText)
+        #expect(model.window.viewport == viewport)
+        #expect(model.restoration == (readingHistory ? .preserve(anchor) : .none))
+        #expect(model.window.pages.last?.hasLater == false)
+    }
+
+    @Test(arguments: [false, true])
+    func externalTailLoadsOneBoundedLatestPage(initiallyEmpty: Bool) async throws {
+        let source = SuspendedCoachTimelineSource()
+        let model = model(source)
+        let empty = CoachPage(identity: Data.identity, exchanges: [], before: nil, after: nil,
+            hasEarlier: false, hasLater: false, earlierSegment: nil, laterSegment: nil)
+        await open(model, source: source, page: initiallyEmpty ? empty : Data.page(141...160))
+        if !initiallyEmpty {
+            model.setViewport(.latest, visibleIDs: [Data.id(150)], measuredAnchor: Data.anchor(150))
+        }
+        let latestNumber = initiallyEmpty ? 1 : 161
+        let result = model.apply(DiaryChanges(turnIDs: [Data.id(latestNumber)], coachLatestChanged: true))
+        let update = try #require(result)
+        #expect(await source.refreshRequest(0) == [])
+        await source.finishRefresh(0, CoachTimelineRefresh(identity: Data.identity, exchanges: [],
+            latestCursor: Data.cursor(latestNumber), latestEmptySegment: nil))
+        #expect((await source.request(1)).request == .latest)
+        let held = await source.pageReadCounts()
+        #expect(held.entered == 2 && held.outstanding == 1)
+        #expect(model.window.reservedCapacity == CoachPagedHistoryWindow.pageSize)
+        var page = initiallyEmpty ? Data.page(1...1, total: 1) : Data.page(142...161, total: 161)
+        page.exchanges[page.exchanges.count - 1].assistantText = "Estimate ready for review."
+        await source.finish(1, page)
+        await update.value
+        #expect(model.exchanges == page.exchanges)
+        #expect(model.window.viewport == .latest)
+        #expect(model.restoration == .latest)
+        #expect(model.window.pages.last?.hasLater == false)
+        #expect(model.window.reservedCapacity == 0)
+        let drained = await source.pageReadCounts()
+        #expect(drained.entered == 2 && drained.outstanding == 0)
+        #expect(model.peakCapacity <= (initiallyEmpty ? 20 : 40))
+    }
+
+    @Test func externalTailDoesNotMoveHistoryReader() async throws {
+        let source = SuspendedCoachTimelineSource()
+        let model = model(source)
+        await open(model, source: source, page: Data.page(141...160))
+        let anchor = Data.anchor(150, focus: 151)
+        model.setViewport(.history(anchor), visibleIDs: [Data.id(150), Data.id(151)], measuredAnchor: anchor)
+        let before = model.exchanges
+        let result = model.apply(DiaryChanges(turnIDs: [Data.id(161)], coachLatestChanged: true))
+        let update = try #require(result)
+        #expect(await source.refreshRequest(0) == [])
+        await source.finishRefresh(0, CoachTimelineRefresh(identity: Data.identity, exchanges: [],
+            latestCursor: Data.cursor(161), latestEmptySegment: nil))
+        await update.value
+        #expect(model.exchanges == before)
+        #expect(model.window.viewport == .history(anchor))
+        #expect(model.restoration == .preserve(anchor))
+        #expect(model.window.pages.last?.hasLater == true)
+        let calls = await source.pageReadCounts()
+        #expect(calls.entered == 1 && calls.outstanding == 0)
+    }
+
+    @Test func unloadedOldMutationWithUnchangedTailDoesNotReloadLatest() async throws {
+        let source = SuspendedCoachTimelineSource()
+        let model = model(source)
+        await open(model, source: source, page: Data.page(141...160))
+        model.setViewport(.latest, visibleIDs: [Data.id(150)], measuredAnchor: Data.anchor(150))
+        let before = model.exchanges
+        let result = model.apply(DiaryChanges(turnIDs: [Data.id(5)]))
+        let update = try #require(result)
+        #expect(await source.refreshRequest(0) == [])
+        await source.finishRefresh(0, CoachTimelineRefresh(identity: Data.identity, exchanges: [],
+            latestCursor: Data.cursor(160), latestEmptySegment: nil))
+        await update.value
+        #expect(model.exchanges == before)
+        #expect(model.window.viewport == .latest)
+        #expect(model.restoration == .none)
+        let calls = await source.pageReadCounts()
+        #expect(calls.entered == 1 && calls.outstanding == 0)
+        #expect(model.apply(DiaryChanges()) == nil)
+    }
+
+    @Test func newerTailCoalescesWhileMetadataOwnedReplacementDrains() async throws {
+        let source = SuspendedCoachTimelineSource()
+        let model = model(source)
+        await open(model, source: source, page: Data.page(141...160))
+        model.setViewport(.latest, visibleIDs: [Data.id(150)], measuredAnchor: Data.anchor(150))
+        let firstResult = model.apply(DiaryChanges(turnIDs: [Data.id(161)], coachLatestChanged: true))
+        let first = try #require(firstResult)
+        #expect(await source.refreshRequest(0) == [])
+        await source.finishRefresh(0, CoachTimelineRefresh(identity: Data.identity, exchanges: [],
+            latestCursor: Data.cursor(161), latestEmptySegment: nil))
+        #expect((await source.request(1)).request == .latest)
+        #expect(model.refreshTask != nil, "The refresh retains ownership while its tail page is physically held")
+        let firstHeld = await source.pageReadCounts()
+        #expect(firstHeld.entered == 2 && firstHeld.outstanding == 1)
+        #expect(model.window.reservedCapacity == 20)
+        #expect(model.window.occupiedPageSlots == 2)
+        let coalescedResult = model.apply(DiaryChanges(turnIDs: [Data.id(162)], coachLatestChanged: true))
+        let coalesced = try #require(coalescedResult)
+        let afterCoalescing = await source.pageReadCounts()
+        #expect(afterCoalescing.entered == 2 && afterCoalescing.outstanding == 1)
+        #expect(model.refreshTask != nil)
+        #expect(model.window.residentCount + model.window.reservedCapacity <= 100)
+        // This page was read before the second accepted capture. It must drain but cannot publish.
+        await source.finish(1, Data.page(142...161, total: 161))
+        #expect((await source.request(2)).request == .latest)
+        #expect(!model.exchanges.contains { $0.id == Data.id(161) })
+        let retryHeld = await source.pageReadCounts()
+        #expect(retryHeld.entered == 3 && retryHeld.outstanding == 1)
+        #expect(model.window.reservedCapacity == 20)
+        #expect(model.window.occupiedPageSlots == 2)
+        var latest = Data.page(143...162, total: 162)
+        latest.exchanges[latest.exchanges.count - 1].assistantText = "Second external capture completed"
+        await source.finish(2, latest)
+        await first.value
+        await coalesced.value
+        // Finishing the owning refresh must replay the newer coalesced metadata notification.
+        #expect(await source.refreshRequest(1) == [])
+        let replayResult = model.refreshTask
+        let replay = try #require(replayResult)
+        #expect(model.exchanges == latest.exchanges)
+        #expect(model.window.reservedCapacity == 0)
+        await source.finishRefresh(1, CoachTimelineRefresh(identity: Data.identity, exchanges: [],
+            latestCursor: Data.cursor(162), latestEmptySegment: nil))
+        await replay.value
+        #expect(model.exchanges == latest.exchanges)
+        #expect(model.window.viewport == .latest)
+        #expect(model.restoration == .none)
+        #expect(model.window.pages.last?.hasLater == false)
+        #expect(model.refreshTask == nil)
+        #expect(model.window.reservedCapacity == 0)
+        #expect(model.window.occupiedPageSlots == 1)
+        let drained = await source.pageReadCounts()
+        #expect(drained.entered == 3 && drained.outstanding == 0)
+        #expect(model.peakCapacity <= 40)
+    }
+
+    @Test func metadataTailNeverOverridesAnExplicitSeekRetry() async throws {
+        let source = SuspendedCoachTimelineSource()
+        let model = model(source)
+        await open(model, source: source, page: Data.page(141...160))
+        model.setViewport(.latest, visibleIDs: [Data.id(150)], measuredAnchor: Data.anchor(150))
+        let seek = Task { await model.seek(.turn(Data.id(70))) }
+        #expect((await source.request(1)).request == .aroundTurn(Data.id(70)))
+        let deltaResult = model.apply(DiaryChanges(turnIDs: [Data.id(161)], coachLatestChanged: true))
+        let delta = try #require(deltaResult)
+        #expect(await source.refreshRequest(0) == [])
+        // The mutation invalidates the first page value. Hold its retry after it adopts the new mutation.
+        await source.finish(1, Data.page(61...80))
+        #expect((await source.request(2)).request == .aroundTurn(Data.id(70)))
+        await source.finishRefresh(0, CoachTimelineRefresh(identity: Data.identity, exchanges: [],
+            latestCursor: Data.cursor(161), latestEmptySegment: nil))
+        // The accepted metadata must finish independently, without appending a latest intent to the seek.
+        await delta.value
+        let held = await source.pageReadCounts()
+        #expect(held.entered == 3 && held.outstanding == 1)
+        #expect(model.window.reservedCapacity == 20)
+        await source.finish(2, Data.page(61...80))
+        await seek.value
+        let anchor = CoachViewportAnchor(rowID: Data.id(70), offset: 0)
+        #expect(model.window.viewport == .history(anchor))
+        #expect(model.restoration == .preserve(anchor))
+        #expect(model.exchanges.map(\.sequence) == (61...80).map(Int64.init))
+        #expect(model.window.reservedCapacity == 0)
+        #expect(model.refreshTask == nil)
+        let drained = await source.pageReadCounts()
+        #expect(drained.entered == 3 && drained.outstanding == 0)
+        #expect(model.peakCapacity <= 40)
+    }
+
+
+    @Test func historyMoveWhileAutomaticTailIsHeldPreventsLatestPublication() async throws {
+        let source = SuspendedCoachTimelineSource()
+        let model = model(source)
+        await open(model, source: source, page: Data.page(141...160))
+        model.setViewport(.latest, visibleIDs: [Data.id(150)], measuredAnchor: Data.anchor(150))
+        let before = model.exchanges
+        let result = model.apply(DiaryChanges(turnIDs: [Data.id(161)], coachLatestChanged: true))
+        let update = try #require(result)
+        #expect(await source.refreshRequest(0) == [])
+        await source.finishRefresh(0, CoachTimelineRefresh(identity: Data.identity, exchanges: [],
+            latestCursor: Data.cursor(161), latestEmptySegment: nil))
+        #expect((await source.request(1)).request == .latest)
+        let anchor = Data.anchor(150, focus: 151)
+        model.setViewport(.history(anchor), visibleIDs: [Data.id(150), Data.id(151)], measuredAnchor: anchor)
+        #expect(model.window.reservedCapacity == 20, "The abandoned auto-read stays charged until its physical source exits")
+        await source.finish(1, Data.page(142...161, total: 161))
+        await update.value
+        #expect(model.exchanges == before)
+        #expect(model.window.viewport == .history(anchor))
+        #expect(model.restoration == .preserve(anchor))
+        #expect(model.window.pages.last?.hasLater == true)
+        #expect(model.window.reservedCapacity == 0)
+        #expect(model.refreshTask == nil)
+        let drained = await source.pageReadCounts()
+        #expect(drained.entered == 2 && drained.outstanding == 0)
+        #expect(model.peakCapacity <= 40)
+    }
+
 }

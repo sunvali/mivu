@@ -111,7 +111,7 @@ import Testing
         stage = "edit item"
         var edited = item; edited.name = "Synthetic user correction"
         var current = try await store.meal(id: captured.id, expectedProfileID: f.owner)
-        try await store.editItem(mealID: current.id, item: edited, expectedRevision: current.revision, expectedProfileID: f.owner)
+        try await store.editItem(mealID: current.id, item: edited, explicitNutrients: [], expectedRevision: current.revision, expectedProfileID: f.owner)
         stage = "correct note"
         let note = try await store.correctMealProjection(mealID: captured.id, text: "Synthetic note", reviewFirst: true, expectedSelection: try await store.selectionOwnership(expectedProfileID: f.owner), expectedProfileID: f.owner)
         #expect(note.items.first?.name == edited.name)
@@ -737,7 +737,7 @@ import Testing
         try await boundedWait { try await gate.waitUntilReached() }
         if kind == "meal" {
             var item = f.source.meals[0].items[0]; item.name = "Committed newer detail"
-            try await store.editItem(mealID: f.mealID, item: item, expectedRevision: 1, expectedProfileID: f.owner)
+            try await store.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 1, expectedProfileID: f.owner)
         } else { try await store.setCompleteness(dayID: dayID, .complete, expectedProfileID: f.owner) }
         try await model.refresh(profileID: f.owner)
         await model.loadMeal(f.mealID); await model.loadDay(dayID)

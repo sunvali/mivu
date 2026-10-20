@@ -4,7 +4,7 @@ struct DiaryProfile: Codable, Equatable, Sendable, Identifiable {
     var id = UUID()
     var name: String
     var language = "en"
-    var timeZoneID = "Asia/Jerusalem"
+    var timeZoneID = TimeZone.current.identifier
     var preferences = ""
 }
 
@@ -15,12 +15,13 @@ enum SubmissionState: String, Codable, Sendable { case captured, waitingForConne
 enum DayAssignment: Equatable, Sendable { case existing(UUID), newDay, ask(UUID) }
 
 enum DiaryError: Error, Equatable, LocalizedError {
-    case noProfile, wrongOwner, invalidData, persistenceFailed, staleRevision, notFound, emptyCapture, ambiguousDay, staleArchive
+    case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, notFound, emptyCapture, ambiguousDay, staleArchive
     var errorDescription: String? {
         switch self {
         case .noProfile: "Choose a local profile first."
         case .wrongOwner: "The profile changed. Please try again."
         case .invalidData: "This diary contains invalid or unsupported data."
+        case .invalidAmountUnitChange: "Enter or clear each known nutrient when changing to an unrelated unit."
         case .persistenceFailed: "The diary could not be saved. Your input is still available."
         case .staleRevision: "This meal changed. Please retry the correction."
         case .notFound: "This diary entry no longer exists."
@@ -87,6 +88,7 @@ struct MealSubmission: Codable, Equatable, Sendable, Identifiable {
     var reviewFirst: Bool
     var state: SubmissionState = .captured
     var proposal: AnalysisOutput? = nil
+    var manualAcceptance: ManualNutritionAcceptance? = nil
 }
 
 struct DiaryMeal: Codable, Equatable, Sendable, Identifiable {
@@ -292,6 +294,10 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
                       submission.photoIDs.allSatisfy({ id in meal.photos.contains { $0.id == id } })
                 else { throw DiaryError.invalidData }
                 try validateMealSubmissionFields(submission, mealID: meal.id, mealRevision: meal.revision, profileID: profile.id)
+                if let acceptance = submission.manualAcceptance {
+                    let target = acceptance.target.day
+                    guard days.contains(where: { $0.id == target.id && $0.localDate == target.localDate && $0.timeZoneID == target.timeZoneID }) else { throw DiaryError.invalidData }
+                }
             }
         }
         guard coachTurns.count <= 10_000, unique(coachTurns.map(\.id)) else { throw DiaryError.invalidData }
@@ -402,6 +408,10 @@ func validateMealSubmissionFields(_ submission: MealSubmission, mealID: UUID, me
         guard proposal.schemaVersion == 1, proposal.profileID == profileID, proposal.mealID == mealID,
               proposal.submissionID == submission.id, proposal.baseRevision == submission.baseRevision else { throw DiaryError.invalidData }
         try validateItems(proposal.items)
+    }
+    if let acceptance = submission.manualAcceptance {
+        guard mealRevision > submission.baseRevision else { throw DiaryError.invalidData }
+        try validateManualAcceptance(acceptance, submission: submission, mealID: mealID, profileID: profileID)
     }
 }
 

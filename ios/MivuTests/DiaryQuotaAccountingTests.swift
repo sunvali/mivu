@@ -40,7 +40,7 @@ import Testing
                     item.name = text; item.reference = generator.encodingEdge()
                     item.quantity = [0, 0.001, 100_000][cycle % 3]
                     item.nutrition = NutritionValues(kcal: [0, 0.125, 10_000_000][cycle % 3], carbs: cycle.isMultiple(of: 2) ? nil : 0.3333333333333333)
-                    _ = try database.editItem(mealID: originalMeal, item: item, expected: head, maximumBytes: ChatHistoryFixture.maximumBytes)
+                    _ = try database.editItem(mealID: originalMeal, item: item, explicitNutrients: ["kcal", "carbs", "protein", "fat"], expected: head, maximumBytes: ChatHistoryFixture.maximumBytes)
                 case 4:
                     addedPhotoID = photo.id
                     _ = try database.addPhotos(mealID: manualMealID, photos: [photo], expected: head, maximumBytes: ChatHistoryFixture.maximumBytes)
@@ -93,7 +93,7 @@ import Testing
                 #expect(try database.readHead(expectedProfileID: fixture.profileID) == current)
                 var invalid = try database.meal(id: originalMeal, expectedProfileID: fixture.profileID).items[0]
                 invalid.quantity = .infinity
-                #expect(throws: DiaryError.invalidData) { try database.editItem(mealID: originalMeal, item: invalid, expected: current, maximumBytes: ChatHistoryFixture.maximumBytes) }
+                #expect(throws: DiaryError.invalidData) { try database.editItem(mealID: originalMeal, item: invalid, explicitNutrients: [], expected: current, maximumBytes: ChatHistoryFixture.maximumBytes) }
                 #expect(try accountingDurableState(fixture) == before, "seed=\(seed) index=\(index) command=reject nonfinite rollback")
             }
         }
@@ -121,7 +121,7 @@ import Testing
         let database = try DiaryDatabase(url: calibration.url)
         var item = calibration.before.meals[0].items[0]
         item.name = String(repeating: "Synthetic escaped \" 🍎\\\n", count: 20)
-        _ = try database.editItem(mealID: calibration.before.meals[0].id, item: item,
+        _ = try database.editItem(mealID: calibration.before.meals[0].id, item: item, explicitNutrients: [],
             expected: database.readHead(expectedProfileID: calibration.profileID), maximumBytes: ChatHistoryFixture.maximumBytes)
         let exact = try JSONEncoder().encode(ChatHistoryFixture.completeReference(databaseURL: calibration.url)).count
         for limit in [exact - 1, exact, exact + 1] {
@@ -129,11 +129,11 @@ import Testing
             let database = try DiaryDatabase(url: fixture.url), head = try database.readHead(expectedProfileID: fixture.profileID)
             let before = try accountingDurableState(fixture)
             if limit < exact {
-                #expect(throws: DiaryError.invalidData) { try database.editItem(mealID: fixture.before.meals[0].id, item: item, expected: head, maximumBytes: limit) }
+                #expect(throws: DiaryError.invalidData) { try database.editItem(mealID: fixture.before.meals[0].id, item: item, explicitNutrients: [], expected: head, maximumBytes: limit) }
                 #expect(try accountingDurableState(fixture) == before)
                 #expect(try database.readHead(expectedProfileID: fixture.profileID) == head)
             } else {
-                _ = try database.editItem(mealID: fixture.before.meals[0].id, item: item, expected: head, maximumBytes: limit)
+                _ = try database.editItem(mealID: fixture.before.meals[0].id, item: item, explicitNutrients: [], expected: head, maximumBytes: limit)
                 #expect(try fixture.rows("SELECT portableBytes FROM storage_quota") == [[String(exact)]])
                 #expect(try portableAccountingMatches(fixture))
             }
@@ -218,6 +218,18 @@ import Testing
                 #expect(try fixture.rows("SELECT portableBytes FROM storage_quota") == [[String(exact)]])
             }
         }
+    }
+
+    @Test func manualAcceptanceBytesAreIncludedInPortableQuota() throws {
+        let snapshot = try ManualNutritionPayloadTests.snapshot()
+        var legacy = snapshot; legacy.meals[0].submissions[0].manualAcceptance = nil
+        #expect(try JSONEncoder().encode(snapshot).count > JSONEncoder().encode(legacy).count)
+        let url = try ChatHistoryFixture.makeDatabase(snapshot)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try DiaryDatabase(url: url).migrateForPagedStorage(maximumBytes: ChatHistoryFixture.maximumBytes)
+        #expect(try ChatHistoryFixture.strings(url, "SELECT portableBytes FROM storage_quota") == [[String(try JSONEncoder().encode(snapshot).count)]])
+        #expect(try ChatHistoryFixture.strings(url, "PRAGMA user_version") == [["1"]])
+        #expect(try ChatHistoryFixture.completeReference(databaseURL: url) == snapshot)
     }
 
     @Test func storageBudgetMatchesPortableEncoding() throws {

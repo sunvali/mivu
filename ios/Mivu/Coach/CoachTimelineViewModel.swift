@@ -33,6 +33,7 @@ struct CoachTimelineRefresh: Sendable {
         var request: CoachPageRequest
         var generation: UUID
         var identity: CoachTimelineIdentity?
+        var automaticLatest: Bool
         var id = UUID()
     }
     private var pendingReplacement: ReplacementIntent?
@@ -65,7 +66,12 @@ struct CoachTimelineRefresh: Sendable {
     /// New navigation coalesces to one pending intent while an older read drains.
     @discardableResult func beginReplacement(_ request: CoachPageRequest) -> Task<Void, Never> {
         supersede()
-        pendingReplacement = ReplacementIntent(request: request, generation: generation, identity: window.identity)
+        return enqueueReplacement(request)
+    }
+
+    private func enqueueReplacement(_ request: CoachPageRequest, automaticLatest: Bool = false) -> Task<Void, Never> {
+        pendingReplacement = ReplacementIntent(request: request, generation: generation, identity: window.identity,
+            automaticLatest: automaticLatest)
         if let replacementTask { return replacementTask }
         let task = Task {
             await drainReplacements()
@@ -79,9 +85,11 @@ struct CoachTimelineRefresh: Sendable {
         while let intent = pendingReplacement {
             pendingReplacement = nil
             guard isCurrent(intent.generation, identity: intent.identity) else { continue }
+            if intent.automaticLatest, case .history = window.viewport { continue }
             replacementID = intent.id
             isLoadDeferred = false
-            preserveReader()
+            if intent.automaticLatest { restoration = .none }
+            else { preserveReader() }
             guard window.reserveReplacement(anchor: window.viewportAnchor) else {
                 replacementID = nil
                 isLoadDeferred = true; error = nil; queryError = nil
@@ -95,6 +103,7 @@ struct CoachTimelineRefresh: Sendable {
                 let page = try await source(intent.request, intent.generation)
                 window.releaseReplacement()
                 guard isCurrent(intent.generation, identity: intent.identity), replacementID == intent.id else { continue }
+                if intent.automaticLatest, case .history = window.viewport { continue }
                 guard mutation == mutationGeneration else {
                     // The accepted intent survives, but its pre-mutation value cannot publish.
                     pendingReplacement = intent
@@ -127,6 +136,7 @@ struct CoachTimelineRefresh: Sendable {
             } catch {
                 window.releaseReplacement()
                 guard isCurrent(intent.generation, identity: intent.identity), replacementID == intent.id else { continue }
+                if intent.automaticLatest, case .history = window.viewport { continue }
                 if mutation != mutationGeneration { pendingReplacement = intent }
                 else { self.error = String(describing: error); queryError = error as? CoachQueryError }
             }
@@ -242,8 +252,15 @@ struct CoachTimelineRefresh: Sendable {
                     return
                 }
                 error = nil; queryError = nil
-                preserveReader()
+                switch window.viewport {
+                case .latest: restoration = .none
+                case .history: preserveReader()
+                }
                 revision += 1
+                if replacementTask == nil, case .latest = window.viewport, let latest = result.latestCursor,
+                   window.pages.last?.after != latest {
+                    await enqueueReplacement(.latest, automaticLatest: true).value
+                }
             } catch {
                 guard isCurrent(current, identity: identity), refreshID == operation, mutation == mutationGeneration, !Task.isCancelled else { return }
                 self.error = String(describing: error); queryError = error as? CoachQueryError

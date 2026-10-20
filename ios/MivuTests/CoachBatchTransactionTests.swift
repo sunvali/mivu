@@ -4,6 +4,31 @@ import Testing
 @testable import Mivu
 
 @Suite struct CoachBatchTransactionTests {
+    @Test func invalidUnitConversionRollsBackWholeBatch() throws {
+        let f = try BatchFixture(); defer { f.remove() }
+        let original = f.source.meals[0].items[0]
+        var edited = original; edited.unit = "g"; edited.quantity = 150
+        let invalid = CoachWrite.manual(.item(mealID: f.mealID, item: edited, revision: 1, submissionID: nil, explicitNutrients: [], original: original))
+        let before = try f.durableState()
+        #expect(throws: DiaryError.invalidAmountUnitChange) { try f.batch([f.foodWrite(), invalid]) }
+        #expect(try f.durableState() == before && f.receipts().isEmpty)
+    }
+
+    @Test func legacyCorrectionReceiptReplaysWithoutRecalculation() throws {
+        var source = BatchFixture.snapshot()
+        let turnID = source.coachTurns[0].id, meal = source.meals[0], item = meal.items[0]
+        let originalReceipt = CoachReceipt(operationKey: "\(turnID)/correct/\(meal.id)/\(item.id)", turnID: turnID, dayID: meal.dayID, mealID: meal.id, itemID: item.id, committedRevision: 1, resultJSON: "{}")
+        source.coachTurns[0].receipts = [originalReceipt]
+        let f = try BatchFixture(source: source); defer { f.remove() }
+        let beforeRevision = try f.head().revision
+        // This payload would fail conversion validation if replay recalculated it.
+        var invalid = item; invalid.unit = "g"; invalid.quantity = 150
+        let replayed = try #require(f.batch([.correction(mealID: meal.id, item: invalid, revision: 1)], mode: .replayOnly).value.first)
+        let afterRevision = try f.head().revision
+        #expect(replayed == originalReceipt)
+        #expect(afterRevision == beforeRevision)
+    }
+
     @Test func mixedBatchIncrementsHeadOnceOrRollsBackEverything() throws {
         let f = try BatchFixture(attachments: true, history: 120); defer { f.remove() }
         let beforeHead = try f.head(), unloaded = try f.rows("SELECT id, hex(payload) FROM coach_turn WHERE id != '\(f.turnID)' ORDER BY ordinal")
@@ -156,7 +181,7 @@ import Testing
         #expect(try fresh.applyCoachWrites([write], turnID: f.turnID, mode: .replayOnly, at: f.instant, expected: f.head(), maximumBytes: f.maximum).value == first.value)
         #expect(try f.database.meal(id: f.mealID, expectedProfileID: f.owner).items[0].quantity == 3)
         var manual = try f.database.meal(id: f.mealID, expectedProfileID: f.owner).items[0]; manual.quantity = 5
-        _ = try f.database.editItem(mealID: f.mealID, item: manual, expectedRevision: 2, expected: f.head(), maximumBytes: f.maximum)
+        _ = try f.database.editItem(mealID: f.mealID, item: manual, explicitNutrients: [], expectedRevision: 2, expected: f.head(), maximumBytes: f.maximum)
         _ = try f.database.moveMeal(f.mealID, to: f.source.days[0].id, expectedRevision: 3, expected: f.head(), maximumBytes: f.maximum)
         let preserved = try f.durableState()
         #expect(try f.batch([write], mode: .replayOnly).value == first.value)
@@ -244,7 +269,7 @@ import Testing
         #expect(try f.database.meal(id: f.mealID, expectedProfileID: f.owner).items[0].quantity == 3)
         let turn = try f.capture(text: "stale grounded correction"), stale = f.correction(quantity: 4, revision: 2)
         var item = try f.database.meal(id: f.mealID, expectedProfileID: f.owner).items[0]; item.quantity = 6
-        _ = try f.database.editItem(mealID: f.mealID, item: item, expectedRevision: 2, expected: f.head(), maximumBytes: f.maximum)
+        _ = try f.database.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 2, expected: f.head(), maximumBytes: f.maximum)
         let before = try f.durableState()
         #expect(throws: DiaryError.staleRevision) { try f.batch([f.foodWrite(), stale], turnID: turn) }
         #expect(try f.durableState() == before && f.rows("SELECT COUNT(*) FROM meal WHERE id = '\(other.id)'") == [["1"]])

@@ -13,7 +13,7 @@ import Testing
         let selected = try f.database.diaryDay(id: source.days[1].id, expectedProfileID: f.owner)
         #expect(selected.meals.count == 101)
         var item = source.meals[0].items[0]; item.quantity = 2
-        let commit = try f.database.editItem(mealID: f.mealID, item: item, expectedRevision: 1, expected: f.head(), maximumBytes: f.maximum)
+        let commit = try f.database.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 1, expected: f.head(), maximumBytes: f.maximum)
         #expect(commit.changes.mealIDs == [f.mealID])
         #expect(f.diagnostics.counters.originalPhotoBytes == 0 && f.diagnostics.counters.completeReads == 0 && f.diagnostics.counters.completeReconciles == 0)
         #expect(try ChatHistoryFixture.completeReference(databaseURL: f.url).meals.filter { $0.id != f.mealID } == unloaded)
@@ -52,7 +52,7 @@ import Testing
         _ = try f.database.applyAnalysis(proposal, expected: f.head(), maximumBytes: f.maximum)
         #expect(try f.database.meal(id: f.mealID, expectedProfileID: f.owner).items == f.source.meals[0].items)
         var changed = f.source.meals[0].items[0]; changed.quantity = 2
-        _ = try f.database.editItem(mealID: f.mealID, item: changed, expectedRevision: 1, expected: f.head(), maximumBytes: f.maximum)
+        _ = try f.database.editItem(mealID: f.mealID, item: changed, explicitNutrients: [], expectedRevision: 1, expected: f.head(), maximumBytes: f.maximum)
         let before = try f.durableState()
         #expect(throws: DiaryError.staleRevision) { try f.database.acceptReview(mealID: f.mealID, submissionID: submission.id, expected: f.head(), maximumBytes: f.maximum) }
         #expect(throws: DiaryError.invalidData) { try f.database.addPhotos(mealID: f.mealID, photos: [f.photo()], expected: f.head(), maximumBytes: 1) }
@@ -221,7 +221,7 @@ import Testing
         for table in ["photo", "coach_photo"] { try f.execute("CREATE TRIGGER guard_\(table) BEFORE UPDATE OF bytes ON \(table) BEGIN SELECT RAISE(ABORT, 'unexpected blob write'); END") }
         _ = try f.database.transaction(expected: f.head(), maximumBytes: f.maximum) { try $0.updatePhotoRole(mealID: f.mealID, photoID: reference.photoID, role: .after) }
         var item = f.source.meals[0].items[0]; item.quantity = 3
-        _ = try f.database.editItem(mealID: f.mealID, item: item, expected: f.head(), maximumBytes: f.maximum)
+        _ = try f.database.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expected: f.head(), maximumBytes: f.maximum)
         let after = try #require(f.database.meal(id: f.mealID, expectedProfileID: f.owner).photos.first)
         #expect(after.contentToken == reference.contentToken && after.role == .after)
         #expect(f.diagnostics.counters.originalPhotoBytes == 0)
@@ -276,6 +276,32 @@ import Testing
         var invalid = try #require(first.cursor); invalid.identity = CoachTimelineIdentity(profileID: f.owner, timelineGeneration: UUID())
         #expect(throws: CoachQueryError.wrongTimeline) { try f.database.diaryHistory(before: invalid, expectedProfileID: f.owner) }
         #expect(f.diagnostics.counters.originalPhotoBytes == 0 && f.diagnostics.counters.completeReads == 0)
+    }
+
+    @Test func seventyFiveDayKeysetsAreReversibleWithoutCompleteReads() throws {
+        var source = ChatHistoryFixture.snapshot(exchanges: 0)
+        let instant = source.days[0].startAt
+        source.days = (0..<75).map { index in
+            TrackingDay(localDate: "2027-01-15", timeZoneID: "UTC", startAt: instant.addingTimeInterval(Double(-index) * 86400), completeness: .complete)
+        }
+        source.activeDayID = source.days[0].id
+        source.meals = []; source.weights = []; source.workouts = []
+        let f = try MealProjectionFixture(source); defer { f.remove() }
+        // Equal date labels exercise the ordinal/id keyset rather than date-only paging.
+        let latest = try f.database.diaryHistory(limit: 30, expectedProfileID: f.owner)
+        let middle = try f.database.diaryHistory(before: latest.cursor, limit: 30, expectedProfileID: f.owner)
+        let oldest = try f.database.diaryHistory(before: middle.cursor, limit: 30, expectedProfileID: f.owner)
+        #expect(latest.days.count == 30 && middle.days.count == 30 && oldest.days.count == 15)
+        #expect(latest.hasMore && middle.hasMore && !oldest.hasMore)
+        let allIDs = (latest.days + middle.days + oldest.days).map(\.day.id)
+        #expect(Set(allIDs) == Set(source.days.map(\.id)) && Set(allIDs).count == 75)
+        let newer = try f.database.diaryHistory(before: latest.cursor, limit: 30, expectedProfileID: f.owner)
+        #expect(newer.days.map(\.day.id) == middle.days.map(\.day.id))
+        let reset = try f.database.diaryHistory(limit: 30, expectedProfileID: f.owner)
+        #expect(reset.days.map(\.day.id) == latest.days.map(\.day.id))
+        #expect(f.diagnostics.counters.completeReads == 0)
+        #expect(f.diagnostics.counters.completeReconciles == 0)
+        #expect(f.diagnostics.counters.originalPhotoBytes == 0)
     }
 
     @Test func targetedParentLimitsRejectAtomically() throws {

@@ -2,9 +2,11 @@ import Foundation
 import SQLite3
 
 extension DiaryDatabase {
-    func nextPendingCoachTurn(includeWaitingForConnection: Bool, expectedProfileID: UUID) throws -> CoachWorkItem? {
+    func nextPendingCoachTurn(includeWaitingForConnection: Bool, capturedOnly: Bool = false, expectedProfileID: UUID) throws -> CoachWorkItem? {
         try domainRead(expectedProfileID: expectedProfileID) { head in
-            let states = includeWaitingForConnection ? "'captured','analyzing','waitingForNetwork','waitingForConnection'" : "'captured','analyzing','waitingForNetwork'"
+            let states: String
+            if capturedOnly { states = "'captured','analyzing'" }
+            else { states = includeWaitingForConnection ? "'captured','analyzing','waitingForNetwork','waitingForConnection'" : "'captured','analyzing','waitingForNetwork'" }
             let statement = try domainStatement("SELECT turnID FROM coach_index WHERE state IN (\(states)) ORDER BY sequence LIMIT 1")
             defer { sqlite3_finalize(statement) }
             guard try mutationStep(statement), let id = try mutationOptionalUUID(statement, 0) else { return nil }
