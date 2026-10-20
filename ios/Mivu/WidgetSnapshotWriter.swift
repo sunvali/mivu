@@ -4,7 +4,8 @@ import WidgetKit
 extension WidgetSnapshot {
     init(readModel: DiaryReadModel?, now: Date, cutoffHour: Int) {
         let zone = readModel?.activeDay?.timeZoneID ?? readModel?.head.profile.timeZoneID ?? TimeZone.current.identifier
-        let rolloverAt = Self.nextRollover(after: now, timeZoneID: zone, cutoffHour: cutoffHour)
+        // From the day's start, so a day left open past the cutoff reads as over instead of lasting until tomorrow.
+        let rolloverAt = Self.nextRollover(after: readModel?.activeDay?.startAt ?? now, timeZoneID: zone, cutoffHour: cutoffHour)
         guard let readModel else {
             self.init(day: "", eaten: 0, target: nil, hasDiary: false, rolloverAt: rolloverAt, writtenAt: now)
             return

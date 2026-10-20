@@ -63,4 +63,16 @@ import Testing
         #expect(snapshot.target == 2000)
         #expect(snapshot.rolloverAt == WidgetSnapshot.nextRollover(after: start, timeZoneID: "Asia/Jerusalem", cutoffHour: 4))
     }
+
+    @Test func dayStillOpenAfterTheCutoffRollsOverImmediately() throws {
+        // Yesterday's day started at 05:00 UTC; a write at 06:00 UTC today must not keep it until tomorrow's cutoff.
+        let start = try #require(ISO8601DateFormatter().date(from: "2026-10-20T05:00:00Z"))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-21T06:00:00Z"))
+        let day = TrackingDay(localDate: "2026-10-20", timeZoneID: "UTC", startAt: start)
+        let head = DiaryHead(profile: DiaryProfile(name: "Synthetic widget", timeZoneID: "UTC"), revision: 1,
+                             lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
+        let model = DiaryReadModel(head: head, activeDay: day, meals: [], weight: nil, workouts: [], activeGoal: nil, pendingAnalysisCount: 0)
+        let snapshot = WidgetSnapshot(readModel: model, now: now, cutoffHour: 4)
+        #expect(snapshot.rolloverAt <= now)
+    }
 }

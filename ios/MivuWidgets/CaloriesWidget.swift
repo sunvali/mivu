@@ -61,8 +61,9 @@ struct CaloriesWidgetView: View {
         switch family {
         case .accessoryCircular: circular
         case .accessoryRectangular: rectangular
-        case .systemMedium: medium
-        default: small
+        // Capped like system widgets: past this size the figure, actions and Pip cannot share a fixed widget.
+        case .systemMedium: medium.dynamicTypeSize(...DynamicTypeSize.xLarge)
+        default: small.dynamicTypeSize(...DynamicTypeSize.xLarge)
         }
     }
 
@@ -75,7 +76,7 @@ struct CaloriesWidgetView: View {
                 if let snapshot, snapshot.hasDiary {
                     figure(snapshot, size: 32, eyebrow: false)
                     Spacer(minLength: 8)
-                    goalBar(snapshot).frame(width: 64)
+                    goalBar(snapshot).frame(width: 64, alignment: .leading)
                 } else {
                     setUpText
                 }
@@ -91,7 +92,7 @@ struct CaloriesWidgetView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if let snapshot, snapshot.hasDiary {
                     figure(snapshot, size: 38, eyebrow: true)
-                    goalBar(snapshot).frame(width: 150).padding(.top, 10)
+                    goalBar(snapshot).frame(width: 150, alignment: .leading).padding(.top, 10)
                     Spacer(minLength: 8)
                     HStack(spacing: 8) {
                         Button(intent: LogFoodIntent()) {
@@ -102,6 +103,8 @@ struct CaloriesWidgetView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    // Stops short of Pip; larger text shrinks the labels instead of sliding under him.
+                    .frame(maxWidth: 220, alignment: .leading)
                 } else {
                     setUpText
                 }
@@ -138,7 +141,7 @@ struct CaloriesWidgetView: View {
                 .frame(height: 6)
                 .accessibilityHidden(true)
         } else {
-            Text("Set a target").font(.caption.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+            Text("Set a target").font(.caption.weight(.semibold)).foregroundStyle(Color.diaryAccent).fixedSize()
         }
     }
 
@@ -154,10 +157,10 @@ struct CaloriesWidgetView: View {
             Image(systemName: systemImage).imageScale(.small)
             Text(title)
         }
-        .font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+        .font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
         .foregroundStyle(text)
-        .padding(.horizontal, 14)
-        .frame(minHeight: 44)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .background(fill, in: .capsule)
     }
 
