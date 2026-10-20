@@ -1,5 +1,7 @@
 import AppKit
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
 let iconDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 let repoRoot = iconDirectory
@@ -10,41 +12,37 @@ let repoRoot = iconDirectory
 let catalog = repoRoot.appendingPathComponent("ios/Mivu/Assets.xcassets/AppIcon.appiconset")
 
 let variants = [
-    ("icon-default.svg", "AppIcon.png"),
-    ("icon-dark.svg", "AppIcon-dark.png"),
-    ("icon-tinted.svg", "AppIcon-tinted.png")
+    ("icon-default.png", "AppIcon.png"),
+    ("icon-dark.png", "AppIcon-dark.png"),
+    ("icon-tinted.png", "AppIcon-tinted.png")
 ]
 
 for (source, destination) in variants {
     let sourceURL = iconDirectory.appendingPathComponent(source)
-    guard let image = NSImage(contentsOf: sourceURL) else {
-        fatalError("Could not load vector source: \(sourceURL.path)")
+    guard let image = NSImage(contentsOf: sourceURL),
+          let sourceImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        fatalError("Could not load icon source: \(sourceURL.path)")
     }
 
-    let bitmap = NSBitmapImageRep(
-        bitmapDataPlanes: nil,
-        pixelsWide: 1024,
-        pixelsHigh: 1024,
-        bitsPerSample: 8,
-        samplesPerPixel: 4,
-        hasAlpha: true,
-        isPlanar: false,
-        colorSpaceName: .deviceRGB,
-        bytesPerRow: 0,
-        bitsPerPixel: 0
-    )!
-    bitmap.size = NSSize(width: 1024, height: 1024)
-    let context = NSGraphicsContext(bitmapImageRep: bitmap)!
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = context
-    image.draw(in: NSRect(x: 0, y: 0, width: 1024, height: 1024), from: .zero, operation: .copy, fraction: 1)
-    context.flushGraphics()
-    NSGraphicsContext.restoreGraphicsState()
+    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+          let context = CGContext(
+            data: nil, width: 1024, height: 1024, bitsPerComponent: 8,
+            bytesPerRow: 0, space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+          ) else {
+        fatalError("Could not create opaque sRGB drawing context")
+    }
+    context.interpolationQuality = .high
+    context.draw(sourceImage, in: CGRect(x: 0, y: 0, width: 1024, height: 1024))
 
     let outputURL = catalog.appendingPathComponent(destination)
-    guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
+    guard let renderedImage = context.makeImage(),
+          let encoder = CGImageDestinationCreateWithURL(outputURL as CFURL, UTType.png.identifier as CFString, 1, nil) else {
         fatalError("Could not encode PNG: \(outputURL.path)")
     }
-    try pngData.write(to: outputURL)
+    CGImageDestinationAddImage(encoder, renderedImage, nil)
+    guard CGImageDestinationFinalize(encoder) else {
+        fatalError("Could not write PNG: \(outputURL.path)")
+    }
     print("Rendered \(outputURL.path)")
 }
