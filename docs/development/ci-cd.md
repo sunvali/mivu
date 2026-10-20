@@ -36,10 +36,65 @@ not an Apple build, test run, signed product or phone installation.
 ## Local native verification
 
 Use XcodeBuildMCP on the local Mac with Xcode and an iOS 26-or-newer
-simulator. The committed JOSESwift 3.0.0 revision remains enforced. Run focused
-native checks for Swift changes and the full native unit/UI scheme before merging
-screen/navigation changes. A later source change needs appropriate fresh evidence.
-This is a contributor merge rule, separate from hosted branch protection.
+simulator. The committed JOSESwift 3.0.0 revision remains enforced.
+
+Choose the smallest checks that cover the change:
+
+| Change | Local checks |
+|---|---|
+| Docs only | No native tests |
+| Swift logic, validation or presentation | Relevant `MivuTests/<Suite>` unit suites |
+| Screens or navigation | Relevant units + short smoke; add only the affected UI journey when smoke cannot cover it |
+| Release candidate, broad regression, explicit request | Complete `Mivu` test plan (all existing unit/UI journeys) |
+
+For a test-only edit, run just the changed test or its owning suite. For code
+changes, run the new/changed tests and the smallest suites covering direct
+callers. Do not repeat unchanged passing checks or broaden a focused pass
+without a concrete new risk or failure. Do not run all tests on every edit or PR. Prefer unit tests for form state,
+formatting, validation, receipts, settings conflicts and view-model transitions;
+reserve UI automation for interactions that need the running app. Existing
+`CoachReceiptPresentationTests`, `DiaryPreferencesDraftTests`,
+`ManualNutritionDraftTests`, `ProgressEditorStateTests` and
+`CoachCaptureOptionsTests` form the curated unit selection for the push hook and `native.sh unit`.
+The default `MivuQuick` Xcode plan contains only `SmokeUITests`. Use explicit
+unit selectors with `-testPlan Mivu` in daily work; a plain Xcode Test action
+cannot accidentally start the complete unit/UI suite. All older
+journeys remain unchanged in the explicit `Mivu` plan.
+
+Before native work, inspect running native jobs and reserve a separate simulator
+if others are active. Pass its UUID explicitly and use this checkout's own
+DerivedData; never change shared session defaults or stop another agent's work.
+
+```sh
+# Short E2E only: offline text + photo, relaunch persistence, tabs and Settings.
+python3 scripts/ci/smoke.py --simulator-id <reserved-UUID>
+
+# Focused UI-state units (replace the suite with the changed owner).
+xcodebuildmcp simulator test --project-path "$PWD/ios/Mivu.xcodeproj" \
+  --scheme Mivu --simulator-id <reserved-UUID> \
+  --derived-data-path "$PWD/build/smoke/DerivedData" \
+  --json '{"extraArgs":["-testPlan","Mivu","-only-testing:MivuTests/DiaryPreferencesDraftTests","-parallel-testing-enabled","NO"]}' \
+  --output json
+
+# Explicit long run only (never the default PR command).
+xcodebuildmcp simulator test --project-path "$PWD/ios/Mivu.xcodeproj" \
+  --scheme Mivu --simulator-id <reserved-UUID> \
+  --derived-data-path "$PWD/build/full/DerivedData" \
+  --json '{"extraArgs":["-testPlan","Mivu","-parallel-testing-enabled","NO"]}' \
+  --output json
+```
+
+The smoke runner has a **120-second wall-clock limit**, including compilation,
+installation and testing. It stops only its own process group and fails on
+an overrun, failed/skipped/zero-test result, malformed output or missing result
+bundle. It saves full output and elapsed time under `build/smoke/run-*`, and prints
+only a concise status plus evidence path. A cold build or a busy Mac may exceed
+the cap: that is a failure, not passing evidence. Build prerequisites separately
+or rerun after the cold build has populated this checkout's DerivedData; do not
+raise the budget or automatically fall back to the long suite.
+
+A later source change needs appropriate fresh evidence. This is a contributor
+merge rule, separate from hosted branch protection.
 
 Record the exact command, source SHA, UTC time, Xcode/simulator environment,
 exit status, named tests, pass/fail/skip counts and result bundle location. An
@@ -47,8 +102,8 @@ unavailable native suite is blocked, not passed. Simulator results do not prove
 physical camera, haptics, VoiceOver, provider authentication or phone installation.
 
 `native.sh`, `signed.sh` and their short script tests remain available for local
-or controlled rehearsals; no workflow invokes them. `native.sh` modes retain
-result-bundle and named-test validation. Use a fresh `MIVU_CI_OUTPUT` directory
+or controlled rehearsals; no workflow invokes them. `native.sh` defaults to unit-only; `native.sh test` explicitly selects the full
+`Mivu` plan. Its modes retain result-bundle and named-test validation. Use a fresh `MIVU_CI_OUTPUT` directory
 for each rehearsal so a previous result bundle cannot be overwritten. Signing
 scripts are intended for an isolated controlled rehearsal, not ordinary workstation
 credential management. Use Xcode/Organizer for normal local signing and delivery.
@@ -79,11 +134,14 @@ native inputs match that baseline. Missing baselines require native verification
 
 Native inputs include the entire `ios/` tree and the hook's test helper/recipe.
 A native push must check the current `HEAD`, with no dirty or untracked native
-inputs. It runs all `MivuTests` units through XcodeBuildMCP in Debug, with parallel
+inputs. It runs the curated unit suites (UI automation excluded) through
+XcodeBuildMCP in Debug, with parallel
 testing off and package versions bound to the committed lockfile. Native child
 processes clear Git's repository variables so package checkouts use their own
-repositories; SSH, askpass and proxy settings remain available. It chooses an
-available iPhone on iOS 26 or newer, preferring a booted device, then the latest
+repositories; SSH, askpass and proxy settings remain available. Set
+`MIVU_TEST_SIMULATOR_ID=<reserved-UUID>` when pushing alongside other agents;
+an unavailable reserved device blocks the push instead of falling back to theirs.
+Without an override it chooses an available iPhone on iOS 26 or newer, preferring a booted device, then the latest
 runtime. Missing Xcode, tooling, simulators or valid test evidence blocks the push.
 
 A verified success is reused only for identical native inputs, recipe, selected
@@ -96,11 +154,12 @@ Failures, zero-test and malformed results never enter the cache. A lock prevents
 parallel native runs. Source, `HEAD` and environment are checked again after the
 run. Evidence, success records and reusable build output live under
 `mivu-checks/` in Git's common directory, outside tracked files; each run gets a
-fresh result-bundle path. The hook prints that evidence location.
+fresh result-bundle path. Hook build/package caches are separated by simulator
+UUID so a reserved simulator also has its own build directory. The hook prints
+that evidence location.
 
-These unit checks do not replace manual full unit/UI verification for screen or
-navigation changes, physical-device checks, or independent Ponytail Review before
-merge. Report a blocked push as blocked, then resolve its cause and push again.
+These unit checks do not replace short smoke/affected UI checks for screen or
+navigation changes, physical-device checks, or Ponytail Review before merge. Report a blocked push as blocked, then resolve its cause and push again.
 
 ## Versioning, packaging and signing
 

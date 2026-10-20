@@ -17,7 +17,10 @@ from pathlib import Path
 
 NATIVE = ('ios', 'scripts/ci/git_hooks.py', '.githooks/pre-push')
 QUICK = ('scripts/ci', '.githooks', '.github/workflows')
-EXTRA = ['-only-testing:MivuTests', '-parallel-testing-enabled', 'NO',
+QUICK_UNIT_SUITES = ['CoachReceiptPresentationTests', 'DiaryPreferencesDraftTests', 'ManualNutritionDraftTests', 'ProgressEditorStateTests', 'CoachCaptureOptionsTests']
+UNIT_SELECTORS = ['MivuTests/' + suite for suite in QUICK_UNIT_SUITES]
+EXTRA = ['-testPlan', 'Mivu', *['-only-testing:' + suite for suite in UNIT_SELECTORS],
+         '-parallel-testing-enabled', 'NO',
          '-onlyUsePackageVersionsFromResolvedFile', '-disableAutomaticPackageResolution',
          '-skipPackageUpdates', 'SWIFT_VERSION=6.0']
 
@@ -81,13 +84,17 @@ def environment():
     if listed.get('didError') is not False:
         raise ValueError('Could not list available iPhone simulators.')
     candidates = []
+    reserved = os.environ.get('MIVU_TEST_SIMULATOR_ID')
     for device in listed['data']['simulators']:
         match = re.fullmatch(r'iOS\s+(\d+)\.(\d+)(?:\.(\d+))?', device['runtime'])
-        if match and int(match[1]) >= 26 and device['isAvailable'] and device['name'].startswith('iPhone'):
+        if reserved and device['simulatorId'] != reserved:
+            continue
+        if match and int(match[1]) >= 26 and device['isAvailable'] and (reserved or device['name'].startswith('iPhone')):
             candidates.append((device['state'] == 'Booted', tuple(int(n or 0) for n in match.groups()),
                                device['name'], device['simulatorId'], device['runtime']))
     if not candidates:
-        raise ValueError('No available iPhone simulator with iOS 26 or newer.')
+        raise ValueError('The reserved simulator is unavailable or not iOS 26 or newer.' if reserved
+                         else 'No available iPhone simulator with iOS 26 or newer.')
     selected = max(candidates)
     return dict(developer=str(developer), xcode=xcode, architecture=platform.machine(),
                 hostOS=platform.mac_ver()[0] or platform.platform(),
@@ -110,7 +117,7 @@ def successful(result):
             or any(type(counts.get(k)) is not int or counts[k] < 0 for k in ('passed', 'failed', 'skipped'))
             or counts['passed'] <= 0 or counts['failed'] != 0
             or counts.get('expectedFailures', 0) != 0
-            or data['request']['onlyTesting'] != ['MivuTests'] or data['request'].get('skipTesting')):
+            or sorted(data['request']['onlyTesting']) != sorted(UNIT_SELECTORS) or data['request'].get('skipTesting')):
         raise ValueError('Native unit tests failed or returned incomplete/zero-test evidence.')
     return counts
 
@@ -147,9 +154,9 @@ def native_check(head):
         bundle = output / 'Mivu.xcresult'
         args = dict(projectPath=str(Path('ios/Mivu.xcodeproj').resolve()), scheme='Mivu',
                     configuration='Debug', simulatorId=tools['simulator'],
-                    derivedDataPath=str(common / 'DerivedData'), preferXcodebuild=True,
+                    derivedDataPath=str(common / ('DerivedData-' + tools['simulator'])), preferXcodebuild=True,
                     testRunnerEnv={}, progress=False,
-                    extraArgs=EXTRA + ['-clonedSourcePackagesDirPath', str(common / 'SourcePackages'),
+                    extraArgs=EXTRA + ['-clonedSourcePackagesDirPath', str(common / ('SourcePackages-' + tools['simulator'])),
                                        '-resultBundlePath', str(bundle)])
         command = [tools['cli'], 'simulator', 'test', '--json', json.dumps(args), '--output', 'json']
         print('Running local MivuTests units; evidence: ' + str(output), flush=True)

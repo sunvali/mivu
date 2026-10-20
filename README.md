@@ -52,6 +52,18 @@ device checklist. See the [merged Coach foundation evidence](docs/verification/2
 and [P0 implementation plan](docs/superpowers/plans/2026-10-12-coach-p0.md) for
 the current scope and evidence.
 
+## Fast local checks
+
+Use focused `MivuTests/<Suite>` tests for changed logic. For UI/navigation changes,
+run `python3 scripts/ci/smoke.py --simulator-id <reserved-UUID>`; it fails after
+120 seconds, including build time. Use a dedicated simulator when other agents
+are working. The default Xcode plan, `MivuQuick`, runs one
+capture/persistence/navigation smoke journey. Run only the changed unit test or
+its suite plus directly affected callers; do not rerun unchanged passing checks. The complete `Mivu` plan
+remains available for longer runs; it is not required on every PR. See
+[the test selection policy](docs/development/ci-cd.md#local-native-verification)
+for commands, cold-build limits and full-suite triggers.
+
 ## Agent guidance
 
 The [navigation and summary layout guide](docs/development/navigation-and-summary-layout.md) records the approved card treatment, tab responsibilities and applied UX research.
