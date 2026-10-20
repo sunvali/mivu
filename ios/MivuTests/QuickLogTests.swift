@@ -12,6 +12,13 @@ import AVFoundation
         #expect(QuickLogRequest.shared.pending)
     }
 
+    @Test func openCoachIntentRequestsCoach() async throws {
+        QuickLogRequest.shared.openCoach = false
+        defer { QuickLogRequest.shared.openCoach = false }
+        _ = try await OpenCoachIntent().perform()
+        #expect(QuickLogRequest.shared.openCoach)
+    }
+
     @Test func homeScreenQuickActionIsDeclaredAndHandled() throws {
         let items = try #require(Bundle.main.object(forInfoDictionaryKey: "UIApplicationShortcutItems") as? [[String: Any]])
         #expect(items.compactMap { $0["UIApplicationShortcutItemType"] as? String } == [QuickLogRequest.shortcutType])

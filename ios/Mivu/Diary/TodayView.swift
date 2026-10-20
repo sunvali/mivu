@@ -186,8 +186,11 @@ struct DiaryRootView: View {
             coach.startMonitoring(); coach.resume()
         }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
+        .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel) }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
-        .onChange(of: hasLoaded) { _, _ in openQuickLog(); openNotifiedMeal() }
+        .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
+        .onOpenURL { if $0.host == "today" { selectedTab = "today" } }
+        .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest(); openNotifiedMeal() }
         .onChange(of: mealNotifications.openedMealID, initial: true) { _, _ in openNotifiedMeal() }
         .onChange(of: model.isChangingProfile) { _, changing in
             coachRoutes.synchronize(selection: model.selection, isChangingProfile: changing)
@@ -387,6 +390,13 @@ struct DiaryRootView: View {
         // shortcut: sheets presented inside a tab (composer, Coach camera) stay up and block this cover; dismiss them if that shows up in use.
         routes.route = nil; coachHistory = nil; noteMealID = nil
         selectedTab = "today"; quickLogOwner = owner
+    }
+    private func openCoachRequest() {
+        guard quickLog.openCoach, hasLoaded else { return }
+        quickLog.openCoach = false
+        guard model.selection != nil, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
+        routes.route = nil; coachHistory = nil; noteMealID = nil
+        selectedTab = "coach"
     }
     private func openNotifiedMeal() {
         guard let id = mealNotifications.openedMealID, hasLoaded else { return }
