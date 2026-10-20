@@ -107,7 +107,8 @@ final class PipRigView: UIView {
     // MARK: - Pose resolution
 
     private func joint(of part: PipRigAsset.Part, in pose: PipPose, slide local: CGFloat) -> PipPose.Joint {
-        var joint = pose.joints[part.name] ?? PipPose.Joint()
+        // A joint keyed by the full id (`arm-r@seated`) moves only that set's part; a plain name moves every set's.
+        var joint = pose.joints[part.id] ?? pose.joints[part.name] ?? PipPose.Joint()
         let gaze = Self.clamped(pose.gaze)
         if let reach = pupilReach[part.id] {
             joint.offset.x += gaze.x * (gaze.x < 0 ? -reach.lo.x : reach.hi.x)
@@ -298,6 +299,8 @@ extension PipRigView {
         var glance = pose
         glance.gaze = CGPoint(x: target.headTurn > pose.headTurn ? 1 : -1, y: target.gaze.y)
         transition(to: glance, period: period)
+        // A view swap lands while the lids are shut (70 ms down), so it reads as a quick turn instead of a cut.
+        if Self.view(for: target.headTurn).0 != Self.view(for: pose.headTurn).0 { blink() }
         after(Self.eyesLead, run) { [unowned self] in transition(to: target, period: period - Self.eyesLead) }
     }
 
@@ -418,19 +421,20 @@ extension PipRigView {
         ("transform.scale.x", "pip.scaleX"), ("transform.scale.y", "pip.scaleY"),
     ]
 
-    /// Natural frequency is chosen so the first overshoot lands near the key time; followers are 40% softer and 40 ms late.
+    /// Natural frequency is chosen so the first overshoot lands near the key time, capped so short keys ease instead of snap.
+    /// The body settles with little wobble; followers are 40% softer, bouncier and 60 ms late, which reads as follow-through.
     private func spring(from: Float, to: Float, period: TimeInterval, follower: Bool, saccade: Bool, on layer: CALayer, path: String) -> CASpringAnimation {
         let animation = CASpringAnimation(keyPath: path)
         animation.fromValue = from
         animation.toValue = to
-        var omega = saccade ? Self.saccadeOmega : min(max(3.76 / CGFloat(max(period, 0.05)), 14), 90)
+        var omega = saccade ? Self.saccadeOmega : min(max(3.76 / CGFloat(max(period, 0.05)), 14), 60)
         if follower { omega *= 0.6.squareRoot() }
         animation.mass = 1
         animation.stiffness = omega * omega
-        animation.damping = 2 * (saccade ? 0.6 : 0.55) * omega
+        animation.damping = 2 * (saccade ? 0.6 : follower ? 0.5 : 0.68) * omega
         animation.duration = animation.settlingDuration
         if follower {
-            animation.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + 0.04
+            animation.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + 0.06
             animation.fillMode = .backwards
         }
         return animation

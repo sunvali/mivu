@@ -15,7 +15,7 @@ enum PipGestureLibrary {
         },
         PipGesture("greeting-morning") {
             $0.at(0.10) { $0.squash(0.06).earPerk(-6).nod(3) }
-            $0.at(0.28) { $0.squash(-0.05).pawUp(.both, -60, elbow: -30).nod(-8).earPerk(14).mouth(.yawn).eyes(.closedHappy) }
+            $0.at(0.28) { $0.squash(-0.05).pawUp(.both, -60, elbow: -75).nod(-8).earPerk(14).mouth(.yawn).eyes(.closedHappy) }
             $0.at(0.48) { $0.pawUp(.right, -100, elbow: -50).earPerk(10).mouth(.smallOpen).tailWag(16).hop(6) }
             $0.at(0.60) { $0.pawUp(.right, -45, elbow: -35).earPerk(8).mouth(.smallOpen).tailWag(-12) }
             $0.settle(at: 0.90)
@@ -63,8 +63,8 @@ enum PipGestureLibrary {
         },
         PipGesture("reviewed") {
             $0.at(0.09) { $0.squash(0.05).nod(3) }
-            $0.at(0.26) { $0.squash(-0.06).pawUp(.both, -55, elbow: -30).nod(-6).earPerk(10).mouth(.smallOpen) }
-            $0.at(0.38) { $0.squash(-0.04).pawUp(.both, -55, elbow: -25).nod(-5).earPerk(12).mouth(.smallOpen).eyes(.closedHappy) }
+            $0.at(0.26) { $0.squash(-0.06).pawUp(.both, -55, elbow: -75).nod(-6).earPerk(10).mouth(.smallOpen) }
+            $0.at(0.38) { $0.squash(-0.04).pawUp(.both, -55, elbow: -75).nod(-5).earPerk(12).mouth(.smallOpen).eyes(.closedHappy) }
             $0.settle(at: 0.65)
         },
         PipGesture("recovery") {
@@ -86,10 +86,10 @@ enum PipGestureLibrary {
         },
         PipGesture("day-complete") {
             $0.at(0.12) { $0.squash(0.08).earPerk(-6) }
-            $0.at(0.34) { $0.hop(14).pawUp(.both, -60, elbow: -30).earPerk(16).mouth(.bigOpen).blushing().hearts(2).tailWag(24).scarf(-10) }
-            $0.at(0.56) { $0.squash(0.06).pawUp(.both, -55, elbow: -30).mouth(.bigOpen).blushing().hearts(2, drift: 8) }
-            $0.at(0.76) { $0.hop(10).pawUp(.both, -60, elbow: -30).earPerk(14).mouth(.bigOpen).blushing().hearts(2, drift: 16).tailWag(-24) }
-            $0.at(0.92) { $0.pawUp(.both, -55, elbow: -30).mouth(.smallOpen).blushing().hearts(2, drift: 22).eyes(.closedHappy) }
+            $0.at(0.34) { $0.hop(14).pawUp(.both, -60, elbow: -75).earPerk(16).mouth(.bigOpen).blushing().hearts(2).tailWag(24).scarf(-10) }
+            $0.at(0.56) { $0.squash(0.06).pawUp(.both, -55, elbow: -75).mouth(.bigOpen).blushing().hearts(2, drift: 8) }
+            $0.at(0.76) { $0.hop(10).pawUp(.both, -60, elbow: -75).earPerk(14).mouth(.bigOpen).blushing().hearts(2, drift: 16).tailWag(-24) }
+            $0.at(0.92) { $0.pawUp(.both, -55, elbow: -75).mouth(.smallOpen).blushing().hearts(2, drift: 22).eyes(.closedHappy) }
             $0.settle(at: 1.30)
         },
         PipGesture("curious") {
@@ -172,8 +172,8 @@ enum PipGestureLibrary {
             $0.settle(at: 1.90)
         },
         PipGesture("idle-stretch") {
-            $0.at(0.50) { $0.squash(-0.05).pawUp(.both, -75, elbow: -10).nod(-7).earPerk(-8).tailWag(14).eyes(.closedHappy) }
-            $0.at(1.15) { $0.squash(-0.05).pawUp(.both, -75, elbow: -10).nod(-7).earPerk(-8).tailWag(14).eyes(.closedHappy) }
+            $0.at(0.50) { $0.squash(-0.05).pawUp(.both, -55, elbow: -10).nod(-7).earPerk(-8).tailWag(14).eyes(.closedHappy) }
+            $0.at(1.15) { $0.squash(-0.05).pawUp(.both, -55, elbow: -10).nod(-7).earPerk(-8).tailWag(14).eyes(.closedHappy) }
             $0.at(1.45) { $0.squash(0.03).nod(2).eyes(.closedHappy) }
             $0.settle(at: 1.90)
         },

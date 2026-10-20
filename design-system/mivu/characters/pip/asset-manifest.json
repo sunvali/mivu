@@ -34,8 +34,8 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip-rig.json",
-    "sha256": "8b802e1e63bba96f9f39ab18c0260a862a29b426ad60c16405a43e885fd13ea3",
-    "bytes": 320978,
+    "sha256": "2802429d21b61bbf2abdf95bfe969a22b83a0bfddd2755856221f285108fc6bb",
+    "bytes": 302418,
     "formatVersion": 2,
     "canvas": [
       512,
@@ -57,22 +57,22 @@
     {
       "name": "PipResting",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipResting.imageset/pip.png",
-      "sha256": "a689d585d0bc93a84128cb9ddb37944ef4ebf7f802e338ba7cddfc5f843120e0",
-      "bytes": 41574,
+      "sha256": "ee8d5ba08fd537cfd37098a88d23a62d67ed9cdb3f10b961a3a9b632f5626602",
+      "bytes": 41519,
       "appearances": "same original artwork for light and dark"
     },
     {
       "name": "PipCoach",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipCoach.imageset/pip.png",
-      "sha256": "aa2a5961a64443bcb7a2d30ccc6dd2b3a6fa27cbb80e7849a9bdb900c6cb7f36",
-      "bytes": 40699,
+      "sha256": "b814b16baf67922f7c0309d149b0362ac7d2c065e7ba908fa3d0b3c95c3b892b",
+      "bytes": 40567,
       "appearances": "original context-matched seated art"
     },
     {
       "name": "PipPreview",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/pip.png",
-      "sha256": "a689d585d0bc93a84128cb9ddb37944ef4ebf7f802e338ba7cddfc5f843120e0",
-      "bytes": 41574,
+      "sha256": "ee8d5ba08fd537cfd37098a88d23a62d67ed9cdb3f10b961a3a9b632f5626602",
+      "bytes": 41519,
       "appearances": "same original artwork for light and dark"
     }
   ],
@@ -110,20 +110,20 @@
   "authoringSources": [
     {
       "path": "design-system/mivu/characters/pip/rig/pip.svg",
-      "sha256": "7d541300d159da2c862af89dcf99320c48acb2718a48856e1eb0e24d0a2c3bca",
-      "bytes": 225144,
+      "sha256": "c9cc3f359643b473020e44fbffd416b35598e73242277205399b669e153d4a17",
+      "bytes": 212386,
       "role": "Editable layered vector Pip"
     },
     {
       "path": "design-system/mivu/characters/pip/rig/build.py",
-      "sha256": "a00d7828613ce75d00d24b3474280ca4df7932aad5272d4af53b28f8f97e4562",
-      "bytes": 9507,
+      "sha256": "3615cd19211caa39d1af85fe2904cad542ed418cfc47f450795be19096bf28c7",
+      "bytes": 9644,
       "role": "SVG to pip-rig.json converter; --png renders fallbacks"
     },
     {
       "path": "design-system/mivu/characters/pip/rig/test_rig.py",
-      "sha256": "1bb9faea80a63310a186ea68ceeb9a9776015f397e5ae43bbe7275ad95a6e6e9",
-      "bytes": 7802,
+      "sha256": "bfbc9a0e78632db24bf82c41d3092dabcf3d7dd2125539960ddcb551b2f02787",
+      "bytes": 8125,
       "role": "Rig asset regression checks"
     },
     {

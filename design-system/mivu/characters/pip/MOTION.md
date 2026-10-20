@@ -21,7 +21,11 @@ and feet stay on the ground line. Pip is decorative: `accessibilityHidden(true)`
 1,048,576 bytes) and `PipRigView` builds a `CAShapeLayer` tree. A pose is data (joint
 rotation/offset/scale plus eye, mouth and gaze). Joints move with
 `CASpringAnimation` started from the presentation layer, so any gesture interrupts
-any other without a jump; ears, tail and scarf follow with softer springs.
+any other without a jump. Body springs settle with little wobble; ears, tail and
+scarf follow 60 ms later on softer, bouncier springs. A head view swap lands inside
+a blink, so a turn never reads as a cut. Ears are rooted under the head and front
+legs under the chest, so no joint opens a gap: lifted legs bend at the elbow and
+uncover plain body, never hidden layer edges.
 A gesture is a list of timed poses (`PipGesture`); `PipGestureLibrary` holds them
 all and `gesture(for:)` is the only moment-to-gesture mapping. Adding one:
 [adding-a-gesture](../../../../.agents/skills/mivu-animation/references/adding-a-gesture.md).
