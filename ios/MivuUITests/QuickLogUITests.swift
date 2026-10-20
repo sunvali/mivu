@@ -18,4 +18,14 @@ import XCTest
         addNote.tap()
         XCTAssertTrue(app.textFields["mealText"].waitForExistence(timeout: 5))
     }
+
+    func testOpenCoachRequestLandsOnCoach() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--open-coach"]
+        app.launch()
+        let coach = app.tabBars.buttons["Coach"]
+        XCTAssertTrue(coach.waitForExistence(timeout: 15))
+        let selected = NSPredicate(format: "isSelected == true")
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: selected, object: coach)], timeout: 10), .completed)
+    }
 }
