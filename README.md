@@ -5,6 +5,13 @@ newer. Coach saves conversational text and photos, with Today, meal review,
 History and Settings alongside it. The Hebrew language selector is disabled for now; existing profile
 and archive data, including stored language values, must remain intact.
 
+## Meet Pip
+
+<img src="ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/pip.png" alt="Pip, Mivu’s orange fox companion wearing a teal scarf" width="240">
+
+Pip is Mivu’s fox companion, bringing playful gestures and gentle feedback to
+Today and Coach. Pip respects Reduce Motion and keeps your diary content clear.
+
 ## Conversational tracking
 
 Input saves locally before analysis. Connect ChatGPT and select an eligible model
