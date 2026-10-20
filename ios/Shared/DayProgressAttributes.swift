@@ -4,7 +4,8 @@ import Foundation
 /// Today's calories and macros for the Live Activity; the app sends every value, the extension never opens the diary.
 struct DayProgressAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
-        var kcalEaten: Double
+        /// Nil while any of today's items has no calories, so the island never shows a total it doesn't know.
+        var kcalEaten: Double?
         var kcalTarget: Double?
         var protein: Double?
         var proteinTarget: Double?
@@ -15,8 +16,11 @@ struct DayProgressAttributes: ActivityAttributes {
         var hasPending: Bool
         var hideWhenLocked: Bool
 
-        var isOver: Bool { kcalTarget.map { kcalEaten > $0 } ?? false }
-        var figure: String { Self.number(kcalTarget.map { abs($0 - kcalEaten) } ?? kcalEaten) }
+        var isOver: Bool { kcalEaten.flatMap { eaten in kcalTarget.map { eaten > $0 } } ?? false }
+        var figure: String {
+            guard let kcalEaten else { return "–" }
+            return Self.number(kcalTarget.map { abs($0 - kcalEaten) } ?? kcalEaten)
+        }
         var word: String { kcalTarget == nil ? "eaten" : isOver ? "over" : "left" }
         var compact: String { isOver ? "\(figure) over" : figure }
 
@@ -25,7 +29,8 @@ struct DayProgressAttributes: ActivityAttributes {
                 .compactMap { name, value, target in
                     value.map { v in target.map { "\(name) \(Self.number(v)) of \(Self.number($0)) grams." } ?? "\(name) \(Self.number(v)) grams." }
                 }
-            return (["\(figure) calories \(word)."] + macros).joined(separator: " ")
+            let calories = kcalEaten == nil ? "Calories not known yet." : "\(figure) calories \(word)."
+            return ([calories] + macros).joined(separator: " ")
         }
 
         static func macroLabel(_ letter: String, _ value: Double?, _ target: Double?) -> String {

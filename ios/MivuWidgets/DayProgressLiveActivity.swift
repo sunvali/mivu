@@ -32,18 +32,28 @@ struct DayProgressLiveActivity: Widget {
             } compactLeading: {
                 PipMark(size: 24)
             } compactTrailing: {
-                Text(stale ? "–" : state.compact)
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold)).monospacedDigit()
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                    .foregroundStyle(state.isOver ? Color.diarySecondary : Color.diaryAccent)
-                    .privacySensitive(state.hideWhenLocked)
-                    .accessibilityLabel(stale ? "Open Mivu for today" : state.spoken)
+                CompactFigure(state: state, isStale: stale)
             } minimal: {
                 CalorieRing(state: state, isStale: stale, size: 22)
             }
             .widgetURL(URL(string: "mivu://today"))
             .keylineTint(Color.diaryAccent)
         }
+    }
+}
+
+private struct CompactFigure: View {
+    @Environment(\.redactionReasons) private var redaction
+    let state: DayState
+    let isStale: Bool
+
+    var body: some View {
+        Text(isStale ? "–" : state.compact)
+            .font(.system(.subheadline, design: .rounded, weight: .semibold)).monospacedDigit()
+            .lineLimit(1).minimumScaleFactor(0.6)
+            .foregroundStyle(state.isOver ? Color.diarySecondary : Color.diaryAccent)
+            .privacySensitive(state.hideWhenLocked)
+            .accessibilityLabel(isStale ? "Open Mivu for today" : redaction.contains(.privacy) ? "Mivu day progress" : state.spoken)
     }
 }
 
@@ -77,6 +87,7 @@ private struct PipMark: View {
 }
 
 private struct Headline: View {
+    @Environment(\.redactionReasons) private var redaction
     let state: DayState
     let isStale: Bool
     let primary: Color
@@ -93,10 +104,14 @@ private struct Headline: View {
                     .privacySensitive(state.hideWhenLocked)
                 Text(state.hasPending ? "kcal \(state.word) · pending" : "kcal \(state.word)")
                     .font(.footnote.weight(.medium)).foregroundStyle(Color.diarySecondary).lineLimit(1)
+                    .privacySensitive(state.hideWhenLocked)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(isStale ? "Open Mivu for today" : state.spoken + (state.hasPending ? " More meals pending." : ""))
+        // Redacted numbers must not come back through VoiceOver on a locked phone.
+        .accessibilityLabel(isStale ? "Open Mivu for today"
+                            : redaction.contains(.privacy) ? "Mivu day progress"
+                            : state.spoken + (state.hasPending ? " More meals pending." : ""))
     }
 }
 
@@ -163,7 +178,7 @@ private extension DayState {
                             fat: 40, fatTarget: 60, hasPending: false, hideWhenLocked: true)
     static let over = Self(kcalEaten: 2300, kcalTarget: 2000, protein: 130, proteinTarget: 120, carbs: 260, carbsTarget: 200,
                            fat: 70, fatTarget: 60, hasPending: false, hideWhenLocked: true)
-    static let pending = Self(kcalEaten: 0, kcalTarget: 2000, protein: nil, proteinTarget: 120, carbs: nil, carbsTarget: 200,
+    static let pending = Self(kcalEaten: nil, kcalTarget: 2000, protein: nil, proteinTarget: 120, carbs: nil, carbsTarget: 200,
                               fat: nil, fatTarget: 60, hasPending: true, hideWhenLocked: false)
     static let noTarget = Self(kcalEaten: 1360, kcalTarget: nil, protein: 80, proteinTarget: nil, carbs: 150, carbsTarget: nil,
                                fat: 40, fatTarget: nil, hasPending: false, hideWhenLocked: false)

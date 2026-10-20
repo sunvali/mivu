@@ -6,7 +6,7 @@ extension DayProgressAttributes.ContentState {
     /// Built from the same daily report Today and the widget use, so no totals are computed twice.
     init(report: DailyProgress, hideWhenLocked: Bool) {
         let eaten = report.foodTotals, target = report.goal?.targets
-        self.init(kcalEaten: eaten?.kcal ?? 0, kcalTarget: target?.kcal,
+        self.init(kcalEaten: eaten?.kcal, kcalTarget: target?.kcal,
                   protein: eaten?.protein, proteinTarget: target?.protein,
                   carbs: eaten?.carbs, carbsTarget: target?.carbs,
                   fat: eaten?.fat, fatTarget: target?.fat,
@@ -19,6 +19,9 @@ enum DayProgressSync: Equatable {
     case endAll, start, update(endingExtra: Int)
 
     static let enabledKey = "liveActivityEnabled", hideWhenLockedKey = "liveActivityHideWhenLocked"
+
+    /// iOS keeps an ended activity listed until its Lock Screen card goes; it can no longer be updated.
+    static func isLive(_ state: ActivityState) -> Bool { state == .active || state == .stale }
 
     static func decide(enabled: Bool, authorized: Bool, hasDiary: Bool, running: Int) -> DayProgressSync {
         guard enabled, authorized, hasDiary else { return .endAll }
@@ -67,7 +70,7 @@ extension DayProgressSync {
 
 private func applyDayProgress(enabled: Bool, authorized: Bool,
                               content: ActivityContent<DayProgressAttributes.ContentState>?) async {
-    let running = Activity<DayProgressAttributes>.activities
+    let running = Activity<DayProgressAttributes>.activities.filter { DayProgressSync.isLive($0.activityState) }
     switch DayProgressSync.decide(enabled: enabled, authorized: authorized, hasDiary: content != nil, running: running.count) {
     case .endAll:
         for activity in running { await activity.end(nil, dismissalPolicy: .immediate) }

@@ -1,4 +1,5 @@
 import Foundation
+import ActivityKit
 import Testing
 @testable import Mivu
 
@@ -54,7 +55,7 @@ import Testing
 
     @Test func pendingWithoutSavedMeal() throws {
         let s = try state(eaten: nil, target: targets, pending: true)
-        #expect(s.kcalEaten == 0 && s.hasPending && s.figure == "2,000" && s.word == "left")
+        #expect(s.kcalEaten == nil && s.hasPending && s.figure == "–" && s.compact == "–" && !s.isOver)
     }
 
     @Test func unknownItemsCountAsPending() throws {
@@ -83,5 +84,16 @@ import Testing
         #expect(State.macroLabel("P", nil, 120) == "P –/120g")
         #expect(State.macroLabel("P", nil, nil) == "P –")
         #expect(State.fraction(nil, 120) == nil)
+    }
+
+    @Test func unknownCaloriesNeverShowAFullTarget() throws {
+        // One saved item without calories makes the day's total unknown; "2,000 left" would overstate it.
+        let s = try state(eaten: NutritionValues(carbs: 10, protein: 5, fat: 2), target: targets)
+        #expect(s.kcalEaten == nil && s.figure == "–" && s.spoken.hasPrefix("Calories not known yet."))
+    }
+
+    @Test func onlyActiveOrStaleActivitiesCountAsRunning() {
+        #expect(DayProgressSync.isLive(.active) && DayProgressSync.isLive(.stale))
+        #expect(!DayProgressSync.isLive(.ended) && !DayProgressSync.isLive(.dismissed))
     }
 }
