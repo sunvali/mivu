@@ -5,5 +5,6 @@ import WidgetKit
     var body: some Widget {
         CaloriesWidget()
         LogFoodControl()
+        DayProgressLiveActivity()
     }
 }
