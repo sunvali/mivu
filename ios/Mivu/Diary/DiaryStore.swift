@@ -280,7 +280,8 @@ actor DiaryStore {
     }
     func coachPreferenceSummary(expectedProfileID: UUID) throws -> String {
         let profile = try diaryHead(expectedProfileID: expectedProfileID).profile
-        return "Timezone: \(profile.timeZoneID). Dietary preferences: \(profile.preferences.isEmpty ? "not set" : profile.preferences)."
+        let diet = ((profile.about?.dietTags ?? []) + [profile.about?.healthNotes ?? ""]).filter { !$0.isEmpty }.joined(separator: "; ")
+        return "Timezone: \(profile.timeZoneID). Dietary preferences: \(profile.preferences.isEmpty ? "not set" : profile.preferences). Diet and health from setup: \(diet.isEmpty ? "not set" : diet)."
     }
     func coachWorkoutSummary(id: UUID, expectedProfileID: UUID) throws -> String {
         let workout: WorkoutSession, day: TrackingDay

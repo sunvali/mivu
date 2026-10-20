@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showDiagnostic = false
     @State private var showConnectionDiagnostic = false
     @State private var showGoals = false
+    @State private var showOnboarding = false
     @State private var fields = DiaryPreferencesDraft()
     @State private var linkedSection: SettingsSection?
     @State private var openedInitialDestination = false
@@ -44,6 +45,8 @@ struct SettingsView: View {
                 Section("Setup") {
                     Button { showGoals = true } label: { settingsRow("Goals", symbol: "scope", color: .diaryAccent) }
                         .accessibilityIdentifier("editGoals")
+                    Button { showOnboarding = true } label: { settingsRow("Redo setup with Pip", symbol: "pawprint", color: .diaryProtein) }
+                        .accessibilityIdentifier("redoOnboarding")
                     NavigationLink(value: SettingsSection.preferences) { settingsRow("Diary preferences", symbol: "list.bullet.rectangle", color: .diaryCarbs) }
                     NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
@@ -93,6 +96,7 @@ struct SettingsView: View {
             .environment(\.layoutDirection, .leftToRight)
         }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
+        .fullScreenCover(isPresented: $showOnboarding) { OnboardingView(model: model, connection: connection) { showOnboarding = false } }
         .onChange(of: model.readModel?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.readModel?.profile, restoreGeneration: model.restoreGeneration) }
         .confirmationDialog("Delete \(model.readModel?.profile.name ?? "this private local profile")?", isPresented: $showDelete, titleVisibility: .visible) {

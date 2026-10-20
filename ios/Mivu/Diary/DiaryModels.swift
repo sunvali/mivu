@@ -6,6 +6,22 @@ struct DiaryProfile: Codable, Equatable, Sendable, Identifiable {
     var language = "en"
     var timeZoneID = TimeZone.current.identifier
     var preferences = ""
+    /// Body, goal and diet answers from onboarding; nil for diaries that never ran it.
+    var about: ProfileAbout? = nil
+}
+
+struct ProfileAbout: Codable, Equatable, Sendable {
+    enum Sex: String, Codable, CaseIterable, Sendable { case female, male, unspecified }
+    enum Pace: String, Codable, CaseIterable, Sendable {
+        case gentle, steady, faster
+        var kgPerWeek: Double { switch self { case .gentle: 0.25; case .steady: 0.5; case .faster: 0.75 } }
+    }
+    var heightCm: Double
+    var birthYear: Int
+    var sex = Sex.unspecified
+    var pace = Pace.steady
+    var dietTags: [String] = []
+    var healthNotes = ""
 }
 
 enum DayCompleteness: String, Codable, CaseIterable, Sendable { case unknown, complete, partial, untracked }
@@ -377,8 +393,14 @@ func validateDiaryMetadataFields(schemaVersion: Int, revision: Int, profile: Dia
           !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
           profile.name.count <= 200, ["en", "he"].contains(profile.language),
           TimeZone(identifier: profile.timeZoneID) != nil, profile.preferences.count <= 10_000,
+          profile.about.map(validAbout) ?? true,
           lineage == nil || (!lineage!.isEmpty && lineage!.count <= 256 && unique(lineage!)),
           previousDayConfirmedAt == nil || previousDayConfirmedAt!.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+}
+
+private func validAbout(_ about: ProfileAbout) -> Bool {
+    (50...272).contains(about.heightCm) && (1900...2100).contains(about.birthYear)
+        && about.dietTags.count <= 32 && about.dietTags.allSatisfy { !$0.isEmpty && $0.count <= 60 } && about.healthNotes.count <= 2_000
 }
 
 func validateDiaryMetadataCollections(goals: [GoalRecord], deletedWeightIDs: [UUID], deletedWorkoutIDs: [UUID]) throws {

@@ -62,21 +62,35 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: unfiltered, object: nil)], timeout: 10), .completed)
         _ = assertTop("2026-10-19")
     }
-    func testFirstRunCreatesNamedDiaryWithoutInventingRecords() {
+    func testFirstRunOpensSetupWithoutInventingRecords() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--proof-english"]
         app.launch()
-        let name = app.textFields["newDiaryName"]
-        XCTAssertTrue(name.waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["createDiary"].isEnabled)
-        XCTAssertTrue(app.buttons["Restore from diary archive"].exists)
-        name.tap(); name.typeText("Synthetic diary")
-        app.buttons["createDiary"].tap()
+        // No name to invent: the first diary is created and Pip's setup opens. Answer, skip ChatGPT, save the estimate.
+        let next = app.buttons["onboardingNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        next.tap()
+        let height = app.textFields["onboardingHeight"]
+        XCTAssertTrue(height.waitForExistence(timeout: 5))
+        height.tap(); height.typeText("170") // the keyboard's Next walks to weight, then birth year
+        app.buttons["keyboardNext"].tap(); app.typeText("80")
+        app.buttons["keyboardNext"].tap(); app.typeText("1990")
+        app.buttons["keyboardDone"].tap()
+        next.tap()
+        let target = app.textFields["onboardingTarget"]
+        XCTAssertTrue(target.waitForExistence(timeout: 5))
+        target.tap(); target.typeText("72")
+        app.buttons["keyboardDone"].tap()
+        next.tap() // goal, steady pace
+        next.tap() // diet
+        app.buttons["onboardingSkipConnect"].tap()
+        XCTAssertTrue(app.staticTexts["Estimate"].waitForExistence(timeout: 5))
+        next.tap()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
         XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, 0)
         app.buttons["profileSettings"].tap()
-        XCTAssertTrue(app.buttons["localProfiles"].label.contains("Synthetic diary"))
+        XCTAssertTrue(app.buttons["localProfiles"].label.contains("My diary"))
     }
     func testPrecisionGlassReferenceScreensInBothAppearances() {
         for mode in ["light", "dark"] {

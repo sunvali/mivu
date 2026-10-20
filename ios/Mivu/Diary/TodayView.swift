@@ -12,47 +12,57 @@ extension EnvironmentValues {
     @Entry var diaryPhotoLimiter: PhotoWorkLimiter? = nil
 }
 
+/// First launch never asks for a diary name: with no diaries one is created and Pip's setup opens;
+/// with diaries (or after signing out) you pick one or start another.
 private struct DiarySetupView: View {
     @Bindable var model: DiaryViewModel
     let onSelected: () -> Void
-    @State private var name = ""
-    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var onCreated: () -> Void = {}
+    @State private var failed = false
     var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    Image(systemName: "chart.bar.xaxis").font(.largeTitle).foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
-                    Text("A clearer record of your day.").font(.largeTitle.bold())
-                    Text("Log meals, review estimates, and follow your progress. Your diary stays on this iPhone. Keep a backup before changing phones.")
-                        .foregroundStyle(Color.diarySecondary)
-                }.padding(.vertical, 12)
-            }
-            Section("Create your diary") {
-                TextField("Profile name", text: $name).textContentType(.nickname)
-                    .accessibilityIdentifier("newDiaryName")
-                Button("Create diary") {
-                    Task {
-                        await model.createProfile(name: trimmedName)
-                        if model.readModel != nil { onSelected() }
+        if model.profiles.isEmpty {
+            Group {
+                if failed {
+                    ContentUnavailableView {
+                        Label("Couldn't create your diary", systemImage: "exclamationmark.triangle")
+                    } actions: {
+                        Button("Try again") { Task { await startNew() } }.buttonStyle(.glassProminent).tint(.diaryAccent)
                     }
-                }.disabled(trimmedName.isEmpty || model.isChangingProfile)
-                    .frame(minHeight: 44).accessibilityIdentifier("createDiary")
+                } else {
+                    ProgressView("Setting up your diary").task { await startNew() }
+                }
             }
-            if !model.profiles.isEmpty {
-                Section("Your local diaries") {
+            .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.diaryCanvas)
+        } else {
+            Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Image(systemName: "chart.bar.xaxis").font(.largeTitle).foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+                        Text("Welcome back").font(.largeTitle.bold())
+                        Text("Choose a diary on this iPhone, or start a new one.").foregroundStyle(Color.diarySecondary)
+                    }.padding(.vertical, 12)
+                }
+                Section("Your diaries") {
                     ForEach(model.profiles) { profile in
                         Button(profile.name) {
                             Task { await model.switchProfile(profile.id); if model.readModel?.profile.id == profile.id { onSelected() } }
                         }.disabled(model.isChangingProfile).frame(minHeight: 44)
                     }
+                    Button("Start a new diary", systemImage: "plus") { Task { await startNew() } }
+                        .disabled(model.isChangingProfile).frame(minHeight: 44).accessibilityIdentifier("startNewDiary")
+                }
+                Section("Have a backup?") {
+                    DiaryBackupSettings(model: model)
                 }
             }
-            Section("Have a backup?") {
-                DiaryBackupSettings(model: model)
-            }
+            .scrollContentBackground(.hidden).background(Color.diaryCanvas)
+            .navigationTitle("Mivu")
         }
-        .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .navigationTitle("Mivu")
+    }
+    private func startNew() async {
+        failed = false
+        await model.createProfile(name: model.profiles.isEmpty ? "My diary" : "Diary \(model.profiles.count + 1)")
+        if model.readModel != nil { onSelected(); onCreated() } else { failed = true }
     }
 }
 
@@ -66,6 +76,7 @@ struct DiaryRootView: View {
     @State private var coachRoutes = CoachNavigationOwner()
     @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
+    @State private var showOnboarding = false
     @State private var companion = CompanionPresentation()
     @State private var companionRuntime: CompanionRuntime
     #if DEBUG
@@ -205,7 +216,7 @@ struct DiaryRootView: View {
             if !DiaryLaunch.isUITest { restoredTab = value }
             refreshCompanion()
         }
-        .onChange(of: [routes.route != nil, coachHistory != nil, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion, lowPower]) { _, _ in refreshCompanion() }
+        .onChange(of: [routes.route != nil, coachHistory != nil, showOnboarding, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion, lowPower]) { _, _ in refreshCompanion() }
         .onChange(of: model.selection, initial: true) { _, selection in
             coachRoutes.synchronize(selection: selection, isChangingProfile: model.isChangingProfile)
             coachHistory = nil
@@ -279,6 +290,9 @@ struct DiaryRootView: View {
             }
             .tint(.diaryAccent)
         }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(model: model, connection: connection) { showOnboarding = false }
+        }
         .sheet(item: $coachHistory) { presentation in
             CoachHistoryView(model: model, routes: coachRoutes, presentation: presentation,
                              open: coachAction(from: presentation.origin))
@@ -289,7 +303,7 @@ struct DiaryRootView: View {
             if !hasLoaded {
                 ProgressView("Opening diary").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.diaryCanvas)
             } else if model.readModel == nil {
-                NavigationStack { DiarySetupView(model: model) { selectedTab = "today" } }
+                NavigationStack { DiarySetupView(model: model, onSelected: { selectedTab = "today" }, onCreated: { showOnboarding = true }) }
             } else {
                 rootTabs
             }
@@ -399,7 +413,7 @@ struct DiaryRootView: View {
             reduceMotion: reduceMotion, lowPower: lowPower, thermalState: thermalState,
             sceneActive: phase == .active && hasLoaded && model.readModel != nil && !model.isChangingProfile,
             selected: context.surface != nil && context.surface == selectedCompanionSurface,
-            visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || model.errorMessage != nil)
+            visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || showOnboarding || model.errorMessage != nil)
         let output = companion.resolve(context: context, now: Date())
         if companionOutput.playback == .animated && output.playback != .animated { companionRuntime.stop() }
         #if DEBUG

@@ -32,7 +32,7 @@ extension Color {
     static let diaryRule = adaptive(0xD5DFE1, 0x374346, highContrastLight: 0x9BAEB2, highContrastDark: 0x68777B)
 }
 
-private struct DiarySummaryCardStyle: ViewModifier {
+struct DiarySummaryCardStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
 
