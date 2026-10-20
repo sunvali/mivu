@@ -62,48 +62,6 @@
       "appearances": "same original artwork for light and dark"
     },
     {
-      "name": "PipAttentive",
-      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipAttentive.imageset/pip.png",
-      "sha256": "a26ccc9003fc2165d2b4e0c0af933b3c884bf23d96db690c78315e161edf6acd",
-      "bytes": 157629,
-      "appearances": "same original artwork for light and dark"
-    },
-    {
-      "name": "PipThinking",
-      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipThinking.imageset/pip.png",
-      "sha256": "4f708c89a8575f19b2f79bacb8fc6c0074a18f20516a44dd4a4c57916e67f55b",
-      "bytes": 141238,
-      "appearances": "same original artwork for light and dark"
-    },
-    {
-      "name": "PipSaved",
-      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipSaved.imageset/pip.png",
-      "sha256": "7b7d47f2c1b2263398cad2e80ac5d03024cd31ae5c1cd39b93c5ddc97ebfb527",
-      "bytes": 142881,
-      "appearances": "same original artwork for light and dark"
-    },
-    {
-      "name": "PipReviewed",
-      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipReviewed.imageset/pip.png",
-      "sha256": "12f884678703f8c739423f164e07e926fa41544a2256e205adac9589c90f3cce",
-      "bytes": 149392,
-      "appearances": "same original artwork for light and dark"
-    },
-    {
-      "name": "PipRecovery",
-      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipRecovery.imageset/pip.png",
-      "sha256": "7cd53319bb53253df1d9fb33449476a89627364454131725c189f094a7a86e6a",
-      "bytes": 151321,
-      "appearances": "same original artwork for light and dark"
-    },
-    {
-      "name": "PipGreeting",
-      "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipGreeting.imageset/pip.png",
-      "sha256": "859060e57920aaab97f0858e246024cd9214359995084fc54dad2211c386a547",
-      "bytes": 149087,
-      "appearances": "same original artwork for light and dark"
-    },
-    {
       "name": "PipCoach",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipCoach.imageset/pip.png",
       "sha256": "aa2a5961a64443bcb7a2d30ccc6dd2b3a6fa27cbb80e7849a9bdb900c6cb7f36",

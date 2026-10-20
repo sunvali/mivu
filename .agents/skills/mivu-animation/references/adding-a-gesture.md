@@ -33,8 +33,8 @@ arrives at by `at` seconds; unlisted joints rest. Build keys with the builder in
    },
    ```
 
-   Keep the hop at or under 14 and squash at or under 0.10 so feet land back on
-   y 472. The name must be unique.
+   Keep the hop at or under 14 (a convention; tests do not enforce it) and squash
+   at or under 0.10 (enforced: scale 0.9-1.1, feet on the ground). The name must be unique.
 
 2. **If it is a new app event**, add it in four places:
    - `PipMoment` case in `PipGesture.swift`.
@@ -52,15 +52,16 @@ arrives at by `at` seconds; unlisted joints rest. Build keys with the builder in
 3. **Map it** in `PipGestureLibrary.gesture(for:)`: `case .proud: return named("proud")`.
    Variants (hour of day, tap level) are chosen in this one switch.
 
-4. **Tests run automatically.** `PipGestureTests` loops over
-   `PipGestureLibrary.all`: it checks that each gesture ends at rest within two
-   seconds, only `curl-up`/`wake` change the body set, squash and hop stay in caps,
-   and every joint name exists in the standing set. It also checks that every
-   `PipMoment` maps to a library gesture.
-   Add a named test only for new behaviour: moment mapping in
-   `PipGestureTests`, priority/dedupe in `CompanionPresentationTests`, runtime
-   playback in `CompanionRigRuntimeTests`, a signal from a screen in
-   `DiaryCompanionMomentTests`. Write the failing test first.
+4. **Tests.** Only the per-library-entry checks are automatic: `PipGestureTests`
+   loops over `PipGestureLibrary.all` and checks that each gesture ends at rest
+   within two seconds, only `curl-up`/`wake` change the body set, squash and feet
+   stay in caps, and every joint name exists in the standing set. Moment mapping is
+   **not** automatic: for a new `PipMoment`, append the case to
+   `PipGestureTests.moments` (the compiler only enforces the `gesture(for:)`
+   switch, not that list). Add other named tests only for new behaviour: priority/
+   dedupe in `CompanionPresentationTests`, runtime playback in
+   `CompanionRigRuntimeTests`, a signal from a screen in `DiaryCompanionMomentTests`.
+   Write the failing test first.
 
 5. **Review it.** Launch the app with `-PipRigPreview`, play the gesture at 40, 64,
    88 and 200 pt in light and dark, and check that it reads and that Coach's
