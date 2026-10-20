@@ -115,6 +115,28 @@ import Testing
         #expect(meal.state == .awaitingReview)
         model.enterBackground()
     }
+    @Test func captureDuringARunningSampleWorkerIsStillProcessed() async throws {
+        let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
+        let store = DiaryStore(directory: path)
+        _ = try await store.createProfile(DiaryProfile(name: "Synthetic busy worker", timeZoneID: "UTC"))
+        let day = try await store.startDay(at: Date())
+        let gate = Task10Gate(), once = Task10Once()
+        defer { Task { await gate.releaseAll() } }
+        // The worker started by load is held in its refresh, after it already processed an empty queue.
+        let model = DiaryViewModel(store: store, sampleMode: true, actionReadModelLoading: { owner in
+            if await once.claim() { await gate.hold(0) }
+            return try await store.diaryReadModel(expectedProfileID: owner)
+        })
+        await model.load(createDefaultProfile: false)
+        try await gate.waitForArrivals(1)
+        var draft = MealDraft(); draft.text = "Synthetic snack"; draft.reviewFirst = true
+        #expect(await model.capture(draft, dayID: day.id))
+        await gate.release(0)
+        await model.waitForWorker()
+        let meal = try #require(try await store.snapshotForExport().meals.first)
+        #expect(meal.state == .awaitingReview)
+        model.enterBackground()
+    }
     @Test func profileSwitchAndSignOutHideOtherPrivateRecords() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)

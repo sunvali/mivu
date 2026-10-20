@@ -328,7 +328,7 @@ private actor ReturnedPhotoGate {
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         await coach.loadTimelineIfNeeded()
         let turn = try #require(coach.turns.first), receipt = try #require(turn.receipts.first)
-        let initialLinksRevision = coach.linksRevision
+        let initialLinksRevision = coach.linksRevision, loadedRevision = coach.timeline?.revision ?? 0
         let runtime = CompanionRuntime()
         let output = CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil)
         let hosting = UIHostingController(rootView: CoachView(coach: coach, companionOutput: output, companionRuntime: runtime,
@@ -337,8 +337,9 @@ private actor ReturnedPhotoGate {
         let window = UIWindow(windowScene: scene); window.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
         window.rootViewController = hosting; window.makeKeyAndVisible()
         defer { window.rootViewController = nil; window.isHidden = true; runtime.stop() }
-        // The mounted view's initial refresh has finished before the controlled mutation.
-        try await waitFor { coach.linksRevision > initialLinksRevision && coach.linkedWorkouts(turn).first == workout }
+        // The mounted view's initial refresh and its reconnect delta have both finished before the controlled mutation.
+        try await waitFor { coach.linksRevision > initialLinksRevision && coach.linkedWorkouts(turn).first == workout
+            && (coach.timeline?.revision ?? 0) > loadedRevision && coach.timeline?.refreshTask == nil }
         let generation = diary.changeGeneration, timelineRevision = coach.timeline?.revision
         let linksBeforeChange = coach.linksRevision
         let stream = await store.changes(expectedProfileID: original.profile.id)
