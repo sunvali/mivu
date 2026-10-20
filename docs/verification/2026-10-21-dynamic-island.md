@@ -1,6 +1,6 @@
 # Dynamic Island day progress — verification
 
-- **Source:** `feat/dynamic-island` at `f548586`. The branch is based on `feat/widget` at `319bd0a`.
+- **Source:** `feat/dynamic-island` at `b412cac` (UI checks at `f548586`). The branch is based on `feat/widget` at `319bd0a`.
 - **Environment:** Xcode 27.0, iOS 27.0 simulator "Mivu dynamic-island (Claude)", an iPhone 18 Pro
   (`CEE1F6BE-3EFA-4913-99FA-BB33D802BA93`), on this machine only. XcodeBuildMCP wasn't available in
   this session, so `xcodebuild` ran directly.
@@ -11,8 +11,8 @@
 
 | Run | Revision | Result |
 |---|---|---|
-| `MivuTests` (whole unit target, test plan `Mivu`) | `243fb9f` | 1,021 tests in 95 suites passed |
-| `MivuTests/DayProgressActivityTests` + `WidgetSnapshotTests` | `f548586` | 21 tests in 2 suites passed |
+| `MivuTests` (whole unit target, test plan `Mivu`) | `b412cac` | 1,024 tests in 95 suites passed |
+| `MivuTests/DayProgressActivityTests` + `WidgetSnapshotTests` | `b412cac` | 23 tests in 2 suites passed |
 | `build-for-testing`, including `MivuUITests` | `243fb9f` | TEST BUILD SUCCEEDED |
 
 **Not run (blocked by the owner's instruction):** `MivuUITests/LiveActivityUITests.testDynamicIslandTogglesShowAndPersist`.
@@ -34,6 +34,12 @@ synthetic diaries have none.
 | Real diary data (no target, unknown macros) shows "100 eaten" with dashes, never "0g" | Pass, after the fix in `f548586` | Earlier build showed "P 0g", now covered by `unknownMacroIsNeverZero` |
 | The first build's Pip (489×592 asset) rendered as a grey box in the island | Fixed with a 138×168 `PipIsland` cut | `dynamic-island/expanded-under-before-inset.png` |
 | An activity starts on app open and updates when the diary loads | Pass (unified log: start, then update) | — |
+
+## Review fixes (`b412cac`)
+
+- If any item's calories are unknown, the figure shows "–", never a full "2,000 left" (`unknownCaloriesNeverShowAFullTarget`).
+- Only active or stale activities count as running, so a new one starts after iOS ends the old one at about 8 hours (`onlyActiveOrStaleActivitiesCountAsRunning`).
+- When numbers are hidden on a locked phone, VoiceOver says "Mivu day progress" instead of the figures, and the left/over caption is hidden too. This was not checked on a device.
 
 ## Not verified
 
