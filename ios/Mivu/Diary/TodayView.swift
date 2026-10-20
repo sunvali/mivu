@@ -187,6 +187,7 @@ struct DiaryRootView: View {
         .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel) }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
+        .onOpenURL { if $0.host == "today" { selectedTab = "today" } }
         .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest() }
         .onChange(of: model.isChangingProfile) { _, changing in
             coachRoutes.synchronize(selection: model.selection, isChangingProfile: changing)
