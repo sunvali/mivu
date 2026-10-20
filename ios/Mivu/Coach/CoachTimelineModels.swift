@@ -124,4 +124,5 @@ struct CoachNavigationRequest: Equatable, Sendable {
     var target: CoachSeekTarget?
     var requestID: UUID
     var draft: String? = nil
+    var reply: CoachReply? = nil
 }

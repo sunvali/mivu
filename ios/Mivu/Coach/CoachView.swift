@@ -136,6 +136,7 @@ struct CoachView: View {
             guard let request = navigationRequest else { return }
             if request.target != nil { _ = await coach.seek(request) }
             if let draft = request.draft, !Task.isCancelled { coach.prefill(draft) }
+            if let reply = request.reply, !Task.isCancelled, coach.startReply(reply) { editing = true }
             guard !Task.isCancelled, navigationRequest?.requestID == request.requestID else { return }
             onNavigationConsumed(request.requestID)
         }
