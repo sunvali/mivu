@@ -76,17 +76,21 @@ import XCTest
         let next = app.buttons["onboardingNext"]
         XCTAssertTrue(next.waitForExistence(timeout: 10))
         next.tap()
-        for (field, value) in [("Height in cm", "170"), ("Weight in kg", "80"), ("Birth year", "1990"), ("Target weight in kg", "72")] {
-            if field == "Target weight in kg" { next.tap() } // sex: keep "Prefer not to say"
-            let input = app.textFields.matching(NSPredicate(format: "label == %@ OR placeholderValue == %@", field, field.components(separatedBy: " in ")[0])).firstMatch
-            XCTAssertTrue(input.waitForExistence(timeout: 5), field)
-            input.tap(); input.typeText(value)
-            next.tap()
-        }
-        next.tap() // pace
+        let height = app.textFields["onboardingHeight"]
+        XCTAssertTrue(height.waitForExistence(timeout: 5))
+        height.tap(); height.typeText("170") // the keyboard's Next walks to weight, then birth year
+        app.buttons["keyboardNext"].tap(); app.typeText("80")
+        app.buttons["keyboardNext"].tap(); app.typeText("1990")
+        app.buttons["keyboardDone"].tap()
+        next.tap()
+        let target = app.textFields["onboardingTarget"]
+        XCTAssertTrue(target.waitForExistence(timeout: 5))
+        target.tap(); target.typeText("72")
+        app.buttons["keyboardDone"].tap()
+        next.tap() // goal, steady pace
         next.tap() // diet
         app.buttons["onboardingSkipConnect"].tap()
-        XCTAssertTrue(app.staticTexts["Estimate from a standard formula"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Estimate"].waitForExistence(timeout: 5))
         next.tap()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
