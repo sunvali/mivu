@@ -57,6 +57,8 @@ struct DiaryReportTests {
         let summary = document.page(at: 0)?.string ?? "", meals = document.page(at: 1)?.string ?? ""
         #expect(summary.contains("Synthetic") && summary.contains("Days logged") && summary.contains("−0.6 kg"))
         #expect(meals.contains("Burrito bowl") && !meals.contains("Still analyzing"))
+        #expect(summary.contains("MIVU") && summary.contains("Made with Mivu") && summary.contains("Page 1 of \(document.pageCount)"))
+        #expect(meals.contains("Page 2 of \(document.pageCount)"))
     }
     @Test func filesAreWrittenForTheChosenFormat() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

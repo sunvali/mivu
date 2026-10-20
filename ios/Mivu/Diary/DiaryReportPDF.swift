@@ -11,13 +11,20 @@ extension DiaryReport {
 
         let format = UIGraphicsPDFRendererFormat()
         format.documentInfo = [kCGPDFContextTitle as String: "Mivu food log", kCGPDFContextCreator as String: "Mivu"]
-        return UIGraphicsPDFRenderer(bounds: page, format: format).pdfData { context in
+        // Footers say "Page n of N", so a first pass counts the pages.
+        var pages = 0
+        func render(_ total: Int) -> Data { pages = 0; return UIGraphicsPDFRenderer(bounds: page, format: format).pdfData { context in
             var y = margin
             func draw(_ text: String, _ font: UIFont, _ color: UIColor, in rect: CGRect, align: NSTextAlignment = .left) {
                 let style = NSMutableParagraphStyle(); style.alignment = align; style.lineBreakMode = .byTruncatingTail
                 (text as NSString).draw(in: rect, withAttributes: [.font: font, .foregroundColor: color, .paragraphStyle: style])
             }
-            func newPage() { context.beginPage(); y = margin }
+            func newPage() {
+                context.beginPage(); pages += 1; y = margin
+                rule.setFill(); UIRectFill(CGRect(x: margin, y: page.height - 28, width: width, height: 0.5))
+                draw("Made with Mivu · values are logged estimates", font(8), secondary, in: CGRect(x: margin, y: page.height - 24, width: width / 2, height: 12))
+                draw("Page \(pages) of \(total)", font(8), secondary, in: CGRect(x: margin + width / 2, y: page.height - 24, width: width / 2, height: 12), align: .right)
+            }
             func ensure(_ height: CGFloat) { if y + height > page.height - margin { newPage() } }
             func line() { rule.setFill(); UIRectFill(CGRect(x: margin, y: y - 3, width: width, height: 0.5)) }
             /// Columns after the first are right-aligned numbers of equal width.
@@ -34,8 +41,18 @@ extension DiaryReport {
 
             // Summary page
             newPage()
-            draw("Mivu food log", font(20, .bold), ink, in: CGRect(x: margin, y: y, width: width, height: 26)); y += 28
-            draw("\(profileName) · \(rangeTitle) · prepared for your clinician", font(10), secondary, in: CGRect(x: margin, y: y, width: width, height: 14)); y += 26
+            let band = CGRect(x: 0, y: 0, width: page.width, height: 112), white = UIColor.white
+            accent.setFill(); UIRectFill(band)
+            draw("MIVU", font(9, .heavy), white.withAlphaComponent(0.85), in: CGRect(x: margin, y: 30, width: width - 120, height: 12))
+            draw("Food log", font(22, .bold), white, in: CGRect(x: margin, y: 44, width: width - 120, height: 28))
+            draw("\(profileName) · \(rangeTitle) · prepared for your clinician", font(10), white.withAlphaComponent(0.85), in: CGRect(x: margin, y: 76, width: width - 120, height: 14))
+            if let pip = UIImage(named: "PipCoach") {
+                // Pip's portrait is cropped at the chest, so it sits on the band's edge and peeks up from behind it.
+                context.cgContext.saveGState(); UIRectClip(band)
+                pip.draw(in: CGRect(x: page.width - margin - 104, y: band.maxY - 104, width: 104, height: 104))
+                context.cgContext.restoreGState()
+            }
+            y = band.maxY + 24
 
             let tileWidth = (width - 18) / 4
             for (index, tileText) in summaryTiles.enumerated() {
@@ -72,7 +89,7 @@ extension DiaryReport {
                      day.weight.map { "\(number($0.value)) \($0.unit)" } ?? "—"], first: 120, colors: isOver ? [1: over] : [:])
             }
             y += 8
-            draw("Red calories are above that day's target. Nutrition values are logged estimates; “—” means unknown.", font(8), secondary,
+            draw("Red calories are above that day’s target. “—” means unknown.", font(8), secondary,
                  in: CGRect(x: margin, y: y, width: width, height: 12))
 
             // Meal pages
@@ -91,7 +108,9 @@ extension DiaryReport {
                 }
             }
             if days.allSatisfy(\.meals.isEmpty) { draw("No saved meals in this range.", font(10), secondary, in: CGRect(x: margin, y: y, width: width, height: 14)) }
-        }
+        } }
+        _ = render(0)
+        return render(pages)
     }
 
     private var summaryTiles: [(title: String, value: String, detail: String)] {
