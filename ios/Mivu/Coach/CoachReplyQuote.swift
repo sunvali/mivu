@@ -26,13 +26,15 @@ struct CoachReplyQuote: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 10) {
-            Capsule().fill(inMessage ? Color.white.opacity(0.85) : Color.diaryAccent).frame(width: 3)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.footnote.weight(.semibold))
+        HStack(spacing: 8) {
+            Capsule().fill(inMessage ? Color.white.opacity(0.7) : Color.diaryAccent).frame(width: 3)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.caption.weight(.semibold))
                     .foregroundStyle(inMessage ? Color.white : Color.diaryAccent)
-                Text(reply.excerpt).font(.subheadline).lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
-                    .foregroundStyle(inMessage ? Color.white.opacity(0.85) : Color.diarySecondary)
+                // One line in the composer, two in a sent message; more only at accessibility sizes.
+                Text(reply.excerpt).font(.footnote)
+                    .lineLimit((inMessage ? 2 : 1) + (typeSize.isAccessibilitySize ? 1 : 0))
+                    .foregroundStyle(inMessage ? Color.white.opacity(0.8) : Color.diarySecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

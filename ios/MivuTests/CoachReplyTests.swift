@@ -123,6 +123,22 @@ import Testing
         #expect(!coach.startReply(other) && coach.attachmentDraft.reply == nil)
     }
 
+    @Test func replyIsIgnoredWhileSending() async throws {
+        let gate = Task10Gate(), f = try await Task10Fixture.make(); defer { f.remove() }
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture
+        dependencies.capture = { payload, owner in await gate.hold(1); return try await capture(payload, owner) }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), attachmentDependencies: dependencies)
+        defer { coach.cancel() }
+        coach.draft.text = "2 eggs"
+        let sending = Task { await coach.send() }
+        try await gate.waitForArrivals(1)
+        coach.reply(to: CoachTimelineTestData.row(1), fromPip: false)
+        #expect(coach.attachmentDraft.reply == nil)
+        await gate.release(1)
+        #expect(await sending.value && coach.draft.text.isEmpty)
+    }
+
     @Test func messageExcerptUsesTextOrPhoto() async throws {
         let f = try await Task10Fixture.make(); defer { f.remove() }
         let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection()); defer { coach.cancel() }

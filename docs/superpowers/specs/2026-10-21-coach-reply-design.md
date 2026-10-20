@@ -1,6 +1,6 @@
 # Coach reply-to-message design
 
-Status: draft for owner approval, 2026-10-21. Builds on the
+Status: approved by the owner, 2026-10-21. Builds on the
 [Coach chat history design](2026-10-18-coach-chat-history-design.md),
 [behavior contract](../../development/coach-chat-behavior.md) and the Diary
 redesign branch `feat/diary-redesign` (its `CoachNavigationRequest.target?`/`draft`).
@@ -15,7 +15,7 @@ identified reference), so Pip edits or explains the right thing.
 
 ## Owner decisions (2026-10-21)
 
-- Start a reply by **swiping a row right** (native swipe action, replies to
+- Start a reply by **swiping a row right** (replies to
   Pip's answer in that row, or to the person's message when there is no answer
   yet) **or long-pressing a bubble** (context menu → Reply to that exact message).
 - **Both** the person's and Pip's messages are repliable.
@@ -25,8 +25,8 @@ identified reference), so Pip edits or explains the right thing.
 
 ## Behavior
 
-1. **Composer quote bar.** While a reply is set, a compact bar sits directly
-   above the text field: a leading accent rule, a one-line title ("Replying to
+1. **Composer quote bar.** While a reply is set, a compact bar sits inside the
+   top of the text field (as in Messages, so Pip still rests on the field): a leading accent rule, a one-line title ("Replying to
    Pip", "Replying to you", or "From Diary"), and a one/two-line excerpt, plus an
    ✕ button (44-pt target, label "Cancel reply"). Setting a reply focuses the
    field. Sending clears it with the text; a failed or uncertain send keeps it.
@@ -41,8 +41,8 @@ identified reference), so Pip edits or explains the right thing.
    - day → existing `.day(id)` seek.
 3. **Accessibility.** The quote is part of the bubble's spoken content
    ("Reply to Pip: …"); tapping it is a button with hint "Shows the original".
-   Each exchange row exposes custom actions "Reply to your message" and "Reply
-   to Pip" (the latter only when an answer exists). The table's existing
+   Each message (the person's bubble and Pip's answer) exposes a "Reply"
+   accessibility action, matching its long-press menu. The table's existing
    accessibility prefix and the Jump-to-latest button are untouched. Quote text
    uses Dynamic Type styles (`.subheadline`/`.footnote`), limits lines to 2 (3
    at accessibility sizes); no animation when Reduce Motion is on.
@@ -115,8 +115,14 @@ rather than guessing another, and ask if it is unavailable.
 - **Branch:** stacked on `feat/diary-redesign` (tip `bf35b30`) because it already
   changes `CoachNavigationRequest`; the PR targets that branch and retargets to
   `main` once the Diary PR merges. `draft`/`prefill` stay for other callers.
-- Swipe uses `UITableView` leading swipe actions (native, full-swipe performs it)
-  and long-press uses SwiftUI `.contextMenu` on each bubble with Copy and Reply.
+- Swipe is an interactive pan on the timeline table (owner asked for
+  Apple-level polish over a Mail-style action button): the row follows the
+  finger with resistance past 64 pt, a reply arrow fades and scales in beside
+  the finger, a light haptic marks the threshold, and the row springs back
+  (plain ease with Reduce Motion). It only begins for clearly horizontal
+  rightward drags, so vertical scrolling and the Jump-to-latest drag are
+  unchanged. Long-press uses SwiftUI `.contextMenu` on each message with Reply
+  and Copy.
 - Reply stored in the manifest rather than a new column, for free immutability
   and archive coverage.
 - Excerpt cap 280 characters; message excerpts come from the quoted message's

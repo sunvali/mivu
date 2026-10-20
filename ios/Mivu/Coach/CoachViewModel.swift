@@ -180,6 +180,8 @@ private final class CoachNavigationReadFence: Sendable {
     }
     /// Quotes an earlier message, replacing any quote already in the composer.
     func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
+        // A quote changed mid-send would keep the sent text in the composer for a second send.
+        guard !isSending else { return }
         synchronizeDraftOwnership()
         let text = (fromPip ? turn.assistantText ?? "" : turn.text).trimmingCharacters(in: .whitespacesAndNewlines)
         attachmentDraft.reply = CoachReply(target: .message(turnID: turn.id, fromPip: fromPip),

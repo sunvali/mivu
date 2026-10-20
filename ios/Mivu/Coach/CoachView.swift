@@ -434,14 +434,15 @@ struct CoachView: View {
         HStack(spacing: 4) {
             CoachReplyQuote(reply: reply, title: reply.composerTitle)
             Button { coach.attachmentDraft.reply = nil } label: {
-                Image(systemName: "xmark").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)
-                    .frame(minWidth: 44, minHeight: 44)
+                Image(systemName: "xmark.circle.fill").font(.title3).symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(Color.diarySecondary)
+                    .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
             }
-            .accessibilityLabel("Cancel reply").accessibilityIdentifier("coachReplyCancel")
+            .buttonStyle(.borderless).accessibilityLabel("Cancel reply").accessibilityIdentifier("coachReplyCancel")
         }
-        .padding(.leading, 12).padding(.vertical, 2)
-        .background(Color.diaryAccent.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
-        .padding([.horizontal, .top], 6)
+        .padding(.leading, 10).padding(.vertical, 2)
+        .background(Color.diaryAccent.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding([.horizontal, .top], 5)
         .accessibilityElement(children: .contain).accessibilityIdentifier("coachReplyBar")
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
     }
@@ -468,9 +469,9 @@ struct CoachView: View {
                 if let reply = turn.reply {
                     Button { openQuote(reply) } label: {
                         CoachReplyQuote(reply: reply, title: reply.author, inMessage: true)
-                            .padding(.horizontal, 10).padding(.vertical, 8).frame(minHeight: 44)
-                            .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
-                            .contentShape(RoundedRectangle(cornerRadius: 12))
+                            .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 44)
+                            .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain).accessibilityHint("Shows the original")
                     .accessibilityIdentifier("coachQuote-" + turn.id.uuidString)

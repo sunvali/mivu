@@ -36,6 +36,8 @@ struct CoachTimelineView: UIViewRepresentable {
         table.accessibilityIdentifier = "coachViewport"
         table.register(CoachTimelineCell.self, forCellReuseIdentifier: "exchange")
         table.dataSource = context.coordinator; table.delegate = context.coordinator
+        let replyPan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.replyPan(_:)))
+        replyPan.delegate = context.coordinator; table.addGestureRecognizer(replyPan)
         table.onViewport = { [weak coordinator = context.coordinator] in coordinator?.reportViewport() }
         context.coordinator.table = table
         context.coordinator.baselineCompletion()
@@ -115,7 +117,7 @@ struct CoachTimelineView: UIViewRepresentable {
         }
     }
 
-    @MainActor final class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate {
+    @MainActor final class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate, UIGestureRecognizerDelegate {
         var owner: CoachTimelineView
         weak var table: CoachTimelineTable?
         private var completionBaselineSet = false
@@ -136,15 +138,44 @@ struct CoachTimelineView: UIViewRepresentable {
             let cell = table.dequeueReusableCell(withIdentifier: "exchange", for: indexPath) as! CoachTimelineCell
             configure(cell, row: table.rows[indexPath.row]); return cell
         }
-        // Swipe right to reply, as in Messages; a full swipe replies at once.
-        func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-            let rows = (tableView as! CoachTimelineTable).rows
-            guard let onReply = owner.onReply, rows.indices.contains(indexPath.row), let turn = rows[indexPath.row].exchange else { return nil }
-            let action = UIContextualAction(style: .normal, title: "Reply") { _, _, done in onReply(turn); done(true) }
-            action.image = UIImage(systemName: "arrowshape.turn.up.left.fill"); action.backgroundColor = UIColor(Color.diaryAccent)
-            let configuration = UISwipeActionsConfiguration(actions: [action])
-            configuration.performsFirstActionWithFullSwipe = true
-            return configuration
+        // Swipe right to reply, as in Messages: the row follows the finger, an arrow fades in,
+        // a light tap marks the threshold, and the row springs back.
+        private var swipingCell: CoachTimelineCell?
+        private var swipeArmed = false
+        func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+            guard let pan = gesture as? UIPanGestureRecognizer, owner.onReply != nil, let table else { return false }
+            let velocity = pan.velocity(in: table)
+            return velocity.x > 0 && velocity.x > abs(velocity.y) * 2 && replyTurn(at: pan.location(in: table)) != nil
+        }
+        private func replyTurn(at point: CGPoint) -> (CoachTimelineCell, CoachExchangeSummary)? {
+            guard let table, let path = table.indexPathForRow(at: point), table.rows.indices.contains(path.row),
+                  let turn = table.rows[path.row].exchange, let cell = table.cellForRow(at: path) as? CoachTimelineCell else { return nil }
+            return (cell, turn)
+        }
+        @objc func replyPan(_ pan: UIPanGestureRecognizer) {
+            guard let table else { return }
+            let threshold: CGFloat = 64
+            switch pan.state {
+            case .began:
+                swipingCell = replyTurn(at: pan.location(in: table))?.0; swipeArmed = false
+                swipingCell?.replyIconY = swipingCell.map { pan.location(in: $0).y }
+            case .changed:
+                let x = max(0, pan.translation(in: table).x)
+                let offset = min(x, threshold) + max(0, x - threshold) * 0.15
+                swipingCell?.setReplyOffset(offset, progress: min(1, x / threshold))
+                if (x >= threshold) != swipeArmed {
+                    swipeArmed.toggle()
+                    if swipeArmed { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                }
+            default:
+                let cell = swipingCell
+                if pan.state == .ended, swipeArmed, let turn = replyTurn(at: pan.location(in: table))?.1 ?? cell?.rowID.flatMap({ id in
+                    table.rows.first { $0.id == id }?.exchange }) { owner.onReply?(turn) }
+                swipingCell = nil; swipeArmed = false
+                let reset: () -> Void = { cell?.setReplyOffset(0, progress: 0) }
+                if UIAccessibility.isReduceMotionEnabled { UIView.animate(withDuration: 0.2, animations: reset) }
+                else { UIView.animate(springDuration: 0.4, bounce: 0.25, animations: reset) }
+            }
         }
         func updateJumpButton(in table: CoachTimelineTable, appearanceChanged: Bool) {
             guard owner.jumpToLatest != nil else {
@@ -279,7 +310,28 @@ struct CoachTimelineView: UIViewRepresentable {
     }
 }
 
-final class CoachTimelineCell: UITableViewCell { var rowID: CoachTimelineRow.Identity? }
+final class CoachTimelineCell: UITableViewCell {
+    var rowID: CoachTimelineRow.Identity?
+    /// The arrow appears beside the finger, so it sits next to the message being swiped in a tall exchange.
+    var replyIconY: CGFloat?
+    private lazy var replyIcon: UIImageView = {
+        let icon = UIImageView(image: UIImage(systemName: "arrowshape.turn.up.left.fill",
+            withConfiguration: UIImage.SymbolConfiguration(textStyle: .subheadline, scale: .medium)))
+        icon.tintColor = .secondaryLabel; icon.contentMode = .center; icon.alpha = 0
+        icon.backgroundColor = .tertiarySystemFill; icon.layer.cornerRadius = 16; icon.isAccessibilityElement = false
+        insertSubview(icon, belowSubview: contentView)
+        return icon
+    }()
+    func setReplyOffset(_ offset: CGFloat, progress: CGFloat) {
+        contentView.transform = CGAffineTransform(translationX: offset, y: 0)
+        let y = min(max(replyIconY ?? bounds.midY, 24), bounds.height - 24)
+        replyIcon.bounds = CGRect(x: 0, y: 0, width: 32, height: 32); replyIcon.center = CGPoint(x: 28, y: y)
+        replyIcon.alpha = progress
+        let scale = 0.6 + 0.4 * progress
+        replyIcon.transform = CGAffineTransform(scaleX: scale, y: scale)
+    }
+    override func prepareForReuse() { super.prepareForReuse(); setReplyOffset(0, progress: 0) }
+}
 
 final class CoachTimelineTable: UITableView {
     var rows: [CoachTimelineRow] = []

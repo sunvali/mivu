@@ -198,8 +198,10 @@ extension DiaryDatabase {
             case .meal(let id), .item(let id, _):
                 if case .item(_, let itemID) = reply.target,
                    !(try transaction.mealItems(id: id)).contains(where: { $0.id == itemID }) { throw DiaryError.notFound }
-                let meal = try coachMealDetail(id, transaction: transaction)
-                if try JSONEncoder().encode(meal).count <= 8192 { value.meal = meal }
+                do {
+                    let meal = try coachMealDetail(id, transaction: transaction)
+                    if try JSONEncoder().encode(meal).count <= 8192 { value.meal = meal }
+                } catch CoachError.limitExceeded {} // ids only; the model uses get_meal
             case .day(let id): _ = try trackingDay(id: id)
             }
         } catch DiaryError.notFound { value.unavailable = true }
