@@ -150,8 +150,9 @@ CLI path/version and simulator/runtime. Forwarded `TEST_RUNNER_*` and
 `SIMCTL_CHILD_*` names/values affect a digest in the key; raw values are not stored.
 A nonempty `XCODE_XCCONFIG_FILE` blocks native verification because it selects
 untracked build configuration.
-Failures, zero-test and malformed results never enter the cache. A lock prevents
-parallel native runs. Source, `HEAD` and environment are checked again after the
+Failures, zero-test and malformed results never enter the cache. A per-simulator
+lock prevents two native checks from using the same device; separate reserved
+devices and build caches can run independently. Source, `HEAD` and environment are checked again after the
 run. Evidence, success records and reusable build output live under
 `mivu-checks/` in Git's common directory, outside tracked files; each run gets a
 fresh result-bundle path. Hook build/package caches are separated by simulator

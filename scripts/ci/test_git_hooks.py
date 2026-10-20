@@ -313,12 +313,22 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         self.native_commit()
         common = self.root / '.git/mivu-checks'
         common.mkdir()
-        with (common / 'native.lock').open('w') as lock:
+        with (common / 'native-synthetic-id.lock').open('w') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             result = self.push()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Another native check', result.stderr)
         self.assertEqual(self.calls(), [])
+
+    def test_other_simulator_does_not_block_native_check(self):
+        self.native_commit()
+        common = self.root / '.git/mivu-checks'
+        common.mkdir()
+        with (common / 'native-other-device.lock').open('w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            result = self.push()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.calls()), 1)
 
     def test_real_push_clears_repository_git_environment_for_native_children(self):
         self.native_commit()

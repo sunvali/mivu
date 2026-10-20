@@ -125,7 +125,8 @@ def successful(result):
 def native_check(head):
     common = Path(git('rev-parse', '--git-common-dir').strip()).resolve() / 'mivu-checks'
     common.mkdir(parents=True, exist_ok=True)
-    with (common / 'native.lock').open('w') as lock:
+    tools = environment()
+    with (common / ('native-' + tools['simulator'] + '.lock')).open('w') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
@@ -134,7 +135,6 @@ def native_check(head):
         if git('rev-parse', 'HEAD').strip() != head:
             raise ValueError('HEAD changed before native verification; push again.')
         inputs = tree(head, NATIVE)
-        tools = environment()
         key = hashlib.sha256(json.dumps([inputs, tools, EXTRA], sort_keys=True).encode()).hexdigest()
         cache = common / (key + '.json')
         prior = None
