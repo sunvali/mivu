@@ -184,7 +184,7 @@ import UIKit
     /// Width over height of the artboard crop each surface shows (the asset's frames), with the shipped values until loaded.
     func cropAspect(for surface: CompanionSurface) -> CGFloat {
         let frame = asset?.frames[surface == .coach ? "coach" : "today"]
-        return frame.map { $0.width / $0.height } ?? (surface == .coach ? 76.0 / 66 : 399.8 / 455.5)
+        return frame.map { $0.width / $0.height } ?? (surface == .coach ? 398.6 / 353.8 : 399.8 / 455.5)
     }
 
     func fallbackAssetName(for surface: CompanionSurface = .today) -> String {

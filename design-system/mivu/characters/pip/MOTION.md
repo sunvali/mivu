@@ -11,8 +11,9 @@ loosened below. Source is `rig/pip.svg`; see [`rig/README.md`](rig/README.md).
 Pip is a layered vector drawn by us, traced from the paintings and checked by
 overlay. Artboard 512x512, ground line y 472, content inside x 40-472 / y 32-472;
 it must read at 40, 64, 88 and 200 pt in light and dark. Today shows the standing
-set, Coach the seated set (fits the 76:66 strip uncropped), long idle on Today the
-curled set. Native text, keyboard, controls and navigation remain SwiftUI-owned,
+set; Coach peeks over the composer (character sheet p. 2): the seated set cropped at the
+`data-peek` bar line (y 383), paws resting on it and on the field's top edge; long idle on
+Today the curled set. Native text, keyboard, controls and navigation remain SwiftUI-owned,
 and feet stay on the ground line. Pip is decorative: `accessibilityHidden(true)`.
 
 ## Runtime
@@ -86,7 +87,9 @@ carries meaning and never relies on color or motion alone.
 
 ## Living eyes and idle
 
-Eyes blink on their own (a drawn blink: half-shut, shut, half-shut, open in 160 ms) and follow `look(at:)` (gaze leads, then the head turns for
+Eyes blink on their own (a drawn blink: half-shut, shut, half-shut, open in 160 ms) and follow `look(at:)`;
+with no gesture playing the head follows a beat later inside its view (face slide plus a nod up to 3 degrees, never a
+view swap), as the sheet's "tiny gaze changes" ask (gaze leads, then the head turns for
 a larger glance or a head view swap). `PipIdleScheduler` picks a beat every 2-6 s:
 blink, double blink, glance, ear flick, weight shift; yawn and stretch after 30 s
 of quiet; on Today a tail hug and then curl-up after 90 s. A curled Pip only

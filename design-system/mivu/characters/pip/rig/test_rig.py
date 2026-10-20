@@ -125,6 +125,8 @@ class RigTests(unittest.TestCase):
         for body_set in SETS:
             for chain in chains:
                 for parent, child in zip(chain, chain[1:]):
+                    if body_set == "seated" and child.startswith("paw-"):
+                        parent = "body"  # Coach peeks over the composer: the paws rest on the bar, off the legs
                     self.assertEqual(by_id[set_id(child, body_set)]["parent"], set_id(parent, body_set),
                                      (body_set, child))
 
@@ -140,10 +142,14 @@ class RigTests(unittest.TestCase):
             self.assertTrue(40 <= x0 and x1 <= 472 and 32 <= y0 and y1 <= 472, (body_set, x0, y0, x1, y1))
 
     def test_coach_frame_contains_seated_set(self):
+        # Coach is a bust: everything above the bar line fits, the crop ends on it, and both paws rest on it.
         x, y, w, h = self.rig["frames"]["coach"]
-        x0, y0, x1, y1 = set_bounds(self.parts, "seated")
-        self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w and y1 <= y + h)
-        self.assertAlmostEqual(w / h, 76 / 66, delta=0.01)
+        x0, y0, x1, _ = set_bounds(self.parts, "seated", below=383)
+        self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w)
+        self.assertAlmostEqual(y + h, 383, delta=0.5)
+        for paw in ("paw-l@seated", "paw-r@seated"):
+            part = next(p for p in self.parts if p["id"] == paw)
+            self.assertAlmostEqual(max(points(part["path"])[1]), 383, delta=2, msg=paw)
         x, y, w, h = self.rig["frames"]["today"]
         x0, y0, x1, y1 = set_bounds(self.parts, "standing")
         self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w and y1 <= y + h)

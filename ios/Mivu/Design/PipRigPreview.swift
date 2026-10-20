@@ -116,7 +116,7 @@ struct PipRigPreview: View {
 
     private func eyesLeadTurn() async {
         caption = "eyes lead turn"
-        for turn in [CGFloat(-1), 0, 1] {
+        for turn in [CGFloat(0.6), 1.4, 1] { // in-view turns, as gestures use them
             await play(PipGesture("turn") { $0.at(0.3) { $0.turn(turn) }; $0.at(0.8) { $0.turn(turn) } })
         }
     }

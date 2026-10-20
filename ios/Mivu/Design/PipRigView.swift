@@ -17,6 +17,7 @@ final class PipRigView: UIView {
     /// Glint part id -> its iris; the glint counter-shifts so the light seems fixed.
     private var glintIris: [String: String] = [:]
     private var playback: Playback?
+    private var lookFollow: DispatchWorkItem?
     private var playbackTick = 0
 
     /// Timers still waiting for the current gesture; bounded by one pass of its keys, even for a loop.
@@ -57,6 +58,7 @@ final class PipRigView: UIView {
 
     func removeAllMotion() {
         stopPlayback()
+        lookFollow?.cancel()
         root.removeAllAnimations()
         containers.values.forEach { $0.removeAllAnimations() }
         shapes.values.forEach { $0.removeAllAnimations() }
@@ -321,11 +323,25 @@ extension PipRigView {
         }
     }
 
-    /// Saccade to `point` (unit disc, +y down) for idle glances and typing.
+    /// Saccade to `point` (unit disc, +y down) for idle glances and typing. With no gesture playing the head follows a
+    /// beat later and slower: the face slides toward the look inside the current view (never a view swap, which reads as
+    /// a pop) and nods up to 3 degrees, as the character sheet's "tiny gaze changes" ask.
     func look(at point: CGPoint, animated: Bool = true) {
         var next = pose
         next.gaze = point
-        if animated { transition(to: next, period: 0.06) } else { apply(next, animated: false) }
+        guard animated else { apply(next, animated: false); return }
+        transition(to: next, period: 0.06)
+        lookFollow?.cancel()
+        guard playback == nil else { return }
+        var follow = next
+        follow.headTurn = 1 + 0.35 * point.x // 0.65...1.35 stays in the right view
+        follow.joints["head", default: PipPose.Joint()].rotation = 3 * .pi / 180 * point.y
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, playback == nil, pose == next else { return }
+            transition(to: follow, period: 0.45)
+        }
+        lookFollow = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
     }
 
     /// A drawn cartoon blink: half-shut (40 ms), shut (70 ms), half-shut (40 ms), open. It swaps the painted eye

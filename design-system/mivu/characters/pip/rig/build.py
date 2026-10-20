@@ -139,8 +139,8 @@ def collect(node, matrix, parent, part_set, parts, hidden=False, view=None):
         collect(child, m, part_id or parent, child_set, parts, child_hidden, child_view)
 
 
-def set_bounds(parts, name):
-    """Union bounds of a set at rest: its visible parts plus the default head view on its mount."""
+def set_bounds(parts, name, below=None):
+    """Union bounds of a set at rest: its visible parts plus the default head view on its mount (points above `below`)."""
     k, tx, ty = next(p["mount"] for p in parts if p["id"] == ("body" if name == "standing" else f"body@{name}"))
     xs, ys = [], []
     for p in parts:
@@ -149,9 +149,17 @@ def set_bounds(parts, name):
             px, py = v[0::2], v[1::2]
             if p["view"]:
                 px, py = [k * x + tx for x in px], [k * y + ty for y in py]
-            xs += px
-            ys += py
+            kept = [(x, y) for x, y in zip(px, py) if below is None or y <= below]
+            xs += [x for x, _ in kept]
+            ys += [y for _, y in kept]
     return min(xs), min(ys), max(xs), max(ys)
+
+
+def coach_frame(root, parts):
+    """Coach shows a bust peeking over the composer: down to the seated body's `data-peek` bar line, where the paws rest."""
+    peek = float(next(g.get("data-peek") for g in root.iter(f"{SVG}g") if g.get("id") == "body@seated"))
+    x0, y0, x1, _ = set_bounds(parts, "seated", below=peek)
+    return frame((x0, y0, x1, peek), 6)[:3] + [float(number(peek - (y0 - 6)))]
 
 
 def frame(bounds, pad, aspect=None):
@@ -169,17 +177,27 @@ def build():
     parts = []
     collect(root, IDENTITY, None, None, parts)
     rig = {"version": 2, "artboard": 512, "ground": 472, "parallaxScale": PARALLAX_SCALE,
-           "frames": {"today": frame(set_bounds(parts, "standing"), 8),
-                      "coach": frame(set_bounds(parts, "seated"), 6, aspect=76 / 66)},
+           "frames": {"today": frame(set_bounds(parts, "standing"), 8), "coach": coach_frame(root, parts)},
            "parts": sorted(parts, key=lambda p: p["z"])}
     OUTPUT.write_text(json.dumps(rig, separators=(",", ":")) + "\n")
     return rig
 
 
-def set_svg(name, dark=False):
-    """The SVG showing one body set at rest, with the head views mounted on its body."""
+def set_svg(name, dark=False, crop=None):
+    """The SVG showing one body set at rest, with the head views mounted on its body.
+
+    `crop` ([x, y, w, h]) clips to that frame and centres it in a square canvas of the usual size, the way the app
+    centres a square fallback over the rig's crop."""
     ET.register_namespace("", SVG[1:-1])
     root = ET.parse(SOURCE).getroot()
+    if crop:
+        x, y, w, h = crop
+        side = max(w, h)
+        root.set("viewBox", " ".join(number(v) for v in (x - (side - w) / 2, y - (side - h) / 2, side, side)))
+        clip = ET.SubElement(ET.SubElement(root, f"{SVG}defs"), f"{SVG}clipPath", id="crop")
+        ET.SubElement(clip, f"{SVG}rect", x=number(x), y=number(y), width=number(w), height=number(h))
+        for g in root.findall(f"{SVG}g"):
+            g.set("clip-path", "url(#crop)")
     body = "body" if name == "standing" else f"body@{name}"
     mount = next((g.get("data-mount") for g in root.iter(f"{SVG}g") if g.get("id") == body), "1 0 0")
     k, tx, ty = mount.split()
@@ -195,7 +213,7 @@ def set_svg(name, dark=False):
     return ET.tostring(root)
 
 
-def render_sets(out_dir):
+def render_sets(out_dir, rig):
     import cairosvg
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -207,7 +225,8 @@ def render_sets(out_dir):
         folder = OUTPUT.parents[3] / f"Assets.xcassets/Companion/Pip/{imageset}.imageset"
         for entry in json.loads((folder / "Contents.json").read_text())["images"]:
             dark = any(a.get("value") == "dark" for a in entry.get("appearances", []))
-            cairosvg.svg2png(bytestring=set_svg(name, dark), write_to=str(folder / entry["filename"]))
+            crop = rig["frames"]["coach"] if imageset == "PipCoach" else None  # Coach's fallback is the same bust
+            cairosvg.svg2png(bytestring=set_svg(name, dark, crop), write_to=str(folder / entry["filename"]))
 
 
 if __name__ == "__main__":
@@ -217,4 +236,4 @@ if __name__ == "__main__":
     rig = build()
     print(f"wrote {len(rig['parts'])} parts to {OUTPUT}")
     if args.png:
-        render_sets(args.png)
+        render_sets(args.png, rig)

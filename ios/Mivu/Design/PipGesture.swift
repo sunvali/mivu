@@ -68,8 +68,8 @@ extension PipPose {
         edited(sides(side).map { "ear-\($0)" }) { $0.rotation = Self.radians(degrees) }
     }
     /// Lifts a paw: negative `degrees` swings the leg forward from the shoulder, `elbow` is how far the paw comes up.
-    /// Standing, the lower leg hangs from the raised elbow and the paw curls under; seated, the paw reaches a little
-    /// forward over the tail. The far (left) leg swings a third as much so it never lies across the chest.
+    /// Standing, the lower leg hangs from the raised elbow and the paw curls under; the far (left) leg swings a third as
+    /// much so it never lies across the chest. Seated (Coach, peeking over the composer) the paw rises off the bar.
     func pawUp(_ side: Side = .both, _ degrees: CGFloat = -40, elbow: CGFloat = -60) -> PipPose {
         var copy = self
         let lift = abs(elbow)
@@ -78,9 +78,8 @@ extension PipPose {
             copy = copy.edited(["arm-\(s)"]) { $0.rotation = Self.radians(max(degrees, -65) * reach) }
                 .edited(["forearm-\(s)"]) { $0.rotation = Self.radians(lift * 0.85) }
                 .edited(["paw-\(s)"]) { $0.rotation = Self.radians(lift * 0.25) }
-                .edited(["arm-\(s)@seated"]) { $0.rotation = Self.radians(degrees * 0.3 * reach) }
-                .edited(["forearm-\(s)@seated"]) { $0.rotation = Self.radians(-lift * 0.35 * reach) }
-                .edited(["paw-\(s)@seated"]) { $0.rotation = 0 }
+                .edited(["arm-\(s)@seated", "forearm-\(s)@seated"]) { $0.rotation = 0 }
+                .edited(["paw-\(s)@seated"]) { $0.offset.y = -lift * 0.35; $0.rotation = Self.radians(-lift * 0.15) }
         }
         // Lifting one paw shifts the weight back a touch; added, so a gesture's own tilt still applies.
         if side != .both { copy.joints["body", default: Joint()].rotation -= Self.radians(1.2) }

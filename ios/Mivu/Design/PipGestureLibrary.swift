@@ -93,8 +93,8 @@ enum PipGestureLibrary {
             $0.settle(at: 1.30)
         },
         PipGesture("curious") {
-            $0.at(0.15) { $0.nod(4).earPerk(16).look(-1, 0.1).turn(0.2).eyes(.wide) }
-            $0.at(0.55) { $0.tilt(2).nod(5).earPerk(18, .right).look(-1, 0.2).turn(0.2).eyes(.wide).mouth(.o) }
+            $0.at(0.15) { $0.nod(4).earPerk(16).look(-1, 0.1).turn(0.6).eyes(.wide) }
+            $0.at(0.55) { $0.tilt(2).nod(5).earPerk(18, .right).look(-1, 0.2).turn(0.6).eyes(.wide).mouth(.o) }
             $0.settle(at: 0.95)
         },
         PipGesture("patted") {
@@ -122,9 +122,9 @@ enum PipGestureLibrary {
             $0.settle(at: 0.55)
         },
         PipGesture("tap-wink") {
-            $0.at(0.10) { $0.nod(-3).turn(0.2).look(-1, 0.1).earPerk(10) }
-            $0.at(0.22) { $0.nod(-2).turn(0.2).look(-1, 0.1).eyes(.closedHappy).mouth(.smallOpen).tilt(1.5).earPerk(12) }
-            $0.at(0.50) { $0.nod(-2).turn(0.2).look(-1, 0.1).mouth(.smallOpen).earPerk(8) }
+            $0.at(0.10) { $0.nod(-3).turn(0.6).look(-1, 0.1).earPerk(10) }
+            $0.at(0.22) { $0.nod(-2).turn(0.6).look(-1, 0.1).eyes(.closedHappy).mouth(.smallOpen).tilt(1.5).earPerk(12) }
+            $0.at(0.50) { $0.nod(-2).turn(0.6).look(-1, 0.1).mouth(.smallOpen).earPerk(8) }
             $0.settle(at: 0.80)
         },
         PipGesture("tap-tail-flick") {
