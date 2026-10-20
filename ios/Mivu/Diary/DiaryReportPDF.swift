@@ -41,18 +41,12 @@ extension DiaryReport {
 
             // Summary page
             newPage()
-            let band = CGRect(x: 0, y: 0, width: page.width, height: 112), white = UIColor.white
-            accent.setFill(); UIRectFill(band)
-            draw("MIVU", font(9, .heavy), white.withAlphaComponent(0.85), in: CGRect(x: margin, y: 30, width: width - 120, height: 12))
-            draw("Food log", font(22, .bold), white, in: CGRect(x: margin, y: 44, width: width - 120, height: 28))
-            draw("\(profileName) · \(rangeTitle) · prepared for your clinician", font(10), white.withAlphaComponent(0.85), in: CGRect(x: margin, y: 76, width: width - 120, height: 14))
-            if let pip = UIImage(named: "PipCoach") {
-                // Pip's portrait is cropped at the chest, so it sits on the band's edge and peeks up from behind it.
-                context.cgContext.saveGState(); UIRectClip(band)
-                pip.draw(in: CGRect(x: page.width - margin - 104, y: band.maxY - 104, width: 104, height: 104))
-                context.cgContext.restoreGState()
-            }
-            y = band.maxY + 24
+            draw("MIVU", font(9, .heavy), accent, in: CGRect(x: margin, y: 44, width: width - 90, height: 12))
+            draw("Food log", font(22, .bold), ink, in: CGRect(x: margin, y: 58, width: width - 90, height: 28))
+            draw("\(profileName) · \(rangeTitle) · prepared for your clinician", font(10), secondary, in: CGRect(x: margin, y: 90, width: width - 90, height: 14))
+            UIImage(named: "PipPreview")?.draw(in: CGRect(x: page.width - margin - 72, y: 36, width: 72, height: 72))
+            rule.setFill(); UIRectFill(CGRect(x: margin, y: 116, width: width, height: 0.75))
+            y = 136
 
             let tileWidth = (width - 18) / 4
             for (index, tileText) in summaryTiles.enumerated() {
