@@ -40,127 +40,168 @@ struct CaloriesWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "com.yakov103.mivu.calories", provider: CaloriesProvider()) { entry in
             CaloriesWidgetView(snapshot: entry.snapshot)
-                .tint(Color("AccentColor"))
-                .containerBackground(.fill.tertiary, for: .widget)
+                .tint(.diaryAccent)
+                .containerBackground(Color.diarySurface, for: .widget)
                 .widgetURL(URL(string: "mivu://today"))
         }
         .configurationDisplayName("Calories")
         .description("Today's calories, with Log Food and Coach one tap away.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
+        // Pip stands in the corner, so the system families pad their own content instead.
+        .contentMarginsDisabled()
     }
 }
 
+/// Mirrors the Today card: a bold intake figure, the goal bar, capsule actions and Pip beside them.
 struct CaloriesWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let snapshot: WidgetSnapshot?
 
     var body: some View {
-        if let snapshot, snapshot.hasDiary {
-            switch family {
-            case .accessoryCircular: circular(snapshot)
-            case .accessoryRectangular: rectangular(snapshot)
-            case .systemMedium:
-                HStack(spacing: 16) {
-                    summary(snapshot)
-                    VStack(spacing: 8) {
-                        // The dark-mode accent is light teal, so the label flips to the background color to stay readable.
-                        Button(intent: LogFoodIntent()) {
-                            buttonLabel("Log Food", systemImage: "camera").foregroundStyle(Color(.systemBackground))
-                        }
-                        .buttonStyle(.borderedProminent)
-                        Button(intent: OpenCoachIntent()) { buttonLabel("Coach", systemImage: "bubble.left.fill") }
-                            .buttonStyle(.bordered)
-                    }
-                    .frame(maxWidth: 150)
-                }
-            default: summary(snapshot)
-            }
-        } else {
-            setUp
-        }
-    }
-
-    private func summary(_ snapshot: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .top) {
-                pip.frame(width: 48, height: 48)
-                Spacer(minLength: 4)
-                ring(snapshot).frame(width: 40, height: 40)
-            }
-            Spacer(minLength: 4)
-            Text(kcal(snapshot.eaten))
-                .font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
-                .minimumScaleFactor(0.6).lineLimit(1)
-            Text(snapshot.target.map { "of \(kcal($0)) kcal" } ?? "kcal eaten")
-                .font(.caption).foregroundStyle(.secondary).minimumScaleFactor(0.8).lineLimit(1)
-            if snapshot.target == nil {
-                Text("Set a target").font(.caption2.weight(.semibold)).foregroundStyle(.tint).lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken(snapshot))
-    }
-
-    private func ring(_ snapshot: WidgetSnapshot) -> some View {
-        ZStack {
-            Circle().stroke(.tint.opacity(0.2), lineWidth: 6)
-            Circle().trim(from: 0, to: snapshot.ringFraction)
-                .stroke(.tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-        }
-        .widgetAccentable()
-    }
-
-    private func circular(_ snapshot: WidgetSnapshot) -> some View {
-        Gauge(value: snapshot.ringFraction) {
-            Text("kcal")
-        } currentValueLabel: {
-            Text(kcal(snapshot.eaten)).minimumScaleFactor(0.5)
-        }
-        .gaugeStyle(.accessoryCircularCapacity)
-        .widgetAccentable()
-        .accessibilityLabel(spoken(snapshot))
-    }
-
-    private func rectangular(_ snapshot: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Mivu").font(.headline).widgetAccentable()
-            Text(snapshot.target.map { "\(kcal(snapshot.eaten)) / \(kcal($0)) kcal" } ?? "\(kcal(snapshot.eaten)) kcal eaten")
-                .minimumScaleFactor(0.7).lineLimit(1)
-            if snapshot.target != nil {
-                Gauge(value: snapshot.ringFraction) { EmptyView() }.gaugeStyle(.accessoryLinearCapacity)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken(snapshot))
-    }
-
-    @ViewBuilder private var setUp: some View {
         switch family {
-        case .accessoryCircular, .accessoryRectangular:
-            Label("Set up Mivu", systemImage: "fork.knife").widgetAccentable()
-        default:
-            VStack(alignment: .leading, spacing: 4) {
-                pip.frame(width: 44, height: 44)
-                Spacer(minLength: 4)
-                Text("Set up Mivu").font(.headline)
-                Text("Open the app to start your diary.").font(.caption).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        case .accessoryCircular: circular
+        case .accessoryRectangular: rectangular
+        case .systemMedium: medium
+        default: small
         }
     }
 
-    private var pip: some View {
-        Image("PipResting").resizable().widgetAccentedRenderingMode(.accentedDesaturated).scaledToFit()
+    // MARK: Home Screen
+
+    private var small: some View {
+        ZStack(alignment: .bottomTrailing) {
+            pip(height: 76)
+            VStack(alignment: .leading, spacing: 0) {
+                if let snapshot, snapshot.hasDiary {
+                    figure(snapshot, size: 32, eyebrow: false)
+                    Spacer(minLength: 8)
+                    goalBar(snapshot).frame(width: 64)
+                } else {
+                    setUpText
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(16)
+        }
+    }
+
+    private var medium: some View {
+        ZStack(alignment: .bottomTrailing) {
+            pip(height: 120)
+            VStack(alignment: .leading, spacing: 0) {
+                if let snapshot, snapshot.hasDiary {
+                    figure(snapshot, size: 38, eyebrow: true)
+                    goalBar(snapshot).frame(width: 150).padding(.top, 10)
+                    Spacer(minLength: 8)
+                    HStack(spacing: 8) {
+                        Button(intent: LogFoodIntent()) {
+                            capsule("Log Food", systemImage: "camera.fill", fill: .diaryAccent, text: .diaryActionText)
+                        }
+                        Button(intent: OpenCoachIntent()) {
+                            capsule("Coach", systemImage: "bubble.left.fill", fill: .diarySummarySurface, text: .diaryAccent)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    setUpText
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(16)
+        }
+    }
+
+    private func figure(_ snapshot: WidgetSnapshot, size: CGFloat, eyebrow: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if eyebrow { Text("Today").font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary) }
+            Text(kcal(snapshot.eaten))
+                .font(.system(size: size, weight: .bold)).tracking(-1).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .foregroundStyle(Color.diaryText)
+            Text(snapshot.target.map { "of \(kcal($0)) kcal" } ?? "kcal recorded")
+                .font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
+                .foregroundStyle(Color.diaryText)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken(snapshot))
+    }
+
+    @ViewBuilder private func goalBar(_ snapshot: WidgetSnapshot) -> some View {
+        if snapshot.target != nil {
+            Capsule().fill(Color.diaryAccent.opacity(0.16))
+                .overlay(alignment: .leading) {
+                    GeometryReader { proxy in
+                        Capsule().fill(Color.diaryAccent).widgetAccentable()
+                            .frame(width: max(proxy.size.width * snapshot.ringFraction, snapshot.eaten > 0 ? 6 : 0))
+                    }
+                }
+                .frame(height: 6)
+                .accessibilityHidden(true)
+        } else {
+            Text("Set a target").font(.caption.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+        }
+    }
+
+    private var setUpText: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Set up Mivu").font(.headline).foregroundStyle(Color.diaryText)
+            Text("Pip will track your day here.").font(.caption).foregroundStyle(Color.diarySecondary)
+        }
+    }
+
+    private func capsule(_ title: String, systemImage: String, fill: Color, text: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage).imageScale(.small)
+            Text(title)
+        }
+        .font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+        .foregroundStyle(text)
+        .padding(.horizontal, 14)
+        .frame(minHeight: 44)
+        .background(fill, in: .capsule)
+    }
+
+    private func pip(height: CGFloat) -> some View {
+        // Cut from the approved painting (design-system/mivu/characters/pip/widget), not the animation rig.
+        Image("PipWave").resizable().widgetAccentedRenderingMode(.accentedDesaturated).scaledToFit()
+            .frame(height: height)
+            .padding([.trailing, .bottom], 10)
             .accessibilityHidden(true)
     }
 
-    private func buttonLabel(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity, minHeight: 44)
+    // MARK: Lock Screen
+
+    @ViewBuilder private var circular: some View {
+        if let snapshot, snapshot.hasDiary {
+            Gauge(value: snapshot.ringFraction) {
+                Text("kcal")
+            } currentValueLabel: {
+                Text(kcal(snapshot.eaten)).minimumScaleFactor(0.5)
+            }
+            .gaugeStyle(.accessoryCircularCapacity)
+            .widgetAccentable()
+            .accessibilityLabel(spoken(snapshot))
+        } else {
+            Image(systemName: "fork.knife").font(.title2).widgetAccentable().accessibilityLabel("Set up Mivu")
+        }
+    }
+
+    @ViewBuilder private var rectangular: some View {
+        if let snapshot, snapshot.hasDiary {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Mivu").font(.headline).widgetAccentable()
+                Text(snapshot.target.map { "\(kcal(snapshot.eaten)) / \(kcal($0)) kcal" } ?? "\(kcal(snapshot.eaten)) kcal recorded")
+                    .minimumScaleFactor(0.7).lineLimit(1)
+                if snapshot.target != nil {
+                    Gauge(value: snapshot.ringFraction) { EmptyView() }.gaugeStyle(.accessoryLinearCapacity)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spoken(snapshot))
+        } else {
+            Label("Set up Mivu", systemImage: "fork.knife").widgetAccentable()
+        }
     }
 
     private func kcal(_ value: Double) -> String { Int(value.rounded()).formatted() }
