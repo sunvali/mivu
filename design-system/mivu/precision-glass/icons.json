@@ -30,22 +30,20 @@
     "Warning": "exclamationmark.triangle"
   },
   "appIcon": {
-    "conceptAsset": "assets/19-identity.png",
-    "mark": "three vertical bars short/tall/medium over shared baseline",
+    "conceptAsset": "icon/icon-default.png",
+    "mark": "Pip fox portrait without lettering; the Home Screen label supplies the app name",
     "normalizedCanvas": 1024,
-    "clearSpacePercent": 18,
     "layers": [
-      "opaque adaptive background",
-      "three-bar foreground",
-      "baseline foreground"
+      "opaque appearance background",
+      "illustrated Pip portrait in source master"
     ],
     "appearances": [
       "default",
       "dark",
-      "tinted",
-      "clear"
+      "tinted"
     ],
-    "production": "Recreate separate vector layers in Icon Composer; use platform masks/materials. Do not crop the presentation board or bake in a screenshot shadow.",
-    "exportAcceptance": "Recognizable at small home-screen size, centered optical weight, no text, clean silhouette in all supported appearances."
+    "clearAppearance": "system-derived; no custom Icon Composer layers",
+    "production": "Render icon/icon-*.png source masters using icon/render-icons.swift. Export alpha-free sRGB PNGs; leave masking to iOS.",
+    "exportAcceptance": "Recognizable Pip at small home-screen sizes. Preserve both ears, face and scarf through the system mask in every appearance; no lettering inside the artwork."
   }
 }

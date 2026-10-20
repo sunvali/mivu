@@ -1,0 +1,27 @@
+{
+  "selectedOn": "2026-10-20",
+  "revision": "Text-free Pip portrait requested after wordmark review",
+  "method": "Built-in image generator; text removal and appearance-only variants",
+  "originalSelection": "output/imagegen/mivu-pip-icon/mivu-pip-logo.png",
+  "currentMaster": "output/imagegen/mivu-pip-icon/no-text/icon-default.png",
+  "variants": [
+    {
+      "variant": "default",
+      "prompt": "Edit this approved Mivu Pip app icon into a text-free iPhone icon. REMOVE the entire lowercase mivu wordmark and its i dot, leaving absolutely NO text, lettering, symbols or typography anywhere. Preserve EXACTLY the same illustrated Pip fox identity: same orange and cream fur, brown eyes, open-mouth warm smile, curious head tilt, ear shape, teal neck scarf and refined painted 2D animation style. Do not redesign Pip or change his expression. Rebalance the existing portrait into the whole square now that the lettering is removed: a beautifully centered head-and-shoulders portrait, both ear tips entirely visible with at least 8 percent top padding, comfortable side padding, face as the visual hero around the middle, teal scarf visible in lower third, and a small amount of cream/orange chest extending naturally to the bottom edge. Do not leave an empty wordmark-shaped gap or a floating head. Use the same full-bleed opaque pale cool off-white #F5F8F8 background. One production square 1024x1024 icon with unrounded exterior corners; iOS will mask the corners. Keep essential ears, face and scarf inside iOS safe bounds. No border, no added shadows, no mockup, no extra objects, no chart bars, no letters, no text.",
+      "sourceFilename": "icon-default.png",
+      "sha256": "83b027d845411cdb90a62c2ff77a4223c9cd7ad45d207530d20712b3c5e4d9be"
+    },
+    {
+      "variant": "dark",
+      "prompt": "Edit this approved TEXT-FREE Pip fox iPhone app icon. Preserve EXACTLY its geometry, scale, face, eye shapes, brown eyes, open-mouth smile, head tilt, two ear silhouettes, teal scarf shapes, shoulders and chest. Change ONLY the appearance colors. There must be absolutely NO TEXT, no letters or wordmark, no symbols and no extra objects anywhere. One opaque square production app icon, full bleed background, unrounded outside corners, no mockup, border or shadows. Keep exactly the same composition as the reference. DARK APPEARANCE: replace all pale off-white background with uniform dark charcoal blue-green #111D20, including gaps beside the scarf and shoulders. Keep Pip's bright warm orange fur, cream muzzle, inner ears and chest, rich brown eyes and nose, and teal scarf. Preserve the original refined painted 2D illustration shading. Natural crisp fur edges, no pale background or white cutout halo. Shoulders continue to the bottom edge as in the reference. Do not darken the entire character; keep the face friendly, vivid and highly recognizable.",
+      "sourceFilename": "icon-dark.png",
+      "sha256": "630ca188aea93bed8025222cbc5755beab6bb0f8505d7db614b93a60548c6de7"
+    },
+    {
+      "variant": "tinted",
+      "prompt": "Edit this approved TEXT-FREE Pip fox iPhone app icon. Preserve EXACTLY its geometry, scale, face, eye shapes, brown eyes, open-mouth smile, head tilt, two ear silhouettes, teal scarf shapes, shoulders and chest. Change ONLY the appearance colors. There must be absolutely NO TEXT, no letters or wordmark, no symbols and no extra objects anywhere. One opaque square production app icon, full bleed background, unrounded outside corners, no mockup, border or shadows. Keep exactly the same composition as the reference. TINTED APPEARANCE SOURCE: create a neutral GRAYSCALE rendition on uniform near-black #171717. Fox orange fur becomes medium-light gray, cream muzzle, inner ears and chest become ivory-white, eyes and nose remain very dark with white catchlights, scarf becomes distinct medium gray. Retain the portrait's exact shading relationships, clear eye shapes and smile. No colored pixels. Fully replace the original light background, avoid any pale cutout halo. This is a polished grayscale source for the iOS system to apply a user-selected tint. Preserve detail and silhouette.",
+      "sourceFilename": "icon-tinted.png",
+      "sha256": "c4c22e490dcb90060d652a619d7b28befde28f2355d6b7e3a3c094d358069354"
+    }
+  ]
+}
