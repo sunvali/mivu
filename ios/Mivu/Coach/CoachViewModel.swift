@@ -413,6 +413,10 @@ private final class CoachNavigationReadFence: Sendable {
                         }
                         guard !Task.isCancelled, diary.selection == selected else { break }
                         try await diary.refresh(profileID: owner)
+                        if let mealID = turn.pendingMealID {
+                            await diary.loadMeal(mealID)
+                            if let meal = diary.meal(mealID) { MealNotification.post(meal) }
+                        }
                     }
                 } catch {
                     processingFailed = true
