@@ -16,6 +16,19 @@
 
 Unit skip: `BrowserCallbackProbeTests/nativeAuthenticationBrowserReachesLoopback` (needs a real browser; not counted as passing).
 
+## Ponytail review fixes
+
+Tested source `634247d` (same environment). Later commits change docs only. Supersedes the unit counts above for this branch.
+
+| Suite | Result | Bundle |
+|---|---|---|
+| Focused Pip*/Companion*/DiaryCompanionMoment suites | 134 passed, 0 failed | `test_sim_2026-10-20T05-45-08-116Z_pid32285_0726c175.xcresult` |
+| `MivuTests` (two clean runs) | 868 passed, 0 failed, 1 skipped | `test_sim_2026-10-20T05-50-20-762Z_pid33227_b0551950.xcresult` |
+| `MivuUITests/CompanionUITests` | 16 executed: 13 passed, 3 failed (the three pre-existing failures listed below) | `test_sim_2026-10-20T05-51-11-747Z_pid33399_51cf64c3.xcresult` |
+| `rig/test_rig.py`; `scripts/ci` | 17 ran, OK; 31 ran, OK | n/a |
+
+Two earlier full `MivuTests` runs each had one timing flake (a new mid-gesture test that slept a fixed 150 ms, since made to poll; then `CompanionMountTests` `rig.window != nil` under load, which passes alone and in both later full runs). The new tests were run RED before the fix.
+
 ### MivuUITests failures and true-base comparison
 
 Base `5a63421` was run for the four tests that were previously only compared against the mid-branch commit `5af19d4`: the three CompanionUITests below (3 executed, 0 passed, bundle `test_sim_2026-10-20T04-17-15-759Z_pid20465_b1406756.xcresult`) and the Coach spike (1 executed, 0 passed, bundle `test_sim_2026-10-20T04-24-30-974Z_pid22393_1ecae615.xcresult`). The 8 other failures live in code this branch does not touch (Coach, Diary, Progress) and also failed on `5af19d4` with identical messages.
