@@ -26,7 +26,7 @@ prompts are recorded in `design-system/mivu/precision-glass/icon/provenance.json
   baked into the icon; the native Mivu label remains beneath it.
 - Default icons remain visible when only interface dark mode changes; selecting
   Dark icon styling uses the custom dark asset, as intended by iOS customization.
-- No physical iPhone installation, App Store upload, full native unit suite, or
+- No physical iPhone installation, App Store upload, full UI suite, or
   custom layered Icon Composer acceptance is claimed for this asset-only change.
   Colored user tints were not separately exercised; the neutral tinted style was.
 
@@ -50,3 +50,13 @@ prompts are recorded in `design-system/mivu/precision-glass/icon/provenance.json
 
 The existing asset catalog provides the three custom appearances. Clear uses
 system derivation; there is no new layered `.icon` file or baked corner mask.
+
+## Isolated PR publication checks
+
+The icon-only branch starts at `93fa727fefa60ceeb5eb3a8d1606bbee60a1364b`
+(`main`), excluding the concurrent review-readiness changes. Local pre-push
+verification tested `e9c29e48a9324d33cec5ab98eff32f7d0cec01f2`: 31 script tests
+passed, followed by 990 native unit tests passed, 0 failed and 1 skipped.
+The dedicated `iPhone Pip icon PR` simulator ran iOS 27.0; other agents'
+checkout branches and simulator contents were left untouched. Native source
+inputs are unchanged by this documentation-only follow-up.
