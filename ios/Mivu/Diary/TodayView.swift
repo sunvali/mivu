@@ -175,10 +175,12 @@ struct DiaryRootView: View {
             }
             await model.load(createDefaultProfile: (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test"))
             hasLoaded = true
+            if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
             if !DiaryLaunch.isUITest { await connection.restore() }
             coach.startMonitoring(); coach.resume()
         }
+        .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
         .onChange(of: model.isChangingProfile) { _, changing in
             coachRoutes.synchronize(selection: model.selection, isChangingProfile: changing)
             if changing { coachHistory = nil }
@@ -207,6 +209,7 @@ struct DiaryRootView: View {
                 attachCompanion()
                 refreshCompanion()
             }
+            if value == .active, hasLoaded, DiaryLaunch.rollsOverDays { Task { await model.rollOverDay() } }
             if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
         }
     }
@@ -487,19 +490,33 @@ struct TodayView: View {
     @State private var showComposer = false
     @State private var showWeight = false
     @State private var showGoals = false
-    @State private var confirmDay = false
     @State private var savedMealID: UUID?
+    @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     var body: some View {
         List {
             if model.sampleMode { Section { SampleBanner().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) } }
             if let snapshot = model.readModel {
-                if let savedMealID, model.meal(savedMealID) != nil {
+                if let savedMealID, let meal = model.meal(savedMealID) {
                     Section {
+                        let lateDay = lateMealDay(meal)
                         NavigationLink(value: savedMealID) {
-                            Label("Saved on this iPhone", systemImage: "checkmark.circle")
+                            Label(lateDay.map { "Added to \(wakingDayTitle($0.localDate))" } ?? "Saved on this iPhone", systemImage: "checkmark.circle")
                                 .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
                         }.accessibilityIdentifier("savedMealReceipt")
+                        // Moving opens today's calendar date, so offer it only while that is still the meal's date.
+                        if lateDay != nil, diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID) == diaryDateLabel(Date(), zone: snapshot.profile.timeZoneID) {
+                            Button("Move to \(wakingDayTitle(diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID)))", systemImage: "arrow.uturn.forward") {
+                                Task { await moveToCalendarDay(meal) }
+                            }.font(.subheadline).frame(minHeight: 44).accessibilityIdentifier("moveLateMeal")
+                        }
                     }
+                }
+                if let day = model.activeDay, let recap = model.morningRecap, model.todaysMeals.isEmpty, dismissedMorningDay != day.id.uuidString {
+                    Section {
+                        MorningCheckInCard(model: model, day: day, previous: recap.previous, previousTarget: recap.target, todayWeight: snapshot.weight) {
+                            withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
+                        }
+                    }.transition(.opacity)
                 }
                 Section {
                     VStack(alignment: .leading, spacing: 16) {
@@ -583,19 +600,32 @@ struct TodayView: View {
         .navigationTitle("Today")
         .toolbarTitleDisplayMode(.inlineLarge)
         .sheet(isPresented: $showComposer) { MealComposerView(model: model, onSaved: { savedMealID = $0 }) }
+        .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") {
+            // Coach may move the saved meal to the night before; keep its receipt readable once it leaves today.
+            if let savedMealID, model.readModel?.meals.contains(where: { $0.id == savedMealID }) == false { await model.loadMeal(savedMealID) }
+        }
         .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil }
-        .confirmationDialog("Start a waking day?", isPresented: $confirmDay, titleVisibility: .visible) {
-            Button("Start new day") { guard let owner = model.readModel?.profile.id else { return }; Task { await model.change { _ = try await model.store.startDay(expectedProfileID: owner) } } }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("Meals already recorded keep their original day. Repeated starts today reuse this day.") }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .onAppear { surfaceVisible = true; reportCompanionContext() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
-        .onChange(of: [companionVisible, showComposer, showWeight, showGoals, confirmDay, showingDetail]) { _, _ in reportCompanionContext() }
+        .onChange(of: [companionVisible, showComposer, showWeight, showGoals, showingDetail]) { _, _ in reportCompanionContext() }
     }
 
-    private var covered: Bool { showComposer || showWeight || showGoals || confirmDay || showingDetail }
+    /// A meal logged after midnight that counts for the waking day before: before the cutoff, or because Coach judged it late-night food.
+    private func lateMealDay(_ meal: MealReadModel) -> TrackingDay? {
+        guard let day = model.day(meal.dayID), day.localDate < diaryDateLabel(meal.capturedAt, zone: day.timeZoneID) else { return nil }
+        return day
+    }
+    private func moveToCalendarDay(_ meal: MealReadModel) async {
+        guard let owner = model.readModel?.profile.id else { return }
+        await model.change {
+            // Starting before the cutoff opens the calendar date, because the waking day is already active.
+            let day = try await model.store.startDay(at: Date(), expectedProfileID: owner)
+            try await model.store.moveMeal(meal.id, to: day.id, expectedRevision: meal.revision, expectedDayID: meal.dayID, expectedProfileID: owner)
+        }
+    }
+    private var covered: Bool { showComposer || showWeight || showGoals || showingDetail }
     private func reportCompanionContext() {
         // Foreground capture is covered by its sheet. Background persistence is not a character action.
         onCompanionContextChanged(CompanionContext(surface: .today, isTyping: false,
@@ -604,7 +634,11 @@ struct TodayView: View {
     }
     private var summaryDate: some View {
         Menu {
-            Button("Start new day", systemImage: "sunrise") { confirmDay = true }.accessibilityIdentifier("startNewDay")
+            // No confirmation: a repeated start reuses the open day, and meals can be moved back.
+            Button("Start new day", systemImage: "sunrise") {
+                guard let owner = model.readModel?.profile.id else { return }
+                Task { await model.change { _ = try await model.store.startDay(expectedProfileID: owner) } }
+            }.accessibilityIdentifier("startNewDay")
         } label: {
             HStack(spacing: 6) {
                 Text(displayDate).font(.subheadline)

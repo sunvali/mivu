@@ -399,10 +399,10 @@ import Testing
         let store = DiaryStore(directory: root), profile = DiaryProfile(name: "Synthetic choice")
         _ = try await store.createProfile(profile); let previous = try await store.startDay(at: now.addingTimeInterval(-86400))
         let turn = try await capturedTurn(store, text: "Food now", photos: [], at: now, expectedProfileID: profile.id)
-        await #expect(throws: DiaryError.ambiguousDay) { try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], expectedProfileID: profile.id) }
+        // Turns captured before automatic rollover may still be waiting for this answer.
         try await store.setCoachTurnState(turnID: turn.id, state: .needsClarification, needsDayChoice: true, expectedProfileID: profile.id)
         let chosen: UUID
-        if usePrevious { try await store.confirmPreviousDay(at: now); chosen = previous.id }
+        if usePrevious { try await store.chooseCoachDay(turnID: turn.id, usePrevious: true, at: now, expectedProfileID: profile.id); chosen = previous.id }
         else { chosen = try await store.startDay(at: now).id }
         try await store.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: profile.id)
         let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], expectedProfileID: profile.id)
@@ -413,6 +413,16 @@ import Testing
         let reload = DiaryStore(directory: root); _ = try await reload.selectProfile(profile.id)
         #expect(try await reload.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], expectedProfileID: profile.id) == receipt)
         #expect(try await reload.snapshotForExport().meals.count == 1)
+    }
+    @Test func foodAfterTheCutoffWithYesterdayStillOpenStartsTheNewDay() async throws {
+        let root = URL.temporaryDirectory.appending(path: "CoachRollover-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root), profile = DiaryProfile(name: "Synthetic rollover", timeZoneID: "UTC")
+        _ = try await store.createProfile(profile); let previous = try await store.startDay(at: now.addingTimeInterval(-86400))
+        let turn = try await capturedTurn(store, text: "Food now", photos: [], at: now, expectedProfileID: profile.id)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], expectedProfileID: profile.id)
+        let snapshot = try await store.snapshotForExport()
+        #expect(receipt.dayID != previous.id && snapshot.activeDayID == receipt.dayID)
+        #expect(snapshot.days.first { $0.id == receipt.dayID }?.localDate == "2027-01-15")
     }
     @Test func sourceIdentifiedQuantityCorrectionPreservesMatchUncertainty() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }

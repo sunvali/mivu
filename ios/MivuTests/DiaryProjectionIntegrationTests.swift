@@ -127,8 +127,6 @@ import Testing
         try await store.setCompleteness(dayID: f.dayID, .complete, expectedProfileID: f.owner)
         stage = "start day"
         _ = try await store.startDay(at: f.instant, expectedProfileID: f.owner)
-        stage = "confirm previous day"
-        try await store.confirmPreviousDay(at: f.instant, expectedProfileID: f.owner)
         stage = "goals"
         var goal = f.source.goals[0]; goal.targets.kcal = 2300
         _ = try await store.setGoals(goal, expectedRevision: goal.revision, expectedProfileID: f.owner)
@@ -449,7 +447,6 @@ import Testing
         f.metrics.reset()
         await #expect(throws: DiaryError.wrongOwner) { try await store.dayAssignment(expectedSelection: token, expectedProfileID: f.owner) }
         await #expect(throws: DiaryError.wrongOwner) { try await store.startDay(at: f.instant, expectedSelection: token, expectedProfileID: f.owner) }
-        await #expect(throws: DiaryError.wrongOwner) { try await store.confirmPreviousDay(at: f.instant, expectedSelection: token, expectedProfileID: f.owner) }
         await #expect(throws: DiaryError.wrongOwner) { try await store.capturedMeal(submissionID: acceptedID, expectedSelection: token, expectedProfileID: f.owner) }
         for submissionID in [UUID(), acceptedID] {
             await #expect(throws: DiaryError.wrongOwner) {

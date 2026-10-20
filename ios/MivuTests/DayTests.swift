@@ -11,20 +11,31 @@ struct DayTests {
         let day = try await store.startDay(at: date(at))
         return (store, profile, day)
     }
-    @Test func fourAMNeedsChoiceAndPreviousConfirmationExpiresAtFourHours() async throws {
-        let (store, _, day) = try await Self.ready()
-        let fourAM = Self.date("2026-10-11T01:00:00Z")
-        #expect(try await store.dayAssignment(at: fourAM) == .ask(day.id))
-        try await store.confirmPreviousDay(at: fourAM)
-        #expect(try await store.dayAssignment(at: fourAM.addingTimeInterval(14_399)) == .existing(day.id))
-        #expect(try await store.dayAssignment(at: fourAM.addingTimeInterval(14_400)) == .ask(day.id))
+    @Test func wakingDateCountsTheHoursBeforeTheCutoffForTheDayBefore() {
+        #expect(wakingDateLabel(Self.date("2026-10-11T01:30:00Z"), zone: "UTC", cutoffHour: 4) == "2026-10-10")
+        #expect(wakingDateLabel(Self.date("2026-10-11T04:00:00Z"), zone: "UTC", cutoffHour: 4) == "2026-10-11")
+        #expect(wakingDateLabel(Self.date("2026-10-11T01:30:00Z"), zone: "UTC", cutoffHour: 0) == "2026-10-11")
     }
-    @Test func confirmationExpiresAtCalendarRolloverEvenBeforeFourHours() async throws {
+    @Test func lateFoodStaysInTheWakingDayAndTheCutoffStartsTheNextWithoutAsking() async throws {
+        let (store, _, day) = try await Self.ready()
+        #expect(try await store.dayAssignment(at: Self.date("2026-10-10T22:30:00Z")) == .existing(day.id))
+        #expect(try await store.dayAssignment(at: Self.date("2026-10-11T00:59:59Z")) == .existing(day.id))
+        #expect(try await store.dayAssignment(at: Self.date("2026-10-11T01:00:00Z")) == .newDay)
+        #expect(try await store.startDay(at: Self.date("2026-10-11T01:00:00Z")).localDate == "2026-10-11")
+    }
+    @Test func earlyMorningCaptureLetsCoachJudgeTheNightBefore() {
+        let early = WakingDayInstruction.text(capturedAt: Self.date("2026-10-11T05:30:00Z"), zone: "UTC", cutoffHour: 4)
+        #expect(early.contains("alcohol") && early.contains("(2026-10-10)") && early.contains("belongs to 2026-10-11"))
+        let late = WakingDayInstruction.text(capturedAt: Self.date("2026-10-11T07:00:00Z"), zone: "UTC", cutoffHour: 4)
+        #expect(late == "The current waking day is 2026-10-11; log new intake to it unless the person names another day.")
+        #expect(WakingDayInstruction.text(capturedAt: Self.date("2026-10-11T01:30:00Z"), zone: "UTC", cutoffHour: 4).contains("2026-10-10"))
+    }
+    @Test func explicitStartBeforeTheCutoffOpensTheCalendarDateOnce() async throws {
         let (store, _, day) = try await Self.ready(zone: "UTC")
-        let late = Self.date("2026-10-11T23:00:00Z")
-        try await store.confirmPreviousDay(at: late)
-        #expect(try await store.dayAssignment(at: Self.date("2026-10-11T23:59:59Z")) == .existing(day.id))
-        #expect(try await store.dayAssignment(at: Self.date("2026-10-12T00:00:00Z")) == .ask(day.id))
+        let next = try await store.startDay(at: Self.date("2026-10-11T01:30:00Z"))
+        #expect(next.id != day.id && next.localDate == "2026-10-11")
+        #expect(try await store.dayAssignment(at: Self.date("2026-10-11T02:00:00Z")) == .existing(next.id))
+        #expect(try await store.dayAssignment(at: Self.date("2026-10-11T09:00:00Z")) == .existing(next.id))
     }
     @Test func startDayAndMorningWeightAreIdempotent() async throws {
         let (store, _, oldDay) = try await Self.ready()
@@ -40,24 +51,18 @@ struct DayTests {
         #expect(snapshot.weights[0].value == 71)
         #expect(snapshot.days.first { $0.id == oldDay.id }?.completeness == .unknown)
     }
-    @Test func DSTUsesLocalCalendarAndElapsedExpiry() async throws {
+    @Test func DSTNightStaysInTheWakingDay() async throws {
         let (store, _, day) = try await Self.ready(zone: "America/New_York", at: "2026-10-31T12:00:00Z")
-        let beforeFallback = Self.date("2026-11-01T05:30:00Z")
-        try await store.confirmPreviousDay(at: beforeFallback)
-        #expect(try await store.dayAssignment(at: beforeFallback.addingTimeInterval(10_800)) == .existing(day.id))
-        #expect(try await store.dayAssignment(at: beforeFallback.addingTimeInterval(14_400)) == .ask(day.id))
-        let next = try await store.startDay(at: Self.date("2026-11-01T08:00:00Z"))
-        #expect(next.localDate == "2026-11-01")
+        #expect(try await store.dayAssignment(at: Self.date("2026-11-01T05:30:00Z")) == .existing(day.id))
+        #expect(try await store.startDay(at: Self.date("2026-11-01T12:00:00Z")).localDate == "2026-11-01")
     }
-    @Test func timezoneChangeAsksAndPreservesHistory() async throws {
+    @Test func timezoneChangeStartsADayInTheNewZoneAndPreservesHistory() async throws {
         let (store, profile, day) = try await Self.ready()
         var changed = profile
         changed.timeZoneID = "America/New_York"
         try await store.updateProfile(changed)
-        #expect(try await store.dayAssignment(at: day.startAt) == .ask(day.id))
+        #expect(try await store.dayAssignment(at: day.startAt) == .newDay)
         #expect(try await store.snapshotForExport().days[0] == day)
-        try await store.confirmPreviousDay(at: day.startAt)
-        #expect(try await store.dayAssignment(at: day.startAt) == .existing(day.id))
     }
     @Test func moveUpdatesBothDayTotalsAndCompletenessStaysIndependent() async throws {
         let (store, _, oldDay) = try await Self.ready()

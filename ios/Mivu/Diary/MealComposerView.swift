@@ -10,8 +10,6 @@ struct MealComposerView: View {
     @State private var ownership: DiarySelectionOwnership?
     @State private var photoPreparation = PhotoPreparation()
     @State private var photoImportFailed = false
-    @State private var ambiguousDay: UUID?
-    @State private var showDayQuestion = false
     @State private var photoRole = PhotoRole.unspecified
     @State private var submitting = false
     @State private var showDiscard = false
@@ -99,14 +97,6 @@ struct MealComposerView: View {
                 ToolbarItem(placement: .confirmationAction) { Button { Task { await send() } } label: { if submitting { ProgressView() } else { Text("Save") } }.disabled(!draft.isValid || submitting || !photoPreparation.canCapture).accessibilityIdentifier("sendMeal") }
             }
             .alert("Could not import photo", isPresented: $photoImportFailed) { Button("OK", role: .cancel) {} } message: { Text("Choose a smaller image or another photo. Your other input is preserved.") }
-            .confirmationDialog("Which waking day?", isPresented: $showDayQuestion, titleVisibility: .visible) {
-                Button("Previous day") {
-                    guard let dayID = ambiguousDay else { return }
-                    Task { await save(destination: .previousDay(dayID)) }
-                }
-                Button("New day") { Task { await save(destination: .newDay) } }
-                Button("Keep editing", role: .cancel) {}
-            } message: { Text("Your active day began on an earlier date. A late meal can stay in that day.") }
         }
         .sheet(isPresented: $showManualNutrition) {
             let target = dayID.flatMap { model.day($0) }.map { ManualNutritionTarget.recorded(dayID: $0.id, localDate: $0.localDate, timeZoneID: $0.timeZoneID) }
@@ -134,7 +124,6 @@ struct MealComposerView: View {
         defer { submitting = false }
         switch await model.capture(draft, destination: destination, photoRole: photoRole, photoPreparation: photoPreparation, expectedSelection: token) {
         case .saved(let mealID): onSaved?(mealID); dismiss()
-        case .needsDayChoice(let dayID): ambiguousDay = dayID; showDayQuestion = true
         case .failed: break
         }
     }

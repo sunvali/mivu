@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 
 enum ManualNutritionOperation: String, Codable, Sendable { case create, append }
-enum ManualNutritionDayChoice: Equatable, Sendable { case current, previous, newCurrent, recorded(UUID) }
+enum ManualNutritionDayChoice: Equatable, Sendable { case current, newCurrent, recorded(UUID) }
 enum ManualNutritionTarget: Codable, Equatable, Sendable {
     case recorded(dayID: UUID, localDate: String, timeZoneID: String)
     case active(dayID: UUID, localDate: String, timeZoneID: String, confirmPrevious: Bool)

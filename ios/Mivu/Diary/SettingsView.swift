@@ -42,6 +42,7 @@ struct SettingsView: View {
             }
             companionSection
             if model.readModel != nil {
+                DaySettingsSection()
                 Section("Setup") {
                     Button { showGoals = true } label: { settingsRow("Goals", symbol: "scope", color: .diaryAccent) }
                         .accessibilityIdentifier("editGoals")

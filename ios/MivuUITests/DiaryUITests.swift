@@ -62,6 +62,35 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: unfiltered, object: nil)], timeout: 10), .completed)
         _ = assertTop("2026-10-19")
     }
+    func testNewDayShowsMorningCheckInThatNeverBlocksLogging() {
+        let app = launch(["--diary-history-fixture", "--rollover-ui-test"])
+        let card = app.descendants(matching: .any)["morningCheckIn"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "The fixture's old active day must roll over to a new day")
+        XCTAssertTrue(app.buttons["logMeal"].isHittable)
+        XCTAssertTrue(app.buttons["morningWeightSkip"].exists, "The weigh-in is optional")
+        // Coach asks the same weigh-in, and the weight can go in a message instead.
+        app.tabBars.buttons["Coach"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        app.buttons["morningTellCoach"].tap()
+        XCTAssertEqual(app.descendants(matching: .any)["coachInput"].value as? String, "My weight this morning is ")
+        XCTAssertFalse(card.exists, "The check-in steps aside while typing")
+    }
+    func testCoachMessageBoxGrowsLineByLineUpToFourThenScrolls() {
+        let app = launch()
+        app.tabBars.buttons["Coach"].tap()
+        let input = app.descendants(matching: .any)["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        let line = "Synthetic oatmeal with berries and "
+        var heights = [input.frame.height]
+        for _ in 0..<7 { input.typeText(line); heights.append(input.frame.height) }
+        // Each new line makes the box taller until the fourth; after that the text scrolls inside it.
+        let oneLine = heights[0], tallest = heights.max() ?? 0
+        XCTAssertEqual(heights, heights.sorted(), "The box never shrinks while typing: \(heights)")
+        XCTAssertGreaterThan(heights[1], oneLine, "A second line makes it taller")
+        XCTAssertEqual(tallest / oneLine, 4, accuracy: 0.3, "It stops at four lines: \(heights)")
+        XCTAssertEqual(heights.last ?? 0, tallest, accuracy: 1)
+    }
     func testFirstRunOpensSetupWithoutInventingRecords() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--proof-english"]

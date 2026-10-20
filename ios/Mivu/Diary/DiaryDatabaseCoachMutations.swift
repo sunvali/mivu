@@ -167,12 +167,20 @@ extension DiaryTransaction {
     }
     private func coachDay(_ date: String, turn: CoachTurn, activateIfEmpty: Bool = true, exact: Bool = false) throws -> TrackingDay {
         let noon = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID), current = diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == date
+        var rollsOver = false
         if !exact && current {
             if let id = turn.resolvedDayID { return try database.trackingDay(id: id) }
-            if let id = turn.activeDayID, try database.trackingDay(id: id).localDate != date { throw DiaryError.ambiguousDay }
+            if let id = turn.activeDayID {
+                let active = try database.trackingDay(id: id), waking = wakingDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID)
+                // Before the cutoff the active day is still the waking day, so late food stays in it.
+                if active.localDate == waking { return active }
+                // After the cutoff with yesterday still open (the app stayed open), this capture starts the new day.
+                rollsOver = active.localDate < waking && date == waking && head.activeDayID == id
+                if active.localDate != date && !rollsOver { throw DiaryError.ambiguousDay }
+            }
         }
         let day = try resolveDay(localDate: date, timeZoneID: turn.captureTimeZoneID, at: current ? turn.capturedAt : noon)
-        if activateIfEmpty && current && head.activeDayID == nil { try activateDay(day) }
+        if activateIfEmpty && current && (head.activeDayID == nil || rollsOver) { try activateDay(day) }
         return day
     }
     private func addSource(kind: String, recordID: UUID, turnID: UUID, origin: Bool) throws {
