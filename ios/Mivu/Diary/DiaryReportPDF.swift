@@ -123,12 +123,12 @@ extension DiaryReport {
         return [
             ("Avg calories", whole(average(logged.compactMap(\.totals.kcal))), target?.kcal.map { "target \(whole($0))" } ?? "no target"),
             ("Avg protein", average(logged.compactMap(\.totals.protein)).map { "\(whole($0)) g" } ?? "—", target?.protein.map { "target \(whole($0)) g" } ?? "no target"),
-            ("Days logged", "\(logged.count) / \(days.count)", "days with saved meals"),
+            ("Days logged", "\(logged.count) / \(calendarDayCount)", "days with saved meals"),
             ("Weight change", change, first.map { first in last.map { "\(number(first.value)) → \(number($0.value))" } ?? "" } ?? "no weigh-ins"),
         ]
     }
     private var rangeTitle: String {
-        guard let first = days.first?.localDate, let last = days.last?.localDate else { return "No days in range" }
+        guard let first = from, let last = through else { return "No days in range" }
         return first == last ? Self.dayTitle(first) : "\(Self.dayTitle(first)) – \(Self.dayTitle(last))"
     }
     private func whole(_ value: Double?) -> String { value.map { Int($0.rounded()).formatted() } ?? "—" }

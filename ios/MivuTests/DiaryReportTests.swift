@@ -60,6 +60,15 @@ struct DiaryReportTests {
         #expect(summary.contains("MIVU") && summary.contains("Made with Mivu") && summary.contains("Page 1 of \(document.pageCount)"))
         #expect(meals.contains("Page 2 of \(document.pageCount)"))
     }
+    @Test func lastDaysFollowTheWakingDayAcrossMidnight() {
+        #expect(DiaryReport.lastDays(7, now: Self.date("2026-10-11T01:30:00Z"), zone: "UTC", cutoffHour: 4) == ("2026-10-04", "2026-10-10"))
+        #expect(DiaryReport.lastDays(30, now: Self.date("2026-10-11T09:00:00Z"), zone: "UTC", cutoffHour: 4) == ("2026-09-12", "2026-10-11"))
+    }
+    @Test func summaryCountsEveryCalendarDayInTheRequestedRange() throws {
+        let report = DiaryReport(Self.snapshot(), from: "2026-08-30", through: "2026-09-02")
+        let summary = try #require(PDFDocument(data: report.pdfData())?.page(at: 0)?.string)
+        #expect(summary.contains("2 / 4") && summary.contains("30 Aug 2026"))
+    }
     @Test func filesAreWrittenForTheChosenFormat() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

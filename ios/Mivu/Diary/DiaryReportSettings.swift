@@ -39,23 +39,19 @@ struct DiaryReportSettings: View {
             defer { preparing = false }
             do {
                 let snapshot = try await model.store.snapshotForExport(expectedProfileID: token.identity.profileID)
+                let zone = snapshot.profile.timeZoneID, device = TimeZone.current.identifier
                 let urls = try await Task.detached {
-                    var calendar = Calendar(identifier: .gregorian)
-                    calendar.timeZone = TimeZone(identifier: snapshot.profile.timeZoneID) ?? .current
-                    func local(_ date: Date) -> String {
-                        let parts = calendar.dateComponents([.year, .month, .day], from: date)
-                        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-                    }
-                    let (from, through): (Date?, Date?) = switch range {
-                    case .week: (calendar.date(byAdding: .day, value: -6, to: .now), .now)
-                    case .month: (calendar.date(byAdding: .day, value: -29, to: .now), .now)
+                    // Picked dates are calendar days on this phone, so they are labelled in its time zone.
+                    let (from, through): (String?, String?) = switch range {
+                    case .week: DiaryReport.lastDays(7, now: .now, zone: zone)
+                    case .month: DiaryReport.lastDays(30, now: .now, zone: zone)
                     case .all: (nil, nil)
-                    case .custom: (start, end)
+                    case .custom: (diaryDateLabel(start, zone: device), diaryDateLabel(end, zone: device))
                     }
-                    let report = DiaryReport(snapshot, from: from.map(local), through: through.map(local))
+                    let report = DiaryReport(snapshot, from: from, through: through)
                     return try report.write(format, to: FileManager.default.temporaryDirectory.appendingPathComponent("Report-" + UUID().uuidString))
                 }.value
-                guard model.selection == token else { return }
+                guard model.selection == token else { try? FileManager.default.removeItem(at: urls[0].deletingLastPathComponent()); return }
                 shared = urls
             } catch { model.errorMessage = "Could not prepare this report. Your local diary is preserved." }
         }

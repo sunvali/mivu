@@ -10,7 +10,8 @@ struct DiaryReport {
     let profileName: String
     let days: [Day]
     let weights: [Weight]
-    private let label: String
+    /// The requested local dates; for all time, the first and last diary days.
+    let from: String?, through: String?
 
     init(_ snapshot: DiarySnapshot, from: String?, through: String?) {
         func inRange(_ date: String) -> Bool { (from.map { date >= $0 } ?? true) && (through.map { date <= $0 } ?? true) }
@@ -23,7 +24,7 @@ struct DiaryReport {
         let dayByID = Dictionary(uniqueKeysWithValues: snapshot.days.map { ($0.id, $0) })
         weights = snapshot.weights.compactMap { entry in
             let zone = entry.dayID.flatMap { dayByID[$0]?.timeZoneID } ?? snapshot.profile.timeZoneID
-            let localDate = entry.dayID.flatMap { dayByID[$0]?.localDate } ?? ISO8601DateFormatter.string(from: entry.measuredAt, timeZone: TimeZone(identifier: zone) ?? .current, formatOptions: .withFullDate)
+            let localDate = entry.dayID.flatMap { dayByID[$0]?.localDate } ?? diaryDateLabel(entry.measuredAt, zone: zone)
             guard inRange(localDate) else { return nil }
             return Weight(localDate: localDate, time: entry.timePrecision == .dateOnly ? "" : clock(entry.measuredAt, zone), entry: entry)
         }.sorted { $0.entry.measuredAt < $1.entry.measuredAt }
@@ -38,8 +39,26 @@ struct DiaryReport {
                        weight: weights.last { $0.localDate == day.localDate }?.entry, meals: meals)
         }
         profileName = snapshot.profile.name
-        label = days.isEmpty ? "empty" : "\(days.first!.localDate) to \(days.last!.localDate)"
+        self.from = from ?? days.first?.localDate
+        self.through = through ?? days.last?.localDate
     }
+
+    /// The last `count` waking days ending today, so an export at 01:30 still ends on the day being lived.
+    static func lastDays(_ count: Int, now: Date, zone: String, cutoffHour: Int = DayCutoff.hour) -> (from: String, through: String) {
+        let through = wakingDateLabel(now, zone: zone, cutoffHour: cutoffHour)
+        return (shift(through, by: 1 - count), through)
+    }
+    /// Local dates are calendar labels, so arithmetic happens in UTC where every day is 24 hours.
+    static func shift(_ localDate: String, by days: Int) -> String {
+        guard let date = try? Date(localDate + "T00:00:00Z", strategy: .iso8601) else { return localDate }
+        return diaryDateLabel(date.addingTimeInterval(Double(days) * 86_400), zone: "UTC")
+    }
+    var calendarDayCount: Int {
+        guard let from, let through, let start = try? Date(from + "T00:00:00Z", strategy: .iso8601),
+              let end = try? Date(through + "T00:00:00Z", strategy: .iso8601) else { return days.count }
+        return Int((end.timeIntervalSince(start) / 86_400).rounded()) + 1
+    }
+    private var label: String { from.flatMap { from in through.map { "\(from) to \($0)" } } ?? "empty" }
 
     // MARK: CSV
 
