@@ -71,4 +71,11 @@ import Testing
         #expect(try state(eaten: full, target: targets, hide: false).hideWhenLocked == false)
         #expect(try state(eaten: full, target: targets).hideWhenLocked)
     }
+
+    @Test func disabledEndsAll() { #expect(DayProgressSync.decide(enabled: false, authorized: true, hasDiary: true, running: 1) == .endAll) }
+    @Test func unauthorizedEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: false, hasDiary: true, running: 1) == .endAll) }
+    @Test func noDiaryEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: false, running: 1) == .endAll) }
+    @Test func noneRunningStarts() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 0) == .start) }
+    @Test func oneRunningUpdates() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1) == .update(endingExtra: 0)) }
+    @Test func extrasEnd() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 3) == .update(endingExtra: 2)) }
 }
