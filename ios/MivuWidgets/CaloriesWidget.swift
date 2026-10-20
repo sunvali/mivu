@@ -40,6 +40,7 @@ struct CaloriesWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "com.yakov103.mivu.calories", provider: CaloriesProvider()) { entry in
             CaloriesWidgetView(snapshot: entry.snapshot)
+                .tint(Color("AccentColor"))
                 .containerBackground(.fill.tertiary, for: .widget)
                 .widgetURL(URL(string: "mivu://today"))
         }
@@ -62,8 +63,11 @@ struct CaloriesWidgetView: View {
                 HStack(spacing: 16) {
                     summary(snapshot)
                     VStack(spacing: 8) {
-                        Button(intent: LogFoodIntent()) { buttonLabel("Log Food", systemImage: "camera") }
-                            .buttonStyle(.borderedProminent)
+                        // The dark-mode accent is light teal, so the label flips to the background color to stay readable.
+                        Button(intent: LogFoodIntent()) {
+                            buttonLabel("Log Food", systemImage: "camera").foregroundStyle(Color(.systemBackground))
+                        }
+                        .buttonStyle(.borderedProminent)
                         Button(intent: OpenCoachIntent()) { buttonLabel("Coach", systemImage: "bubble.left.fill") }
                             .buttonStyle(.bordered)
                     }
@@ -79,7 +83,7 @@ struct CaloriesWidgetView: View {
     private func summary(_ snapshot: WidgetSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .top) {
-                pip.frame(width: 36, height: 36)
+                pip.frame(width: 48, height: 48)
                 Spacer(minLength: 4)
                 ring(snapshot).frame(width: 40, height: 40)
             }
