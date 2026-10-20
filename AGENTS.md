@@ -53,12 +53,16 @@ for this native app. No web frontend is required.
 
 ## Companion animation work
 
-For Pip artwork, Lottie, motion, pose transitions, lifecycle, character selection,
-or animation verification, read the repository skill
+For Pip artwork, the rig, motion, gestures, pose transitions, lifecycle, character
+selection, or animation verification, read the repository skill
 [mivu-animation](.agents/skills/mivu-animation/SKILL.md) first. It maps editable
 sources to generated assets and native owners, and links the verification recipe.
-The shipping runtime is Lottie; older Rive plans are historical context. Keep
-animation changes tied to the approved painted references and explicit user intent.
+Pip is a native Core Animation rig (no Lottie, no painted atlas): the art source is
+`design-system/mivu/characters/pip/rig/pip.svg`, built by `rig/build.py` into
+`pip-rig.json`. To add or change a gesture, follow
+[adding a gesture](.agents/skills/mivu-animation/references/adding-a-gesture.md).
+Older Lottie and Rive plans are historical context. Keep animation changes tied to
+the approved references and explicit user intent.
 
 ## Coach chat history
 

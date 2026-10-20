@@ -7,40 +7,25 @@ simulator or change global defaults while another job is using them.
 
 ## Regenerate only when authoring changes
 
-Use Python 3 with Pillow and NumPy. Prefer an existing suitable interpreter;
-if missing, create a local virtual environment rather than changing system Python.
+`pip.svg` is the source; `pip-rig.json` is generated and must not be hand-edited.
+`build.py` needs only the standard library; `--png` needs `cairosvg` and Pillow in
+the repo-root `.venv` (`python3 -m venv .venv && .venv/bin/pip install cairosvg pillow`).
 
 ```sh
-python3 -c 'import PIL, numpy'
-python3 design-system/mivu/characters/pip/lottie-source/build.py
-python3 design-system/mivu/characters/pip/lottie-source/fallbacks.py
-python3 design-system/mivu/characters/pip/lottie-source/test_motion.py
+.venv/bin/python design-system/mivu/characters/pip/rig/build.py --png OUT
+.venv/bin/python design-system/mivu/characters/pip/rig/test_rig.py
 ```
 
-`build.py` imports and calls `coach_pose.authored_peek`; there is no separate
-Coach regeneration command. It writes the JSON, registration and painted assets.
-It consumes the existing coverage alpha; this is not a blank-project bootstrap.
-`fallbacks.py` uses that registration and coverage alpha to write static poses;
-the Coach fallback is prepared through the Coach recipe invoked by `build.py`.
-**The Python regression suite also calls `build.build()` and rewrites generated
-outputs.** Inspect its diff even when running it only as a test.
-
-Check the diff at source and output. Preserve untouched surfaces and artwork;
-compare hashes against the checked-out baseline when identity must stay unchanged.
-Do not regenerate or replace original references to make a test pass. Inspect
-moving-mask connectivity, joint overlap and grounded paw coverage: a tiny detached
-paint component can become obvious during a larger gesture.
-
-The loader caps JSON at **1,048,576 bytes**. Preserve marker names expected by
-the loader and presenter; derive current durations from `MOTION.md` and source.
-Do not treat a metadata match as proof of rendered motion.
+`--png` also rewrites the static fallback images in
+`ios/Mivu/Assets.xcassets/Companion/Pip/`: inspect that diff. Check the SVG and
+JSON diff at source and output, keep `pip-rig.json` under 512 KiB (the loader
+rejects more than **1,048,576 bytes**), and do not replace `reference.png` to make
+a test pass. Compare Pip beside `reference.png` at 40, 64, 88 and 200 pt.
 
 `design-system/mivu/characters/pip/asset-manifest.json` is separate provenance;
-the builder does not refresh it. After intended changes, update affected SHA-256
-and byte entries in `runtimeAsset`, `sourceArtwork`, `fallbacks`, `authoringSources`
-and `assets`, plus applicable layer/marker metadata. `assets[].file` is relative
-to the Pip directory; other `path` fields are repo-relative. Preserve historical
-validation and record fresh evidence separately instead of relabeling old runs.
+the builder does not refresh it. After intended changes, update the SHA-256 and
+byte entries for `runtimeAsset`, `authoringSources` and `fallbacks`. Preserve
+historical validation and record fresh evidence separately.
 
 ## Choose checks for the changed owner
 
@@ -48,18 +33,20 @@ Tests live in `ios/MivuTests/` unless specified otherwise.
 
 | Change | Useful checks |
 |---|---|
-| Generator, masks, gesture strength | Python `test_motion.py`; `CompanionLottieAssetTests`, `CompanionArtworkMatteTests`, `CompanionLottiePreviewTests` |
-| Loading, transitions, completion, cancellation | `CompanionAssetTests`, `CompanionSurfaceTests`, `CompanionMountTests`, `CompanionRootIntegrationTests` |
-| Accepted input versus durable save/review | `CompanionPresentationTests`, `CompanionReceiptTests`, `CoachReceiptFeedbackTests`, root integration |
+| `pip.svg` / `build.py` | `rig/test_rig.py`; `PipRigAssetTests`, `PipRigViewTests`, `PipRigSnapshotTests` |
+| Gestures, moment mapping | `PipGestureTests` (covers every library entry), `PipRigSnapshotTests` |
+| Idle beats | `PipIdleSchedulerTests` |
+| Runtime playback, interruption, gaze, policy | `CompanionRigRuntimeTests`, `CompanionMountTests`, `CompanionSurfaceTests` |
+| Accepted input versus durable save/review, priority | `CompanionPresentationTests`, `CompanionReceiptTests`, `DiaryCompanionMomentTests`, `CoachReceiptFeedbackTests`, `CompanionRootIntegrationTests` |
 | Eligibility or fallback policy | `MotionPolicyTests`, asset and mount tests |
-| Character catalog/selection | `CharacterCatalogTests`, `CompanionSelectionTests`, asset failure/switch cases |
+| Character catalog/selection | `CharacterCatalogTests`, `CompanionSelectionTests`, `CompanionAssetTests` |
 | Screens, keyboard, focus, text size | `ios/MivuUITests/CompanionUITests.swift` and affected Coach/Diary journeys |
 
-For regressions, reproduce at the relevant layer before changing behavior.
-`CompanionRootIntegrationTests.untouchedTodayKeepsBreathingDuringAnEmptyBackgroundCoachRefresh`
-exercises the actual shared persistence lock; the display-frame tests in
-`CompanionLottiePreviewTests` exercise idle wrap and greeting completion. These
-check different failure sources.
+For visual review launch the app with the `-PipRigPreview` argument (it shows
+`PipRigPreview`: every gesture, gaze, turn and idle beat at shipping sizes in both
+appearances). For regressions, reproduce at the relevant layer before changing
+behavior. `CompanionRootIntegrationTests.untouchedTodayKeepsBreathingDuringAnEmptyBackgroundCoachRefresh`
+exercises the actual shared persistence lock.
 
 Use **XcodeBuildMCP**, not direct native build/simulator commands. Discover the
 installed CLI and actual available destinations before running:
@@ -76,12 +63,13 @@ Example focused renderer run, after confirming that simulator name is available
 ```sh
 xcodebuildmcp simulator test \
   --project-path "$PWD/ios/Mivu.xcodeproj" \
-  --json '{"scheme":"Mivu","simulatorName":"iPhone 17 Pro","useLatestOS":true,"extraArgs":["-parallel-testing-enabled","NO","-disableAutomaticPackageResolution","-onlyUsePackageVersionsFromResolvedFile","-only-testing:MivuTests/CompanionLottiePreviewTests"]}' \
+  --json '{"scheme":"Mivu","simulatorName":"iPhone 18 Pro","useLatestOS":true,"extraArgs":["-parallel-testing-enabled","NO","-disableAutomaticPackageResolution","-onlyUsePackageVersionsFromResolvedFile","-only-testing:MivuTests/PipGestureTests"]}' \
   --output json
 ```
 
-Replace the `-only-testing` entry with the relevant suite(s). Swift Testing
-method selectors can yield **zero tests** without failing the build; prefer
+Replace the `-only-testing` entry with the relevant suite(s). A single-test
+`-only-testing` filter (and Swift Testing method selectors) can silently run
+**zero tests** without failing the build; prefer
 suite selectors and confirm discovered cases and nonzero result counts. XCTest
 methods use the `test` prefix shown in source. Parse both tool error status and
 the result summary: a successful shell exit alone is insufficient evidence.

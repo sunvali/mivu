@@ -1,10 +1,10 @@
 {
   "characterID": "pip",
   "displayName": "Pip",
-  "schemaVersion": 1,
-  "status": "Today passive-refresh pose flash corrected; Coach acting strengthened; complete native and targeted UI checks passed; Release installed and launched on connected iPhone",
+  "schemaVersion": 2,
+  "status": "Native layered rig (pip.svg -> build.py -> pip-rig.json); Lottie and painted atlas removed",
   "created": "2026-10-17",
-  "source": "Approved original Pip storyboard illustration with authored Lottie image layers, vector masks, joint transforms and eyelid patches. The separate Coach pose uses an exact crop of the approved context illustration. Preserve the selected fox identity and original painted pixels. No imported third-party character artwork.",
+  "source": "Layered vector Pip drawn by us from the approved paintings (reference.png, storyboard.png). Editable source rig/pip.svg; pip-rig.json is generated. No imported third-party artwork.",
   "assets": [
     {
       "file": "reference.png",
@@ -33,81 +33,32 @@
     }
   ],
   "runtimeAsset": {
-    "path": "ios/Mivu/Resources/Characters/pip/pip.json",
-    "sha256": "5a39809af6996b9a4c8eb6dc6a21776c90bf192de3071b35eeb75ac4dd54b06d",
-    "bytes": 710323,
-    "formatVersion": "5.12.2",
+    "path": "ios/Mivu/Resources/Characters/pip/pip-rig.json",
+    "sha256": "8b802e1e63bba96f9f39ab18c0260a862a29b426ad60c16405a43e885fd13ea3",
+    "bytes": 320978,
+    "formatVersion": 2,
     "canvas": [
       512,
       512
     ],
-    "layers": 110,
-    "markers": [
-      "resting",
-      "blink",
-      "attentive",
-      "submitted",
-      "thinking",
-      "saved",
-      "reviewed",
-      "recovery",
-      "greeting",
-      "coach-resting",
-      "coach-blink",
-      "coach-attentive",
-      "coach-submitted",
-      "coach-thinking",
-      "coach-saved",
-      "coach-reviewed",
-      "coach-recovery",
-      "coach-greeting"
-    ]
-  },
-  "sourceArtwork": {
-    "originalAtlas": {
-      "path": "ios/Mivu/Resources/Characters/pip/pip-artwork.png",
-      "sha256": "5bef0e0459bf52c26fde44170c4b9419d0d4e4154779f51b0d01fdd1fd9166e1",
-      "bytes": 1579851
-    },
-    "coverageAlpha": {
-      "path": "ios/Mivu/Resources/Characters/pip/pip-artwork-alpha.png",
-      "sha256": "7739938597b2affc6f20e9e43a62b30416d31548b3d339a15393b2d0754faf46",
-      "bytes": 218335
-    },
-    "eyelids": {
-      "path": "ios/Mivu/Resources/Characters/pip/pip-eyelids.png",
-      "sha256": "c93df46ed9f4c35a528a9a70e576b6a2a97af788021ea06034bf73ca42e8a78d",
-      "bytes": 7278
-    },
-    "coachPose": {
-      "path": "ios/Mivu/Resources/Characters/pip/pip-coach.png",
-      "sha256": "1b445ed9637c75f94678fa8a4ad5b16a360afc4244ba8e55927dcf88387e5b10",
-      "bytes": 29824,
-      "source": "Exact 145x142 crop from context.png at source box [845, 612, 990, 754]; opaque interior RGB equality asserted"
-    },
-    "coachEyelids": {
-      "path": "ios/Mivu/Resources/Characters/pip/pip-coach-eyelids.png",
-      "sha256": "7e5dea35a7ffb456a7da22e609122d1112302c5d82dd92c2ab8b751df0521c9e",
-      "bytes": 3771,
-      "source": "Two small registered eye edits only; source and target boxes documented below"
-    }
+    "parts": 312,
+    "sizeCapBytes": 1048576,
+    "generatedBy": "design-system/mivu/characters/pip/rig/build.py"
   },
   "editableSource": {
-    "directory": "design-system/mivu/characters/pip/lottie-source",
-    "builder": "design-system/mivu/characters/pip/lottie-source/build.py",
-    "fallbackGenerator": "design-system/mivu/characters/pip/lottie-source/fallbacks.py",
-    "instructions": "design-system/mivu/characters/pip/lottie-source/README.md",
-    "registration": "design-system/mivu/characters/pip/lottie-source/pose-registration.json",
-    "coachPoseRecipe": "design-system/mivu/characters/pip/lottie-source/coach_pose.py",
-    "motionRegressionTests": "design-system/mivu/characters/pip/lottie-source/test_motion.py"
+    "directory": "design-system/mivu/characters/pip/rig",
+    "svg": "design-system/mivu/characters/pip/rig/pip.svg",
+    "builder": "design-system/mivu/characters/pip/rig/build.py",
+    "tests": "design-system/mivu/characters/pip/rig/test_rig.py",
+    "instructions": "design-system/mivu/characters/pip/rig/README.md"
   },
-  "targetRuntime": "Lottie iOS 4.6.1, Core Animation renderer",
+  "targetRuntime": "Native Core Animation (CAShapeLayer rig, CASpringAnimation); no third-party runtime",
   "fallbacks": [
     {
       "name": "PipResting",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipResting.imageset/pip.png",
-      "sha256": "dd1309af7e26feb63c7b3bba29328f94a2a09654fb521ff95140ae34f2808293",
-      "bytes": 148289,
+      "sha256": "a689d585d0bc93a84128cb9ddb37944ef4ebf7f802e338ba7cddfc5f843120e0",
+      "bytes": 41574,
       "appearances": "same original artwork for light and dark"
     },
     {
@@ -155,90 +106,16 @@
     {
       "name": "PipCoach",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipCoach.imageset/pip.png",
-      "sha256": "d0ffd4905380cee3f20dc4952efb264c8dd58cc6671e25b23d016e1e935c98dd",
-      "bytes": 127451,
+      "sha256": "aa2a5961a64443bcb7a2d30ccc6dd2b3a6fa27cbb80e7849a9bdb900c6cb7f36",
+      "bytes": 40699,
       "appearances": "original context-matched seated art"
     },
     {
       "name": "PipPreview",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/pip.png",
-      "sha256": "dd1309af7e26feb63c7b3bba29328f94a2a09654fb521ff95140ae34f2808293",
-      "bytes": 148289,
+      "sha256": "a689d585d0bc93a84128cb9ddb37944ef4ebf7f802e338ba7cddfc5f843120e0",
+      "bytes": 41574,
       "appearances": "same original artwork for light and dark"
-    }
-  ],
-  "coachEyeEdits": {
-    "alternateImage": {
-      "path": "design-system/mivu/characters/pip/lottie-source/coach-blink-source.png",
-      "sha256": "900fe57a47d1ee2d7919d7d9b100335c4d244718cc07aca11220266976ed41ce",
-      "bytes": 718738,
-      "use": "Generated image has changed layout, scale and body RGB and is rejected wholesale except the two registered hand-painted eye edits below."
-    },
-    "sourceBoxCoordinates": "Full context.png pixel coordinates; boxes are x1,y1,x2,y2",
-    "patches": [
-      {
-        "eye": "left",
-        "source": [
-          954,
-          654,
-          1007,
-          696
-        ],
-        "target": [
-          918,
-          676,
-          946,
-          702
-        ]
-      },
-      {
-        "eye": "right",
-        "source": [
-          1030,
-          642,
-          1072,
-          676
-        ],
-        "target": [
-          954,
-          668,
-          975,
-          692
-        ]
-      }
-    ],
-    "preservation": "All Coach body and face pixels outside those eye patches are from the original context crop."
-  },
-  "authoringSources": [
-    {
-      "path": "design-system/mivu/characters/pip/lottie-source/coach_pose.py",
-      "sha256": "2b13e1a81475a2e2ec5e936a6508b449f66b66e55f160a13ea5bcfcc03e986ac",
-      "bytes": 10708,
-      "role": "Coach crop, matte, eyelid registration and Lottie marker recipe"
-    },
-    {
-      "path": "design-system/mivu/characters/pip/lottie-source/coach-blink-source.png",
-      "sha256": "900fe57a47d1ee2d7919d7d9b100335c4d244718cc07aca11220266976ed41ce",
-      "bytes": 718738,
-      "role": "generated eye-edit source; changed layout, scale and body are rejected"
-    },
-    {
-      "path": "design-system/mivu/characters/pip/lottie-source/build.py",
-      "sha256": "c59f790f50aca570b9dd6c145b3b2d70ae32629a37c708124376b52265b4e64f",
-      "bytes": 19527,
-      "role": "Lottie rig builder"
-    },
-    {
-      "path": "design-system/mivu/characters/pip/lottie-source/fallbacks.py",
-      "sha256": "1225408b3f5f10908e016038af6d946c9477b3d307e5a917f461c967718c14f1",
-      "bytes": 4798,
-      "role": "Static fallback generator"
-    },
-    {
-      "path": "design-system/mivu/characters/pip/lottie-source/README.md",
-      "sha256": "16fcd7f7a0f5e9157193218cf0719a9c009001170d70daae5e6c4e7da71f89b1",
-      "bytes": 5737,
-      "role": "Rig authoring and runtime documentation"
     }
   ],
   "historicalValidation": {
@@ -271,5 +148,65 @@
     "nativeUnitSuite": "b7e0642: 536 passed, 0 failed, 1 expected interactive sign-in skip",
     "uiSuite": "Initial full UI at 35dfa4a: 34 passed, 3 failed; all five Progress journeys passed in isolation on iOS27.0; original Goals flow passed on iOS26.5 at 102c773; final light/dark motion journey passed at b7e0642. Initial failure cause unresolved.",
     "verification": "docs/verification/2026-10-17-pip-expressive-motion.md"
+  },
+  "authoringSources": [
+    {
+      "path": "design-system/mivu/characters/pip/rig/pip.svg",
+      "sha256": "7d541300d159da2c862af89dcf99320c48acb2718a48856e1eb0e24d0a2c3bca",
+      "bytes": 225144,
+      "role": "Editable layered vector Pip"
+    },
+    {
+      "path": "design-system/mivu/characters/pip/rig/build.py",
+      "sha256": "a00d7828613ce75d00d24b3474280ca4df7932aad5272d4af53b28f8f97e4562",
+      "bytes": 9507,
+      "role": "SVG to pip-rig.json converter; --png renders fallbacks"
+    },
+    {
+      "path": "design-system/mivu/characters/pip/rig/test_rig.py",
+      "sha256": "1bb9faea80a63310a186ea68ceeb9a9776015f397e5ae43bbe7275ad95a6e6e9",
+      "bytes": 7802,
+      "role": "Rig asset regression checks"
+    },
+    {
+      "path": "design-system/mivu/characters/pip/rig/README.md",
+      "sha256": "54eedc1ac30d8b096b7d38469924eafd8ac1fe88093747746fac6c1f60777af4",
+      "bytes": 6637,
+      "role": "Rig authoring and conventions"
+    }
+  ],
+  "retiredLottiePipeline": {
+    "note": "Removed in the layered-rig change. pip.json, pip-artwork*.png, pip-eyelids.png, pip-coach*.png and lottie-source/ no longer exist; recover them from git history (before the 'remove Lottie atlas pipeline' commit). The validation blocks below describe that retired pipeline and are historical only.",
+    "lastRuntimeAsset": {
+      "path": "ios/Mivu/Resources/Characters/pip/pip.json",
+      "sha256": "5a39809af6996b9a4c8eb6dc6a21776c90bf192de3071b35eeb75ac4dd54b06d",
+      "bytes": 710323,
+      "formatVersion": "5.12.2",
+      "canvas": [
+        512,
+        512
+      ],
+      "layers": 110,
+      "markers": [
+        "resting",
+        "blink",
+        "attentive",
+        "submitted",
+        "thinking",
+        "saved",
+        "reviewed",
+        "recovery",
+        "greeting",
+        "coach-resting",
+        "coach-blink",
+        "coach-attentive",
+        "coach-submitted",
+        "coach-thinking",
+        "coach-saved",
+        "coach-reviewed",
+        "coach-recovery",
+        "coach-greeting"
+      ]
+    }
   }
 }
