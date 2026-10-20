@@ -75,7 +75,8 @@ final class ChatGPTConnection {
 
     // Launch restoration is explicit; constructing the screen never activates saved credentials.
     func restore() async {
-        guard !isConnecting, !isDisconnecting else { return }
+        // A connection saved before the sharing consent existed stays unused until the person agrees and reconnects.
+        guard !isConnecting, !isDisconnecting, sharingConsented else { return }
         let revision = generation
         guard reloadSavedJob() else { return }
         do {
@@ -93,6 +94,18 @@ final class ChatGPTConnection {
             guard revision == generation else { return }
             notice = .unavailable
         }
+    }
+
+    /// Whether the person agreed to send meal and profile data to OpenAI; asked before connecting.
+    var sharingConsented: Bool { preferences.bool(forKey: "openAISharingConsent") }
+    func recordSharingConsent() { preferences.set(true, forKey: "openAISharingConsent") }
+
+    /// Signs in over whichever window is in front, so any screen can start it.
+    func connect() async {
+        let scene = UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        guard let window = scene?.keyWindow else { notice = .unavailable; return }
+        await connect(window: window)
     }
 
     func connect(window: UIWindow) async {

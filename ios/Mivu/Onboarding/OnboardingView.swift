@@ -14,6 +14,7 @@ struct OnboardingView: View {
     private static let kgPerLb = 0.45359237
 
     @State private var step = Step.hello
+    @State private var askSharingConsent = false
     @State private var forward = true
     @State private var heightCm: Double?
     @State private var weightKg: Double?
@@ -28,7 +29,6 @@ struct OnboardingView: View {
     @State private var askFailed = false
     @State private var saving = false
     @State private var savedCount = 0
-    @State private var window: UIWindow?
     @State private var runtime = CompanionRuntime()
     @FocusState private var focus: Field?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -78,7 +78,7 @@ struct OnboardingView: View {
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
         }
-        .background(PresentationWindowReader { window = $0 })
+        .openAIConsent(isPresented: $askSharingConsent, connection: connection) { connectChatGPT() }
         .sensoryFeedback(.selection, trigger: step)
         .sensoryFeedback(.success, trigger: savedCount)
         .task {
@@ -214,7 +214,9 @@ struct OnboardingView: View {
                     unitMenu($metricWeight, metric: "kg", imperial: "lb")
                 }
             }
-            if let answers, !answers.keepsWeight {
+            if let answers, !answers.targetIsHealthy {
+                footnote("That target is below a healthy weight for your height, so Mivu can't set it. Choose a higher target, or talk to a doctor or registered dietitian.")
+            } else if let answers, !answers.keepsWeight {
                 Text(answers.targetKg < answers.weightKg ? "How quickly would you like to lose it?" : "How quickly would you like to gain it?")
                     .font(.headline).padding(.top, 4)
                 card {
@@ -286,7 +288,7 @@ struct OnboardingView: View {
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
             }
-            footnote("You can change these any time in Settings › Goals.")
+            footnote("These are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat, especially if you have a health condition. You can change targets any time in Settings › Goals.")
         }
     }
 
@@ -315,8 +317,8 @@ struct OnboardingView: View {
         case .about:
             heightCm.map { (50...272).contains($0) } == true && weightKg.map { (20...400).contains($0) } == true
                 && birthYear.map { (1900...Self.thisYear - 13).contains($0) } == true
-        case .goal: targetKg.map { (20...400).contains($0) } == true
-        case .connect: window != nil && !connection.isConnecting && !connection.isDisconnecting
+        case .goal: targetKg.map { (20...400).contains($0) } == true && answers?.targetIsHealthy == true
+        case .connect: !connection.isConnecting && !connection.isDisconnecting
         case .results: !asking && !saving && [targets.kcal, targets.protein, targets.carbs, targets.fat].allSatisfy { ($0 ?? -1) >= 0 }
         default: true
         }
@@ -324,10 +326,14 @@ struct OnboardingView: View {
 
     private func primary() {
         switch step {
-        case .connect: if let window { Task { await connection.connect(window: window) } }
+        case .connect: if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
         case .results: Task { await save() }
         default: advance()
         }
+    }
+
+    private func connectChatGPT() {
+        Task { await connection.connect() }
     }
 
     private func advance() {

@@ -56,7 +56,7 @@ struct CoachView: View {
                 .overlay {
                     if timeline.exchanges.isEmpty, timeline.error == nil {
                         ContentUnavailableView("What would you like to record?", systemImage: "text.bubble",
-                            description: Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate."))
+                            description: Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate. Coach gives estimates, not medical advice."))
                             .allowsHitTesting(false)
                     }
                 }
@@ -345,8 +345,12 @@ struct CoachView: View {
                 }
             }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture {
-                Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.")
-                    .font(.caption).foregroundStyle(Color.diarySecondary)
+                HStack(spacing: 4) {
+                    Text("Input saves on this iPhone.").foregroundStyle(Color.diarySecondary)
+                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for analysis")
+                        .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
+                }
+                .font(.caption)
             }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)

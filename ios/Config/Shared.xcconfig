@@ -7,5 +7,6 @@ IPHONEOS_DEPLOYMENT_TARGET = 26.0
 TARGETED_DEVICE_FAMILY = 1
 SWIFT_VERSION = 6.0
 GENERATE_INFOPLIST_FILE = YES
-INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait
 CODE_SIGN_ENTITLEMENTS = Config/Mivu.entitlements
+INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO

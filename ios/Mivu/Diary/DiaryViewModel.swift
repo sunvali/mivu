@@ -78,6 +78,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private var backupScheduledRevision: Int?
     private var changesTask: Task<Void, Never>?
     private var sampleProcessingAllowed = true
+    private var workerRerun = false
     private var worker: Task<Void, Never>?
     private var workerID: UUID?
     @ObservationIgnored private var memoryTask: Task<Void, Never>?
@@ -554,18 +555,24 @@ enum DiaryCaptureResult: Equatable, Sendable {
             restoreGeneration += 1; return true
         } catch { await recoverProfileSelection(previous); present(error); return false }
     }
-    private func cancelSampleWorker() { worker?.cancel(); worker = nil; workerID = nil }
+    private func cancelSampleWorker() { worker?.cancel(); worker = nil; workerID = nil; workerRerun = false }
     func enterBackground() { sampleProcessingAllowed = false; cancelSampleWorker() }
     func waitForWorker() async { await worker?.value }
     func resumeWorker(allowProcessing: Bool = false) {
         if allowProcessing { sampleProcessingAllowed = true }
         guard sampleMode else { resumeCoach?(); return }
-        guard sampleProcessingAllowed, !isChangingProfile, worker == nil, let token = selection else { return }
+        guard sampleProcessingAllowed, !isChangingProfile, let token = selection else { return }
+        // A capture committed while the worker runs may miss its queue read, so the worker goes around once more.
+        guard worker == nil else { workerRerun = true; return }
         let id = UUID(); workerID = id
         worker = Task {
             defer { if workerID == id { worker = nil; workerID = nil } }
-            do { try Task.checkCancellation(); try await store.processPending(expectedProfileID: token.identity.profileID); try Task.checkCancellation(); try await refresh(profileID: token.identity.profileID) }
-            catch is CancellationError {} catch { if selection == token { present(error) } }
+            do {
+                repeat {
+                    workerRerun = false
+                    try Task.checkCancellation(); try await store.processPending(expectedProfileID: token.identity.profileID); try Task.checkCancellation(); try await refresh(profileID: token.identity.profileID)
+                } while workerRerun
+            } catch is CancellationError {} catch { if selection == token { present(error) } }
         }
     }
     private func present(_ error: Error) { errorMessage = (error as? LocalizedError)?.errorDescription ?? "Could not save on this iPhone. Your input is still here." }
@@ -580,10 +587,15 @@ enum DiaryLaunch {
     static var shouldLaunchDiary: Bool {
         shouldLaunchDiary(arguments: ProcessInfo.processInfo.arguments, environment: ProcessInfo.processInfo.environment)
     }
+    /// UI-test and sample launch switches exist only in Debug builds, so Release has no hidden modes.
     static var testID: UUID? {
+        #if DEBUG
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "--diary-ui-test"), args.indices.contains(index + 1) else { return nil }
         return UUID(uuidString: args[index + 1])
+        #else
+        return nil
+        #endif
     }
     static var isUITest: Bool { testID != nil }
     /// UI tests run at any wall-clock time, so fixtures keep their day unless a test asks for the rollover.
@@ -593,7 +605,13 @@ enum DiaryLaunch {
     #endif
     static var isCoachUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-ui-test") }
     static var isCoachInferenceFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-inference-fixture") }
-    static var isSampleMode: Bool { (isUITest && !isCoachUITest) || ProcessInfo.processInfo.arguments.contains("--sample-mode") }
+    static var isSampleMode: Bool {
+        #if DEBUG
+        (isUITest && !isCoachUITest) || ProcessInfo.processInfo.arguments.contains("--sample-mode")
+        #else
+        false
+        #endif
+    }
     static var defaults: UserDefaults {
         if let id = testID, let defaults = UserDefaults(suiteName: "MivuUITest-" + id.uuidString) { return defaults }
         return .standard

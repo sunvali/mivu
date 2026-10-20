@@ -4,8 +4,8 @@ struct MealDetailView: View {
     @Bindable var model: DiaryViewModel
     let mealID: UUID
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.diarySettingsRoutes) private var routes
     @Environment(\.openDiaryCoach) private var openChat
+    @Environment(ChatGPTConnection.self) private var connection: ChatGPTConnection?
     @State private var showCorrection = false
     @State private var showManualNutrition = false
     @State private var editedItem: FoodItem?
@@ -242,13 +242,13 @@ struct MealDetailView: View {
                     Text("Nutrition").font(.headline)
                     Text("— kcal").font(.largeTitle.weight(.semibold)).monospacedDigit()
                     Text("Not estimated yet").font(.subheadline).foregroundStyle(Color.diarySecondary)
-                    Text(meal.state == .cancelled ? "Analysis was cancelled. Your note and photos are kept." : meal.state == .needsRetry ? "Your meal is saved. Retry analysis when you’re ready." : meal.state == .waitingForConnection ? "Connect ChatGPT in Settings to analyze this saved meal." : "Your meal is saved. Analysis will resume when available.")
+                    Text(meal.state == .cancelled ? "Analysis was cancelled. Your note and photos are kept." : meal.state == .needsRetry ? "Your meal is saved. Retry analysis when you’re ready." : meal.state == .waitingForConnection ? "Connect ChatGPT to analyze this saved meal." : "Your meal is saved. Analysis will resume when available.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
             }
-            if meal.state == .waitingForConnection {
-                Button("Open connection settings", systemImage: "link") { routes?.openConnection() }
-                    .frame(minHeight: 44).buttonStyle(.glass).accessibilityIdentifier("openMealConnection")
+            if meal.state == .waitingForConnection, let connection {
+                ChatGPTConnectButton(connection: connection, title: "Connect ChatGPT")
+                    .frame(minHeight: 44).buttonStyle(.glass)
             }
         }.padding(.vertical, 12)
     }

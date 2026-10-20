@@ -19,6 +19,24 @@ struct ConnectionTests {
         #expect(requests.values.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: directory.path))
     }
+
+    @Test func restoreWithoutSharingConsentLeavesSavedCredentialsUnused() async throws {
+        let fixture = try ConnectionFixture()
+        fixture.preferences.removeObject(forKey: "openAISharingConsent")
+        await fixture.connection.restore()
+        #expect(fixture.connection.accountState == .disconnected)
+        #expect(fixture.store.loads == 0)
+        #expect(fixture.requests.values.isEmpty)
+    }
+
+    @Test func openAISharingConsentStartsUnsetAndPersists() {
+        let preferences = UserDefaults(suiteName: UUID().uuidString)!
+        let connection = ChatGPTConnection(preferences: preferences)
+        #expect(!connection.sharingConsented)
+        connection.recordSharingConsent()
+        #expect(connection.sharingConsented)
+        #expect(ChatGPTConnection(preferences: preferences).sharingConsented)
+    }
 }
 
 private final class ConnectionRequests: @unchecked Sendable {
@@ -254,6 +272,7 @@ extension ConnectionTests {
         }
         let preferences = UserDefaults(suiteName: UUID().uuidString)!
         preferences.set(credentials.registrationID, forKey: "selectedRegistrationID")
+        preferences.set(true, forKey: "openAISharingConsent")
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let connection = ChatGPTConnection(auth: AuthSession(session: session, store: store),
@@ -275,6 +294,7 @@ extension ConnectionTests {
         defer { try? store.delete(registrationID: selected.registrationID); try? store.delete(registrationID: other.registrationID) }
         let preferences = UserDefaults(suiteName: UUID().uuidString)!
         preferences.set(selected.registrationID, forKey: "selectedRegistrationID")
+        preferences.set(true, forKey: "openAISharingConsent")
         let session = syntheticSession { _ in connectionCatalog() }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -307,6 +327,7 @@ extension ConnectionTests {
             scopes: permission ? saved.scopes : ["openid"], expiresAt: saved.expiresAt)
         try store.replace(credentials)
         preferences.set(credentials.registrationID, forKey: "selectedRegistrationID")
+        preferences.set(true, forKey: "openAISharingConsent")
         jobStore = ProbeJobStore(directory: directory)
         let requests = requests, jobStore = jobStore
         let session = syntheticSession { request in
@@ -437,6 +458,7 @@ extension ConnectionTests {
         }
         let preferences = UserDefaults(suiteName: UUID().uuidString)!
         preferences.set(old.registrationID, forKey: "selectedRegistrationID")
+        preferences.set(true, forKey: "openAISharingConsent")
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { block.signal(); try? FileManager.default.removeItem(at: directory) }
         let connection = ChatGPTConnection(auth: AuthSession(session: session, store: store),

@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var model: DiaryViewModel
     @Bindable var connection: ChatGPTConnection
-    @State private var window: UIWindow?
     let nutritionKeys: NutritionAPIKeyStore
     let destination: CoachDestination?
     @Binding var companionSelection: CompanionSelection
@@ -58,7 +57,12 @@ struct SettingsView: View {
                     }
                 }
                 Section {
+                    #if DEBUG
                     Button { showDiagnostic = true } label: { settingsRow("Diagnostics", symbol: "stethoscope", color: .diarySuccess) }
+                    #endif
+                    Link(destination: MivuLinks.privacyPolicy) { settingsRow("Privacy Policy", symbol: "hand.raised", color: .diaryAccent) }
+                        .accessibilityIdentifier("privacyPolicy")
+                    Text("Calorie and nutrition figures are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     Text("Keep a backup or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 } header: { Text("Support") }
                 Section {
@@ -86,7 +90,6 @@ struct SettingsView: View {
         .navigationDestination(for: SettingsSection.self) { section in
             settingsDetail(section)
         }
-        .background(PresentationWindowReader { window = $0 })
         .task { nutritionConfigured = (try? nutritionKeys.load()) != nil }
         .sheet(isPresented: $showDiagnostic) {
             VStack(spacing: 0) {
@@ -101,9 +104,15 @@ struct SettingsView: View {
         .onChange(of: model.readModel?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.readModel?.profile, restoreGeneration: model.restoreGeneration) }
         .confirmationDialog("Delete \(model.readModel?.profile.name ?? "this private local profile")?", isPresented: $showDelete, titleVisibility: .visible) {
-            Button("Delete profile", role: .destructive) { Task { await model.deleteCurrentProfile() } }
+            Button("Delete profile", role: .destructive) {
+                Task {
+                    await model.deleteCurrentProfile()
+                    // The ChatGPT connection is shared by all profiles, so it goes with the last one.
+                    if model.profiles.isEmpty, connection.activeRegistrationID != nil { await connection.disconnect() }
+                }
+            }
             Button("Cancel", role: .cancel) {}
-        } message: { Text("This removes the selected profile's meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved.") }
+        } message: { Text("This removes the selected profile's meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved. Deleting your last profile also disconnects ChatGPT.") }
         .onAppear {
             guard !openedInitialDestination else { return }
             openedInitialDestination = true
@@ -204,10 +213,7 @@ struct SettingsView: View {
                         ProgressView("Connecting")
                         Button("Cancel connection") { connection.cancelConnection() }.frame(minHeight: 44)
                     } else {
-                        Button(connection.accountState == .planPermissionMissing ? "Enable ChatGPT plan usage" : connection.activeRegistrationID == nil ? "Continue with ChatGPT" : "Reauthorize ChatGPT") {
-                            guard let window else { return }
-                            Task { await connection.connect(window: window) }
-                        }.frame(minHeight: 44).disabled(window == nil || connection.isDisconnecting)
+                        ChatGPTConnectButton(connection: connection).frame(minHeight: 44)
                     }
                     if !connection.models.isEmpty {
                         Picker("Account model", selection: $connection.selectedModel) {
@@ -219,7 +225,9 @@ struct SettingsView: View {
                     }
                     if let notice = connection.notice { Text(notice.rawValue).font(.subheadline).foregroundStyle(Color.diarySecondary) }
                     Link("ChatGPT usage settings", destination: URL(string: "https://chatgpt.com/settings/usage")!).frame(minHeight: 44)
+                    #if DEBUG
                     Button("ChatGPT connection diagnostic") { showConnectionDiagnostic = true }.frame(minHeight: 44)
+                    #endif
                 }
 
             case .nutritionSource:
