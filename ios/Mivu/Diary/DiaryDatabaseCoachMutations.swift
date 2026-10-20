@@ -88,6 +88,8 @@ extension DiaryTransaction {
         case .deleteWeight(let id, _): guard try exists("weight_tombstone", id) else { throw DiaryError.notFound }; return
         case .deleteWorkout(let id, _): guard try exists("workout_tombstone", id) else { throw DiaryError.notFound }; return
         case .manual(.deleteMeal(let id, _), _): guard try exists("tombstone", id) else { throw DiaryError.notFound }; return
+        case .manual(.deleteItem(let meal, let item, _), _):
+            guard try !mealItems(id: meal).contains(where: { $0.id == item }) else { throw DiaryError.notFound }; return
         case .manual(.deletePhoto(let meal, let photo, _), _):
             _ = try mealRecord(id: meal); guard try photoMetadata(photoID: photo, owner: .meal(meal)) == nil else { throw DiaryError.notFound }; return
         case .manual(.attach(let meal, let ids, _, _), _):
@@ -152,6 +154,9 @@ extension DiaryTransaction {
                 _ = try meal(id, revision: revision)
                 guard !photos.isEmpty, Set(photos).count == photos.count else { throw DiaryError.invalidData }
                 for photo in photos { guard turn.photoIDs.contains(photo), try photoMetadata(photoID: photo, owner: .meal(id)) == nil else { throw DiaryError.notFound } }
+            case .deleteItem(let id, let item, let revision):
+                _ = try meal(id, revision: revision); let items = try mealItems(id: id)
+                guard items.contains(where: { $0.id == item }) else { throw DiaryError.notFound }; guard items.count > 1 else { throw DiaryError.invalidData }
             case .deletePhoto(let id, let photo, let revision): _ = try meal(id, revision: revision); guard try photoMetadata(photoID: photo, owner: .meal(id)) != nil else { throw DiaryError.notFound }
             case .goals(let date, let targets, _, _, _, let revision):
                 guard try exactGoal(on: date)?.revision == revision else { throw DiaryError.staleRevision }
@@ -325,6 +330,9 @@ extension DiaryTransaction {
                 if owner == .coachTurn(turn.id) { try removePhoto(photoID: photoID, owner: owner) }
             }
             receipt.dayID = try mealRecord(id: id).dayID; receipt.mealID = id; receipt.resultJSON = try coachJSON(mealResult(id))
+        case .deleteItem(let id, let item, _):
+            try deleteItem(mealID: id, itemID: item, expectedRevision: nil)
+            receipt.mealID = id; receipt.itemID = item; receipt.dayID = try mealRecord(id: id).dayID; receipt.resultJSON = try coachJSON(mealResult(id))
         case .deletePhoto(let id, let photoID, _):
             receipt.dayID = try mealRecord(id: id).dayID; receipt.mealID = id
             try deleteMealPhoto(mealID: id, photoID: photoID); receipt.resultJSON = try coachJSON(Deleted(id: photoID))
