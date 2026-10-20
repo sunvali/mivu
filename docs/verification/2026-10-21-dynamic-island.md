@@ -41,6 +41,10 @@ synthetic diaries have none.
 - Only active or stale activities count as running, so a new one starts after iOS ends the old one at about 8 hours (`onlyActiveOrStaleActivitiesCountAsRunning`).
 - When numbers are hidden on a locked phone, VoiceOver says "Mivu day progress" instead of the figures, and the left/over caption is hidden too. This was not checked on a device.
 
+## Later change
+
+- The onboarding offer was removed at the owner's request. The island is now enabled only from Settings, and it is off by default.
+
 ## Not verified
 
 - Hidden numbers on a locked device (`privacySensitive`). The simulator showed iOS's first-run

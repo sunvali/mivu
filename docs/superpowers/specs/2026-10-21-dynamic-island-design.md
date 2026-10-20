@@ -14,8 +14,8 @@ have one. It is opt-in, because a persistent calorie number is not for everyone.
   against today's targets.
 - Keep it current whenever Mivu changes the diary: manual capture, edits,
   deletes, Coach mutations, and day rollover.
-- Let people turn it on or off at any time. New users are asked once during
-  onboarding, and everyone gets a Settings switch.
+- Let people turn it on or off at any time from a Settings switch. It is off by
+  default, and Mivu doesn't prompt for it (owner decision, 2026-10-21).
 
 ## Non-goals
 
@@ -37,7 +37,7 @@ have one. It is opt-in, because a persistent calorie number is not for everyone.
 | Topic | Decision |
 |---|---|
 | Content | Today's calories left |
-| Opt-in | Asked once during onboarding, plus a Settings switch for everyone. Off by default for existing users. |
+| Opt-in | Settings switch only, off by default. No onboarding prompt (changed 2026-10-21). |
 | Pip | A static Pip glyph |
 | Updates | Local only, sent from the app |
 | Start | Every app open starts it, or refreshes it if one is running |
@@ -109,12 +109,6 @@ have one. It is opt-in, because a persistent calorie number is not for everyone.
   `.privacySensitive()`, so iOS redacts them on a locked device and Pip stays
   visible. The value reaches the extension through `ContentState`, because the
   extension has no shared defaults. Changing it syncs right away.
-- **Onboarding:** on the final `results` step, add a toggle phrased as Pip's
-  offer: "Show what's left in your Dynamic Island". It is off by default, and
-  saving the targets saves its value to the same key and syncs right away, so the
-  island appears as Pip hands off to Today. This adds no new step,
-  and Settings changes it later. *(Builder call: a toggle on the results step,
-  not a new step.)*
 
 ### Tap
 
@@ -153,8 +147,7 @@ target.
     under `DiaryLaunch.isUITest` unless `--live-activity` is passed.
   - It is called from the same place as `publishWidgetSnapshot`:
     `.onChange(of: model.readModel, initial: true)` in `TodayView`. It is also
-    called when the scene becomes active, and from both toggles and the
-    onboarding save. *(Builder call: this reuses the widget's proven hook
+    called when the scene becomes active, and from both toggles. *(Builder call: this reuses the widget's proven hook
     instead of the model-level call this doc proposed earlier.)*
 - **Tap:** reuse `.widgetURL(URL(string: "mivu://today"))`. `TodayView`
   already handles it.
