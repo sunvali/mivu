@@ -152,17 +152,12 @@ struct MealDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom) {
             if let movedDayID, let day = model.day(movedDayID) {
-                NavigationLink { DayHistoryView(model: model, dayID: day.id) } label: {
-                    Label {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Moved to \(day.localDate)").font(.subheadline)
-                            Text("View day").font(.body.weight(.semibold))
-                        }
-                    } icon: { Image(systemName: "checkmark.circle") }
+                // The Diary tab shows the destination day; this only confirms the move.
+                Label("Moved to \(DiaryWeek.format(day.localDate, "EEEE, d MMM"))", systemImage: "checkmark.circle")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySuccess)
                     .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                }
-                .buttonStyle(.glass).tint(.diaryAccent).accessibilityIdentifier("movedMealDayReceipt")
-                .padding(20).background(Color.diaryCanvas)
+                    .accessibilityIdentifier("movedMealDayReceipt")
+                    .padding(.horizontal, 20).background(Color.diaryCanvas)
             }
         }
         .fullScreenCover(item: $viewingPhoto) { photo in

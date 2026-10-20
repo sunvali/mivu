@@ -248,8 +248,7 @@ import XCTest
         defer { continueAfterFailure = previousFailurePolicy }
         let app = launchHistory()
         app.tabBars.buttons["Diary"].tap()
-        let day = app.buttons.matching(identifier: "diaryDay").matching(NSPredicate(format: "value == %@", "2027-01-15 UTC")).firstMatch
-        XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap()
+        XCTAssertTrue(app.selectDiaryDate("2027-01-15"))
         let meal = app.buttons.matching(identifier: "historyMeal").firstMatch
         for _ in 0..<8 where !meal.isHittable { app.swipeUp() }
         XCTAssertTrue(meal.isHittable); meal.tap()

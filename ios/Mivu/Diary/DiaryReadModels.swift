@@ -138,6 +138,7 @@ struct DiaryDaySummary: Equatable, Sendable {
 struct DiaryWeekPage: Equatable, Sendable {
     var days: [DiaryDaySummary]
     var earliestLocalDate: String?
+    var latestLocalDate: String?
 }
 
 struct DiaryHistoryPage: Equatable, Sendable {

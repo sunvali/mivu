@@ -1,67 +1,71 @@
 import XCTest
 
 @MainActor final class DiaryUITests: XCTestCase {
-    func testDiaryOlderNewerLatestAndDateFilterRemainReversible() {
+    private func launchHistory() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"]
         app.launch()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
         app.tabBars.buttons["Diary"].tap()
-        let days = app.buttons.matching(identifier: "diaryDay")
-        func firstDay(_ date: String) -> XCUIElement {
-            days.matching(NSPredicate(format: "value == %@", date + " UTC")).firstMatch
-        }
-        func observedDays() -> String {
-            days.allElementsBoundByIndex.map { "\($0.value ?? "nil"): \($0.label)" }.joined(separator: " | ")
-        }
-        func assertTop(_ date: String) -> Bool {
-            let anchor = firstDay(date)
-            for _ in 0..<10 {
-                if anchor.exists && anchor.isHittable { break }
-                app.swipeDown(velocity: .fast)
-            }
-            guard anchor.exists && anchor.isHittable else {
-                XCTFail("Expected page anchor \(date); observed \(observedDays())")
-                return false
-            }
-            XCTAssertEqual(anchor.value as? String, date + " UTC")
-            return true
-        }
-        func tapPage(_ id: String, first date: String) -> Bool {
-            let button = app.buttons[id]
-            for _ in 0..<10 { if button.exists && button.isHittable { break }; app.swipeUp(velocity: .fast) }
-            guard button.exists && button.isHittable && button.isEnabled else {
-                XCTFail("Page action \(id) unavailable; observed \(observedDays())")
-                return false
-            }
-            let previous = days.firstMatch.value as? String
-            button.tap()
-            let changed = NSPredicate { _, _ in (days.firstMatch.value as? String) != previous }
-            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: changed, object: nil)], timeout: 10), .completed)
-            return assertTop(date)
-        }
-        XCTAssertTrue(days.firstMatch.waitForExistence(timeout: 10))
-        print("HISTORY_INITIAL_ROWS " + observedDays())
-        guard assertTop("2026-10-19"),
-              tapPage("earlierDiaryDays", first: "2026-09-19"),
-              tapPage("earlierDiaryDays", first: "2026-08-20"),
-              tapPage("newerDiaryDays", first: "2026-09-19"),
-              tapPage("latestDiaryDays", first: "2026-10-19") else { return }
-        app.buttons["chooseDiaryDate"].tap(); app.buttons["applyDiaryDate"].tap()
-        XCTAssertTrue(app.buttons["showAllDiaryDays"].waitForExistence(timeout: 5))
-        let filtered = NSPredicate { _, _ in days.count == 1 }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: filtered, object: nil)], timeout: 10), .completed)
-        XCTAssertEqual(days.count, 1)
-        days.firstMatch.tap()
-        XCTAssertTrue(app.buttons["logMealForDay"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.buttons["showAllDiaryDays"].waitForExistence(timeout: 5))
-        XCTAssertEqual(days.count, 1)
-        app.buttons["showAllDiaryDays"].tap()
-        let unfiltered = NSPredicate { _, _ in days.count > 1 }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: unfiltered, object: nil)], timeout: 10), .completed)
-        _ = assertTop("2026-10-19")
+        return app
     }
+
+    func testSelectingPillShowsThatDaysMeals() {
+        let app = launchHistory()
+        XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
+        XCTAssertEqual(app.selectedDiaryDate, "2026-10-12")
+        XCTAssertTrue(app.buttons["historyMeal"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Monday, 12 October"].exists)
+        XCTAssertTrue(app.buttons["logMealForDay"].exists && app.buttons["diaryAskPip"].exists)
+    }
+
+    func testCalendarJumpSelectsDate() {
+        let app = launchHistory()
+        XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
+        app.buttons["chooseDiaryDate"].tap()
+        XCTAssertTrue(app.buttons["applyDiaryDate"].waitForExistence(timeout: 5))
+        app.buttons["applyDiaryDate"].tap()
+        XCTAssertEqual(app.selectedDiaryDate, "2026-10-12", "The calendar opens on the selected day and keeps it")
+        XCTAssertTrue(app.buttons["historyMeal"].firstMatch.waitForExistence(timeout: 5))
+    }
+
+    func testEmptyDateShowsNothingLoggedAndOnlyAskPip() {
+        let app = launchHistory()
+        XCTAssertTrue(app.selectDiaryDate(XCUIApplication.diaryLabel(Date())))
+        XCTAssertTrue(app.staticTexts["Nothing logged"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["logMealForDay"].exists)
+        XCTAssertFalse(app.buttons["diaryAddMenu"].isEnabled)
+        XCTAssertTrue(app.buttons["diaryAskPip"].exists)
+    }
+
+    func testAskPipOnEmptyDatePrefillsCoach() {
+        let app = launchHistory()
+        XCTAssertTrue(app.selectDiaryDate(XCUIApplication.diaryLabel(Date())))
+        app.buttons["diaryAskPip"].tap()
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        let prefilled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value BEGINSWITH %@", "For "), object: input)
+        XCTAssertEqual(XCTWaiter.wait(for: [prefilled], timeout: 10), .completed, "Coach draft was \(input.value ?? "nil")")
+    }
+
+    func testProfileSwitchResetsSelectedDay() {
+        let app = launchHistory()
+        XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["localProfiles"].tap()
+        let create = app.buttons["Create local profile"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5)); create.tap()
+        let name = app.alerts.textFields.firstMatch; XCTAssertTrue(name.waitForExistence(timeout: 5)); name.typeText("Synthetic second profile")
+        app.alerts.buttons["Create"].tap()
+        XCTAssertTrue(app.staticTexts["Synthetic second profile"].firstMatch.waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["doneSettings"].tap()
+        XCTAssertTrue(app.diaryPills.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertNotEqual(app.selectedDiaryDate, "2026-10-12")
+        XCTAssertFalse(app.buttons["historyMeal"].firstMatch.exists)
+    }
+
     func testNewDayShowsMorningCheckInThatNeverBlocksLogging() {
         let app = launch(["--diary-history-fixture", "--rollover-ui-test"])
         let card = app.descendants(matching: .any)["morningCheckIn"]
@@ -262,9 +266,6 @@ import XCTest
         app.buttons["saveWeight"].tap()
         app.tabBars.buttons["Diary"].tap()
         XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
-        let day = app.buttons["diaryDay"].firstMatch
-        XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap()
-        XCTAssertFalse(app.tabBars.buttons["Diary"].isHittable)
         let savedWeight = app.staticTexts["Morning weight, 70 kg"]
         reveal(savedWeight, in: app); XCTAssertTrue(savedWeight.waitForExistence(timeout: 5))
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "Synthetic diary history"; attachment.lifetime = .keepAlways; add(attachment)
@@ -399,25 +400,26 @@ import XCTest
         let receipt = app.buttons["coachMealLink"].firstMatch
         XCTAssertTrue(receipt.waitForExistence(timeout: 15))
         app.tabBars.buttons["Diary"].tap()
-        let day = app.buttons["diaryDay"].firstMatch
-        XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap()
-        let selectedDate = app.navigationBars.firstMatch.identifier
+        // "Yesterday" is relative to the waking day, which can differ from the clock after midnight.
+        XCTAssertTrue(app.diaryPills.firstMatch.waitForExistence(timeout: 10))
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = .gmt; formatter.dateFormat = "yyyy-MM-dd"
+        let waking = formatter.date(from: app.selectedDiaryDate ?? "") ?? Date()
+        let yesterday = formatter.string(from: waking.addingTimeInterval(-86_400))
+        XCTAssertTrue(app.selectDiaryDate(yesterday))
         let log = app.buttons["logMealForDay"]
-        XCTAssertTrue(log.waitForExistence(timeout: 5)); reveal(log, in: app); log.tap()
+        XCTAssertTrue(log.waitForExistence(timeout: 5)); log.tap()
         let note = app.textFields["mealText"]
         XCTAssertTrue(note.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts[selectedDate].exists, "The composer must show its selected destination")
+        XCTAssertTrue(app.staticTexts[yesterday].exists, "The composer must show its selected destination")
         note.tap(); note.typeText("Synthetic selected-day meal")
         if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
         let review = app.switches["reviewFirst"].switches.firstMatch
         reveal(review, in: app); review.tap()
         app.buttons["sendMeal"].tap()
-        XCTAssertTrue(app.navigationBars[selectedDate].waitForExistence(timeout: 10))
         let meal = app.buttons["savedDayMealReceipt"]
-        reveal(meal, in: app); meal.tap()
+        XCTAssertTrue(meal.waitForExistence(timeout: 10)); reveal(meal, in: app); meal.tap()
         XCTAssertTrue(app.staticTexts["Time unspecified"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts[selectedDate].exists)
-        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts[yesterday].exists)
         app.navigationBars.buttons.firstMatch.tap()
         app.tabBars.buttons["Today"].tap()
         XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists, "Historical capture must not move records into Today")

@@ -268,7 +268,7 @@ import Testing
         let f = try weekFixture(extra: [("2027-01-10", "UTC"), ("2027-01-18", "UTC")]); defer { f.remove() }
         let week = try f.database.diaryWeek(from: "2027-01-15", through: "2027-01-17", expectedProfileID: f.owner)
         #expect(week.days.map(\.day.localDate) == ["2027-01-15"])
-        #expect(week.earliestLocalDate == "2027-01-10")
+        #expect(week.earliestLocalDate == "2027-01-10" && week.latestLocalDate == "2027-01-18")
     }
 
     @Test func weekRejectsSpanOverSevenDays() throws {

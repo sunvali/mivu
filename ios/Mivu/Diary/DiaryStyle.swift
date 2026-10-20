@@ -76,6 +76,7 @@ struct SampleBanner: View {
 }
 
 struct DiaryCaptureAction: View {
+    var identifier = "logMeal"
     let action: () -> Void
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
@@ -91,7 +92,7 @@ struct DiaryCaptureAction: View {
                 .frame(maxWidth: .infinity, minHeight: 52)
         }
         .tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
-        .accessibilityIdentifier("logMeal")
+        .accessibilityIdentifier(identifier)
     }
 }
 

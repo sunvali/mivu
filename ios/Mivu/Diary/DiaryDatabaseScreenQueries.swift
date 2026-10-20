@@ -56,9 +56,10 @@ extension DiaryDatabase {
                 try validateTrackingDayFields(day)
                 days.append(try transaction.daySummary(day))
             }
-            let earliest = try domainStatement("SELECT MIN(\(date)) FROM day")
-            defer { sqlite3_finalize(earliest) }
-            return DiaryWeekPage(days: days, earliestLocalDate: try mutationStep(earliest) ? try? mutationText(earliest, 0) : nil)
+            let bounds = try domainStatement("SELECT MIN(\(date)), MAX(\(date)) FROM day")
+            defer { sqlite3_finalize(bounds) }
+            guard try mutationStep(bounds) else { return DiaryWeekPage(days: days) }
+            return DiaryWeekPage(days: days, earliestLocalDate: try? mutationText(bounds, 0), latestLocalDate: try? mutationText(bounds, 1))
         }
     }
     func historyCoverage(expectedProfileID: UUID) throws -> [DayCompleteness: Int] {

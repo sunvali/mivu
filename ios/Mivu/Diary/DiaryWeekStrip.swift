@@ -110,6 +110,7 @@ struct DiaryWeekStrip: View {
         .buttonStyle(.plain)
         .disabled(isFuture).opacity(isFuture ? 0.35 : 1)
         .accessibilityLabel(DiaryWeek.pillLabel(date, summaries: days))
+        .accessibilityValue(date)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityShowsLargeContentViewer()
         .accessibilityIdentifier("diaryDayPill")
