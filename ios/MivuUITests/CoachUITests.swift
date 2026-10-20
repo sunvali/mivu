@@ -48,12 +48,10 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["Apple sample mode"].exists)
-        app.buttons["profileSettings"].tap()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
-        revealList(app.buttons["Continue with ChatGPT"], in: app)
-        XCTAssertTrue(app.buttons["Continue with ChatGPT"].isHittable)
+        openConnectionSettings(in: app)
+        let connect = settingsConnectButton(in: app)
+        revealList(connect, in: app)
+        XCTAssertTrue(connect.exists)
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["doneSettings"].tap()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5))
@@ -63,6 +61,25 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Synthetic offline persisted Coach"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+
+    func testChatGPTConnectAsksForSharingConsentFromCoachAndSettings() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        let consent = app.alerts["Share with OpenAI?"]
+        let coachConnect = app.buttons["connectChatGPT"]
+        XCTAssertTrue(coachConnect.waitForExistence(timeout: 5)); coachConnect.tap()
+        XCTAssertTrue(consent.waitForExistence(timeout: 5), "Coach must offer the connection in place")
+        consent.buttons["Not Now"].tap()
+        openConnectionSettings(in: app)
+        let settingsConnect = settingsConnectButton(in: app)
+        revealList(settingsConnect, in: app)
+        XCTAssertTrue(settingsConnect.isEnabled, "The pushed connection page must keep its button usable")
+        settingsConnect.tap()
+        XCTAssertTrue(consent.waitForExistence(timeout: 5))
+        consent.buttons["Not Now"].tap()
     }
 
     func testLargestDynamicTypeDarkCoachKeepsCaptureReachable() {
@@ -442,6 +459,17 @@ import XCTest
         XCTAssertTrue(link.isHittable); link.tap()
         XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.tabBars.buttons["Coach"].isHittable, "Focused record details must hide the tab bar")
+    }
+    /// Coach's own connect link stays in the hierarchy under Settings, so match the Settings label too.
+    private func settingsConnectButton(in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(identifier: "connectChatGPT").matching(NSPredicate(format: "label == %@", "Continue with ChatGPT")).firstMatch
+    }
+    private func openConnectionSettings(in app: XCUIApplication) {
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch
+        revealList(row, in: app); row.tap()
+        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
     }
     private func revealList(_ element: XCUIElement, in app: XCUIApplication) {
         guard let list = nativeList(in: app) else { return }

@@ -345,8 +345,12 @@ struct CoachView: View {
                 }
             }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture {
-                Text("Input saves on this iPhone. Connect ChatGPT in Settings for analysis.")
-                    .font(.caption).foregroundStyle(Color.diarySecondary)
+                HStack(spacing: 4) {
+                    Text("Input saves on this iPhone.").foregroundStyle(Color.diarySecondary)
+                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for analysis")
+                        .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
+                }
+                .font(.caption)
             }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)

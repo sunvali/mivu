@@ -29,7 +29,6 @@ struct OnboardingView: View {
     @State private var askFailed = false
     @State private var saving = false
     @State private var savedCount = 0
-    @State private var window: UIWindow?
     @State private var runtime = CompanionRuntime()
     @FocusState private var focus: Field?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -79,7 +78,6 @@ struct OnboardingView: View {
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
         }
-        .background(PresentationWindowReader { window = $0 })
         .openAIConsent(isPresented: $askSharingConsent, connection: connection) { connectChatGPT() }
         .sensoryFeedback(.selection, trigger: step)
         .sensoryFeedback(.success, trigger: savedCount)
@@ -320,7 +318,7 @@ struct OnboardingView: View {
             heightCm.map { (50...272).contains($0) } == true && weightKg.map { (20...400).contains($0) } == true
                 && birthYear.map { (1900...Self.thisYear - 13).contains($0) } == true
         case .goal: targetKg.map { (20...400).contains($0) } == true && answers?.targetIsHealthy == true
-        case .connect: window != nil && !connection.isConnecting && !connection.isDisconnecting
+        case .connect: !connection.isConnecting && !connection.isDisconnecting
         case .results: !asking && !saving && [targets.kcal, targets.protein, targets.carbs, targets.fat].allSatisfy { ($0 ?? -1) >= 0 }
         default: true
         }
@@ -335,7 +333,7 @@ struct OnboardingView: View {
     }
 
     private func connectChatGPT() {
-        if let window { Task { await connection.connect(window: window) } }
+        Task { await connection.connect() }
     }
 
     private func advance() {

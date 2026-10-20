@@ -4,7 +4,6 @@ import Observation
 @MainActor @Observable final class DiarySettingsRouteOwner {
     struct Route: Identifiable { let id = UUID(); let destination: CoachDestination? }
     var route: Route?
-    func openConnection() { route = Route(destination: .connection) }
 }
 
 extension EnvironmentValues {
@@ -97,7 +96,7 @@ struct DiaryRootView: View {
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
     private let nutritionKeys: NutritionAPIKeyStore
     init() {
-        let diary = DiaryViewModel.local(), session = ChatGPTConnection()
+        let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults)
         let keys = NutritionAPIKeyStore.local
         nutritionKeys = keys
         let foodSource = FoodEvidenceClient()
@@ -286,6 +285,7 @@ struct DiaryRootView: View {
         .environment(\.diarySettingsRoutes, routes)
         .environment(\.diaryPhotoLimiter, model.photoWorkLimiter)
         .environment(\.openDiaryCoach, openCoachAction)
+        .environment(connection)
         .sensoryFeedback(.success, trigger: model.captureReceipt)
         .sheet(item: $routes.route) { route in
             NavigationStack {

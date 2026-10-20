@@ -100,6 +100,14 @@ final class ChatGPTConnection {
     var sharingConsented: Bool { preferences.bool(forKey: "openAISharingConsent") }
     func recordSharingConsent() { preferences.set(true, forKey: "openAISharingConsent") }
 
+    /// Signs in over whichever window is in front, so any screen can start it.
+    func connect() async {
+        let scene = UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        guard let window = scene?.keyWindow else { notice = .unavailable; return }
+        await connect(window: window)
+    }
+
     func connect(window: UIWindow) async {
         let browser = NativeAuthorizationBrowser(window: window)
         await connect { try await browser.open($0) }

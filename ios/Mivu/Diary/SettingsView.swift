@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var model: DiaryViewModel
     @Bindable var connection: ChatGPTConnection
-    @State private var window: UIWindow?
     let nutritionKeys: NutritionAPIKeyStore
     let destination: CoachDestination?
     @Binding var companionSelection: CompanionSelection
@@ -21,7 +20,6 @@ struct SettingsView: View {
     @State private var openedInitialDestination = false
     @Environment(\.dismiss) private var dismiss
     @State private var showDiscard = false
-    @State private var askSharingConsent = false
     private var hasUnsavedChanges: Bool { fields.isDirty || !nutritionDraft.text.isEmpty }
 
     private enum SettingsSection: Hashable {
@@ -92,7 +90,6 @@ struct SettingsView: View {
         .navigationDestination(for: SettingsSection.self) { section in
             settingsDetail(section)
         }
-        .background(PresentationWindowReader { window = $0 })
         .task { nutritionConfigured = (try? nutritionKeys.load()) != nil }
         .sheet(isPresented: $showDiagnostic) {
             VStack(spacing: 0) {
@@ -216,10 +213,7 @@ struct SettingsView: View {
                         ProgressView("Connecting")
                         Button("Cancel connection") { connection.cancelConnection() }.frame(minHeight: 44)
                     } else {
-                        Button(connection.accountState == .planPermissionMissing ? "Enable ChatGPT plan usage" : connection.activeRegistrationID == nil ? "Continue with ChatGPT" : "Reauthorize ChatGPT") {
-                            if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
-                        }.frame(minHeight: 44).disabled(window == nil || connection.isDisconnecting)
-                        .openAIConsent(isPresented: $askSharingConsent, connection: connection) { connectChatGPT() }
+                        ChatGPTConnectButton(connection: connection).frame(minHeight: 44)
                     }
                     if !connection.models.isEmpty {
                         Picker("Account model", selection: $connection.selectedModel) {
@@ -293,11 +287,6 @@ struct SettingsView: View {
         .navigationTitle(title(section))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-    }
-
-    private func connectChatGPT() {
-        guard let window else { return }
-        Task { await connection.connect(window: window) }
     }
 
     private func settingsRow(_ title: String, symbol: String, color: Color, value: String? = nil) -> some View {
