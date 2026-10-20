@@ -49,7 +49,8 @@ struct CoachView: View {
                 #endif
                 CoachTimelineView(timeline: timeline, rows: timelineRows(timeline), diagnostics: fixtureDiagnostics,
                     jumpToLatest: jumpToLatestAction(timeline), onViewportRefreshReady: { refreshViewport = $0 },
-                    onAccessibilityPageRequestReady: { requestAccessibilityPage = $0 }) { row in
+                    onAccessibilityPageRequestReady: { requestAccessibilityPage = $0 },
+                    onReply: { turn in reply(to: turn, fromPip: turn.assistantText != nil) }) { row in
                     AnyView(timelineContent(row))
                 }
                 .dynamicTypeSize(diagnostics.largeText ? .accessibility2 : typeSize)
@@ -256,10 +257,14 @@ struct CoachView: View {
                 if row.fixtureBanner { Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner") }
                 inputBubble(turn)
                 VStack(alignment: .leading, spacing: 12) {
-                    if let reply = turn.assistantText {
-                        Text(reply).font(.body).textSelection(.enabled)
+                    if let answer = turn.assistantText {
+                        Text(answer).font(.body)
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("coachReply")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
+                            .contextMenu { messageActions(turn, fromPip: true) }
+                            .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: true) }
+                            .accessibilityIdentifier("coachReply")
                     }
                     turnActions(turn)
                 }
@@ -356,15 +361,21 @@ struct CoachView: View {
             }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)
+        .animation(reduceMotion ? nil : .snappy, value: coach.attachmentDraft.reply)
+        .sensoryFeedback(.selection, trigger: coach.attachmentDraft.reply) { $1 != nil }
         .disabled(coach.isSending || coach.diary.isChangingProfile)
     }
     private var composerInput: some View {
-        TextField("Message Coach", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }), axis: .vertical)
-            // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
-            .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
-            .accessibilityIdentifier("coachInput")
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            .frame(minHeight: 48)
+        // A reply quote sits inside the field's top, as in Messages; Pip then rests above it.
+        VStack(alignment: .leading, spacing: 0) {
+            if let reply = coach.attachmentDraft.reply { replyBar(reply) }
+            TextField("Message Coach", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }), axis: .vertical)
+                // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
+                .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
+                .accessibilityIdentifier("coachInput")
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .frame(minHeight: 48)
+        }
             .onGeometryChange(for: Bool.self) { $0.size.height > 56 } action: { inputWraps = $0 }
             .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
             .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
@@ -411,6 +422,39 @@ struct CoachView: View {
             }
         }
     }
+    @ViewBuilder private func messageActions(_ turn: CoachExchangeSummary, fromPip: Bool) -> some View {
+        Button("Reply", systemImage: "arrowshape.turn.up.left") { reply(to: turn, fromPip: fromPip) }
+        let text = fromPip ? turn.assistantText ?? "" : turn.text
+        if !text.isEmpty { Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text } }
+    }
+    private func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
+        coach.reply(to: turn, fromPip: fromPip); editing = true
+    }
+    private func replyBar(_ reply: CoachReply) -> some View {
+        HStack(spacing: 4) {
+            CoachReplyQuote(reply: reply, title: reply.composerTitle)
+            Button { coach.attachmentDraft.reply = nil } label: {
+                Image(systemName: "xmark").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityLabel("Cancel reply").accessibilityIdentifier("coachReplyCancel")
+        }
+        .padding(.leading, 12).padding(.vertical, 2)
+        .background(Color.diaryAccent.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+        .padding([.horizontal, .top], 6)
+        .accessibilityElement(children: .contain).accessibilityIdentifier("coachReplyBar")
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+    }
+    private func openQuote(_ reply: CoachReply) {
+        let target: CoachSeekTarget
+        switch reply.target {
+        case .meal(let id), .item(let id, _): selectedRecord = .meal(id); return
+        case .message(let id, _): target = .turn(id)
+        case .day(let id): target = .day(id)
+        }
+        guard let identity = coach.diary.selection?.identity else { return }
+        Task { _ = await coach.seek(CoachNavigationRequest(identity: identity, target: target, requestID: UUID())) }
+    }
     private func openCamera(replacing id: UUID? = nil) {
         coach.synchronizeDraftOwnership()
         do {
@@ -421,7 +465,17 @@ struct CoachView: View {
     private func inputBubble(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
-                if !turn.text.isEmpty { Text(turn.text).font(.body).textSelection(.enabled).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
+                if let reply = turn.reply {
+                    Button { openQuote(reply) } label: {
+                        CoachReplyQuote(reply: reply, title: reply.author, inMessage: true)
+                            .padding(.horizontal, 10).padding(.vertical, 8).frame(minHeight: 44)
+                            .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
+                            .contentShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain).accessibilityHint("Shows the original")
+                    .accessibilityIdentifier("coachQuote-" + turn.id.uuidString)
+                }
+                if !turn.text.isEmpty { Text(turn.text).font(.body).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
                 if !turn.photos.isEmpty {
                     Label("\(turn.photos.count) attached photos", systemImage: "photo").font(.caption)
                     ForEach(turn.photos) { photo in DiaryPhotoPreview(model: coach.diary, reference: photo, height: 140) }
@@ -429,6 +483,9 @@ struct CoachView: View {
             }
             .padding(16).foregroundStyle(Color.white)
             .background(Color.diaryMessage, in: RoundedRectangle(cornerRadius: 20))
+            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 20))
+            .contextMenu { messageActions(turn, fromPip: false) }
+            .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: false) }
             Label("Input saved on this iPhone", systemImage: "internaldrive")
                 .font(.caption).foregroundStyle(Color.diarySecondary)
         }.frame(maxWidth: .infinity, alignment: .trailing)

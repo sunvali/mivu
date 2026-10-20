@@ -22,6 +22,7 @@ struct CoachTimelineView: UIViewRepresentable {
     typealias AccessibilityPageRequest = @MainActor (CoachPageDirection) -> Bool
     var onViewportRefreshReady: (@MainActor (@escaping ViewportRefresh) -> Void)? = nil
     var onAccessibilityPageRequestReady: (@MainActor (@escaping AccessibilityPageRequest) -> Void)? = nil
+    var onReply: (@MainActor (CoachExchangeSummary) -> Void)? = nil
     let content: (CoachTimelineRow) -> AnyView
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
@@ -134,6 +135,16 @@ struct CoachTimelineView: UIViewRepresentable {
             let table = tableView as! CoachTimelineTable; self.table = table
             let cell = table.dequeueReusableCell(withIdentifier: "exchange", for: indexPath) as! CoachTimelineCell
             configure(cell, row: table.rows[indexPath.row]); return cell
+        }
+        // Swipe right to reply, as in Messages; a full swipe replies at once.
+        func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+            let rows = (tableView as! CoachTimelineTable).rows
+            guard let onReply = owner.onReply, rows.indices.contains(indexPath.row), let turn = rows[indexPath.row].exchange else { return nil }
+            let action = UIContextualAction(style: .normal, title: "Reply") { _, _, done in onReply(turn); done(true) }
+            action.image = UIImage(systemName: "arrowshape.turn.up.left.fill"); action.backgroundColor = UIColor(Color.diaryAccent)
+            let configuration = UISwipeActionsConfiguration(actions: [action])
+            configuration.performsFirstActionWithFullSwipe = true
+            return configuration
         }
         func updateJumpButton(in table: CoachTimelineTable, appearanceChanged: Bool) {
             guard owner.jumpToLatest != nil else {
