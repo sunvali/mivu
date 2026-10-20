@@ -15,6 +15,7 @@ extension EnvironmentValues {
 private struct DiarySetupView: View {
     @Bindable var model: DiaryViewModel
     let onSelected: () -> Void
+    var onCreated: () -> Void = {}
     @State private var name = ""
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     var body: some View {
@@ -33,7 +34,7 @@ private struct DiarySetupView: View {
                 Button("Create diary") {
                     Task {
                         await model.createProfile(name: trimmedName)
-                        if model.readModel != nil { onSelected() }
+                        if model.readModel != nil { onSelected(); onCreated() }
                     }
                 }.disabled(trimmedName.isEmpty || model.isChangingProfile)
                     .frame(minHeight: 44).accessibilityIdentifier("createDiary")
@@ -66,6 +67,7 @@ struct DiaryRootView: View {
     @State private var coachRoutes = CoachNavigationOwner()
     @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
+    @State private var showOnboarding = false
     @State private var companion = CompanionPresentation()
     @State private var companionRuntime: CompanionRuntime
     #if DEBUG
@@ -205,7 +207,7 @@ struct DiaryRootView: View {
             if !DiaryLaunch.isUITest { restoredTab = value }
             refreshCompanion()
         }
-        .onChange(of: [routes.route != nil, coachHistory != nil, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion, lowPower]) { _, _ in refreshCompanion() }
+        .onChange(of: [routes.route != nil, coachHistory != nil, showOnboarding, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion, lowPower]) { _, _ in refreshCompanion() }
         .onChange(of: model.selection, initial: true) { _, selection in
             coachRoutes.synchronize(selection: selection, isChangingProfile: model.isChangingProfile)
             coachHistory = nil
@@ -279,6 +281,9 @@ struct DiaryRootView: View {
             }
             .tint(.diaryAccent)
         }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(model: model, connection: connection) { showOnboarding = false }
+        }
         .sheet(item: $coachHistory) { presentation in
             CoachHistoryView(model: model, routes: coachRoutes, presentation: presentation,
                              open: coachAction(from: presentation.origin))
@@ -289,7 +294,7 @@ struct DiaryRootView: View {
             if !hasLoaded {
                 ProgressView("Opening diary").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.diaryCanvas)
             } else if model.readModel == nil {
-                NavigationStack { DiarySetupView(model: model) { selectedTab = "today" } }
+                NavigationStack { DiarySetupView(model: model, onSelected: { selectedTab = "today" }, onCreated: { showOnboarding = true }) }
             } else {
                 rootTabs
             }
@@ -399,7 +404,7 @@ struct DiaryRootView: View {
             reduceMotion: reduceMotion, lowPower: lowPower, thermalState: thermalState,
             sceneActive: phase == .active && hasLoaded && model.readModel != nil && !model.isChangingProfile,
             selected: context.surface != nil && context.surface == selectedCompanionSurface,
-            visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || model.errorMessage != nil)
+            visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || showOnboarding || model.errorMessage != nil)
         let output = companion.resolve(context: context, now: Date())
         if companionOutput.playback == .animated && output.playback != .animated { companionRuntime.stop() }
         #if DEBUG

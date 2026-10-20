@@ -29,8 +29,6 @@ meeting the companion, not filling in a form.
    - Pace: Gentle, Steady (the default) or Faster, about 0.25, 0.5 and
      0.75 kg a week. Hidden when the target equals the current weight
      (the goal is to keep it).
-   - Activity: active days per week, 0–7. Only this one question. Apple Health
-     and sport apps come later and will replace it.
    - Diet and health: chips plus an "Anything else?" text field. Optional.
      - Chips: gluten-free, lactose-free, vegetarian, vegan, type 1 diabetes,
        type 2 diabetes, Crohn's, IBS, nut allergy.
@@ -52,8 +50,8 @@ meeting the companion, not filling in a form.
 - **Formula (the instant fallback):**
   - Calories at rest use Mifflin–St Jeor. "Prefer not to say" uses the
     midpoint of the female and male results.
-  - Activity factor from active days a week: 0 → 1.2, 1–2 → 1.375,
-    3–4 → 1.55, 5–6 → 1.725, 7 → 1.9.
+  - Activity is not asked, to keep questions to a minimum: everyone gets
+    light activity (×1.375) until Apple Health and sport apps supply it.
   - Pace adjusts by ±(kg a week × 7700 / 7) kcal a day.
   - The total never goes below 1200 kcal.
   - Macros: protein 1.6 g per kg of current weight, fat 30% of kcal, and
@@ -75,7 +73,7 @@ meeting the companion, not filling in a form.
 
 - `DiaryProfile` gains optional fields:
   - `heightCm`, `birthYear` and `sex` (female, male or unspecified);
-  - `activeDaysPerWeek` and `pace`;
+  - `pace`;
   - `dietTags: [String]` and `healthNotes: String`.
 - All new fields decode as absent in old diaries, so nothing migrates
   destructively. Backups and export carry them through the profile.

@@ -72,6 +72,22 @@ import XCTest
         XCTAssertTrue(app.buttons["Restore from diary archive"].exists)
         name.tap(); name.typeText("Synthetic diary")
         app.buttons["createDiary"].tap()
+        // Pip's onboarding follows: answer, skip ChatGPT, and save the formula estimate.
+        let next = app.buttons["onboardingNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        next.tap()
+        for (field, value) in [("Height in cm", "170"), ("Weight in kg", "80"), ("Birth year", "1990"), ("Target weight in kg", "72")] {
+            if field == "Target weight in kg" { next.tap() } // sex: keep "Prefer not to say"
+            let input = app.textFields.matching(NSPredicate(format: "label == %@ OR placeholderValue == %@", field, field.components(separatedBy: " in ")[0])).firstMatch
+            XCTAssertTrue(input.waitForExistence(timeout: 5), field)
+            input.tap(); input.typeText(value)
+            next.tap()
+        }
+        next.tap() // pace
+        next.tap() // diet
+        app.buttons["onboardingSkipConnect"].tap()
+        XCTAssertTrue(app.staticTexts["Estimate from a standard formula"].waitForExistence(timeout: 5))
+        next.tap()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
         XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, 0)

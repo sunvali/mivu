@@ -241,6 +241,12 @@ final class ChatGPTConnection {
     var sessionRevision: Int { generation }
 
     func coachInference() throws -> @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult {
+        let respond = try inference()
+        return { input, namespace in try await respond(input, namespace) }
+    }
+
+    /// A request on the connected plan, bound to this session; `nil` tools for a plain answer such as onboarding targets.
+    func inference() throws -> @Sendable ([CoachInferenceInput], Data?) async throws -> CoachInferenceResult {
         guard planAuthorized, let owner = activeRegistrationID,
               !isConnecting, !isDisconnecting,
               models.contains(where: { $0.slug == selectedModel }) else {
@@ -253,7 +259,7 @@ final class ChatGPTConnection {
         }
     }
 
-    private func respondForCoach(input: [CoachInferenceInput], namespace: Data,
+    private func respondForCoach(input: [CoachInferenceInput], namespace: Data?,
                                  owner: String, revision: Int, model: String) async throws -> CoachInferenceResult {
         func validate() throws {
             try Task.checkCancellation()
