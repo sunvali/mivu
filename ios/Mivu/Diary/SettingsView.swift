@@ -205,6 +205,7 @@ struct SettingsView: View {
                 }
             case .backup:
                 Section("Backup and portability") { DiaryBackupSettings(model: model) }
+                if model.readModel != nil { Section("Share a report") { DiaryReportSettings(model: model) } }
             case .connection:
                 Section("Connection") {
                     Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle")
