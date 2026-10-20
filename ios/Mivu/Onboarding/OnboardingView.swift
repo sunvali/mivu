@@ -14,6 +14,7 @@ struct OnboardingView: View {
     private static let kgPerLb = 0.45359237
 
     @State private var step = Step.hello
+    @AppStorage(DayProgressSync.enabledKey) private var liveActivity = false
     @State private var askSharingConsent = false
     @State private var forward = true
     @State private var heightCm: Double?
@@ -287,6 +288,13 @@ struct OnboardingView: View {
                     Button("Try again", systemImage: "arrow.clockwise") { Task { await askChatGPT() } }
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
+            }
+            // Pip's one-time offer; saving the targets changes the diary, which starts the activity.
+            card {
+                Toggle(isOn: $liveActivity) {
+                    Label("Show what's left in your Dynamic Island", systemImage: "platter.filled.top.iphone")
+                }
+                .tint(.diaryAccent).frame(minHeight: 44).accessibilityIdentifier("onboardingLiveActivity")
             }
             footnote("These are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat, especially if you have a health condition. You can change targets any time in Settings › Goals.")
         }
