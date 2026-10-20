@@ -18,12 +18,12 @@ struct CompanionView: View {
 
     var body: some View {
         Group {
-            if animated, let rig = runtime.rig {
+            if presentation.playback != .hidden, let rig = runtime.rig {
                 CompanionRigHost(rig: rig, onWindow: runtime.resumeBreathing)
                     .id(ObjectIdentifier(rig))
                     .task { await runtime.reconcileMount(rig) }
             } else {
-                // The square fallback overflows its crop by transparent margin only, like the rig's framing.
+                // Only while the rig loads or when it failed to load. The square fallback overflows its crop by transparent margin only, like the rig's framing.
                 Image(runtime.fallbackAssetName(for: surface)).resizable().scaledToFit()
                     .frame(width: max(frame.width, frame.height), height: max(frame.width, frame.height))
             }

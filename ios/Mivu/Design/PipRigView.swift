@@ -19,6 +19,9 @@ final class PipRigView: UIView {
     private var playback: Playback?
     private var playbackTick = 0
 
+    /// Timers still waiting for the current gesture; bounded by one pass of its keys, even for a loop.
+    var pendingWorkCount: Int { playback?.work.count ?? 0 }
+
     private final class Playback {
         let token: Int
         let completion: (Bool) -> Void
@@ -104,7 +107,7 @@ final class PipRigView: UIView {
     // MARK: - Pose resolution
 
     private func joint(of part: PipRigAsset.Part, in pose: PipPose, slide local: CGFloat) -> PipPose.Joint {
-        var joint = pose.joints[part.name] ?? (part.name.hasPrefix("brow-") ? pose.brows : nil) ?? PipPose.Joint()
+        var joint = pose.joints[part.name] ?? PipPose.Joint()
         let gaze = Self.clamped(pose.gaze)
         if let reach = pupilReach[part.id] {
             joint.offset.x += gaze.x * (gaze.x < 0 ? -reach.lo.x : reach.hi.x)
@@ -258,6 +261,7 @@ extension PipRigView {
                 schedule(gesture, run: run)
                 return
             }
+            run.work.removeAll() // the items capture `run`; dropping them breaks the cycle so the playback can free
             playback = nil
             run.completion(true)
         }
@@ -278,6 +282,7 @@ extension PipRigView {
         guard let run = playback else { return }
         playback = nil
         run.work.forEach { $0.cancel() }
+        run.work.removeAll()
         run.completion(false)
     }
 
@@ -306,7 +311,9 @@ extension PipRigView {
         breath.isAdditive = true
         breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         for part in asset.parts where part.name == "head" || part.name == "chest" {
-            if on { containers[part.id]?.add(breath, forKey: "breath") } else { containers[part.id]?.removeAnimation(forKey: "breath") }
+            guard let container = containers[part.id] else { continue }
+            if !on { container.removeAnimation(forKey: "breath") }
+            else if container.animation(forKey: "breath") == nil { container.add(breath, forKey: "breath") } // keep the phase running
         }
     }
 

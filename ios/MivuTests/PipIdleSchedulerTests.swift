@@ -59,6 +59,21 @@ struct SeededGenerator: RandomNumberGenerator {
         for draw in draws(500, quietFor: 600, surface: .coach) { #expect(draw.beat != .hugTail && draw.beat != .curlUp) }
     }
 
+    @Test func hugOnTodayNeverBecomesACurlOnCoach() {
+        var scheduler = scheduler()
+        var now = start.addingTimeInterval(95)
+        var hugged = false
+        for _ in 0..<200 where !hugged {
+            hugged = scheduler.next(after: start, now: now, surface: .today).beat == .hugTail
+            now = now.addingTimeInterval(4)
+        }
+        #expect(hugged, "precondition: a hug was chosen on Today")
+        for _ in 0..<50 {
+            #expect(scheduler.next(after: start, now: now, surface: .coach).beat != .curlUp)
+            now = now.addingTimeInterval(4)
+        }
+    }
+
     @Test func neverRepeatsABeatAndVariesTheGlance() {
         let beats = draws(300, quietFor: 40, surface: .coach).map(\.beat)
         for pair in zip(beats, beats.dropFirst()) { #expect(pair.0 != pair.1) }

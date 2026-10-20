@@ -197,6 +197,19 @@ enum PipGestureLibrary {
 
     static var wake: PipGesture { named("wake") }
 
+    /// Stands (or seats) Pip back up: the wake ends in the surface's resting body set.
+    static func wake(endingIn set: PipPose.BodySet) -> PipGesture {
+        var wake = self.wake
+        wake.endSet = set
+        return wake
+    }
+
+    /// The held pose a static Pip shows for a moment (Reduce Motion, Low Power, thermal): the key before the final settle.
+    static func stillPose(for moment: PipMoment) -> PipPose {
+        let keys = gesture(for: moment).keys
+        return keys.count > 1 ? keys[keys.count - 2].pose : .rest
+    }
+
     /// The idle beats that need body motion; blinks and glances use `blink(double:)` and `look(at:)` instead.
     static func gesture(forIdle beat: PipIdleScheduler.Beat, curled: Bool = false) -> PipGesture? {
         switch beat {

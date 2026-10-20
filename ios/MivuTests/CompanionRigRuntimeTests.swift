@@ -11,10 +11,19 @@ import UIKit
     var sleeps = 0
     /// While true each sleep jumps the clock to its due time and returns; otherwise it waits until cancelled.
     var fast = false
+    /// When set, the next wait for an idle beat (2 s or longer) suspends until `release()`, then moves the clock by its length.
+    var holdBeat = false
+    private(set) var held: CheckedContinuation<TimeInterval, Never>?
+
+    func release() { held?.resume(returning: 0); held = nil }
 
     func sleep(_ seconds: TimeInterval) async throws {
         sleeps += 1
-        if fast {
+        if holdBeat, seconds >= 2 {
+            holdBeat = false
+            _ = await withCheckedContinuation { held = $0 }
+            now = now.addingTimeInterval(seconds)
+        } else if fast {
             now = now.addingTimeInterval(seconds)
             await Task.yield()
         } else {
@@ -87,7 +96,7 @@ func animationKeys(in layer: CALayer) -> [String] {
         #expect(runtime.displayedPose == .resting)
         let asset = try PipRigAsset.load(PipRigAssetTests.bundledData())
         #expect(rig.visibleRect == asset.frames["today"])
-        #expect(rig.layer(named: "mouth.closedSmile@right")?.isHidden == false)
+        #expect(rig.layer(named: "mouth.smallOpen@right")?.isHidden == false, "the static pose holds the semantic moment, not rest")
     }
 
     @Test func staticPoseShowsTheSeatedRestOnCoach() async throws {
@@ -204,9 +213,113 @@ func animationKeys(in layer: CALayer) -> [String] {
         #expect(await eventually { runtime.idleBeatCount > before }, "idle resumes after the interruption")
     }
 
-    @Test func sharedDurationsMatchTheLibrary() {
-        #expect(abs(MivuMotion.saved - PipGestureLibrary.gesture(for: .saved).duration) <= 0.02)
-        #expect(abs(MivuMotion.reviewed - PipGestureLibrary.gesture(for: .reviewed).duration) <= 0.02)
-        #expect(abs(MivuMotion.greeting - PipGestureLibrary.gesture(for: .greeting(hour: 14)).duration) <= 0.02)
+    @Test func everyReactionLivesAtLeastAsLongAsItsGesture() {
+        let cases: [(PipMoment, TimeInterval)] =
+            [(.curious, MivuMotion.curious), (.patted, MivuMotion.patted), (.welcomeBack, MivuMotion.welcomeBack),
+             (.saved, MivuMotion.saved), (.reviewed, MivuMotion.reviewed), (.submitted, MivuMotion.submitted),
+             (.firstMealToday, MivuMotion.firstMealToday), (.dayComplete, MivuMotion.dayComplete)]
+            + (0...5).map { (PipMoment.tapped(level: $0), MivuMotion.tapped) }
+            + [3, 8, 14, 21].map { (PipMoment.greeting(hour: $0), MivuMotion.greeting) }
+        for (moment, lifetime) in cases {
+            let gesture = PipGestureLibrary.gesture(for: moment).duration
+            #expect(lifetime >= gesture, "\(moment) is cut off: \(lifetime) < \(gesture)")
+            #expect(lifetime - gesture <= 0.3, "\(moment) lingers: \(lifetime) vs \(gesture)")
+        }
+    }
+
+    @Test func runtimeUpdateChangesWhenOnlyTheDraftGrows() {
+        func update(_ typing: Double) -> DiaryRootView.RuntimeUpdate {
+            DiaryRootView.RuntimeUpdate(output: output(.attentive, typing: typing), surface: .coach, characterID: "pip",
+                                        darkMode: false, loaded: true, ready: true)
+        }
+        #expect(update(0.1) != update(0.5), "the root task must re-apply as the text grows, or the eyes freeze")
+        #expect(update(0.5) == update(0.5))
+    }
+
+    /// Everything the rig shows: which parts are visible, where they are and how opaque.
+    private func look(of rig: PipRigView, _ asset: PipRigAsset) -> [String] {
+        asset.parts.map { part in
+            let layer = rig.layer(named: part.id)
+            return "\(part.id) \(layer?.isHidden == true) \(layer?.opacity ?? 0) \(String(describing: layer?.transform))"
+        }
+    }
+
+    @Test func staticPlaybackShowsEachSemanticPoseWithoutMotion() async throws {
+        for surface in [CompanionSurface.today, .coach] { try await checkStaticPoses(on: surface) }
+    }
+
+    private func checkStaticPoses(on surface: CompanionSurface) async throws {
+        let runtime = await ready()
+        let rig = try #require(runtime.rig)
+        let window = try mount(rig)
+        defer { runtime.stop(); window.isHidden = true }
+        let asset = try PipRigAsset.load(PipRigAssetTests.bundledData())
+        await runtime.apply(output(playback: .staticPose), darkMode: false, surface: surface)
+        let rest = look(of: rig, asset)
+        var seen: [[String]] = [rest]
+        for pose in CompanionPose.allCases where pose != .resting {
+            await runtime.apply(output(pose, playback: .staticPose), darkMode: false, surface: surface)
+            let shown = look(of: rig, asset)
+            #expect(animationKeys(in: rig.layer).isEmpty, "\(pose) must not animate")
+            #expect(!runtime.isIdleScheduled && runtime.isPaused)
+            #expect(!seen.contains(shown), "\(pose) must look different from rest and from every other pose")
+            seen.append(shown)
+        }
+        await runtime.apply(output(playback: .staticPose), darkMode: false, surface: surface)
+        #expect(look(of: rig, asset) == rest, "back to rest")
+    }
+
+    @Test func staleIdleBeatIsDroppedWhenInputArrivedAfterItWasChosen() async throws {
+        let harness = IdleHarness()
+        harness.fast = true
+        harness.holdBeat = true
+        let runtime = await ready(harness)
+        defer { runtime.stop() }
+        await runtime.apply(output(), darkMode: false)
+        #expect(await eventually { harness.held != nil }, "the idle loop chose a beat and is waiting for it")
+        harness.now.addTimeInterval(1)
+        await runtime.apply(output(.tapped, reaction: UUID()), darkMode: false) // a touch while the beat waits
+        #expect(await eventually { runtime.displayedPose == .resting }, "the reaction plays out inside the wait")
+        let sleeps = harness.sleeps
+        harness.fast = false
+        harness.release()
+        #expect(await eventually { harness.sleeps > sleeps }, "the loop chose a fresh beat instead")
+        #expect(runtime.idleBeatCount == 0, "the beat chosen before the touch must not play after it")
+    }
+
+    @Test func idleBeatIsDroppedWhenTheSurfaceChangedWhileItWaited() async throws {
+        let harness = IdleHarness()
+        harness.fast = true
+        harness.holdBeat = true
+        let runtime = await ready(harness)
+        defer { runtime.stop() }
+        await runtime.apply(output(), darkMode: false)
+        #expect(await eventually { harness.held != nil })
+        await runtime.apply(output(), darkMode: false, surface: .coach)
+        try await Task.sleep(for: .milliseconds(500)) // let the surface change's own rest gesture finish
+        let sleeps = harness.sleeps
+        harness.fast = false
+        harness.release()
+        #expect(await eventually { harness.sleeps > sleeps })
+        #expect(runtime.idleBeatCount == 0)
+    }
+
+    @Test func wakeEndsInTheSurfacesRestingSet() async throws {
+        #expect(PipGestureLibrary.wake(endingIn: .seated).endSet == .seated)
+        #expect(PipGestureLibrary.wake(endingIn: .standing).endSet == .standing)
+        let harness = IdleHarness()
+        harness.fast = true
+        let runtime = await ready(harness)
+        let rig = try #require(runtime.rig)
+        await runtime.apply(output(), darkMode: false)
+        #expect(await eventually(60) { runtime.curled })
+        harness.fast = false
+        await runtime.apply(output(.attentive), darkMode: false)
+        #expect(await eventually { !runtime.curled && runtime.playedGestures.last == "attentive" })
+        let asset = try PipRigAsset.load(PipRigAssetTests.bundledData())
+        let standing = try #require(asset.parts.first { $0.set == "standing" })
+        let curledBody = try #require(asset.parts.first { $0.set == "curled" })
+        #expect(rig.layer(named: standing.id)?.isHidden == false && rig.layer(named: curledBody.id)?.isHidden == true)
+        runtime.stop()
     }
 }

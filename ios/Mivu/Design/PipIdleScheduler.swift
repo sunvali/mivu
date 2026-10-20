@@ -30,7 +30,7 @@ struct PipIdleScheduler {
         var choices: [(beat: Beat, weight: Double)]
         if curled != nil {
             choices = [(.blink, 5), (.doubleBlink, 1), (.earFlick, 2)]
-        } else if hugged != nil {
+        } else if hugged != nil, surface == .today { // Coach never curls, even after a hug on Today
             choices = [(.curlUp, 1)]
         } else {
             choices = [(.blink, 5), (.doubleBlink, 1), (.glance(glanceTarget()), 3), (.earFlick, 2), (.weightShift, 2)]

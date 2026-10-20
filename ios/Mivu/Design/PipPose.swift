@@ -15,11 +15,10 @@ struct PipPose: Equatable {
     var joints: [String: Joint] = [:]
     var eyes = EyeShape.open
     var mouth = MouthShape.closedSmile
-    var brows: Joint?
     /// Unit-disc pupil direction; +y looks down.
     var gaze = CGPoint.zero
     var blush = false
-    /// The rig has hidden `heart-1…3` parts; showing them is not wired yet.
+    /// How many of the rig's `heart-1…3` parts are visible.
     var hearts = 0
     /// Today rests standing; Coach chooses `.seated` explicitly.
     var set = BodySet.standing

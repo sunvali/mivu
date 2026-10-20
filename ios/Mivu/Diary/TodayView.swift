@@ -238,7 +238,7 @@ struct DiaryRootView: View {
             }
             await companionRuntime.select(companionSelection.selectedCharacter)
             guard !Task.isCancelled, update == runtimeUpdate else { return }
-            await companionRuntime.attach(eligible: companionOutput.playback == .animated)
+            await companionRuntime.attach(eligible: companionOutput.playback != .hidden)
             guard !Task.isCancelled, update == runtimeUpdate else { return }
             await companionRuntime.apply(companionOutput, darkMode: colorScheme == .dark, surface: selectedCompanionSurface ?? .today)
             #if DEBUG
@@ -410,20 +410,28 @@ struct DiaryRootView: View {
         observeCompanionOutput?(output)
         #endif
     }
-    private struct RuntimeUpdate: Hashable {
+    /// What `.task(id:)` watches: any change here re-applies the output to the runtime.
+    struct RuntimeUpdate: Hashable {
         let surface: CompanionSurface?
         let characterID: String
         let pose: Int
         let animated: Bool
         let reactionID: UUID?
+        /// The draft grows while the pose stays attentive; the eyes follow it.
+        let typing: Double
         let darkMode: Bool
         let loaded: Bool
         // Loading can outlive its requesting task; readiness reconciles the latest output.
         let ready: Bool
+
+        init(output: CompanionOutput, surface: CompanionSurface?, characterID: String, darkMode: Bool, loaded: Bool, ready: Bool) {
+            self.surface = surface; self.characterID = characterID; pose = output.pose.rawValue
+            animated = output.playback == .animated; reactionID = output.reactionID; typing = output.typingProgress
+            self.darkMode = darkMode; self.loaded = loaded; self.ready = ready
+        }
     }
     private var runtimeUpdate: RuntimeUpdate {
-        RuntimeUpdate(surface: selectedCompanionSurface, characterID: companionSelection.selectedCharacterID, pose: companionOutput.pose.rawValue,
-                      animated: companionOutput.playback == .animated, reactionID: companionOutput.reactionID,
+        RuntimeUpdate(output: companionOutput, surface: selectedCompanionSurface, characterID: companionSelection.selectedCharacterID,
                       darkMode: colorScheme == .dark, loaded: hasLoaded, ready: companionRuntime.isReady)
     }
     private var profileControl: some ToolbarContent {

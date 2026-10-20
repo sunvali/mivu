@@ -115,6 +115,7 @@ import UIKit
         guard eligible, output.playback == .animated else {
             if let reaction = output.reactionID { consumedReaction = reaction }
             pauseAndReset()
+            if eligible, output.playback == .staticPose { showStill(output) }
             return
         }
         guard let rig else { isPaused = true; return }
@@ -235,6 +236,17 @@ import UIKit
         return pose
     }
 
+    /// Reduce Motion and friends: the rig holds the semantic pose with no animation and no timers.
+    private func showStill(_ output: CompanionOutput) {
+        guard let rig else { return }
+        rig.isDark = latestDark
+        let hour = Calendar.current.component(.hour, from: clock())
+        var pose = Self.moment(for: output.pose, tapLevel: output.tapLevel, hour: hour).map(PipGestureLibrary.stillPose(for:)) ?? .rest
+        pose.set = restPose(latestSurface).set
+        if output.pose == .attentive { pose.gaze = Self.typingGaze(output.typingProgress) }
+        rig.apply(pose, animated: false)
+    }
+
     private func show(_ surface: CompanionSurface) {
         curled = false
         displayedSurface = surface
@@ -260,7 +272,7 @@ import UIKit
             done(finished)
         }
         if curled && wakes {
-            rig.play(PipGestureLibrary.wake) { [weak self, weak rig] finished in
+            rig.play(PipGestureLibrary.wake(endingIn: restPose(displayedSurface).set)) { [weak self, weak rig] finished in
                 guard finished, let self, token == self.gestureToken else { finish(false); return }
                 self.curled = false
                 rig?.play(gesture, completion: finish)
@@ -283,9 +295,12 @@ import UIKit
                 continue
             }
             let now = clock()
-            let next = scheduler.next(after: lastInput, now: now, surface: displayedSurface)
+            let surface = displayedSurface
+            let next = scheduler.next(after: lastInput, now: now, surface: surface)
             do { try await sleep(max(0, next.at.timeIntervalSince(now))) } catch { return }
-            guard !Task.isCancelled, let rig, live, displayedPose == .resting, !gestureActive else { continue }
+            // The wait can outlast a touch, a reaction or a surface change; a beat chosen before them is stale.
+            guard !Task.isCancelled, let rig, live, displayedPose == .resting, !gestureActive,
+                  lastInput <= now, displayedSurface == surface else { continue }
             idleBeatCount += 1
             switch next.beat {
             case .blink: rig.blink()
@@ -293,7 +308,7 @@ import UIKit
             case .glance(let point):
                 rig.look(at: point)
                 do { try await sleep(0.9) } catch { return }
-                if live, !gestureActive { rig.look(at: .zero) }
+                if live, !gestureActive, displayedPose == .resting { rig.look(at: .zero) }
             default:
                 guard let gesture = PipGestureLibrary.gesture(forIdle: next.beat, curled: curled) else { continue }
                 await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in

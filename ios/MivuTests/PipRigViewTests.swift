@@ -143,8 +143,69 @@ import UIKit
         var results: [Bool] = []
         view.play(PipGesture.for(.saved)) { results.append($0) }
         view.play(PipGesture.for(.earTwitch)) { results.append($0) }
-        try await Task.sleep(for: .milliseconds(900))
+        await spin { results.count == 2 }
         #expect(results == [false, true])
+    }
+
+    private final class Probe {}
+
+    /// Plays `gesture` holding a probe in its completion, so a leaked playback keeps the probe alive.
+    private func play(_ gesture: PipGesture, on view: PipRigView, results: @escaping (Bool) -> Void = { _ in }) -> Probe? {
+        weak var weakProbe: Probe?
+        do {
+            let probe = Probe()
+            weakProbe = probe
+            view.play(gesture) { finished in _ = probe; results(finished) }
+        }
+        return weakProbe
+    }
+
+    @Test func finishedGestureFreesItsPlayback() async throws {
+        let view = try rig()
+        var finished = false
+        weak var probe = play(PipGesture.for(.earTwitch), on: view) { finished = $0 }
+        await spin { finished && probe == nil }
+        #expect(finished)
+        #expect(probe == nil, "a played-out gesture must not stay alive through its own timers")
+        #expect(view.pendingWorkCount == 0)
+    }
+
+    @Test func interruptedGestureFreesItsPlayback() async throws {
+        let view = try rig()
+        var results: [Bool] = []
+        weak var probe = play(PipGesture.for(.reviewed), on: view) { results.append($0) }
+        view.removeAllMotion()
+        #expect(results == [false] && view.pendingWorkCount == 0)
+        await spin { probe == nil }
+        #expect(probe == nil, "an interrupted gesture must not stay alive through its cancelled timers")
+    }
+
+    @Test func deallocatedRigEndsItsGesture() async throws {
+        var view: PipRigView? = try rig()
+        var results: [Bool] = []
+        weak var probe = play(PipGesture.for(.dayComplete), on: try #require(view)) { results.append($0) }
+        view = nil
+        #expect(results == [false], "deallocation reports the interruption")
+        await spin { probe == nil }
+        #expect(probe == nil)
+    }
+
+    @Test func loopsKeepOnlyOnePassOfTimers() async throws {
+        let view = try rig()
+        var results: [Bool] = []
+        var pose = PipPose.rest
+        pose.joints["head"] = .init(rotation: 0.05)
+        let loop = PipGesture(name: "short-loop", keys: [(0.05, pose), (0.1, .rest)], loops: true)
+        view.play(loop) { results.append($0) }
+        var peak = 0
+        for _ in 0..<30 {
+            try await Task.sleep(for: .milliseconds(15))
+            peak = max(peak, view.pendingWorkCount)
+        }
+        #expect(results.isEmpty && view.pendingWorkCount > 0, "still looping")
+        #expect(peak <= 3, "two keys plus the loop end, never accumulating across passes")
+        view.removeAllMotion()
+        #expect(results == [false] && view.pendingWorkCount == 0)
     }
 
     @Test func heartsAndBlushAreShownByPose() throws {
@@ -229,7 +290,7 @@ import UIKit
         #expect(view.layer(named: "chest@seated")?.animation(forKey: "breath") != nil)
         var done = false
         view.play(PipGesture.for(.earTwitch)) { _ in done = true }
-        try await Task.sleep(for: .milliseconds(400))
+        await spin { done }
         #expect(done)
         #expect(head.animation(forKey: "breath") != nil)
         view.setBreathing(false)
