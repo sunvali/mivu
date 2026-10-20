@@ -22,6 +22,7 @@ class GitHooks(unittest.TestCase):
         self.env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
         self.env.pop('DEVELOPER_DIR', None)
         self.env.pop('XCODE_XCCONFIG_FILE', None)
+        self.env.pop('MIVU_TEST_SIMULATOR_ID', None)
         self.env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1')
         self.git('init', '-q')
         self.git('config', 'user.name', 'Synthetic contributor')
@@ -80,7 +81,7 @@ if os.environ.get('ENV_DURING_RUN'):
         plistlib.dump({'CFBundleShortVersionString': '28.0', 'ProductBuildVersion': 'changed'}, file)
 if mode == 'malformed': print('not JSON'); sys.exit()
 print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode == 'error',
-    'data': {'request': {'onlyTesting': ['MivuTests/Subset'] if mode == 'subset' else ['MivuTests'], 'skipTesting': []},
+    'data': {'request': {'onlyTesting': ['MivuTests/Subset'] if mode == 'subset' else [a.removeprefix('-only-testing:') for a in extra if a.startswith('-only-testing:')], 'skipTesting': []},
              'summary': {'status': 'FAILED' if mode == 'failed' else 'SUCCEEDED',
                          'counts': {'passed': 0 if mode == 'zero' else ('2' if mode == 'count-type' else 2),
                                     'failed': 1 if mode == 'failed' else 0, 'skipped': 0}},
@@ -176,7 +177,7 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         args = json.loads(self.calls()[0][self.calls()[0].index('--json') + 1])
         self.assertEqual(args['scheme'], 'Mivu')
         self.assertEqual(args['configuration'], 'Debug')
-        self.assertIn('-only-testing:MivuTests', args['extraArgs'])
+        self.assertIn('-only-testing:MivuTests/DiaryPreferencesDraftTests', args['extraArgs'])
         self.assertIn('-disableAutomaticPackageResolution', args['extraArgs'])
         (self.root / 'ios/synthetic-resource.txt').write_text('Changed native resource\n')
         self.commit()
@@ -229,6 +230,20 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('XCODE_XCCONFIG_FILE', result.stderr)
         self.assertEqual(self.calls(), [])
+
+    def test_explicit_simulator_is_used_and_unavailable_choice_blocks(self):
+        self.env['MIVU_TEST_SIMULATOR_ID'] = 'someone-elses-unavailable-id'
+        (self.root / 'ios/source.swift').write_text('// changed source\n')
+        self.commit()
+        result = self.push()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('reserved simulator', result.stderr)
+        self.env['MIVU_TEST_SIMULATOR_ID'] = 'synthetic-id'
+        result = self.push()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = json.loads(self.calls()[0][self.calls()[0].index('--json') + 1])
+        self.assertEqual(args['simulatorId'], 'synthetic-id')
+        self.assertEqual(args['extraArgs'][args['extraArgs'].index('-testPlan') + 1], 'Mivu')
 
     def test_unknown_baseline_requires_native_and_missing_simulator_blocks(self):
         self.assertEqual(self.push(remote='1' * 40).returncode, 0)
@@ -298,12 +313,22 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         self.native_commit()
         common = self.root / '.git/mivu-checks'
         common.mkdir()
-        with (common / 'native.lock').open('w') as lock:
+        with (common / 'native-synthetic-id.lock').open('w') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             result = self.push()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Another native check', result.stderr)
         self.assertEqual(self.calls(), [])
+
+    def test_other_simulator_does_not_block_native_check(self):
+        self.native_commit()
+        common = self.root / '.git/mivu-checks'
+        common.mkdir()
+        with (common / 'native-other-device.lock').open('w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            result = self.push()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.calls()), 1)
 
     def test_real_push_clears_repository_git_environment_for_native_children(self):
         self.native_commit()

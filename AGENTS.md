@@ -36,20 +36,37 @@ for this native app. No web frontend is required.
 - Use Conventional Commit PR/squash titles. All hosted jobs use `ubuntu-slim`
   with two-minute limits for script and title checks only. No hosted macOS,
   self-hosted runner, native build/test, packaging or signing jobs are allowed.
-- Run focused native checks locally with XcodeBuildMCP for Swift changes; record
-  full native unit/UI verification locally for screen/navigation changes. Linux
-  CI does not establish native acceptance. Record the exact tested source SHA.
+- Keep test work proportional to the change. For a test-only edit, run only that
+  test or its suite. For implementation changes, run the new/changed test plus
+  the smallest suites covering its direct callers; prefer unit tests for UI
+  presentation, validation and state. Use suite selectors when Swift Testing
+  method selectors run zero tests; never count zero tests as passing.
+- For screens/navigation, add `python3 scripts/ci/smoke.py --simulator-id
+  <reserved-UUID>` (120-second cap). Add a specific longer UI test only when the
+  changed behavior needs it. Do not run every UI journey or all unit tests on
+  every edit, PR, review or handoff. Do not repeat unchanged passing checks or
+  broaden a passing focused run without a concrete new risk/failure.
+- `MivuQuick` is the default smoke-only Xcode plan. Keep the complete `Mivu`
+  unit/UI plan for release candidates, broad regressions or an explicit request.
+  This policy supersedes older plans/skills that demand a full run each time.
+  Use XcodeBuildMCP, record tested source SHA and named results, and distinguish
+  local native evidence from Linux CI. A timeout or blocked run is not a pass.
+- Other agents may be using simulators. Check active native jobs first; reserve
+  a separate simulator and pass its UUID explicitly. Use a checkout-specific
+  DerivedData directory; set `MIVU_TEST_SIMULATOR_ID` for push-hook checks.
+  Never change shared defaults, erase, stop or reuse
+  another agent's simulator or terminate their build/test processes.
 - Version/changelog PRs and tags remain automated. Package and sign the exact
   version tag locally with Xcode/Organizer; record local evidence separately.
   Keep Actions usage/auto-packaging gates false and never count blocked or
   skipped native work as passing evidence.
 - Local Git hooks are opt-in via `python3 scripts/ci/git_hooks.py install`.
   Preserve custom hooks. Commits check staged syntax/whitespace only; pushes run
-  quick script checks and native units when native inputs changed or the baseline
+  quick script checks and curated units when native inputs changed or the baseline
   is unknown. Native pushes require the checked-out commit and clean native inputs.
 - Reuse local native success only for identical inputs, recipe and environment;
   never cache failed, zero-test or malformed evidence. Hook units do not replace
-  full local UI verification or independent Ponytail Review before merge.
+  focused UI smoke/affected-journey verification or Ponytail Review before merge.
 
 ## Companion animation work
 

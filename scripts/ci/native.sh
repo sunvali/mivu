@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-mode=${1:-test}
+mode=${1:-unit}
 case "$mode" in unit|test|release|unsigned) ;; *) echo 'Use native.sh unit|test|release|unsigned' >&2; exit 2 ;; esac
 output=${MIVU_CI_OUTPUT:-$PWD/build/ci}
 mkdir -p "$output"
@@ -37,7 +37,8 @@ xcrun swift --version | tee "$output/swift-version.txt"
 xcodebuild -showsdks > "$output/sdks.txt"
 xcrun swift --version | head -1 | grep -Eq 'Swift version 6\.'
 # No package version may drift from the committed lockfile.
-common=(-project ios/Mivu.xcodeproj -scheme Mivu -derivedDataPath "$output/DerivedData"
+plan=Mivu
+common=(-project ios/Mivu.xcodeproj -scheme Mivu -testPlan "$plan" -derivedDataPath "$output/DerivedData"
   -clonedSourcePackagesDirPath "$output/SourcePackages"
   -onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution
   -skipPackageUpdates SWIFT_VERSION=6.0)
@@ -56,7 +57,10 @@ if not candidates: raise SystemExit("No available iPhone simulator with iOS 26 o
 print("platform=iOS Simulator,arch=" + platform.machine() + ",id=" + max(candidates)[2])')
   set +e
   test_scope=()
-  if [ "$mode" = unit ] || [ "$mode" = release ]; then test_scope=(-only-testing:MivuTests); fi
+  if [ "$mode" = unit ]; then
+    while IFS= read -r suite; do test_scope+=("-only-testing:MivuTests/$suite"); done < <(
+      python3 -c 'import runpy; print("\n".join(runpy.run_path("scripts/ci/git_hooks.py")["QUICK_UNIT_SUITES"]))')
+  elif [ "$mode" = release ]; then test_scope=(-only-testing:MivuTests); fi
   xcodebuild test "${common[@]}" -configuration Debug -destination "$destination" \
     "${test_scope[@]}" -parallel-testing-enabled NO -resultBundlePath "$output/Mivu.xcresult" -quiet
   test_status=$?

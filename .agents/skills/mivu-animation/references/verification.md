@@ -74,10 +74,13 @@ suite selectors and confirm discovered cases and nonzero result counts. XCTest
 methods use the `test` prefix shown in source. Parse both tool error status and
 the result summary: a successful shell exit alone is insufficient evidence.
 
-Follow the root instructions and `docs/development/ci-cd.md` for required full
-native/UI verification after screen/navigation changes. Local push-hook units
-and Linux checks do not replace UI acceptance. Do not rerun all native tests for
-documentation-only changes.
+Follow the root instructions and `docs/development/ci-cd.md`: run only the
+new/changed test or its owning suite plus directly affected callers. Do not
+repeat unchanged passing checks or run all units on every edit/PR. Add
+the 120-second smoke runner and directly affected UI journeys after screen or
+navigation changes. Reserve the full `Mivu` plan for releases, broad regressions
+or an explicit request. Local push-hook units and Linux checks do not replace UI
+acceptance. Do not rerun native tests for documentation-only changes.
 
 ## Inspect actual motion
 

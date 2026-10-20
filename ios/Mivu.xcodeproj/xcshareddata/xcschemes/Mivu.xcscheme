@@ -30,8 +30,10 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:Mivu/Mivu.xctestplan"
+            reference = "container:Mivu/MivuQuick.xctestplan"
             default = "YES">
+         </TestPlanReference>
+         <TestPlanReference reference = "container:Mivu/Mivu.xctestplan">
          </TestPlanReference>
       </TestPlans>
       <Testables>

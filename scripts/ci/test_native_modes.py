@@ -5,11 +5,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from git_hooks import UNIT_SELECTORS
 from pathlib import Path
 
 
 class NativeModes(unittest.TestCase):
-    def run_mode(self, mode, test_status=0, failed_results=False):
+    def run_mode(self, mode=None, test_status=0, failed_results=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             tool = root / 'tool'
@@ -54,16 +55,24 @@ elif name == 'ditto':
             env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
                        REAL_PYTHON=sys.executable, MIVU_CI_OUTPUT=str(output),
                        TEST_STATUS=str(test_status), FAILED_RESULTS=str(failed_results).lower())
-            result = subprocess.run(['bash', str(Path(__file__).with_name('native.sh')), mode],
+            result = subprocess.run(['bash', str(Path(__file__).with_name('native.sh'))] + ([mode] if mode else []),
                                     env=env, capture_output=True, text=True)
             commands = [json.loads(line) for line in (output / 'commands.jsonl').read_text().splitlines()] if (output / 'commands.jsonl').exists() else []
             return result, commands, (output / 'Mivu-simulator.app.zip').exists()
+
+    def test_default_selects_quick_units_without_ui_or_packaging(self):
+        result, commands, package = self.run_mode()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        test = next(c for c in commands if c[:2] == ['xcodebuild', 'test'])
+        self.assertEqual(sorted(a.removeprefix('-only-testing:') for a in test if a.startswith('-only-testing:')), sorted(UNIT_SELECTORS))
+        self.assertEqual(test[test.index('-testPlan') + 1], 'Mivu')
+        self.assertFalse(package)
 
     def test_unit_mode_selects_unit_target_without_packaging(self):
         result, commands, package = self.run_mode('unit')
         self.assertEqual(result.returncode, 0, result.stderr)
         test = next(c for c in commands if c[:2] == ['xcodebuild', 'test'])
-        self.assertIn('-only-testing:MivuTests', test)
+        self.assertEqual(sorted(a.removeprefix('-only-testing:') for a in test if a.startswith('-only-testing:')), sorted(UNIT_SELECTORS))
         self.assertFalse(package)
 
     def test_full_suite_has_no_target_filter_or_release_packaging(self):
@@ -71,6 +80,7 @@ elif name == 'ditto':
         self.assertEqual(result.returncode, 0, result.stderr)
         test = next(c for c in commands if c[:2] == ['xcodebuild', 'test'])
         self.assertFalse(any(a.startswith(('-only-testing:', '-skip-testing:')) for a in test))
+        self.assertEqual(test[test.index('-testPlan') + 1], 'Mivu')
         self.assertFalse(package)
 
     def test_release_packages_only_after_verified_unit_tests(self):
