@@ -42,7 +42,8 @@ import XCTest
             let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
             XCTAssertTrue(strip.waitForExistence(timeout: 5))
             XCTAssertGreaterThan(strip.frame.height, 0)
-            XCTAssertLessThanOrEqual(strip.frame.height, 110, "The resting companion must leave the conversation most of the screen")
+            // The Coach design pose shows Pip at 112 points peeking over the composer (#25).
+            XCTAssertLessThanOrEqual(strip.frame.height, 120, "The resting companion must leave the conversation most of the screen")
             let restingHeight = strip.frame.height
             XCTAssertFalse(app.buttons["coachEarlierMessages"].exists)
             XCTAssertFalse(app.buttons["coachLaterMessages"].exists)
