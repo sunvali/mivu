@@ -19,20 +19,19 @@ meeting the companion, not filling in a form.
 
 1. **Hello.** Pip waves (`greeting`), with Start and "Set up later".
    "Set up later" goes straight to the app with no targets.
-2. **Questions**, one card per screen. Pip stays above the card, `attentive`
-   while you answer and nodding (`saved`) on Next.
-   - Height. Required. Toggle cm / ft-in.
-   - Current weight. Required. Toggle kg / lb. Saved as a normal weight entry.
-   - Birth year. Required.
-   - Sex: Female / Male / Prefer not to say. Optional.
-   - Target weight. Required. Toggle kg / lb.
-   - Pace: Gentle, Steady (the default) or Faster, about 0.25, 0.5 and
-     0.75 kg a week. Hidden when the target equals the current weight
-     (the goal is to keep it).
-   - Diet and health: chips plus an "Anything else?" text field. Optional.
+2. **Questions**, grouped onto as few screens as possible. A progress bar sits at the top, with
+   Back and Skip in the toolbar. Pip stays above the content: `attentive` while you answer,
+   nodding (`saved`) on Continue, and smaller while the keyboard is up.
+   - **About you**, one card: height (cm or ft/in), weight (kg or lb), birth year, and sex
+     (Female / Male / Prefer not to say, optional). Each unit is a menu on its row, and the
+     keyboard's Next walks through the fields.
+   - **Your goal**: target weight, then pace cards: Gentle, Steady (the default) or Faster,
+     about 0.25, 0.5 and 0.75 kg a week. If the target equals the current weight, the cards
+     are replaced by "keep your weight steady".
+   - **How do you eat?**: diet and health chips, plus an "other allergies, intolerances or
+     dislikes" field. Optional.
      - Chips: gluten-free, lactose-free, vegetarian, vegan, type 1 diabetes,
        type 2 diabetes, Crohn's, IBS, nut allergy.
-     - The text field takes other allergies, intolerances and dislikes.
 3. **Connect ChatGPT**, using the existing connection flow. If you are already
    connected, this step is skipped.
 4. **Working.** Pip plays `thinking`. Formula targets show at once, marked
