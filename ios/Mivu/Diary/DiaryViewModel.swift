@@ -248,20 +248,18 @@ struct MealDraft: Equatable {
                 }
                 attempt = (token, draft, photos, prior == nil); manualCaptureAttempt = attempt
             }
-            // Known before the write: nothing has been recorded yet on the day being saved into.
-            // The view model may not have refreshed after a day was just started, so ask the store about this one day.
-            let firstOfDay = (try? await store.diaryDay(id: dayID, expectedProfileID: token.identity.profileID))
-                .map { $0.head.activeDayID == dayID && $0.meals.isEmpty } ?? false
             let saved = try await store.captureProjection(text: draft.text, photos: attempt.photos, reviewFirst: draft.reviewFirst,
                 dayID: dayID, at: at, dateOnly: dateOnly, submissionID: draft.submissionID, forCoach: !sampleMode, expectedSelection: token, expectedProfileID: token.identity.profileID)
             try await refresh(profileID: token.identity.profileID)
             guard !Task.isCancelled, selection == token else { return false }
+            // Decided after the durable write, from the state it produced: the day holds only this meal.
+            let firstOfDay = readModel?.activeDay?.id == dayID && readModel?.meals.map(\.id) == [saved.id]
             savedMealID = saved.id
             if attempt.isNew, companionCaptureEvent?.profileID != token.identity.profileID || companionCaptureEvent?.operationID != draft.submissionID {
                 captureReceipt = draft.submissionID
                 companionCaptureEvent = CompanionEvent(profileID: token.identity.profileID, operationID: draft.submissionID, kind: .saved, committedAt: Date())
             }
-            if attempt.isNew, firstOfDay, companionHabitEvent?.operationID != draft.submissionID {
+            if attempt.isNew, firstOfDay, companionHabitEvent?.profileID != token.identity.profileID || companionHabitEvent?.operationID != draft.submissionID {
                 companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: draft.submissionID, kind: .firstMealToday, committedAt: Date())
             }
             resumeWorker(); return true

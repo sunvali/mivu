@@ -35,6 +35,19 @@ import Testing
         #expect(again.kind == .firstMealToday && again.operationID == next.submissionID)
     }
 
+    @Test func firstMealIsDecidedFromTheStateTheWriteProduced() async throws {
+        let (path, store, profile, model) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: path) }
+        // A day the view model has not seen yet: the decision cannot rely on anything read before the save.
+        let newDay = try await store.startDay(at: Date().addingTimeInterval(86_400), expectedProfileID: profile.id)
+        let draft = meal("Synthetic breakfast on a fresh day")
+        #expect(await model.capture(draft, dayID: newDay.id))
+        let event = try #require(model.companionHabitEvent)
+        #expect(event.kind == .firstMealToday && event.operationID == draft.submissionID)
+        #expect(await model.capture(meal("Synthetic second meal"), dayID: newDay.id))
+        #expect(model.companionHabitEvent == event, "the second meal of the day is not a first")
+    }
+
     @Test func dayCompleteFiresOnTransitionOnly() async throws {
         let (path, store, profile, model) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
