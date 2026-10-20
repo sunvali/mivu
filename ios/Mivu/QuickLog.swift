@@ -34,15 +34,17 @@ struct MivuShortcuts: AppShortcutsProvider {
     }
 }
 
-final class MivuAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+final class MivuAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // Set before launch finishes so a tap that cold-launches the app is still delivered.
         UNUserNotificationCenter.current().delegate = self
         return true
     }
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let id = MealNotification.mealID(from: response.notification.request.content.userInfo) else { return }
-        await MainActor.run { MealNotification.shared.openedMealID = id }
+    // Main-actor completion form: the async form finished off the main thread and UIKit crashed the app on tap.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        if let id = MealNotification.mealID(from: response.notification.request.content.userInfo) { MealNotification.shared.openedMealID = id }
+        completionHandler()
     }
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
