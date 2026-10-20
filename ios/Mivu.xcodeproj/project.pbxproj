@@ -73,6 +73,11 @@
 			path = Config;
 			sourceTree = "<group>";
 		};
+		630000000000000000000001 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -109,6 +114,7 @@
 				8B41F6472DEDD0D5001A66F9 /* Mivu */,
 				8B41F65F2DEDD0D6001A66F9 /* MivuTests */,
 				620000000000000000000003 /* MivuUITests */,
+				630000000000000000000001 /* Shared */,
 				8B41F6812DEDD23B001A66F9 /* Frameworks */,
 				8B41F6462DEDD0D5001A66F9 /* Products */,
 			);
@@ -170,6 +176,7 @@
 			fileSystemSynchronizedGroups = (
 				8B41F6472DEDD0D5001A66F9 /* Mivu */,
 				8BD71C052DEE41D800CEDD92 /* Config */,
+				630000000000000000000001 /* Shared */,
 			);
 			name = Mivu;
 			packageProductDependencies = (
