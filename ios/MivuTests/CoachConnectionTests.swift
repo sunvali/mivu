@@ -229,6 +229,7 @@ private final class CoachCredentialStore: CredentialStoring, @unchecked Sendable
         let store = CoachCredentialStore()
         preferences = UserDefaults(suiteName: preferencesName)!
         preferences.set(try store.registrations().first?.id, forKey: "selectedRegistrationID")
+        preferences.set(true, forKey: "openAISharingConsent")
         let requests = requests
         let session = syntheticSession { request in
             switch request.url?.path {

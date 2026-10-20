@@ -216,7 +216,9 @@ struct OnboardingView: View {
                     unitMenu($metricWeight, metric: "kg", imperial: "lb")
                 }
             }
-            if let answers, !answers.keepsWeight {
+            if let answers, !answers.targetIsHealthy {
+                footnote("That target is below a healthy weight for your height, so Mivu can't set it. Choose a higher target, or talk to a doctor or registered dietitian.")
+            } else if let answers, !answers.keepsWeight {
                 Text(answers.targetKg < answers.weightKg ? "How quickly would you like to lose it?" : "How quickly would you like to gain it?")
                     .font(.headline).padding(.top, 4)
                 card {
@@ -317,7 +319,7 @@ struct OnboardingView: View {
         case .about:
             heightCm.map { (50...272).contains($0) } == true && weightKg.map { (20...400).contains($0) } == true
                 && birthYear.map { (1900...Self.thisYear - 13).contains($0) } == true
-        case .goal: targetKg.map { (20...400).contains($0) } == true
+        case .goal: targetKg.map { (20...400).contains($0) } == true && answers?.targetIsHealthy == true
         case .connect: window != nil && !connection.isConnecting && !connection.isDisconnecting
         case .results: !asking && !saving && [targets.kcal, targets.protein, targets.carbs, targets.fat].allSatisfy { ($0 ?? -1) >= 0 }
         default: true

@@ -56,7 +56,7 @@ struct CoachView: View {
                 .overlay {
                     if timeline.exchanges.isEmpty, timeline.error == nil {
                         ContentUnavailableView("What would you like to record?", systemImage: "text.bubble",
-                            description: Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate."))
+                            description: Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate. Coach gives estimates, not medical advice."))
                             .allowsHitTesting(false)
                     }
                 }

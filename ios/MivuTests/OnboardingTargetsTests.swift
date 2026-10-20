@@ -24,6 +24,13 @@ import Testing
         #expect(targets.kcal == 1200)
     }
 
+    @Test func losingBelowAHealthyWeightIsNotATarget() {
+        #expect(answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 62, birthYear: 1990).targetIsHealthy)
+        #expect(!answers(sex: .female, heightCm: 165, weightKg: 55, targetKg: 48, birthYear: 1990).targetIsHealthy)
+        #expect(answers(sex: .female, heightCm: 165, weightKg: 45, targetKg: 48, birthYear: 1990).targetIsHealthy)
+        #expect(answers(sex: .female, heightCm: 165, weightKg: 48, targetKg: 48, birthYear: 1990).targetIsHealthy)
+    }
+
     @Test func replyIsAcceptedOnlyWhenTheNumbersHoldTogether() {
         let good = #"```json {"kcal":1800,"protein":120,"carbs":200,"fat":60,"explanation":"A steady deficit."} ```"#
         #expect(OnboardingTargets.parse(good)?.targets == NutritionValues(kcal: 1800, carbs: 200, protein: 120, fat: 60))

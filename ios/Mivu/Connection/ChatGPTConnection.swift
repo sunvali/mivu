@@ -75,7 +75,8 @@ final class ChatGPTConnection {
 
     // Launch restoration is explicit; constructing the screen never activates saved credentials.
     func restore() async {
-        guard !isConnecting, !isDisconnecting else { return }
+        // A connection saved before the sharing consent existed stays unused until the person agrees and reconnects.
+        guard !isConnecting, !isDisconnecting, sharingConsented else { return }
         let revision = generation
         guard reloadSavedJob() else { return }
         do {

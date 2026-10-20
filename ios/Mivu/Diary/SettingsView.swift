@@ -107,9 +107,15 @@ struct SettingsView: View {
         .onChange(of: model.readModel?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.readModel?.profile, restoreGeneration: model.restoreGeneration) }
         .confirmationDialog("Delete \(model.readModel?.profile.name ?? "this private local profile")?", isPresented: $showDelete, titleVisibility: .visible) {
-            Button("Delete profile", role: .destructive) { Task { await model.deleteCurrentProfile() } }
+            Button("Delete profile", role: .destructive) {
+                Task {
+                    await model.deleteCurrentProfile()
+                    // The ChatGPT connection is shared by all profiles, so it goes with the last one.
+                    if model.profiles.isEmpty, connection.activeRegistrationID != nil { await connection.disconnect() }
+                }
+            }
             Button("Cancel", role: .cancel) {}
-        } message: { Text("This removes the selected profile's meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved.") }
+        } message: { Text("This removes the selected profile's meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved. Deleting your last profile also disconnects ChatGPT.") }
         .onAppear {
             guard !openedInitialDestination else { return }
             openedInitialDestination = true

@@ -9,6 +9,9 @@ struct OnboardingAnswers: Equatable {
     /// Keeping weight when the target is within half a kilo, so pace does not apply.
     var keepsWeight: Bool { abs(targetKg - weightKg) < 0.5 }
 
+    /// Weight loss may not aim below BMI 18.5; keeping or gaining weight is always allowed.
+    var targetIsHealthy: Bool { targetKg >= weightKg - 0.5 || targetKg / pow(about.heightCm / 100, 2) >= 18.5 }
+
     /// Mifflin–St Jeor resting energy × light activity, moved by the pace, never under 1200 kcal.
     /// Protein 1.6 g per kg, fat 30% of energy, carbs the rest.
     func estimate(year: Int = Calendar.current.component(.year, from: Date())) -> NutritionValues {
