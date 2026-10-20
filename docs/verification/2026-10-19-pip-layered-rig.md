@@ -33,9 +33,24 @@ Baseline `5af19d4` was re-run for `CoachNavigationUITests`, `CoachUITests`, `Dia
 | DiaryUITests/testLogMealFromSelectedHistoricalDayKeepsTodaySeparate | fail | fail |
 | ProgressUITests/testSavedGoalsWeightWorkoutAndReportsSurviveRelaunch | fail | fail |
 | ProgressUITests/testSavedWorkoutSetsAndNoGoalReport | fail | fail |
-| **DiaryUITests/testMealPhotoViewerClosingAndCancelledDeletionPreserveRecord** | **fail (3 of 3 runs, incl. 2 isolated)** | **pass (full-class run and isolated)** |
+| DiaryUITests/testMealPhotoViewerClosingAndCancelledDeletionPreserveRecord | pass after fix (3 of 3 class runs) | pass |
 
-Eight of the 12 failures also fail on baseline with identical messages (list-reachability, "Invalid frame dimension" warnings), so they are not caused by this branch. `testMealPhotoViewerClosingAndCancelledDeletionPreserveRecord` is a **non-baseline failure**: `reveal` cannot make `viewMealPhoto` reachable ("The target must be reachable; morning weight must clear fixed controls", `DiaryUITests.swift:88`). Cause not investigated; it is unresolved and must not be counted as passing. Baseline reachability failures in the same file suggest layout sensitivity on this simulator, but that is unconfirmed.
+Eight of the 12 failures above also fail on baseline with identical messages (list-reachability, "Invalid frame dimension" warnings), so they are not caused by this branch.
+
+### Meal photo regression: fixed
+
+`testMealPhotoViewerClosingAndCancelledDeletionPreserveRecord` failed because the Today hero grew by 14 pt (the Pip frame is now derived from the rig crop at size 200, previously a fixed 186 pt tall frame). That moved the first meal row from y=684 to y=698, so its centre sat under the floating Log meal bar and the test's `row.tap()` opened the composer instead of the meal (probe: baseline row y=684, detail opened; HEAD row y=698, composer opened). Fix: Today Pip size 186 in `TodayView.companionArt`, restoring the old hero height. See `.superpowers/sdd/2026-10-19-pip-layered-rig/regression-meal-photo-report.md`.
+
+Re-verification on source `464a3a8724025f79c7707fbe9889a02a9a7f2207` plus the fix (commit following it), same environment, `-parallel-testing-enabled NO`:
+
+| Run | Result |
+|---|---|
+| `DiaryUITests` x3 (11 discovered each) | 9 passed, 2 failed each run; the 2 are baseline-identical (`testCapturePhotoReviewCorrectionEditingAndHistory`, `testLogMealFromSelectedHistoricalDayKeepsTodaySeparate`); the meal photo test passed in all 3 |
+| `MivuUITests` full (57 discovered) | 57 passed, 12 failed (tool summary, counts include repeats): the 11 baseline-identical ones plus `CoachScrollSpikeUITests/testSpikeBidirectionalEvictionAndBackgroundReplyPreserveReader` (see below) |
+| `MivuTests` full (856 discovered) | 855 passed, 0 failed, 1 skipped (same skip as above) |
+| `CompanionUITests` Today and Coach tap/long-press | 2 passed |
+
+Open: `testSpikeBidirectionalEvictionAndBackgroundReplyPreserveReader` passed in the earlier full run (e2e92b1) but failed here, in the full run and in two isolated runs (one with the fix stashed, so it is not caused by the fix; commits since e2e92b1 are docs only). Cause not investigated; not counted as passing.
 
 ## Evidence
 
@@ -55,6 +70,6 @@ Limits: recordings were driven by manual taps, so typing-gaze and thinking phase
 ## Blocked / not verified
 
 - Physical iPhone performance: device "Yaakov’s IPhone" was offline. Instruments Animation Hitches (target under 5 ms/s) and idle CPU/energy were **not run**.
-- Non-baseline UI failure above is unresolved.
+- `CoachScrollSpikeUITests` failure above is unresolved.
 - Reduce Motion in dark appearance, VoiceOver and Dynamic Type recordings were not made; Dynamic Type and accessibility coverage is only what the UI suite asserts.
 - Hosted CI, signing and packaging: not part of this record.

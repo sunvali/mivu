@@ -600,8 +600,9 @@ struct TodayView: View {
         return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
     private var companionArt: some View {
+        // 186 keeps the hero's old height; taller pushes the first meal row under the floating Log meal bar.
         CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                      size: typeSize.isAccessibilitySize ? 144 : 200, runtime: companionRuntime, onTouch: onCompanionTouch)
+                      size: typeSize.isAccessibilitySize ? 144 : 186, runtime: companionRuntime, onTouch: onCompanionTouch)
             .onScrollVisibilityChange(threshold: 0.5) { visible in
                 companionVisible = visible; reportCompanionContext()
             }
