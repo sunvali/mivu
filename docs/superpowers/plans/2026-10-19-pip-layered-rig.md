@@ -147,7 +147,7 @@ Removed in Task 9: Lottie SPM package, `pip.json`, `pip-artwork*.png`, `pip-*eye
 - Produces:
   - `struct PipGesture { let name: String; let keys: [(at: TimeInterval, pose: PipPose)]; var duration: TimeInterval { keys.last!.at } }`
   - `enum PipMoment: Hashable { case greeting(hour: Int), welcomeBack, attentive, submitted, thinking, saved, reviewed, recovery, firstMealToday, dayComplete, curious, tapped(level: Int), patted, earTwitch }`
-  - `static func PipGesture.for(_ moment: PipMoment) -> PipGesture` and `static func PipGesture.loopFor(_ moment: PipMoment) -> PipGesture?` (loops: attentive, thinking).
+  - `PipGestureLibrary.gesture(for:)` and `PipGestureLibrary.loop(for:)` (loops: attentive, thinking).
   - `PipRigView.play(_ gesture: PipGesture, completion: @escaping (Bool) -> Void)` — schedules each key as `CASpringAnimation` (per joint; followers `ear-*`, `tail-2…4`, `scarf-end-*` get stiffness × 0.6 and +40 ms delay), `fromValue` = presentation layer's current value; completion `false` if interrupted.
 - Timings (spec): greeting ≈ 700 ms (prep 100 / lift 160 / wave 180 / settle 260); saved ≈ 450 ms (70/120/90/170); reviewed ≈ 650 ms (90/170/120/270); submitted ≤ 800 ms with first visible change ≤ 100 ms; thinking loop 1.4 s; recovery 200 ms tilt + paw-over-heart then still.
 - Gesture content per the spec tables (greeting variants: hour 5–11 adds stretch, 19–4 softer wave; tapped levels 0–3 rotate giggle squash / ear wiggle / wink / tail flick, level 4 = shake-off; patted = lean in, closedHappy eyes, blush, tail wag, 1 heart; firstMealToday = heart eyes, wiggle, 1 heart; dayComplete = both paws up, hop, blush, 2 hearts; welcomeBack = droop + puppy (`wide`) eyes 400 ms then joyful wave; curious = lean toward camera side, `wide` eyes; earTwitch = single ear flick).
@@ -187,7 +187,7 @@ Removed in Task 9: Lottie SPM package, `pip.json`, `pip-artwork*.png`, `pip-*eye
 **Interfaces:**
 - `struct PipIdleScheduler { enum Beat { blink, glance(CGPoint), earFlick, weightShift, yawn, stretch, hugTail, curlUp } ; init(random: some RandomNumberGenerator); mutating func next(after lastInput: Date, now: Date, surface: CompanionSurface) -> (beat: Beat, at: Date) }` — common beats every 2–6 s; `yawn`/`stretch` only after ≥ 30 s without input; `hugTail` then `curlUp` only on `.today` after ≥ 90 s; Coach never curls.
 - `PipRigView.setBreathing(_ on: Bool)` — chest/head scale-y 1.00↔1.02, 4.5 s, autoreverse, repeat; one `CABasicAnimation` keyed `"breath"`.
-- Idle beats map to small `PipGesture`s (`PipGesture.forIdle(_:)`).
+- Idle beats map to small `PipGesture`s (`PipGestureLibrary.gesture(forIdle:)`).
 
 - [ ] **Step 1: Failing tests** (seeded generator, fixed dates):
   - `PipIdleSchedulerTests.commonBeatsSpacedTwoToSixSeconds` — 200 draws, all `at - now` in 2…6.

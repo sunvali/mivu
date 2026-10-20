@@ -40,19 +40,19 @@ Durations come from `MivuMotion` and the gesture library.
 | Moment | Duration | Gesture |
 | --- | ---: | --- |
 | Resting | continuous | Gentle breathing plus living eyes and idle beats (below) |
-| Greeting | 0.7 s | Ears pop, small hop, wave; morning adds a stretch and yawn (0.9 s), evening a softer wave (0.9 s) |
+| Greeting | 0.9 s | Ears pop, small hop, wave; morning adds a stretch and yawn (0.9 s), evening a softer wave (0.9 s) |
 | Welcome back (a day or more away) | 1.6 s | Ears droop with puppy eyes, then a joyful wave |
-| Attentive (typing) | 8 s loop | Leans in, ears forward; eyes sweep with draft length |
+| Attentive (typing) | holds | Leans in, ears forward, then holds the pose (1.6 s loop); eyes sweep with draft length |
 | Submitted | 0.8 s | Anticipation dip, nod, paw lift; first visible response within 100 ms |
-| Thinking (processing) | 4 s loop | Paw to chin, eyes look side to side, tail swish |
+| Thinking (processing) | 1.4 s loop | Paw to chin, eyes look side to side, tail swish |
 | Saved | 0.45 s | Happy closed eyes, nod, open paw, little bounce |
 | Reviewed | 0.65 s | Grounded stretch, both paws up, smile |
 | First meal today | 1.0 s | Heart eyes, wiggle, one heart rises |
 | Day complete | 1.4 s | Both-paws cheer, hop, blush, two hearts |
-| Curious (photo added) | 0.8 s | Eyes wide, leans toward the photo |
-| Recovery | 4 s | Ears droop, head tilt, open palm over heart, calm mouth; then still |
-| Tap | 0.6 s | Rotating giggle, ear wiggle, wink, tail flick; rapid taps escalate once to a shake-off; light haptic |
-| Pat (long-press/slow drag) | 1.2 s | Leans into the hand, closed eyes, blush, tail wag, a heart drifts up |
+| Curious (photo added) | 1.0 s | Eyes wide, leans toward the photo |
+| Recovery | 1.8 s | Ears droop, head tilt, open palm over heart, calm mouth; then holds still |
+| Tap | 0.8 s | Rotating giggle, ear wiggle, wink, tail flick; rapid taps escalate once to a shake-off; light haptic |
+| Pat (long press) | 1.3 s | Leans into the hand, closed eyes, blush, tail wag, a heart drifts up |
 
 During recovery or processing a tap gives only an ear twitch. Surface changes use
 the native tab transition; the 350 ms native focus and keyboard sizing animation is
