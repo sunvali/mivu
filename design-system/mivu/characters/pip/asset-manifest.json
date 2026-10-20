@@ -34,8 +34,8 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip-rig.json",
-    "sha256": "fb6119101be3526c4ced923b494f208ddc759c4e1a9ac6e346af2da18efaca73",
-    "bytes": 309518,
+    "sha256": "b78c3e8368353f8fe078eff92f94cdcb55f71dd07385196292838bc06822763f",
+    "bytes": 309488,
     "formatVersion": 2,
     "canvas": [
       512,
@@ -64,8 +64,8 @@
     {
       "name": "PipCoach",
       "path": "ios/Mivu/Assets.xcassets/Companion/Pip/PipCoach.imageset/pip.png",
-      "sha256": "c530069a260cf0b476e9b1b3771bc68814925de6a76b2192adfe11a18c7a96ed",
-      "bytes": 52271,
+      "sha256": "e37c72e4c94d03d93fa1cf7a1943832f29b23980d72a58cf5236b109cd9a263f",
+      "bytes": 51383,
       "appearances": "original context-matched seated art"
     },
     {
@@ -110,8 +110,8 @@
   "authoringSources": [
     {
       "path": "design-system/mivu/characters/pip/rig/pip.svg",
-      "sha256": "7490bd903974b83f5d01c66fb3402586340fef30f73d0db5388a9dcf6f88b44f",
-      "bytes": 219927,
+      "sha256": "30b95aca696c6011efc598a1b2d5f66fd7eb2365251f8cf95bcefcfe34fee022",
+      "bytes": 219901,
       "role": "Editable layered vector Pip"
     },
     {
