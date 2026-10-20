@@ -76,6 +76,10 @@ struct DiaryRootView: View {
     @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
     @State private var showOnboarding = false
+    @State private var quickLog = QuickLogRequest.shared
+    @State private var quickLogOwner: DiarySelectionOwnership?
+    @State private var loggedMealID: UUID?
+    @State private var noteMealID: UUID?
     @State private var companion = CompanionPresentation()
     @State private var companionRuntime: CompanionRuntime
     #if DEBUG
@@ -180,6 +184,8 @@ struct DiaryRootView: View {
             coach.startMonitoring(); coach.resume()
         }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
+        .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
+        .onChange(of: hasLoaded) { _, _ in openQuickLog() }
         .onChange(of: model.isChangingProfile) { _, changing in
             coachRoutes.synchronize(selection: model.selection, isChangingProfile: changing)
             if changing { coachHistory = nil }
@@ -222,6 +228,7 @@ struct DiaryRootView: View {
         .onChange(of: model.selection, initial: true) { _, selection in
             coachRoutes.synchronize(selection: selection, isChangingProfile: model.isChangingProfile)
             coachHistory = nil
+            if selection != quickLogOwner { quickLogOwner = nil }
         }
         .onChange(of: model.restoreGeneration) { _, _ in coachRoutes.invalidate(); coachHistory = nil }
         .onChange(of: thermalState) { _, _ in refreshCompanion() }
@@ -296,6 +303,18 @@ struct DiaryRootView: View {
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(model: model, connection: connection) { showOnboarding = false }
         }
+        .fullScreenCover(isPresented: Binding(get: { quickLogOwner != nil }, set: { if !$0 { quickLogOwner = nil } })) {
+            if let owner = quickLogOwner {
+                QuickLogCameraView(model: model, ownership: owner) { id in
+                    quickLogOwner = nil; selectedTab = "today"
+                    withAnimation { loggedMealID = id }
+                    AccessibilityNotification.Announcement("Meal logged").post()
+                }
+            }
+        }
+        .sheet(isPresented: Binding(get: { noteMealID != nil }, set: { if !$0 { noteMealID = nil } })) {
+            if let id = noteMealID { MealComposerView(model: model, correctingMealID: id) }
+        }
         .sheet(item: $coachHistory) { presentation in
             CoachHistoryView(model: model, routes: coachRoutes, presentation: presentation,
                              open: coachAction(from: presentation.origin))
@@ -320,6 +339,12 @@ struct DiaryRootView: View {
                               onCompanionContextChanged: updateCompanionContext,
                               onCompanionTouch: touchCompanion).toolbar { profileControl }
                 }
+                .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
+                .task(id: loggedMealID) {
+                    guard loggedMealID != nil else { return }
+                    try? await Task.sleep(for: .seconds(UIAccessibility.isVoiceOverRunning ? 10 : 5))
+                    if !Task.isCancelled { withAnimation { loggedMealID = nil } }
+                }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
                 NavigationStack { HistoryView(model: model).toolbar { profileControl } }
@@ -340,6 +365,39 @@ struct DiaryRootView: View {
                 }
             }
         }
+    }
+    private func openQuickLog() {
+        guard quickLog.pending, hasLoaded else { return }
+        quickLog.pending = false
+        // Without a diary there is nowhere to save; the app shows setup instead.
+        guard let owner = model.selection, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
+        // shortcut: sheets presented inside a tab (composer, Coach camera) stay up and block this cover; dismiss them if that shows up in use.
+        routes.route = nil; coachHistory = nil; noteMealID = nil
+        selectedTab = "today"; quickLogOwner = owner
+    }
+    private func quickLogToast(_ id: UUID) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Meal logged").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
+                Text(connection.planAuthorized ? "Analyzing your photo" : "Analyzes when ChatGPT is connected")
+                    .font(.caption).foregroundStyle(Color.diarySecondary)
+            }
+            Spacer(minLength: 8)
+            Button { loggedMealID = nil; noteMealID = id } label: {
+                Text("Add Note").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+                    .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+            }.accessibilityIdentifier("quickLogAddNote")
+        }
+        .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 6)
+        // Solid, not glass: the toast sits over busy meal rows and must stay readable.
+        .background(Color.diarySurface, in: .capsule)
+        .overlay(Capsule().strokeBorder(Color.diaryRule))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        .padding(.horizontal, 16).padding(.bottom, 8)
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("quickLogToast")
     }
     private var openCoachAction: OpenDiaryCoachAction {
         coachAction(from: coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile))

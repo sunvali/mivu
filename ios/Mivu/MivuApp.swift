@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MivuApp: App {
+    @UIApplicationDelegateAdaptor private var appDelegate: MivuAppDelegate
     var body: some Scene {
         WindowGroup {
             root
