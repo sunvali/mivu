@@ -14,6 +14,7 @@ struct OnboardingView: View {
     private static let kgPerLb = 0.45359237
 
     @State private var step = Step.hello
+    @State private var askSharingConsent = false
     @State private var forward = true
     @State private var heightCm: Double?
     @State private var weightKg: Double?
@@ -79,6 +80,7 @@ struct OnboardingView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .background(PresentationWindowReader { window = $0 })
+        .openAIConsent(isPresented: $askSharingConsent, connection: connection) { connectChatGPT() }
         .sensoryFeedback(.selection, trigger: step)
         .sensoryFeedback(.success, trigger: savedCount)
         .task {
@@ -286,7 +288,7 @@ struct OnboardingView: View {
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
             }
-            footnote("You can change these any time in Settings › Goals.")
+            footnote("These are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat, especially if you have a health condition. You can change targets any time in Settings › Goals.")
         }
     }
 
@@ -324,10 +326,14 @@ struct OnboardingView: View {
 
     private func primary() {
         switch step {
-        case .connect: if let window { Task { await connection.connect(window: window) } }
+        case .connect: if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
         case .results: Task { await save() }
         default: advance()
         }
+    }
+
+    private func connectChatGPT() {
+        if let window { Task { await connection.connect(window: window) } }
     }
 
     private func advance() {

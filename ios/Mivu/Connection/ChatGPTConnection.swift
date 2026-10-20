@@ -95,6 +95,10 @@ final class ChatGPTConnection {
         }
     }
 
+    /// Whether the person agreed to send meal and profile data to OpenAI; asked before connecting.
+    var sharingConsented: Bool { preferences.bool(forKey: "openAISharingConsent") }
+    func recordSharingConsent() { preferences.set(true, forKey: "openAISharingConsent") }
+
     func connect(window: UIWindow) async {
         let browser = NativeAuthorizationBrowser(window: window)
         await connect { try await browser.open($0) }

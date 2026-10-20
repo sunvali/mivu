@@ -19,6 +19,15 @@ struct ConnectionTests {
         #expect(requests.values.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: directory.path))
     }
+
+    @Test func openAISharingConsentStartsUnsetAndPersists() {
+        let preferences = UserDefaults(suiteName: UUID().uuidString)!
+        let connection = ChatGPTConnection(preferences: preferences)
+        #expect(!connection.sharingConsented)
+        connection.recordSharingConsent()
+        #expect(connection.sharingConsented)
+        #expect(ChatGPTConnection(preferences: preferences).sharingConsented)
+    }
 }
 
 private final class ConnectionRequests: @unchecked Sendable {

@@ -21,6 +21,7 @@ struct SettingsView: View {
     @State private var openedInitialDestination = false
     @Environment(\.dismiss) private var dismiss
     @State private var showDiscard = false
+    @State private var askSharingConsent = false
     private var hasUnsavedChanges: Bool { fields.isDirty || !nutritionDraft.text.isEmpty }
 
     private enum SettingsSection: Hashable {
@@ -58,7 +59,12 @@ struct SettingsView: View {
                     }
                 }
                 Section {
+                    #if DEBUG
                     Button { showDiagnostic = true } label: { settingsRow("Diagnostics", symbol: "stethoscope", color: .diarySuccess) }
+                    #endif
+                    Link(destination: MivuLinks.privacyPolicy) { settingsRow("Privacy Policy", symbol: "hand.raised", color: .diaryAccent) }
+                        .accessibilityIdentifier("privacyPolicy")
+                    Text("Calorie and nutrition figures are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     Text("Keep a backup or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 } header: { Text("Support") }
                 Section {
@@ -205,9 +211,9 @@ struct SettingsView: View {
                         Button("Cancel connection") { connection.cancelConnection() }.frame(minHeight: 44)
                     } else {
                         Button(connection.accountState == .planPermissionMissing ? "Enable ChatGPT plan usage" : connection.activeRegistrationID == nil ? "Continue with ChatGPT" : "Reauthorize ChatGPT") {
-                            guard let window else { return }
-                            Task { await connection.connect(window: window) }
+                            if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
                         }.frame(minHeight: 44).disabled(window == nil || connection.isDisconnecting)
+                        .openAIConsent(isPresented: $askSharingConsent, connection: connection) { connectChatGPT() }
                     }
                     if !connection.models.isEmpty {
                         Picker("Account model", selection: $connection.selectedModel) {
@@ -219,7 +225,9 @@ struct SettingsView: View {
                     }
                     if let notice = connection.notice { Text(notice.rawValue).font(.subheadline).foregroundStyle(Color.diarySecondary) }
                     Link("ChatGPT usage settings", destination: URL(string: "https://chatgpt.com/settings/usage")!).frame(minHeight: 44)
+                    #if DEBUG
                     Button("ChatGPT connection diagnostic") { showConnectionDiagnostic = true }.frame(minHeight: 44)
+                    #endif
                 }
 
             case .nutritionSource:
@@ -279,6 +287,11 @@ struct SettingsView: View {
         .navigationTitle(title(section))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+    }
+
+    private func connectChatGPT() {
+        guard let window else { return }
+        Task { await connection.connect(window: window) }
     }
 
     private func settingsRow(_ title: String, symbol: String, color: Color, value: String? = nil) -> some View {

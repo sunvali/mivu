@@ -580,10 +580,15 @@ enum DiaryLaunch {
     static var shouldLaunchDiary: Bool {
         shouldLaunchDiary(arguments: ProcessInfo.processInfo.arguments, environment: ProcessInfo.processInfo.environment)
     }
+    /// UI-test and sample launch switches exist only in Debug builds, so Release has no hidden modes.
     static var testID: UUID? {
+        #if DEBUG
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "--diary-ui-test"), args.indices.contains(index + 1) else { return nil }
         return UUID(uuidString: args[index + 1])
+        #else
+        return nil
+        #endif
     }
     static var isUITest: Bool { testID != nil }
     /// UI tests run at any wall-clock time, so fixtures keep their day unless a test asks for the rollover.
@@ -593,7 +598,13 @@ enum DiaryLaunch {
     #endif
     static var isCoachUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-ui-test") }
     static var isCoachInferenceFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-inference-fixture") }
-    static var isSampleMode: Bool { (isUITest && !isCoachUITest) || ProcessInfo.processInfo.arguments.contains("--sample-mode") }
+    static var isSampleMode: Bool {
+        #if DEBUG
+        (isUITest && !isCoachUITest) || ProcessInfo.processInfo.arguments.contains("--sample-mode")
+        #else
+        false
+        #endif
+    }
     static var defaults: UserDefaults {
         if let id = testID, let defaults = UserDefaults(suiteName: "MivuUITest-" + id.uuidString) { return defaults }
         return .standard
