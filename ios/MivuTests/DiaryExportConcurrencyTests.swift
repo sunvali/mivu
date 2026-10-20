@@ -3,7 +3,7 @@ import SQLite3
 import Testing
 @testable import Mivu
 
-@Suite struct DiaryExportConcurrencyTests {
+@Suite(.timeLimit(.minutes(2))) struct DiaryExportConcurrencyTests {
     @Test func oneLoadedPageExportsEveryTurnAndPhoto() async throws {
         let f = try CaptureFixture(exchanges: 10_000); defer { f.remove() }
         let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: f.root, diagnostics: metrics)
@@ -45,8 +45,10 @@ import Testing
             checkpoint: { stage, url in try await gate.checkpoint(stage, url: url) })
         let request = try await store.exportRequest(expectedProfileID: f.profileID)
         let operation = Task { () async throws -> (DiaryExportTicket, Data) in
-            let ticket = try await coordinator.makeClone(request)
-            return (ticket, try await coordinator.archiveData(ticket))
+            try await gate.observe {
+                let ticket = try await coordinator.makeClone(request)
+                return (ticket, try await coordinator.archiveData(ticket))
+            }
         }
         try await gate.waitUntilReached()
         let beforeCapture = try await store.diaryHead(expectedProfileID: f.profileID)
@@ -817,23 +819,23 @@ private actor ExportStageGate {
     private var reached = false
     private var continuation: CheckedContinuation<Void, Never>?
     private var failure: (any Error)?
+    private let entered = AsyncStream<Void>.makeStream()
     private(set) var visitedURL: URL?
     init(_ stage: DiaryExportStage) { self.stage = stage }
     func checkpoint(_ current: DiaryExportStage, url: URL) async throws {
         guard current == stage, !reached else { return }
-        reached = true; visitedURL = url
+        reached = true; visitedURL = url; entered.continuation.yield(())
         await withCheckedContinuation { continuation = $0 }
         try Task.checkCancellation()
     }
+    // Event-driven: a wall-clock deadline flakes when the full suite loads the simulator.
     func waitUntilReached() async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-        while !reached {
-            if let failure { throw failure }
-            guard ContinuousClock.now < deadline else { throw POSIXError(.ETIMEDOUT) }
-            try await Task.sleep(for: .milliseconds(1))
-        }
+        if !reached && failure == nil { for await _ in entered.stream { break } }
+        if let failure { throw failure }
+        if !reached { throw CancellationError() }
     }
     func observe<Value: Sendable>(_ operation: @Sendable () async throws -> Value) async throws -> Value {
+        defer { entered.continuation.finish() }
         do { return try await operation() }
         catch { failure = error; throw error }
     }
