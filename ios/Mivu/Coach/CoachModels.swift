@@ -142,9 +142,9 @@ struct CoachSubmissionManifest: Codable, Equatable, Sendable {
 struct CoachReply: Codable, Equatable, Sendable {
     enum Target: Codable, Equatable, Sendable {
         case message(turnID: UUID, fromPip: Bool)
-        case meal(UUID)
+        case meal(mealID: UUID)
         case item(mealID: UUID, itemID: UUID)
-        case day(UUID)
+        case day(dayID: UUID)
     }
     var target: Target
     var excerpt: String
@@ -234,6 +234,15 @@ struct CoachContext: Codable, Equatable, Sendable {
     var attachedPhotoIDs: [UUID]? = nil
     var committedReceipts: [CoachCommittedReceipt]? = nil
     var omittedReceiptCount: Int? = nil
+    /// What the person is replying to, resolved to current content for this turn only.
+    var replyTo: Reply? = nil
+    struct Reply: Codable, Equatable, Sendable {
+        var target: CoachReply.Target
+        var excerpt: String
+        var turn: Turn? = nil
+        var meal: Meal? = nil
+        var unavailable: Bool? = nil
+    }
 }
 
 extension CoachContext {
