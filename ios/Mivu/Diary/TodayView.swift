@@ -406,7 +406,7 @@ struct DiaryRootView: View {
     private func continueInBackground() {
         coach.continueInBackground(begin: { expire in
             backgroundLease = UIApplication.shared.beginBackgroundTask(withName: "Finish saved meal") {
-                Task { @MainActor in expire() }
+                expire() // handler runs on the main actor and must end the task before returning
             }
             return backgroundLease != .invalid
         }, end: {

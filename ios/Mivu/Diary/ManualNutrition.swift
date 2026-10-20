@@ -93,6 +93,16 @@ extension ManualNutritionAcceptance {
     }
 }
 
+extension ManualNutritionAcceptance {
+    /// Compares stored fields directly; the fingerprint is write-only so a library change cannot lock out saved meals.
+    func matches(_ payload: ManualNutritionPayload, proposal: AnalysisOutput?) -> Bool {
+        operation == payload.operation && target == payload.target && capturedAt == payload.capturedAt
+            && eatenAt == payload.eatenAt && timePrecision == payload.timePrecision
+            && expectedMealRevision == payload.expectedMealRevision && enteredItemIDs == payload.items.map(\.id)
+            && proposal?.items == payload.items
+    }
+}
+
 func validateManualAcceptance(_ acceptance: ManualNutritionAcceptance,
                               submission: MealSubmission, mealID: UUID, profileID: UUID) throws {
     guard acceptance.schemaVersion == 1, submission.state == .saved, submission.photoIDs.isEmpty,
@@ -100,9 +110,4 @@ func validateManualAcceptance(_ acceptance: ManualNutritionAcceptance,
           proposal.profileID == profileID, proposal.mealID == mealID, proposal.submissionID == submission.id,
           proposal.baseRevision == submission.baseRevision, acceptance.enteredItemIDs == proposal.items.map(\.id),
           submission.baseRevision == (acceptance.expectedMealRevision ?? 0) else { throw DiaryError.invalidData }
-    let payload = ManualNutritionPayload(profileID: profileID, mealID: mealID, submissionID: submission.id,
-        operation: acceptance.operation, target: acceptance.target, capturedAt: acceptance.capturedAt,
-        eatenAt: acceptance.eatenAt, timePrecision: acceptance.timePrecision,
-        expectedMealRevision: acceptance.expectedMealRevision, items: proposal.items)
-    guard try manualNutritionFingerprint(payload) == acceptance.payloadFingerprint else { throw DiaryError.invalidData }
 }

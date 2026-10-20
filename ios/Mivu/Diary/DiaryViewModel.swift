@@ -61,6 +61,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     var retryCoachMeal: ((UUID) -> Void)?
     var profiles: [DiaryProfile] = []
     var errorMessage: String?
+    var manualDayChoiceNeeded = false
     var isSaving = false
     private(set) var isChangingProfile = false
     private(set) var captureReceipt: UUID?
@@ -387,6 +388,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard !isSaving, !isChangingProfile, selection == expectedSelection,
               payload.profileID == expectedSelection.identity.profileID else { return nil }
         isSaving = true; defer { isSaving = false }
+        manualDayChoiceNeeded = false
         let generation = changeGeneration
         do {
             let result = try await manualNutritionSaving(payload, expectedSelection)
@@ -416,7 +418,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             do { try await store.validateSelectionOwnership(expectedSelection) }
             catch DiaryError.wrongOwner, DiaryError.noProfile { return nil }
             catch { /* Storage failure does not prove that the selected owner changed. */ }
-            present(error)
+            if error as? DiaryError == .ambiguousDay { manualDayChoiceNeeded = true } else { present(error) }
             return nil
         }
     }

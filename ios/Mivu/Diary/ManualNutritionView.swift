@@ -177,6 +177,8 @@ struct ManualNutritionView: View {
             }
             if let result = await model.saveManualNutrition(payload, expectedSelection: token), model.selection == token {
                 onSaved(result.meal.id); dismiss()
+            } else if model.selection == token, model.manualDayChoiceNeeded {
+                draft.releaseUncommittedIdentity(); showDayQuestion = true // nothing was saved; re-resolve the day
             } else if model.selection == token { message = model.errorMessage ?? "Could not confirm this save. Retry with the same food to check it safely." }
         } catch DiaryError.ambiguousDay { showDayQuestion = true }
         catch { if model.selection == token { message = error.localizedDescription } }

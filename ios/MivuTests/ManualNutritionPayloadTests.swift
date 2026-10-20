@@ -41,21 +41,23 @@ struct ManualNutritionPayloadTests {
         var snapshot = try Self.snapshot()
         snapshot.meals[0].items[0].nutrition.kcal = 999
         try snapshot.validate()
-        snapshot.meals[0].submissions[0].proposal!.items[0].nutrition.kcal = 999
-        #expect(throws: DiaryError.invalidData) { try snapshot.validate() }
+    }
+    @Test func staleStoredFingerprintDoesNotMakeArchiveUnreadable() throws {
+        var snapshot = try Self.snapshot()
+        snapshot.meals[0].submissions[0].manualAcceptance!.payloadFingerprint = String(repeating: "0", count: 64)
+        try snapshot.validate()
     }
     @Test func acceptanceRejectsTamperedMetadataAndAssociation() throws {
         let original = try Self.snapshot()
-        for mutation in 0..<8 {
+        for mutation in 0..<7 {
             var changed = original
             switch mutation {
             case 0: changed.meals[0].submissions[0].manualAcceptance!.schemaVersion = 2
             case 1: changed.meals[0].submissions[0].manualAcceptance!.enteredItemIDs = [UUID()]
-            case 2: changed.meals[0].submissions[0].manualAcceptance!.payloadFingerprint = String(repeating: "0", count: 64)
-            case 3: changed.meals[0].submissions[0].baseRevision = 1
-            case 4: changed.meals[0].submissions[0].state = .captured
-            case 5: changed.meals[0].submissions[0].proposal!.profileID = UUID()
-            case 6: changed.meals[0].submissions[0].proposal!.mealID = UUID()
+            case 2: changed.meals[0].submissions[0].baseRevision = 1
+            case 3: changed.meals[0].submissions[0].state = .captured
+            case 4: changed.meals[0].submissions[0].proposal!.profileID = UUID()
+            case 5: changed.meals[0].submissions[0].proposal!.mealID = UUID()
             default: changed.meals[0].submissions[0].proposal!.submissionID = UUID()
             }
             #expect(throws: DiaryError.invalidData) { try changed.validate() }

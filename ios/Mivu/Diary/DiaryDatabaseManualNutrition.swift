@@ -79,7 +79,7 @@ extension DiaryTransaction {
             guard parent == payload.mealID else { throw DiaryError.invalidData }
             let submission = try submission(id: payload.submissionID, mealID: parent)
             guard let acceptance = submission.manualAcceptance,
-                  acceptance == (try ManualNutritionAcceptance(payload: payload)) else { throw DiaryError.invalidData }
+                  acceptance.matches(payload, proposal: submission.proposal) else { throw DiaryError.invalidData }
             _ = try manualRecordedDay(acceptance.target)
             return ManualNutritionSaveResult(acceptance: acceptance, submissionID: submission.id,
                 meal: try mealProjection(id: parent), replayed: true)

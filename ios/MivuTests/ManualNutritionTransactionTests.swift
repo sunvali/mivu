@@ -182,6 +182,20 @@ import Testing
         #expect(try db.manualNutritionResult(for: payload, expectedProfileID: f.profileID)?.acceptance == result.acceptance)
     }
 
+    @Test func staleStoredFingerprintStillReadsAndReplays() throws {
+        let f = try CaptureFixture(); defer { f.remove() }
+        let db = try DiaryDatabase(url: f.url), payload = manualPayload(f)
+        let result = try save(db, f, payload)
+        try f.execute("UPDATE submission SET payload = CAST(replace(CAST(payload AS TEXT), '\(result.acceptance.payloadFingerprint)', '\(String(repeating: "0", count: 64))') AS BLOB)")
+        let replay = try #require(try db.manualNutritionResult(for: payload, expectedProfileID: f.profileID))
+        #expect(replay.replayed && replay.acceptance.payloadFingerprint == String(repeating: "0", count: 64))
+        var item = payload.items[0]; item.name = "Different food"
+        let changed = ManualNutritionPayload(profileID: payload.profileID, mealID: payload.mealID, submissionID: payload.submissionID,
+            operation: payload.operation, target: payload.target, capturedAt: payload.capturedAt, eatenAt: payload.eatenAt,
+            timePrecision: payload.timePrecision, expectedMealRevision: payload.expectedMealRevision, items: [item])
+        #expect(throws: DiaryError.invalidData) { _ = try db.manualNutritionResult(for: changed, expectedProfileID: f.profileID) }
+    }
+
     @Test func manualReceiptSurvivesPortableRestoreWithFreshSelection() async throws {
         let f = try CaptureFixture(); defer { f.remove() }
         let store = DiaryStore(directory: f.root), payload = manualPayload(f, append: f.before.meals[0])

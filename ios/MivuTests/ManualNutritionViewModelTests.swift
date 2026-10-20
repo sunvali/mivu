@@ -15,6 +15,17 @@ import Testing
         #expect(model.readModel == before && model.captureReceipt == receipt && model.companionCaptureEvent == reaction)
         #expect(payload == f.payload)
     }
+    @Test func ambiguousDayAsksForDayChoiceWithoutErrorBanner() async throws {
+        let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
+        let model = DiaryViewModel(store: f.store, manualNutritionSaving: { _, _ in throw DiaryError.ambiguousDay })
+        await model.load(createDefaultProfile: false)
+        let owner = try #require(model.selection)
+        #expect(await model.saveManualNutrition(f.payload, expectedSelection: owner) == nil)
+        #expect(model.manualDayChoiceNeeded && model.errorMessage == nil)
+        model.errorMessage = nil
+        #expect(await model.saveManualNutrition(f.payload, expectedSelection: owner) == nil)
+        #expect(model.manualDayChoiceNeeded)
+    }
     @Test func manualStorageFailureReplacesStaleErrorWhenOwnershipReadAlsoFails() async throws {
         let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
         let database = f.path.appendingPathComponent(f.payload.profileID.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
