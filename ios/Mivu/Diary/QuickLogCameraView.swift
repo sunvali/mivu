@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 /// The Log Food camera: one shutter tap saves the photo as a meal on this iPhone; analysis follows on Today.
 struct QuickLogCameraView: View {
@@ -11,6 +12,7 @@ struct QuickLogCameraView: View {
     @State private var unsaved: Data?
     @State private var saving = false
     @State private var error: String?
+    @AppStorage("quickLogFlash") private var flash = AVCaptureDevice.FlashMode.auto.rawValue
     @Environment(\.scenePhase) private var scene
     @Environment(\.dismiss) private var dismiss
 
@@ -61,6 +63,7 @@ struct QuickLogCameraView: View {
             HStack {
                 Button("Close") { dismiss() }.frame(minWidth: 64, minHeight: 44).accessibilityIdentifier("quickLogClose")
                 Spacer()
+                if state.hasFlash { flashButton }
             }
             Spacer()
             if saving { ProgressView("Logging meal").tint(.white) }
@@ -71,6 +74,19 @@ struct QuickLogCameraView: View {
                     .frame(minHeight: 44).disabled(saving).accessibilityIdentifier("quickLogSyntheticPhoto")
             }
         }.padding(24)
+    }
+    private var flashButton: some View {
+        let mode = AVCaptureDevice.FlashMode(rawValue: flash) ?? .auto
+        let (icon, name, next): (String, String, AVCaptureDevice.FlashMode) = switch mode {
+        case .on: ("bolt.fill", "On", .off)
+        case .off: ("bolt.slash.fill", "Off", .auto)
+        default: ("bolt.badge.automatic.fill", "Auto", .on)
+        }
+        return Button { flash = next.rawValue } label: {
+            Image(systemName: icon).font(.title3).foregroundStyle(mode == .on ? .yellow : .white)
+                .frame(width: 44, height: 44).background(.black.opacity(0.35), in: .circle)
+        }
+        .accessibilityLabel("Flash").accessibilityValue(name).accessibilityIdentifier("quickLogFlash")
     }
     private var shutterButton: some View {
         Button { shutter() } label: {
@@ -96,7 +112,7 @@ struct QuickLogCameraView: View {
     private func shutter() {
         saving = true
         Task {
-            do { save(try await CoachAttachmentDraft.normalize(try await camera.capture(), source: .camera)) }
+            do { save(try await CoachAttachmentDraft.normalize(try await camera.capture(flash: AVCaptureDevice.FlashMode(rawValue: flash) ?? .auto), source: .camera)) }
             catch { saving = false; self.error = "Could not take photo. Try again." }
         }
     }

@@ -18,6 +18,7 @@ actor CoachCameraSession {
         var canChoosePhotos = false
         var canClose = false
         var isCapturing = false
+        var hasFlash = false
     }
     struct Dependencies: Sendable {
         let available: @Sendable () -> Bool
@@ -107,6 +108,7 @@ actor CoachCameraSession {
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input), session.canAddOutput(output) else { throw CoachCameraFailure.unavailable }
         session.addInput(input); session.addOutput(output)
+        state.hasFlash = device.hasFlash
         if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
         configured = true
         observeSession()
@@ -180,7 +182,13 @@ actor CoachCameraSession {
         }
         state = State(); publish()
     }
-    func capture() async throws -> Data {
+    nonisolated static func photoSettings(flash: AVCaptureDevice.FlashMode, supported: [AVCaptureDevice.FlashMode]) -> AVCapturePhotoSettings {
+        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+        settings.flashMode = supported.contains(flash) ? flash : .off
+        settings.photoQualityPrioritization = .balanced
+        return settings
+    }
+    func capture(flash: AVCaptureDevice.FlashMode = .off) async throws -> Data {
         guard state.isRunning, foreground, state.destination == .camera else { throw CoachCameraFailure.unavailable }
         guard requests.isEmpty, !state.isCapturing else { throw CoachCameraFailure.busy }
         let expected = generation, presentation = state.presentationID
@@ -197,9 +205,7 @@ actor CoachCameraSession {
             try await withCheckedThrowingContinuation { continuation in
                 let delegate = PhotoDelegate(owner: self, id: id)
                 requests[id] = CaptureRequest(delegate: delegate, generation: expected, continuation: continuation)
-                let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
-                settings.photoQualityPrioritization = .balanced
-                output.capturePhoto(with: settings, delegate: delegate)
+                output.capturePhoto(with: Self.photoSettings(flash: flash, supported: output.supportedFlashModes), delegate: delegate)
             }
         } onCancel: { Task { await self.cancelCapture(id) } }
         try Task.checkCancellation()

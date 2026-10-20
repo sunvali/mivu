@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import UIKit
+import AVFoundation
 @testable import Mivu
 
 @Suite(.serialized) @MainActor struct QuickLogTests {
@@ -20,5 +21,14 @@ import UIKit
         #expect(!QuickLogRequest.shared.pending)
         #expect(QuickLogRequest.shared.handle(UIApplicationShortcutItem(type: QuickLogRequest.shortcutType, localizedTitle: "Log Food")))
         #expect(QuickLogRequest.shared.pending)
+    }
+}
+
+@Suite struct CoachCameraFlashTests {
+    @Test func requestedFlashIsUsedOnlyWhenTheCameraSupportsIt() {
+        #expect(CoachCameraSession.photoSettings(flash: .on, supported: [.off, .auto, .on]).flashMode == .on)
+        #expect(CoachCameraSession.photoSettings(flash: .auto, supported: [.off, .auto, .on]).flashMode == .auto)
+        // AVFoundation raises an exception for an unsupported mode, so it must fall back to off.
+        #expect(CoachCameraSession.photoSettings(flash: .on, supported: []).flashMode == .off)
     }
 }

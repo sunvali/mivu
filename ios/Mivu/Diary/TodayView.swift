@@ -379,17 +379,21 @@ struct DiaryRootView: View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Meal logged").font(.subheadline.weight(.semibold))
+                Text("Meal logged").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
                 Text(connection.planAuthorized ? "Analyzing your photo" : "Analyzes when ChatGPT is connected")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Color.diarySecondary)
             }
             Spacer(minLength: 8)
             Button { loggedMealID = nil; noteMealID = id } label: {
-                Text("Add Note").font(.subheadline.weight(.semibold)).frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+                Text("Add Note").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+                    .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
             }.accessibilityIdentifier("quickLogAddNote")
         }
         .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 6)
-        .glassEffect(.regular, in: .capsule)
+        // Solid, not glass: the toast sits over busy meal rows and must stay readable.
+        .background(Color.diarySurface, in: .capsule)
+        .overlay(Capsule().strokeBorder(Color.diaryRule))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
         .padding(.horizontal, 16).padding(.bottom, 8)
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
         .accessibilityElement(children: .contain)
