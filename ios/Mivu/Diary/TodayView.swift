@@ -689,11 +689,11 @@ struct TodayView: View {
             if model.readModel != nil {
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
                     if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill") { showComposer = true } }
-                    else {
+                    else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
                         DiaryCaptureAction {
                             if let selection = model.selection { openChat(nil, expectedSelection: selection) }
                         }
-                        .disabled(model.selection == nil)
+                        .disabled(model.selection == nil || model.isChangingProfile)
                         DiaryManualAction(identifier: "addManually") { showManualNutrition = true }
                     }
                 }

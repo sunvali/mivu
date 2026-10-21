@@ -539,7 +539,8 @@ struct CoachView: View {
         case .meal(let id), .item(let id, _): selectedRecord = .meal(id); return
         case .message(let id, _): target = .turn(id)
         case .day(let id): target = .day(id)
-        case .weight, .workout: return // shortcut: not tappable, seek the record's day once Progress has a record route
+        case .workout(let id): selectedRecord = .workout(id); return
+        case .weight: return // shortcut: weight quotes render non-interactive (no record route yet), seek the record's day once Progress has one
         }
         guard let identity = coach.diary.selection?.identity else { return }
         Task { _ = await coach.seek(CoachNavigationRequest(identity: identity, target: target, requestID: UUID())) }
@@ -555,14 +556,16 @@ struct CoachView: View {
         VStack(alignment: .trailing, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
                 if let reply = turn.reply {
-                    Button { openQuote(reply) } label: {
-                        CoachReplyQuote(reply: reply, title: reply.author, inMessage: true)
-                            .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 44)
-                            .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    let quote = CoachReplyQuote(reply: reply, title: reply.author, inMessage: true)
+                        .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 44)
+                        .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    if case .weight = reply.target { quote.accessibilityIdentifier("coachQuote-" + turn.id.uuidString) }
+                    else {
+                        Button { openQuote(reply) } label: { quote }
+                            .buttonStyle(.plain).accessibilityHint("Shows the original")
+                            .accessibilityIdentifier("coachQuote-" + turn.id.uuidString)
                     }
-                    .buttonStyle(.plain).accessibilityHint("Shows the original")
-                    .accessibilityIdentifier("coachQuote-" + turn.id.uuidString)
                 }
                 if !turn.text.isEmpty { Text(turn.text).font(.body).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
                 if !turn.photos.isEmpty {
