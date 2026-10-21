@@ -75,6 +75,19 @@ in the others and in the full run; treat as flaky.
 
 `f6f4541` (test-only) fixes the attachment double: CoachAttachmentDraftTests 27/27.
 
+## Final review fixes
+
+The whole-branch review found four Important issues and three must-fix minors. One fix wave addressed all of them, and a scoped re-review confirmed each one:
+
+| Commit | Fix |
+| --- | --- |
+| `149cbf0` | Clarifications accept meals found by search; a `confirm` that names a food resolves to its own meal; Coach does not ask again after a confirm answer (prompt rule) |
+| `bcef032` | Scale and undo summaries read as updates ("845 → 650 kcal", "Removed …") |
+| `eb1f2df` | The Diary "Ask Pip" button sends a reply quote with the meal and food IDs; chips and Retry send while a draft exists and keep it; Undo cannot be double-tapped; Remove/Keep quote the meal |
+| `b30723d` | The re-review's one new Important: the set-aside draft is restored only when the profile is unchanged. Covered by `CoachReplyComposerTests` and `CoachPartialSuccessTests`, 13/13 |
+
+These fixes were verified with targeted unit and UI runs only: 61 unit and 5 UI tests, then the 13 above.
+
 ## Not verified
 
 - The remaining UI classes listed above, and a second full MivuTests run at HEAD.
