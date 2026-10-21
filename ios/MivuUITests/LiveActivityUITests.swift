@@ -16,13 +16,17 @@ final class LiveActivityUITests: XCTestCase {
         let hide = app.switches["liveActivityHideWhenLocked"]
         XCTAssertTrue(hide.waitForExistence(timeout: 3))
         XCTAssertTrue(switchIsOn(main))
-        XCTAssertTrue(switchIsOn(hide))
         XCTAssertGreaterThanOrEqual(main.frame.height, 44)
+        // Flip whatever an earlier run left, so the check never depends on the simulator's history.
+        let hideWasOn = switchIsOn(hide)
+        hide.switches.firstMatch.tap()
+        XCTAssertNotEqual(switchIsOn(hide), hideWasOn)
 
         app.terminate()
         app = openSettings(id)
         XCTAssertTrue(switchIsOn(app.switches["liveActivityToggle"]))
-        XCTAssertTrue(switchIsOn(app.switches["liveActivityHideWhenLocked"]))
+        XCTAssertNotEqual(switchIsOn(app.switches["liveActivityHideWhenLocked"]), hideWasOn)
+        app.switches["liveActivityHideWhenLocked"].switches.firstMatch.tap()
         app.switches["liveActivityToggle"].switches.firstMatch.tap()
         XCTAssertFalse(app.switches["liveActivityHideWhenLocked"].waitForExistence(timeout: 1))
     }

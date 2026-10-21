@@ -16,9 +16,11 @@
 | `MivuTests` after rebasing onto `main` at `1d16ec8` | `c53cc09` | 1,068 tests in 101 suites passed |
 | `build-for-testing`, including `MivuUITests` | `243fb9f` | TEST BUILD SUCCEEDED |
 
-**Not run (blocked by the owner's instruction):** `MivuUITests/LiveActivityUITests.testDynamicIslandTogglesShowAndPersist`.
-The owner asked not to spend time running UI tests. It compiles but has not been run, so it is not
-counted as evidence.
+**UI test, run on `main` at `aa3a436`:** `MivuUITests/LiveActivityUITests.testDynamicIslandTogglesShowAndPersist`
+failed the first time. It assumed "Hide numbers on Lock Screen" started on, but the value lives in the
+simulator's standard defaults, which an earlier manual check had set off. The test now flips whatever
+value it finds, checks the change survives a relaunch, and restores both switches. With the fix, it
+passed one run starting from each saved value (off, then on). Each run took about 28 seconds.
 
 ## Manual, on the simulator
 
