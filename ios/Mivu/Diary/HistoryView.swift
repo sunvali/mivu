@@ -124,8 +124,8 @@ struct HistoryView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }.accessibilityIdentifier("enterNutritionForDay")
-                    Button("Morning weight", systemImage: "scalemass") { showWeight = true }.accessibilityIdentifier("logWeightForDay")
-                    Button("Log workout", systemImage: "figure.strengthtraining.traditional") { showWorkout = true }.accessibilityIdentifier("logWorkoutForDay")
+                    Button("Add weight manually", systemImage: "scalemass") { showWeight = true }.accessibilityIdentifier("logWeightForDay")
+                    Button("Add workout manually", systemImage: "figure.strengthtraining.traditional") { showWorkout = true }.accessibilityIdentifier("logWorkoutForDay")
                 } label: {
                     Image(systemName: "plus").frame(minWidth: 44, minHeight: 44).accessibilityLabel("Add to this day")
                 }

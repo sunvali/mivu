@@ -77,19 +77,12 @@ struct MealDetailView: View {
                         }
                     } header: { Text("Foods").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
                     Section {
-                        Button { showCorrection = true } label: {
+                        Button { if model.sampleMode { showCorrection = true } else { askPip(about: nil, in: meal) } } label: {
                             Label("Add note or photo", systemImage: "note.text.badge.plus").frame(minHeight: 44)
                         }.accessibilityIdentifier("correctMeal")
                         if meal.isSaved && !meal.hasUnresolvedInput {
                             Button("Add food manually", systemImage: "number") { showManualNutrition = true }
                                 .frame(minHeight: 44).accessibilityIdentifier("addFoodManually")
-                        }
-                        if meal.isSaved && meal.state == .saved {
-                            Button("I ate half") {
-                                guard let token = model.selection else { return }
-                                Task { if await model.change({ _ = try await model.store.correctMealProjection(mealID: mealID, text: "half", forCoach: !model.sampleMode, expectedSelection: token, expectedProfileID: snapshot.profile.id) }) { model.resumeWorker() } }
-                            }
-                                .frame(minHeight: 44).accessibilityIdentifier("halfPortion")
                         }
                     }.listRowBackground(Color.clear)
                     Section {
@@ -135,7 +128,7 @@ struct MealDetailView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
-                            Button("Add note or photo", systemImage: "note.text.badge.plus") { showCorrection = true }
+                            Button("Add note or photo", systemImage: "note.text.badge.plus") { if model.sampleMode { showCorrection = true } else { askPip(about: nil, in: meal) } }
                             Button("Move to another day", systemImage: "calendar") { showMove = true }
                             if meal.state == .needsRetry || meal.state == .captured {
                                 Button("Retry analysis", systemImage: "arrow.clockwise") { if model.sampleMode { model.resumeWorker() } else { model.retryCoachMeal?(mealID) } }

@@ -583,7 +583,7 @@ struct WorkoutEditorView: View {
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
-            .navigationTitle(session == nil ? "Log workout" : "Edit workout")
+            .navigationTitle(session == nil ? "Add workout manually" : "Edit workout")
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() }.accessibilityIdentifier("progressKeyboardDone") }
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if isDirty { showDiscard = true } else { dismiss() } }.disabled(saving).frame(minHeight: 44)
@@ -725,7 +725,7 @@ struct MorningWeightEditorView: View {
             }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Log morning weight")
+            .navigationTitle("Add weight manually")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -401,7 +401,7 @@ struct DiaryProgressView: View {
                     }
                 }
             Section {
-                Button { showWeight = true } label: { Label("Log morning weight", systemImage: "plus").frame(minHeight: 44) }
+                Button { showWeight = true } label: { Label("Add weight manually", systemImage: "plus").frame(minHeight: 44) }
                     .accessibilityIdentifier("logWeight")
             }
         }
@@ -415,7 +415,7 @@ struct DiaryProgressView: View {
     private var workoutList: some View {
         List {
                 Section {
-                    Button("Log workout") { showWorkout = true }
+                    Button("Add workout manually") { showWorkout = true }
                         .frame(minHeight: 44).accessibilityIdentifier("logWorkout")
                     if let workoutError {
                         Text(workoutError).foregroundStyle(Color.diaryError)
