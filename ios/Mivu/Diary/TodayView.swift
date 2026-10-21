@@ -416,7 +416,7 @@ struct DiaryRootView: View {
                     .font(.caption).foregroundStyle(Color.diarySecondary)
             }
             Spacer(minLength: 8)
-            Button { loggedMealID = nil; noteMealID = id } label: {
+            Button { loggedMealID = nil; addNote(to: id) } label: {
                 Text("Add Note").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
                     .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
             }.accessibilityIdentifier("quickLogAddNote")
@@ -430,6 +430,14 @@ struct DiaryRootView: View {
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("quickLogToast")
+    }
+    /// Sample mode keeps the local composer; otherwise the note goes through Coach, quoting the meal.
+    private func addNote(to id: UUID) {
+        guard !model.sampleMode else { noteMealID = id; return }
+        guard let selection = model.selection else { return }
+        let meal = model.meal(id)
+        let title = meal?.items.first?.name ?? meal?.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        openCoachAction(nil, reply: CoachReply(target: .meal(mealID: id), excerpt: String((title.isEmpty ? "Meal" : title).prefix(280))), expectedSelection: selection)
     }
     private var openCoachAction: OpenDiaryCoachAction {
         coachAction(from: coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile))
@@ -574,6 +582,8 @@ struct TodayView: View {
     var onCompanionTouch: (CompanionTouch) -> Void = { _ in }
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openDiaryCoach) private var openChat
+    @State private var showManualNutrition = false
     @State private var companionVisible = false
     @State private var surfaceVisible = false
     @State private var showingDetail = false
@@ -677,9 +687,18 @@ struct TodayView: View {
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .safeAreaInset(edge: .bottom) {
             if model.readModel != nil {
-                DiaryCaptureAction { showComposer = true }
-                    .padding(.horizontal, 20).padding(.vertical, 12)
-                    .background(Color.diaryCanvas)
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
+                    if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill") { showComposer = true } }
+                    else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
+                        DiaryCaptureAction {
+                            if let selection = model.selection { openChat(nil, expectedSelection: selection) }
+                        }
+                        .disabled(model.selection == nil || model.isChangingProfile)
+                        DiaryManualAction(identifier: "addManually") { showManualNutrition = true }
+                    }
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                .background(Color.diaryCanvas)
             }
         }
         .navigationDestination(for: UUID.self) {
@@ -690,6 +709,7 @@ struct TodayView: View {
         .navigationTitle("Today")
         .toolbarTitleDisplayMode(.inlineLarge)
         .sheet(isPresented: $showComposer) { MealComposerView(model: model, onSaved: { savedMealID = $0 }) }
+        .sheet(isPresented: $showManualNutrition) { ManualNutritionView(model: model) { savedMealID = $0 } }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") {
             // Coach may move the saved meal to the night before; keep its receipt readable once it leaves today.
             if let savedMealID, model.readModel?.meals.contains(where: { $0.id == savedMealID }) == false { await model.loadMeal(savedMealID) }
@@ -699,7 +719,7 @@ struct TodayView: View {
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .onAppear { surfaceVisible = true; reportCompanionContext() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
-        .onChange(of: [companionVisible, showComposer, showWeight, showGoals, showingDetail]) { _, _ in reportCompanionContext() }
+        .onChange(of: [companionVisible, showComposer, showManualNutrition, showWeight, showGoals, showingDetail]) { _, _ in reportCompanionContext() }
     }
 
     /// A meal logged after midnight that counts for the waking day before: before the cutoff, or because Coach judged it late-night food.
@@ -715,7 +735,7 @@ struct TodayView: View {
             try await model.store.moveMeal(meal.id, to: day.id, expectedRevision: meal.revision, expectedDayID: meal.dayID, expectedProfileID: owner)
         }
     }
-    private var covered: Bool { showComposer || showWeight || showGoals || showingDetail }
+    private var covered: Bool { showComposer || showManualNutrition || showWeight || showGoals || showingDetail }
     private func reportCompanionContext() {
         // Foreground capture is covered by its sheet. Background persistence is not a character action.
         onCompanionContextChanged(CompanionContext(surface: .today, isTyping: false,

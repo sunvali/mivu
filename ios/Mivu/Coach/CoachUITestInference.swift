@@ -67,16 +67,18 @@ enum CoachUITestInference {
                          "expected_revision": meal.revision, "quantity": bread.quantity / 2]
         } else {
             let items: [[String: Any]]
+            var reviewFirst = false
             if text.contains("yesterday") {
                 items = [["name":"Dessert", "quantity":1, "unit":"serving", "kcal":100, "carbs":15, "protein":2, "fat":4]]
             } else if text.contains("review") {
+                reviewFirst = text.contains("fixture review")
                 items = [["name":"Snack", "quantity":1, "unit":"serving", "kcal":80, "carbs":15, "protein":2, "fat":1]]
             } else {
                 items = [["name":"Eggs", "quantity":2, "unit":"egg", "kcal":140, "carbs":1, "protein":12, "fat":10],
                          ["name":"Bread", "quantity":3, "unit":"slice", "kcal":240, "carbs":45, "protein":9, "fat":3],
                          ["name":"Salad", "quantity":1, "unit":"bowl", "kcal":40, "carbs":8, "protein":1, "fat":0]]
             }
-            name = "log_food"; arguments = ["target_local_date": localDate, "items": items]
+            name = "log_food"; arguments = ["target_local_date": localDate, "items": items, "review_first": reviewFirst]
         }
         let argumentsJSON = String(data: try JSONSerialization.data(withJSONObject: arguments, options: .sortedKeys), encoding: .utf8)!
         let id = UUID().uuidString

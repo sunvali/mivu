@@ -238,6 +238,10 @@ extension DiaryDatabase {
                     if try JSONEncoder().encode(meal).count <= 8192 { value.meal = meal }
                 } catch CoachError.limitExceeded {} // ids only; the model uses get_meal
             case .day(let id): _ = try trackingDay(id: id)
+            case .weight(let id): value.weight = try transaction.weight(id: id)
+            case .workout(let id):
+                let workout = try transaction.workout(id: id)
+                if try JSONEncoder().encode(workout).count <= 8192 { value.workout = workout } // else ids only
             }
         } catch DiaryError.notFound { value.unavailable = true }
         return value

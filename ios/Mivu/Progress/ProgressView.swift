@@ -61,6 +61,7 @@ struct DiaryProgressView: View {
     @State private var nutritionExpanded = false
     @State private var coverageExpanded = false
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.openDiaryCoach) private var openChat
 
     private enum Report: Equatable { case daily, weekly, monthly }
     private struct ReportRequest: Equatable {
@@ -392,6 +393,9 @@ struct DiaryProgressView: View {
                             LabeledContent(weightDate(entry), value: "\(entry.value.formatted()) \(entry.unit)")
                                 .foregroundStyle(Color.diaryText).monospacedDigit().frame(minHeight: 44)
                         }.accessibilityIdentifier("editWeight")
+                        .contextMenu { askPipButton("askPipWeight", weightPrompt(entry)) }
+                        .swipeActions(edge: .leading) { askPipButton("askPipWeight", weightPrompt(entry)).tint(.diaryAccent) }
+                        .accessibilityAction(named: "Ask Pip", weightPrompt(entry))
                     }
                     if loadedWeights == weightRequest, weightPage?.hasMore == true {
                         Button("Older measurements") { weightBefore = weightPage?.cursor }.frame(minHeight: 44)
@@ -401,7 +405,7 @@ struct DiaryProgressView: View {
                     }
                 }
             Section {
-                Button { showWeight = true } label: { Label("Log morning weight", systemImage: "plus").frame(minHeight: 44) }
+                Button { showWeight = true } label: { Label("Add weight manually", systemImage: "plus").frame(minHeight: 44) }
                     .accessibilityIdentifier("logWeight")
             }
         }
@@ -415,7 +419,7 @@ struct DiaryProgressView: View {
     private var workoutList: some View {
         List {
                 Section {
-                    Button("Log workout") { showWorkout = true }
+                    Button("Add workout manually") { showWorkout = true }
                         .frame(minHeight: 44).accessibilityIdentifier("logWorkout")
                     if let workoutError {
                         Text(workoutError).foregroundStyle(Color.diaryError)
@@ -436,6 +440,9 @@ struct DiaryProgressView: View {
                             .frame(minHeight: 44, alignment: .leading)
                         }
                         .accessibilityIdentifier("workoutRow")
+                        .contextMenu { askPipButton("askPipWorkout", workoutPrompt(session)) }
+                        .swipeActions(edge: .leading) { askPipButton("askPipWorkout", workoutPrompt(session)).tint(.diaryAccent) }
+                        .accessibilityAction(named: "Ask Pip", workoutPrompt(session))
                     }
                     if loadedWorkouts == workoutRequest, workoutPage?.hasMore == true {
                         Button("Older workouts") { workoutBefore = workoutPage?.cursor }.frame(minHeight: 44)
@@ -485,6 +492,22 @@ struct DiaryProgressView: View {
             ?? "Seven-day change: insufficient data."
         return "Weight chart: \(weights.count) measured dates. " + average + " " + change + " " + samples.joined(separator: "; ")
     }
+    private func askPipButton(_ id: String, _ action: @escaping () -> Void) -> some View {
+        Button("Ask Pip", systemImage: "sparkles", action: action).accessibilityIdentifier(id)
+    }
+    private func weightPrompt(_ entry: WeightEntry) -> () -> Void {
+        let text = "Weight · \(entry.value.formatted()) \(entry.unit) · \(DiaryWeek.format(weightDate(entry), "EEE d MMM"))"
+        return { askPip(.weight(weightID: entry.id), text, day: entry.dayID) }
+    }
+    private func workoutPrompt(_ session: WorkoutSession) -> () -> Void {
+        let text = "\(session.kind.title) · \(session.durationMinutes) min · \(DiaryWeek.format(workoutDate(session), "EEE d MMM"))"
+        return { askPip(.workout(workoutID: session.id), text, day: session.dayID) }
+    }
+    private func askPip(_ target: CoachReply.Target, _ excerpt: String, day: UUID?) {
+        guard let selection = model.selection else { return }
+        openChat(day.map { .day($0) }, reply: CoachReply(target: target, excerpt: String(excerpt.prefix(280))), expectedSelection: selection)
+    }
+
     private func workoutDate(_ session: WorkoutSession) -> String {
         workoutDates[session.dayID]
             ?? ProgressDate.label(session.performedAt, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)

@@ -204,6 +204,27 @@ import Testing
         #expect(context.replyTo?.unavailable == nil)
     }
 
+    @Test func inferenceContextCarriesQuotedWeight() async throws {
+        let source = ChatHistoryFixture.snapshot(exchanges: 1), weight = try #require(source.weights.first)
+        let context = try await context(source, reply: CoachReply(target: .weight(weightID: weight.id), excerpt: "70.1 kg"))
+        #expect(context.replyTo?.weight?.id == weight.id && context.replyTo?.unavailable == nil)
+    }
+
+    @Test func inferenceContextCarriesQuotedWorkout() async throws {
+        let source = ChatHistoryFixture.snapshot(exchanges: 1), workout = try #require(source.workouts.first)
+        let context = try await context(source, reply: CoachReply(target: .workout(workoutID: workout.id), excerpt: "Workout"))
+        #expect(context.replyTo?.workout?.id == workout.id && context.replyTo?.unavailable == nil)
+    }
+
+    @Test func legacyReplyTargetsStillDecode() throws {
+        let day = UUID(uuidString: "00000000-0000-0000-0000-00000000D001")!, meal = UUID(uuidString: "00000000-0000-0000-0000-00000000A001")!
+        let dayJSON = #"{"target":{"day":{"dayID":"00000000-0000-0000-0000-00000000D001"}},"excerpt":"Tue 14 Oct"}"#
+        let mealJSON = #"{"target":{"meal":{"mealID":"00000000-0000-0000-0000-00000000A001"}},"excerpt":"Toast"}"#
+        let decoder = JSONDecoder()
+        #expect(try decoder.decode(CoachReply.self, from: Data(dayJSON.utf8)) == CoachReply(target: .day(dayID: day), excerpt: "Tue 14 Oct"))
+        #expect(try decoder.decode(CoachReply.self, from: Data(mealJSON.utf8)) == CoachReply(target: .meal(mealID: meal), excerpt: "Toast"))
+    }
+
     @Test func ordinaryTurnContextHasNoReplyKey() async throws {
         let context = try await context(reply: nil)
         #expect(context.replyTo == nil)
@@ -211,10 +232,12 @@ import Testing
     }
 
     @Test(arguments: [CoachReply.Target.meal(mealID: UUID()), .item(mealID: UUID(), itemID: UUID()),
-                      .message(turnID: UUID(), fromPip: false), .day(dayID: UUID())])
+                      .message(turnID: UUID(), fromPip: false), .day(dayID: UUID()),
+                      .weight(weightID: UUID()), .workout(workoutID: UUID())])
     func unavailableReplyTargetIsExplicit(_ target: CoachReply.Target) async throws {
         let context = try await context(reply: CoachReply(target: target, excerpt: "Gone"))
         #expect(context.replyTo?.unavailable == true && context.replyTo?.meal == nil && context.replyTo?.turn == nil)
+        #expect(context.replyTo?.weight == nil && context.replyTo?.workout == nil)
     }
 
     @Test func quotedContentIsBounded() async throws {

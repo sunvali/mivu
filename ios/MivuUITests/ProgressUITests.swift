@@ -264,6 +264,35 @@ import XCTest
         XCTAssertTrue(selected.label.contains("80.0 kg"))
     }
 
+    func testWeightAskPipQuotesRecord() {
+        let app = launchDiary(extra: ["--coach-inference-fixture"])
+        logWeight("70", in: app)
+        app.tabBars.buttons["Progress"].tap()
+        open("openWeight", in: app)
+        askPip("editWeight", expecting: "Weight · 70", in: app)
+    }
+
+    func testWorkoutAskPipQuotesRecord() {
+        let app = launchDiary(extra: ["--coach-inference-fixture"])
+        app.tabBars.buttons["Progress"].tap()
+        open("openWorkouts", in: app)
+        logWorkout(in: app)
+        replace(app.textFields["workoutDuration"], with: "30")
+        app.buttons["saveWorkout"].tap()
+        askPip("workoutRow", expecting: "30 min", in: app)
+    }
+
+    private func askPip(_ row: String, expecting text: String, in app: XCUIApplication) {
+        let target = app.buttons[row].firstMatch
+        reveal(target, in: app)
+        target.press(forDuration: 1)
+        let ask = app.buttons["Ask Pip"]
+        XCTAssertTrue(ask.waitForExistence(timeout: 5)); ask.tap()
+        let bar = app.otherElements["coachReplyBar"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 10))
+        XCTAssertTrue(bar.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists)
+    }
+
     private func launchDiary(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"] + extra
