@@ -71,7 +71,7 @@ enum CoachUITestInference {
             if text.contains("yesterday") {
                 items = [["name":"Dessert", "quantity":1, "unit":"serving", "kcal":100, "carbs":15, "protein":2, "fat":4]]
             } else if text.contains("review") {
-                reviewFirst = true
+                reviewFirst = text.contains("fixture review")
                 items = [["name":"Snack", "quantity":1, "unit":"serving", "kcal":80, "carbs":15, "protein":2, "fat":1]]
             } else {
                 items = [["name":"Eggs", "quantity":2, "unit":"egg", "kcal":140, "carbs":1, "protein":12, "fat":10],
