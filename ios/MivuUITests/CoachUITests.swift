@@ -437,6 +437,40 @@ import XCTest
         }
         XCTAssertTrue(element.isHittable)
     }
+    func testPhotoAloneCanBeSentWithoutText() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        app.buttons["coachPhotos"].tap()
+        XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
+        let send = app.buttons["coachSend"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5), "A photo alone is enough to send")
+        XCTAssertFalse(app.buttons["coachVoice"].exists)
+        XCTAssertTrue(send.isEnabled); send.tap()
+        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10), "The photo-only turn is saved")
+    }
+
+    func testStarterFillsDraftAndTrailingSlotSwapsMicForSend() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["coachVoice"].isHittable, "An empty draft offers voice in the trailing slot")
+        XCTAssertFalse(app.buttons["coachSend"].exists)
+        let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
+        XCTAssertLessThanOrEqual(strip.frame.maxX, app.buttons["coachPhotos"].frame.minX, "Pip stands on the flat field, not the round camera")
+        XCTAssertLessThanOrEqual(strip.frame.maxY, app.textFields["coachInput"].frame.minY, "Pip must not cover the field")
+        let starter = app.buttons["Log breakfast"]
+        XCTAssertTrue(starter.isHittable); XCTAssertGreaterThanOrEqual(starter.frame.height, 44)
+        starter.tap()
+        XCTAssertEqual(app.textFields["coachInput"].value as? String, "For breakfast I had ")
+        XCTAssertTrue(app.buttons["coachSend"].waitForExistence(timeout: 3), "A draft swaps the mic for Send")
+        XCTAssertFalse(app.buttons["coachVoice"].exists)
+        XCTAssertFalse(app.buttons["coachStarter"].exists, "Starters step aside while composing")
+        XCTAssertEqual(app.buttons.matching(identifier: "coachMealLink").count, 0, "A starter never sends by itself")
+    }
+
     private func enter(_ text: String, in app: XCUIApplication) {
         let input = app.textFields["coachInput"]; XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText(text)
     }

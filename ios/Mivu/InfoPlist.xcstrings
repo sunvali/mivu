@@ -7,6 +7,18 @@
         "en": {"stringUnit": {"state": "translated", "value": "Mivu uses the camera to attach meal photos to your private diary."}},
         "he": {"stringUnit": {"state": "translated", "value": "Mivu משתמש במצלמה כדי לצרף תמונות של ארוחות ליומן הפרטי שלך."}}
       }
+    },
+    "NSMicrophoneUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved."}}
+      }
+    },
+    "NSSpeechRecognitionUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Mivu turns your spoken meal into text on this iPhone so you can review it before sending."}}
+      }
     }
   },
   "version": "1.0"
