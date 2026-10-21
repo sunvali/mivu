@@ -217,11 +217,12 @@ import XCTest
             }
         }
         for _ in 0..<10 where !readyToUse(element, in: app) { list.swipeDown() }
-        XCTAssertTrue(readyToUse(element, in: app), "The target must be reachable; morning weight must clear fixed controls")
+        XCTAssertTrue(readyToUse(element, in: app), "The target must be reachable; rows must clear fixed controls")
     }
     private func readyToUse(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         guard element.exists, element.isHittable else { return false }
-        guard element.identifier == "logWeight" else { return true }
+        // isHittable stays true under the pinned Log meal bar, so list rows must clear it.
+        guard ["logWeight", "mealRow"].contains(element.identifier) else { return true }
         let top = app.navigationBars.firstMatch.frame.maxY
         var bottom = app.frame.maxY
         let tabs = app.tabBars.firstMatch
