@@ -107,7 +107,7 @@ import Testing
     @Test func committedReceiptsSurviveLostWorkerNotification() async throws {
         let f = try CoachLunchFixture(); defer { f.remove() }
         let store = try await f.store(), accepted = try await f.accept(store)
-        await #expect(throws: CoachJourneyTransport.Interruption.afterCommit) {
+        try await interruptAfterWrite(store, f.owner, accepted.id) {
             try await f.run(store, accepted.id, CoachJourneyTransport(interruptAfterCommit: true))
         }
         let fresh = try await f.store()
