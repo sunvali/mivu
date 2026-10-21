@@ -78,30 +78,46 @@ extension DiaryDatabase {
             let statement = try domainStatement("SELECT m.id FROM day d JOIN meal m ON m.parent = d.id WHERE json_extract(CAST(d.payload AS TEXT), '$.localDate') = ? AND m.id > ? ORDER BY m.id LIMIT 21", [.text(date), .text(afterMealID?.uuidString ?? "")])
             defer { sqlite3_finalize(statement) }
             var ids: [UUID] = []; while try mutationStep(statement) { guard let id = try mutationOptionalUUID(statement, 0) else { throw DiaryError.invalidData }; ids.append(id) }
-            var meals: [CoachMealCandidate] = []
-            for id in ids.prefix(20) {
-                let meal = try transaction.mealRecord(id: id), day = try trackingDay(id: meal.dayID)
-                let itemCount = try mutationInteger("SELECT COUNT(*) FROM item WHERE parent = ?", [.text(id.uuidString)])
-                let preview = try transaction.records("item", clause: "parent = ?", values: [.text(id.uuidString)], limit: 4).map { try decode(FoodItem.self, $0, composite: true) }
-                try validateItems(preview)
-                var items: [CoachMealCandidate.Item] = []
-                for item in preview {
-                    let value = CoachMealCandidate.Item(id: item.id, name: coachBoundedText(item.name, bytes: 256), quantity: item.quantity, unit: item.unit)
-                    if try JSONEncoder().encode(items + [value]).count > 1200 { break }; items.append(value)
-                }
-                let submitted = try domainStatement("SELECT substr(json_extract(CAST(payload AS TEXT), '$.text'),1,513) FROM submission WHERE parent = ? ORDER BY ordinal, id LIMIT 1", [.text(id.uuidString)])
-                defer { sqlite3_finalize(submitted) }
-                var description = try mutationStep(submitted) ? mutationText(submitted, 0) : ""
-                if description.isEmpty {
-                    let source = try domainStatement("SELECT substr(json_extract(CAST(t.payload AS TEXT), '$.text'),1,513) FROM record_source s JOIN coach_turn t ON t.id = s.turnID WHERE s.kind = 'meal' AND s.recordID = ? ORDER BY CASE s.relation WHEN 'origin' THEN 0 ELSE 1 END, t.ordinal LIMIT 1", [.text(id.uuidString)])
-                    defer { sqlite3_finalize(source) }; if try mutationStep(source) { description = try mutationText(source, 0) }
-                }
-                meals.append(CoachMealCandidate(id: id, dayID: day.id, localDate: date, timeZoneID: day.timeZoneID,
-                    revision: meal.revision, eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: items,
-                    omittedItemCount: itemCount - items.count, capturedDescription: coachBoundedText(description, bytes: 512), descriptionTruncated: description.utf8.count > 512))
-            }
+            let meals = try ids.prefix(20).map { try coachCandidate($0, transaction: transaction) }
             return CoachMealCandidatePage(localDate: date, meals: meals, hasMore: ids.count > 20, nextAfterMealID: ids.count > 20 ? meals.last?.id : nil)
         }
+    }
+    func coachFindMeals(query: String, from: String?, to: String?, expectedProfileID: UUID) throws -> [CoachMealCandidate] {
+        guard !query.isEmpty, query.count <= 100, [from, to].allSatisfy({ $0.map(validLocalDate) ?? true }) else { throw DiaryError.invalidData }
+        let pattern = "%" + query.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_") + "%"
+        return try domainRead(expectedProfileID: expectedProfileID) { head in
+            let transaction = DiaryTransaction(database: self, head: head)
+            let statement = try domainStatement("""
+                SELECT m.id FROM meal m JOIN day d ON m.parent = d.id
+                WHERE EXISTS (SELECT 1 FROM item i WHERE i.parent = m.id AND json_extract(CAST(i.payload AS TEXT), '$.name') LIKE ? ESCAPE '\\')
+                AND json_extract(CAST(d.payload AS TEXT), '$.localDate') >= ? AND json_extract(CAST(d.payload AS TEXT), '$.localDate') <= ?
+                ORDER BY json_extract(CAST(m.payload AS TEXT), '$.eatenAt') DESC, m.ordinal DESC, m.id LIMIT 10
+                """, [.text(pattern), .text(from ?? "0000-00-00"), .text(to ?? "9999-99-99")])
+            defer { sqlite3_finalize(statement) }
+            var ids: [UUID] = []; while try mutationStep(statement) { guard let id = try mutationOptionalUUID(statement, 0) else { throw DiaryError.invalidData }; ids.append(id) }
+            return try ids.map { try coachCandidate($0, transaction: transaction) }
+        }
+    }
+    private func coachCandidate(_ id: UUID, transaction: DiaryTransaction) throws -> CoachMealCandidate {
+        let meal = try transaction.mealRecord(id: id), day = try trackingDay(id: meal.dayID)
+        let itemCount = try mutationInteger("SELECT COUNT(*) FROM item WHERE parent = ?", [.text(id.uuidString)])
+        let preview = try transaction.records("item", clause: "parent = ?", values: [.text(id.uuidString)], limit: 4).map { try decode(FoodItem.self, $0, composite: true) }
+        try validateItems(preview)
+        var items: [CoachMealCandidate.Item] = []
+        for item in preview {
+            let value = CoachMealCandidate.Item(id: item.id, name: coachBoundedText(item.name, bytes: 256), quantity: item.quantity, unit: item.unit)
+            if try JSONEncoder().encode(items + [value]).count > 1200 { break }; items.append(value)
+        }
+        let submitted = try domainStatement("SELECT substr(json_extract(CAST(payload AS TEXT), '$.text'),1,513) FROM submission WHERE parent = ? ORDER BY ordinal, id LIMIT 1", [.text(id.uuidString)])
+        defer { sqlite3_finalize(submitted) }
+        var description = try mutationStep(submitted) ? mutationText(submitted, 0) : ""
+        if description.isEmpty {
+            let source = try domainStatement("SELECT substr(json_extract(CAST(t.payload AS TEXT), '$.text'),1,513) FROM record_source s JOIN coach_turn t ON t.id = s.turnID WHERE s.kind = 'meal' AND s.recordID = ? ORDER BY CASE s.relation WHEN 'origin' THEN 0 ELSE 1 END, t.ordinal LIMIT 1", [.text(id.uuidString)])
+            defer { sqlite3_finalize(source) }; if try mutationStep(source) { description = try mutationText(source, 0) }
+        }
+        return CoachMealCandidate(id: id, dayID: day.id, localDate: day.localDate, timeZoneID: day.timeZoneID,
+            revision: meal.revision, eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: items,
+            omittedItemCount: itemCount - items.count, capturedDescription: coachBoundedText(description, bytes: 512), descriptionTruncated: description.utf8.count > 512)
     }
     func coachMealDetail(id: UUID, expectedProfileID: UUID) throws -> CoachContext.Meal {
         try domainRead(expectedProfileID: expectedProfileID) { head in

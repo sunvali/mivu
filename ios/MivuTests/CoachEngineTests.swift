@@ -36,7 +36,7 @@ private actor CoachInputFixture {
     @Test func toolSchemasRequireDeclaredPropertiesAndKeepOriginalOptionalsNullable() throws {
         let declarations = try #require(JSONSerialization.jsonObject(with: CoachTools.declarations()) as? [String: Any])
         let tools = try #require(declarations["tools"] as? [[String: Any]])
-        #expect(tools.count <= 32)
+        #expect(tools.count <= 40)
         #expect(tools.contains { $0["name"] as? String == "ask_clarification" })
         let clarification = try #require(tools.first { $0["name"] as? String == "ask_clarification" })
         let clarificationParameters = try #require(clarification["parameters"] as? [String: Any])
