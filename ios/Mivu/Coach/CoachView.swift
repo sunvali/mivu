@@ -579,7 +579,7 @@ struct CoachView: View {
     }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let question = turn.question, !question.candidates.isEmpty, turn.id == coach.timeline?.exchanges.last?.id {
+            if let question = turn.question, !question.candidates.isEmpty, coach.timeline?.window.isLatest(turn.id) == true {
                 CoachQuestionChips(question: question, meals: coach.linkedMeals(turn), model: coach.diary) { target, label in
                     Task { await coach.answer(target, label: label) }
                 }.disabled(coach.isWorking)

@@ -35,6 +35,8 @@ struct CoachPagedHistoryWindow {
     var reservedCapacity: Int { (reservations.count + retiredReadIDs.count + (replacementReserved ? 1 : 0)) * Self.pageSize }
     var residentCount: Int { pages.reduce(0) { $0 + $1.exchanges.count } }
     var occupiedPageSlots: Int { pages.count + reservations.count + retiredReadIDs.count + (replacementReserved ? 1 : 0) }
+    /// True only for the newest exchange of the whole conversation, not of a mid-history page.
+    func isLatest(_ id: UUID) -> Bool { pages.last?.hasLater == false && exchanges.last?.id == id }
     var latestEmptySegment: CoachEmptySegment? { pages.last.flatMap { $0.hasLater ? nil : $0.latestEmptySegment } }
 
     func edgeState(_ direction: CoachPageDirection) -> CoachPageEdgeState {

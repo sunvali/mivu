@@ -18,6 +18,15 @@ import Testing
         return window
     }
 
+    @Test func onlyTheTrueLatestExchangeIsLatest() {
+        var window = CoachPagedHistoryWindow()
+        let first = window.reset(Data.page(1...20), request: .aroundTurn(Data.id(10))) // 160 exist: this page is mid-history
+        #expect(first && !window.isLatest(Data.id(20)))
+        let second = window.reset(Data.page(141...160))
+        #expect(second)
+        #expect(window.isLatest(Data.id(160)) && !window.isLatest(Data.id(159)))
+    }
+
     @Test func focusedPageCannotBeEvicted() throws {
         var window = try fullWindow()
         let anchor = Data.anchor(70, focus: 150)
