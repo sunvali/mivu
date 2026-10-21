@@ -109,6 +109,29 @@ private actor UndoReplies {
         #expect(done.receipts.map(\.operationKey) == ["\(turn.id)/undo/\(receipt.operationKey)"])
         #expect(try await store.snapshotForExport().meals.first?.items == meal.items)
         #expect(try await store.coachUndoAvailable(operationKey: receipt.operationKey, expectedProfileID: profile.id) == false)
+        #expect(done.assistantText == "Undid the change to Pasta, Sauce.")
+    }
+    @Test func undoChangeToolOnLogSaysRemoved() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (receipt, _) = try await logged(store, profile)
+        let turn = try await capturedTurn(store, text: "Undo that", photos: [], at: now, expectedProfileID: profile.id)
+        let undo = CoachToolCall(id: "u", callID: "u", name: "undo_change", namespace: "mivu",
+            arguments: String(decoding: try JSONSerialization.data(withJSONObject: ["operation_key": receipt.operationKey]), as: UTF8.self))
+        func result(_ calls: [CoachToolCall]) -> CoachInferenceResult { CoachInferenceResult(model: "fixture", text: "Undone", calls: calls, outputItems: []) }
+        let replies = UndoReplies([result([undo]), result([])])
+        let done = try await CoachEngine(store: store, infer: { _, _ in try await replies.next() }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(done.assistantText == "Removed Apple.")
+    }
+    @Test func secondUndoTapWhileUndoingIsIgnored() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let receipt = try await correction(store, profile, meal)
+        let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in throw CoachError.limitExceeded } })
+        let committed = DiaryDatabase.coachCommittedReceipt(receipt)
+        async let first: Void = coach.undo(committed); async let second: Void = coach.undo(committed)
+        _ = await (first, second)
+        #expect(diary.errorMessage == nil)
+        #expect(try await store.snapshotForExport().meals.first?.items == meal.items)
     }
     @Test func weightReceiptHasNoUndo() async throws {
         let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }

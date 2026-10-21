@@ -381,6 +381,19 @@ extension DiaryDatabase {
             func number(_ value: Double) -> String { value.formatted(.number.grouping(.never).locale(Locale(identifier: "en_US"))) }
             for receipt in turn.receipts {
                 let facts = Self.coachCommittedReceipt(receipt)
+                if let range = receipt.operationKey.range(of: "/undo/") {
+                    // An undone log has no meal left, so its names come from the original receipt.
+                    let key = String(receipt.operationKey[range.upperBound...])
+                    let names: [String]
+                    if let id = receipt.mealID { names = (try? transaction.mealProjection(id: id).items.map(\.name)) ?? [] }
+                    else {
+                        let original = try UUID(uuidString: String(key.prefix(36))).flatMap { try transaction.turn(id: $0) }?.receipts.first { $0.operationKey == key }
+                        names = original.map { Self.coachCommittedReceipt($0).items.map(\.name) } ?? []
+                    }
+                    let list = names.isEmpty ? "that meal" : names.joined(separator: ", ")
+                    summaries.append(receipt.mealID == nil ? "Removed \(list)." : "Undid the change to \(list).")
+                    continue
+                }
                 if let id = receipt.mealID {
                     let meal: MealReadModel
                     do { meal = try transaction.mealProjection(id: id) }
@@ -394,6 +407,12 @@ extension DiaryDatabase {
                         let items = facts.items.map { "\($0.name) (\(number($0.quantity)) \($0.unit))" }.joined(separator: ", ")
                         let date = facts.targetLocalDate.map { " on " + $0 } ?? ""
                         summaries.append("Updated \(items)\(date). Nutrition may be uncertain.")
+                    } else if receipt.operationKey.contains("/scale_meal/"), meal.state != .awaitingReview {
+                        let known = { (items: [FoodItem]) in Int(items.compactMap(\.nutrition.kcal).reduce(0, +).rounded()) }
+                        let before = (try transaction.coachUndo(receipt.operationKey)?.before).map { "\(known($0)) → " } ?? ""
+                        let unknown = meal.items.filter { $0.nutrition.kcal == nil }.map(\.name)
+                        let note = unknown.isEmpty ? "" : " \(unknown.joined(separator: ", ")) \(unknown.count == 1 ? "has" : "have") no calorie estimate, so \(unknown.count == 1 ? "its amount was" : "their amounts were") scaled but not counted."
+                        summaries.append("Updated \(meal.items.map(\.name).joined(separator: ", ")): \(before)\(known(meal.items)) kcal.\(note) Nutrition may be uncertain.")
                     } else if receipt.operationKey.contains("/retry_meal/") {
                         summaries.append("Queued the original saved meal input for analysis. A retry does not add another meal.")
                     } else if receipt.operationKey.contains("/move_meal/") {

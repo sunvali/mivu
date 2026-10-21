@@ -100,5 +100,18 @@ private actor ScaleReplies {
         let receipt = try #require(done.receipts.first)
         #expect(receipt.mealID == meal.id && receipt.dayID == meal.dayID)
         #expect(coach.revision == meal.revision + 1)
+        #expect(done.assistantText == "Updated Pasta, Sauce: 845 → \(Int(try #require(coach.totals.kcal).rounded())) kcal. Nutrition may be uncertain.")
+    }
+    @Test func scaleSummaryNamesUnknownKcalFoods() async throws {
+        let (store, profile, meal, root) = try await fixture([item("Rice", 2, kcal: 400), item("Herbs", 4, kcal: nil)]); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await capturedTurn(store, text: "Make dinner 200", photos: [], at: now, expectedProfileID: profile.id)
+        func call(_ name: String, _ args: [String: Any]) throws -> CoachToolCall {
+            CoachToolCall(id: name, callID: name, name: name, namespace: "mivu", arguments: String(decoding: try JSONSerialization.data(withJSONObject: args), as: UTF8.self))
+        }
+        func result(_ calls: [CoachToolCall]) -> CoachInferenceResult { CoachInferenceResult(model: "fixture", text: "Done", calls: calls, outputItems: []) }
+        let replies = ScaleReplies([result([try call("get_meal", ["meal_id": meal.id.uuidString])]),
+            result([try call("scale_meal", ["meal_id": meal.id.uuidString, "target_kcal": 200, "expected_revision": meal.revision])]), result([])])
+        let done = try await CoachEngine(store: store, infer: { _, _ in try await replies.next() }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(done.assistantText == "Updated Rice, Herbs: 400 → 200 kcal. Herbs has no calorie estimate, so its amount was scaled but not counted. Nutrition may be uncertain.")
     }
 }
