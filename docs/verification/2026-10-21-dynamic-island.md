@@ -13,6 +13,7 @@
 |---|---|---|
 | `MivuTests` (whole unit target, test plan `Mivu`) | `b412cac` | 1,024 tests in 95 suites passed |
 | `MivuTests/DayProgressActivityTests` + `WidgetSnapshotTests` | `b412cac` | 23 tests in 2 suites passed |
+| `MivuTests` after rebasing onto `main` at `1d16ec8` | `c53cc09` | 1,068 tests in 101 suites passed |
 | `build-for-testing`, including `MivuUITests` | `243fb9f` | TEST BUILD SUCCEEDED |
 
 **Not run (blocked by the owner's instruction):** `MivuUITests/LiveActivityUITests.testDynamicIslandTogglesShowAndPersist`.
