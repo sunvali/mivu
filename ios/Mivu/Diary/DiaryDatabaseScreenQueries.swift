@@ -39,6 +39,29 @@ extension DiaryDatabase {
             guard try mutationStep(query) else { return nil }; return try mutationOptionalUUID(query, 0)
         }
     }
+    /// Recorded days whose local date falls in an inclusive span of at most seven dates.
+    func diaryWeek(from start: String, through end: String, expectedProfileID: UUID) throws -> DiaryWeekPage {
+        guard let first = ProgressDate.date(start, zone: "UTC"), let last = ProgressDate.date(end, zone: "UTC"),
+              (0...6).contains(Int((last.timeIntervalSince(first) / 86_400).rounded()))
+        else { throw DiaryError.invalidData }
+        return try domainRead(expectedProfileID: expectedProfileID) { head in
+            let date = "json_extract(CAST(payload AS TEXT), '$.localDate')"
+            let statement = try domainStatement("SELECT id, payload FROM day WHERE \(date) BETWEEN ? AND ? ORDER BY \(date), id", [.text(start), .text(end)])
+            defer { sqlite3_finalize(statement) }
+            let transaction = DiaryTransaction(database: self, head: head)
+            var days: [DiaryDaySummary] = []
+            while try mutationStep(statement) {
+                let id = try mutationText(statement, 0)
+                let day = try decode(TrackingDay.self, Record(id: id, ordinal: 0, payload: mutationBlob(statement, 1)))
+                try validateTrackingDayFields(day)
+                days.append(try transaction.daySummary(day))
+            }
+            let bounds = try domainStatement("SELECT MIN(\(date)), MAX(\(date)) FROM day")
+            defer { sqlite3_finalize(bounds) }
+            guard try mutationStep(bounds) else { return DiaryWeekPage(days: days) }
+            return DiaryWeekPage(days: days, earliestLocalDate: try? mutationText(bounds, 0), latestLocalDate: try? mutationText(bounds, 1))
+        }
+    }
     func historyCoverage(expectedProfileID: UUID) throws -> [DayCompleteness: Int] {
         try domainRead(expectedProfileID: expectedProfileID) { _ in
             let query = try domainStatement("SELECT json_extract(CAST(payload AS TEXT), '$.completeness'), COUNT(*) FROM day GROUP BY 1")

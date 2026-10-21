@@ -1,274 +1,284 @@
 import SwiftUI
 
+/// Diary tab: a week strip above the selected day's summary and meals.
 struct HistoryView: View {
     @Bindable var model: DiaryViewModel
-    @State private var dateFilter: String?
-    @State private var selectedDate = Date()
+    @Environment(\.openDiaryCoach) private var openChat
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @State private var selected = ""
+    @State private var week: DiaryWeekPage?
+    @State private var weekStart: String?
+    @State private var loadError: String?
+    @State private var retries = 0
     @State private var showDatePicker = false
-    @State private var history: DiaryHistoryViewModel
-    @AccessibilityFocusState private var focusedDay: UUID?
+    @State private var pickedDate = Date()
+    @State private var showMeal = false
+    @State private var showManualNutrition = false
+    @State private var showWeight = false
+    @State private var showWorkout = false
+    @State private var savedMealID: UUID?
 
-    init(model: DiaryViewModel) {
-        self.model = model
-        let store = model.store
-        _history = State(initialValue: DiaryHistoryViewModel { scope, start in
-            try await store.validateSelectionOwnership(scope.selection)
-            let cursor: DiaryHistoryCursor?
-            switch start { case .latest: cursor = nil; case .before(let value): cursor = value }
-            let page = try await store.diaryHistory(before: cursor, limit: 30, localDate: scope.localDate, expectedProfileID: scope.selection.identity.profileID)
-            let coverage = try await store.historyCoverage(expectedProfileID: scope.selection.identity.profileID)
-            try await store.validateSelectionOwnership(scope.selection)
-            return DiaryHistoryLoad(page: page, coverage: coverage)
-        })
+    private struct WeekScope: Equatable {
+        let selection: DiarySelectionOwnership
+        let start: String, end: String
+        let generation: UInt64, retries: Int
     }
-    private var historyScope: DiaryHistoryScope? {
-        model.selection.map { DiaryHistoryScope(selection: $0, localDate: dateFilter, changeGeneration: model.changeGeneration) }
+    private struct DayLoad: Equatable { let ids: [UUID]; let generation: UInt64 }
+    private var zone: String { model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier }
+    private var calendarToday: String { diaryDateLabel(Date(), zone: zone) }
+    private var defaultDate: String { model.activeDay?.localDate ?? calendarToday }
+    // Records can sit after today's calendar date (travel across zones); keep them reachable.
+    private var lastDate: String { max(calendarToday, week?.latestLocalDate ?? "") }
+    /// Only the loaded page for the selected week counts; an older page must not read as "nothing logged".
+    private var weekLoaded: Bool { week != nil && weekStart == weekScope?.start }
+    private var summaries: [String: [DiaryDaySummary]] { weekLoaded ? Dictionary(grouping: week?.days ?? [], by: \.day.localDate) : [:] }
+    private var selectedDays: [TrackingDay] { summaries[selected]?.map(\.day) ?? [] }
+    private var recordedDay: TrackingDay? { selectedDays.first }
+    private var weekScope: WeekScope? {
+        let dates = DiaryWeek.dates(containing: selected, calendar: .current)
+        guard let selection = model.selection, let start = dates.first, let end = dates.last else { return nil }
+        return WeekScope(selection: selection, start: start, end: end, generation: model.changeGeneration, retries: retries)
     }
 
     var body: some View {
         List {
-            if model.readModel != nil {
-                if let dateFilter {
+            if model.readModel != nil, !selected.isEmpty {
+                Section {
+                    DiaryWeekStrip(selected: $selected, today: lastDate, earliest: week?.earliestLocalDate, summaries: summaries)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 4, trailing: 12))
+                        .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                }
+                if let loadError {
                     Section {
-                        VStack(alignment: .leading, spacing: 16) {
-                            LabeledContent("Selected date", value: dateFilter)
-                            Button("Show all recorded days") { self.dateFilter = nil }
-                                .frame(minHeight: 44).accessibilityIdentifier("showAllDiaryDays")
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(loadError).foregroundStyle(Color.diarySecondary)
+                            Button("Retry") { retries += 1 }.frame(minHeight: 44).accessibilityIdentifier("retryDiaryHistory")
                         }.diarySummaryCard()
                     }
                 }
-                Section {
-                    let days = history.page?.days ?? []
-                    if days.isEmpty, !history.isLoading, history.errorMessage == nil, let dateFilter {
-                        ContentUnavailableView("No recorded day", systemImage: "calendar", description: Text("There are no records for \(dateFilter). Missing logs do not mean zero intake."))
-                    } else if days.isEmpty, !history.isLoading, history.errorMessage == nil {
-                        ContentUnavailableView("No recorded days", systemImage: "calendar", description: Text("Meals and measurements appear here after you save them."))
-                    }
-                    ForEach(days, id: \.day.id) { summary in
-                        let day = summary.day
-                        NavigationLink(value: HistoryRoute.day(day.id)) {
-                            let totals = summary.totals
-                            ViewThatFits(in: .horizontal) {
-                                HStack(spacing: 16) {
-                                    dayLabel(day, mealCount: summary.mealCount)
-                                    Spacer(minLength: 8)
-                                    energy(totals.kcal)
-                                }
-                                VStack(alignment: .leading, spacing: 8) {
-                                    dayLabel(day, mealCount: summary.mealCount)
-                                    energy(totals.kcal)
-                                }
-                            }
-                            .frame(minHeight: 64, alignment: .leading)
-                            .accessibilityElement(children: .combine)
-                        }.accessibilityIdentifier("diaryDay").accessibilityValue(day.localDate + " " + day.timeZoneID)
-                            .accessibilityFocused($focusedDay, equals: day.id)
-                            .diarySummaryCard()
-                    }
-                } header: { DiarySectionLabel(title: "Recorded days", symbol: "calendar", color: .diaryProtein) }
-                Section {
-                    if history.isLoading { ProgressView("Loading diary days…") }
-                    if let error = history.errorMessage {
-                        Text(error).foregroundStyle(Color.diarySecondary)
-                        Button("Retry") { Task { await history.retry(); focusFirstDay() } }
-                            .frame(minHeight: 44).disabled(history.isLoading).accessibilityIdentifier("retryDiaryHistory")
-                    }
-                    if history.page != nil {
-                        Button("Earlier days") { navigate(.earlier) }
-                            .disabled(!history.canLoadEarlier).accessibilityIdentifier("earlierDiaryDays").frame(minHeight: 44)
-                        Button("Newer days") { navigate(.newer) }
-                            .disabled(!history.canLoadNewer).accessibilityIdentifier("newerDiaryDays").frame(minHeight: 44)
-                        Button("Latest days") { navigate(.latest) }
-                            .disabled(!history.canLoadLatest).accessibilityIdentifier("latestDiaryDays").frame(minHeight: 44)
+                if let savedMealID, model.meal(savedMealID) != nil {
+                    Section {
+                        NavigationLink { MealDetailView(model: model, mealID: savedMealID) } label: {
+                            Label("Saved on this iPhone", systemImage: "checkmark.circle").foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
+                        }.accessibilityIdentifier("savedDayMealReceipt").diarySummaryCard()
                     }
                 }
-
-                Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        DisclosureGroup("Day coverage") {
-                            ForEach(DayCompleteness.allCases, id: \.self) { status in
-                                LabeledContent { Text((history.coverage[status] ?? 0).formatted()).monospacedDigit() } label: { Text(status.title) }
-                            }
-                        }
-                        Text("Complete means all intake was recorded. Partial, unknown and untracked days remain separate. Missing logs do not mean zero intake.")
-                            .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                    }.diarySummaryCard()
+                if !weekLoaded, loadError == nil {
+                    Section { ProgressView().frame(maxWidth: .infinity, minHeight: 120).listRowBackground(Color.clear).listRowSeparator(.hidden) }
                 }
-            } else {
+                if selectedDays.isEmpty, weekLoaded {
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(DiaryWeek.format(selected, "EEEE, d MMMM")).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
+                            ContentUnavailableView("Nothing logged", systemImage: "fork.knife", description: Text("Ask Pip to add what you ate on this day."))
+                        }.diarySummaryCard()
+                    }
+                }
+                ForEach(selectedDays, id: \.id) { day in
+                    DaySections(model: model, dayID: day.id, title: DiaryWeek.format(selected, "EEEE, d MMMM"))
+                }
+            } else if model.readModel == nil {
                 ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Profile and settings to select a private local profile."))
             }
         }
         .listStyle(.plain)
         .listRowSpacing(0)
         .listSectionSpacing(12)
+        .contentMargins(.top, 0, for: .scrollContent)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .navigationDestination(for: HistoryRoute.self) { route in
-            switch route {
-            case .day(let id): DayHistoryView(model: model, dayID: id)
+        .safeAreaInset(edge: .bottom) {
+            if model.readModel != nil, !selected.isEmpty {
+                HStack(spacing: 12) {
+                    // The composer names its destination from the loaded day, so wait for it.
+                    if let day = recordedDay, model.dayDetail(day.id) != nil { DiaryCaptureAction(identifier: "logMealForDay") { showMeal = true } }
+                    askPip
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                .background(Color.diaryCanvas)
             }
         }
-        .task(id: historyScope) { await history.setScope(historyScope) }
+        .task(id: weekScope) { await loadWeek() }
+        .task(id: DayLoad(ids: selectedDays.map(\.id), generation: model.changeGeneration)) {
+            for day in selectedDays { await model.loadDay(day.id) }
+        }
+        .onAppear { if selected.isEmpty { selected = defaultDate } }
+        .onChange(of: model.activeDay?.localDate) { _, _ in if selected.isEmpty { selected = defaultDate } }
+        .onChange(of: selected) { _, _ in savedMealID = nil }
+        .onChange(of: model.readModel?.profile.id) { _, _ in
+            week = nil; weekStart = nil; selected = defaultDate; savedMealID = nil
+            showMeal = false; showManualNutrition = false; showWeight = false; showWorkout = false; showDatePicker = false
+        }
         .navigationTitle("Diary")
+        .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button("Choose date", systemImage: "calendar") { showDatePicker = true }
-                    .accessibilityIdentifier("chooseDiaryDate")
+                Button("Choose date", systemImage: "calendar") {
+                    pickedDate = ProgressDate.date(selected, zone: zone) ?? Date(); showDatePicker = true
+                }.accessibilityIdentifier("chooseDiaryDate")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }.accessibilityIdentifier("enterNutritionForDay")
+                    Button("Morning weight", systemImage: "scalemass") { showWeight = true }.accessibilityIdentifier("logWeightForDay")
+                    Button("Log workout", systemImage: "figure.strengthtraining.traditional") { showWorkout = true }.accessibilityIdentifier("logWorkoutForDay")
+                } label: {
+                    Image(systemName: "plus").frame(minWidth: 44, minHeight: 44).accessibilityLabel("Add to this day")
+                }
+                .disabled(recordedDay == nil)
+                .accessibilityIdentifier("diaryAddMenu")
             }
         }
-        .sheet(isPresented: $showDatePicker) {
-            NavigationStack {
-                Form {
-                    DatePicker("Recorded date", selection: $selectedDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                    Text("Choose a date to filter the recorded days. Earlier day labels stay unchanged.")
-                        .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                }
-                .navigationTitle("Choose date").navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showDatePicker = false } }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Show date") {
-                            dateFilter = ProgressDate.label(selectedDate, zone: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
-                            showDatePicker = false
-                        }.accessibilityIdentifier("applyDiaryDate")
-                    }
-                }
-            }
-            .environment(\.timeZone, TimeZone(identifier: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier) ?? .current)
+        .sheet(isPresented: $showDatePicker) { datePicker }
+        .sheet(isPresented: $showMeal) {
+            if let day = recordedDay { MealComposerView(model: model, dayID: day.id, onSaved: { savedMealID = $0 }) }
         }
-        .onChange(of: model.readModel?.profile.id) { _, _ in dateFilter = nil; showDatePicker = false }
-    }
-
-    private func navigate(_ direction: DiaryHistoryNavigation) {
-        Task { await history.navigate(direction); focusFirstDay() }
-    }
-    private func focusFirstDay() {
-        guard history.errorMessage == nil else { return }
-        focusedDay = history.page?.days.first?.day.id
-    }
-    private func dayLabel(_ day: TrackingDay, mealCount: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(formattedDate(day))
-                .font(.headline).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 4) {
-                Text(day.completeness.title)
-                Text("· \(mealCount) \(mealCount == 1 ? "meal" : "meals")")
-            }
-            .font(.subheadline).foregroundStyle(Color.diarySecondary)
-        }
-    }
-
-    private func formattedDate(_ day: TrackingDay) -> String {
-        guard let date = ProgressDate.date(day.localDate, zone: day.timeZoneID) else { return day.localDate }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.timeZone = TimeZone(identifier: day.timeZoneID) ?? .gmt
-        formatter.dateFormat = "EEEE, d MMM"
-        return formatter.string(from: date)
-    }
-
-    private func energy(_ value: Double?) -> some View {
-        Text(value.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "—")
-            .font(.body.weight(.semibold)).monospacedDigit().fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-struct DayHistoryView: View {
-    @Bindable var model: DiaryViewModel
-    let dayID: UUID
-    @Environment(\.openDiaryCoach) private var openChat
-    @Environment(\.dismiss) private var dismiss
-    @State private var showMeal = false
-    @State private var showManualNutrition = false
-    @State private var showWeight = false
-    @State private var showWorkout = false
-    @State private var savedMealID: UUID?
-    var body: some View {
-        List {
-            if let snapshot = model.dayDetail(dayID) {
-                let day = snapshot.day
-                Section {
-                    let selection = model.selection
-                    Button {
-                        guard let selection, openChat(.day(dayID), expectedSelection: selection) else { return }
-                        dismiss()
-                    } label: { Label("Open chat", systemImage: "bubble.left").frame(minHeight: 44) }
-                        .disabled(selection == nil || model.isChangingProfile || openChat.origin?.selection != selection)
-                        .accessibilityIdentifier("diaryDayOpenChat")
-                }
-                if let savedMealID, model.meal(savedMealID) != nil {
-                    Section {
-                        NavigationLink { MealDetailView(model: model, mealID: savedMealID) } label: {
-                            Label("Saved on this iPhone", systemImage: "checkmark.circle").foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
-                        }.accessibilityIdentifier("savedDayMealReceipt")
-                        Text("Open the saved meal to review its analysis state.").font(.subheadline).foregroundStyle(Color.diarySecondary)
-                    }
-                }
-                Section { NutritionSummary(totals: snapshot.totals).padding(.vertical, 12).listRowBackground(Color.diarySummarySurface) }
-                Section {
-                    Button { showMeal = true } label: { Label("Log meal", systemImage: "plus.circle").frame(minHeight: 44) }
-                        .accessibilityIdentifier("logMealForDay")
-                    Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }
-                        .frame(minHeight: 44).accessibilityIdentifier("enterNutritionForDay")
-                    Button { showWeight = true } label: { Label("Morning weight", systemImage: "scalemass").frame(minHeight: 44) }
-                        .accessibilityIdentifier("logWeightForDay")
-                    Button { showWorkout = true } label: { Label("Log workout", systemImage: "figure.strengthtraining.traditional").frame(minHeight: 44) }
-                        .accessibilityIdentifier("logWorkoutForDay")
-                } header: { Text("Add to this day") }
-                Section("Day coverage") {
-                    Picker("Coverage", selection: Binding(get: { day.completeness }, set: { value in Task { await model.change { try await model.store.setCompleteness(dayID: dayID, value, expectedProfileID: snapshot.head.profile.id) } } })) {
-                        ForEach(DayCompleteness.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
-                    Text("Complete means all intake was recorded, even if some estimates still need review.")
-                        .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                    if let weight = snapshot.weight {
-                        LabeledContent("Morning weight", value: "\(weight.value.formatted()) \(weight.unit)").monospacedDigit()
-                    }
-                }
-                Section("Meals") {
-                    if snapshot.meals.allSatisfy({ $0.dayID != dayID }) {
-                        Text("No meals recorded for this day.").foregroundStyle(Color.diarySecondary)
-                    }
-                    ForEach(snapshot.meals.filter { $0.dayID == dayID }.sorted { $0.eatenAt < $1.eatenAt }, id: \.id) { meal in
-                        NavigationLink { MealDetailView(model: model, mealID: meal.id) } label: { MealRow(meal: meal, model: model) }.accessibilityIdentifier("historyMeal")
-                    }
-                }
-                let workouts = snapshot.workouts.filter { $0.dayID == dayID }
-                if !workouts.isEmpty {
-                    Section("Workouts") {
-                        ForEach(workouts.sorted { $0.performedAt < $1.performedAt }) { workout in
-                            NavigationLink { WorkoutDetailView(model: model, sessionID: workout.id) } label: {
-                                LabeledContent("Workout", value: "\(workout.durationMinutes) minutes").frame(minHeight: 44)
-                            }
-                        }
-                    }
-                }
-            } else {
-                ContentUnavailableView("Day unavailable", systemImage: "calendar", description: Text("This recorded day is unavailable in the selected diary."))
-                    .accessibilityIdentifier("diaryDayUnavailable")
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .task(id: model.changeGeneration) { await model.loadDay(dayID) }
-        .navigationTitle(model.day(dayID)?.localDate ?? "Day")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
-        .sheet(isPresented: $showMeal) { MealComposerView(model: model, dayID: dayID, onSaved: { savedMealID = $0 }) }
         .sheet(isPresented: $showManualNutrition) {
-            if let day = model.day(dayID) {
+            if let day = recordedDay {
                 ManualNutritionView(model: model, target: .recorded(dayID: day.id, localDate: day.localDate, timeZoneID: day.timeZoneID)) { savedMealID = $0 }
             }
         }
-        .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model, dayID: dayID) }
+        .sheet(isPresented: $showWeight) { if let day = recordedDay { MorningWeightEditorView(model: model, dayID: day.id) } }
         .sheet(isPresented: $showWorkout) {
-            if let day = model.day(dayID) {
-                WorkoutEditorView(model: model, localDate: day.localDate, dayID: dayID)
+            if let day = recordedDay { WorkoutEditorView(model: model, localDate: day.localDate, dayID: day.id) }
+        }
+    }
+
+    @ViewBuilder private var askPip: some View {
+        let button = Button(action: askPipAction) {
+            Group {
+                // Beside Log meal at accessibility sizes, an icon keeps the bar to one row.
+                if recordedDay != nil && typeSize.isAccessibilitySize {
+                    Image(systemName: "sparkles").accessibilityLabel("Ask Pip")
+                } else { Label("Ask Pip", systemImage: "sparkles") }
+            }
+            .font(.headline)
+            .frame(maxWidth: recordedDay == nil ? .infinity : nil, minHeight: 52)
+            .padding(.horizontal, 8)
+        }
+        .tint(.diaryAccent)
+        .disabled(!weekLoaded || model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
+        .accessibilityIdentifier("diaryAskPip")
+        if reduceTransparency { button.buttonStyle(.bordered) } else { button.buttonStyle(.glass) }
+    }
+
+    private func askPipAction() {
+        guard let selection = model.selection else { return }
+        if let day = recordedDay {
+            openChat(.day(day.id), expectedSelection: selection)
+        } else {
+            openChat(nil, draft: "For \(DiaryWeek.format(selected, "EEEE, d MMM")): ", expectedSelection: selection)
+        }
+    }
+
+    private var datePicker: some View {
+        let first = week?.earliestLocalDate.flatMap { ProgressDate.date($0, zone: zone) } ?? .distantPast
+        let last = ProgressDate.date(lastDate, zone: zone) ?? Date()
+        return NavigationStack {
+            Form {
+                DatePicker("Date", selection: $pickedDate, in: min(first, last)...last, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+            }
+            .navigationTitle("Choose date").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showDatePicker = false } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Show date") {
+                        selected = min(ProgressDate.label(pickedDate, zone: zone), lastDate)
+                        showDatePicker = false
+                    }.accessibilityIdentifier("applyDiaryDate")
+                }
             }
         }
-        .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil; showMeal = false; showManualNutrition = false; showWeight = false; showWorkout = false }
+        .environment(\.timeZone, TimeZone(identifier: zone) ?? .current)
+        .presentationDetents([.medium, .large])
+    }
+
+    private func loadWeek() async {
+        guard let scope = weekScope else { week = nil; return }
+        let store = model.store
+        do {
+            try await store.validateSelectionOwnership(scope.selection)
+            let page = try await store.diaryWeek(from: scope.start, through: scope.end, expectedProfileID: scope.selection.identity.profileID)
+            try await store.validateSelectionOwnership(scope.selection)
+            guard !Task.isCancelled, weekScope == scope else { return }
+            week = page; weekStart = scope.start; loadError = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            loadError = error.localizedDescription
+        }
     }
 }
 
-private enum HistoryRoute: Hashable { case day(UUID) }
+/// Summary, meals and workouts of one recorded day.
+private struct DaySections: View {
+    @Bindable var model: DiaryViewModel
+    let dayID: UUID
+    let title: String
+
+    var body: some View {
+        Group {
+            if let snapshot = model.dayDetail(dayID) {
+                Section { summary(snapshot).diarySummaryCard() }
+                Section {
+                    let meals = snapshot.meals.filter { $0.dayID == dayID }.sorted { $0.eatenAt < $1.eatenAt }
+                    if meals.isEmpty {
+                        Text("No meals recorded for this day.").foregroundStyle(Color.diarySecondary).diarySummaryCard()
+                    }
+                    ForEach(meals, id: \.id) { meal in
+                        NavigationLink { MealDetailView(model: model, mealID: meal.id) } label: { MealRow(meal: meal, model: model) }
+                            .accessibilityIdentifier("historyMeal")
+                            .diarySummaryCard()
+                    }
+                } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
+                let workouts = snapshot.workouts.filter { $0.dayID == dayID }.sorted { $0.performedAt < $1.performedAt }
+                if !workouts.isEmpty {
+                    Section {
+                        ForEach(workouts) { workout in
+                            NavigationLink { WorkoutDetailView(model: model, sessionID: workout.id) } label: {
+                                Label { LabeledContent("Workout", value: "\(workout.durationMinutes) minutes") } icon: {
+                                    Image(systemName: "figure.strengthtraining.traditional").foregroundStyle(Color.diaryWorkout)
+                                }.frame(minHeight: 44)
+                            }.diarySummaryCard()
+                        }
+                    } header: { Text("Workouts").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
+                }
+            }
+        }
+    }
+
+    private func summary(_ snapshot: DiaryDayReadModel) -> some View {
+        let totals = snapshot.totals
+        return VStack(alignment: .leading, spacing: 16) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center) {
+                    Text(title).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    coverage(snapshot)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
+                    coverage(snapshot)
+                }
+            }
+            NutritionSummary(totals: totals)
+            if let target = snapshot.goal?.targets.kcal, target > 0, let kcal = totals.kcal {
+                VStack(alignment: .leading, spacing: 6) {
+                    ProgressView(value: min(kcal, target), total: target).tint(.diaryAccent).accessibilityHidden(true)
+                    Text("\(kcal.formatted(.number.precision(.fractionLength(0)))) of \(target.formatted(.number.precision(.fractionLength(0)))) kcal target")
+                        .font(.subheadline).foregroundStyle(Color.diarySecondary).monospacedDigit()
+                }
+            }
+            if let weight = snapshot.weight {
+                LabeledContent("Morning weight", value: "\(weight.value.formatted()) \(weight.unit)").monospacedDigit()
+            }
+        }
+    }
+
+    private func coverage(_ snapshot: DiaryDayReadModel) -> some View {
+        CoverageChip(completeness: snapshot.day.completeness) { value in
+            Task { await model.change { try await model.store.setCompleteness(dayID: dayID, value, expectedProfileID: snapshot.head.profile.id) } }
+        }
+    }
+}

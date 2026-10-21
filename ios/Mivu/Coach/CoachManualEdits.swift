@@ -13,6 +13,7 @@ enum CoachManualEdit: Sendable {
     case accept(mealID: UUID, submissionID: UUID, revision: Int)
     case move(mealID: UUID, date: String, revision: Int, originalDayID: UUID)
     case deleteMeal(mealID: UUID, revision: Int)
+    case deleteItem(mealID: UUID, itemID: UUID, revision: Int)
     case attach(mealID: UUID, photoIDs: [UUID], role: PhotoRole, revision: Int)
     case deletePhoto(mealID: UUID, photoID: UUID, revision: Int)
     case retry(mealID: UUID, revision: Int)
@@ -25,7 +26,7 @@ enum CoachManualEdit: Sendable {
     var mealID: UUID? {
         switch self {
         case .item(let id, _, _, _, _, _), .append(let id, _, _), .accept(let id, _, _), .move(let id, _, _, _),
-             .deleteMeal(let id, _), .attach(let id, _, _, _), .deletePhoto(let id, _, _), .retry(let id, _): id
+             .deleteMeal(let id, _), .deleteItem(let id, _, _), .attach(let id, _, _, _), .deletePhoto(let id, _, _), .retry(let id, _): id
         default: nil
         }
     }
@@ -36,6 +37,7 @@ enum CoachManualEdit: Sendable {
         case .accept(let id, let submission, _): "accept_review/\(id)/\(submission)"
         case .move(let id, _, _, _): "move_meal/\(id)"
         case .deleteMeal(let id, _): "delete_meal/\(id)"
+        case .deleteItem(let id, let item, _): "delete_item/\(id)/\(item)"
         case .attach(let id, _, _, _): "attach_photos/\(id)"
         case .deletePhoto(let id, let photo, _): "delete_photo/\(id)/\(photo)"
         case .retry(let id, _): "retry_meal/\(id)"
@@ -65,6 +67,7 @@ extension CoachTools {
             ("accept_review", "Save an explicitly accepted retrieved meal proposal into totals. Use its submission ID and current meal revision. Never accept an estimate just because the user requests an edit.", mealObject(["submission_id": string], required: ["submission_id"])),
             ("move_meal", "Move an existing retrieved meal's tracking date to target_local_date (yyyy-MM-dd), preserving active waking day and its original capture/eating time and precision. A 04:00 meal can belong to the previous waking day.", mealObject(["target_local_date": string], required: ["target_local_date"])),
             ("delete_meal", "Delete an explicitly requested retrieved meal and its photos. Use its real ID/revision; never delete to compensate for eating.", mealObject([:], required: [])),
+            ("delete_item", "Delete one explicitly requested food from a retrieved saved meal using its real item ID and meal revision. If it is the meal's only food, do not call this; use ask_clarification to ask whether to delete the whole meal.", mealObject(["item_id": string], required: ["item_id"])),
             ("attach_photos", "Attach current turn's actual attachedPhotoIDs to a retrieved meal, preserving the original photo bytes. Choose before/after only when supplied. Does not change food totals; pair with explicit food edits when needed.", mealObject(["photo_ids": ["type": "array", "items": string], "role": ["type": "string", "enum": PhotoRole.allCases.map(\.rawValue)]], required: ["photo_ids", "role"])),
             ("delete_photo", "Delete an explicitly requested photo using a retrieved meal's photo ID and revision. Removes retained copies, without deleting the food.", mealObject(["photo_id": string], required: ["photo_id"])),
             ("retry_meal", "Requeue an existing paused meal capture without creating a new meal or food record. Uses original saved input. Only the later successful analysis can confirm food saved.", mealObject([:], required: [])),
@@ -149,6 +152,13 @@ extension CoachTools {
             write = .move(mealID: mealID, date: try date("target_local_date"), revision: try revision(allowZero: true), originalDayID: meal.dayID)
         case "delete_meal":
             try keys(mealFields, mealFields); write = .deleteMeal(mealID: try id("meal_id"), revision: try revision(allowZero: true))
+        case "delete_item":
+            try keys(mealFields.union(["item_id"]), mealFields.union(["item_id"]))
+            let mealID = try id("meal_id"), itemID = try id("item_id")
+            // A committed delete replays even though the food is already gone from context.
+            let replay = receipts.contains { $0.operationKey.hasSuffix("/delete_item/\(mealID)/\(itemID)") }
+            guard replay || meals.first(where: { $0.id == mealID }).map({ meal in meal.items.contains { $0.id == itemID } && meal.items.count > 1 }) == true else { throw CoachError.invalidArguments }
+            write = .deleteItem(mealID: mealID, itemID: itemID, revision: try revision(allowZero: true))
         case "retry_meal":
             try keys(mealFields, mealFields); write = .retry(mealID: try id("meal_id"), revision: try revision(allowZero: true))
         case "attach_photos":

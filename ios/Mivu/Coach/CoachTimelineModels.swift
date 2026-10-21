@@ -119,6 +119,8 @@ enum CoachQueryError: Error, Equatable, Sendable {
 enum CoachSeekTarget: Equatable, Sendable { case day(UUID), turn(UUID) }
 struct CoachNavigationRequest: Equatable, Sendable {
     var identity: CoachTimelineIdentity
-    var target: CoachSeekTarget
+    /// Nil opens Coach without moving the timeline, e.g. to prefill a draft for an unrecorded date.
+    var target: CoachSeekTarget?
     var requestID: UUID
+    var draft: String? = nil
 }

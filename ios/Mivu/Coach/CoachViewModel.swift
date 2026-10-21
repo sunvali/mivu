@@ -172,7 +172,14 @@ private final class CoachNavigationReadFence: Sendable {
         }
     }
 
+    /// Starts an unsent message for the person to finish; never replaces text they already typed.
+    @discardableResult func prefill(_ text: String) -> Bool {
+        guard draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        draft.text = text
+        return true
+    }
     func seek(_ request: CoachNavigationRequest) async -> Bool {
+        guard let target = request.target else { return false }
         traceHistoryNavigation("entered", request)
         await loadTimelineIfNeeded()
         traceHistoryNavigation("ready", request)
@@ -181,12 +188,12 @@ private final class CoachNavigationReadFence: Sendable {
         let generation = UUID(); seekGeneration = generation
         navigationReadState.fence?.cancel()
         let fence = CoachNavigationReadFence(); navigationReadState.fence = fence
-        navigationReadState.request = switch request.target { case .turn(let id): .aroundTurn(id); case .day(let id): .atDay(id) }
+        navigationReadState.request = switch target { case .turn(let id): .aroundTurn(id); case .day(let id): .atDay(id) }
         do {
             try await diary.store.validateSelectionOwnership(owner)
             guard generation == seekGeneration, diary.selection == owner, !Task.isCancelled else { return false }
             traceHistoryNavigation("beforeTimeline", request, generation: generation, fence: fence)
-            await withTaskCancellationHandler(operation: { await timeline.seek(request.target) }, onCancel: { fence.cancel() })
+            await withTaskCancellationHandler(operation: { await timeline.seek(target) }, onCancel: { fence.cancel() })
             traceHistoryNavigation("afterTimeline", request, generation: generation, fence: fence)
             try await diary.store.validateSelectionOwnership(owner)
             guard generation == seekGeneration, diary.selection == owner, !diary.isChangingProfile, !Task.isCancelled else { return false }
@@ -194,7 +201,7 @@ private final class CoachNavigationReadFence: Sendable {
             traceHistoryNavigation("afterLinks", request, generation: generation, fence: fence)
             guard fence.isValid else { return false }
             if timeline.error == nil, !timeline.isLoadDeferred {
-                highlightedTurnID = switch request.target {
+                highlightedTurnID = switch target {
                 case .turn(let id): id
                 case .day(let id): timeline.exchanges.first(where: { $0.trackingDayID == id })?.id
                 }
@@ -230,6 +237,7 @@ private final class CoachNavigationReadFence: Sendable {
         let resident: Bool = switch request.target {
         case .turn(let id): timeline?.exchanges.contains { $0.id == id } ?? false
         case .day(let id): timeline?.exchanges.contains { $0.trackingDayID == id } ?? false
+        case nil: false
         }
         if historyNavigationTrace.count == 32 { historyNavigationTrace.removeFirst() }
         historyNavigationTrace.append(["phase": phase, "requestID": request.requestID.uuidString,

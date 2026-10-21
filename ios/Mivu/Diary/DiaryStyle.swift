@@ -44,6 +44,7 @@ struct SampleBanner: View {
 }
 
 struct DiaryCaptureAction: View {
+    var identifier = "logMeal"
     let action: () -> Void
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
@@ -59,7 +60,7 @@ struct DiaryCaptureAction: View {
                 .frame(maxWidth: .infinity, minHeight: 52)
         }
         .tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
-        .accessibilityIdentifier("logMeal")
+        .accessibilityIdentifier(identifier)
     }
 }
 
@@ -176,52 +177,84 @@ struct MealRow: View {
     var prominent = false
     var model: DiaryViewModel? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .body) private var thumbnail = 56.0
     private var title: String {
         let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return meal.items.first.map { $0.provenance == .sample ? "Apple (sample)" : $0.name } ?? (text.isEmpty ? "Meal" : text)
     }
+    private var needsReview: Bool { meal.state == .awaitingReview }
     private var statusText: Text {
         let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : Text(meal.eatenAt, style: .time)
-        if let provenance = meal.items.first?.provenance {
-            let label = provenance == .estimate ? "Estimated" : provenance == .sample ? "Sample estimate" : provenance.description
-            return Text("\(Text(meal.state.title)) · \(time) · \(label)")
-        }
-        return Text("\(Text(meal.state.title)) · \(time)")
+        let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
+        return meal.state == .saved ? Text("\(time)\(estimated)") : Text("\(Text(meal.state.title)) · \(time)")
     }
     @ViewBuilder private var calories: some View {
         if meal.isSaved {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(meal.totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—").font(.body.weight(.semibold)).monospacedDigit()
+                Text(meal.totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—").font(.headline).monospacedDigit()
                 Text("kcal").font(.caption).foregroundStyle(Color.diarySecondary)
             }.fixedSize(horizontal: true, vertical: false)
         }
     }
-    var body: some View {
-        HStack(spacing: 12) {
-            if let reference = meal.photos.first, let model {
-                DiaryPhotoPreview(model: model, reference: reference, height: prominent ? 72 : 40)
-                    .frame(width: prominent ? 72 : 40).accessibilityHidden(true)
-            } else { Image(systemName: "fork.knife").font(.body).foregroundStyle(Color.diaryCarbs).frame(width: 24).accessibilityHidden(true) }
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(title)
-                    statusText.font(.subheadline).foregroundStyle(meal.state.color)
-                    calories
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(prominent ? .subheadline.weight(.semibold) : .body).lineLimit(2)
-                    statusText.font(.caption).foregroundStyle(meal.state.color)
-                }
-                Spacer(minLength: 8)
-                if !prominent { calories }
-            }
+    @ViewBuilder private var image: some View {
+        if let reference = meal.photos.first, let model {
+            DiaryPhotoPreview(model: model, reference: reference, height: thumbnail).frame(width: thumbnail)
+        } else {
+            RoundedRectangle(cornerRadius: 14).fill(Color.diarySummarySurface).frame(width: thumbnail, height: thumbnail)
+                .overlay { Image(systemName: "fork.knife").font(.title3).foregroundStyle(Color.diaryAccent) }
         }
-        .frame(minHeight: typeSize.isAccessibilitySize ? 72 : 56)
+    }
+    private var text: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
+            }
+            statusText.font(.subheadline).foregroundStyle(meal.state == .saved ? Color.diarySecondary : meal.state.color)
+        }
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if typeSize.isAccessibilitySize {
+                image.accessibilityHidden(true)
+                text
+                calories
+            } else {
+                HStack(spacing: 12) {
+                    image.accessibilityHidden(true)
+                    text.frame(maxWidth: .infinity, alignment: .leading)
+                    calories
+                }
+            }
+            MacroBar(totals: meal.totals).padding(.leading, typeSize.isAccessibilitySize ? 0 : thumbnail + 12)
+        }
+        .frame(minHeight: 56)
         .accessibilityElement(children: .combine)
+        .accessibilityValue(needsReview ? Text("Needs review") : Text(""))
     }
 }
 
+/// Protein, carbs and fat as shares of one thin bar; hidden when every macro is unknown.
+struct MacroBar: View {
+    let totals: NutritionTotals
+    var body: some View {
+        let parts: [(Double, Color)] = [(totals.protein ?? 0, .diaryProtein), (totals.carbs ?? 0, .diaryCarbs), (totals.fat ?? 0, .diaryFat)]
+        let sum = parts.reduce(0) { $0 + $1.0 }
+        if sum > 0 {
+            GeometryReader { proxy in
+                HStack(spacing: 2) {
+                    ForEach(parts.indices, id: \.self) { index in
+                        if parts[index].0 > 0 {
+                            Capsule().fill(parts[index].1).frame(width: max(4, (proxy.size.width - 4) * parts[index].0 / sum))
+                        }
+                    }
+                }
+            }
+            .frame(height: 4)
+            .accessibilityHidden(true)
+        }
+    }
+}
 
 extension NutritionProvenance {
     var description: String {
