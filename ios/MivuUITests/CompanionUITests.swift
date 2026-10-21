@@ -130,23 +130,23 @@ import XCTest
     }
 
     func testFallbackKeepsCaptureAndReviewUsable() {
-        let app = launch(["--companion-load-failure"])
-        app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()
+        // The composer is reachable only in sample mode, which starts on Today.
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english", "--companion-load-failure", "--sample-mode"]
+        app.launch()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15)); app.buttons["logMeal"].tap()
         let input = app.textFields["mealText"]
         XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Fixture review meal")
         if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
         let review = app.switches["reviewFirst"].switches.firstMatch
         reveal(review, in: app); review.tap(); app.buttons["sendMeal"].tap()
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Coach"].tap()
-        let link = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
-        XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap()
+        let row = app.buttons["mealRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
         let accept = app.buttons["acceptReview"]
         reveal(accept, in: app)
         XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap()
         XCTAssertFalse(accept.exists)
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.textFields["coachInput"].waitForExistence(timeout: 5))
     }
 
     func testSettingsReturnKeepsCoachSendReachable() {

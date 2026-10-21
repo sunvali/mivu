@@ -44,6 +44,8 @@ struct SampleBanner: View {
 }
 
 struct DiaryCaptureAction: View {
+    var title: LocalizedStringKey = "Log with Pip"
+    var systemImage = "sparkles"
     var identifier = "logMeal"
     let action: () -> Void
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -56,10 +58,32 @@ struct DiaryCaptureAction: View {
     }
     private var button: some View {
         Button(action: action) {
-            Label("Log meal", systemImage: "plus.circle.fill").font(.headline)
+            Label(title, systemImage: systemImage).font(.headline)
                 .frame(maxWidth: .infinity, minHeight: 52)
         }
         .tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// The secondary entry beside the Pip action: typing nutrition in by hand.
+struct DiaryManualAction: View {
+    let identifier: String
+    let action: () -> Void
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var body: some View {
+        if reduceTransparency {
+            button.buttonStyle(.bordered)
+        } else {
+            button.buttonStyle(.glass)
+        }
+    }
+    private var button: some View {
+        Button(action: action) {
+            Label("Add manually", systemImage: "number").font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 52)
+        }
+        .tint(.diaryAccent)
         .accessibilityIdentifier(identifier)
     }
 }

@@ -92,7 +92,10 @@ struct HistoryView: View {
             if model.readModel != nil, !selected.isEmpty {
                 HStack(spacing: 12) {
                     // The composer names its destination from the loaded day, so wait for it.
-                    if let day = recordedDay, model.dayDetail(day.id) != nil { DiaryCaptureAction(identifier: "logMealForDay") { showMeal = true } }
+                    if let day = recordedDay, model.dayDetail(day.id) != nil {
+                        if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMealForDay") { showMeal = true } }
+                        else { DiaryManualAction(identifier: "addManuallyForDay") { showManualNutrition = true } }
+                    }
                     askPip
                 }
                 .padding(.horizontal, 20).padding(.vertical, 12)
