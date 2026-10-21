@@ -891,7 +891,9 @@ private actor Task8FailedHandoffReplies {
     private(set) var oldCalls = 0
     private(set) var newCalls = 0
     func respond(_ input: [CoachInferenceInput]) throws -> CoachInferenceResult {
-        if input.contains(where: {
+        // History precedes the tail developer message; only the current capture follows it.
+        let tail = input.lastIndex { if case .message(role: .developer, _, _) = $0 { return true }; return false } ?? 0
+        if input[tail...].contains(where: {
             if case .message(role: .user, text: "Synthetic exhausted capture", images: _) = $0 { return true }
             return false
         }) {
