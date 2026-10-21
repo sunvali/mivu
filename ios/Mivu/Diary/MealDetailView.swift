@@ -509,10 +509,10 @@ private struct FoodItemEditor: View {
                         }
                         if deleteFood != nil {
                             Button("Delete food", systemImage: "trash", role: .destructive) { confirmDelete = true }
-                                .frame(minHeight: 44).accessibilityIdentifier("deleteFood")
+                                .foregroundStyle(Color.diaryError).frame(minHeight: 44).accessibilityIdentifier("deleteFood")
                         } else if deleteMeal != nil {
                             Button("Delete meal", systemImage: "trash", role: .destructive) { confirmDelete = true }
-                                .frame(minHeight: 44).accessibilityIdentifier("deleteMealFromFood")
+                                .foregroundStyle(Color.diaryError).frame(minHeight: 44).accessibilityIdentifier("deleteMealFromFood")
                         }
                     } footer: {
                         if deleteFood == nil && deleteMeal != nil { Text("This is the meal’s only food, so deleting it deletes the meal.") }
@@ -535,7 +535,7 @@ private struct FoodItemEditor: View {
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
             .foregroundStyle(Color.diaryText).tint(.diaryAccent)
-            .navigationTitle("Edit ingredient").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Edit food").navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(hasChanges || saving)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editingField = nil } }
