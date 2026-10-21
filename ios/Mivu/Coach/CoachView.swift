@@ -252,7 +252,7 @@ struct CoachView: View {
                 segment = turn.segmentID
             }
             result.append(CoachTimelineRow(id: .exchange(turn.id), exchange: turn,
-                targets: turn.receipts.map(coach.receiptTarget), activity: coach.activityTurnID == turn.id ? coach.activity : nil,
+                targets: turn.receipts.map(coach.receiptTarget), questionMeals: coach.linkedMeals(turn), activity: coach.activityTurnID == turn.id ? coach.activity : nil,
                 fixtureBanner: DiaryLaunch.isCoachInferenceFixture && turn.id == timeline.exchanges.first?.id,
                 isHighlighted: coach.highlightedTurnID == turn.id))
         }
@@ -579,6 +579,11 @@ struct CoachView: View {
     }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let question = turn.question, !question.candidates.isEmpty, turn.id == coach.timeline?.exchanges.last?.id {
+                CoachQuestionChips(question: question, meals: coach.linkedMeals(turn), model: coach.diary) { target, label in
+                    Task { await coach.answer(target, label: label) }
+                }.disabled(coach.isWorking)
+            }
             if turn.state != .completed {
                 if let activity = coach.activity, coach.activityTurnID == turn.id, turn.receipts.isEmpty {
                     CoachActivityView(activity: activity)

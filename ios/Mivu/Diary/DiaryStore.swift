@@ -216,7 +216,7 @@ actor DiaryStore {
             let transaction = DiaryTransaction(database: database, head: head)
             var targets: [UUID: CoachReceiptTarget] = [:]
             for exchange in exchanges {
-                for id in Set(exchange.receipts.compactMap(\.mealID) + (exchange.pendingMealID.map { [$0] } ?? [])) where targets[id] == nil {
+                for id in exchange.linkedMealIDs where targets[id] == nil {
                     do {
                         let meal = try transaction.mealProjection(id: id)
                         let day = try database.trackingDay(id: meal.dayID)

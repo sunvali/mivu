@@ -195,6 +195,14 @@ private final class CoachNavigationReadFence: Sendable {
         reply(to: turn, fromPip: true)
         await send()
     }
+    /// Answers Coach's question with one tap: the chosen record is quoted and the label is the message.
+    func answer(_ target: CoachReply.Target, label: String) async {
+        guard !isSending, attachmentDraft.reply == nil, attachmentDraft.attachments.isEmpty,
+              draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        draft.text = label
+        attachmentDraft.reply = CoachReply(target: target, excerpt: String(label.prefix(280)))
+        await send()
+    }
     /// A Diary handoff quote; never replaces a message the person already started.
     @discardableResult func startReply(_ reply: CoachReply) -> Bool {
         synchronizeDraftOwnership()
@@ -599,7 +607,7 @@ private final class CoachNavigationReadFence: Sendable {
         await refreshHistoryFixtureFacts()
         guard let token = diary.selection else { receiptTargets = [:]; capturedDayLabels = [:]; linksSelection = nil; return }
         let request = UUID(), rows = turns, generation = diary.changeGeneration; linksRequest = request
-        let ids = Set(rows.flatMap { $0.receipts.compactMap(\.mealID) + $0.receipts.compactMap(\.workoutID) + ($0.pendingMealID.map { [$0] } ?? []) })
+        let ids = Set(rows.flatMap { Array($0.linkedMealIDs) + $0.receipts.compactMap(\.workoutID) })
         receiptTargets = receiptTargets.filter { ids.contains($0.key) }
         do {
             let values = try await diary.store.coachReceiptTargets(exchanges: rows, expectedSelection: token)
@@ -643,8 +651,7 @@ private final class CoachNavigationReadFence: Sendable {
     }
     func linkedMeals(_ turn: CoachExchangeSummary) -> [MealReadModel] {
         guard linksAreCurrent else { return [] }
-        let ids = Set(turn.receipts.compactMap(\.mealID) + (turn.pendingMealID.map { [$0] } ?? []))
-        return ids.compactMap { if case .meal(let meal, _) = receiptTargets[$0] { meal } else { nil } }
+        return turn.linkedMealIDs.compactMap { if case .meal(let meal, _) = receiptTargets[$0] { meal } else { nil } }
     }
     func linkedWorkouts(_ turn: CoachExchangeSummary) -> [WorkoutSession] {
         guard linksAreCurrent else { return [] }
