@@ -3,7 +3,7 @@ import XCTest
 @MainActor final class ManualNutritionUITests: XCTestCase {
     func testOfflineTodayCreateAndAppendRemainSavedAfterRelaunch() {
         let app = launch()
-        app.buttons["logMeal"].tap(); app.buttons["enterNutritionManually"].tap()
+        app.buttons["addManually"].tap()
         enter(app, name: "Synthetic oats", calories: "120")
         app.buttons["saveManualNutrition"].tap()
         XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
@@ -21,10 +21,11 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Synthetic oats"].exists)
     }
     func testManualCancelAndSavePreserveUnsentNoteDraft() {
-        let app = launch()
+        let app = launch(["--sample-mode"])
         app.buttons["logMeal"].tap()
         app.textFields["mealText"].tap(); app.textFields["mealText"].typeText("Synthetic unsent note")
-        app.buttons["doneMealText"].tap(); app.buttons["enterNutritionManually"].tap()
+        app.buttons["doneMealText"].tap()
+        reveal(app.buttons["enterNutritionManually"], in: app); app.buttons["enterNutritionManually"].tap()
         XCTAssertFalse(app.buttons["saveManualNutrition"].isEnabled)
         enter(app, name: "Synthetic tea", calories: "-1")
         XCTAssertFalse(app.buttons["saveManualNutrition"].isEnabled)
@@ -52,9 +53,7 @@ import XCTest
     func testManualFormSupportsLightDarkAndLargestTextSave() throws {
         for appearance in ["--proof-light", "--proof-dark"] {
             let app = launch([appearance, "--proof-largest-text"])
-            app.buttons["logMeal"].tap()
-            reveal(app.buttons["enterNutritionManually"], in: app)
-            app.buttons["enterNutritionManually"].tap()
+            app.buttons["addManually"].tap()
             enter(app, name: "Synthetic accessible food", calories: "0")
             let save = app.buttons["saveManualNutrition"]
             XCTAssertTrue(save.isHittable && save.isEnabled)

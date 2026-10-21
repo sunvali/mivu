@@ -10,13 +10,25 @@ import XCTest
         return app
     }
 
+    func testLogWithPipOpensCoachAndAddManuallyOpensForm() {
+        let app = launchHistory()
+        app.tabBars.buttons["Today"].tap()
+        app.buttons["logMeal"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Today"].tap()
+        XCTAssertTrue(app.buttons["addManually"].waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(app.buttons["addManually"].frame.height, 44)
+        app.buttons["addManually"].tap()
+        XCTAssertTrue(app.navigationBars["Enter nutrition"].waitForExistence(timeout: 5))
+    }
+
     func testSelectingPillShowsThatDaysMeals() {
         let app = launchHistory()
         XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
         XCTAssertEqual(app.selectedDiaryDate, "2026-10-12")
         XCTAssertTrue(app.buttons["historyMeal"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Monday, 12 October"].exists)
-        XCTAssertTrue(app.buttons["logMealForDay"].exists && app.buttons["diaryAskPip"].exists)
+        XCTAssertTrue(app.buttons["addManuallyForDay"].exists && app.buttons["diaryAskPip"].exists)
     }
 
     func testCalendarJumpSelectsDate() {
@@ -33,7 +45,7 @@ import XCTest
         let app = launchHistory()
         XCTAssertTrue(app.selectDiaryDate(XCUIApplication.diaryLabel(Date())))
         XCTAssertTrue(app.staticTexts["Nothing logged"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["logMealForDay"].exists)
+        XCTAssertFalse(app.buttons["addManuallyForDay"].exists)
         XCTAssertFalse(app.buttons["diaryAddMenu"].isEnabled)
         XCTAssertTrue(app.buttons["diaryAskPip"].exists)
     }
@@ -411,16 +423,16 @@ import XCTest
         let date = try XCTUnwrap(dessertDay.value as? String)
         try XCTSkipIf(date == active, "Coach logged yesterday's dessert on the active waking day (run after midnight)")
         XCTAssertTrue(app.selectDiaryDate(date))
-        let log = app.buttons["logMealForDay"]
+        let log = app.buttons["addManuallyForDay"]
         XCTAssertTrue(log.waitForExistence(timeout: 5)); log.tap()
-        let note = app.textFields["mealText"]
-        XCTAssertTrue(note.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", date)).firstMatch.exists, "The composer must show its selected destination")
-        note.tap(); note.typeText("Synthetic selected-day meal")
-        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
-        let review = app.switches["reviewFirst"].switches.firstMatch
-        reveal(review, in: app); review.tap()
-        app.buttons["sendMeal"].tap()
+        let food = app.textFields["manualFoodName"]
+        XCTAssertTrue(food.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", date)).firstMatch.exists, "The form must show its selected destination")
+        food.tap(); food.typeText("Synthetic selected-day meal")
+        let kcal = app.textFields["manualCalories"]
+        reveal(kcal, in: app); kcal.tap(); kcal.typeText("10")
+        if app.buttons["doneManualNutrition"].exists { app.buttons["doneManualNutrition"].tap() }
+        app.buttons["saveManualNutrition"].tap()
         let meal = app.buttons["savedDayMealReceipt"]
         XCTAssertTrue(meal.waitForExistence(timeout: 10)); reveal(meal, in: app); meal.tap()
         XCTAssertTrue(app.staticTexts["Time unspecified"].waitForExistence(timeout: 5))

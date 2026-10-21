@@ -131,14 +131,9 @@ import XCTest
 
     func testFallbackKeepsCaptureAndReviewUsable() {
         let app = launch(["--companion-load-failure"])
-        app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()
-        let input = app.textFields["mealText"]
+        let input = app.textFields["coachInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Fixture review meal")
-        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
-        let review = app.switches["reviewFirst"].switches.firstMatch
-        reveal(review, in: app); review.tap(); app.buttons["sendMeal"].tap()
-        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Coach"].tap()
+        app.buttons["coachSend"].tap()
         let link = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
         XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap()
         let accept = app.buttons["acceptReview"]
@@ -347,6 +342,7 @@ import XCTest
             app.tabBars.buttons["Today"].tap()
             XCTAssertTrue(app.buttons["logMeal"].isHittable)
             XCTAssertGreaterThanOrEqual(app.buttons["logMeal"].frame.height, 44)
+            XCTAssertTrue(app.buttons["addManually"].isHittable)
             let capture = XCTAttachment(screenshot: app.screenshot())
             capture.name = "Today largest text \(appearance)"; capture.lifetime = .keepAlways; add(capture)
             app.terminate()

@@ -179,13 +179,8 @@ import XCTest
         revealMealDetailItem(app.staticTexts[date], in: app)
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()
-        let manual = app.textFields["mealText"]; XCTAssertTrue(manual.waitForExistence(timeout: 5)); manual.tap(); manual.typeText("Fixture review meal")
-        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
-        let review = app.switches["reviewFirst"].switches.firstMatch
-        for _ in 0..<5 where !review.isHittable { app.collectionViews.firstMatch.swipeUp() }
-        XCTAssertTrue(review.isHittable); review.tap(); app.buttons["sendMeal"].tap()
-        app.tabBars.buttons["Coach"].tap(); waitForReply(to: "Fixture review meal", in: app)
+        app.tabBars.buttons["Coach"].tap(); enter("Fixture review meal", in: app); app.buttons["coachSend"].tap()
+        waitForReply(to: "Fixture review meal", in: app)
         let reviewLink = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
         revealCoachLink(reviewLink, in: app)
         XCTAssertTrue(reviewLink.waitForExistence(timeout: 5)); reviewLink.tap()
