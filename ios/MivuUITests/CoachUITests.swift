@@ -179,10 +179,20 @@ import XCTest
         revealMealDetailItem(app.staticTexts[date], in: app)
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Coach"].tap(); enter("Fixture review meal", in: app); app.buttons["coachSend"].tap()
+        waitForReply(to: "Fixture review meal", in: app)
+        let reviewLink = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
+        revealCoachLink(reviewLink, in: app)
+        XCTAssertTrue(reviewLink.waitForExistence(timeout: 5)); reviewLink.tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+        let accept = app.buttons["acceptReview"]
+        revealMealDetailItem(accept, in: app)
+        XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap()
+        revealMealDetailItem(app.staticTexts["Snack"].firstMatch, in: app)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Synthetic fixture saved review record"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.terminate(); app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
-        let persistedInputs = ["Two eggs, three bread slices and salad", "half bread", "Yesterday I had dessert"]
+        let persistedInputs = ["Two eggs, three bread slices and salad", "half bread", "Yesterday I had dessert", "Fixture review meal"]
         var persistedTurnIDs = Set<String>()
         for text in persistedInputs.reversed() {
             let input = app.staticTexts.matching(NSPredicate(format: "label == %@ AND identifier BEGINSWITH %@", text, "coachText-")).firstMatch
@@ -191,9 +201,9 @@ import XCTest
             persistedTurnIDs.insert(input.identifier)
             let reply = ownReply(to: text, in: app)
             revealCoach(reply, in: app)
-            XCTAssertFalse(reply.label.isEmpty, "Each of the three actual captured turns must retain its own completed reply")
+            XCTAssertFalse(reply.label.isEmpty, "Each of the four actual captured turns must retain its own completed reply")
         }
-        XCTAssertEqual(persistedTurnIDs.count, 3)
+        XCTAssertEqual(persistedTurnIDs.count, 4)
         let banner = app.staticTexts["coachFixtureBanner"]
         for _ in 0..<12 where !banner.isHittable { coachViewport(in: app).swipeDown() }
         XCTAssertTrue(banner.isHittable)

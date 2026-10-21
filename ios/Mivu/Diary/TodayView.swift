@@ -679,17 +679,18 @@ struct TodayView: View {
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .safeAreaInset(edge: .bottom) {
             if model.readModel != nil {
-                HStack(spacing: 12) {
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
                     if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill") { showComposer = true } }
                     else {
                         DiaryCaptureAction {
                             if let selection = model.selection { openChat(nil, expectedSelection: selection) }
                         }
+                        .disabled(model.selection == nil)
                         DiaryManualAction(identifier: "addManually") { showManualNutrition = true }
                     }
                 }
                 .padding(.horizontal, 20).padding(.vertical, 12)
-                    .background(Color.diaryCanvas)
+                .background(Color.diaryCanvas)
             }
         }
         .navigationDestination(for: UUID.self) {

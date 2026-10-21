@@ -90,7 +90,7 @@ struct HistoryView: View {
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .safeAreaInset(edge: .bottom) {
             if model.readModel != nil, !selected.isEmpty {
-                HStack(spacing: 12) {
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
                     // The composer names its destination from the loaded day, so wait for it.
                     if let day = recordedDay, model.dayDetail(day.id) != nil {
                         if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMealForDay") { showMeal = true } }
