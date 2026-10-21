@@ -158,8 +158,11 @@ struct CoachView: View {
         }
         .onChange(of: [editing, showPhotos, showingDetail, companionProcessing, companionRecovery, listening]) { _, _ in reportCompanionContext() }
         .onChange(of: editing) { _, typing in if typing { stopListening() } } // typed edits must not be overwritten by later speech
-        .onChange(of: scenePhase) { _, phase in if phase != .active { stopListening() } }
+        // Only background stops listening: permission alerts briefly make the scene inactive.
+        .onChange(of: scenePhase) { _, phase in if phase == .background { stopListening() } }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in stopListening() }
+        // A route change (headphones, Bluetooth) stops the audio engine underneath us.
+        .onReceive(NotificationCenter.default.publisher(for: .AVAudioEngineConfigurationChange)) { _ in stopListening() }
         .sensoryFeedback(trigger: listening) { _, on in on ? .start : .stop }
         .onChange(of: CompanionContext.draftSignal(coach.attachmentDraft.text.count)) { _, _ in reportCompanionContext() }
         .onChange(of: coach.diary.selection) { _, _ in
@@ -435,7 +438,7 @@ struct CoachView: View {
     private func waveImage(_ levels: [Float]) -> Image {
         let size = CGSize(width: 15, height: 16)
         let image = UIGraphicsImageRenderer(size: size).image { _ in
-            UIColor(Color.diaryAccent).setFill()
+            UIColor(Color.diaryAccent).resolvedColor(with: UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)).setFill()
             for (index, level) in levels.enumerated() {
                 let height = 4 + CGFloat(reduceMotion ? 0.5 : level) * (size.height - 4)
                 UIBezierPath(roundedRect: CGRect(x: CGFloat(index) * 6, y: (size.height - height) / 2, width: 3, height: height),
@@ -452,7 +455,8 @@ struct CoachView: View {
                 Task {
                     await voice.start(appendingTo: coach.attachmentDraft.text) { text in
                         // Final words can arrive after a profile switch; they belong only to the draft they started in.
-                        if coach.attachmentDraft.ownership == owner { coach.attachmentDraft.text = text }
+                        // Once the person is typing, late final words must not overwrite what they type.
+                        if coach.attachmentDraft.ownership == owner, !editing { coach.attachmentDraft.text = text }
                     }
                 }
             } else { stopListening() }

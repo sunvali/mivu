@@ -14,6 +14,8 @@ import SwiftUI
     private var analyzer: SpeechAnalyzer?
     private var input: AsyncStream<AnalyzerInput>.Continuation?
     private var results: Task<Void, Never>?
+    /// Bumped by every start and stop, so a start that resumes after being stopped (or restarted) gives up.
+    private var attempt = 0
 
     nonisolated static func merged(draft: String, spoken: String) -> String {
         let spoken = spoken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -36,6 +38,8 @@ import SwiftUI
     func start(appendingTo draft: String, update: @escaping @MainActor (String) -> Void) async {
         guard phase == .idle else { return }
         phase = .preparing; note = nil
+        attempt += 1
+        let mine = attempt
         do {
             guard await AVAudioApplication.requestRecordPermission() else {
                 throw Failure("Allow microphone access in Settings to log by voice.")
@@ -69,7 +73,7 @@ import SwiftUI
             }
             let analyzer = SpeechAnalyzer(modules: [transcriber])
             try await analyzer.start(inputSequence: stream)
-            guard phase == .preparing else { // stopped while preparing
+            guard attempt == mine, phase == .preparing else { // stopped or restarted while preparing
                 engine.inputNode.removeTap(onBus: 0); continuation.finish(); await analyzer.cancelAndFinishNow(); return
             }
             // No suspension from here on, so stop() always sees what it must release.
@@ -86,7 +90,10 @@ import SwiftUI
                         if isFinal { finished += text }
                         update(Self.merged(draft: draft, spoken: isFinal ? finished : finished + text))
                     }
-                } catch { self.note = "Voice input stopped. Your text is kept." }
+                } catch {
+                    self.note = "Voice input stopped. Your text is kept."
+                    Task { await self.stop() } // releases the microphone; this task must finish first
+                }
             }
             phase = .listening
             AccessibilityNotification.Announcement("Listening").post()
@@ -101,6 +108,7 @@ import SwiftUI
         guard phase != .idle else { return }
         let wasListening = phase == .listening
         phase = .idle
+        attempt += 1
         engine?.inputNode.removeTap(onBus: 0); engine?.stop()
         input?.finish()
         try? await analyzer?.finalizeAndFinishThroughEndOfInput()
