@@ -35,9 +35,9 @@ Source `ae6d721` (before the two later fixes): **1085 tests in 107 suites, 11 is
 | Failure | Classification |
 | --- | --- |
 | CoachAttachmentDraftTests, two `...DuringFailedFinalRefresh...` tests (10 issues) | Test double scanned history user messages; fixed in `f6f4541`, then 27/27 passed |
-| CompanionRootIntegrationTests `pagingAndPhotoLoadsEmitNoCompanionFeedback` (1 issue, `:84`) | Not classified; not rerun |
+| CompanionRootIntegrationTests `pagingAndPhotoLoadsEmitNoCompanionFeedback` (1 issue, `:84`) | Passed 7/7 in an isolated class run at `06b38e8`; full-run flake |
 
-They failed from Task 1 (`0af619b`) on, so the implementers' stash checks were mid-branch; a run on base `5017ea4` was attempted but executed 0 tests and is not evidence.
+They failed from Task 1 (`0af619b`) on, so the implementers' stash checks were mid-branch; isolated class runs (Swift Testing; xcodebuild's XCTest line shows 0) gave base `5017ea4` 27/27 passed and pre-fix HEAD `6fb9b6f` 2 failed, confirming a branch regression.
 
 ## Partial UI run
 
