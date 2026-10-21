@@ -186,7 +186,7 @@ struct DiaryRootView: View {
             coach.startMonitoring(); coach.resume()
         }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
-        .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel) }
+        .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel); syncDayProgressActivity(readModel) }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
         .onOpenURL { if $0.host == "today" { selectedTab = "today" } }
@@ -206,6 +206,8 @@ struct DiaryRootView: View {
         .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
+            // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
+            if value == .active { syncDayProgressActivity(model.readModel) }
             if value != .active {
                 companionRuntime.stop()
                 if value == .background {

@@ -1,9 +1,15 @@
+import ActivityKit
 import SwiftUI
 import UserNotifications
 
 /// When a waking day starts, and the optional morning reminder (off until the person turns it on).
 struct DaySettingsSection: View {
+    let readModel: DiaryReadModel?
     @AppStorage(DayCutoff.key) private var cutoff = 4
+    @AppStorage(DayProgressSync.enabledKey) private var liveActivity = false
+    @AppStorage(DayProgressSync.hideWhenLockedKey) private var hideWhenLocked = true
+    @State private var activitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
+    @Environment(\.openURL) private var openURL
     @AppStorage(MorningReminder.enabledKey) private var reminder = false
     @AppStorage(MorningReminder.minutesKey) private var minutes = 8 * 60
     @State private var denied = false
@@ -20,10 +26,26 @@ struct DaySettingsSection: View {
             if reminder {
                 DatePicker("Reminder time", selection: time, displayedComponents: .hourAndMinute).frame(minHeight: 44)
             }
+            Toggle(isOn: $liveActivity) { Label("Show in Dynamic Island", systemImage: "platter.filled.top.iphone") }
+                .frame(minHeight: 44).accessibilityIdentifier("liveActivityToggle").disabled(!activitiesAllowed)
+            if liveActivity && activitiesAllowed {
+                Toggle(isOn: $hideWhenLocked) { Label("Hide numbers on Lock Screen", systemImage: "eye.slash") }
+                    .frame(minHeight: 44).accessibilityIdentifier("liveActivityHideWhenLocked")
+            }
+            if !activitiesAllowed {
+                Button("Open Settings") { URL(string: UIApplication.openSettingsURLString).map { openURL($0) } }.frame(minHeight: 44)
+            }
         } header: { Text("Your day") } footer: {
-            Text(denied ? "Notifications are off for Mivu. You can allow them in iOS Settings."
-                 : "Food before \(hourLabel(cutoff)) still counts for the day before. A new day starts the first time you open Mivu after that.")
+            VStack(alignment: .leading, spacing: 8) {
+                Text(denied ? "Notifications are off for Mivu. You can allow them in iOS Settings."
+                     : "Food before \(hourLabel(cutoff)) still counts for the day before. A new day starts the first time you open Mivu after that.")
+                if !activitiesAllowed { Text("Live Activities are off for Mivu in iOS Settings.") }
+            }
         }
+        // Follows the iOS switch live, so returning from Settings re-enables the toggle.
+        .task { for await allowed in ActivityAuthorizationInfo().activityEnablementUpdates { activitiesAllowed = allowed } }
+        .onChange(of: liveActivity) { _, _ in syncDayProgressActivity(readModel) }
+        .onChange(of: hideWhenLocked) { _, _ in syncDayProgressActivity(readModel) }
     }
 
     private var time: Binding<Date> {
