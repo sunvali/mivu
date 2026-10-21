@@ -37,3 +37,18 @@ this work only (`C6FFAE69-…`, baseline on `AE1C61BE-…`), XcodeBuildMCP, test
 - Live ChatGPT behaviour with `replyTo`; tests use the native inference fixture only.
 - Diary "Ask Pip" buttons do not exist yet on the base branch; the request field and composer
   behaviour are unit-tested, the end-to-end tap is not.
+
+## Re-verification after rebase onto main
+
+After the Diary PR (#38) was squash-merged as `270d881`, the seven reply commits were rebased
+onto `origin/main` with no conflicts. The rebased source is `1d30c764f57ba58e3ca42e9281255a2b56da0402`;
+the only later commit adds this section. Same simulator and toolchain as above.
+
+- Focused: the four reply suites plus `CoachNavigationTests`, `CoachAttachmentDraftTests`,
+  `CoachEngineTests`, `CoachIndexedContextTests`, `CoachCaptureTransactionTests`, `ArchiveTests`
+  and `CoachReplyUITests`: **166 passed, 0 failed** (`/tmp/mivu-reply-rebase.xcresult`).
+- `CoachNavigationUITests`, `CoachUITests`, `CoachHistoryUITests`: **20 passed, 1 failed**
+  (`/tmp/mivu-reply-rebase-ui.xcresult`). The failure,
+  `CoachUITests/testLargestDynamicTypeDarkCoachKeepsCaptureReachable`, fails identically on
+  unchanged `origin/main` `270d881`; it is pre-existing and not counted as passing.
+- Hosted checks on `1d30c76`: `checks` and `title` passed.
