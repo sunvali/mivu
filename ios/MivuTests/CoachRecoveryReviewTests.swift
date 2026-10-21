@@ -16,7 +16,7 @@ import Testing
         let turn = try await capturedTurn(store, text: "Please edit yesterday’s lunch because I ate one more chicken.", photos: [],
             at: ISO8601DateFormatter().date(from: "2027-01-16T10:00:00Z")!, expectedProfileID: source.profile.id)
         let first = CoachJourneyTransport(interruptAfterCommit: true)
-        await #expect(throws: CoachJourneyTransport.Interruption.afterCommit) {
+        try await interruptAfterWrite(store, source.profile.id, turn.id) {
             try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: source.profile.id)
         }
         let before = try await store.snapshotForExport(expectedProfileID: source.profile.id)

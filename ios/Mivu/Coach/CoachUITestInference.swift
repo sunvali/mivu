@@ -6,18 +6,20 @@ import UIKit
 // Explicit UI-test isolation is required by the caller; no provider request is made.
 enum CoachUITestInference {
     static func respond(_ input: [CoachInferenceInput], _: Data) async throws -> CoachInferenceResult {
-        if input.contains(where: {
-            if case .message(role: .user, let text, _) = $0 { return text == "Synthetic delayed weekly report" }
+        if input.last(where: { if case .message(role: .user, _, _) = $0 { return true }; return false }).map({
+            if case .message(_, let text, _) = $0 { return text == "Synthetic delayed weekly report" }
             return false
-        }) {
+        }) == true {
             try await Task.sleep(for: .seconds(8))
         }
         guard let developer = input.compactMap({ entry -> String? in
             if case .message(role: .developer, let text, _) = entry { return text }; return nil
-        }).first, let range = developer.range(of: "Context: "),
+        }).last, let range = developer.range(of: "Context: "),
         let data = String(developer[range.upperBound...]).data(using: .utf8) else { throw CoachError.invalidArguments }
         let context = try JSONDecoder().decode(CoachContext.self, from: data)
-        let text = input.compactMap { entry -> String? in
+        // History exchanges precede the tail developer message; only the current capture follows it.
+        let tail = input.lastIndex { if case .message(role: .developer, _, _) = $0 { return true }; return false } ?? 0
+        let text = input[tail...].compactMap { entry -> String? in
             if case .message(role: .user, let text, _) = entry { return text }; return nil
         }.joined(separator: " ").lowercased()
         if text.contains("edit yesterday’s lunch"), text.contains("one more chicken") {
@@ -29,7 +31,14 @@ enum CoachUITestInference {
             #endif
             return result
         }
-        if input.contains(where: { if case .functionOutput = $0 { return true }; return false }) {
+        let hasOutput = input.contains(where: { if case .functionOutput = $0 { return true }; return false })
+        if text.contains("synthetic partial"), context.replyTo == nil, hasOutput {
+            // Saved food followed by a failed round: the turn must still report what saved.
+            let id = UUID().uuidString
+            return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: "no_such_tool", namespace: "mivu", arguments: "{}")], outputItems: [])
+        }
+        if !hasOutput, let result = try clarification(input, context: context) { return result }
+        if hasOutput || (text.contains("synthetic partial") && context.replyTo != nil) {
             return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: [], outputItems: [])
         }
         var calendar = Calendar(identifier: .gregorian)
@@ -72,6 +81,35 @@ enum CoachUITestInference {
         let argumentsJSON = String(data: try JSONSerialization.data(withJSONObject: arguments, options: .sortedKeys), encoding: .utf8)!
         let id = UUID().uuidString
         return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: name, namespace: "mivu", arguments: argumentsJSON)], outputItems: [])
+    }
+    /// Scenarios "clarify-candidates" / "clarify-confirm": ask on the first turn, resolve against pendingQuestion on the next.
+    private static func clarification(_ input: [CoachInferenceInput], context: CoachContext) throws -> CoachInferenceResult? {
+        let last = input.reversed().compactMap { entry -> String? in
+            if case .message(role: .user, let text, _) = entry { return text.lowercased() }; return nil
+        }.first ?? ""
+        func call(_ name: String, _ args: [String: Any]) throws -> CoachInferenceResult {
+            let id = UUID().uuidString
+            let json = String(decoding: try JSONSerialization.data(withJSONObject: args, options: .sortedKeys), as: UTF8.self)
+            return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: name, namespace: "mivu", arguments: json)], outputItems: [])
+        }
+        if let pending = context.focus?.pendingQuestion {
+            let original = pending.originalText.lowercased()
+            guard original.contains("clarify-candidates") || original.contains("clarify-confirm") else { return nil }
+            guard let meal = context.replyTo?.meal else { throw CoachError.invalidArguments }
+            if pending.kind == .confirm {
+                if last.contains("keep") { return CoachInferenceResult(model: "native-test-fixture", text: "Kept it.", calls: [], outputItems: []) }
+                return try call("delete_meal", ["meal_id": meal.id.uuidString, "expected_revision": meal.revision])
+            }
+            guard let item = meal.items.first else { throw CoachError.invalidArguments }
+            return try call("correct_item", ["meal_id": meal.id.uuidString, "item_id": item.id.uuidString, "expected_revision": meal.revision, "quantity": item.quantity + 1])
+        }
+        if last.contains("clarify-candidates") {
+            return try call("ask_clarification", ["kind": "meal", "candidates": context.meals.suffix(2).map { ["meal_id": $0.id.uuidString] }])
+        }
+        if last.contains("clarify-confirm"), let meal = context.meals.last {
+            return try call("ask_clarification", ["kind": "confirm", "candidates": [["meal_id": meal.id.uuidString]]])
+        }
+        return nil
     }
     private static func correction(_ input: [CoachInferenceInput], context: CoachContext) throws -> CoachInferenceResult {
         func reply(_ name: String? = nil, _ args: [String: Any] = [:]) throws -> CoachInferenceResult {

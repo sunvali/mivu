@@ -113,6 +113,8 @@ struct DiaryMeal: Codable, Equatable, Sendable, Identifiable {
     var capturedAt: Date
     var eatenAt: Date
     var revision = 0
+    /// Diary head revision that last wrote this meal; nil on payloads saved before Coach focus.
+    var changedRevision: Int? = nil
     var timePrecision: MealTimePrecision? = nil
     var items: [FoodItem] = []
     var photos: [MealPhoto] = []

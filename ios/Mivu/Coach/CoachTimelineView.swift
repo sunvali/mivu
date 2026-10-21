@@ -7,6 +7,8 @@ struct CoachTimelineRow: Equatable, Identifiable {
     var exchange: CoachExchangeSummary?
     var date: String?
     var targets: [CoachReceiptTarget] = []
+    var undo: [CoachUndoState?] = []
+    var questionMeals: [MealReadModel] = []
     var activity: CoachActivity?
     var fixtureBanner = false
     var isHighlighted = false

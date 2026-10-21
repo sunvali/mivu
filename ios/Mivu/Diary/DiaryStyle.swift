@@ -114,6 +114,7 @@ struct NutritionSummary: View {
         Text(totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
             .font(.system(size: energySize, weight: .semibold, design: .default)).monospacedDigit().foregroundStyle(Color.diaryEnergy)
             .contentTransition(.numericText()).animation(reduceMotion ? nil : .snappy(duration: MivuMotion.numeric), value: totals.kcal)
+            .accessibilityIdentifier("nutritionEnergy")
     }
     private var separator: some View {
         Rectangle().fill(Color.diaryRule).frame(width: 1, height: 36).padding(.horizontal, 10).accessibilityHidden(true)
@@ -172,6 +173,20 @@ extension DayCompleteness {
     }
 }
 
+struct MealThumbnail: View {
+    let meal: MealReadModel
+    var model: DiaryViewModel? = nil
+    let size: CGFloat
+    var body: some View {
+        if let reference = meal.photos.first, let model {
+            DiaryPhotoPreview(model: model, reference: reference, height: size).frame(width: size)
+        } else {
+            RoundedRectangle(cornerRadius: 14).fill(Color.diarySummarySurface).frame(width: size, height: size)
+                .overlay { Image(systemName: "fork.knife").font(.title3).foregroundStyle(Color.diaryAccent) }
+        }
+    }
+}
+
 struct MealRow: View {
     let meal: MealReadModel
     var prominent = false
@@ -196,14 +211,7 @@ struct MealRow: View {
             }.fixedSize(horizontal: true, vertical: false)
         }
     }
-    @ViewBuilder private var image: some View {
-        if let reference = meal.photos.first, let model {
-            DiaryPhotoPreview(model: model, reference: reference, height: thumbnail).frame(width: thumbnail)
-        } else {
-            RoundedRectangle(cornerRadius: 14).fill(Color.diarySummarySurface).frame(width: thumbnail, height: thumbnail)
-                .overlay { Image(systemName: "fork.knife").font(.title3).foregroundStyle(Color.diaryAccent) }
-        }
-    }
+    private var image: some View { MealThumbnail(meal: meal, model: model, size: thumbnail) }
     private var text: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {

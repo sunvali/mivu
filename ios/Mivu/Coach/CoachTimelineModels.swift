@@ -62,6 +62,14 @@ struct CoachExchangeSummary: Equatable, Sendable, Identifiable {
     var pendingMealID: UUID? = nil
     var needsDayChoice: Bool = false
     var reply: CoachReply? = nil
+    var question: CoachQuestion? = nil
+    var incomplete: Bool? = nil
+    /// Meals the receipts, a pending review or an unanswered question point at.
+    var linkedMealIDs: Set<UUID> {
+        Set(receipts.compactMap(\.mealID) + (pendingMealID.map { [$0] } ?? []) + (question?.candidates ?? []).compactMap {
+            switch $0 { case .meal(let id), .item(let id, _): id; default: nil }
+        })
+    }
 }
 
 enum CoachPageRequest: Equatable, Sendable {

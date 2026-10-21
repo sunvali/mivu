@@ -108,7 +108,7 @@ import Testing
         let f = try CoachLunchFixture(); defer { f.remove() }
         let initial = try await f.store(), accepted = try await f.accept(initial)
         let transport = CoachJourneyTransport(interruptAfterCommit: true)
-        await #expect(throws: CoachJourneyTransport.Interruption.afterCommit) { try await f.run(initial, accepted.id, transport) }
+        try await interruptAfterWrite(initial, f.owner, accepted.id) { try await f.run(initial, accepted.id, transport) }
         let prior = try f.database.coachExchangeSummary(turnID: accepted.id, expectedProfileID: f.owner)
         #expect(prior.receipts.count == 1 && prior.assistantText == nil)
         #expect(try f.applications() == 1)

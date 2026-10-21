@@ -7,7 +7,7 @@ import Testing
         let object = try #require(JSONSerialization.jsonObject(with: CoachTools.declarations()) as? [String: Any])
         let declarations = try #require(object["tools"] as? [[String: Any]])
         let names = Set(declarations.compactMap { $0["name"] as? String })
-        for name in ["edit_item", "delete_item", "append_food", "accept_review", "move_meal", "delete_meal", "attach_photos", "delete_photo", "get_goals", "set_goals", "update_preferences", "start_day", "set_day_coverage", "open_settings"] {
+        for name in ["edit_item", "delete_item", "scale_meal", "append_food", "accept_review", "move_meal", "delete_meal", "attach_photos", "delete_photo", "get_goals", "set_goals", "update_preferences", "start_day", "set_day_coverage", "open_settings"] {
             #expect(names.contains(name), "Missing manual-edit operation: \(name)")
         }
     }

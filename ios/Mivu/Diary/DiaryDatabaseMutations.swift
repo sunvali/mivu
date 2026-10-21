@@ -110,11 +110,11 @@ extension DiaryDatabase {
         }
     }
 
-    func updateCoachTurn(turnID: UUID, state: CoachTurnState, assistantText: String?, needsDayChoice: Bool,
+    func updateCoachTurn(turnID: UUID, state: CoachTurnState, assistantText: String?, question: CoachQuestion? = nil, incomplete: Bool? = nil, needsDayChoice: Bool,
                          expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<CoachExchangeSummary> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
             guard var turn = try transaction.turn(id: turnID) else { throw DiaryError.notFound }
-            turn.state = state; turn.assistantText = assistantText
+            turn.state = state; turn.assistantText = assistantText; turn.question = question; turn.incomplete = incomplete
             turn.needsDayChoice = state == .needsClarification && needsDayChoice ? true : nil
             try transaction.saveTurn(turn)
             return try coachExchangeSummary(turnID: turnID, expectedProfileID: expected.profile.id)

@@ -216,7 +216,7 @@ actor DiaryStore {
             let transaction = DiaryTransaction(database: database, head: head)
             var targets: [UUID: CoachReceiptTarget] = [:]
             for exchange in exchanges {
-                for id in Set(exchange.receipts.compactMap(\.mealID) + (exchange.pendingMealID.map { [$0] } ?? [])) where targets[id] == nil {
+                for id in exchange.linkedMealIDs where targets[id] == nil {
                     do {
                         let meal = try transaction.mealProjection(id: id)
                         let day = try database.trackingDay(id: meal.dayID)
@@ -271,12 +271,12 @@ actor DiaryStore {
     }
     func setCoachTurnState(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, expectedProfileID: UUID) throws {
         _ = try pagedMutation(expectedProfileID) { database, head in
-            let text = state == .completed ? try database.coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID).assistantText : nil
-            return try database.updateCoachTurn(turnID: turnID, state: state, assistantText: text, needsDayChoice: needsDayChoice, expected: head, maximumBytes: maximumFileBytes)
+            let kept = state == .completed ? try database.coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID) : nil
+            return try database.updateCoachTurn(turnID: turnID, state: state, assistantText: kept?.assistantText, question: kept?.question, incomplete: kept?.incomplete, needsDayChoice: needsDayChoice, expected: head, maximumBytes: maximumFileBytes)
         }
     }
-    func completeCoachTurn(turnID: UUID, assistantText: String, expectedProfileID: UUID) throws {
-        _ = try pagedMutation(expectedProfileID) { try $0.updateCoachTurn(turnID: turnID, state: .completed, assistantText: assistantText, needsDayChoice: false, expected: $1, maximumBytes: maximumFileBytes) }
+    func completeCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = nil, incomplete: Bool? = nil, expectedProfileID: UUID) throws {
+        _ = try pagedMutation(expectedProfileID) { try $0.updateCoachTurn(turnID: turnID, state: .completed, assistantText: assistantText, question: question, incomplete: incomplete, needsDayChoice: false, expected: $1, maximumBytes: maximumFileBytes) }
     }
     func coachPreferenceSummary(expectedProfileID: UUID) throws -> String {
         let profile = try diaryHead(expectedProfileID: expectedProfileID).profile
@@ -392,6 +392,10 @@ actor DiaryStore {
         return try pagedMutation(expectedProfileID) { try $0.deleteItem(mealID: mealID, itemID: itemID, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
     }
 
+    func scaleMeal(mealID: UUID, targetKcal: Double, expectedRevision: Int, expectedProfileID: UUID? = nil) throws {
+        return try pagedMutation(expectedProfileID) { try $0.scaleMeal(mealID: mealID, targetKcal: targetKcal, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+
     func addPhotos(mealID: UUID, photos: [MealPhoto], expectedProfileID: UUID? = nil) throws {
         return try pagedMutation(expectedProfileID) { try $0.addPhotos(mealID: mealID, photos: photos, expected: $1, maximumBytes: maximumFileBytes) }
     }
@@ -469,6 +473,10 @@ actor DiaryStore {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.coachMeals(on: date, afterMealID: afterMealID, expectedProfileID: expectedProfileID)
     }
 
+    func coachFindMeals(query: String, from: String?, to: String?, expectedProfileID: UUID) throws -> [CoachMealCandidate] {
+        return try pagedConnection(expectedProfileID: expectedProfileID).database.coachFindMeals(query: query, from: from, to: to, expectedProfileID: expectedProfileID)
+    }
+
     func coachContext(turnID: UUID, expectedProfileID: UUID) throws -> CoachContext {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.coachInferenceContext(turnID: turnID, expectedProfileID: expectedProfileID)
     }
@@ -487,6 +495,27 @@ actor DiaryStore {
 
     func coachMeal(id: UUID, expectedProfileID: UUID) throws -> CoachContext.Meal {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.coachMealDetail(id: id, expectedProfileID: expectedProfileID)
+    }
+
+    func coachUndoAvailable(operationKey: String, expectedProfileID: UUID) throws -> Bool {
+        try coachUndoStates(keys: [operationKey], expectedProfileID: expectedProfileID)[operationKey] == .available
+    }
+
+    /// One read for a page of receipt cards; keys without a usable snapshot are absent.
+    func coachUndoStates(keys: [String], expectedProfileID: UUID) throws -> [String: CoachUndoState] {
+        let database = try pagedConnection(expectedProfileID: expectedProfileID).database
+        return try database.domainRead(expectedProfileID: expectedProfileID) { head in
+            let transaction = DiaryTransaction(database: database, head: head)
+            var states: [String: CoachUndoState] = [:]
+            for key in keys { states[key] = try transaction.coachUndoState(key) }
+            return states
+        }
+    }
+
+    func undoCoachChange(operationKey: String, expectedProfileID: UUID) throws {
+        try pagedMutation(expectedProfileID) { database, head in
+            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { _ = try $0.undoCoachChange(operationKey) }
+        }
     }
 
     func coachGoals(localDate: String, expectedProfileID: UUID) throws -> String {
@@ -592,9 +621,9 @@ actor DiaryStore {
         }
     }
 
-    func finishCoachTurn(turnID: UUID, assistantText: String, epoch: UInt64, expectedProfileID: UUID) throws {
+    func finishCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = nil, incomplete: Bool? = nil, epoch: UInt64, expectedProfileID: UUID) throws {
         try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
-        try completeCoachTurn(turnID: turnID, assistantText: assistantText, expectedProfileID: expectedProfileID)
+        try completeCoachTurn(turnID: turnID, assistantText: assistantText, question: question, incomplete: incomplete, expectedProfileID: expectedProfileID)
     }
 
     func failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, epoch: UInt64, expectedProfileID: UUID) throws {

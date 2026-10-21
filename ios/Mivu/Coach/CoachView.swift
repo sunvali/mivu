@@ -138,8 +138,9 @@ struct CoachView: View {
         .task(id: navigationRequest?.requestID) {
             guard let request = navigationRequest else { return }
             if request.target != nil { _ = await coach.seek(request) }
-            if let draft = request.draft, !Task.isCancelled { coach.prefill(draft) }
+            // The quote goes first: startReply refuses a composer that already has text.
             if let reply = request.reply, !Task.isCancelled, coach.startReply(reply) { editing = true }
+            if let draft = request.draft, !Task.isCancelled { coach.prefill(draft) }
             guard !Task.isCancelled, navigationRequest?.requestID == request.requestID else { return }
             onNavigationConsumed(request.requestID)
         }
@@ -252,7 +253,7 @@ struct CoachView: View {
                 segment = turn.segmentID
             }
             result.append(CoachTimelineRow(id: .exchange(turn.id), exchange: turn,
-                targets: turn.receipts.map(coach.receiptTarget), activity: coach.activityTurnID == turn.id ? coach.activity : nil,
+                targets: turn.receipts.map(coach.receiptTarget), undo: turn.receipts.map(coach.undoState), questionMeals: coach.linkedMeals(turn), activity: coach.activityTurnID == turn.id ? coach.activity : nil,
                 fixtureBanner: DiaryLaunch.isCoachInferenceFixture && turn.id == timeline.exchanges.first?.id,
                 isHighlighted: coach.highlightedTurnID == turn.id))
         }
@@ -579,6 +580,11 @@ struct CoachView: View {
     }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let question = turn.question, !question.candidates.isEmpty, coach.timeline?.window.isLatest(turn.id) == true {
+                CoachQuestionChips(question: question, meals: coach.linkedMeals(turn), model: coach.diary) { target, label, excerpt in
+                    Task { await coach.answer(target, label: label, excerpt: excerpt) }
+                }.disabled(coach.isWorking)
+            }
             if turn.state != .completed {
                 if let activity = coach.activity, coach.activityTurnID == turn.id, turn.receipts.isEmpty {
                     CoachActivityView(activity: activity)
@@ -595,10 +601,15 @@ struct CoachView: View {
                 }
             }
             ForEach(turn.receipts.filter { $0.mealID != nil || $0.workoutID != nil }, id: \.operationKey) { receipt in
-                CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt)) {
+                CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt), undoState: coach.undoState(receipt),
+                                 undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
                 }
+            }
+            if turn.incomplete == true {
+                Text("Couldn't finish the rest").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                Button("Retry") { Task { await coach.finishRest(of: turn) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachFinishRest")
             }
             if let pendingID = turn.pendingMealID, !turn.receipts.contains(where: { $0.mealID == pendingID }),
                let meal = coach.linkedMeals(turn).first(where: { $0.id == pendingID }) {

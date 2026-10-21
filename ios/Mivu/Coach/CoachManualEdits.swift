@@ -14,6 +14,7 @@ enum CoachManualEdit: Sendable {
     case move(mealID: UUID, date: String, revision: Int, originalDayID: UUID)
     case deleteMeal(mealID: UUID, revision: Int)
     case deleteItem(mealID: UUID, itemID: UUID, revision: Int)
+    case scaleMeal(mealID: UUID, targetKcal: Double, revision: Int)
     case attach(mealID: UUID, photoIDs: [UUID], role: PhotoRole, revision: Int)
     case deletePhoto(mealID: UUID, photoID: UUID, revision: Int)
     case retry(mealID: UUID, revision: Int)
@@ -21,12 +22,13 @@ enum CoachManualEdit: Sendable {
     case preferences(timezone: String?, text: String?, revision: Int)
     case startDay(revision: Int)
     case coverage(date: String, completeness: DayCompleteness)
+    case undo(operationKey: String)
     case open(CoachDestination)
 
     var mealID: UUID? {
         switch self {
         case .item(let id, _, _, _, _, _), .append(let id, _, _), .accept(let id, _, _), .move(let id, _, _, _),
-             .deleteMeal(let id, _), .deleteItem(let id, _, _), .attach(let id, _, _, _), .deletePhoto(let id, _, _), .retry(let id, _): id
+             .deleteMeal(let id, _), .deleteItem(let id, _, _), .scaleMeal(let id, _, _), .attach(let id, _, _, _), .deletePhoto(let id, _, _), .retry(let id, _): id
         default: nil
         }
     }
@@ -38,6 +40,7 @@ enum CoachManualEdit: Sendable {
         case .move(let id, _, _, _): "move_meal/\(id)"
         case .deleteMeal(let id, _): "delete_meal/\(id)"
         case .deleteItem(let id, let item, _): "delete_item/\(id)/\(item)"
+        case .scaleMeal(let id, _, _): "scale_meal/\(id)"
         case .attach(let id, _, _, _): "attach_photos/\(id)"
         case .deletePhoto(let id, let photo, _): "delete_photo/\(id)/\(photo)"
         case .retry(let id, _): "retry_meal/\(id)"
@@ -45,6 +48,7 @@ enum CoachManualEdit: Sendable {
         case .preferences: "update_preferences"
         case .startDay: "start_day"
         case .coverage(let date, _): "set_day_coverage/\(date)"
+        case .undo(let key): "undo/\(key)"
         case .open(let destination): "open_settings/\(destination.rawValue)"
         }
     }
@@ -67,7 +71,8 @@ extension CoachTools {
             ("accept_review", "Save an explicitly accepted retrieved meal proposal into totals. Use its submission ID and current meal revision. Never accept an estimate just because the user requests an edit.", mealObject(["submission_id": string], required: ["submission_id"])),
             ("move_meal", "Move an existing retrieved meal's tracking date to target_local_date (yyyy-MM-dd), preserving active waking day and its original capture/eating time and precision. A 04:00 meal can belong to the previous waking day.", mealObject(["target_local_date": string], required: ["target_local_date"])),
             ("delete_meal", "Delete an explicitly requested retrieved meal and its photos. Use its real ID/revision; never delete to compensate for eating.", mealObject([:], required: [])),
-            ("delete_item", "Delete one explicitly requested food from a retrieved saved meal using its real item ID and meal revision. If it is the meal's only food, do not call this; use ask_clarification to ask whether to delete the whole meal.", mealObject(["item_id": string], required: ["item_id"])),
+            ("delete_item", "Delete one explicitly requested food from a retrieved saved meal using its real item ID and meal revision. If it is the meal's only food, do not call this; for the only food use ask_clarification kind confirm with that meal.", mealObject(["item_id": string], required: ["item_id"])),
+            ("scale_meal", "Change the whole saved meal's portions proportionally so its known calories total target_kcal (ratio 0.1 to 3 of the current total). Use for requests like \"make this meal 650 kcal\" or \"I only ate about two thirds\"; use edit_item for one food. Needs a retrieved saved meal and its revision; refused for unaccepted estimates or meals with 0 known kcal.", mealObject(["target_kcal": number], required: ["target_kcal"])),
             ("attach_photos", "Attach current turn's actual attachedPhotoIDs to a retrieved meal, preserving the original photo bytes. Choose before/after only when supplied. Does not change food totals; pair with explicit food edits when needed.", mealObject(["photo_ids": ["type": "array", "items": string], "role": ["type": "string", "enum": PhotoRole.allCases.map(\.rawValue)]], required: ["photo_ids", "role"])),
             ("delete_photo", "Delete an explicitly requested photo using a retrieved meal's photo ID and revision. Removes retained copies, without deleting the food.", mealObject(["photo_id": string], required: ["photo_id"])),
             ("retry_meal", "Requeue an existing paused meal capture without creating a new meal or food record. Uses original saved input. Only the later successful analysis can confirm food saved.", mealObject([:], required: [])),
@@ -77,6 +82,7 @@ extension CoachTools {
             ("update_preferences", "Update explicitly requested preferences/timezone after reading complete get_preferences. Null fields preserve saved values; empty preferences clears them. expected_diary_revision protects unseen concurrent changes. Does not change historical day labels, credentials, or language.", object(["expected_diary_revision": integer, "timezone": string, "preferences": string], required: ["expected_diary_revision"])),
             ("start_day", "Explicitly start the current waking day from the persisted capture clock. Read fresh context for expected_diary_revision. Delayed captures cannot reverse a newer waking-day choice.", object(["expected_diary_revision": integer], required: ["expected_diary_revision"])),
             ("set_day_coverage", "Set the requested local date's coverage without closing it or activating it. Missing intake remains unknown. Use close_day only when the user explicitly closes a day.", object(["local_date": string, "completeness": ["type": "string", "enum": DayCompleteness.allCases.map(\.rawValue)]], required: ["local_date", "completeness"])),
+            ("undo_change", "Undo one earlier Coach food change by the operation key from its [saved key=…] line: log_food, append_food, edit_item, correct_item, scale_meal or delete_item. Restores the meal exactly as it was before that change (an undone log_food removes the meal), refused if anything changed the meal since. Not for whole-meal deletes, weights, workouts, goals or settings.", object(["operation_key": string], required: ["operation_key"])),
             ("open_settings", "Offer a native Settings link for accounts, local profiles, secrets or Files backup. The user must tap and complete the native action; this tool never authorizes, deletes a profile, restores a backup or claims those actions succeeded.", object(["destination": ["type": "string", "enum": CoachDestination.allCases.map(\.rawValue)]], required: ["destination"]))
         ]
     }
@@ -159,6 +165,11 @@ extension CoachTools {
             let replay = receipts.contains { $0.operationKey.hasSuffix("/delete_item/\(mealID)/\(itemID)") }
             guard replay || meals.first(where: { $0.id == mealID }).map({ meal in meal.items.contains { $0.id == itemID } && meal.items.count > 1 }) == true else { throw CoachError.invalidArguments }
             write = .deleteItem(mealID: mealID, itemID: itemID, revision: try revision(allowZero: true))
+        case "scale_meal":
+            try keys(mealFields.union(["target_kcal"]), mealFields.union(["target_kcal"]))
+            let mealID = try id("meal_id")
+            guard meals.contains(where: { $0.id == mealID }), let target = number(args["target_kcal"]), target > 0, target <= 10_000_000 else { throw CoachError.invalidArguments }
+            write = .scaleMeal(mealID: mealID, targetKcal: target, revision: try revision(allowZero: true))
         case "retry_meal":
             try keys(mealFields, mealFields); write = .retry(mealID: try id("meal_id"), revision: try revision(allowZero: true))
         case "attach_photos":
@@ -192,6 +203,12 @@ extension CoachTools {
             try keys(["local_date", "completeness"], ["local_date", "completeness"])
             guard let completeness = DayCompleteness(rawValue: try string("completeness")) else { throw CoachError.invalidArguments }
             write = .coverage(date: try date("local_date"), completeness: completeness)
+        case "undo_change":
+            try keys(["operation_key"], ["operation_key"])
+            let key = try string("operation_key"), parts = key.split(separator: "/", maxSplits: 1).map(String.init)
+            let food = ["food/", "correct/", "edit_item/", "append_food/", "delete_item/", "scale_meal/"]
+            guard parts.count == 2, UUID(uuidString: parts[0]) != nil, food.contains(where: parts[1].hasPrefix) else { throw CoachError.invalidArguments }
+            write = .undo(operationKey: key)
         case "open_settings":
             try keys(["destination"], ["destination"])
             guard let destination = CoachDestination(rawValue: try string("destination")) else { throw CoachError.invalidArguments }; write = .open(destination)

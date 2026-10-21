@@ -112,6 +112,10 @@ struct CoachTurn: Codable, Equatable, Sendable, Identifiable {
     var pendingMealRevision: Int? = nil
     var submissionManifest: CoachSubmissionManifest? = nil
     var captureSegmentID: UUID? = nil
+    /// Set when this turn ended with a question the next reply answers.
+    var question: CoachQuestion? = nil
+    /// True when saved food was kept but the rest of the request failed.
+    var incomplete: Bool? = nil
 }
 
 struct CoachCaptureContext: Codable, Equatable, Sendable {
@@ -186,6 +190,7 @@ struct CoachContext: Codable, Equatable, Sendable {
         var capturedAt: Date
         var text: String
         var assistantText: String?
+        var receipts: String? = nil
     }
     struct MealReference: Codable, Equatable, Sendable {
         var id: UUID
@@ -236,6 +241,13 @@ struct CoachContext: Codable, Equatable, Sendable {
     var omittedReceiptCount: Int? = nil
     /// What the person is replying to, resolved to current content for this turn only.
     var replyTo: Reply? = nil
+    struct Focus: Codable, Equatable, Sendable {
+        struct LastChanged: Codable, Equatable, Sendable { var mealID: UUID; var itemNames: [String]; var localDate: String; var revision: Int }
+        var lastChanged: LastChanged? = nil
+        var pendingQuestion: CoachQuestion? = nil
+    }
+    /// Conversation focus for resolving "it"/"that"; nil when nothing applies.
+    var focus: Focus? = nil
     struct Reply: Codable, Equatable, Sendable {
         var target: CoachReply.Target
         var excerpt: String
@@ -313,4 +325,11 @@ extension NutritionTotals: Codable {
         try c.encodeIfPresent(protein, forKey: .protein); try c.encodeIfPresent(fat, forKey: .fat)
         try c.encode(unknownItemCount, forKey: .unknownItemCount)
     }
+}
+
+/// An unanswered Coach question; the next reply is resolved against it.
+struct CoachQuestion: Codable, Equatable, Sendable {
+    var kind: CoachClarification
+    var candidates: [CoachReply.Target]
+    var originalText: String
 }

@@ -116,6 +116,9 @@ extension DiaryDatabase {
     func deleteItem(mealID: UUID, itemID: UUID, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.deleteItem(mealID: mealID, itemID: itemID, expectedRevision: expectedRevision) }
     }
+    func scaleMeal(mealID: UUID, targetKcal: Double, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
+        try transaction(expected: expected, maximumBytes: maximumBytes) { _ = try $0.scaleMeal(mealID: mealID, targetKcal: targetKcal, expectedRevision: expectedRevision) }
+    }
     func addPhotos(mealID: UUID, photos: [MealPhoto], expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
             _ = try transaction.mealRecord(id: mealID)
@@ -332,6 +335,7 @@ extension DiaryTransaction {
         try validateMealSubmissionFields(submission, mealID: mealID, mealRevision: meal.revision, profileID: head.profile.id); return submission
     }
     func insertMeal(_ meal: DiaryMeal) throws {
+        var meal = meal; meal.changedRevision = head.revision + 1
         guard meal.items.isEmpty, meal.submissions.isEmpty, meal.photos.isEmpty, try database.mutationInteger("SELECT COUNT(*) FROM tombstone WHERE id = ?", [.text(meal.id.uuidString)]) == 0 else { throw DiaryError.invalidData }
         _ = try database.trackingDay(id: meal.dayID); try validateMealFields(meal, itemCount: 0)
         let payload = try JSONEncoder().encode(meal)
@@ -340,6 +344,7 @@ extension DiaryTransaction {
         changes.mealIDs.insert(meal.id); changes.dayIDs.insert(meal.dayID)
     }
     func saveMeal(_ meal: DiaryMeal) throws {
+        var meal = meal; meal.changedRevision = head.revision + 1
         guard meal.items.isEmpty, meal.submissions.isEmpty, meal.photos.isEmpty else { throw DiaryError.invalidData }
         _ = try database.trackingDay(id: meal.dayID)
         try validateMealFields(meal, itemCount: database.mutationInteger("SELECT COUNT(*) FROM item WHERE parent = ?", [.text(meal.id.uuidString)]))
@@ -434,6 +439,25 @@ extension DiaryTransaction {
         let saved = MealSubmission(id: id, baseRevision: meal.revision, text: "Direct item delete", photoIDs: [], reviewFirst: false, state: .saved, proposal: output)
         let committed = try commitSavedItems(mealID: mealID, items: items, expectedRevision: meal.revision)
         try saveSubmission(saved, meal: committed)
+    }
+    /// Resizes every portion by one ratio so the foods with a known energy total `targetKcal`.
+    @discardableResult func scaleMeal(mealID: UUID, targetKcal: Double, expectedRevision: Int?) throws -> DiaryMeal {
+        let meal = try mealRecord(id: mealID)
+        guard expectedRevision == nil || expectedRevision == meal.revision else { throw DiaryError.staleRevision }
+        guard try mealProjection(id: mealID).state == .saved else { throw DiaryError.invalidData }
+        let items = try mealItems(id: mealID), known = items.compactMap(\.nutrition.kcal).reduce(0, +)
+        guard known > 0, targetKcal.isFinite else { throw DiaryError.invalidData }
+        let ratio = targetKcal / known
+        guard (0.1...3).contains(ratio) else { throw DiaryError.invalidData }
+        let scaled = try items.map { previous in
+            var item = previous; item.quantity = (previous.quantity * ratio * 100).rounded() / 100
+            return try diaryCorrectedItem(item, previous: previous, explicitNutrients: [])
+        }
+        try validateItems(scaled)
+        let id = UUID(), output = AnalysisOutput(profileID: head.profile.id, mealID: mealID, submissionID: id, baseRevision: meal.revision, items: scaled)
+        let saved = MealSubmission(id: id, baseRevision: meal.revision, text: "Direct meal scale", photoIDs: [], reviewFirst: false, state: .saved, proposal: output)
+        let committed = try commitSavedItems(mealID: mealID, items: scaled, expectedRevision: meal.revision)
+        try saveSubmission(saved, meal: committed); return committed
     }
     func moveMeal(_ mealID: UUID, to dayID: UUID, eatenAt: Date?, expectedRevision: Int?, expectedDayID: UUID?) throws {
         var meal = try mealRecord(id: mealID); let day = try database.trackingDay(id: dayID)

@@ -36,12 +36,12 @@ private actor CoachInputFixture {
     @Test func toolSchemasRequireDeclaredPropertiesAndKeepOriginalOptionalsNullable() throws {
         let declarations = try #require(JSONSerialization.jsonObject(with: CoachTools.declarations()) as? [String: Any])
         let tools = try #require(declarations["tools"] as? [[String: Any]])
-        #expect(tools.count <= 32)
+        #expect(tools.count <= 40)
         #expect(tools.contains { $0["name"] as? String == "ask_clarification" })
         let clarification = try #require(tools.first { $0["name"] as? String == "ask_clarification" })
         let clarificationParameters = try #require(clarification["parameters"] as? [String: Any])
         let clarificationProperties = try #require(clarificationParameters["properties"] as? [String: [String: Any]])
-        #expect(clarificationProperties["kind"]?["enum"] as? [String] == ["portion", "food", "day", "meal", "workout"])
+        #expect(clarificationProperties["kind"]?["enum"] as? [String] == ["portion", "food", "day", "meal", "workout", "confirm"])
         func checkObject(_ schema: [String: Any]) throws {
             if schema["type"] as? String == "object" {
                 let properties = try #require(schema["properties"] as? [String: [String: Any]])
@@ -198,9 +198,7 @@ private actor CoachInputFixture {
         #expect(try await store.coachContext(turnID: followup.id, expectedProfileID: profile.id).recentTurns.contains { $0.id == turn.id && $0.assistantText == question })
         let foodArgs = "{\"target_local_date\":\"2027-01-15\",\"items\":[{\"name\":\"Synthetic yogurt\",\"quantity\":150,\"unit\":\"g\",\"kcal\":90}]}"
         let interrupted = CoachFixture([result([call("log_food", foodArgs)])])
-        await #expect(throws: CoachError.limitExceeded) {
-            try await CoachEngine(store: store, infer: { try await interrupted.infer($0, $1) }).run(turnID: followup.id, expectedProfileID: profile.id)
-        }
+        try await interruptAfterWrite(store, profile.id, followup.id) { try await CoachEngine(store: store, infer: { try await interrupted.infer($0, $1) }).run(turnID: followup.id, expectedProfileID: profile.id) }
         let committed = try await store.snapshotForExport()
         let retry = CoachFixture([result([call("log_food", foodArgs, id: "retry")]), result(text: "Saved")])
         let saved = try await CoachEngine(store: store, infer: { try await retry.infer($0, $1) }).run(turnID: followup.id, expectedProfileID: profile.id)
@@ -229,7 +227,7 @@ private actor CoachInputFixture {
         _ = try await CoachEngine(store: store, infer: { try await captured.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         let developer = try #require(await captured.input.compactMap { item -> String? in
             if case .message(role: .developer, text: let text, images: _) = item { return text }; return nil
-        }.first)
+        }.last)
         let contextJSON = try #require(developer.components(separatedBy: "Context: ").last)
         let context = try JSONDecoder().decode(CoachContext.self, from: Data(contextJSON.utf8))
         #expect(context.meals.contains { $0.state == .saved && $0.items.contains { $0.name == "Synthetic yogurt" && $0.quantity == 150 && $0.unit == "g" } })
@@ -237,9 +235,7 @@ private actor CoachInputFixture {
         let intake = try await capturedTurn(store, text: "One more synthetic yogurt", photos: [], at: now, expectedProfileID: profile.id)
         let args = #"{"target_local_date":"2027-01-15","items":[{"name":"Synthetic yogurt","quantity":150,"unit":"g","kcal":90}]}"#
         let interrupted = CoachFixture([result([call("log_food", args)])])
-        await #expect(throws: CoachError.limitExceeded) {
-            try await CoachEngine(store: store, infer: { try await interrupted.infer($0, $1) }).run(turnID: intake.id, expectedProfileID: profile.id)
-        }
+        try await interruptAfterWrite(store, profile.id, intake.id) { try await CoachEngine(store: store, infer: { try await interrupted.infer($0, $1) }).run(turnID: intake.id, expectedProfileID: profile.id) }
         let committed = try await store.snapshotForExport()
         let retry = CoachFixture([result([call("log_food", args, id: "retry")]), result(text: "Done")])
         let finished = try await CoachEngine(store: store, infer: { try await retry.infer($0, $1) }).run(turnID: intake.id, expectedProfileID: profile.id)
@@ -277,12 +273,10 @@ private actor CoachInputFixture {
         #expect(try await exportedCoachPhotos(store, turnID: turn.id, expectedProfileID: profile.id) == [photo])
     }
 
-    @Test(arguments: [false, true]) func clarificationCannotMixWithOrFollowCurrentTurnWrites(earlierWrite: Bool) async throws {
+    @Test func clarificationCannotMixWithCurrentTurnWrites() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        if earlierWrite { _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic eggs", nutrition: NutritionValues(kcal: 140))], expectedProfileID: profile.id) }
         let before = try await store.snapshotForExport()
-        let question = call("ask_clarification", "{\"kind\":\"portion\"}", id: "question")
-        let replies = CoachFixture([result(earlierWrite ? [question] : [call("log_food", logArgs), question])])
+        let replies = CoachFixture([result([call("log_food", logArgs), call("ask_clarification", "{\"kind\":\"portion\"}", id: "question")])])
         await #expect(throws: CoachError.invalidArguments) {
             try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }
@@ -345,9 +339,9 @@ private actor CoachInputFixture {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let first = CoachFixture([result([call("log_food", logArgs)])])
         let failed = CoachEngine(store: store, infer: { try await first.infer($0, $1) })
-        await #expect(throws: CoachError.limitExceeded) { try await failed.run(turnID: turn.id, expectedProfileID: profile.id) }
+        try await interruptAfterWrite(store, profile.id, turn.id) { try await failed.run(turnID: turn.id, expectedProfileID: profile.id) }
         let before = try await store.snapshotForExport(); #expect(before.meals.count == 1)
-        #expect(before.coachTurns[0].state == .needsRetry)
+        #expect(before.coachTurns[0].state == .captured)
         let retry = CoachFixture([result([call("log_food", logArgs, id: "regenerated")]), result(text: "Done")])
         let engine = CoachEngine(store: store, infer: { try await retry.infer($0, $1) })
         let done = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
@@ -400,7 +394,7 @@ private actor CoachInputFixture {
         let engine = CoachEngine(store: store, infer: { try await fixture.infer($0, $1) })
         let completed = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
         #expect(completed.state == .completed)
-        let messages = await fixture.input.compactMap { item -> String? in
+        let messages = await fixture.input.suffix(from: await fixture.input.lastIndex { if case .message(.developer, _, _) = $0 { return true }; return false }!).compactMap { item -> String? in
             if case .message(role: .user, text: let text, images: _) = item { return text }; return nil
         }
         #expect(messages.joined() == raw)
@@ -530,7 +524,7 @@ private actor CoachInputFixture {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let args = "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\",\"measured_at\":\"2027-01-15T08:00:00Z\"}"
         let first = CoachFixture([result([call("log_weight", args)])])
-        await #expect(throws: CoachError.limitExceeded) { try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
+        try await interruptAfterWrite(store, profile.id, turn.id) { try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
         let before = try await store.snapshotForExport()
         let retry = CoachFixture([result([call("log_weight", args, id: "regenerated")]), result(text: "Done")])
         let completed = try await CoachEngine(store: store, infer: { try await retry.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
@@ -678,14 +672,12 @@ private actor CoachInputFixture {
             "{\"local_date\":\"2027-01-15\",\"value\":71,\"unit\":\"kg\",\"expected_revision\":\(revision)" + (byID ? ",\"weight_id\":\"\(weight.id)\"}" : "}")
         }
         let first = CoachFixture([result([call("log_weight", arguments(byID: idFirst, revision: 1))])])
-        await #expect(throws: CoachError.limitExceeded) { try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
+        try await interruptAfterWrite(store, profile.id, turn.id) { try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
         let before = try await store.snapshotForExport(), receipt = try #require(before.coachTurns[0].receipts.first)
         #expect(receipt.operationKey == "\(turn.id)/correct_weight/\(weight.id)")
         if currentRevision {
             let changed = CoachFixture([result([call("log_weight", arguments(byID: !idFirst, revision: 2), id: "changed-revision")])])
-            await #expect(throws: CoachError.invalidArguments) {
-                try await CoachEngine(store: store, infer: { try await changed.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
-            }
+            try await interruptAfterWrite(store, profile.id, turn.id) { try await CoachEngine(store: store, infer: { try await changed.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
             #expect(try await store.snapshotForExport().weights == before.weights)
             #expect(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).receipts == [receipt])
         }

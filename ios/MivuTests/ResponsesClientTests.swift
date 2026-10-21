@@ -254,7 +254,7 @@ struct ResponsesClientTests {
     }
 
     @Test func oversizedToolCatalogIsRejectedBeforeSending() async throws {
-        let tools: [[String: Any]] = (0..<33).map { ["type": "function", "name": "synthetic_\($0)", "parameters": ["type": "object", "properties": [:]] as [String: Any]] }
+        let tools: [[String: Any]] = (0..<41).map { ["type": "function", "name": "synthetic_\($0)", "parameters": ["type": "object", "properties": [:]] as [String: Any]] }
         let namespace = try JSONSerialization.data(withJSONObject: ["type": "namespace", "name": "mivu", "tools": tools])
         let capture = RequestCapture()
         await #expect(throws: ResponsesClient.Failure.invalidInput) {
