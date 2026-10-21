@@ -319,11 +319,6 @@ struct MealDetailView: View {
             }
             if model.sampleMode { Text("Apple sample estimate — not food recognition").font(.caption).foregroundStyle(Color.diarySecondary) }
             if meal.isSaved { NutritionSummary(totals: meal.totals) }
-            if meal.state == .saved, (meal.totals.kcal ?? 0) > 0 {
-                Button { showScale = true } label: { Label("Adjust total", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, minHeight: 44) }
-                    .buttonStyle(.glass).accessibilityHint("Resizes every food in this meal to reach a calorie total")
-                    .accessibilityIdentifier("adjustMealTotal")
-            }
             else if meal.state != .awaitingReview {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Nutrition").font(.headline)
@@ -332,6 +327,11 @@ struct MealDetailView: View {
                     Text(meal.state == .cancelled ? "Analysis was cancelled. Your note and photos are kept." : meal.state == .needsRetry ? "Your meal is saved. Retry analysis when you’re ready." : meal.state == .waitingForConnection ? "Connect ChatGPT to analyze this saved meal." : "Your meal is saved. Analysis will resume when available.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
+            }
+            if meal.state == .saved, (meal.totals.kcal ?? 0) > 0 {
+                Button { showScale = true } label: { Label("Adjust total", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, minHeight: 44) }
+                    .buttonStyle(.glass).accessibilityHint("Resizes every food in this meal to reach a calorie total")
+                    .accessibilityIdentifier("adjustMealTotal")
             }
             if meal.state == .waitingForConnection, let connection {
                 ChatGPTConnectButton(connection: connection, title: "Connect ChatGPT")

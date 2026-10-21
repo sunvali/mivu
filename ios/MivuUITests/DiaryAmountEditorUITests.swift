@@ -74,6 +74,7 @@ import XCTest
         calories.tap(); calories.typeText("500")
         if app.buttons["doneManualNutrition"].exists { app.buttons["doneManualNutrition"].tap() }
         app.buttons["saveManualNutrition"].tap()
+        XCTAssertFalse(app.staticTexts["Not estimated yet"].exists)
         let adjust = app.buttons["adjustMealTotal"]
         for _ in 0..<6 where app.buttons.matching(identifier: "editItem").count < 2 { _ = adjust.waitForExistence(timeout: 2) }
         reveal(adjust, in: app); XCTAssertGreaterThanOrEqual(adjust.frame.height, 44); adjust.tap()
