@@ -39,6 +39,7 @@ import Testing
 
     @Test func stableRulesStateResolutionOrder() {
         #expect(CoachEngine.stableRules.contains("explicit mention, then replyTo, then pendingQuestion, then focus.lastChanged, then the newest matching meal"))
+        #expect(CoachEngine.stableRules.contains("remove it means call delete_meal now without asking again"))
         #expect(!CoachEngine.stableRules.contains("Omitted or paginated evidence cannot establish uniqueness"))
         #expect(!CoachEngine.stableRules.contains("Ask when the matching food or serving is ambiguous."))
     }

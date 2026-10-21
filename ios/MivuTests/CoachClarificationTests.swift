@@ -68,10 +68,33 @@ private actor Replies {
         }
         let meal = CoachContext.Meal(id: UUID(), dayID: UUID(), revision: 1, eatenAt: now, timePrecision: .dateOnly, items: [FoodItem(name: "Eggs", nutrition: NutritionValues(kcal: 100))])
         for args in [#"{"kind":"meal","candidates":[{"meal_id":"\#(meal.id)","item_id":"\#(UUID())"}]}"#,   // item not in meal
-                     #"{"kind":"confirm"}"#, #"{"kind":"confirm","candidates":[{"meal_id":"\#(meal.id)","item_id":"\#(meal.items[0].id)"}]}"#,
+                     #"{"kind":"confirm"}"#,
                      #"{"kind":"meal","candidates":[{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"}]}"#] {
             #expect(throws: CoachError.invalidArguments) { try CoachTools.parse(call("ask_clarification", args), meals: [meal], evidence: [:], receipts: []) }
         }
+    }
+
+    @Test func foundMealsAreCandidatesAndConfirmItemMeansItsMeal() throws {
+        let item = CoachMealCandidate.Item(id: UUID(), name: "Pizza slice", quantity: 1, unit: "slice")
+        let found = CoachMealCandidate(id: UUID(), dayID: UUID(), localDate: "2027-01-01", timeZoneID: "UTC", revision: 1, eatenAt: now, timePrecision: .dateOnly,
+            items: [item], omittedItemCount: 0, capturedDescription: "Pizza", descriptionTruncated: false)
+        let pick = #"{"kind":"meal","candidates":[{"meal_id":"\#(found.id)","item_id":"\#(item.id)"}]}"#
+        guard case .clarification(_, let candidates) = try CoachTools.parse(call("ask_clarification", pick), meals: [], evidence: [:], receipts: [], found: [found]) else { Issue.record("must parse"); return }
+        #expect(candidates == [.item(mealID: found.id, itemID: item.id)])
+        let confirm = #"{"kind":"confirm","candidates":[{"meal_id":"\#(found.id)","item_id":"\#(item.id)"}]}"#
+        guard case .clarification(.confirm, let target) = try CoachTools.parse(call("ask_clarification", confirm), meals: [], evidence: [:], receipts: [], found: [found]) else { Issue.record("must parse"); return }
+        #expect(target == [.meal(mealID: found.id)])
+    }
+
+    @Test func confirmItemCandidateAsksAboutItsMeal() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let receipt = try await log(store, profile, "Snickers Minis")
+        let meal = try #require(receipt.mealID), item = try #require(try await store.coachMeal(id: meal, expectedProfileID: profile.id).items.first?.id)
+        let turn = try await capturedTurn(store, text: "Delete the snickers", photos: [], at: now, expectedProfileID: profile.id)
+        let finished = try await run(store, profile, turn, [result([call("find_meals", #"{"query":"snickers"}"#, id: "f")]),
+            result([call("ask_clarification", #"{"kind":"confirm","candidates":[{"meal_id":"\#(meal)","item_id":"\#(item)"}]}"#)])])
+        #expect(finished.assistantText == "Remove the whole Snickers Minis meal?")
+        #expect(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).question?.candidates == [.meal(mealID: meal)])
     }
 
     @Test func clarificationAfterWriteCompletes() async throws {
