@@ -539,6 +539,7 @@ struct CoachView: View {
         case .meal(let id), .item(let id, _): selectedRecord = .meal(id); return
         case .message(let id, _): target = .turn(id)
         case .day(let id): target = .day(id)
+        case .weight, .workout: return // shortcut: not tappable, seek the record's day once Progress has a record route
         }
         guard let identity = coach.diary.selection?.identity else { return }
         Task { _ = await coach.seek(CoachNavigationRequest(identity: identity, target: target, requestID: UUID())) }

@@ -7,6 +7,7 @@ extension CoachReply {
         case .message(_, true): "Pip"
         case .message: "You"
         case .meal, .item, .day: "Diary"
+        case .weight, .workout: "Progress"
         }
     }
     var composerTitle: String {
@@ -14,6 +15,7 @@ extension CoachReply {
         case .message(_, true): "Replying to Pip"
         case .message: "Replying to you"
         case .meal, .item, .day: "From Diary"
+        case .weight, .workout: "From Progress"
         }
     }
 }
