@@ -20,6 +20,8 @@ struct CoachTimelineView: UIViewRepresentable {
     let rows: [CoachTimelineRow]
     var diagnostics: CoachTimelineDiagnostics? = nil
     var jumpToLatest: (@MainActor () -> Void)? = nil
+    /// Height of the composer floating over the table's bottom edge.
+    var bottomInset: CGFloat = 0
     typealias ViewportRefresh = @MainActor () -> Void
     typealias AccessibilityPageRequest = @MainActor (CoachPageDirection) -> Bool
     var onViewportRefreshReady: (@MainActor (@escaping ViewportRefresh) -> Void)? = nil
@@ -67,9 +69,13 @@ struct CoachTimelineView: UIViewRepresentable {
         #if DEBUG
         table.diagnostics = diagnostics; diagnostics?.attach(table, timeline: timeline)
         #endif
+        if table.contentInset.bottom != bottomInset {
+            table.contentInset.bottom = bottomInset; table.verticalScrollIndicatorInsets.bottom = bottomInset
+        }
         let typeChanged = table.typeSize != nil && table.typeSize != typeSize
         let appearanceChanged = table.typeSize != typeSize || table.colorScheme != colorScheme
         context.coordinator.updateJumpButton(in: table, appearanceChanged: appearanceChanged)
+        table.jumpBottom?.constant = -8 - bottomInset
         context.coordinator.updatePagingAccessibility(in: table)
         // A model revision carries a new command. Same-revision measurements are feedback,
         // not another scroll command to replay while the reader moves.
@@ -181,7 +187,7 @@ struct CoachTimelineView: UIViewRepresentable {
         }
         func updateJumpButton(in table: CoachTimelineTable, appearanceChanged: Bool) {
             guard owner.jumpToLatest != nil else {
-                table.jumpButton?.removeFromSuperview(); table.jumpButton = nil; return
+                table.jumpButton?.removeFromSuperview(); table.jumpButton = nil; table.jumpBottom = nil; return
             }
             guard table.jumpButton == nil || appearanceChanged else { return }
             var configuration = UIButton.Configuration.glass()
@@ -197,9 +203,10 @@ struct CoachTimelineView: UIViewRepresentable {
                 button.accessibilityLabel = String(localized: "Jump to latest")
                 button.translatesAutoresizingMaskIntoConstraints = false
                 table.addSubview(button); table.jumpButton = button
+                table.jumpBottom = button.bottomAnchor.constraint(equalTo: table.frameLayoutGuide.bottomAnchor, constant: -8)
                 NSLayoutConstraint.activate([
                     button.centerXAnchor.constraint(equalTo: table.frameLayoutGuide.centerXAnchor),
-                    button.bottomAnchor.constraint(equalTo: table.frameLayoutGuide.bottomAnchor, constant: -8),
+                    table.jumpBottom!,
                     button.leadingAnchor.constraint(greaterThanOrEqualTo: table.frameLayoutGuide.leadingAnchor, constant: 16),
                     button.trailingAnchor.constraint(lessThanOrEqualTo: table.frameLayoutGuide.trailingAnchor, constant: -16),
                     button.widthAnchor.constraint(equalToConstant: 48),
@@ -280,7 +287,7 @@ struct CoachTimelineView: UIViewRepresentable {
         private func finishedScroll() {
             defer { previousDragOffset = nil; dragDirection = nil }
             guard let table, table.hasApplied(owner.timeline) else { return }
-            table.followsLatest = owner.timeline.window.pages.last?.hasLater == false && table.contentSize.height - table.contentOffset.y - table.bounds.height <= 80
+            table.followsLatest = owner.timeline.window.pages.last?.hasLater == false && table.contentSize.height + table.contentInset.bottom - table.contentOffset.y - table.bounds.height <= 80
             reportViewport()
             table.readingAnchor = table.followsLatest ? nil : table.measuredAnchor()
             // At capacity, the same reservation can succeed only after interaction pins settle.
@@ -293,7 +300,7 @@ struct CoachTimelineView: UIViewRepresentable {
                   let cell = table.visibleCells.compactMap({ $0 as? CoachTimelineCell }).first(where: { $0.rowID == edge.id }),
                   let anchor = table.measuredAnchor() else { return nil }
             let frame = cell.convert(cell.bounds, to: table).offsetBy(dx: -table.bounds.minX, dy: -table.bounds.minY)
-            let near = direction == .earlier ? abs(frame.minY) <= 200 : abs(frame.maxY - table.bounds.height) <= 200
+            let near = direction == .earlier ? abs(frame.minY) <= 200 : abs(frame.maxY - table.bounds.height + table.contentInset.bottom) <= 200
             guard near else { return nil }
             // Reservation/deduplication, failure retry and eviction remain the window's responsibility.
             return direction == .earlier ? owner.timeline.loadEarlier(anchor: anchor) : owner.timeline.loadLater(anchor: anchor)
@@ -340,6 +347,7 @@ final class CoachTimelineTable: UITableView {
     var typeSize: DynamicTypeSize?
     var colorScheme: ColorScheme?
     var jumpButton: UIView?
+    var jumpBottom: NSLayoutConstraint?
     var readingAnchor: CoachViewportAnchor?
     var followsLatest = true
     var isApplyingRows = false
@@ -428,7 +436,7 @@ final class CoachTimelineTable: UITableView {
         let visible = rows.compactMap { row -> (UUID, CGRect)? in
             guard case .exchange(let id) = row.id, let frame = frames[id] else { return nil }; return (id, frame)
         }
-        guard let value = visible.first(where: { min($0.1.maxY, bounds.height) - max($0.1.minY, 0) >= 44 }) ?? visible.first else { return nil }
+        guard let value = visible.first(where: { min($0.1.maxY, bounds.height - contentInset.bottom) - max($0.1.minY, 0) >= 44 }) ?? visible.first else { return nil }
         return CoachViewportAnchor(rowID: value.0, offset: value.1.minY, focusedExchangeID: focusedExchange())
     }
     func refreshViewportNow() { onViewport?() }

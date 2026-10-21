@@ -51,11 +51,17 @@ import XCTest
             let camera = app.buttons["coachPhotos"]
             let voice = app.buttons["coachVoice"]
             let send = app.buttons["coachSend"]
-            XCTAssertEqual(input.frame.midY, camera.frame.midY, accuracy: 12, "Normal composer must follow the reference's single horizontal row")
-            XCTAssertEqual(input.frame.midY, voice.frame.midY, accuracy: 12)
+            XCTAssertEqual(input.frame.midY, camera.frame.midY, accuracy: 2, "The camera sits inside the field, level with the text")
+            XCTAssertEqual(input.frame.midY, voice.frame.midY, accuracy: 12, "The round mic shares the field's row")
             XCTAssertGreaterThanOrEqual(camera.frame.height, 44)
             XCTAssertGreaterThanOrEqual(voice.frame.height, 44)
+            XCTAssertFalse(send.exists, "Send takes the mic's place only once the draft has content")
             enter("Two eggs, three bread slices and salad", in: app)
+            XCTAssertEqual(input.frame.maxY, send.frame.maxY, accuracy: 12)
+            XCTAssertGreaterThanOrEqual(send.frame.height, 44)
+            XCTAssertTrue(camera.isHittable, "The camera stays inside the field while typing")
+            XCTAssertFalse(voice.exists)
+            XCTAssertGreaterThanOrEqual(camera.frame.height, 44)
             XCTAssertEqual(strip.frame.height, restingHeight, accuracy: 2, "Typing must keep the compact companion strip stable")
             XCTAssertTrue(app.keyboards.firstMatch.exists)
             XCTAssertTrue(send.isHittable)
