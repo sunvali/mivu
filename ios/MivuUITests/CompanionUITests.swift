@@ -49,11 +49,12 @@ import XCTest
             XCTAssertFalse(app.buttons["coachLaterMessages"].exists)
             let input = app.textFields["coachInput"]
             let camera = app.buttons["coachPhotos"]
+            let voice = app.buttons["coachVoice"]
             let send = app.buttons["coachSend"]
             XCTAssertEqual(input.frame.midY, camera.frame.midY, accuracy: 12, "Normal composer must follow the reference's single horizontal row")
-            XCTAssertEqual(input.frame.midY, send.frame.midY, accuracy: 12)
+            XCTAssertEqual(input.frame.midY, voice.frame.midY, accuracy: 12)
             XCTAssertGreaterThanOrEqual(camera.frame.height, 44)
-            XCTAssertGreaterThanOrEqual(send.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(voice.frame.height, 44)
             enter("Two eggs, three bread slices and salad", in: app)
             XCTAssertEqual(strip.frame.height, restingHeight, accuracy: 2, "Typing must keep the compact companion strip stable")
             XCTAssertTrue(app.keyboards.firstMatch.exists)
@@ -79,7 +80,7 @@ import XCTest
             XCTAssertGreaterThanOrEqual(app.tables["coachViewport"].frame.height, app.frame.height * 0.45,
                 "With the keyboard hidden, conversation must own at least 45% of the screen")
             XCTAssertTrue(input.isHittable)
-            XCTAssertTrue(send.isHittable)
+            XCTAssertTrue(voice.isHittable, "A sent draft returns the trailing slot to voice")
             captureVisual("Compact Coach food receipt " + appearance, in: app)
             let details = app.buttons["coachReceiptDetails"].firstMatch
             for _ in 0..<8 where !details.isHittable { app.tables["coachViewport"].swipeUp() }

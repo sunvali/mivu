@@ -562,6 +562,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_DISPLAY_NAME)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Mivu uses the camera to attach meal photos to your private diary.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Mivu turns your spoken meal into text on this iPhone so you can review it before sending.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -586,6 +588,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_DISPLAY_NAME)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Mivu uses the camera to attach meal photos to your private diary.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Mivu turns your spoken meal into text on this iPhone so you can review it before sending.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

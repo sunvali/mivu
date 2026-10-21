@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct CoachView: View {
@@ -15,8 +16,9 @@ struct CoachView: View {
     @State private var surfaceVisible = false
     @State private var showingDetail = false
     @State private var showPhotos = false
-    @State private var inputWraps = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var voice = CoachVoiceInput()
     @State private var cameraPresentationID: UUID?
     @State private var retakingPhotoID: UUID?
     @State private var restoreKeyboard = false
@@ -141,7 +143,7 @@ struct CoachView: View {
             guard !Task.isCancelled, navigationRequest?.requestID == request.requestID else { return }
             onNavigationConsumed(request.requestID)
         }
-        .onDisappear { surfaceVisible = false; diagnostics.stop(); reportCompanionContext() }
+        .onDisappear { surfaceVisible = false; diagnostics.stop(); stopListening(); reportCompanionContext() }
         .onChange(of: coach.captureReceipt) { _, id in
             if let id, fixtureDiagnostics != nil { diagnostics.expectReply(id, alreadyCompleted: coach.historyFixtureLatest?.id == id && coach.historyFixtureLatest?.state == .completed && coach.historyFixtureLatest?.assistantText != nil) }
         }
@@ -154,10 +156,15 @@ struct CoachView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.elementFocusedNotification)) { event in
             diagnostics.observeFocusNotification(event)
         }
-        .onChange(of: [editing, showPhotos, showingDetail, companionProcessing, companionRecovery]) { _, _ in reportCompanionContext() }
+        .onChange(of: [editing, showPhotos, showingDetail, companionProcessing, companionRecovery, listening]) { _, _ in reportCompanionContext() }
+        .onChange(of: editing) { _, typing in if typing { stopListening() } } // typed edits must not be overwritten by later speech
+        .onChange(of: scenePhase) { _, phase in if phase != .active { stopListening() } }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in stopListening() }
+        .sensoryFeedback(trigger: listening) { _, on in on ? .start : .stop }
         .onChange(of: CompanionContext.draftSignal(coach.attachmentDraft.text.count)) { _, _ in reportCompanionContext() }
         .onChange(of: coach.diary.selection) { _, _ in
             coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; selectedRecord = nil
+            stopListening()
         }
     }
 
@@ -288,20 +295,17 @@ struct CoachView: View {
     private var companionRecovery: Bool { coach.companionNeedsRecovery }
     private var companionProcessing: Bool { coach.companionIsProcessing }
     private func reportCompanionContext() {
-        onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: editing && !coach.isSending,
+        onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: (editing || listening) && !coach.isSending,
             isProcessing: companionProcessing, needsRecovery: companionRecovery,
             playback: surfaceVisible && !showPhotos && !showingDetail ? .animated : .hidden,
             draftLength: coach.attachmentDraft.text.count))
     }
     private var companionStrip: some View {
         HStack(alignment: .center, spacing: 12) {
-            // Pip peeks over the composer (character sheet): the crop's bottom is the bar line his paws rest on.
+            // Character sheet: the crop's bottom is the bar line his paws rest on, here the field's top edge.
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
                           size: typeSize.isAccessibilitySize ? 76 : 112, runtime: companionRuntime, surface: .coach,
                           onTouch: onCompanionTouch)
-                // Paws rest on the field's top edge; once the text wraps, Pip steps up so the first line stays clear.
-                .offset(y: inputWraps ? 0 : 20)
-                .animation(reduceMotion ? nil : .snappy, value: inputWraps)
             VStack(alignment: .leading, spacing: 4) {
                 if let day = coach.diary.activeDay {
                     Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
@@ -334,22 +338,19 @@ struct CoachView: View {
                     withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
                 }.transition(.opacity)
             }
-            companionStrip.zIndex(1) // the paws overlap the field's top edge
+            if showsStarters { starters }
             if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
-            if typeSize.isAccessibilitySize {
-                composerInput
-                HStack {
-                    photoAction
-                    Spacer(minLength: 8)
-                    send
-                }
-            } else {
-                HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
+                // Pip stands on the left of the field's flat top edge, never on the round camera.
+                VStack(alignment: .leading, spacing: 0) {
+                    companionStrip
                     composerInput
-                    photoAction
-                    send
                 }
+                photoAction
+            }
+            if let note = voice.note {
+                Text(note).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachVoiceNote")
             }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture {
                 HStack(spacing: 4) {
@@ -364,21 +365,34 @@ struct CoachView: View {
         .animation(reduceMotion ? nil : .snappy, value: coach.attachmentDraft.reply)
         .sensoryFeedback(.selection, trigger: coach.attachmentDraft.reply) { $1 != nil }
         .disabled(coach.isSending || coach.diary.isChangingProfile)
+        .animation(reduceMotion ? nil : .snappy, value: showsStarters)
     }
     private var composerInput: some View {
-        // A reply quote sits inside the field's top, as in Messages; Pip then rests above it.
+        // A reply quote sits inside the field's top, as in Messages. Below it, one trailing slot:
+        // mic while empty, Send once there is something to send.
         VStack(alignment: .leading, spacing: 0) {
             if let reply = coach.attachmentDraft.reply { replyBar(reply) }
-            TextField("Message Coach", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }), axis: .vertical)
-                // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
-                .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
-                .accessibilityIdentifier("coachInput")
-                .padding(.horizontal, 16).padding(.vertical, 10)
+            HStack(alignment: .bottom, spacing: 0) {
+                // Stacked, not overlaid, so the field grows to fit the words plus the wave while listening.
+                ZStack(alignment: .leading) {
+                    TextField("Describe a meal…", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }),
+                              prompt: Text(listening ? "" : "Describe a meal…"), axis: .vertical)
+                        // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
+                        .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
+                        .accessibilityIdentifier("coachInput")
+                        .padding(.leading, 16).padding(.vertical, 10)
+                        // Hide only the text while listening; a transparent field would stop receiving the tap that switches to typing.
+                        .foregroundStyle(listening ? Color.clear : Color.primary)
+                    if listening { listeningText }
+                }
                 .frame(minHeight: 48)
+                Group { if showsSend { send } else { voiceAction } }
+                    .transition(.opacity).padding(.trailing, 2)
+            }
+            .animation(reduceMotion ? nil : .snappy, value: showsSend)
         }
-            .onGeometryChange(for: Bool.self) { $0.size.height > 56 } action: { inputWraps = $0 }
-            .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
-            .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
+        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
+        .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
     }
     private var photoAction: some View {
         Button { openCamera() } label: {
@@ -388,17 +402,85 @@ struct CoachView: View {
             .buttonStyle(.glass).buttonBorderShape(.circle)
             .disabled(coach.attachmentDraft.attachments.count + coach.attachmentDraft.reservedAttachmentCount >= 8)
     }
+    private var listening: Bool { voice.phase == .listening }
+    private var showsSend: Bool { voice.phase == .idle && (coach.isSending || coach.attachmentDraft.isValid) }
+    private var showsStarters: Bool {
+        coach.timeline?.exchanges.isEmpty == true && !coach.attachmentDraft.isValid && !editing && voice.phase == .idle
+    }
+    private var starters: some View {
+        // Each starter fills the draft for review; nothing is sent until the user taps Send.
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach([("Log breakfast", "For breakfast I had "), ("Log my weight", "My weight this morning is "),
+                         ("How am I doing today?", "How am I doing today?")], id: \.0) { title, draft in
+                    Button(title) { coach.attachmentDraft.text = draft; editing = true }
+                        .font(.subheadline).controlSize(.large)
+                        .buttonStyle(.glass).accessibilityIdentifier("coachStarter")
+                }
+            }
+        }
+        // Scrolls under the composer's side margins so the last chip reads as more, not as clipped.
+        .contentMargins(.horizontal, 20, for: .scrollContent).padding(.horizontal, -20)
+        .scrollIndicators(.hidden).transition(.opacity)
+    }
+    /// While listening, the words stream in with a three-line sound wave as their cursor.
+    /// Taps fall through to the hidden field, so tapping to type stops listening.
+    private var listeningText: some View {
+        // The wave sits below the baseline so its middle lines up with the middle of the letters.
+        Text("\(coach.attachmentDraft.text) \(Text(waveImage(voice.levels)).baselineOffset(-3))")
+            .lineLimit(typeSize.isAccessibilitySize ? 3 : 4).truncationMode(.head)
+            .padding(.leading, 16).padding(.vertical, 10)
+            .allowsHitTesting(false).accessibilityHidden(true)
+    }
+    private func waveImage(_ levels: [Float]) -> Image {
+        let size = CGSize(width: 15, height: 16)
+        let image = UIGraphicsImageRenderer(size: size).image { _ in
+            UIColor(Color.diaryAccent).setFill()
+            for (index, level) in levels.enumerated() {
+                let height = 4 + CGFloat(reduceMotion ? 0.5 : level) * (size.height - 4)
+                UIBezierPath(roundedRect: CGRect(x: CGFloat(index) * 6, y: (size.height - height) / 2, width: 3, height: height),
+                             cornerRadius: 1.5).fill()
+            }
+        }
+        return Image(decorative: image.cgImage!, scale: image.scale)
+    }
+    private var voiceAction: some View {
+        Button {
+            if voice.phase == .idle {
+                coach.synchronizeDraftOwnership(); editing = false
+                let owner = coach.attachmentDraft.ownership
+                Task {
+                    await voice.start(appendingTo: coach.attachmentDraft.text) { text in
+                        // Final words can arrive after a profile switch; they belong only to the draft they started in.
+                        if coach.attachmentDraft.ownership == owner { coach.attachmentDraft.text = text }
+                    }
+                }
+            } else { stopListening() }
+        } label: {
+            Group {
+                if voice.phase == .preparing { ProgressView() }
+                else {
+                    Image(systemName: listening ? "stop.fill" : "mic.fill").font(.system(size: 19, weight: .medium))
+                        .symbolEffect(.pulse, isActive: listening && !reduceMotion)
+                }
+            }.frame(minWidth: 44, minHeight: 48).contentShape(Rectangle())
+        }
+        .accessibilityLabel(voice.phase == .idle ? "Speak your meal" : "Stop listening").accessibilityIdentifier("coachVoice")
+        .buttonStyle(.plain).foregroundStyle(listening ? Color.diaryError : Color.diaryAccent)
+    }
+    private func stopListening() { Task { await voice.stop() } }
     private var send: some View {
-        Button { editing = false; Task { _ = await coach.send() } } label: {
+        Button { editing = false; Task { await voice.stop(); _ = await coach.send() } } label: {
             Group {
                 if coach.isSending { ProgressView() }
-                else if typeSize.isAccessibilitySize { Text("Send").font(.headline).fixedSize() }
-                else { Image(systemName: "arrow.up").font(.system(size: 22, weight: .semibold)) }
+                else {
+                    Image(systemName: "arrow.up").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 34, height: 34).background(Color.diaryAccent, in: Circle())
+                }
             }
-            .frame(minWidth: 48, minHeight: 48)
-            .padding(.horizontal, typeSize.isAccessibilitySize ? 12 : 0)
+            .frame(minWidth: 44, minHeight: 48).contentShape(Rectangle())
         }
-        .buttonStyle(.glassProminent).buttonBorderShape(.capsule).tint(Color.diaryAccent)
+        .buttonStyle(.plain).opacity(coach.canSend || coach.isSending ? 1 : 0.4)
         .disabled(!coach.canSend)
         .accessibilityLabel("Send").accessibilityIdentifier("coachSend")
     }
