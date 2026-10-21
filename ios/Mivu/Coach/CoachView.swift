@@ -138,8 +138,9 @@ struct CoachView: View {
         .task(id: navigationRequest?.requestID) {
             guard let request = navigationRequest else { return }
             if request.target != nil { _ = await coach.seek(request) }
-            if let draft = request.draft, !Task.isCancelled { coach.prefill(draft) }
+            // The quote goes first: startReply refuses a composer that already has text.
             if let reply = request.reply, !Task.isCancelled, coach.startReply(reply) { editing = true }
+            if let draft = request.draft, !Task.isCancelled { coach.prefill(draft) }
             guard !Task.isCancelled, navigationRequest?.requestID == request.requestID else { return }
             onNavigationConsumed(request.requestID)
         }
@@ -580,8 +581,8 @@ struct CoachView: View {
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if let question = turn.question, !question.candidates.isEmpty, coach.timeline?.window.isLatest(turn.id) == true {
-                CoachQuestionChips(question: question, meals: coach.linkedMeals(turn), model: coach.diary) { target, label in
-                    Task { await coach.answer(target, label: label) }
+                CoachQuestionChips(question: question, meals: coach.linkedMeals(turn), model: coach.diary) { target, label, excerpt in
+                    Task { await coach.answer(target, label: label, excerpt: excerpt) }
                 }.disabled(coach.isWorking)
             }
             if turn.state != .completed {

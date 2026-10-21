@@ -184,25 +184,30 @@ private final class CoachNavigationReadFence: Sendable {
         // A quote changed mid-send would keep the sent text in the composer for a second send.
         guard !isSending else { return }
         synchronizeDraftOwnership()
+        attachmentDraft.reply = Self.quote(turn, fromPip: fromPip)
+    }
+    private static func quote(_ turn: CoachExchangeSummary, fromPip: Bool) -> CoachReply {
         let text = (fromPip ? turn.assistantText ?? "" : turn.text).trimmingCharacters(in: .whitespacesAndNewlines)
-        attachmentDraft.reply = CoachReply(target: .message(turnID: turn.id, fromPip: fromPip),
-                                           excerpt: text.isEmpty ? "Photo" : String(text.prefix(280)))
+        return CoachReply(target: .message(turnID: turn.id, fromPip: fromPip), excerpt: text.isEmpty ? "Photo" : String(text.prefix(280)))
     }
     /// Asks Coach to finish what an incomplete exchange could not, quoting what already saved.
     func finishRest(of turn: CoachExchangeSummary) async {
-        guard !isSending, attachmentDraft.reply == nil, attachmentDraft.attachments.isEmpty,
-              draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        draft.text = turn.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Finish the rest" : turn.text
-        reply(to: turn, fromPip: true)
-        await send()
+        await sendTap(turn.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Finish the rest" : turn.text, reply: Self.quote(turn, fromPip: true))
     }
     /// Answers Coach's question with one tap: the chosen record is quoted and the label is the message.
-    func answer(_ target: CoachReply.Target, label: String) async {
-        guard !isSending, attachmentDraft.reply == nil, attachmentDraft.attachments.isEmpty,
-              draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        draft.text = label
-        attachmentDraft.reply = CoachReply(target: target, excerpt: String(label.prefix(280)))
+    func answer(_ target: CoachReply.Target, label: String, excerpt: String? = nil) async {
+        await sendTap(label, reply: CoachReply(target: target, excerpt: String((excerpt ?? label).prefix(280))))
+    }
+    /// Sends a one-tap message; anything the person was composing is set aside and put back afterwards.
+    private func sendTap(_ text: String, reply: CoachReply) async {
+        synchronizeDraftOwnership()
+        guard !isSending, !attachmentDraft.isPreparing else { return }
+        let kept = draft, keptReply = attachmentDraft.reply
+        let composing = attachmentDraft.isValid || keptReply != nil
+        if composing { draft = MealDraft(submissionID: UUID(), text: text, photos: []) } else { draft.text = text }
+        attachmentDraft.reply = reply
         await send()
+        if composing { draft = kept; attachmentDraft.reply = keptReply }
     }
     /// A Diary handoff quote; never replaces a message the person already started.
     @discardableResult func startReply(_ reply: CoachReply) -> Bool {
@@ -651,10 +656,15 @@ private final class CoachNavigationReadFence: Sendable {
            !(meal.items + meal.submissions.flatMap { $0.proposal?.items ?? [] }).contains(where: { $0.id == itemID }) { return .unavailable }
         return value
     }
-    func undoState(_ receipt: CoachCommittedReceipt) -> CoachUndoState? { linksAreCurrent ? undoStates[receipt.operationKey] : nil }
+    private var undoing: Set<String> = []
+    /// Hidden while its undo runs, so a second tap cannot race the first.
+    func undoState(_ receipt: CoachCommittedReceipt) -> CoachUndoState? {
+        linksAreCurrent && !undoing.contains(receipt.operationKey) ? undoStates[receipt.operationKey] : nil
+    }
     /// A direct diary edit, not a chat exchange; the card re-reads availability afterwards.
     func undo(_ receipt: CoachCommittedReceipt) async {
-        guard let owner = diary.selection?.identity.profileID else { return }
+        guard let owner = diary.selection?.identity.profileID, undoing.insert(receipt.operationKey).inserted else { return }
+        defer { undoing.remove(receipt.operationKey) }
         await diary.change { try await self.diary.store.undoCoachChange(operationKey: receipt.operationKey, expectedProfileID: owner) }
         await refreshLinks()
     }

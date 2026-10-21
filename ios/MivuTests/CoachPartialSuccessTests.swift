@@ -99,4 +99,28 @@ func interruptAfterWrite<R>(_ store: DiaryStore, _ profileID: UUID, _ turnID: UU
         #expect(page.exchanges.count == 2 && page.exchanges.last?.text == "Finish the rest")
         #expect(page.exchanges.last?.reply?.target == .message(turnID: first.id, fromPip: true))
     }
+
+    @Test func oneTapAnswersSendWhileComposingAndKeepTheDraft() async throws {
+        let root = URL.temporaryDirectory.appending(path: "CoachPartial-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
+        _ = try await store.startDay(at: Date())
+        let today = diaryDateLabel(Date(), zone: TimeZone.current.identifier)
+        let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
+        let model = PartialModel([result([call("log_food", log(today), id: "a")]), result([call("no_such_tool", "{}", id: "b")]),
+                                  result(text: "Nothing else to do."), result(text: "Kept as is.")])
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { input, _ in try await model.infer(input) } })
+        coach.draft.text = "Eggs and a thing"
+        #expect(await coach.send()); await coach.waitForWorker()
+        let owner = try #require(diary.selection).identity.profileID
+        let first = try #require(try await store.coachPage(.latest, expectedProfileID: owner).exchanges.last)
+        let meal = try #require(first.receipts.first?.mealID)
+        coach.draft.text = "Half-typed note"
+        await coach.finishRest(of: first); await coach.waitForWorker()
+        #expect(try await store.coachPage(.latest, expectedProfileID: owner).exchanges.count == 2)
+        #expect(coach.draft.text == "Half-typed note" && coach.attachmentDraft.reply == nil)
+        await coach.answer(.meal(mealID: meal), label: "Keep it", excerpt: "Eggs"); await coach.waitForWorker()
+        let last = try #require(try await store.coachPage(.latest, expectedProfileID: owner).exchanges.last)
+        #expect(last.text == "Keep it" && last.reply == CoachReply(target: .meal(mealID: meal), excerpt: "Eggs"))
+        #expect(coach.draft.text == "Half-typed note")
+    }
 }

@@ -5,7 +5,8 @@ struct CoachQuestionChips: View {
     let question: CoachQuestion
     let meals: [MealReadModel]
     var model: DiaryViewModel? = nil
-    let onPick: (CoachReply.Target, String) -> Void
+    /// The target, the message sent, and the quote shown above it.
+    let onPick: (CoachReply.Target, String, String) -> Void
     @ScaledMetric(relativeTo: .body) private var thumbnail = 44.0
 
     private func mealID(_ target: CoachReply.Target) -> UUID? {
@@ -21,10 +22,11 @@ struct CoachQuestionChips: View {
     }
     var body: some View {
         if question.kind == .confirm, let target = question.candidates.first {
+            let meal = mealID(target).flatMap { id in meals.first { $0.id == id } }.map { name($0, .meal(mealID: $0.id)) } ?? "Meal"
             HStack(spacing: 12) {
-                Button(role: .destructive) { onPick(target, "Remove it") } label: { Text("Remove").frame(maxWidth: .infinity, minHeight: 44) }
+                Button(role: .destructive) { onPick(target, "Remove it", meal) } label: { Text("Remove").frame(maxWidth: .infinity, minHeight: 44) }
                     .buttonStyle(.bordered).tint(Color.diaryError).accessibilityIdentifier("coachConfirmRemove")
-                Button { onPick(target, "Keep it") } label: { Text("Keep").frame(maxWidth: .infinity, minHeight: 44) }
+                Button { onPick(target, "Keep it", meal) } label: { Text("Keep").frame(maxWidth: .infinity, minHeight: 44) }
                     .buttonStyle(.bordered).tint(Color.diaryAccent).accessibilityIdentifier("coachConfirmKeep")
             }
         } else {
@@ -32,7 +34,7 @@ struct CoachQuestionChips: View {
                 ForEach(Array(question.candidates.enumerated()), id: \.offset) { _, target in
                     if let id = mealID(target), let meal = meals.first(where: { $0.id == id }) {
                         let title = name(meal, target)
-                        Button { onPick(target, title) } label: {
+                        Button { onPick(target, title, title) } label: {
                             HStack(spacing: 12) {
                                 MealThumbnail(meal: meal, model: model, size: thumbnail).accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 2) {

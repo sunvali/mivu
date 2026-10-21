@@ -135,6 +135,7 @@ import XCTest
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         let prefilled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value BEGINSWITH %@", "About the "), object: input)
         XCTAssertEqual(XCTWaiter.wait(for: [prefilled], timeout: 10), .completed, "Coach draft was \(input.value ?? "nil")")
+        XCTAssertTrue(app.descendants(matching: .any)["coachReplyBar"].waitForExistence(timeout: 5), "The handoff quotes the food")
     }
 
     func testAskPipAboutFoodPrefillsCoach() {

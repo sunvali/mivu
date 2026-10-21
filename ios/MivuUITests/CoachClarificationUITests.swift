@@ -36,6 +36,9 @@ import XCTest
         XCTAssertGreaterThanOrEqual(remove.frame.height, 44)
         remove.tap()
         XCTAssertTrue(remove.waitForNonExistence(timeout: 20), "Buttons leave once answered")
+        let quote = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'coachQuote-'")).firstMatch
+        XCTAssertTrue(quote.waitForExistence(timeout: 5))
+        XCTAssertFalse(quote.label.contains("Remove it"), "The answer quotes the meal, not itself: \(quote.label)")
         app.tabBars.buttons["Today"].tap()
         XCTAssertFalse(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 3), "The confirmed meal is gone")
     }
