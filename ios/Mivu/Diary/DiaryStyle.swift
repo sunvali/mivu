@@ -114,6 +114,7 @@ struct NutritionSummary: View {
         Text(totals.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
             .font(.system(size: energySize, weight: .semibold, design: .default)).monospacedDigit().foregroundStyle(Color.diaryEnergy)
             .contentTransition(.numericText()).animation(reduceMotion ? nil : .snappy(duration: MivuMotion.numeric), value: totals.kcal)
+            .accessibilityIdentifier("nutritionEnergy")
     }
     private var separator: some View {
         Rectangle().fill(Color.diaryRule).frame(width: 1, height: 36).padding(.horizontal, 10).accessibilityHidden(true)

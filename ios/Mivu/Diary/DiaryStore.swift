@@ -392,6 +392,10 @@ actor DiaryStore {
         return try pagedMutation(expectedProfileID) { try $0.deleteItem(mealID: mealID, itemID: itemID, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
     }
 
+    func scaleMeal(mealID: UUID, targetKcal: Double, expectedRevision: Int, expectedProfileID: UUID? = nil) throws {
+        return try pagedMutation(expectedProfileID) { try $0.scaleMeal(mealID: mealID, targetKcal: targetKcal, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+
     func addPhotos(mealID: UUID, photos: [MealPhoto], expectedProfileID: UUID? = nil) throws {
         return try pagedMutation(expectedProfileID) { try $0.addPhotos(mealID: mealID, photos: photos, expected: $1, maximumBytes: maximumFileBytes) }
     }

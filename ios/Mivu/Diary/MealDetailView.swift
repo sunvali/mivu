@@ -14,6 +14,7 @@ struct MealDetailView: View {
     private enum Deletion { case meal, photo(UUID), food(FoodItem, revision: Int) }
     @State private var deletion: Deletion?
     @State private var showMove = false
+    @State private var showScale = false
     @State private var movedDayID: UUID?
     @State private var viewingPhoto: DiaryPhotoReference?
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -230,6 +231,9 @@ struct MealDetailView: View {
             case .food: Text("Only this food is removed. The meal keeps its other foods.")
             }
         }
+        .sheet(isPresented: $showScale) {
+            if let meal = model.meal(mealID), let owner = model.readModel?.profile.id { ScaleMealSheet(model: model, meal: meal, ownerID: owner) }
+        }
         .sheet(isPresented: $showMove) {
             if let meal = model.meal(mealID), let owner = model.readModel?.profile.id {
                 MoveMealSheet(model: model, meal: meal, ownerID: owner) { movedDayID = $0 }
@@ -315,6 +319,11 @@ struct MealDetailView: View {
             }
             if model.sampleMode { Text("Apple sample estimate — not food recognition").font(.caption).foregroundStyle(Color.diarySecondary) }
             if meal.isSaved { NutritionSummary(totals: meal.totals) }
+            if meal.state == .saved, (meal.totals.kcal ?? 0) > 0 {
+                Button { showScale = true } label: { Label("Adjust total", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, minHeight: 44) }
+                    .buttonStyle(.glass).accessibilityHint("Resizes every food in this meal to reach a calorie total")
+                    .accessibilityIdentifier("adjustMealTotal")
+            }
             else if meal.state != .awaitingReview {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Nutrition").font(.headline)
@@ -433,6 +442,73 @@ private struct MoveMealSheet: View {
             try await model.store.moveMeal(mealID, to: selectedDay, expectedRevision: originalRevision,
                                            expectedDayID: originalDayID, expectedProfileID: ownerID)
         }) { onMoved(selectedDay); dismiss() }
+    }
+}
+
+/// Resizes the whole meal to a calorie total; the revision is captured when the sheet opens.
+private struct ScaleMealSheet: View {
+    @Bindable var model: DiaryViewModel
+    let mealID: UUID
+    let ownerID: UUID
+    let revision: Int
+    let currentKcal: Double
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var target: String
+    @State private var saving = false
+    @FocusState private var focused: Bool
+    init(model: DiaryViewModel, meal: MealReadModel, ownerID: UUID) {
+        self.model = model; mealID = meal.id; self.ownerID = ownerID; revision = meal.revision
+        currentKcal = meal.totals.kcal ?? 0
+        _target = State(initialValue: (meal.totals.kcal ?? 0).formatted(.number.precision(.fractionLength(0)).grouping(.never)))
+    }
+    private var value: Double? {
+        guard let kcal = Double(target.replacingOccurrences(of: ",", with: ".")), kcal.isFinite, (0.1...3).contains(kcal / currentKcal) else { return nil }
+        return kcal
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent { TextField("kcal", text: $target).keyboardType(.decimalPad).multilineTextAlignment(.trailing).monospacedDigit()
+                        .focused($focused).accessibilityIdentifier("mealTargetKcal") } label: { Text("Total calories") }
+                        .frame(minHeight: 44).accessibilityElement(children: .contain)
+                } header: { Text("New total") } footer: {
+                    Text("Every food in this meal is resized by the same amount. Allowed: 10% to 300% of the current \(currentKcal.formatted(.number.precision(.fractionLength(0)))) kcal.")
+                }
+                Section("Preview") {
+                    let text = value.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—"
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(text).font(.largeTitle.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diaryEnergy).contentTransition(.numericText())
+                        Text("kcal").foregroundStyle(Color.diarySecondary)
+                    }
+                    .accessibilityElement(children: .ignore).accessibilityLabel(value == nil ? "No valid total" : "\(text) kcal").accessibilityIdentifier("mealPreviewKcal")
+                    if let value { Text("\((value / currentKcal).formatted(.number.precision(.fractionLength(2))))× of the current portions").font(.subheadline).foregroundStyle(Color.diarySecondary) }
+                }
+                if let message = model.errorMessage {
+                    Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
+                }
+            }
+            .disabled(saving)
+            .scrollContentBackground(.hidden).background(Color.diaryCanvas).tint(.diaryAccent)
+            .navigationTitle("Adjust total").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focused = false } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { Task { await save() } }
+                        .disabled(saving || value == nil || model.readModel?.profile.id != ownerID).accessibilityIdentifier("saveMealTotal")
+                }
+            }
+            .interactiveDismissDisabled(saving)
+            .onChange(of: model.readModel?.profile.id) { _, id in if id != ownerID { dismiss() } }
+        }
+        .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
+    }
+    private func save() async {
+        guard let kcal = value, !saving else { return }
+        saving = true; defer { saving = false }
+        if await model.change({ try await model.store.scaleMeal(mealID: mealID, targetKcal: kcal, expectedRevision: revision, expectedProfileID: ownerID) }) { dismiss() }
     }
 }
 

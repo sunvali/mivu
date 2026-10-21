@@ -37,6 +37,7 @@ extension CoachWrite {
             case .append(_, let items, let revision): arguments = ["items": try foods(items), "revision": revision]
             case .accept(_, _, let revision), .deleteMeal(_, let revision), .deletePhoto(_, _, let revision), .retry(_, let revision), .startDay(let revision): arguments = ["revision": revision]
             case .deleteItem(_, let item, let revision): arguments = ["item": item.uuidString, "revision": revision]
+            case .scaleMeal(_, let target, let revision): arguments = ["target": target, "revision": revision]
             case .move(_, let date, let revision, _): arguments = ["date": date, "revision": revision]
             case .attach(_, let ids, let role, let revision): arguments = ["photos": ids.map(\.uuidString).sorted(), "role": role.rawValue, "revision": revision]
             case .goals(_, let targets, let weight, let clear, let credit, let revision):

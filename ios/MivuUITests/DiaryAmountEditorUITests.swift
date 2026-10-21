@@ -62,6 +62,33 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: doubled, object: nil)], timeout: 5), .completed, "Preview \(preview.label) from \(before ?? -1)")
     }
 
+    func testAdjustMealTotal() {
+        let app = launchWithMeal()
+        // The sample meal is far below 650 kcal / 3, so add a 500 kcal food first.
+        let add = app.buttons["addFoodManually"]
+        reveal(add, in: app, above: app.buttons["mealAskPip"]); add.tap()
+        let name = app.textFields["manualFoodName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Synthetic stew")
+        let calories = app.textFields["manualCalories"]
+        for _ in 0..<4 where !calories.isHittable { app.swipeUp() }
+        calories.tap(); calories.typeText("500")
+        if app.buttons["doneManualNutrition"].exists { app.buttons["doneManualNutrition"].tap() }
+        app.buttons["saveManualNutrition"].tap()
+        let adjust = app.buttons["adjustMealTotal"]
+        for _ in 0..<6 where app.buttons.matching(identifier: "editItem").count < 2 { _ = adjust.waitForExistence(timeout: 2) }
+        reveal(adjust, in: app); XCTAssertGreaterThanOrEqual(adjust.frame.height, 44); adjust.tap()
+        let field = app.textFields["mealTargetKcal"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        replace(field, with: "650")
+        let preview = app.descendants(matching: .any)["mealPreviewKcal"].firstMatch
+        XCTAssertEqual(kcal(preview), 650, "field=\(field.value ?? "nil") preview=\(preview.exists) \(preview.label)")
+        if app.buttons["Done"].firstMatch.exists { app.buttons["Done"].firstMatch.tap() }
+        app.buttons["saveMealTotal"].tap()
+        let summary = app.staticTexts["nutritionEnergy"].firstMatch
+        let near = NSPredicate { _, _ in summary.exists && abs((Double(summary.label) ?? 0) - 650) <= 10 }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: near, object: nil)], timeout: 10), .completed, "Summary showed \(summary.label)")
+    }
+
     func testDeleteFoodRemovesRowAfterConfirm() {
         let app = launchWithMeal()
         let add = app.buttons["addFoodManually"]

@@ -157,6 +157,10 @@ extension DiaryTransaction {
             case .deleteItem(let id, let item, let revision):
                 _ = try meal(id, revision: revision); let items = try mealItems(id: id)
                 guard items.contains(where: { $0.id == item }) else { throw DiaryError.notFound }; guard items.count > 1 else { throw DiaryError.invalidData }
+            case .scaleMeal(let id, let target, let revision):
+                _ = try meal(id, revision: revision); guard try mealProjection(id: id).state == .saved else { throw DiaryError.invalidData }
+                let known = try mealItems(id: id).compactMap(\.nutrition.kcal).reduce(0, +)
+                guard known > 0, (0.1...3).contains(target / known) else { throw DiaryError.invalidData }
             case .deletePhoto(let id, let photo, let revision): _ = try meal(id, revision: revision); guard try photoMetadata(photoID: photo, owner: .meal(id)) != nil else { throw DiaryError.notFound }
             case .goals(let date, let targets, _, _, _, let revision):
                 guard try exactGoal(on: date)?.revision == revision else { throw DiaryError.staleRevision }
@@ -333,6 +337,9 @@ extension DiaryTransaction {
         case .deleteItem(let id, let item, _):
             try deleteItem(mealID: id, itemID: item, expectedRevision: nil)
             receipt.mealID = id; receipt.itemID = item; receipt.dayID = try mealRecord(id: id).dayID; receipt.resultJSON = try coachJSON(mealResult(id))
+        case .scaleMeal(let id, let target, _):
+            try scaleMeal(mealID: id, targetKcal: target, expectedRevision: nil)
+            receipt.mealID = id; receipt.dayID = try mealRecord(id: id).dayID; receipt.resultJSON = try coachJSON(mealResult(id))
         case .deletePhoto(let id, let photoID, _):
             receipt.dayID = try mealRecord(id: id).dayID; receipt.mealID = id
             try deleteMealPhoto(mealID: id, photoID: photoID); receipt.resultJSON = try coachJSON(Deleted(id: photoID))
