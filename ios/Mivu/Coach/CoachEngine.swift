@@ -175,7 +175,7 @@ struct CoachEngine: Sendable {
             // A late account/profile response cannot even change the original turn's state.
             if (try? await store.validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)) != nil {
                 // Saved food is never reported as a failure; the person can ask for the rest.
-                if !(error is CancellationError), let stored = try? await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID), !stored.receipts.isEmpty,
+                if !(error is CancellationError || (error as? URLError)?.code == .cancelled || error as? SessionError == .sessionChanged), let stored = try? await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID), !stored.receipts.isEmpty,
                    let text = try? await store.coachCommittedSummary(turnID: turnID, expectedProfileID: expectedProfileID),
                    (try? await store.finishCoachTurn(turnID: turnID, assistantText: text, incomplete: true, epoch: epoch, expectedProfileID: expectedProfileID)) != nil,
                    let done = try? await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID) { return done }

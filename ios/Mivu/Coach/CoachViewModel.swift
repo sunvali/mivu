@@ -191,7 +191,7 @@ private final class CoachNavigationReadFence: Sendable {
     func finishRest(of turn: CoachExchangeSummary) async {
         guard !isSending, attachmentDraft.reply == nil, attachmentDraft.attachments.isEmpty,
               draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        draft.text = turn.text
+        draft.text = turn.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Finish the rest" : turn.text
         reply(to: turn, fromPip: true)
         await send()
     }
