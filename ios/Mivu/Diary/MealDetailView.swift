@@ -40,11 +40,6 @@ struct MealDetailView: View {
                                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
                             NutritionSummary(totals: nutritionTotals(proposal.items), title: "Estimated totals")
                             ForEach(proposal.items, id: \.id) { item in itemRow(item, editable: true, reviewSubmissionID: review.id) }
-                            Button { Task { await model.acceptReview(mealID: meal.id, submissionID: review.id, expectedProfileID: snapshot.profile.id) } } label: {
-                                Label("Mark reviewed", systemImage: "checkmark.circle").frame(maxWidth: .infinity, minHeight: 52)
-                            }
-                            .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
-                            .accessibilityIdentifier("acceptReview")
                         }.listRowBackground(Color.diarySurface)
                     }
                     if meal.photos.count > 1 {
@@ -166,13 +161,27 @@ struct MealDetailView: View {
                             .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySuccess)
                             .frame(minHeight: 44).accessibilityIdentifier("movedMealDayReceipt")
                     }
-                    Button { askPip(about: nil, in: meal) } label: {
-                        Label("Ask Pip about this meal", systemImage: "sparkles").font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                    // A pending estimate pins its own primary action; Ask Pip shrinks to an icon beside it.
+                    let review = meal.submissions.last(where: { $0.state == .awaitingReview && $0.proposal != nil })
+                    HStack(spacing: 12) {
+                        if let review, let owner = model.readModel?.profile.id {
+                            Button { Task { await model.acceptReview(mealID: meal.id, submissionID: review.id, expectedProfileID: owner) } } label: {
+                                Label("Mark reviewed", systemImage: "checkmark.circle").font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                            }
+                            .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
+                            .accessibilityIdentifier("acceptReview")
+                        }
+                        Button { askPip(about: nil, in: meal) } label: {
+                            Group {
+                                if review != nil { Image(systemName: "sparkles").frame(width: 52, height: 52).accessibilityLabel("Ask Pip about this meal") }
+                                else { Label("Ask Pip about this meal", systemImage: "sparkles").frame(maxWidth: .infinity, minHeight: 52) }
+                            }.font(.headline)
+                        }
+                        .buttonStyle(.glass).tint(.diaryAccent)
+                        .disabled(model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
+                        // Keeps the identifier Coach navigation tests use for the source-conversation route.
+                        .accessibilityIdentifier(meal.sourceTurnID != nil ? "mealSourceChat" : "mealAskPip")
                     }
-                    .buttonStyle(.glass).tint(.diaryAccent)
-                    .disabled(model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
-                    // Keeps the identifier Coach navigation tests use for the source-conversation route.
-                    .accessibilityIdentifier(meal.sourceTurnID != nil ? "mealSourceChat" : "mealAskPip")
                 }
                 .padding(.horizontal, 20).padding(.vertical, 12).background(Color.diaryCanvas)
             }
