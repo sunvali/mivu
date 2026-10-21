@@ -98,7 +98,7 @@ import XCTest
         nudge(toward: reply, in: app)
         let arrival = XCTAttachment(screenshot: app.screenshot()); arrival.name = "English dark accessibility5 latest reply arrival"; arrival.lifetime = .keepAlways; add(arrival)
         XCTAssertTrue(input.isHittable, "The composer must remain reachable after the latest reply")
-        XCTAssertTrue(send.isHittable)
+        XCTAssertTrue(app.buttons["coachVoice"].isHittable, "A sent draft returns the trailing slot to voice")
         let receipt = app.buttons["coachMealLink"].firstMatch
         XCTAssertTrue(receipt.waitForExistence(timeout: 5))
         nudge(toward: receipt, in: app)
