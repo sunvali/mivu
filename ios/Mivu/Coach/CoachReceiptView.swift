@@ -135,9 +135,16 @@ struct CoachReceiptView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 0) { receiptStatus; reviewButton }
+                VStack(alignment: .leading, spacing: 0) { receiptStatus; reviewButton; undoButton }
             } else {
-                HStack(spacing: 12) { receiptStatus; Spacer(minLength: 0); reviewButton }
+                // Undo joins the header row so it doesn't add a row to every fresh receipt.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { receiptStatus; Spacer(minLength: 0); undoButton; reviewButton }
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: 12) { receiptStatus; Spacer(minLength: 0); reviewButton }
+                        undoButton
+                    }
+                }
             }
             ForEach(Array(presentation.committedItems.enumerated()), id: \.offset) { _, item in
                 Text(item).accessibilityIdentifier("coachReceiptQuantity")
@@ -156,10 +163,6 @@ struct CoachReceiptView: View {
             }
             if let notice = presentation.targetNotice {
                 Text(notice).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptTargetStatus")
-            }
-            if undoState == .available {
-                Button(action: undo) { Label("Undo", systemImage: "arrow.uturn.backward").frame(minWidth: 44, minHeight: 44) }
-                    .accessibilityIdentifier("coachUndo")
             }
             if let macros = presentation.committedMacros {
                 DisclosureGroup {
@@ -180,6 +183,12 @@ struct CoachReceiptView: View {
     }
     private var receiptStatus: some View {
         Text(undoState == .undone ? "Undone" : presentation.committedStatus).font(.subheadline.weight(.semibold))
+    }
+    @ViewBuilder private var undoButton: some View {
+        if undoState == .available {
+            Button(action: undo) { Label("Undo", systemImage: "arrow.uturn.backward").frame(minWidth: 44, minHeight: 44) }
+                .accessibilityIdentifier("coachUndo")
+        }
     }
     @ViewBuilder private var committedDate: some View {
         if let date = presentation.committedDate {
