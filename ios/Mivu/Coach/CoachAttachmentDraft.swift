@@ -18,6 +18,7 @@ import Observation
         let submissionID: UUID
         let text: String
         let attachments: [MealPhoto]
+        var reply: CoachReply? = nil
     }
     struct Dependencies: Sendable {
         var prepare: @Sendable (Date, DiarySelectionOwnership) async throws -> CoachCapturePreparation
@@ -46,6 +47,7 @@ import Observation
 
     private(set) var ownership: DiarySelectionOwnership?
     var text: String
+    var reply: CoachReply?
     private(set) var attachments: [MealPhoto]
     private(set) var submissionID: UUID
     private(set) var uncertainAttempt: Attempt?
@@ -72,12 +74,12 @@ import Observation
     var reservedAttachmentCount: Int { reservations.values.filter { !$0.replacement }.count }
     var isPreparing: Bool { !reservations.isEmpty }
     var isValid: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty }
-    private var snapshot: Snapshot { Snapshot(submissionID: submissionID, text: text, attachments: attachments) }
+    private var snapshot: Snapshot { Snapshot(submissionID: submissionID, text: text, attachments: attachments, reply: reply) }
 
     func synchronizeOwnership(_ selected: DiarySelectionOwnership?) {
         guard ownership != selected else { return }
         generation &+= 1; presentationID = nil; reservations = [:]
-        ownership = selected; text = ""; attachments = []; order = [:]; nextOrder = 0
+        ownership = selected; text = ""; reply = nil; attachments = []; order = [:]; nextOrder = 0
         submissionID = UUID(); uncertainAttempt = nil; lastAcceptedAttempt = nil; captureReceipt = nil
     }
 
@@ -211,7 +213,7 @@ import Observation
     private func accepted(_ attempt: Attempt, result: CoachExchangeSummary) {
         lastAcceptedAttempt = attempt; uncertainAttempt = nil; captureReceipt = result.id
         if snapshot == attempt.snapshot {
-            text = ""; attachments = []; order = [:]; nextOrder = 0; submissionID = UUID()
+            text = ""; reply = nil; attachments = []; order = [:]; nextOrder = 0; submissionID = UUID()
         } else if submissionID == attempt.payload.submissionID { submissionID = UUID() }
     }
 
@@ -248,7 +250,7 @@ import Observation
             let preparation = try await dependencies.prepare(Date(), owner)
             try await validateSend(owner)
             guard preparation.ownership == owner else { throw DiaryError.wrongOwner }
-            let payload = try CoachSubmissionPayload(submissionID: input.submissionID, text: input.text, attachments: input.attachments, context: preparation.context)
+            let payload = try CoachSubmissionPayload(submissionID: input.submissionID, text: input.text, attachments: input.attachments, context: preparation.context, reply: input.reply)
             attempt = Attempt(ownership: owner, payload: payload, snapshot: input)
         }
         uncertainAttempt = attempt

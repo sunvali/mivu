@@ -135,6 +135,20 @@ struct CoachSubmissionManifest: Codable, Equatable, Sendable {
     var attachments: [Attachment]
     var pendingMealID: UUID?
     var pendingMealRevision: Int?
+    var reply: CoachReply? = nil
+}
+
+/// What a turn replies to: an earlier message or a Diary record. The excerpt is the quote shown when it was sent.
+struct CoachReply: Codable, Equatable, Sendable {
+    enum Target: Codable, Equatable, Sendable {
+        case message(turnID: UUID, fromPip: Bool)
+        case meal(mealID: UUID)
+        case item(mealID: UUID, itemID: UUID)
+        case day(dayID: UUID)
+    }
+    var target: Target
+    var excerpt: String
+    var isValid: Bool { excerpt.count <= 280 && !excerpt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
 
 struct CoachSubmissionPayload: Sendable {
@@ -144,8 +158,8 @@ struct CoachSubmissionPayload: Sendable {
     let context: CoachCaptureContext
     let manifest: CoachSubmissionManifest
     init(submissionID: UUID, text: String, attachments: [MealPhoto], context: CoachCaptureContext,
-         pendingMealID: UUID? = nil, pendingMealRevision: Int? = nil) throws {
-        guard attachments.count <= 8, Set(attachments.map(\.id)).count == attachments.count, text.count <= 20_000,
+         pendingMealID: UUID? = nil, pendingMealRevision: Int? = nil, reply: CoachReply? = nil) throws {
+        guard attachments.count <= 8, reply?.isValid != false, Set(attachments.map(\.id)).count == attachments.count, text.count <= 20_000,
               context.capturedAt.timeIntervalSince1970.isFinite,
               TimeZone(identifier: context.timeZoneID) != nil,
               context.previousDayConfirmedAt == nil || context.previousDayConfirmedAt!.timeIntervalSince1970.isFinite,
@@ -158,7 +172,7 @@ struct CoachSubmissionPayload: Sendable {
         manifest = CoachSubmissionManifest(submissionID: submissionID, context: context,
             textFingerprint: fingerprint(Data(text.utf8)), attachments: attachments.map {
                 CoachSubmissionManifest.Attachment(id: $0.id, role: $0.role, createdAt: $0.createdAt, contentFingerprint: fingerprint($0.data))
-            }, pendingMealID: pendingMealID, pendingMealRevision: pendingMealRevision)
+            }, pendingMealID: pendingMealID, pendingMealRevision: pendingMealRevision, reply: reply)
     }
 }
 
@@ -220,6 +234,15 @@ struct CoachContext: Codable, Equatable, Sendable {
     var attachedPhotoIDs: [UUID]? = nil
     var committedReceipts: [CoachCommittedReceipt]? = nil
     var omittedReceiptCount: Int? = nil
+    /// What the person is replying to, resolved to current content for this turn only.
+    var replyTo: Reply? = nil
+    struct Reply: Codable, Equatable, Sendable {
+        var target: CoachReply.Target
+        var excerpt: String
+        var turn: Turn? = nil
+        var meal: Meal? = nil
+        var unavailable: Bool? = nil
+    }
 }
 
 extension CoachContext {

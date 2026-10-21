@@ -173,8 +173,9 @@ extension DiaryDatabase {
             let progress = try progressRangeInsideContext(transaction, date: diaryDateLabel(work.capturedAt, zone: work.captureTimeZoneID))
             context.weights = progress.weights; context.workouts = progress.workouts
             context.omittedWeightCount = progress.omittedWeights; context.omittedWorkoutCount = progress.omittedWorkouts
-            let facts = try coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID).receipts
-            try context.includeCommittedReceipts(facts)
+            let current = try coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID)
+            try context.includeCommittedReceipts(current.receipts)
+            context.replyTo = try current.reply.map { try coachReplyContext($0, transaction: transaction) }
             context.truncated = recent.count < min(12, Int(work.sequence - 1)) || !context.omittedMeals.isEmpty || context.additionalMealCount > 0 || context.preferencesTruncated == true
             while try JSONEncoder().encode(context).count > 60_000, let meal = context.meals.first {
                 context.meals.removeFirst(); context.omittedMeals.append(.init(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count)); context.truncated = true
@@ -184,6 +185,27 @@ extension DiaryDatabase {
             }
             guard try JSONEncoder().encode(context).count <= 60_000 else { throw CoachError.limitExceeded }; return context
         }
+    }
+    /// One bounded read of what the turn quotes; missing records are explicit, never guessed.
+    private func coachReplyContext(_ reply: CoachReply, transaction: DiaryTransaction) throws -> CoachContext.Reply {
+        var value = CoachContext.Reply(target: reply.target, excerpt: reply.excerpt)
+        do {
+            switch reply.target {
+            case .message(let id, _):
+                guard let turn = try transaction.turn(id: id) else { throw DiaryError.notFound }
+                value.turn = .init(id: turn.id, capturedAt: turn.capturedAt, text: coachBoundedText(turn.text, bytes: 1024),
+                                   assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) })
+            case .meal(let id), .item(let id, _):
+                if case .item(_, let itemID) = reply.target,
+                   !(try transaction.mealItems(id: id)).contains(where: { $0.id == itemID }) { throw DiaryError.notFound }
+                do {
+                    let meal = try coachMealDetail(id, transaction: transaction)
+                    if try JSONEncoder().encode(meal).count <= 8192 { value.meal = meal }
+                } catch CoachError.limitExceeded {} // ids only; the model uses get_meal
+            case .day(let id): _ = try trackingDay(id: id)
+            }
+        } catch DiaryError.notFound { value.unavailable = true }
+        return value
     }
     private func progressRangeInsideContext(_ transaction: DiaryTransaction, date: String) throws -> (weights: [WeightEntry], workouts: [WorkoutReference], omittedWeights: Int, omittedWorkouts: Int) {
         let weights = try domainStatement("SELECT payload FROM weight ORDER BY ordinal DESC, id DESC LIMIT 41")

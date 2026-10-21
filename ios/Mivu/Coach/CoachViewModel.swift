@@ -178,6 +178,23 @@ private final class CoachNavigationReadFence: Sendable {
         draft.text = text
         return true
     }
+    /// Quotes an earlier message, replacing any quote already in the composer.
+    func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
+        // A quote changed mid-send would keep the sent text in the composer for a second send.
+        guard !isSending else { return }
+        synchronizeDraftOwnership()
+        let text = (fromPip ? turn.assistantText ?? "" : turn.text).trimmingCharacters(in: .whitespacesAndNewlines)
+        attachmentDraft.reply = CoachReply(target: .message(turnID: turn.id, fromPip: fromPip),
+                                           excerpt: text.isEmpty ? "Photo" : String(text.prefix(280)))
+    }
+    /// A Diary handoff quote; never replaces a message the person already started.
+    @discardableResult func startReply(_ reply: CoachReply) -> Bool {
+        synchronizeDraftOwnership()
+        guard reply.isValid, attachmentDraft.reply == nil, attachmentDraft.attachments.isEmpty,
+              draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        attachmentDraft.reply = reply
+        return true
+    }
     func seek(_ request: CoachNavigationRequest) async -> Bool {
         guard let target = request.target else { return false }
         traceHistoryNavigation("entered", request)

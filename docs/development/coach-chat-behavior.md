@@ -116,6 +116,27 @@ Those are diary-projection byte limits, not a multimodal request or token limit.
 Omitted records can still be retrieved with existing tools; prior photos are
 not replayed as context.
 
+## Replies
+
+Any message, the person's or Pip's, can be quoted: swipe a row right (replies
+to Pip's answer, or to the person's message before an answer exists) or
+long-press a message and choose Reply. Diary "Ask Pip" opens Coach with a quote
+of the food, meal or day and an empty field; it never replaces a draft already
+in progress. The quote sits inside the top of the field with a 44-point Cancel
+reply control, and is unsent draft state like text.
+
+The accepted `CoachReply` (target ids plus the quoted excerpt, at most 280
+characters) is part of the immutable submission manifest, so reconciliation,
+paging, relaunch and archives carry it unchanged. A later edit or deletion of
+the quoted record does not rewrite it. Tapping the sent quote seeks the original
+message or day through the ordinary seek path, or opens the current meal.
+
+Only the turn being processed sends `replyTo` in its inference context: the
+quoted message's current text and answer (1024 bytes each, read by id even
+outside the 12 recent turns), or the current meal detail when it fits 8 KB, or
+`unavailable`. Ordinary turns encode nothing new and the 60 KB limit holds.
+Design: [Coach reply](../superpowers/specs/2026-10-21-coach-reply-design.md).
+
 ## Backups and acknowledgement
 
 Local capture acknowledgement, committed food changes and backup-folder write
