@@ -6,10 +6,10 @@ import UIKit
 // Explicit UI-test isolation is required by the caller; no provider request is made.
 enum CoachUITestInference {
     static func respond(_ input: [CoachInferenceInput], _: Data) async throws -> CoachInferenceResult {
-        if input.contains(where: {
-            if case .message(role: .user, let text, _) = $0 { return text == "Synthetic delayed weekly report" }
+        if input.last(where: { if case .message(role: .user, _, _) = $0 { return true }; return false }).map({
+            if case .message(_, let text, _) = $0 { return text == "Synthetic delayed weekly report" }
             return false
-        }) {
+        }) == true {
             try await Task.sleep(for: .seconds(8))
         }
         guard let developer = input.compactMap({ entry -> String? in
@@ -17,7 +17,9 @@ enum CoachUITestInference {
         }).last, let range = developer.range(of: "Context: "),
         let data = String(developer[range.upperBound...]).data(using: .utf8) else { throw CoachError.invalidArguments }
         let context = try JSONDecoder().decode(CoachContext.self, from: data)
-        let text = input.compactMap { entry -> String? in
+        // History exchanges precede the tail developer message; only the current capture follows it.
+        let tail = input.lastIndex { if case .message(role: .developer, _, _) = $0 { return true }; return false } ?? 0
+        let text = input[tail...].compactMap { entry -> String? in
             if case .message(role: .user, let text, _) = entry { return text }; return nil
         }.joined(separator: " ").lowercased()
         if text.contains("edit yesterday’s lunch"), text.contains("one more chicken") {
