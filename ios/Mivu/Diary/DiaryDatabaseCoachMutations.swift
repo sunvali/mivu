@@ -174,7 +174,7 @@ extension DiaryTransaction {
             case .coverage(let date, _): _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID)
             case .undo(let key):
                 guard let undo = try coachUndo(key) else { throw CoachError.invalidArguments }
-                guard !undo.undone, try mealRecord(id: undo.mealID).revision == undo.afterRevision else { throw DiaryError.staleRevision }
+                guard !undo.undone, try undoState(undo.mealID) == undo.afterState else { throw DiaryError.staleRevision }
             case .open: break
             }
         }
@@ -313,26 +313,32 @@ extension DiaryTransaction {
         // Review proposals stay with their own review flow.
         guard try mealProjection(id: mealID).state == .saved else { return }
         let payload: DiaryDatabase.Value = before.isEmpty ? .null : .blob(try JSONEncoder().encode(before))
-        try database.execute("INSERT OR IGNORE INTO coach_undo(operationKey, turnID, mealID, afterRevision, beforePayload) VALUES (?, ?, ?, ?, ?)",
-            [.text(key), .text(turnID.uuidString), .text(mealID.uuidString), .integer(try mealRecord(id: mealID).revision), payload])
+        try database.execute("INSERT OR IGNORE INTO coach_undo(operationKey, turnID, mealID, afterRevision, afterState, beforePayload) VALUES (?, ?, ?, ?, ?, ?)",
+            [.text(key), .text(turnID.uuidString), .text(mealID.uuidString), .integer(try mealRecord(id: mealID).revision), .text(try undoState(mealID)), payload])
     }
-    func coachUndo(_ key: String) throws -> (mealID: UUID, afterRevision: Int, before: [FoodItem]?, undone: Bool)? {
-        let statement = try database.mutationStatement("SELECT mealID, afterRevision, beforePayload, undone FROM coach_undo WHERE operationKey = ?", [.text(key)])
+    /// Captures, photos and moves don't bump the meal revision, so availability also compares day, submissions and photos.
+    private func undoState(_ mealID: UUID) throws -> String {
+        let meal = try mealRecord(id: mealID)
+        let submissions = try mealSubmissions(id: mealID).map(\.id.uuidString).sorted(), photos = try photoReferences(owner: .meal(mealID)).map(\.photoID.uuidString).sorted()
+        return "\(meal.revision)/\(meal.dayID)/" + submissions.joined(separator: ",") + "/" + photos.joined(separator: ",")
+    }
+    func coachUndo(_ key: String) throws -> (mealID: UUID, afterRevision: Int, afterState: String, before: [FoodItem]?, undone: Bool)? {
+        let statement = try database.mutationStatement("SELECT mealID, afterRevision, beforePayload, undone, afterState FROM coach_undo WHERE operationKey = ?", [.text(key)])
         defer { sqlite3_finalize(statement) }
         guard try database.mutationStep(statement) else { return nil }
         guard let mealID = try database.mutationOptionalUUID(statement, 0) else { throw DiaryError.invalidData }
         let before = sqlite3_column_type(statement, 2) == SQLITE_NULL ? nil : try JSONDecoder().decode([FoodItem].self, from: database.mutationBlob(statement, 2))
-        return (mealID, Int(sqlite3_column_int64(statement, 1)), before, sqlite3_column_int64(statement, 3) != 0)
+        return (mealID, Int(sqlite3_column_int64(statement, 1)), try database.mutationText(statement, 4), before, sqlite3_column_int64(statement, 3) != 0)
     }
     func coachUndoState(_ key: String) throws -> CoachUndoState? {
         guard let undo = try coachUndo(key) else { return nil }
         if undo.undone { return .undone }
-        do { return try mealRecord(id: undo.mealID).revision == undo.afterRevision ? .available : nil } catch DiaryError.notFound { return nil }
+        do { return try undoState(undo.mealID) == undo.afterState ? .available : nil } catch DiaryError.notFound { return nil }
     }
     /// Restores the snapshot only while the meal is exactly as that change left it; never recreates a deleted meal.
     @discardableResult func undoCoachChange(_ key: String) throws -> UUID? {
         guard let undo = try coachUndo(key) else { throw DiaryError.notFound }
-        guard !undo.undone, try mealRecord(id: undo.mealID).revision == undo.afterRevision else { throw DiaryError.staleRevision }
+        guard !undo.undone, try undoState(undo.mealID) == undo.afterState else { throw DiaryError.staleRevision }
         if let before = undo.before { _ = try commitSavedItems(mealID: undo.mealID, items: before, expectedRevision: undo.afterRevision) }
         else { try deleteMeal(undo.mealID) }
         try database.execute("UPDATE coach_undo SET undone = 1 WHERE operationKey = ?", [.text(key)])

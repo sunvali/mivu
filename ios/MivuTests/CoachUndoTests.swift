@@ -33,6 +33,40 @@ private actor UndoReplies {
         return try await store.applyCoachItemCorrection(turnID: turn.id, mealID: meal.id, item: item, expectedRevision: meal.revision, expectedProfileID: profile.id)
     }
 
+    private func logged(_ store: DiaryStore, _ profile: DiaryProfile) async throws -> (CoachReceipt, DiaryMeal) {
+        let turn = try await capturedTurn(store, text: "Synthetic apple", photos: [], at: now, expectedProfileID: profile.id)
+        let apple = FoodItem(name: "Apple", quantity: 1, unit: "piece", nutrition: NutritionValues(kcal: 95), provenance: .estimate, reference: "Synthetic")
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID), items: [apple], expectedProfileID: profile.id)
+        let mealID = try #require(receipt.mealID)
+        return (receipt, try #require(await store.snapshotForExport().meals.first { $0.id == mealID }))
+    }
+    private func expectStale(_ store: DiaryStore, _ profile: DiaryProfile, _ receipt: CoachReceipt) async throws {
+        let before = try await store.snapshotForExport()
+        #expect(try await store.coachUndoAvailable(operationKey: receipt.operationKey, expectedProfileID: profile.id) == false)
+        await #expect(throws: DiaryError.staleRevision) { try await store.undoCoachChange(operationKey: receipt.operationKey, expectedProfileID: profile.id) }
+        #expect(try await store.snapshotForExport() == before)
+    }
+    @Test func undoHiddenAfterTextCapture() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (receipt, meal) = try await logged(store, profile)
+        let corrected = try await correctedMeal(store, mealID: meal.id, text: "Also a coffee", expectedProfileID: profile.id)
+        #expect(corrected.submissions.count == meal.submissions.count + 1)
+        try await expectStale(store, profile, receipt)
+    }
+    @Test func undoHiddenAfterPhotoAdded() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (receipt, meal) = try await logged(store, profile)
+        try await store.addPhotos(mealID: meal.id, photos: [MealPhoto(data: Data([3, 4]))], expectedProfileID: profile.id)
+        try await expectStale(store, profile, receipt)
+        #expect(try await store.snapshotForExport().meals.first { $0.id == meal.id }?.photos.count == 1)
+    }
+    @Test func undoHiddenAfterMove() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (receipt, meal) = try await logged(store, profile)
+        let other = try await store.startDay(at: now.addingTimeInterval(86_400))
+        try await store.moveMeal(meal.id, to: other.id, expectedProfileID: profile.id)
+        try await expectStale(store, profile, receipt)
+    }
     @Test func undoCorrectionRestoresItems() async throws {
         let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let receipt = try await correction(store, profile, meal)
