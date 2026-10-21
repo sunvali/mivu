@@ -416,7 +416,7 @@ struct DiaryRootView: View {
                     .font(.caption).foregroundStyle(Color.diarySecondary)
             }
             Spacer(minLength: 8)
-            Button { loggedMealID = nil; noteMealID = id } label: {
+            Button { loggedMealID = nil; addNote(to: id) } label: {
                 Text("Add Note").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
                     .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
             }.accessibilityIdentifier("quickLogAddNote")
@@ -430,6 +430,14 @@ struct DiaryRootView: View {
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("quickLogToast")
+    }
+    /// Sample mode keeps the local composer; otherwise the note goes through Coach, quoting the meal.
+    private func addNote(to id: UUID) {
+        guard !model.sampleMode else { noteMealID = id; return }
+        guard let selection = model.selection else { return }
+        let meal = model.meal(id)
+        let title = meal?.items.first?.name ?? meal?.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        openCoachAction(nil, reply: CoachReply(target: .meal(mealID: id), excerpt: String((title.isEmpty ? "Meal" : title).prefix(280))), expectedSelection: selection)
     }
     private var openCoachAction: OpenDiaryCoachAction {
         coachAction(from: coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile))

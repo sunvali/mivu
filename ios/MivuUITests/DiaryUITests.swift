@@ -22,6 +22,19 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Enter nutrition"].waitForExistence(timeout: 5))
     }
 
+    func testAddNoteOrPhotoQuotesMealInCoach() {
+        let app = launchHistory()
+        XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
+        let meal = app.buttons["historyMeal"].firstMatch
+        XCTAssertTrue(meal.waitForExistence(timeout: 5)); meal.tap()
+        XCTAssertFalse(app.buttons["halfPortion"].exists)
+        let note = app.buttons["correctMeal"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5)); // The pinned Ask Pip bar covers the list bottom, so scroll the row above it.
+        for _ in 0..<5 where note.frame.maxY > app.buttons["mealAskPip"].frame.minY { app.swipeUp() }
+        note.tap()
+        XCTAssertTrue(app.buttons["coachReplyCancel"].waitForExistence(timeout: 10), "Coach opens quoting the meal")
+    }
+
     func testSelectingPillShowsThatDaysMeals() {
         let app = launchHistory()
         XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
@@ -255,8 +268,6 @@ import XCTest
         XCTAssertFalse(app.tabBars.buttons["Today"].isHittable, "Focused meal details must hide the tab bar")
         let accept = app.buttons["acceptReview"]
         reveal(accept, in: app); XCTAssertTrue(accept.waitForExistence(timeout: 10)); accept.tap()
-        let half = app.buttons["halfPortion"]
-        reveal(half, in: app); XCTAssertTrue(half.isEnabled); half.tap()
         let edit = app.buttons["editItem"].firstMatch
         reveal(edit, in: app); edit.tap()
         let quantity = app.textFields["itemQuantity"]
