@@ -169,7 +169,8 @@ struct HistoryView: View {
     private func askPipAction() {
         guard let selection = model.selection else { return }
         if let day = recordedDay {
-            openChat(.day(day.id), expectedSelection: selection)
+            let reply = CoachReply(target: .day(dayID: day.id), excerpt: DiaryWeek.format(day.localDate, "EEEE, d MMM"))
+            openChat(.day(day.id), reply: reply, expectedSelection: selection)
         } else {
             openChat(nil, draft: "For \(DiaryWeek.format(selected, "EEEE, d MMM")): ", expectedSelection: selection)
         }

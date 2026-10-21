@@ -40,7 +40,7 @@ import XCTest
         correction.tap()
         replace(app.textFields["weightCorrectionInput"], with: "71")
         app.buttons["saveWeightCorrection"].tap()
-        app.navigationBars.buttons["Progress"].tap()
+        XCTAssertTrue(app.buttons["openWorkouts"].waitForExistence(timeout: 10))
         open("openWorkouts", in: app)
         logWorkout(in: app)
         app.buttons["workoutStrength"].tap()
@@ -262,6 +262,35 @@ import XCTest
         chart.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(selected.waitForExistence(timeout: 5))
         XCTAssertTrue(selected.label.contains("80.0 kg"))
+    }
+
+    func testWeightAskPipQuotesRecord() {
+        let app = launchDiary(extra: ["--coach-inference-fixture"])
+        logWeight("70", in: app)
+        app.tabBars.buttons["Progress"].tap()
+        open("openWeight", in: app)
+        askPip("editWeight", expecting: "Weight · 70", in: app)
+    }
+
+    func testWorkoutAskPipQuotesRecord() {
+        let app = launchDiary(extra: ["--coach-inference-fixture"])
+        app.tabBars.buttons["Progress"].tap()
+        open("openWorkouts", in: app)
+        logWorkout(in: app)
+        replace(app.textFields["workoutDuration"], with: "30")
+        app.buttons["saveWorkout"].tap()
+        askPip("workoutRow", expecting: "30 min", in: app)
+    }
+
+    private func askPip(_ row: String, expecting text: String, in app: XCUIApplication) {
+        let target = app.buttons[row].firstMatch
+        reveal(target, in: app)
+        target.press(forDuration: 1)
+        let ask = app.buttons["Ask Pip"]
+        XCTAssertTrue(ask.waitForExistence(timeout: 5)); ask.tap()
+        let bar = app.otherElements["coachReplyBar"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 10))
+        XCTAssertTrue(bar.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists)
     }
 
     private func launchDiary(extra: [String] = []) -> XCUIApplication {
