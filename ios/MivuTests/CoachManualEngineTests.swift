@@ -22,7 +22,7 @@ private actor RevisionCoachReplies {
         guard let developer = input.compactMap({ item -> String? in
             if case .message(role: .developer, text: let text, images: _) = item { return text }
             return nil
-        }).first,
+        }).last,
               let range = developer.range(of: "Context: ", options: .backwards),
               let data = String(developer[range.upperBound...]).data(using: .utf8),
               let context = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -370,7 +370,7 @@ private actor StartDayReplies {
         guard let developer = input.compactMap({ item -> String? in
             if case .message(role: .developer, text: let text, images: _) = item { return text }
             return nil
-        }).first,
+        }).last,
               let range = developer.range(of: "Context: ", options: .backwards),
               let data = String(developer[range.upperBound...]).data(using: .utf8),
               let context = try JSONSerialization.jsonObject(with: data) as? [String: Any],

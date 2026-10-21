@@ -14,7 +14,7 @@ enum CoachUITestInference {
         }
         guard let developer = input.compactMap({ entry -> String? in
             if case .message(role: .developer, let text, _) = entry { return text }; return nil
-        }).first, let range = developer.range(of: "Context: "),
+        }).last, let range = developer.range(of: "Context: "),
         let data = String(developer[range.upperBound...]).data(using: .utf8) else { throw CoachError.invalidArguments }
         let context = try JSONDecoder().decode(CoachContext.self, from: data)
         let text = input.compactMap { entry -> String? in

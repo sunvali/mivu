@@ -229,7 +229,7 @@ private actor CoachInputFixture {
         _ = try await CoachEngine(store: store, infer: { try await captured.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         let developer = try #require(await captured.input.compactMap { item -> String? in
             if case .message(role: .developer, text: let text, images: _) = item { return text }; return nil
-        }.first)
+        }.last)
         let contextJSON = try #require(developer.components(separatedBy: "Context: ").last)
         let context = try JSONDecoder().decode(CoachContext.self, from: Data(contextJSON.utf8))
         #expect(context.meals.contains { $0.state == .saved && $0.items.contains { $0.name == "Synthetic yogurt" && $0.quantity == 150 && $0.unit == "g" } })
@@ -400,7 +400,7 @@ private actor CoachInputFixture {
         let engine = CoachEngine(store: store, infer: { try await fixture.infer($0, $1) })
         let completed = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
         #expect(completed.state == .completed)
-        let messages = await fixture.input.compactMap { item -> String? in
+        let messages = await fixture.input.suffix(from: await fixture.input.lastIndex { if case .message(.developer, _, _) = $0 { return true }; return false }!).compactMap { item -> String? in
             if case .message(role: .user, text: let text, images: _) = item { return text }; return nil
         }
         #expect(messages.joined() == raw)

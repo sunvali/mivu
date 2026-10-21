@@ -123,6 +123,13 @@ extension DiaryDatabase {
         }
         guard try JSONEncoder().encode(value).count <= 60_000 else { throw CoachError.limitExceeded }; return value
     }
+    private static func receiptLine(_ receipts: [CoachReceipt]) -> String? {
+        let parts = receipts.compactMap { r -> String? in
+            guard r.mealID != nil || r.itemID != nil else { return nil }
+            return "saved key=\(r.operationKey)" + (r.mealID.map { " meal=\($0.uuidString)" } ?? "") + (r.itemID.map { " item=\($0.uuidString)" } ?? "")
+        }
+        return parts.isEmpty ? nil : coachBoundedText("[" + parts.joined(separator: "; ") + "]", bytes: 1024)
+    }
     func coachInferenceContext(turnID: UUID, expectedProfileID: UUID) throws -> CoachContext {
         try domainRead(expectedProfileID: expectedProfileID) { head in
             let transaction = DiaryTransaction(database: self, head: head), work = try workerItem(turnID, head: head)
@@ -134,7 +141,7 @@ extension DiaryDatabase {
             while try mutationStep(previous) {
                 diagnostics?.recordTurnDecode()
                 let turn = try JSONDecoder().decode(CoachTurn.self, from: mutationBlob(previous, 1))
-                recent.append(.init(id: turn.id, capturedAt: turn.capturedAt, text: coachBoundedText(turn.text, bytes: 1024), assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) }))
+                recent.append(.init(id: turn.id, capturedAt: turn.capturedAt, text: coachBoundedText(turn.text, bytes: 1024), assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) }, receipts: Self.receiptLine(turn.receipts)))
             }
             recent.reverse(); while try JSONEncoder().encode(recent).count > 8192 { recent.removeFirst() }
             let daysQuery = try domainStatement("SELECT payload FROM day ORDER BY ordinal DESC, id DESC LIMIT 14")

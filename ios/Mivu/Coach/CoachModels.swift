@@ -186,6 +186,7 @@ struct CoachContext: Codable, Equatable, Sendable {
         var capturedAt: Date
         var text: String
         var assistantText: String?
+        var receipts: String? = nil
     }
     struct MealReference: Codable, Equatable, Sendable {
         var id: UUID
