@@ -139,6 +139,29 @@ import Testing
         #expect(await sending.value && coach.draft.text.isEmpty)
     }
 
+    @Test(arguments: [false, true]) func tapSendRestoresDraftOnlyForTheSameProfile(switches: Bool) async throws {
+        let f = try await Task10Fixture.make(); defer { f.remove() }
+        let first = try #require(f.diary.readModel?.profile.id)
+        await f.diary.createProfile(name: "Synthetic second")
+        let second = try #require(f.diary.readModel?.profile.id)
+        await f.diary.switchProfile(first)
+        var dependencies = Task10Fixture.dependencies(f.diary)
+        let capture = dependencies.capture, diary = f.diary
+        dependencies.capture = { payload, owner in
+            // A profile change that lands while the tap's message is in flight.
+            if switches { await MainActor.run { diary.isSaving = false }; await diary.switchProfile(second) }
+            return try await capture(payload, owner)
+        }
+        let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection(), attachmentDependencies: dependencies)
+        defer { coach.cancel() }
+        coach.draft.text = "Half-typed note"; coach.attachmentDraft.reply = Self.dayReply
+        await coach.answer(.meal(mealID: UUID()), label: "Keep it", excerpt: "Eggs")
+        coach.synchronizeDraftOwnership()
+        #expect(f.diary.readModel?.profile.id == (switches ? second : first))
+        #expect(coach.draft.text == (switches ? "" : "Half-typed note"))
+        #expect(coach.attachmentDraft.reply == (switches ? nil : Self.dayReply))
+    }
+
     @Test func messageExcerptUsesTextOrPhoto() async throws {
         let f = try await Task10Fixture.make(); defer { f.remove() }
         let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection()); defer { coach.cancel() }

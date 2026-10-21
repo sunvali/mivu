@@ -202,12 +202,13 @@ private final class CoachNavigationReadFence: Sendable {
     private func sendTap(_ text: String, reply: CoachReply) async {
         synchronizeDraftOwnership()
         guard !isSending, !attachmentDraft.isPreparing else { return }
-        let kept = draft, keptReply = attachmentDraft.reply
+        let kept = draft, keptReply = attachmentDraft.reply, owner = diary.selection
         let composing = attachmentDraft.isValid || keptReply != nil
         if composing { draft = MealDraft(submissionID: UUID(), text: text, photos: []) } else { draft.text = text }
         attachmentDraft.reply = reply
         await send()
-        if composing { draft = kept; attachmentDraft.reply = keptReply }
+        // The set-aside draft belongs to its profile; after a profile change it is dropped, like any unsent draft.
+        if composing, diary.selection == owner, !diary.isChangingProfile { draft = kept; attachmentDraft.reply = keptReply }
     }
     /// A Diary handoff quote; never replaces a message the person already started.
     @discardableResult func startReply(_ reply: CoachReply) -> Bool {
