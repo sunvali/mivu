@@ -237,6 +237,13 @@ struct CoachContext: Codable, Equatable, Sendable {
     var omittedReceiptCount: Int? = nil
     /// What the person is replying to, resolved to current content for this turn only.
     var replyTo: Reply? = nil
+    struct Focus: Codable, Equatable, Sendable {
+        struct LastChanged: Codable, Equatable, Sendable { var mealID: UUID; var itemNames: [String]; var localDate: String; var revision: Int }
+        var lastChanged: LastChanged? = nil
+        var pendingQuestion: CoachQuestion? = nil
+    }
+    /// Conversation focus for resolving "it"/"that"; nil when nothing applies.
+    var focus: Focus? = nil
     struct Reply: Codable, Equatable, Sendable {
         var target: CoachReply.Target
         var excerpt: String
@@ -314,4 +321,11 @@ extension NutritionTotals: Codable {
         try c.encodeIfPresent(protein, forKey: .protein); try c.encodeIfPresent(fat, forKey: .fat)
         try c.encode(unknownItemCount, forKey: .unknownItemCount)
     }
+}
+
+/// An unanswered Coach question; the next reply is resolved against it.
+struct CoachQuestion: Codable, Equatable, Sendable {
+    var kind: CoachClarification
+    var candidates: [CoachReply.Target]
+    var originalText: String
 }

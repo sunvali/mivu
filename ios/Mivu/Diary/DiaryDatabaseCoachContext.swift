@@ -177,6 +177,14 @@ extension DiaryDatabase {
                 }
                 context.meals.reverse()
             }
+            if let day = context.activeDayID {
+                let latest = try domainStatement("SELECT id FROM meal WHERE parent = ? AND json_extract(CAST(payload AS TEXT), '$.revision') > 0 AND json_extract(CAST(payload AS TEXT), '$.changedRevision') IS NOT NULL ORDER BY json_extract(CAST(payload AS TEXT), '$.changedRevision') DESC LIMIT 1", [.text(day.uuidString)])
+                defer { sqlite3_finalize(latest) }
+                if try mutationStep(latest), let id = try mutationOptionalUUID(latest, 0) {
+                    context.focus = .init(lastChanged: .init(mealID: id, itemNames: try transaction.mealItems(id: id).prefix(8).map { coachBoundedText($0.name, bytes: 64) }, // bounded: a meal can hold hundreds of long names
+                        localDate: try trackingDay(id: day).localDate, revision: try transaction.mealRecord(id: id).revision))
+                }
+            }
             let progress = try progressRangeInsideContext(transaction, date: diaryDateLabel(work.capturedAt, zone: work.captureTimeZoneID))
             context.weights = progress.weights; context.workouts = progress.workouts
             context.omittedWeightCount = progress.omittedWeights; context.omittedWorkoutCount = progress.omittedWorkouts

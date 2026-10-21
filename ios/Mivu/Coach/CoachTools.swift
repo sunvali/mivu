@@ -30,7 +30,7 @@ enum CoachWrite: Sendable {
     }
 }
 
-enum CoachClarification: String, CaseIterable, Sendable {
+enum CoachClarification: String, CaseIterable, Codable, Sendable {
     case portion, food, day, meal, workout
     var question: String {
         switch self {

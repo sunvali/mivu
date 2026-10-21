@@ -332,6 +332,7 @@ extension DiaryTransaction {
         try validateMealSubmissionFields(submission, mealID: mealID, mealRevision: meal.revision, profileID: head.profile.id); return submission
     }
     func insertMeal(_ meal: DiaryMeal) throws {
+        var meal = meal; meal.changedRevision = head.revision + 1
         guard meal.items.isEmpty, meal.submissions.isEmpty, meal.photos.isEmpty, try database.mutationInteger("SELECT COUNT(*) FROM tombstone WHERE id = ?", [.text(meal.id.uuidString)]) == 0 else { throw DiaryError.invalidData }
         _ = try database.trackingDay(id: meal.dayID); try validateMealFields(meal, itemCount: 0)
         let payload = try JSONEncoder().encode(meal)
@@ -340,6 +341,7 @@ extension DiaryTransaction {
         changes.mealIDs.insert(meal.id); changes.dayIDs.insert(meal.dayID)
     }
     func saveMeal(_ meal: DiaryMeal) throws {
+        var meal = meal; meal.changedRevision = head.revision + 1
         guard meal.items.isEmpty, meal.submissions.isEmpty, meal.photos.isEmpty else { throw DiaryError.invalidData }
         _ = try database.trackingDay(id: meal.dayID)
         try validateMealFields(meal, itemCount: database.mutationInteger("SELECT COUNT(*) FROM item WHERE parent = ?", [.text(meal.id.uuidString)]))
