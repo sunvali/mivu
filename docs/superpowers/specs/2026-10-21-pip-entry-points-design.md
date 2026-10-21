@@ -16,7 +16,7 @@ which are manual forms. After this change every button either opens Coach
 ## Goals
 
 1. **Log with Pip.** Today's primary `DiaryCaptureAction` ("Log meal") becomes
-   "Log with Pip": switch to the Coach tab; the keyboard stays down until the person taps the field.
+   "Log with Pip": switch to the Coach tab.
    On a Diary day (`logMealForDay`), the same, plus the composer starts a reply
    quoting that day (`CoachReply.Target.day`).
 2. **Add manually** link beside that primary on Today and the Diary day: a
@@ -25,7 +25,7 @@ which are manual forms. After this change every button either opens Coach
 3. **Meal detail**
    - Remove "I ate half" (`halfPortion`).
    - "Add note or photo" (list row `correctMeal` and the ⋯ menu item) opens
-     Coach with a `.meal(mealID:)` reply showing above the field (keyboard down). Photos and
+     Coach with a `.meal(mealID:)` reply showing above the field. Photos and
      camera come from Coach's composer.
    - Today's notification "add a note" sheet (`noteMealID`) does the same.
 4. **Ask Pip with a quote everywhere a record is shown**
@@ -85,10 +85,8 @@ composer if sample mode is removed or Coach gains a sample analyzer.
   availability checks on Today/Diary. (answered by existing behavior)
 - **Unrecorded Diary day:** "Log with Pip" uses the same "For <date>: " starter
   draft as Ask Pip; no day-less reply target. (my call)
-- **No automatic keyboard (owner):** no handoff opens the keyboard. Coach
-  shows the quote or draft above the field and the person taps to type. This
-  also removes the existing `editing = true` after `startReply` in
-  `CoachView`'s navigation task.
+- **Keyboard (owner):** no keyboard change in this work; handoffs keep
+  Coach's existing focus behavior.
 - **New quote context depth:** carry the weight entry / workout session record
   in `CoachContext.Reply`, like `meal`, bounded by the same 8 KB check; update
   any model-facing text that enumerates target kinds. (my call)

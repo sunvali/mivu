@@ -13,7 +13,6 @@
 ## Global Constraints
 
 - English only; Dynamic Type, VoiceOver labels, 44-pt minimum targets, reduced motion respected.
-- No handoff opens the keyboard; the person taps the field.
 - A handoff never replaces a message the person already started (`startReply` rule stays).
 - `CoachReply` is persisted: older stored payloads must still decode.
 - Sample mode (`model.sampleMode`): primary log and "Add note or photo" keep opening `MealComposerView`.
@@ -22,11 +21,11 @@
 
 ## Review Focus
 
-1. Unrecorded Diary day: Ask Pip prefills "For <date>: " and does not crash or quote a missing day — covered by Task 4 UI test.
-2. Composer already holds text when a handoff arrives: the draft is kept, no quote, keyboard stays down — covered by existing `navigationReplyNeverReplacesInProgressDraft` plus Task 2 assertion.
+1. Unrecorded Diary day: Ask Pip prefills "For <date>: " and does not crash or quote a missing day — covered by Task 3 UI test.
+2. Composer already holds text when a handoff arrives: the draft is kept, no quote — covered by existing `navigationReplyNeverReplacesInProgressDraft` (unchanged behavior).
 3. Quoted weight/workout deleted before send: context marks `unavailable` — Task 1 parameterized test.
 4. Old archive/turn payloads with only message/meal/item/day targets still decode — Task 1 decode test.
-5. Sample mode still logs via the composer — Task 3 keeps `logMeal` composer path in sample-mode UI tests.
+5. Sample mode still logs via the composer — Task 2 keeps `logMeal` composer path in sample-mode UI tests.
 
 ## Design note (builder call, from the code)
 
@@ -55,19 +54,7 @@ On a Diary day the bottom bar already shows "Log meal" next to "Ask Pip". After 
 - [ ] **Step 4: Run** the same tests. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(coach): quote weights and workouts in a reply`.
 
-### Task 2: Handoffs leave the keyboard down
-
-**Files:**
-- Modify: `ios/Mivu/Coach/CoachView.swift:142` (drop `{ editing = true }` after `startReply`; keep the call)
-- Test: `ios/MivuUITests/CoachReplyUITests.swift` (or the Diary handoff test in `DiaryAmountEditorUITests.swift` that asserts the quote)
-
-- [ ] **Step 1: Write failing assertion** in the existing Diary→Coach quote UI test: after the handoff, `#expect`-equivalent `XCTAssertFalse(app.keyboards.firstMatch.exists)` while `coachReplyCancel` exists.
-- [ ] **Step 2: Run** that single UI test. Expected: FAIL (keyboard shown).
-- [ ] **Step 3: Implement** the one-line change. In-chat swipe reply (`reply(to:fromPip:)`, line ~518) keeps focusing — it is not a handoff.
-- [ ] **Step 4: Run** the test. Expected: PASS.
-- [ ] **Step 5: Commit** `fix(coach): Diary handoffs leave the keyboard down`.
-
-### Task 3: Log with Pip + Add manually
+### Task 2: Log with Pip + Add manually
 
 **Files:**
 - Modify: `ios/Mivu/Diary/DiaryStyle.swift` (`DiaryCaptureAction`)
@@ -78,15 +65,15 @@ On a Diary day the bottom bar already shows "Log meal" next to "Ask Pip". After 
 **Interfaces:**
 - Produces: `DiaryCaptureAction(title: LocalizedStringKey = "Log with Pip", systemImage: String = "sparkles", identifier: String = "logMeal", action:)` and `DiaryManualAction(identifier: String, action:)` — secondary bordered/glass button labelled "Add manually", `systemImage: "number"`, min height 52.
 
-- [ ] **Step 1: Write failing UI test** `testLogWithPipOpensCoachAndAddManuallyOpensForm` (non-sample, Coach UI-test fixture): tap `logMeal` → Coach tab selected, keyboard absent; back to Today, tap `addManually` → manual nutrition sheet title "Enter nutrition".
+- [ ] **Step 1: Write failing UI test** `testLogWithPipOpensCoachAndAddManuallyOpensForm` (non-sample, Coach UI-test fixture): tap `logMeal` → Coach tab selected; back to Today, tap `addManually` → manual nutrition sheet title "Enter nutrition".
 - [ ] **Step 2: Run** it. Expected: FAIL.
 - [ ] **Step 3: Implement.**
   - Today: `HStack { DiaryCaptureAction { sampleMode ? showComposer = true : openChat(nil, expectedSelection:) }; DiaryManualAction(identifier: "addManually") { showManualNutrition = true } }`. Sample mode label stays "Log meal" with `plus.circle.fill`. Manual sheet: `ManualNutritionView` for the active day, as HistoryView does.
-  - Diary day bar: sample mode keeps today's `logMealForDay` composer button; otherwise Ask Pip (Task 4) + `DiaryManualAction(identifier: "addManuallyForDay")` shown only when `recordedDay` exists (the form needs a day).
+  - Diary day bar: sample mode keeps today's `logMealForDay` composer button; otherwise Ask Pip (Task 3) + `DiaryManualAction(identifier: "addManuallyForDay")` shown only when `recordedDay` exists (the form needs a day).
 - [ ] **Step 4: Run** the new test plus existing sample-mode tests that tap `logMeal` (`DiaryUITests`, `CompanionUITests`). Expected: PASS; any non-sample test that used `logMeal` to create a meal switches to sample mode or the Coach fixture.
 - [ ] **Step 5: Commit** `feat(today): log with Pip and add manually`.
 
-### Task 4: Ask Pip quotes every record
+### Task 3: Ask Pip quotes every record
 
 **Files:**
 - Modify: `ios/Mivu/Diary/HistoryView.swift` (`askPipAction`)
@@ -104,7 +91,7 @@ On a Diary day the bottom bar already shows "Log meal" next to "Ask Pip". After 
 - [ ] **Step 4: Run** them. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(diary): Ask Pip quotes days, weights and workouts`.
 
-### Task 5: Meal actions via Coach; manual labels
+### Task 4: Meal actions via Coach; manual labels
 
 **Files:**
 - Modify: `ios/Mivu/Diary/MealDetailView.swift` (remove `halfPortion` ~88; `correctMeal` row ~81 and ⋯ menu ~138)
@@ -112,7 +99,7 @@ On a Diary day the bottom bar already shows "Log meal" next to "Ask Pip". After 
 - Modify: `ios/Mivu/Progress/ProgressView.swift:404,418`, `ios/Mivu/Progress/ProgressEditorViews.swift:586,728`, `ios/Mivu/Diary/HistoryView.swift:124-125`
 - Test: `ios/MivuUITests/DiaryUITests.swift`, `ios/MivuUITests/ProgressUITests.swift` (identifier/label updates)
 
-- [ ] **Step 1: Write failing UI test** `testAddNoteOrPhotoQuotesMealInCoach` (non-sample): meal detail → `correctMeal` → Coach shows `coachReplyCancel`, keyboard absent; `halfPortion` does not exist.
+- [ ] **Step 1: Write failing UI test** `testAddNoteOrPhotoQuotesMealInCoach` (non-sample): meal detail → `correctMeal` → Coach shows `coachReplyCancel`; `halfPortion` does not exist.
 - [ ] **Step 2: Run** it. Expected: FAIL.
 - [ ] **Step 3: Implement.**
   - Non-sample `correctMeal` and the menu item call the existing `askPip(about: nil, in: meal)`; sample mode keeps `showCorrection = true`.
@@ -122,7 +109,7 @@ On a Diary day the bottom bar already shows "Log meal" next to "Ask Pip". After 
 - [ ] **Step 4: Run** the new test and the label-touching tests in `ProgressUITests`/`DiaryUITests`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(diary): meal notes go through Coach and manual forms say so`.
 
-### Task 6: Verification and PR
+### Task 5: Verification and PR
 
 - [ ] Run focused `MivuTests` (`CoachReplyTests`) and the UI tests touched above with XcodeBuildMCP; record SHA, result bundle and counts in `docs/verification/2026-10-21-pip-entry-points.md`.
 - [ ] Ponytail Review of the branch; fix blocking findings.
