@@ -217,6 +217,8 @@ private struct CoachReceiptDisclosureStyle: DisclosureGroupStyle {
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .contentShape(Rectangle())
             }
+            // A wrapped label at accessibility sizes must grow the row, not draw past the card.
+            .fixedSize(horizontal: false, vertical: true)
             .buttonStyle(.plain).textSelection(.disabled)
             .accessibilityValue(configuration.isExpanded ? "Expanded" : "Collapsed")
             .accessibilityIdentifier("coachReceiptDetails")

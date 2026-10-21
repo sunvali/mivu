@@ -112,7 +112,11 @@ struct HistoryView: View {
         .navigationTitle("Diary")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button("Choose date", systemImage: "calendar") { showDatePicker = true }
+                Button("Choose date", systemImage: "calendar") {
+                    // Open on the newest day shown, so the default choice is never an empty filter.
+                    selectedDate = history.page?.days.first?.day.startAt ?? Date()
+                    showDatePicker = true
+                }
                     .accessibilityIdentifier("chooseDiaryDate")
             }
         }
