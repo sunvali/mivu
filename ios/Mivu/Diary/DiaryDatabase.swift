@@ -53,6 +53,8 @@ final class DiaryDatabase {
                     try execute("COMMIT")
                 } catch { try? execute("ROLLBACK"); throw error }
             }
+            // Outside the version gate so already-migrated profiles gain it too; derived state, not archived.
+            try execute("CREATE TABLE IF NOT EXISTS coach_undo (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, mealID TEXT NOT NULL, afterRevision INTEGER NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
         } catch {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData

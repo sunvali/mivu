@@ -7,6 +7,9 @@ enum CoachReceiptTarget: Equatable, Sendable {
     case workout(WorkoutSession, localDate: String)
 }
 
+/// Read from coach_undo; the committed receipt itself never changes.
+enum CoachUndoState: Equatable, Sendable { case available, undone }
+
 struct CoachReceiptPresentation: Equatable {
     let receipt: CoachCommittedReceipt
     let target: CoachReceiptTarget
@@ -124,6 +127,8 @@ struct CoachReceiptPresentation: Equatable {
 struct CoachReceiptView: View {
     let receipt: CoachCommittedReceipt
     let target: CoachReceiptTarget
+    var undoState: CoachUndoState? = nil
+    var undo: () -> Void = {}
     let open: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var presentation: CoachReceiptPresentation { CoachReceiptPresentation(receipt: receipt, target: target) }
@@ -152,6 +157,10 @@ struct CoachReceiptView: View {
             if let notice = presentation.targetNotice {
                 Text(notice).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptTargetStatus")
             }
+            if undoState == .available {
+                Button(action: undo) { Label("Undo", systemImage: "arrow.uturn.backward").frame(minWidth: 44, minHeight: 44) }
+                    .accessibilityIdentifier("coachUndo")
+            }
             if let macros = presentation.committedMacros {
                 DisclosureGroup {
                     Text(macros).monospacedDigit().accessibilityIdentifier("coachReceiptMacros")
@@ -170,7 +179,7 @@ struct CoachReceiptView: View {
         .accessibilityIdentifier("coachReceipt-" + receipt.operationKey)
     }
     private var receiptStatus: some View {
-        Text(presentation.committedStatus).font(.subheadline.weight(.semibold))
+        Text(undoState == .undone ? "Undone" : presentation.committedStatus).font(.subheadline.weight(.semibold))
     }
     @ViewBuilder private var committedDate: some View {
         if let date = presentation.committedDate {

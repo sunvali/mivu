@@ -44,7 +44,7 @@ extension CoachWrite {
                 arguments = ["targets": targets.sorted { $0.nutrient < $1.nutrient }.map { ["nutrient": $0.nutrient, "value": nullable($0.value)] }, "weight": nullable(weight), "clear": clear, "credit": nullable(credit), "revision": nullable(revision)]
             case .preferences(let timezone, let text, let revision): arguments = ["timezone": nullable(timezone), "text": nullable(text), "revision": revision]
             case .coverage(_, let completeness): arguments = ["coverage": completeness.rawValue]
-            case .open: break
+            case .undo, .open: break
             }
             // Parser patch keys preserve explicit supplied fields even when current values later match.
             if let patchKey {

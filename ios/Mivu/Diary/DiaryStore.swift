@@ -497,6 +497,27 @@ actor DiaryStore {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.coachMealDetail(id: id, expectedProfileID: expectedProfileID)
     }
 
+    func coachUndoAvailable(operationKey: String, expectedProfileID: UUID) throws -> Bool {
+        try coachUndoStates(keys: [operationKey], expectedProfileID: expectedProfileID)[operationKey] == .available
+    }
+
+    /// One read for a page of receipt cards; keys without a usable snapshot are absent.
+    func coachUndoStates(keys: [String], expectedProfileID: UUID) throws -> [String: CoachUndoState] {
+        let database = try pagedConnection(expectedProfileID: expectedProfileID).database
+        return try database.domainRead(expectedProfileID: expectedProfileID) { head in
+            let transaction = DiaryTransaction(database: database, head: head)
+            var states: [String: CoachUndoState] = [:]
+            for key in keys { states[key] = try transaction.coachUndoState(key) }
+            return states
+        }
+    }
+
+    func undoCoachChange(operationKey: String, expectedProfileID: UUID) throws {
+        try pagedMutation(expectedProfileID) { database, head in
+            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { _ = try $0.undoCoachChange(operationKey) }
+        }
+    }
+
     func coachGoals(localDate: String, expectedProfileID: UUID) throws -> String {
         let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
         return try database.domainRead(expectedProfileID: expectedProfileID) { head in

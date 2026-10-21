@@ -124,6 +124,21 @@ import XCTest
         XCTAssertTrue(app.otherElements.matching(NSPredicate(format: "identifier BEGINSWITH %@", "coachReceipt-")).firstMatch.exists)
         XCTAssertFalse(app.staticTexts["Analysis could not finish. Your input is saved. Check your connection or retry when ready."].exists)
     }
+    func testReceiptUndo() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        enter("Two eggs, three bread slices and salad", in: app); app.buttons["coachSend"].tap()
+        waitForReply(to: "Two eggs, three bread slices and salad", in: app)
+        let undo = app.buttons["coachUndo"].firstMatch
+        XCTAssertTrue(undo.waitForExistence(timeout: 10))
+        revealCoachLink(undo, in: app)
+        XCTAssertGreaterThanOrEqual(undo.frame.height, 44)
+        undo.tap()
+        XCTAssertTrue(app.staticTexts["Undone"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["coachUndo"].exists)
+    }
     func testFixtureMealCorrectionHistoricalReviewAndConversationRelaunch() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]

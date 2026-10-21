@@ -12,8 +12,10 @@ extension DiaryDatabase {
             for write in normalized {
                 let key = "\(turnID)/\(write.target)"
                 if let prior = turn.receipts.first(where: { $0.operationKey == key }) { results.append(prior); continue }
+                let before = try transaction.undoSnapshot(write, turn: turn)
                 var receipt = try transaction.applyCoachWrite(write, turn: turn, at: at)
                 receipt.operationKey = key; receipt.commandFingerprint = try write.commandFingerprint()
+                if let before, let mealID = receipt.mealID { try transaction.saveUndo(key: key, turnID: turnID, mealID: mealID, before: before) }
                 newReceipts.append(receipt); results.append(receipt)
             }
             if !newReceipts.isEmpty {
@@ -170,6 +172,9 @@ extension DiaryTransaction {
                 guard head.revision == revision else { throw DiaryError.staleRevision }
                 guard turn.captureTimeZoneID == head.profile.timeZoneID, diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == diaryDateLabel(at, zone: head.profile.timeZoneID), try head.activeDayID.map({ try database.trackingDay(id: $0).startAt <= turn.capturedAt }) ?? true else { throw DiaryError.ambiguousDay }
             case .coverage(let date, _): _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID)
+            case .undo(let key):
+                guard let undo = try coachUndo(key) else { throw CoachError.invalidArguments }
+                guard !undo.undone, try mealRecord(id: undo.mealID).revision == undo.afterRevision else { throw DiaryError.staleRevision }
             case .open: break
             }
         }
@@ -292,6 +297,47 @@ extension DiaryTransaction {
         return receipt
     }
     private struct Deleted: Encodable { var id: UUID; var deleted = true }
+    /// Food writes only: the meal's saved items before the change; empty for a new meal, whose undo deletes it.
+    func undoSnapshot(_ write: CoachWrite, turn: CoachTurn) throws -> [FoodItem]? {
+        switch write {
+        case .food:
+            // A capture placeholder has no saved items; deleting it would strand its turn, so it gets no undo.
+            guard let id = turn.pendingMealID else { return [] }
+            let items = try mealItems(id: id); return items.isEmpty ? nil : items
+        case .correction(let id, _, _), .manual(.item(let id, _, _, _, _, _), _), .manual(.append(let id, _, _), _),
+             .manual(.deleteItem(let id, _, _), _), .manual(.scaleMeal(let id, _, _), _): return try mealItems(id: id)
+        default: return nil
+        }
+    }
+    func saveUndo(key: String, turnID: UUID, mealID: UUID, before: [FoodItem]) throws {
+        // Review proposals stay with their own review flow.
+        guard try mealProjection(id: mealID).state == .saved else { return }
+        let payload: DiaryDatabase.Value = before.isEmpty ? .null : .blob(try JSONEncoder().encode(before))
+        try database.execute("INSERT OR IGNORE INTO coach_undo(operationKey, turnID, mealID, afterRevision, beforePayload) VALUES (?, ?, ?, ?, ?)",
+            [.text(key), .text(turnID.uuidString), .text(mealID.uuidString), .integer(try mealRecord(id: mealID).revision), payload])
+    }
+    func coachUndo(_ key: String) throws -> (mealID: UUID, afterRevision: Int, before: [FoodItem]?, undone: Bool)? {
+        let statement = try database.mutationStatement("SELECT mealID, afterRevision, beforePayload, undone FROM coach_undo WHERE operationKey = ?", [.text(key)])
+        defer { sqlite3_finalize(statement) }
+        guard try database.mutationStep(statement) else { return nil }
+        guard let mealID = try database.mutationOptionalUUID(statement, 0) else { throw DiaryError.invalidData }
+        let before = sqlite3_column_type(statement, 2) == SQLITE_NULL ? nil : try JSONDecoder().decode([FoodItem].self, from: database.mutationBlob(statement, 2))
+        return (mealID, Int(sqlite3_column_int64(statement, 1)), before, sqlite3_column_int64(statement, 3) != 0)
+    }
+    func coachUndoState(_ key: String) throws -> CoachUndoState? {
+        guard let undo = try coachUndo(key) else { return nil }
+        if undo.undone { return .undone }
+        do { return try mealRecord(id: undo.mealID).revision == undo.afterRevision ? .available : nil } catch DiaryError.notFound { return nil }
+    }
+    /// Restores the snapshot only while the meal is exactly as that change left it; never recreates a deleted meal.
+    @discardableResult func undoCoachChange(_ key: String) throws -> UUID? {
+        guard let undo = try coachUndo(key) else { throw DiaryError.notFound }
+        guard !undo.undone, try mealRecord(id: undo.mealID).revision == undo.afterRevision else { throw DiaryError.staleRevision }
+        if let before = undo.before { _ = try commitSavedItems(mealID: undo.mealID, items: before, expectedRevision: undo.afterRevision) }
+        else { try deleteMeal(undo.mealID) }
+        try database.execute("UPDATE coach_undo SET undone = 1 WHERE operationKey = ?", [.text(key)])
+        return undo.before == nil ? nil : undo.mealID
+    }
     private func updateCoachItem(_ item: FoodItem, mealID: UUID) throws {
         let id = "\(mealID)/\(item.id)", bytes = try JSONEncoder().encode(item)
         try database.execute("UPDATE item SET payload = ? WHERE id = ? AND parent = ?", [.blob(bytes), .text(id), .text(mealID.uuidString)])
@@ -371,6 +417,11 @@ extension DiaryTransaction {
         case .coverage(let date, let completeness):
             var day = try coachDay(date, turn: turn, activateIfEmpty: false, exact: true); day.completeness = completeness; try saveDay(day)
             receipt.dayID = day.id; receipt.resultJSON = try coachJSON(day)
+        case .undo(let key):
+            guard let mealID = try coachUndo(key)?.mealID else { throw DiaryError.notFound }
+            receipt.dayID = try mealRecord(id: mealID).dayID
+            if let restored = try undoCoachChange(key) { receipt.mealID = restored; receipt.resultJSON = try coachJSON(mealResult(restored)) }
+            else { receipt.resultJSON = try coachJSON(Deleted(id: mealID)) }
         case .open(let destination):
             receipt.destination = destination
             struct Handoff: Encodable { var destination: CoachDestination; var completed = false }

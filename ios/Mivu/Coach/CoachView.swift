@@ -252,7 +252,7 @@ struct CoachView: View {
                 segment = turn.segmentID
             }
             result.append(CoachTimelineRow(id: .exchange(turn.id), exchange: turn,
-                targets: turn.receipts.map(coach.receiptTarget), questionMeals: coach.linkedMeals(turn), activity: coach.activityTurnID == turn.id ? coach.activity : nil,
+                targets: turn.receipts.map(coach.receiptTarget), undo: turn.receipts.map(coach.undoState), questionMeals: coach.linkedMeals(turn), activity: coach.activityTurnID == turn.id ? coach.activity : nil,
                 fixtureBanner: DiaryLaunch.isCoachInferenceFixture && turn.id == timeline.exchanges.first?.id,
                 isHighlighted: coach.highlightedTurnID == turn.id))
         }
@@ -600,7 +600,8 @@ struct CoachView: View {
                 }
             }
             ForEach(turn.receipts.filter { $0.mealID != nil || $0.workoutID != nil }, id: \.operationKey) { receipt in
-                CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt)) {
+                CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt), undoState: coach.undoState(receipt),
+                                 undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
                 }

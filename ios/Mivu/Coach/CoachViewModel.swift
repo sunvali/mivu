@@ -89,6 +89,7 @@ private final class CoachNavigationReadFence: Sendable {
 
     private(set) var timeline: CoachTimelineViewModel?
     private(set) var receiptTargets: [UUID: CoachReceiptTarget] = [:]
+    private(set) var undoStates: [String: CoachUndoState] = [:]
     @ObservationIgnored private var timelineLoadingTask: Task<Void, Never>?
     private var timelineOwnership: DiarySelectionOwnership?
     private var seekGeneration = UUID()
@@ -605,21 +606,22 @@ private final class CoachNavigationReadFence: Sendable {
     func refreshLinks() async {
         await refreshActiveOperation()
         await refreshHistoryFixtureFacts()
-        guard let token = diary.selection else { receiptTargets = [:]; capturedDayLabels = [:]; linksSelection = nil; return }
+        guard let token = diary.selection else { receiptTargets = [:]; undoStates = [:]; capturedDayLabels = [:]; linksSelection = nil; return }
         let request = UUID(), rows = turns, generation = diary.changeGeneration; linksRequest = request
         let ids = Set(rows.flatMap { Array($0.linkedMealIDs) + $0.receipts.compactMap(\.workoutID) })
         receiptTargets = receiptTargets.filter { ids.contains($0.key) }
         do {
             let values = try await diary.store.coachReceiptTargets(exchanges: rows, expectedSelection: token)
+            let undo = try await diary.store.coachUndoStates(keys: rows.flatMap { $0.receipts.filter { $0.mealID != nil }.map(\.operationKey) }, expectedProfileID: token.identity.profileID)
             let dayIDs = Set(rows.filter(\.needsDayChoice).compactMap(\.trackingDayID))
             let labels: [UUID: String]
             if dayIDs.isEmpty { labels = [:] }
             else { labels = try await diary.store.coachCapturedDayLabels(ids: dayIDs, expectedSelection: token) }
             guard diary.selection == token, !diary.isChangingProfile, linksRequest == request, diary.changeGeneration == generation, !Task.isCancelled else { return }
-            linksSelection = token; linksGeneration = generation; receiptTargets = values; capturedDayLabels = labels; linksRevision += 1
+            linksSelection = token; linksGeneration = generation; receiptTargets = values; undoStates = undo; capturedDayLabels = labels; linksRevision += 1
         } catch {
             guard diary.selection == token, linksRequest == request, diary.changeGeneration == generation, !Task.isCancelled else { return }
-            linksSelection = token; linksGeneration = generation; receiptTargets = Dictionary(uniqueKeysWithValues: ids.map { ($0, .failed) }); capturedDayLabels = [:]; linksRevision += 1
+            linksSelection = token; linksGeneration = generation; receiptTargets = Dictionary(uniqueKeysWithValues: ids.map { ($0, .failed) }); undoStates = [:]; capturedDayLabels = [:]; linksRevision += 1
         }
     }
     private func refreshHistoryFixtureFacts() async {
@@ -648,6 +650,13 @@ private final class CoachNavigationReadFence: Sendable {
         if let itemID = receipt.itemID, case .meal(let meal, _) = value,
            !(meal.items + meal.submissions.flatMap { $0.proposal?.items ?? [] }).contains(where: { $0.id == itemID }) { return .unavailable }
         return value
+    }
+    func undoState(_ receipt: CoachCommittedReceipt) -> CoachUndoState? { linksAreCurrent ? undoStates[receipt.operationKey] : nil }
+    /// A direct diary edit, not a chat exchange; the card re-reads availability afterwards.
+    func undo(_ receipt: CoachCommittedReceipt) async {
+        guard let owner = diary.selection?.identity.profileID else { return }
+        await diary.change { try await self.diary.store.undoCoachChange(operationKey: receipt.operationKey, expectedProfileID: owner) }
+        await refreshLinks()
     }
     func linkedMeals(_ turn: CoachExchangeSummary) -> [MealReadModel] {
         guard linksAreCurrent else { return [] }
