@@ -1,8 +1,10 @@
 # Coach chat behavior and recovery
 
-Reviewed 2026-10-19 against the implemented Coach timeline and the approved
+Reviewed 2026-10-21 against the implemented Coach timeline and the approved
 [design](../superpowers/specs/2026-10-18-coach-chat-history-design.md) and
-[implementation plan](../superpowers/plans/2026-10-18-coach-chat-history.md).
+[implementation plan](../superpowers/plans/2026-10-18-coach-chat-history.md);
+context behavior follows the
+[Coach context design](../superpowers/specs/2026-10-21-coach-context-design.md).
 The production timeline is a self-sizing `UITableView` hosting SwiftUI rows
 ([CoachTimelineView.swift](../../ios/Mivu/Coach/CoachTimelineView.swift)); the
 existing Coach view model, diary store and worker remain the owners of capture,
@@ -110,11 +112,79 @@ cocktail photo does not establish hidden alcohol or mixer amounts. Exact grams
 or millilitres are not required when a reasonable uncertain estimate is
 otherwise possible.
 
-The existing bounded inference context remains 14 tracking days, at most 40
-eligible meals within 24 KB, 12 recent turns within 8 KB and 60 KB overall.
-Those are diary-projection byte limits, not a multimodal request or token limit.
-Omitted records can still be retrieved with existing tools; prior photos are
-not replayed as context.
+The bounded inference context is 14 tracking days, at most 40 eligible meals
+within 24 KB and 60 KB overall. Those are diary-projection byte limits, not a
+multimodal request or token limit. Omitted records can still be retrieved with
+`get_meals_for_date`, `find_meals` or `get_meal`; prior photos are not replayed.
+The request stays stateless (`store: false`).
+
+## Conversation context
+
+- **History as messages.** The request is the stable rules developer message,
+  then up to 12 recent exchanges as ordinary user/assistant messages (1 KB per
+  exchange, 8 KB total), then one tail developer message (waking-day sentence,
+  `replyTo` sentence, `Context: <json>` with `recentTurns` empty), then the
+  current capture. An assistant message ends with a receipt line
+  `[saved key=… meal=… item=…]` for meal/item receipts, so the model has real
+  ids for what it saved earlier. Weight, workout and goal receipts add no line.
+- **Focus.** `focus.lastChanged` is the saved meal of the current waking day
+  (`context.activeDayID`) with the highest `changedRevision`: id, revision,
+  name and up to 8 item names. It covers food changes only, from Coach or by
+  hand. `focus.pendingQuestion` is the previous completed turn's clarification:
+  kind, candidates and the original request (1 KB). `focus` is absent when both
+  are empty. A reply carries `replyTo`.
+- **Resolution order.** Which record a message means: explicit mention, then
+  `replyTo`, then `pendingQuestion`, then `focus.lastChanged`, then the newest
+  matching meal. When one wins, Coach acts. It asks only when two candidates
+  tie or before deleting a whole meal. Truncated context is not ambiguity:
+  Coach uses `get_meals_for_date`, or `find_meals` for an older reference,
+  then `get_meal` before editing.
+
+## Clarification
+
+`ask_clarification` may carry up to four candidates (`meal_id`, optional
+`item_id`), validated against records Coach has seen. The question is stored on
+the turn and shown as tappable chips ("Which one did you mean?"), on the true
+latest exchange only. A chip sends its label with the matching record as the
+reply target, so the next turn resumes the original request through
+`pendingQuestion`. A clarification asked after a write finishes the turn with
+the committed summary plus the question and adds no writes.
+
+Deleting a whole meal first asks a `confirm` question, "Remove the whole <meal
+name> meal?", with **Remove** and **Keep** (44 points; Remove is destructive).
+They send "Remove it" / "Keep it" with the meal as reply target.
+
+## Partial success
+
+If a turn has committed receipts and a later step fails, the turn completes as
+incomplete: the saved card stays, with "Couldn't finish the rest" and **Retry**.
+Cancellation, a profile change and a failure with no receipt keep the ordinary
+failure path. A network failure after a save also needs a **Retry** tap; it no
+longer resumes by itself when connectivity returns. Retry sends the original
+text with the turn as reply target ("Finish the rest" for a photo-only turn);
+Coach does only what is missing, and committed receipts are never reapplied.
+
+## Meal tools and Undo
+
+- `scale_meal(meal_id, target_kcal, expected_revision)` multiplies every item
+  quantity by target/current kcal, rounded to 2 decimals. It refuses a meal
+  that is not accepted, has known kcal of 0, a stale revision, or a ratio
+  outside 0.1–3. The manual equivalent is **Adjust total** on the meal detail,
+  with a live preview. Both write the same "Direct meal scale" submission.
+- `find_meals(query, from_date?, to_date?)` matches item names (ASCII
+  case-insensitive), newest first, at most 10. Found meals are not editable
+  until `get_meal` returns them.
+- **Undo** appears on a food receipt card (log, append, edit, correct, scale,
+  delete item), in the card's header row (its own row when the row is too
+  narrow, after Review / Edit at accessibility sizes), and by asking
+  (`undo_change`). A snapshot of the meal's saved
+  items is stored with the receipt (`coach_undo`, not archived or restored).
+  Undo restores it, or removes the meal a log created, and the card then reads
+  "Undone". It is available only while the meal still matches its after-state
+  fingerprint: revision, day, submission ids and photo ids. A later manual
+  edit, capture, photo or move hides it; a stale request fails with a fresh-read
+  error. There is no undo for deleting a whole meal (never restore over a
+  deletion), nor for weight or workout receipts, review proposals, or an undo.
 
 ## Replies
 
@@ -149,4 +219,5 @@ not reduce the completeness requirements of an explicit backup or restore.
 
 Current implementation and recorded evidence, including unverified device and
 provider gates, are tracked in the
-[Coach history verification record](../verification/2026-10-18-coach-chat-history.md).
+[Coach history verification record](../verification/2026-10-18-coach-chat-history.md)
+and the [Coach context verification record](../verification/2026-10-21-coach-context.md).
