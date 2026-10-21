@@ -40,7 +40,7 @@ import XCTest
         correction.tap()
         replace(app.textFields["weightCorrectionInput"], with: "71")
         app.buttons["saveWeightCorrection"].tap()
-        XCTAssertTrue(app.buttons["openWorkouts"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons["Progress"].tap()
         open("openWorkouts", in: app)
         logWorkout(in: app)
         app.buttons["workoutStrength"].tap()
