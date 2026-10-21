@@ -138,9 +138,11 @@ extension DiaryDatabase {
             let previous = try domainStatement("SELECT t.id, t.payload FROM coach_index i JOIN coach_turn t ON t.id = i.turnID WHERE i.sequence < ? ORDER BY i.sequence DESC LIMIT 12", [.integer(Int(work.sequence))])
             defer { sqlite3_finalize(previous) }
             var recent: [CoachContext.Turn] = []
+            var pendingQuestion: CoachQuestion?
             while try mutationStep(previous) {
                 diagnostics?.recordTurnDecode()
                 let turn = try JSONDecoder().decode(CoachTurn.self, from: mutationBlob(previous, 1))
+                if recent.isEmpty, turn.state == .completed { pendingQuestion = turn.question; pendingQuestion?.originalText = coachBoundedText(turn.text, bytes: 1024) } // only the immediately previous turn; bounded for the 60 KB cap
                 recent.append(.init(id: turn.id, capturedAt: turn.capturedAt, text: coachBoundedText(turn.text, bytes: 1024), assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) }, receipts: Self.receiptLine(turn.receipts)))
             }
             recent.reverse(); while try JSONEncoder().encode(recent).count > 8192 { recent.removeFirst() }
@@ -177,14 +179,16 @@ extension DiaryDatabase {
                 }
                 context.meals.reverse()
             }
+            var lastChanged: CoachContext.Focus.LastChanged?
             if let day = context.activeDayID {
                 let latest = try domainStatement("SELECT id FROM meal WHERE parent = ? AND json_extract(CAST(payload AS TEXT), '$.revision') > 0 AND json_extract(CAST(payload AS TEXT), '$.changedRevision') IS NOT NULL ORDER BY json_extract(CAST(payload AS TEXT), '$.changedRevision') DESC LIMIT 1", [.text(day.uuidString)])
                 defer { sqlite3_finalize(latest) }
                 if try mutationStep(latest), let id = try mutationOptionalUUID(latest, 0) {
-                    context.focus = .init(lastChanged: .init(mealID: id, itemNames: try transaction.mealItems(id: id).prefix(8).map { coachBoundedText($0.name, bytes: 64) }, // bounded: a meal can hold hundreds of long names
-                        localDate: try trackingDay(id: day).localDate, revision: try transaction.mealRecord(id: id).revision))
+                    lastChanged = .init(mealID: id, itemNames: try transaction.mealItems(id: id).prefix(8).map { coachBoundedText($0.name, bytes: 64) }, // bounded: a meal can hold hundreds of long names
+                        localDate: try trackingDay(id: day).localDate, revision: try transaction.mealRecord(id: id).revision)
                 }
             }
+            if lastChanged != nil || pendingQuestion != nil { context.focus = .init(lastChanged: lastChanged, pendingQuestion: pendingQuestion) }
             let progress = try progressRangeInsideContext(transaction, date: diaryDateLabel(work.capturedAt, zone: work.captureTimeZoneID))
             context.weights = progress.weights; context.workouts = progress.workouts
             context.omittedWeightCount = progress.omittedWeights; context.omittedWorkoutCount = progress.omittedWorkouts

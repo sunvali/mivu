@@ -86,14 +86,20 @@ struct CoachEngine: Sendable {
                 let currentTurn = try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
                 let commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts, workouts: knownWorkouts) }
                 let writes = commands.compactMap { command -> CoachWrite? in if case .write(let write) = command { return write }; return nil }
-                if let kind = commands.compactMap({ command -> CoachClarification? in if case .clarification(let kind) = command { return kind }; return nil }).first {
-                    guard commands.count == 1, currentTurn.receipts.isEmpty else { throw CoachError.invalidArguments }
-                    var question = kind.question
-                    if turn.text.lowercased().contains("edit"), turn.text.lowercased().contains("one more") {
+                if let (kind, candidates) = commands.compactMap({ command -> (CoachClarification, [CoachReply.Target])? in if case .clarification(let kind, let candidates) = command { return (kind, candidates) }; return nil }).first {
+                    guard commands.count == 1 else { throw CoachError.invalidArguments }
+                    var question = candidates.isEmpty ? kind.question : "Which one did you mean?"
+                    if kind == .confirm, case .meal(let id) = candidates.first {
+                        let names = knownMeals.first { $0.id == id }?.items.map(\.name).joined(separator: ", ") ?? ""
+                        question = (["Remove the whole", names, "meal?"].filter { !$0.isEmpty }).joined(separator: " ")
+                    }
+                    if candidates.isEmpty, turn.text.lowercased().contains("edit"), turn.text.lowercased().contains("one more") {
                         if kind == .food { question = "Which saved food item should I update?" }
                         if kind == .portion { question = "How much was the additional serving? Give its amount and unit." }
                     }
-                    try await store.finishCoachTurn(turnID: turnID, assistantText: question, epoch: epoch, expectedProfileID: expectedProfileID)
+                    // A clarification after committed writes keeps their summary ahead of the question.
+                    let text = currentTurn.receipts.isEmpty ? question : try await store.coachCommittedSummary(turnID: turnID, expectedProfileID: expectedProfileID) + "\n" + question
+                    try await store.finishCoachTurn(turnID: turnID, assistantText: text, question: CoachQuestion(kind: kind, candidates: candidates, originalText: turn.text), epoch: epoch, expectedProfileID: expectedProfileID)
                     return try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
                 }
                 guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }

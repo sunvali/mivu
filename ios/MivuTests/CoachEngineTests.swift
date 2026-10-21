@@ -41,7 +41,7 @@ private actor CoachInputFixture {
         let clarification = try #require(tools.first { $0["name"] as? String == "ask_clarification" })
         let clarificationParameters = try #require(clarification["parameters"] as? [String: Any])
         let clarificationProperties = try #require(clarificationParameters["properties"] as? [String: [String: Any]])
-        #expect(clarificationProperties["kind"]?["enum"] as? [String] == ["portion", "food", "day", "meal", "workout"])
+        #expect(clarificationProperties["kind"]?["enum"] as? [String] == ["portion", "food", "day", "meal", "workout", "confirm"])
         func checkObject(_ schema: [String: Any]) throws {
             if schema["type"] as? String == "object" {
                 let properties = try #require(schema["properties"] as? [String: [String: Any]])
@@ -277,12 +277,10 @@ private actor CoachInputFixture {
         #expect(try await exportedCoachPhotos(store, turnID: turn.id, expectedProfileID: profile.id) == [photo])
     }
 
-    @Test(arguments: [false, true]) func clarificationCannotMixWithOrFollowCurrentTurnWrites(earlierWrite: Bool) async throws {
+    @Test func clarificationCannotMixWithCurrentTurnWrites() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        if earlierWrite { _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic eggs", nutrition: NutritionValues(kcal: 140))], expectedProfileID: profile.id) }
         let before = try await store.snapshotForExport()
-        let question = call("ask_clarification", "{\"kind\":\"portion\"}", id: "question")
-        let replies = CoachFixture([result(earlierWrite ? [question] : [call("log_food", logArgs), question])])
+        let replies = CoachFixture([result([call("log_food", logArgs), call("ask_clarification", "{\"kind\":\"portion\"}", id: "question")])])
         await #expect(throws: CoachError.invalidArguments) {
             try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }

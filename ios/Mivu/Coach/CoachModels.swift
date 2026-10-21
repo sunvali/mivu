@@ -112,6 +112,8 @@ struct CoachTurn: Codable, Equatable, Sendable, Identifiable {
     var pendingMealRevision: Int? = nil
     var submissionManifest: CoachSubmissionManifest? = nil
     var captureSegmentID: UUID? = nil
+    /// Set when this turn ended with a question the next reply answers.
+    var question: CoachQuestion? = nil
 }
 
 struct CoachCaptureContext: Codable, Equatable, Sendable {
