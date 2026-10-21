@@ -42,7 +42,8 @@ import XCTest
             let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
             XCTAssertTrue(strip.waitForExistence(timeout: 5))
             XCTAssertGreaterThan(strip.frame.height, 0)
-            XCTAssertLessThanOrEqual(strip.frame.height, 110, "The resting companion must leave the conversation most of the screen")
+            // The Coach design pose shows Pip at 112 points peeking over the composer (#25).
+            XCTAssertLessThanOrEqual(strip.frame.height, 120, "The resting companion must leave the conversation most of the screen")
             let restingHeight = strip.frame.height
             XCTAssertFalse(app.buttons["coachEarlierMessages"].exists)
             XCTAssertFalse(app.buttons["coachLaterMessages"].exists)
@@ -315,21 +316,25 @@ import XCTest
             XCTAssertLessThanOrEqual(date.frame.maxY, app.textFields["coachInput"].frame.minY,
                 "Rendered date text must remain above the input text")
             XCTAssertLessThanOrEqual(date.frame.maxX, app.frame.maxX)
-            for _ in 0..<8 where !review.isHittable { app.tables["coachViewport"].swipeUp() }
+            let viewport = app.tables["coachViewport"]
+            // Slow drags toward the target: a fling can skip a control inside a receipt several screens tall.
+            func nudge(toward element: XCUIElement, by distance: CGFloat) {
+                let above = element.exists && element.frame.minY < viewport.frame.minY + 8
+                let start = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: above ? distance : -distance)),
+                    withVelocity: .slow, thenHoldForDuration: 0.2)
+            }
+            for _ in 0..<16 where !review.isHittable { nudge(toward: review, by: 200) }
             XCTAssertTrue(review.isHittable)
             XCTAssertGreaterThanOrEqual(review.frame.height, 44)
             XCTAssertFalse(app.staticTexts["Current saved meal"].exists)
             XCTAssertTrue(app.textFields["coachInput"].isHittable)
             let receiptDate = app.staticTexts["coachReceiptDate"].firstMatch
             let receiptEnergy = app.staticTexts["coachReceiptNutrition"].firstMatch
-            let viewport = app.tables["coachViewport"]
             for _ in 0..<12 {
                 if receiptDate.isHittable, receiptDate.frame.minY >= viewport.frame.minY + 8,
                    receiptEnergy.isHittable, receiptEnergy.frame.maxY <= viewport.frame.maxY - 8 { break }
-                let above = receiptDate.exists && receiptDate.frame.minY < viewport.frame.minY + 8
-                let start = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: above ? 80 : -80)),
-                    withVelocity: .slow, thenHoldForDuration: 0.2)
+                nudge(toward: receiptDate, by: 80)
             }
             XCTAssertTrue(receiptDate.isHittable)
             XCTAssertTrue(receiptEnergy.isHittable)

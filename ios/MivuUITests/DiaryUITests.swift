@@ -307,7 +307,8 @@ import XCTest
         let app = launch()
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        app.buttons["Diary preferences"].tap()
+        let preferences = app.buttons["Diary preferences"]
+        reveal(preferences, in: app); preferences.tap()
         XCTAssertTrue(app.navigationBars["Diary preferences"].waitForExistence(timeout: 5))
 
         let dietaryPreferences = app.textFields["dietaryPreferences"]
@@ -321,7 +322,7 @@ import XCTest
         let keepEditing = app.buttons["Keep editing"]
         XCTAssertTrue(keepEditing.waitForExistence(timeout: 5))
         keepEditing.tap()
-        app.buttons["Diary preferences"].tap()
+        reveal(preferences, in: app); preferences.tap()
         let retainedDraft = app.textFields["dietaryPreferences"]
         XCTAssertTrue(retainedDraft.waitForExistence(timeout: 5))
         XCTAssertEqual(retainedDraft.value as? String, "Synthetic dietary preference")
@@ -336,7 +337,7 @@ import XCTest
 
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        app.buttons["Diary preferences"].tap()
+        reveal(preferences, in: app); preferences.tap()
         let discardedDraft = app.textFields["dietaryPreferences"]
         XCTAssertTrue(discardedDraft.waitForExistence(timeout: 5))
         XCTAssertNotEqual(discardedDraft.value as? String, "Synthetic dietary preference")
@@ -450,7 +451,8 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.segmentedControls.count, 0)
         XCTAssertTrue(app.staticTexts["My diary"].exists)
-        app.buttons["Diary preferences"].tap()
+        let preferences = app.buttons["Diary preferences"]
+        reveal(preferences, in: app); preferences.tap()
         XCTAssertTrue(app.navigationBars["Diary preferences"].waitForExistence(timeout: 5))
         let language = app.descendants(matching: .any).matching(NSPredicate(
             format: "label == %@ OR (label == %@ AND value == %@)", "App language, English", "App language", "English"

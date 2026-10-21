@@ -92,13 +92,17 @@ import XCTest
         let send = app.buttons["coachSend"]
         XCTAssertTrue(send.isHittable); XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
         XCTAssertTrue(app.staticTexts["Two eggs, three bread slices and salad"].waitForExistence(timeout: 10))
-        waitForReply(to: "Two eggs, three bread slices and salad", in: app)
+        // Following latest shows the exchange's end; at this size the receipt below the reply fills the screen.
+        let reply = ownReply(to: "Two eggs, three bread slices and salad", in: app)
+        XCTAssertTrue(reply.waitForExistence(timeout: 15), "The submitted turn must receive its own completed reply")
+        nudge(toward: reply, in: app)
         let arrival = XCTAttachment(screenshot: app.screenshot()); arrival.name = "English dark accessibility5 latest reply arrival"; arrival.lifetime = .keepAlways; add(arrival)
         XCTAssertTrue(input.isHittable, "The composer must remain reachable after the latest reply")
         XCTAssertTrue(send.isHittable)
         let receipt = app.buttons["coachMealLink"].firstMatch
         XCTAssertTrue(receipt.waitForExistence(timeout: 5))
-        revealCoachLink(receipt, in: app)
+        nudge(toward: receipt, in: app)
+        XCTAssertLessThan(receipt.frame.maxY, input.frame.minY - 8)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "English dark accessibility5 populated Coach"; screenshot.lifetime = .keepAlways; add(screenshot)
         openLatestMeal(in: app)
         XCTAssertFalse(app.tabBars.buttons["Coach"].isHittable)
@@ -388,6 +392,18 @@ import XCTest
     private func coachViewport(in app: XCUIApplication) -> XCUIElement {
         let table = app.tables["coachViewport"]
         return table.exists ? table : app.scrollViews.firstMatch
+    }
+    /// Slow drags toward an element: a fling can skip a control inside an exchange several screens tall.
+    private func nudge(toward element: XCUIElement, in app: XCUIApplication) {
+        let viewport = coachViewport(in: app), input = app.textFields["coachInput"]
+        for _ in 0..<16 {
+            if element.isHittable, element.frame.minY >= viewport.frame.minY, element.frame.maxY < input.frame.minY - 8 { break }
+            let above = element.exists && element.frame.minY < viewport.frame.minY + 8
+            let start = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: above ? 200 : -200)),
+                withVelocity: .slow, thenHoldForDuration: 0.2)
+        }
+        XCTAssertTrue(element.isHittable)
     }
     private func revealCoachLink(_ link: XCUIElement, in app: XCUIApplication) {
         // Hittable can include a partially clipped link whose center is under the composer.
