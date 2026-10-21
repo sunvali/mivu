@@ -41,7 +41,7 @@ import XCTest
         XCTAssertEqual(app.selectedDiaryDate, "2026-10-12")
         XCTAssertTrue(app.buttons["historyMeal"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Monday, 12 October"].exists)
-        XCTAssertTrue(app.buttons["addManuallyForDay"].exists && app.buttons["diaryAskPip"].exists)
+        XCTAssertTrue(app.buttons["diaryAskPip"].exists && app.buttons["diaryAddMenu"].isEnabled)
     }
 
     func testCalendarJumpSelectsDate() {
@@ -58,7 +58,6 @@ import XCTest
         let app = launchHistory()
         XCTAssertTrue(app.selectDiaryDate(XCUIApplication.diaryLabel(Date())))
         XCTAssertTrue(app.staticTexts["Nothing logged"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["addManuallyForDay"].exists)
         XCTAssertFalse(app.buttons["diaryAddMenu"].isEnabled)
         XCTAssertTrue(app.buttons["diaryAskPip"].exists)
     }
@@ -434,7 +433,9 @@ import XCTest
         let date = try XCTUnwrap(dessertDay.value as? String)
         try XCTSkipIf(date == active, "Coach logged yesterday's dessert on the active waking day (run after midnight)")
         XCTAssertTrue(app.selectDiaryDate(date))
-        let log = app.buttons["addManuallyForDay"]
+        let menu = app.buttons["diaryAddMenu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5)); menu.tap()
+        let log = app.buttons["enterNutritionForDay"]
         XCTAssertTrue(log.waitForExistence(timeout: 5)); log.tap()
         let food = app.textFields["manualFoodName"]
         XCTAssertTrue(food.waitForExistence(timeout: 5))

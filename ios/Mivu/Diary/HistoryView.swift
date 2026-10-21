@@ -4,8 +4,6 @@ import SwiftUI
 struct HistoryView: View {
     @Bindable var model: DiaryViewModel
     @Environment(\.openDiaryCoach) private var openChat
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var selected = ""
     @State private var week: DiaryWeekPage?
     @State private var weekStart: String?
@@ -88,20 +86,6 @@ struct HistoryView: View {
         .contentMargins(.top, 0, for: .scrollContent)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .safeAreaInset(edge: .bottom) {
-            if model.readModel != nil, !selected.isEmpty {
-                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
-                    // The composer names its destination from the loaded day, so wait for it.
-                    if let day = recordedDay, model.dayDetail(day.id) != nil {
-                        if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMealForDay") { showMeal = true } }
-                        else { DiaryManualAction(identifier: "addManuallyForDay") { showManualNutrition = true } }
-                    }
-                    askPip
-                }
-                .padding(.horizontal, 20).padding(.vertical, 12)
-                .background(Color.diaryCanvas)
-            }
-        }
         .task(id: weekScope) { await loadWeek() }
         .task(id: DayLoad(ids: selectedDays.map(\.id), generation: model.changeGeneration)) {
             for day in selectedDays { await model.loadDay(day.id) }
@@ -122,7 +106,16 @@ struct HistoryView: View {
                 }.accessibilityIdentifier("chooseDiaryDate")
             }
             ToolbarItem(placement: .topBarTrailing) {
+                Button("Ask Pip", systemImage: "sparkles", action: askPipAction)
+                    .disabled(!weekLoaded || model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
+                    .accessibilityIdentifier("diaryAskPip")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    // The composer names its destination from the loaded day, so wait for it.
+                    if model.sampleMode, let day = recordedDay, model.dayDetail(day.id) != nil {
+                        Button("Log meal", systemImage: "plus.circle") { showMeal = true }.accessibilityIdentifier("logMealForDay")
+                    }
                     Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }.accessibilityIdentifier("enterNutritionForDay")
                     Button("Add weight manually", systemImage: "scalemass") { showWeight = true }.accessibilityIdentifier("logWeightForDay")
                     Button("Add workout manually", systemImage: "figure.strengthtraining.traditional") { showWorkout = true }.accessibilityIdentifier("logWorkoutForDay")
@@ -146,24 +139,6 @@ struct HistoryView: View {
         .sheet(isPresented: $showWorkout) {
             if let day = recordedDay { WorkoutEditorView(model: model, localDate: day.localDate, dayID: day.id) }
         }
-    }
-
-    @ViewBuilder private var askPip: some View {
-        let button = Button(action: askPipAction) {
-            Group {
-                // Beside Log meal at accessibility sizes, an icon keeps the bar to one row.
-                if recordedDay != nil && typeSize.isAccessibilitySize {
-                    Image(systemName: "sparkles").accessibilityLabel("Ask Pip")
-                } else { Label("Ask Pip", systemImage: "sparkles") }
-            }
-            .font(.headline)
-            .frame(maxWidth: recordedDay == nil ? .infinity : nil, minHeight: 52)
-            .padding(.horizontal, 8)
-        }
-        .tint(.diaryAccent)
-        .disabled(!weekLoaded || model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
-        .accessibilityIdentifier("diaryAskPip")
-        if reduceTransparency { button.buttonStyle(.bordered) } else { button.buttonStyle(.glass) }
     }
 
     private func askPipAction() {
