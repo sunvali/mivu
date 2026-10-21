@@ -11,7 +11,7 @@ struct MealDetailView: View {
     @State private var editedItem: FoodItem?
     @State private var editingRevision: Int?
     @State private var editingSubmissionID: UUID?
-    private enum Deletion { case meal, photo(UUID), food(FoodItem) }
+    private enum Deletion { case meal, photo(UUID), food(FoodItem, revision: Int) }
     @State private var deletion: Deletion?
     @State private var showMove = false
     @State private var movedDayID: UUID?
@@ -72,7 +72,7 @@ struct MealDetailView: View {
                                 .diarySummaryCard()
                                 .swipeActions(edge: .trailing) {
                                     if meal.items.count > 1 && meal.state == .saved {
-                                        Button("Delete", systemImage: "trash", role: .destructive) { deletion = .food(item) }
+                                        Button("Delete", systemImage: "trash", role: .destructive) { deletion = .food(item, revision: meal.revision) }
                                     }
                                 }
                                 .swipeActions(edge: .leading) {
@@ -195,7 +195,7 @@ struct MealDetailView: View {
             let saved = editingSubmissionID == nil && meal?.state == .saved
             let several = (meal?.items.count ?? 0) > 1
             FoodItemEditor(item: item, errorMessage: { model.errorMessage },
-                           deleteFood: saved && several ? { await deleteFood(item) } : nil,
+                           deleteFood: saved && several ? { await deleteFood(item, revision: editingRevision) } : nil,
                            deleteMeal: saved && !several ? { await deleteMeal() } : nil,
                            askPip: meal.map { meal in { askPip(about: item, in: meal) } }) { updated, explicitNutrients in
             guard let owner = model.readModel?.profile.id else { return false }
@@ -205,8 +205,8 @@ struct MealDetailView: View {
             switch target {
             case .meal:
                 Button("Delete meal", role: .destructive) { Task { await deleteMeal() } }
-            case .food(let item):
-                Button("Delete food", role: .destructive) { Task { await deleteFood(item) } }.accessibilityIdentifier("confirmDeleteFood")
+            case .food(let item, let revision):
+                Button("Delete food", role: .destructive) { Task { await deleteFood(item, revision: revision) } }.accessibilityIdentifier("confirmDeleteFood")
             case .photo(let photoID):
                 Button("Delete photo", role: .destructive) {
                     guard let owner = model.readModel?.profile.id else { return }
@@ -229,13 +229,14 @@ struct MealDetailView: View {
     }
     private var deletionTitle: String {
         if case .some(.photo(_)) = deletion { return "Delete this photo?" }
-        if case .some(.food(let item)) = deletion { return "Delete \(item.name)?" }
+        if case .some(.food(let item, _)) = deletion { return "Delete \(item.name)?" }
         guard let meal = model.meal(mealID), let day = model.day(meal.dayID) else { return "Delete meal?" }
         return "Delete “\(displayTitle(meal))” on \(day.localDate)?"
     }
-    private func deleteFood(_ item: FoodItem) async -> Bool {
-        guard let owner = model.readModel?.profile.id, let meal = model.meal(mealID) else { return false }
-        return await model.change { try await model.store.deleteItem(mealID: mealID, itemID: item.id, expectedRevision: meal.revision, expectedProfileID: owner) }
+    /// `revision` is what the person saw when they chose to delete; a newer meal is refused as stale.
+    private func deleteFood(_ item: FoodItem, revision: Int?) async -> Bool {
+        guard let owner = model.readModel?.profile.id, let revision else { return false }
+        return await model.change { try await model.store.deleteItem(mealID: mealID, itemID: item.id, expectedRevision: revision, expectedProfileID: owner) }
     }
     private func deleteMeal() async -> Bool {
         guard let owner = model.readModel?.profile.id else { return false }

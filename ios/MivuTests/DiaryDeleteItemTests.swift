@@ -45,6 +45,17 @@ import Testing
         #expect(try await store.snapshotForExport().meals.first?.items.count == 1)
     }
 
+    // A pending correction is based on the current revision; deleting would strand it.
+    @Test func mealWithPendingCorrectionCannotLoseAFood() async throws {
+        let (store, profile, meal, root) = try await fixture(foods: ["Toast", "Egg"]); defer { try? FileManager.default.removeItem(at: root) }
+        let owner = try await store.selectionOwnership(expectedProfileID: profile.id)
+        let pending = try await store.correctMealProjection(mealID: meal.id, text: "Synthetic review", reviewFirst: true, expectedSelection: owner, expectedProfileID: profile.id)
+        await #expect(throws: DiaryError.invalidData) {
+            try await store.deleteItem(mealID: meal.id, itemID: meal.items[0].id, expectedRevision: pending.revision, expectedProfileID: profile.id)
+        }
+        #expect(try await store.snapshotForExport().meals.first?.items.count == 2)
+    }
+
     @Test func unknownItemThrowsNotFound() async throws {
         let (store, profile, meal, root) = try await fixture(foods: ["Toast", "Egg"]); defer { try? FileManager.default.removeItem(at: root) }
         await #expect(throws: DiaryError.notFound) {

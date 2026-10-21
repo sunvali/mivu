@@ -427,6 +427,8 @@ extension DiaryTransaction {
         guard let index = items.firstIndex(where: { $0.id == itemID }) else { throw DiaryError.notFound }
         // A meal keeps at least one food; removing the last one is deleting the meal.
         guard items.count > 1 else { throw DiaryError.invalidData }
+        // A pending correction is based on this revision; deleting would leave it unacceptable.
+        guard try mealProjection(id: mealID).state == .saved else { throw DiaryError.invalidData }
         items.remove(at: index)
         let id = UUID(), output = AnalysisOutput(profileID: head.profile.id, mealID: mealID, submissionID: id, baseRevision: meal.revision, items: items)
         let saved = MealSubmission(id: id, baseRevision: meal.revision, text: "Direct item delete", photoIDs: [], reviewFirst: false, state: .saved, proposal: output)

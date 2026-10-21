@@ -20,6 +20,14 @@ enum DiaryWeek {
         return (0..<7).compactMap { adding($0 - offset, to: localDate) }
     }
 
+    /// Every week from the earliest of the records and the selection, through the week holding `today`.
+    static func weekStarts(earliest: String?, selected: String, today: String, calendar: Calendar) -> [String] {
+        let first = [earliest, selected, today].compactMap { $0 }.min() ?? today
+        guard let start = dates(containing: first, calendar: calendar).first,
+              let end = dates(containing: max(today, selected), calendar: calendar).first else { return [] }
+        return Array(sequence(first: start) { week in week < end ? adding(7, to: week) : nil })
+    }
+
     static func format(_ localDate: String, _ pattern: String) -> String {
         guard let day = date(localDate) else { return localDate }
         let formatter = DateFormatter()
@@ -55,11 +63,7 @@ struct DiaryWeekStrip: View {
     @State private var visibleWeek: String?
     private var calendar: Calendar { .current }
 
-    private var weeks: [String] {
-        let start = DiaryWeek.dates(containing: min(earliest ?? today, today), calendar: calendar).first ?? today
-        let end = DiaryWeek.dates(containing: today, calendar: calendar).first ?? today
-        return Array(sequence(first: start) { week in week < end ? DiaryWeek.adding(7, to: week) : nil })
-    }
+    private var weeks: [String] { DiaryWeek.weekStarts(earliest: earliest, selected: selected, today: today, calendar: calendar) }
     private func weekStart(_ date: String) -> String { DiaryWeek.dates(containing: date, calendar: calendar).first ?? date }
 
     var body: some View {

@@ -8,6 +8,7 @@ struct HistoryView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var selected = ""
     @State private var week: DiaryWeekPage?
+    @State private var weekStart: String?
     @State private var loadError: String?
     @State private var retries = 0
     @State private var showDatePicker = false
@@ -29,7 +30,9 @@ struct HistoryView: View {
     private var defaultDate: String { model.activeDay?.localDate ?? calendarToday }
     // Records can sit after today's calendar date (travel across zones); keep them reachable.
     private var lastDate: String { max(calendarToday, week?.latestLocalDate ?? "") }
-    private var summaries: [String: [DiaryDaySummary]] { Dictionary(grouping: week?.days ?? [], by: \.day.localDate) }
+    /// Only the loaded page for the selected week counts; an older page must not read as "nothing logged".
+    private var weekLoaded: Bool { week != nil && weekStart == weekScope?.start }
+    private var summaries: [String: [DiaryDaySummary]] { weekLoaded ? Dictionary(grouping: week?.days ?? [], by: \.day.localDate) : [:] }
     private var selectedDays: [TrackingDay] { summaries[selected]?.map(\.day) ?? [] }
     private var recordedDay: TrackingDay? { selectedDays.first }
     private var weekScope: WeekScope? {
@@ -61,7 +64,10 @@ struct HistoryView: View {
                         }.accessibilityIdentifier("savedDayMealReceipt").diarySummaryCard()
                     }
                 }
-                if selectedDays.isEmpty, week != nil {
+                if !weekLoaded, loadError == nil {
+                    Section { ProgressView().frame(maxWidth: .infinity, minHeight: 120).listRowBackground(Color.clear).listRowSeparator(.hidden) }
+                }
+                if selectedDays.isEmpty, weekLoaded {
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(DiaryWeek.format(selected, "EEEE, d MMMM")).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
@@ -101,7 +107,7 @@ struct HistoryView: View {
         .onChange(of: model.activeDay?.localDate) { _, _ in if selected.isEmpty { selected = defaultDate } }
         .onChange(of: selected) { _, _ in savedMealID = nil }
         .onChange(of: model.readModel?.profile.id) { _, _ in
-            week = nil; selected = defaultDate; savedMealID = nil
+            week = nil; weekStart = nil; selected = defaultDate; savedMealID = nil
             showMeal = false; showManualNutrition = false; showWeight = false; showWorkout = false; showDatePicker = false
         }
         .navigationTitle("Diary")
@@ -152,7 +158,7 @@ struct HistoryView: View {
             .padding(.horizontal, 8)
         }
         .tint(.diaryAccent)
-        .disabled(model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
+        .disabled(!weekLoaded || model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
         .accessibilityIdentifier("diaryAskPip")
         if reduceTransparency { button.buttonStyle(.bordered) } else { button.buttonStyle(.glass) }
     }
@@ -197,7 +203,7 @@ struct HistoryView: View {
             let page = try await store.diaryWeek(from: scope.start, through: scope.end, expectedProfileID: scope.selection.identity.profileID)
             try await store.validateSelectionOwnership(scope.selection)
             guard !Task.isCancelled, weekScope == scope else { return }
-            week = page; loadError = nil
+            week = page; weekStart = scope.start; loadError = nil
         } catch {
             guard !Task.isCancelled else { return }
             loadError = error.localizedDescription
