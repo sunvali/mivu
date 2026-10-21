@@ -60,7 +60,7 @@ private actor RevisionCoachReplies {
 
     private func run(_ store: DiaryStore, _ profile: DiaryProfile, _ turn: CoachTurn, _ calls: [CoachToolCall]) async throws -> CoachTurnResult {
         let reads = try calls.compactMap { edit -> CoachToolCall? in
-            guard ["edit_item", "accept_review", "attach_photos", "delete_photo"].contains(edit.name) else { return nil }
+            guard ["edit_item", "delete_item", "accept_review", "attach_photos", "delete_photo"].contains(edit.name) else { return nil }
             guard let args = try JSONSerialization.jsonObject(with: Data(edit.arguments.utf8)) as? [String: Any],
                   let mealID = args["meal_id"] as? String else { throw DiaryError.invalidData }
             return try call("get_meal", ["meal_id": mealID])
@@ -152,6 +152,43 @@ private actor RevisionCoachReplies {
         let replayed = try await store.snapshotForExport()
         #expect(replayed.meals.isEmpty && replayed.deletedMealIDs.filter { $0 == meal.id }.count == 1)
         #expect(replayed.coachTurns.first { $0.id == deleting.id }?.receipts.count == 1)
+    }
+
+    @Test func deleteItemRemovesOneFood() async throws {
+        let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
+        let turn = try await capturedTurn(store, text: "Remove the bread", photos: [], at: now, expectedProfileID: profile.id)
+        let done = try await run(store, profile, turn, [call("delete_item", ["meal_id": meal.id.uuidString, "item_id": meal.items[0].id.uuidString, "expected_revision": meal.revision])])
+        let after = try #require(await store.snapshotForExport().meals.first)
+        #expect(after.items.map(\.name) == ["Synthetic egg"])
+        let receipt = try #require(done.receipts.first)
+        #expect(receipt.mealID == meal.id && receipt.dayID == day.id)
+    }
+
+    @Test func deleteItemReplayRemovesOnce() async throws {
+        let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
+        let turn = try await capturedTurn(store, text: "Remove the bread", photos: [], at: now, expectedProfileID: profile.id)
+        let read = try call("get_meal", ["meal_id": meal.id.uuidString])
+        let delete = try call("delete_item", ["meal_id": meal.id.uuidString, "item_id": meal.items[0].id.uuidString, "expected_revision": meal.revision])
+        let first = ManualCoachReplies([result([read]), result([delete])])
+        await #expect(throws: CoachError.limitExceeded) {
+            try await CoachEngine(store: store, infer: { try await first.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        }
+        #expect(try await store.snapshotForExport().meals.first?.items.count == 1)
+        let retry = ManualCoachReplies([result([read]), result([delete]), result()])
+        _ = try await CoachEngine(store: store, infer: { try await retry.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let replayed = try await store.snapshotForExport()
+        #expect(replayed.meals.first?.items.map(\.name) == ["Synthetic egg"])
+        #expect(replayed.coachTurns.first { $0.id == turn.id }?.receipts.count == 1)
+    }
+
+    @Test func staleDeleteItemChangesNothing() async throws {
+        let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)
+        let turn = try await capturedTurn(store, text: "Remove the bread", photos: [], at: now, expectedProfileID: profile.id)
+        _ = try? await run(store, profile, turn, [call("delete_item", ["meal_id": meal.id.uuidString, "item_id": meal.items[0].id.uuidString, "expected_revision": 999_999])])
+        #expect(try await store.snapshotForExport().meals.first?.items.count == 2)
     }
 
     @Test func photoAttachAndDeleteRemoveEveryPersistedCopy() async throws {

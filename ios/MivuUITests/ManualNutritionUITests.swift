@@ -82,9 +82,8 @@ import XCTest
         let app = launch(["--diary-history-fixture"])
         let today = app.buttons.matching(identifier: "mealRow").count
         app.tabBars.buttons["Diary"].tap()
-        let days = app.buttons.matching(identifier: "diaryDay")
-        XCTAssertTrue(days.firstMatch.waitForExistence(timeout: 10))
-        days.element(boundBy: 1).tap()
+        XCTAssertTrue(app.selectDiaryDate("2026-10-18"))
+        app.buttons["diaryAddMenu"].tap()
         app.buttons["enterNutritionForDay"].tap(); enter(app, name: "Synthetic historical food", calories: "30")
         app.buttons["saveManualNutrition"].tap()
         let saved = app.buttons["savedDayMealReceipt"]
@@ -93,7 +92,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Synthetic historical food"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Time unspecified"].exists)
         XCTAssertTrue(app.staticTexts["2026-10-18"].exists)
-        app.navigationBars.buttons.firstMatch.tap(); app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
         app.tabBars.buttons["Today"].tap()
         XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, today)
     }

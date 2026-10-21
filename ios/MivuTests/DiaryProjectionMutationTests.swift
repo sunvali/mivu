@@ -258,6 +258,31 @@ import Testing
         try f.assertAccounting()
     }
 
+    private func weekFixture(extra: [(String, String)]) throws -> MealProjectionFixture {
+        var source = ChatHistoryFixture.snapshot(exchanges: 0)
+        for (date, zone) in extra { source.days.append(TrackingDay(localDate: date, timeZoneID: zone, startAt: source.days[0].startAt)) }
+        return try MealProjectionFixture(source)
+    }
+
+    @Test func weekReturnsOnlyDaysInRange() throws {
+        let f = try weekFixture(extra: [("2027-01-10", "UTC"), ("2027-01-18", "UTC")]); defer { f.remove() }
+        let week = try f.database.diaryWeek(from: "2027-01-15", through: "2027-01-17", expectedProfileID: f.owner)
+        #expect(week.days.map(\.day.localDate) == ["2027-01-15"])
+        #expect(week.earliestLocalDate == "2027-01-10" && week.latestLocalDate == "2027-01-18")
+    }
+
+    @Test func weekRejectsSpanOverSevenDays() throws {
+        let f = try weekFixture(extra: []); defer { f.remove() }
+        #expect(throws: DiaryError.invalidData) { try f.database.diaryWeek(from: "2027-01-01", through: "2027-01-08", expectedProfileID: f.owner) }
+        #expect(throws: DiaryError.invalidData) { try f.database.diaryWeek(from: "2027-01-08", through: "2027-01-01", expectedProfileID: f.owner) }
+    }
+
+    @Test func weekKeepsSameDateDaysFromBothZones() throws {
+        let f = try weekFixture(extra: [("2027-01-15", "America/New_York")]); defer { f.remove() }
+        let week = try f.database.diaryWeek(from: "2027-01-15", through: "2027-01-15", expectedProfileID: f.owner)
+        #expect(Set(week.days.map(\.day.timeZoneID)) == ["Asia/Jerusalem", "America/New_York"])
+    }
+
     @Test func targetedDayHistoryUsesBoundedPhotoFreeKeysets() throws {
         var source = ChatHistoryFixture.snapshot(exchanges: 0)
         for index in 0..<40 {

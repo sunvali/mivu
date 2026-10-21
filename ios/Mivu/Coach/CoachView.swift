@@ -134,7 +134,8 @@ struct CoachView: View {
         .task(id: receiptRefreshKey) { await coach.refreshLinks() }
         .task(id: navigationRequest?.requestID) {
             guard let request = navigationRequest else { return }
-            _ = await coach.seek(request)
+            if request.target != nil { _ = await coach.seek(request) }
+            if let draft = request.draft, !Task.isCancelled { coach.prefill(draft) }
             guard !Task.isCancelled, navigationRequest?.requestID == request.requestID else { return }
             onNavigationConsumed(request.requestID)
         }

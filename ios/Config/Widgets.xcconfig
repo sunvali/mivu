@@ -1,0 +1,11 @@
+#include "Shared.xcconfig"
+PRODUCT_NAME = MivuWidgets
+PRODUCT_BUNDLE_IDENTIFIER = com.yakov103.mivu.widgets
+INFOPLIST_FILE = Config/Widgets-Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = Mivu
+CODE_SIGN_ENTITLEMENTS = Config/MivuWidgets.entitlements
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) WIDGET_EXTENSION
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+SKIP_INSTALL = YES
+APPLICATION_EXTENSION_API_ONLY = YES
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @executable_path/../../Frameworks

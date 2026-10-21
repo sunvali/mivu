@@ -3,11 +3,12 @@ import Observation
 import UIKit
 import UserNotifications
 
-/// A pending request to open the camera and log food, from Shortcuts, Siri, the Action button or the Home Screen.
+/// A pending request to open the camera and log food, or to open Coach, from Shortcuts, Siri, the Action button or the Home Screen.
 @MainActor @Observable final class QuickLogRequest {
     static let shared = QuickLogRequest()
     static let shortcutType = "com.yakov103.mivu.log-food"
     var pending = DiaryLaunch.isUITest && CommandLine.arguments.contains("--quick-log")
+    var openCoach = DiaryLaunch.isUITest && CommandLine.arguments.contains("--open-coach")
 
     @discardableResult func handle(_ item: UIApplicationShortcutItem) -> Bool {
         guard item.type == Self.shortcutType else { return false }
@@ -16,21 +17,12 @@ import UserNotifications
     }
 }
 
-struct LogFoodIntent: AppIntent {
-    static let title: LocalizedStringResource = "Log Food"
-    static let description = IntentDescription("Opens the camera to photograph a meal and log it.")
-    static let openAppWhenRun = true
-
-    @MainActor func perform() async throws -> some IntentResult {
-        QuickLogRequest.shared.pending = true
-        return .result()
-    }
-}
-
 struct MivuShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: LogFoodIntent(), phrases: ["Log food with \(.applicationName)", "Log a meal in \(.applicationName)"],
                     shortTitle: "Log Food", systemImageName: "camera")
+        AppShortcut(intent: OpenCoachIntent(), phrases: ["Ask \(.applicationName) Coach", "Open \(.applicationName) Coach"],
+                    shortTitle: "Coach", systemImageName: "bubble.left.fill")
     }
 }
 

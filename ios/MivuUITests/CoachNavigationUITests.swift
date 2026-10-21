@@ -78,7 +78,7 @@ import XCTest
         let app = launch()
         app.textFields["coachInput"].tap(); app.textFields["coachInput"].typeText("Keep across diary links")
         guard openDay(901, in: app) else { return }
-        let chat = app.buttons["diaryDayOpenChat"]
+        let chat = app.buttons["diaryAskPip"]
         XCTAssertTrue(chat.waitForExistence(timeout: 5)); chat.tap()
         assertTarget(5, in: app)
         XCTAssertEqual(app.textFields["coachInput"].value as? String, "Keep across diary links")
@@ -95,7 +95,7 @@ import XCTest
         app.buttons["mealSourceChat"].tap(); assertTarget(1, in: app)
         XCTAssertEqual(app.textFields["coachInput"].value as? String, "Keep across diary links")
         guard openDay(904, in: app) else { return }
-        app.buttons["diaryDayOpenChat"].tap()
+        app.buttons["diaryAskPip"].tap()
         let unavailable = app.staticTexts["coachTimelineError"]
         XCTAssertTrue(unavailable.waitForExistence(timeout: 5))
         XCTAssertEqual(unavailable.label, "No conversation for this diary day.")
@@ -127,10 +127,8 @@ import XCTest
     }
     private func openDay(_ number: Int, in app: XCUIApplication) -> Bool {
         guard openDiaryRoot(app) else { return false }
-        let label = number == 904 ? "2027-01-21 UTC" : "2027-01-15 UTC"
-        let day = app.buttons.matching(identifier: "diaryDay").matching(NSPredicate(format: "value == %@", label)).firstMatch
-        reveal(day, in: app); day.tap()
-        let ready = app.buttons["diaryDayOpenChat"].waitForExistence(timeout: 5)
+        guard app.selectDiaryDate(number == 904 ? "2027-01-21" : "2027-01-15") else { return false }
+        let ready = app.buttons["diaryAskPip"].waitForExistence(timeout: 5)
         XCTAssertTrue(ready)
         return ready
     }

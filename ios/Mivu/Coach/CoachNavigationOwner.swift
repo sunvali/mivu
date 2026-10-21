@@ -31,11 +31,11 @@ struct CoachNavigationOrigin: Equatable, Sendable {
             && selection == origin.selection && epoch == origin.epoch
     }
 
-    @discardableResult func queue(_ target: CoachSeekTarget, from origin: CoachNavigationOrigin,
+    @discardableResult func queue(_ target: CoachSeekTarget?, draft: String? = nil, from origin: CoachNavigationOrigin,
                                   selection: DiarySelectionOwnership?, isChangingProfile: Bool) -> Bool {
         synchronize(selection: selection, isChangingProfile: isChangingProfile)
         guard isCurrent(origin, selection: selection, isChangingProfile: isChangingProfile) else { return false }
-        request = CoachNavigationRequest(identity: origin.selection.identity, target: target, requestID: UUID())
+        request = CoachNavigationRequest(identity: origin.selection.identity, target: target, requestID: UUID(), draft: draft)
         return true
     }
 
@@ -46,11 +46,11 @@ struct CoachNavigationOrigin: Equatable, Sendable {
 
 struct OpenDiaryCoachAction {
     var origin: CoachNavigationOrigin?
-    var open: @MainActor (CoachSeekTarget, CoachNavigationOrigin) -> Bool = { _, _ in false }
+    var open: @MainActor (CoachSeekTarget?, String?, CoachNavigationOrigin) -> Bool = { _, _, _ in false }
 
-    @MainActor @discardableResult func callAsFunction(_ target: CoachSeekTarget, expectedSelection: DiarySelectionOwnership) -> Bool {
+    @MainActor @discardableResult func callAsFunction(_ target: CoachSeekTarget?, draft: String? = nil, expectedSelection: DiarySelectionOwnership) -> Bool {
         guard let origin, origin.selection == expectedSelection else { return false }
-        return open(target, origin)
+        return open(target, draft, origin)
     }
 }
 

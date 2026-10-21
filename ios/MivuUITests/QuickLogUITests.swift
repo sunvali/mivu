@@ -12,10 +12,24 @@ import XCTest
         photo.tap()
         let addNote = app.buttons["quickLogAddNote"]
         XCTAssertTrue(addNote.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
-        XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
+        // The toast hides itself after 5 seconds, so use it before any slower wait.
         XCTAssertGreaterThanOrEqual(addNote.frame.height, 44)
+        XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
         addNote.tap()
         XCTAssertTrue(app.textFields["mealText"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        let discard = app.buttons["Discard changes"]
+        if discard.waitForExistence(timeout: 2) { discard.tap() }
+        XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
+    }
+
+    func testOpenCoachRequestLandsOnCoach() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--open-coach"]
+        app.launch()
+        let coach = app.tabBars.buttons["Coach"]
+        XCTAssertTrue(coach.waitForExistence(timeout: 15))
+        let selected = NSPredicate(format: "isSelected == true")
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: selected, object: coach)], timeout: 10), .completed)
     }
 }

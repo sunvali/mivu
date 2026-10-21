@@ -144,20 +144,13 @@ import XCTest
         let yesterday = calendar.date(byAdding: .day, value: -1, to: Date())!
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = calendar.timeZone; formatter.dateFormat = "yyyy-MM-dd"
         let date = formatter.string(from: yesterday)
-        formatter.dateFormat = "EEEE, d MMM"
-        let displayedDate = formatter.string(from: yesterday)
-        let historical = app.buttons.matching(identifier: "diaryDay").matching(NSPredicate(format: "label CONTAINS %@", displayedDate)).firstMatch
-        XCTAssertTrue(historical.waitForExistence(timeout: 5)); historical.tap()
-        XCTAssertTrue(app.navigationBars[date].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.tabBars.buttons["Diary"].isHittable)
+        XCTAssertTrue(app.selectDiaryDate(date))
         let historicalMeal = app.buttons["historyMeal"].firstMatch
         revealList(historicalMeal, in: app)
         XCTAssertTrue(historicalMeal.label.contains("Time unspecified"))
         historicalMeal.tap()
         revealMealDetailItem(app.staticTexts["Time unspecified"], in: app)
         revealMealDetailItem(app.staticTexts[date], in: app)
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars[date].waitForExistence(timeout: 5))
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()

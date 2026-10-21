@@ -388,6 +388,10 @@ actor DiaryStore {
         return try pagedMutation(expectedProfileID) { try $0.editItem(mealID: mealID, item: item, explicitNutrients: explicitNutrients, reviewSubmissionID: reviewSubmissionID, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
     }
 
+    func deleteItem(mealID: UUID, itemID: UUID, expectedRevision: Int, expectedProfileID: UUID? = nil) throws {
+        return try pagedMutation(expectedProfileID) { try $0.deleteItem(mealID: mealID, itemID: itemID, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+
     func addPhotos(mealID: UUID, photos: [MealPhoto], expectedProfileID: UUID? = nil) throws {
         return try pagedMutation(expectedProfileID) { try $0.addPhotos(mealID: mealID, photos: photos, expected: $1, maximumBytes: maximumFileBytes) }
     }
@@ -760,6 +764,7 @@ actor DiaryStore {
     func goalHistory(before: Int? = nil, expectedProfileID: UUID) throws -> DiaryRecordPage<GoalRecord> { try pagedConnection(expectedProfileID: expectedProfileID).database.screenRecords(GoalRecord.self, table: "goal", before: before, expectedProfileID: expectedProfileID) }
     func coachWorkStatus(expectedProfileID: UUID) throws -> CoachWorkStatus { try pagedConnection(expectedProfileID: expectedProfileID).database.coachWorkStatus(expectedProfileID: expectedProfileID) }
     func coachTurnForMeal(_ id: UUID, expectedProfileID: UUID) throws -> UUID? { try pagedConnection(expectedProfileID: expectedProfileID).database.coachTurnForMeal(id, expectedProfileID: expectedProfileID) }
+    func diaryWeek(from start: String, through end: String, expectedProfileID: UUID) throws -> DiaryWeekPage { try pagedConnection(expectedProfileID: expectedProfileID).database.diaryWeek(from: start, through: end, expectedProfileID: expectedProfileID) }
     func historyCoverage(expectedProfileID: UUID) throws -> [DayCompleteness: Int] { try pagedConnection(expectedProfileID: expectedProfileID).database.historyCoverage(expectedProfileID: expectedProfileID) }
     func progressForDisplay(endingOn: String, days: Int, expectedProfileID: UUID) throws -> CoachProgress { try pagedConnection(expectedProfileID: expectedProfileID).database.progressRange(endingOn: endingOn, days: days, includeDailyReports: true, expectedProfileID: expectedProfileID) }
     func weight(id: UUID, expectedProfileID: UUID) throws -> WeightEntry {
