@@ -29,7 +29,13 @@ enum CoachUITestInference {
             #endif
             return result
         }
-        if input.contains(where: { if case .functionOutput = $0 { return true }; return false }) {
+        let hasOutput = input.contains(where: { if case .functionOutput = $0 { return true }; return false })
+        if text.contains("synthetic partial"), context.replyTo == nil, hasOutput {
+            // Saved food followed by a failed round: the turn must still report what saved.
+            let id = UUID().uuidString
+            return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: "no_such_tool", namespace: "mivu", arguments: "{}")], outputItems: [])
+        }
+        if hasOutput || (text.contains("synthetic partial") && context.replyTo != nil) {
             return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: [], outputItems: [])
         }
         var calendar = Calendar(identifier: .gregorian)

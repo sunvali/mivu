@@ -213,7 +213,7 @@ extension DiaryDatabase {
             case .message(let id, _):
                 guard let turn = try transaction.turn(id: id) else { throw DiaryError.notFound }
                 value.turn = .init(id: turn.id, capturedAt: turn.capturedAt, text: coachBoundedText(turn.text, bytes: 1024),
-                                   assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) })
+                                   assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) }, receipts: Self.receiptLine(turn.receipts))
             case .meal(let id), .item(let id, _):
                 if case .item(_, let itemID) = reply.target,
                    !(try transaction.mealItems(id: id)).contains(where: { $0.id == itemID }) { throw DiaryError.notFound }

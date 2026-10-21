@@ -205,13 +205,13 @@ import Testing
     func receiptRecoveryRejectsRegeneratedIntentAcrossEngineRounds(variant: String) async throws {
         let f = try CoachLunchFixture(); defer { f.remove() }
         let store = try await f.store(), accepted = try await f.accept(store)
-        await #expect(throws: CoachJourneyTransport.Interruption.afterCommit) {
+        try await interruptAfterWrite(store, f.owner, accepted.id) {
             try await f.run(store, accepted.id, CoachJourneyTransport(interruptAfterCommit: true))
         }
         let before = try f.businessRows(), work = try await store.coachWorkItem(turnID: accepted.id, expectedProfileID: f.owner)
         try await store.setCoachTurnState(turnID: accepted.id, state: .captured, expectedProfileID: f.owner)
         let script = CoachRecoveryScript(variant: variant)
-        await #expect(throws: CoachError.invalidArguments) {
+        try await interruptAfterWrite(store, f.owner, accepted.id) {
             try await CoachEngine(store: store, infer: { try await script.infer($0, $1) }).run(turnID: accepted.id, expectedProfileID: f.owner)
         }
         #expect(try f.businessRows() == before && f.applications() == 1)
@@ -234,7 +234,7 @@ import Testing
     @Test(arguments: [false, true]) func legacyNilFingerprintRecoveryKeepsPriorResultAuthority(newOperation: Bool) async throws {
         let f = try CoachLunchFixture(); defer { f.remove() }
         let store = try await f.store(), accepted = try await f.accept(store)
-        await #expect(throws: CoachJourneyTransport.Interruption.afterCommit) {
+        try await interruptAfterWrite(store, f.owner, accepted.id) {
             try await f.run(store, accepted.id, CoachJourneyTransport(interruptAfterCommit: true))
         }
         let database = try f.database
@@ -250,7 +250,7 @@ import Testing
         let before = try await fresh.coachWorkItem(turnID: accepted.id, expectedProfileID: f.owner)
         let script = CoachRecoveryScript(variant: newOperation ? "unknown" : "matched")
         if newOperation {
-            await #expect(throws: CoachError.invalidArguments) {
+            try await interruptAfterWrite(fresh, f.owner, accepted.id) {
                 try await CoachEngine(store: fresh, infer: { try await script.infer($0, $1) }).run(turnID: accepted.id, expectedProfileID: f.owner)
             }
         } else {

@@ -113,6 +113,17 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(input.waitForExistence(timeout: 5)); XCTAssertTrue(input.isHittable)
     }
+    func testPartialSuccessShowsSavedCardAndRetry() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        enter("Synthetic partial success", in: app); app.buttons["coachSend"].tap()
+        XCTAssertTrue(app.buttons["coachFinishRest"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["coachFinishRest"].isHittable)
+        XCTAssertTrue(app.otherElements.matching(NSPredicate(format: "identifier BEGINSWITH %@", "coachReceipt-")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Analysis could not finish. Your input is saved. Check your connection or retry when ready."].exists)
+    }
     func testFixtureMealCorrectionHistoricalReviewAndConversationRelaunch() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]

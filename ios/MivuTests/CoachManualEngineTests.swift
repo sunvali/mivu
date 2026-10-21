@@ -142,7 +142,7 @@ private actor RevisionCoachReplies {
         let deleting = try await capturedTurn(store, text: "Delete that meal", photos: [], at: now, expectedProfileID: profile.id)
         let delete = try call("delete_meal", ["meal_id": meal.id.uuidString, "expected_revision": moved.revision])
         let first = ManualCoachReplies([result([delete])])
-        await #expect(throws: CoachError.limitExceeded) {
+        try await interruptAfterWrite(store, profile.id, deleting.id) {
             try await CoachEngine(store: store, infer: { try await first.next($0, $1) }).run(turnID: deleting.id, expectedProfileID: profile.id)
         }
         let after = try await store.snapshotForExport()
@@ -172,7 +172,7 @@ private actor RevisionCoachReplies {
         let read = try call("get_meal", ["meal_id": meal.id.uuidString])
         let delete = try call("delete_item", ["meal_id": meal.id.uuidString, "item_id": meal.items[0].id.uuidString, "expected_revision": meal.revision])
         let first = ManualCoachReplies([result([read]), result([delete])])
-        await #expect(throws: CoachError.limitExceeded) {
+        try await interruptAfterWrite(store, profile.id, turn.id) {
             try await CoachEngine(store: store, infer: { try await first.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }
         #expect(try await store.snapshotForExport().meals.first?.items.count == 1)

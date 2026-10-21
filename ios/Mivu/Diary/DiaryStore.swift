@@ -272,11 +272,11 @@ actor DiaryStore {
     func setCoachTurnState(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, expectedProfileID: UUID) throws {
         _ = try pagedMutation(expectedProfileID) { database, head in
             let kept = state == .completed ? try database.coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID) : nil
-            return try database.updateCoachTurn(turnID: turnID, state: state, assistantText: kept?.assistantText, question: kept?.question, needsDayChoice: needsDayChoice, expected: head, maximumBytes: maximumFileBytes)
+            return try database.updateCoachTurn(turnID: turnID, state: state, assistantText: kept?.assistantText, question: kept?.question, incomplete: kept?.incomplete, needsDayChoice: needsDayChoice, expected: head, maximumBytes: maximumFileBytes)
         }
     }
-    func completeCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = nil, expectedProfileID: UUID) throws {
-        _ = try pagedMutation(expectedProfileID) { try $0.updateCoachTurn(turnID: turnID, state: .completed, assistantText: assistantText, question: question, needsDayChoice: false, expected: $1, maximumBytes: maximumFileBytes) }
+    func completeCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = nil, incomplete: Bool? = nil, expectedProfileID: UUID) throws {
+        _ = try pagedMutation(expectedProfileID) { try $0.updateCoachTurn(turnID: turnID, state: .completed, assistantText: assistantText, question: question, incomplete: incomplete, needsDayChoice: false, expected: $1, maximumBytes: maximumFileBytes) }
     }
     func coachPreferenceSummary(expectedProfileID: UUID) throws -> String {
         let profile = try diaryHead(expectedProfileID: expectedProfileID).profile
@@ -592,9 +592,9 @@ actor DiaryStore {
         }
     }
 
-    func finishCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = nil, epoch: UInt64, expectedProfileID: UUID) throws {
+    func finishCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = nil, incomplete: Bool? = nil, epoch: UInt64, expectedProfileID: UUID) throws {
         try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
-        try completeCoachTurn(turnID: turnID, assistantText: assistantText, question: question, expectedProfileID: expectedProfileID)
+        try completeCoachTurn(turnID: turnID, assistantText: assistantText, question: question, incomplete: incomplete, expectedProfileID: expectedProfileID)
     }
 
     func failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, epoch: UInt64, expectedProfileID: UUID) throws {

@@ -203,7 +203,7 @@ private actor CoachFeedbackReplies {
         var args: [String: Any] = ["meal_id": meal.id.uuidString, "item_id": item.id.uuidString,
             "expected_revision": meal.revision, "nutrients": [["nutrient": "kcal", "value": 120]]]
         let first = CoachFeedbackReplies([reply([try call("edit_item", args)])])
-        await #expect(throws: CoachError.limitExceeded) {
+        try await interruptAfterWrite(store, profile.id, turn.id) {
             try await CoachEngine(store: store, infer: { try await first.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }
         let saved = try #require(await store.snapshotForExport().meals.first)
@@ -212,7 +212,7 @@ private actor CoachFeedbackReplies {
         let originalReceipts = try await exportedTurn(reopened, turnID: turn.id, expectedProfileID: profile.id).receipts
         args["expected_revision"] = saved.revision
         let changed = CoachFeedbackReplies([reply([try call("edit_item", args)])])
-        await #expect(throws: CoachError.invalidArguments) {
+        try await interruptAfterWrite(reopened, profile.id, turn.id) {
             try await CoachEngine(store: reopened, infer: { try await changed.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }
         #expect(try await reopened.snapshotForExport().meals.first == saved)

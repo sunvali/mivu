@@ -187,6 +187,14 @@ private final class CoachNavigationReadFence: Sendable {
         attachmentDraft.reply = CoachReply(target: .message(turnID: turn.id, fromPip: fromPip),
                                            excerpt: text.isEmpty ? "Photo" : String(text.prefix(280)))
     }
+    /// Asks Coach to finish what an incomplete exchange could not, quoting what already saved.
+    func finishRest(of turn: CoachExchangeSummary) async {
+        guard !isSending, attachmentDraft.reply == nil, attachmentDraft.attachments.isEmpty,
+              draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        draft.text = turn.text
+        reply(to: turn, fromPip: true)
+        await send()
+    }
     /// A Diary handoff quote; never replaces a message the person already started.
     @discardableResult func startReply(_ reply: CoachReply) -> Bool {
         synchronizeDraftOwnership()

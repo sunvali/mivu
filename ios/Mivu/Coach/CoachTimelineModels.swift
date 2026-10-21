@@ -63,6 +63,7 @@ struct CoachExchangeSummary: Equatable, Sendable, Identifiable {
     var needsDayChoice: Bool = false
     var reply: CoachReply? = nil
     var question: CoachQuestion? = nil
+    var incomplete: Bool? = nil
 }
 
 enum CoachPageRequest: Equatable, Sendable {

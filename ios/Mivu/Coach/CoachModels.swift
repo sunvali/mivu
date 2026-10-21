@@ -114,6 +114,8 @@ struct CoachTurn: Codable, Equatable, Sendable, Identifiable {
     var captureSegmentID: UUID? = nil
     /// Set when this turn ended with a question the next reply answers.
     var question: CoachQuestion? = nil
+    /// True when saved food was kept but the rest of the request failed.
+    var incomplete: Bool? = nil
 }
 
 struct CoachCaptureContext: Codable, Equatable, Sendable {

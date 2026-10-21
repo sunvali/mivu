@@ -600,6 +600,10 @@ struct CoachView: View {
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
                 }
             }
+            if turn.incomplete == true {
+                Text("Couldn't finish the rest").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                Button("Retry") { Task { await coach.finishRest(of: turn) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachFinishRest")
+            }
             if let pendingID = turn.pendingMealID, !turn.receipts.contains(where: { $0.mealID == pendingID }),
                let meal = coach.linkedMeals(turn).first(where: { $0.id == pendingID }) {
                 Button { selectedRecord = .meal(meal.id) } label: {
