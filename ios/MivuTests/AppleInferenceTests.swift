@@ -178,6 +178,23 @@ struct AppleInferenceTests {
         #expect(item.nutrition.kcal == 330 && item.nutrition.protein == 62)
     }
 
+    @Test func localCaloriesNeverFallBelowWhatTheMacrosImply() async throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile); _ = try await store.startDay()
+        let turn = try await capturedTurn(store, text: "a can of coca cola", photos: [], expectedProfileID: profile.id)
+        _ = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools) { _ in
+                // Measured on-device: a regular Coke given a diet drink's 3 kcal beside its 35 g of sugar.
+                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Coca cola", quantity: 1, unit: "can", kcal: 3, carbs: 35, protein: 0, fat: 0,
+                                                                      kcalPer100g: 1, carbsPer100g: 10.6, proteinPer100g: 0, fatPer100g: 0)],
+                                         editFood: nil, editQuantity: nil)
+            }
+        }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(try await store.snapshotForExport().meals.first?.items.first?.nutrition.kcal == 140)
+    }
+
     @Test func localEditOfAFoodNotInTheLatestMealChangesNothing() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }

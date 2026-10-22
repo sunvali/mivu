@@ -82,9 +82,12 @@ extension AppleInference {
                 func value(_ total: Double, _ per100: Double) -> Double {
                     (min(max(weighed ? per100 * food.quantity / 100 : total, 0), 100_000) * 10).rounded() / 10
                 }
-                return ["name": food.name, "quantity": food.quantity, "unit": food.unit, "kcal": value(food.kcal, food.kcalPer100g),
-                        "carbs": value(food.carbs, food.carbsPer100g), "protein": value(food.protein, food.proteinPer100g),
-                        "fat": value(food.fat, food.fatPer100g)]
+                let carbs = value(food.carbs, food.carbsPer100g), protein = value(food.protein, food.proteinPer100g)
+                let fat = value(food.fat, food.fatPer100g), fromMacros = (4 * (carbs + protein) + 9 * fat).rounded()
+                // Calories cannot sit far below what the macros imply; alcohol only raises them, so no upper bound.
+                var kcal = value(food.kcal, food.kcalPer100g)
+                if kcal < 0.7 * fromMacros { kcal = fromMacros }
+                return ["name": food.name, "quantity": food.quantity, "unit": food.unit, "kcal": kcal, "carbs": carbs, "protein": protein, "fat": fat]
             }
             return try result(text: "", calls: [try call("log_food", ["target_local_date": date, "items": items])])
         }
@@ -92,13 +95,14 @@ extension AppleInference {
     }
 
     static func generateOnDevice(_ prompt: LocalPrompt) async throws -> LocalTurn {
+        // Apple's guidance for the ~3B model: one task, a few examples, greedy sampling for extraction.
         let session = LanguageModelSession(model: SystemLanguageModel.default, instructions: """
-            You read one food diary message. A question is other, even when it mentions food. \
+            Read one food diary message and fill in the result. A question is other, even when it mentions food. \
             When an amount is missing, estimate a typical serving. \
             Zero, diet and sugar-free drinks, water, black coffee and plain tea have almost no calories or carbs.
             """)
         let images = try prompt.images.map { try attachment($0).cgImage }
-        return try await session.respond(generating: LocalTurn.self) {
+        return try await session.respond(generating: LocalTurn.self, options: GenerationOptions(sampling: .greedy)) {
             prompt.text
             for image in images { Attachment(image) }
         }.content
