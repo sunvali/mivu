@@ -46,6 +46,39 @@ struct AppleInferenceTests {
         #expect(describe(output.segments) == [#"{"id":"A"}"#])
     }
 
+    @Test func perTurnDeveloperContextJoinsTheCapturedPrompt() throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let transcript = try AppleInference.transcript([
+            .message(role: .developer, text: "Rules"),
+            .message(role: .user, text: "Earlier"),
+            .message(role: .assistant, text: "Saved"),
+            .message(role: .developer, text: "Context: {}"),
+            .message(role: .user, text: "Lunch"),
+        ], tools: [])
+        guard transcript.count == 4, case .instructions = transcript[0], case .prompt = transcript[1],
+              case .response = transcript[2], case .prompt(let prompt) = transcript[3] else { Issue.record("\(transcript)"); return }
+        #expect(describe(prompt.segments) == ["Context: {}", "Lunch"])
+    }
+
+    @Test func capturedCallsReplayAsTheSameToolCalls() throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let calls = [Transcript.ToolCall(id: "a", toolName: "lookup_nutrition", arguments: try GeneratedContent(json: #"{"query":"egg"}"#)),
+                     Transcript.ToolCall(id: "b", toolName: "lookup_nutrition", arguments: try GeneratedContent(json: #"{"query":"toast"}"#))]
+        let result = try AppleInference.result(text: "", calls: calls)
+        #expect(result.calls.map(\.callID) == ["a", "b"])
+        #expect(result.calls.allSatisfy { $0.namespace == CoachTools.namespace && $0.name == "lookup_nutrition" })
+        #expect(result.calls.map { try? JSONSerialization.jsonObject(with: Data($0.arguments.utf8)) as? [String: String] } == [["query": "egg"], ["query": "toast"]])
+        let replay = try AppleInference.transcript(result.outputItems.map { .priorOutput($0) }, tools: [])
+        guard replay.count == 1, case .toolCalls(let replayed) = replay[0] else { Issue.record("\(replay)"); return }
+        #expect(replayed.map(\.id) == ["a", "b"])
+
+        let answer = try AppleInference.result(text: "Two eggs are about 155 kcal.", calls: [])
+        #expect(answer.calls.isEmpty && answer.text == "Two eggs are about 155 kcal.")
+        let replayedAnswer = try AppleInference.transcript(answer.outputItems.map { .priorOutput($0) }, tools: [])
+        guard replayedAnswer.count == 1, case .response(let response) = replayedAnswer[0] else { Issue.record("\(replayedAnswer)"); return }
+        #expect(describe(response.segments) == ["Two eggs are about 155 kcal."])
+    }
+
     @available(iOS 27.0, *)
     private func describe(_ segments: [Transcript.Segment]) -> [String] {
         segments.map {

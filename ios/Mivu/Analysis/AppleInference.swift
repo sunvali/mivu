@@ -1,10 +1,67 @@
 import Foundation
 import FoundationModels
 import ImageIO
+import Synchronization
 
-/// Apple Private Cloud Compute behind the same inference boundary as the ChatGPT plan.
+/// Apple Intelligence behind the same inference boundary as the ChatGPT plan.
 @available(iOS 27.0, *)
 enum AppleInference {
+    static let continuation = "Continue the captured turn using the tool results above."
+
+    /// One stateless step: Mivu tools only report the calls the model chose; CoachEngine executes them.
+    static func respond(_ input: [CoachInferenceInput], namespace: Data?, model: some LanguageModel = SystemLanguageModel.default) async throws -> CoachInferenceResult {
+        let definitions = try namespace.map(toolDefinitions) ?? []
+        var entries = Array(try transcript(input, tools: definitions))
+        // Every respond needs a prompt: the trailing capture is one; after tool outputs a fixed continuation stands in.
+        // shortcut: the continuation adds a synthetic user line per step; drop it if FoundationModels can resume without a prompt.
+        var segments = [Transcript.Segment.text(.init(content: continuation))]
+        if case .prompt(let last)? = entries.last { segments = last.segments; entries.removeLast() }
+        let capture = Capture()
+        let session = LanguageModelSession(model: model, tools: definitions.map { CaptureTool(definition: $0, capture: capture) },
+                                           transcript: Transcript(entries: entries))
+        capture.session.withLock { $0 = session }
+        do {
+            let response = try await session.respond {
+                for segment in segments {
+                    if case .attachment(let attachment) = segment, case .image(let image) = attachment.content { Attachment(image.cgImage) }
+                    else if case .text(let text) = segment { text.content }
+                    else { "" }
+                }
+            }
+            return try result(text: response.content, calls: [])
+        } catch let error as LanguageModelSession.ToolCallError where error.underlyingError is Captured {
+            return try result(text: "", calls: capture.calls.withLock { $0 })
+        }
+    }
+
+    static func result(text: String, calls: [Transcript.ToolCall]) throws -> CoachInferenceResult {
+        let toolCalls = calls.map { CoachToolCall(id: "fc_" + $0.id, callID: $0.id, name: $0.toolName, namespace: CoachTools.namespace, arguments: $0.arguments.jsonString) }
+        let items: [[String: Any]] = toolCalls.isEmpty
+            ? [["type": "message", "role": "assistant", "content": [["type": "output_text", "text": text]]]]
+            : toolCalls.map { ["type": "function_call", "id": $0.id, "call_id": $0.callID, "name": $0.name, "namespace": CoachTools.namespace,
+                               "arguments": $0.arguments, "status": "completed"] }
+        return CoachInferenceResult(model: "apple-intelligence", text: text, calls: toolCalls,
+                                    outputItems: try items.map { try JSONSerialization.data(withJSONObject: $0, options: .sortedKeys) })
+    }
+
+    private struct Captured: Error {}
+    private final class Capture: Sendable {
+        let session = Mutex<LanguageModelSession?>(nil)
+        let calls = Mutex<[Transcript.ToolCall]>([])
+    }
+    private struct CaptureTool: Tool {
+        let definition: Transcript.ToolDefinition
+        let capture: Capture
+        var name: String { definition.name }
+        var description: String { definition.description }
+        var parameters: GenerationSchema { definition.parameters }
+        func call(arguments: GeneratedContent) async throws -> String {
+            // While a tool runs, the transcript's last entry is the whole parallel batch; a throw rolls it back.
+            if case .toolCalls(let calls)? = capture.session.withLock({ $0?.transcript.last }) { capture.calls.withLock { $0 = Array(calls) } }
+            throw Captured()
+        }
+    }
+
     static func toolDefinitions(_ namespace: Data) throws -> [Transcript.ToolDefinition] {
         guard let tools = (try JSONSerialization.jsonObject(with: namespace) as? [String: Any])?["tools"] as? [[String: Any]] else {
             throw ResponsesClient.Failure.invalidInput
@@ -29,9 +86,9 @@ enum AppleInference {
                 var segments: [Transcript.Segment] = text.isEmpty ? [] : [.text(.init(content: text))]
                 for image in images { segments.append(.attachment(.init(content: .image(try attachment(image))))) }
                 switch role {
-                case .developer: entries.append(.instructions(.init(segments: segments, toolDefinitions: tools)))
+                case .developer where entries.isEmpty: entries.append(.instructions(.init(segments: segments, toolDefinitions: tools)))
                 case .assistant: entries.append(.response(.init(assetIDs: [], segments: segments)))
-                case .user:
+                case .user, .developer: // Instructions lead the transcript, so per-turn context joins the captured prompt.
                     if case .prompt(var prompt) = entries.last {
                         prompt.segments += segments
                         entries[entries.count - 1] = .prompt(prompt)
