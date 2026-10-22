@@ -79,6 +79,16 @@ struct AppleInferenceTests {
         #expect(describe(response.segments) == ["Two eggs are about 155 kcal."])
     }
 
+    @Test @MainActor func appleAnswersWhenNoChatGPTPlanIsConnected() throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let apple = ChatGPTConnection(preferences: UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!, appleModelAvailable: { true })
+        #expect(!apple.planAuthorized && apple.canInfer)
+        #expect(throws: Never.self) { _ = try apple.inference() }
+        let none = ChatGPTConnection(preferences: UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!, appleModelAvailable: { false })
+        #expect(!none.canInfer)
+        #expect(throws: SessionError.noActiveSession) { _ = try none.inference() }
+    }
+
     @available(iOS 27.0, *)
     private func describe(_ segments: [Transcript.Segment]) -> [String] {
         segments.map {

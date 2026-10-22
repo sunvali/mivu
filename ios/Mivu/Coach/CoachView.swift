@@ -372,7 +372,7 @@ struct CoachView: View {
             if let note = voice.note {
                 Text(note).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachVoiceNote")
             }
-            if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture {
+            if !coach.connection.canInfer && !DiaryLaunch.isCoachInferenceFixture {
                 HStack(spacing: 4) {
                     Text("Input saves on this iPhone.").foregroundStyle(Color.diarySecondary)
                     ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for analysis")

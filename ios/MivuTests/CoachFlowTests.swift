@@ -126,7 +126,7 @@ private enum CoachFlowWaitFailure: Error, Equatable {
     }
     @Test func disconnectedCaptureRemainsDurableWaitingAndNotSampleFood() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
-        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(appleModelAvailable: { false }))
         coach.draft.text = "Synthetic dinner"
         #expect(await coach.send()); await coach.waitForWorker()
         #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .waitingForConnection)

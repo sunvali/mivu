@@ -338,13 +338,13 @@ struct OnboardingView: View {
 
     private func advance() {
         var next = Step(rawValue: step.rawValue + 1) ?? .results
-        if next == .connect, connection.planAuthorized { next = .results }
+        if next == .connect, connection.canInfer { next = .results }
         go(to: next)
     }
 
     private func back() {
         var previous = Step(rawValue: step.rawValue - 1) ?? .hello
-        if previous == .connect, connection.planAuthorized { previous = .diet }
+        if previous == .connect, connection.canInfer { previous = .diet }
         go(to: previous)
     }
 
@@ -363,7 +363,7 @@ struct OnboardingView: View {
     private func showEstimate() {
         guard let answers else { return }
         targets = answers.estimate(); reply = nil; askFailed = false
-        if connection.planAuthorized { Task { await askChatGPT() } } else { react(.saved) }
+        if connection.canInfer { Task { await askChatGPT() } } else { react(.saved) }
     }
 
     private func askChatGPT() async {

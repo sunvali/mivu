@@ -254,7 +254,7 @@ private final class CoachCredentialStore: CredentialStoring, @unchecked Sendable
             default: throw URLError(.badURL)
             }
         }
-        connection = ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session), jobStore: ProbeJobStore(directory: directory), preferences: preferences)
+        connection = ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session), jobStore: ProbeJobStore(directory: directory), preferences: preferences, appleModelAvailable: { false })
     }
     func cleanup() {
         preferences.removePersistentDomain(forName: preferencesName)
