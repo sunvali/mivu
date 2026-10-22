@@ -17,6 +17,7 @@ struct CoachView: View {
     @State private var showingDetail = false
     @State private var showPhotos = false
     @State private var composerHeight: CGFloat = 0
+    @State private var textWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var voice = CoachVoiceInput()
@@ -162,7 +163,7 @@ struct CoachView: View {
         // A route change (headphones, Bluetooth) stops the audio engine underneath us.
         .onReceive(NotificationCenter.default.publisher(for: .AVAudioEngineConfigurationChange)) { _ in stopListening() }
         .sensoryFeedback(trigger: listening) { _, on in on ? .start : .stop }
-        .onChange(of: CompanionContext.draftSignal(coach.attachmentDraft.text.count)) { _, _ in reportCompanionContext() }
+        .onChange(of: caretSignal) { _, _ in reportCompanionContext() }
         .onChange(of: coach.diary.selection) { _, _ in
             coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; selectedRecord = nil
             stopListening()
@@ -299,7 +300,11 @@ struct CoachView: View {
         onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: (editing || listening) && !coach.isSending,
             isProcessing: companionProcessing, needsRecovery: companionRecovery,
             playback: surfaceVisible && !showPhotos && !showingDetail ? .animated : .hidden,
-            draftLength: coach.attachmentDraft.text.count))
+            draftLength: caretSignal))
+    }
+    /// Pip's eyes follow the caret across the field, back to the left when the draft wraps.
+    private var caretSignal: Int {
+        CompanionContext.caretSignal(coach.attachmentDraft.text, width: textWidth, font: .preferredFont(forTextStyle: .body))
     }
     private var companionStrip: some View {
         HStack(alignment: .bottom, spacing: 12) {
@@ -402,6 +407,7 @@ struct CoachView: View {
                         // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
                         .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
                         .accessibilityIdentifier("coachInput")
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { textWidth = $0 }
                         .padding(.leading, 16).padding(.vertical, 10)
                         // Hide only the text while listening; a transparent field would stop receiving the tap that switches to typing.
                         .foregroundStyle(listening ? Color.clear : Color.primary)
