@@ -71,7 +71,8 @@ extension AppleInference {
         let latest = context.focus?.lastChanged.flatMap { changed in complete.first { $0.id == changed.mealID } }
             ?? complete.max { $0.eatenAt < $1.eatenAt }
         // A named food must match a saved one; "make it three" names none and is safe only for a single-item meal.
-        let named = words(turn.editFood ?? "")
+        // Only words the message says count: on-device the model invents names ("chocolate" for "make it three").
+        let named = words(turn.editFood ?? "").intersection(messageWords)
         let target = named.isEmpty ? (latest?.items.count == 1 ? latest?.items.first : nil)
             : latest?.items.max { words($0.name).intersection(named).count < words($1.name).intersection(named).count }
                 .flatMap { words($0.name).isDisjoint(with: named) ? nil : $0 }
@@ -90,8 +91,7 @@ extension AppleInference {
                 let weighed = ["g", "gram", "grams", "ml", "milliliter", "milliliters"].contains(food.unit.lowercased())
                 func rounded(_ value: Double?) -> Double { (min(max(value ?? 0, 0), 100_000) * 10).rounded() / 10 }
                 // Numbers come from the USDA table when the on-device model confirms a match and a portion weight exists.
-                if let (match, grams) = try await tableMatch(food, weighed: weighed, table: table, pick: pick) {
-                    let nutrition = match.per100Grams.scaled(by: grams / 100)
+                if let (match, grams) = try await tableMatch(food, weighed: weighed, table: table, pick: pick) {                    let nutrition = match.per100Grams.scaled(by: grams / 100)
                     items.append(["name": food.name, "quantity": food.quantity, "unit": food.unit, "kcal": rounded(nutrition.kcal),
                                   "carbs": rounded(nutrition.carbs), "protein": rounded(nutrition.protein), "fat": rounded(nutrition.fat)])
                     continue

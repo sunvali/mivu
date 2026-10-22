@@ -262,7 +262,7 @@ struct AppleInferenceTests {
         let edit = try await capturedTurn(store, text: "make it three", photos: [], expectedProfileID: profile.id)
         let edited = try await CoachEngine(store: store, infer: { input, tools in
             try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
-                AppleInference.LocalTurn(intent: .edit, foods: [], editFood: nil, editQuantity: 3)
+                AppleInference.LocalTurn(intent: .edit, foods: [], editFood: "chocolate", editQuantity: 3) // Measured on the owner's iPhone: an invented name.
             }
         }).run(turnID: edit.id, expectedProfileID: profile.id)
         #expect(edited.receipts.count == 1)
@@ -280,7 +280,7 @@ struct AppleInferenceTests {
         let again = try await capturedTurn(store, text: "make it 4", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
             try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
-                AppleInference.LocalTurn(intent: .edit, foods: [], editFood: nil, editQuantity: 4)
+                AppleInference.LocalTurn(intent: .edit, foods: [], editFood: "ice cream", editQuantity: 4)
             }
         }).run(turnID: again.id, expectedProfileID: profile.id)
         let quantities = Dictionary(uniqueKeysWithValues: try await store.snapshotForExport().meals.flatMap(\.items).map { ($0.name, $0.quantity) })
