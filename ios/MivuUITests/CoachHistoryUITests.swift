@@ -199,7 +199,9 @@ import XCTest
         XCTAssertEqual(try metrics(app)["requestedPages"] as? [[Int]], pages)
         let newest = app.staticTexts["coachText-00000000-0000-0000-0000-000000000043"]
         for _ in 0..<16 where !newest.isHittable {
-            viewport(app).swipeUp()
+            // The composer floats over the viewport's lower part; drag where the conversation shows.
+            let point = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+            point.press(forDuration: 0.05, thenDragTo: point.withOffset(CGVector(dx: 0, dy: -150)), withVelocity: .fast, thenHoldForDuration: 0)
             _ = try waitHistory(app)
         }
         XCTAssertTrue(newest.isHittable, "A real reverse gesture must return through the loaded conversation")
@@ -258,6 +260,13 @@ import XCTest
         app.buttons["mealSourceChat"].tap()
         let date = app.staticTexts["coachReceiptDate"]
         XCTAssertTrue(date.waitForExistence(timeout: 10)); XCTAssertTrue(date.label.contains("2027-01-15"))
+        // The Diary quote focuses the composer; the keyboard leaves too little viewport to reveal the receipt.
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists { // interactive dismissal needs the drag to continue into the keyboard
+            viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+        }
+        XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5))
         let details = app.descendants(matching: .any)["coachReceiptDetails"].firstMatch
         reveal(details, app: app); details.tap()
         let unknown = app.staticTexts["coachReceiptUnknown"].firstMatch

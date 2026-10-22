@@ -295,7 +295,8 @@ import XCTest
 
     private func launchDiary(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"] + extra
+        // Day start at midnight keeps meals, weights and the Day report on one date between 00:00 and 04:00.
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "-dayStartHour", "<integer>0</integer>"] + extra
         app.launch()
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 15))
         return app

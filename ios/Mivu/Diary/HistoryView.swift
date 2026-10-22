@@ -100,7 +100,8 @@ struct HistoryView: View {
         .navigationTitle("Diary")
         .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            // A leading item collapses into a "More" overflow beside the inline-large title.
+            ToolbarItem(placement: .topBarTrailing) {
                 Button("Choose date", systemImage: "calendar") {
                     pickedDate = ProgressDate.date(selected, zone: zone) ?? Date(); showDatePicker = true
                 }.accessibilityIdentifier("chooseDiaryDate")
