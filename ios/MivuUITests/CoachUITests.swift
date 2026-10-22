@@ -533,9 +533,9 @@ import XCTest
     private func openConnectionSettings(in app: XCUIApplication) {
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Coach AI")).firstMatch
         revealList(row, in: app); row.tap()
-        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Coach AI"].waitForExistence(timeout: 5))
     }
     private func revealList(_ element: XCUIElement, in app: XCUIApplication) {
         guard let list = nativeList(in: app) else { return }

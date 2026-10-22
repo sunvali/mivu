@@ -56,6 +56,18 @@ enum CoachCommand: Sendable {
     case progress(endingOn: String, days: Int)
     case workout(UUID)
     case write(CoachWrite)
+
+    /// New foods remember the model that estimated them; edits keep the food's original source.
+    func estimated(by model: String) -> CoachCommand {
+        func tag(_ items: [FoodItem]) -> [FoodItem] { items.map { var item = $0; item.estimatedBy = model; return item } }
+        switch self {
+        case let .write(.food(date, items, eatenAt, reviewFirst)):
+            return .write(.food(date: date, items: tag(items), eatenAt: eatenAt, reviewFirst: reviewFirst))
+        case let .write(.manual(.append(mealID, items, revision), patchKey)):
+            return .write(.manual(.append(mealID: mealID, items: tag(items), revision: revision), patchKey: patchKey))
+        default: return self
+        }
+    }
 }
 
 /// Only declared operations cross the model-to-diary boundary.

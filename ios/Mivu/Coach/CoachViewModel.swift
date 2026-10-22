@@ -396,7 +396,7 @@ private final class CoachNavigationReadFence: Sendable {
                         captureNeedsProcessing = false
                         let next: CoachTurnResult?
                         do {
-                            next = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, capturedOnly: capturedOnly, expectedProfileID: owner)
+                            next = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.canInfer, capturedOnly: capturedOnly, expectedProfileID: owner)
                         } catch {
                             captureNeedsProcessing = captureNeedsProcessing || pendingCaptureWake
                             throw error

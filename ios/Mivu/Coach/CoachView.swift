@@ -372,13 +372,16 @@ struct CoachView: View {
             if let note = voice.note {
                 Text(note).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachVoiceNote")
             }
-            if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture {
+            if !coach.connection.canInfer && !DiaryLaunch.isCoachInferenceFixture {
                 HStack(spacing: 4) {
                     Text("Input saves on this iPhone.").foregroundStyle(Color.diarySecondary)
                     ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for analysis")
                         .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
                 }
                 .font(.caption)
+            } else if coach.connection.provider == .apple {
+                Text("Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.")
+                    .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachAppleLimits")
             }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)

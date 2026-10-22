@@ -1,4 +1,5 @@
 import Foundation
+import FoundationModels
 import Observation
 import UIKit
 
@@ -61,8 +62,38 @@ final class ChatGPTConnection {
     private var generation = 0
     @ObservationIgnored private var isForeground = true
 
+    @ObservationIgnored private let appleModelAvailable: @Sendable () -> Bool
+
+    /// `apple` is the on-device model, a no-account fallback for logging; ChatGPT is the main Coach.
+    enum Provider: String { case apple, chatGPT }
+
+    nonisolated static let appleIntelligenceAvailable: @Sendable () -> Bool = {
+        if #available(iOS 27.0, *) { SystemLanguageModel.default.isAvailable } else { false }
+    }
+
+    /// The person's choice while it can answer; otherwise Apple when this iPhone can run it, then ChatGPT.
+    var provider: Provider {
+        get {
+            access(keyPath: \.provider)
+            let stored = preferences.string(forKey: "aiProvider").flatMap(Provider.init)
+            if let stored, stored == .chatGPT || available(stored) { return stored }
+            // Someone with a saved ChatGPT connection keeps it until they pick Apple, also while it restores at launch.
+            if stored == nil, planAuthorized || preferences.string(forKey: "selectedRegistrationID") != nil { return .chatGPT }
+            return appleModelAvailable() ? .apple : .chatGPT
+        }
+        set { withMutation(keyPath: \.provider) { preferences.set(newValue.rawValue, forKey: "aiProvider") } }
+    }
+
+    func available(_ provider: Provider) -> Bool { provider == .apple ? appleModelAvailable() : planAuthorized }
+    var appleAvailable: Bool { appleModelAvailable() }
+    var canInfer: Bool { available(provider) }
+    /// Only ChatGPT tunes onboarding targets; the formula estimate beats the on-device model there.
+    var tunesTargets: Bool { provider == .chatGPT && planAuthorized }
+
     init(auth: AuthSession = AuthSession(), client: ResponsesClient = ResponsesClient(),
-         jobStore: ProbeJobStore? = nil, preferences: UserDefaults = .standard) {
+         jobStore: ProbeJobStore? = nil, preferences: UserDefaults = .standard,
+         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceAvailable) {
+        self.appleModelAvailable = appleModelAvailable
         self.auth = auth
         self.client = client
         self.preferences = preferences
@@ -260,6 +291,10 @@ final class ChatGPTConnection {
 
     /// A request on the connected plan, bound to this session; `nil` tools for a plain answer such as onboarding targets.
     func inference() throws -> @Sendable ([CoachInferenceInput], Data?) async throws -> CoachInferenceResult {
+        if provider == .apple {
+            guard #available(iOS 27.0, *), appleModelAvailable() else { throw SessionError.noActiveSession }
+            return { input, namespace in try await AppleInference.respondLocally(input, namespace: namespace) }
+        }
         guard planAuthorized, let owner = activeRegistrationID,
               !isConnecting, !isDisconnecting,
               models.contains(where: { $0.slug == selectedModel }) else {
