@@ -117,7 +117,7 @@ enum AppleInference {
         return Transcript(entries: entries)
     }
 
-    private static func attachment(_ data: Data) throws -> Transcript.ImageAttachment {
+    static func attachment(_ data: Data) throws -> Transcript.ImageAttachment {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ResponsesClient.Failure.invalidInput }
         return Transcript.ImageAttachment(image)

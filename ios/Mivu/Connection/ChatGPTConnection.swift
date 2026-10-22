@@ -66,14 +66,14 @@ final class ChatGPTConnection {
 
     enum Provider: String { case apple, chatGPT }
 
-    // The Coach request (~16K tokens) exceeds the on-device model (4K on iPhone 15 Pro), so Apple means Private Cloud Compute.
+    // The full Coach request (~16K tokens) needs Private Cloud Compute; the on-device model (4K on iPhone 15 Pro) runs the slim local path.
     // Without the managed com.apple.developer.private-cloud-compute entitlement PCC reports available yet every call fails.
-    // shortcut: set true in the same change that adds the granted entitlement; until then the Coach uses ChatGPT.
+    // shortcut: set true in the same change that adds the granted entitlement; until then Apple means the local path.
     nonisolated static let privateCloudComputeEntitled = false
 
     nonisolated static let appleIntelligenceAvailable: @Sendable () -> Bool = {
-        guard privateCloudComputeEntitled, #available(iOS 27.0, *) else { return false }
-        return PrivateCloudComputeLanguageModel().availability == .available
+        guard #available(iOS 27.0, *) else { return false }
+        return privateCloudComputeEntitled ? PrivateCloudComputeLanguageModel().availability == .available : SystemLanguageModel.default.isAvailable
     }
 
     /// The person's choice, Apple by default; ChatGPT whenever Apple Intelligence cannot answer.
@@ -292,7 +292,8 @@ final class ChatGPTConnection {
     func inference() throws -> @Sendable ([CoachInferenceInput], Data?) async throws -> CoachInferenceResult {
         if provider == .apple {
             guard #available(iOS 27.0, *), appleModelAvailable() else { throw SessionError.noActiveSession }
-            return { input, namespace in try await AppleInference.respond(input, namespace: namespace) }
+            if Self.privateCloudComputeEntitled { return { input, namespace in try await AppleInference.respond(input, namespace: namespace) } }
+            return { input, namespace in try await AppleInference.respondLocally(input, namespace: namespace) }
         }
         guard planAuthorized, let owner = activeRegistrationID,
               !isConnecting, !isDisconnecting,

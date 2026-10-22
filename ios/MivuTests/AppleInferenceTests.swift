@@ -110,6 +110,60 @@ struct AppleInferenceTests {
         #expect(throws: SessionError.noActiveSession) { _ = try relaunched.inference() }
     }
 
+    @Test func localModelLogsANewMealThenCorrectsItsPortion() async throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile); _ = try await store.startDay()
+        let prompts = PromptLog()
+
+        let log = try await capturedTurn(store, text: "Two boiled eggs", photos: [], expectedProfileID: profile.id)
+        let logged = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools) { prompt in
+                await prompts.append(prompt.text)
+                return AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11),
+                                                                      .init(name: "Toast", quantity: 1, unit: "slice", kcal: 80, carbs: 14, protein: 3, fat: 1)],
+                                                editFood: nil, editQuantity: nil)
+            }
+        }).run(turnID: log.id, expectedProfileID: profile.id)
+        #expect(logged.state == .completed && logged.receipts.count == 1)
+        var meals = try await store.snapshotForExport().meals
+        // Toast is not named in the message, so the grounding check keeps it out.
+        #expect(meals.count == 1 && meals.first?.items.map(\.name) == ["Boiled egg"] && meals.first?.items.first?.nutrition.kcal == 155)
+
+        let edit = try await capturedTurn(store, text: "Actually it was 3 eggs", photos: [], expectedProfileID: profile.id)
+        let edited = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools) { prompt in
+                await prompts.append(prompt.text)
+                return AppleInference.LocalTurn(intent: .edit, foods: [], editFood: "eggs", editQuantity: 3)
+            }
+        }).run(turnID: edit.id, expectedProfileID: profile.id)
+        #expect(edited.state == .completed && edited.receipts.count == 1)
+        meals = try await store.snapshotForExport().meals
+        #expect(meals.count == 1 && meals.first?.items.first?.quantity == 3)
+        let sent = await prompts.texts
+        #expect(sent == ["Two boiled eggs", "Actually it was 3 eggs"], "One call per turn with only the message, so saved foods cannot be copied")
+    }
+
+    @Test func localEditOfAFoodNotInTheLatestMealChangesNothing() async throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile); _ = try await store.startDay()
+        let log = try await capturedTurn(store, text: "Two boiled eggs", photos: [], expectedProfileID: profile.id)
+        _ = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools) { _ in
+                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11)], editFood: nil, editQuantity: nil)
+            }
+        }).run(turnID: log.id, expectedProfileID: profile.id)
+        let edit = try await capturedTurn(store, text: "make the latte 2", photos: [], expectedProfileID: profile.id)
+        let result = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools) { _ in AppleInference.LocalTurn(intent: .edit, foods: [], editFood: "latte", editQuantity: 2) }
+        }).run(turnID: edit.id, expectedProfileID: profile.id)
+        #expect(result.receipts.isEmpty)
+        #expect(try await store.snapshotForExport().meals.first?.items.first?.quantity == 2)
+    }
+
     @available(iOS 27.0, *)
     private func describe(_ segments: [Transcript.Segment]) -> [String] {
         segments.map {
@@ -122,3 +176,5 @@ struct AppleInferenceTests {
         }
     }
 }
+
+private actor PromptLog { var texts: [String] = []; func append(_ text: String) { texts.append(text) } }
