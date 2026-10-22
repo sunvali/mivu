@@ -213,7 +213,8 @@ struct SettingsView: View {
                 } header: { Text("Coach AI") } footer: {
                     Text(!connection.appleAvailable ? "Apple Intelligence isn't available for the Coach yet. Uses your ChatGPT plan; Coach messages and photos you send are shared with OpenAI."
                          : connection.provider == .chatGPT ? "Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI."
-                         : "Uses Apple Intelligence through Private Cloud Compute. No account needed.")
+                         : ChatGPTConnection.privateCloudComputeEntitled ? "Uses Apple Intelligence through Private Cloud Compute. No account needed."
+                         : "Runs on this iPhone with no account. It logs meals and changes amounts; choose ChatGPT for questions and other edits.")
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
                 Section("Connection") {

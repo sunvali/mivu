@@ -251,7 +251,8 @@ struct OnboardingView: View {
         case .connect where connection.appleAvailable:
             header("Choose your AI", "It turns your answers into personal targets and powers the Coach. You can change this in Settings.")
             card {
-                promise("apple.intelligence", "Apple Intelligence", "No account. Runs on Apple's Private Cloud Compute, which doesn't keep your data.")
+                promise("apple.intelligence", "Apple Intelligence", ChatGPTConnection.privateCloudComputeEntitled ? "No account. Runs on Apple's Private Cloud Compute, which doesn't keep your data."
+                         : "No account, and it runs on this iPhone. Logs meals and changes amounts.")
                 Divider()
                 promise("person.crop.circle.badge.checkmark", "ChatGPT", "Uses your ChatGPT plan's allowance. Only what you send the Coach is shared.")
             }
