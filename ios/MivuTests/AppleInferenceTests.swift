@@ -245,6 +245,48 @@ struct AppleInferenceTests {
         #expect(try await store.snapshotForExport().meals.first?.items.first?.nutrition.kcal == 140)
     }
 
+    @Test func localUnnamedEditChangesTheOnlyFoodInTheLatestMeal() async throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile); _ = try await store.startDay()
+        let log = try await capturedTurn(store, text: "coke zero", photos: [], expectedProfileID: profile.id)
+        _ = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
+                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "coke zero", searchName: "diet cola", quantity: 1, unit: "can",
+                                                                      kcal: 1, carbs: 0, protein: 0, fat: 0, kcalPer100g: 0, carbsPer100g: 0, proteinPer100g: 0, fatPer100g: 0)],
+                                         editFood: nil, editQuantity: nil)
+            }
+        }).run(turnID: log.id, expectedProfileID: profile.id)
+        // Measured on the owner's iPhone: "make it three" names no food.
+        let edit = try await capturedTurn(store, text: "make it three", photos: [], expectedProfileID: profile.id)
+        let edited = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
+                AppleInference.LocalTurn(intent: .edit, foods: [], editFood: nil, editQuantity: 3)
+            }
+        }).run(turnID: edit.id, expectedProfileID: profile.id)
+        #expect(edited.receipts.count == 1)
+        #expect(try await store.snapshotForExport().meals.first?.items.first?.quantity == 3)
+
+        // Measured live: after a second same-day meal, "make it 3" changed the older one (date-only times tie).
+        let pizza = try await capturedTurn(store, text: "pepperoni pizza", photos: [], expectedProfileID: profile.id)
+        _ = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
+                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "pepperoni pizza", searchName: "pepperoni pizza", quantity: 2, unit: "slice",
+                                                                      kcal: 600, carbs: 70, protein: 25, fat: 25, kcalPer100g: 290, carbsPer100g: 34, proteinPer100g: 12, fatPer100g: 12)],
+                                         editFood: nil, editQuantity: nil)
+            }
+        }).run(turnID: pizza.id, expectedProfileID: profile.id)
+        let again = try await capturedTurn(store, text: "make it 4", photos: [], expectedProfileID: profile.id)
+        _ = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
+                AppleInference.LocalTurn(intent: .edit, foods: [], editFood: nil, editQuantity: 4)
+            }
+        }).run(turnID: again.id, expectedProfileID: profile.id)
+        let quantities = Dictionary(uniqueKeysWithValues: try await store.snapshotForExport().meals.flatMap(\.items).map { ($0.name, $0.quantity) })
+        #expect(quantities == ["coke zero": 3, "pepperoni pizza": 4], "The last changed meal is what \"it\" means")
+    }
+
     @Test func localEditOfAFoodNotInTheLatestMealChangesNothing() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }

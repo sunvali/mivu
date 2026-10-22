@@ -11,7 +11,7 @@ extension AppleInference {
         @Generable struct Food {
             @Guide(description: "The food as the message names it.") var name: String
             @Guide(description: "A plain generic name for a nutrition database search, such as diet cola for coke zero.") var searchName: String
-            var quantity: Double
+            @Guide(description: "The amount the message states; 1 when it states none.") var quantity: Double
             @Guide(description: "g or ml when the message gives a weight or volume, otherwise the serving unit such as can, slice or piece.") var unit: String
             @Guide(description: "Total for the whole serving.") var kcal: Double
             @Guide(description: "Total grams for the whole serving.") var carbs: Double
@@ -66,10 +66,16 @@ extension AppleInference {
         // Without a photo, a food counts only when the message names it.
         let foods = turn.foods.filter { !images.isEmpty || !words($0.name).isDisjoint(with: messageWords) }
 
-        let latest = context.meals.filter { $0.omittedItemCount == 0 }.max { $0.eatenAt < $1.eatenAt }
-        if turn.intent == .edit, let latest, let name = turn.editFood, let quantity = turn.editQuantity, quantity > 0,
-           let item = latest.items.max(by: { words($0.name).intersection(words(name)).count < words($1.name).intersection(words(name)).count }),
-           !words(item.name).isDisjoint(with: words(name)) {
+        // "It" is the meal the conversation last changed; date-only meal times tie, so eatenAt is only the fallback.
+        let complete = context.meals.filter { $0.omittedItemCount == 0 }
+        let latest = context.focus?.lastChanged.flatMap { changed in complete.first { $0.id == changed.mealID } }
+            ?? complete.max { $0.eatenAt < $1.eatenAt }
+        // A named food must match a saved one; "make it three" names none and is safe only for a single-item meal.
+        let named = words(turn.editFood ?? "")
+        let target = named.isEmpty ? (latest?.items.count == 1 ? latest?.items.first : nil)
+            : latest?.items.max { words($0.name).intersection(named).count < words($1.name).intersection(named).count }
+                .flatMap { words($0.name).isDisjoint(with: named) ? nil : $0 }
+        if turn.intent == .edit, let latest, let item = target, let quantity = turn.editQuantity, quantity > 0 {
             return try result(text: "", calls: [try call("correct_item", ["meal_id": latest.id.uuidString, "item_id": item.id.uuidString,
                                                                           "expected_revision": latest.revision, "quantity": quantity])])
         }
