@@ -11,7 +11,7 @@
 ## Decisions (owner, 2026-10-22)
 
 1. Driver: accountless app, not an App Review workaround.
-2. Model: `PrivateCloudComputeLanguageModel` (32K context, image input). The on-device model is out: the fixed Coach developer prompt plus context JSON, 16+ tool schemas and photos exceed its ~4K window.
+2. Model: on-device `SystemLanguageModel` now (revised 2026-10-22). `PrivateCloudComputeLanguageModel` (32K) needs the managed `com.apple.developer.private-cloud-compute` entitlement; without it every call fails with `ModelManagerError 1046` while `availability` still reports available (observed on macOS 27). The owner has a paid membership and may request the entitlement; `AppleInference.respond` already takes any `LanguageModel`. Measured on-device context is 8,192 tokens; Coach stable rules are 833 and tool descriptions 867 (schemas excluded).
 3. Tool loop: adapter closure. `CoachEngine` keeps ownership of the loop and batch validation; Apple tools only capture calls.
 4. Accuracy gate: ~12 synthetic text meals + ~4 rendered food images, run once locally. Pass: median kcal error ≤ 20% and every turn logs or asks. No ChatGPT side-by-side.
 5. Selection: connected and authorized ChatGPT wins; otherwise Apple. No new setting.
@@ -26,7 +26,8 @@
   - `.functionOutput` → `.toolOutput`.
 - The Apple closure emits `outputItems` in the same JSON item shape that `CoachInferenceInput.priorOutput` already validates, so `CoachEngine` replays both providers identically.
 - Tool schemas: `CoachTools.declarations()` JSON → `GenerationSchema` through its `Codable` conformance (Task 1 proves or replaces this).
-- Each capture tool's `call()` throws a private sentinel. The adapter catches `LanguageModelSession.ToolCallError` and reads every call from the session transcript's trailing `.toolCalls` entry.
+- Each capture tool's `call()` reads the whole parallel batch from `session.transcript.last` while it runs, then throws a private sentinel. A throw rolls the transcript back, so it cannot be read afterwards (observed live).
+- Only the first developer message becomes instructions; the per-turn context developer message joins the captured prompt.
 - Every `respond` overload requires a prompt. After tool outputs, the rebuilt transcript ends with `.toolOutput` and the adapter sends a fixed continuation prompt. Record this as `shortcut:` until an API that resumes without a prompt exists.
 - Error mapping onto existing turn states:
   - `quotaLimitReached` → `ResponsesClient.Failure.quotaReached`;
@@ -45,16 +46,16 @@
 - [x] Implement `AppleInference.transcript(_ input: [CoachInferenceInput], tools:)`. Contiguous user chunks merge into one prompt; ChatGPT reasoning items are skipped.
 
 ### Task 3: Result capture
-- [ ] Failing test: a transcript ending in a `.toolCalls` entry with two calls yields a `CoachInferenceResult` whose `calls` match and whose `outputItems` pass `CoachInferenceInput.priorOutput` validation; a `.response` yields text and no calls.
-- [ ] Implement result extraction and the sentinel-throwing capture tool.
+- [x] Failing test: two captured calls yield matching `CoachToolCall`s whose `outputItems` replay as the same `.toolCalls`; text yields a replayable `.response`.
+- [x] Implement `AppleInference.result` and the capture tool.
 
 ### Task 4: Live closure and errors
-- [ ] Failing test: PCC errors map to the existing failures above (constructed errors, no network).
-- [ ] Implement `AppleInference.closure()` with availability check and continuation prompt.
+- [x] Implement `AppleInference.respond` with the continuation prompt (live probe: two parallel lookups captured, continuation then produced one `log_food`, ~1.3 s per step on-device).
+- [ ] Map on-device `GenerationError`s (context window, rate limit, guardrail) onto existing turn states; today they fall through to `needsRetry`.
 
 ### Task 5: Selection and scheduling
-- [ ] Failing test: with no ChatGPT plan and Apple available, `CoachViewModel` schedules captured turns (today `nextCoachResult(includeWaitingForConnection: connection.planAuthorized …)` blocks them) and onboarding targets resolve.
-- [ ] Route `CoachViewModel` (inference binding near line 416) and `OnboardingView` (line 374) through one `connection planAuthorized ? ChatGPT : Apple` choice.
+- [x] Failing test: without a plan, an available Apple model makes `canInfer` true and `inference()` return the Apple closure; unavailable still throws `noActiveSession`.
+- [x] `ChatGPTConnection.inference()` chooses; `canInfer` replaces `planAuthorized` in Coach scheduling, the Coach connect banner and onboarding. Tests for the no-provider path pin `appleModelAvailable: { false }`.
 
 ### Task 6: Accuracy gate
 - [ ] Add synthetic meals with reference kcal/macros under `ios/MivuTests` fixtures; a local-only test runs them through the Apple closure when PCC is available and skips otherwise.
