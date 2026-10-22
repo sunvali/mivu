@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum MivuLinks {
-    static let privacyPolicy = URL(string: "https://getmivu.com/privacy")!
+    static let privacyPolicy = URL(string: "https://mivuapp.com/privacy")!
 }
 
 extension View {

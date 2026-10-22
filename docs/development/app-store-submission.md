@@ -24,11 +24,11 @@ submit.
 
 ## Still needed from the owner
 
-1. **Publish getmivu.com.** `MivuLinks.privacyPolicy` already points to
-   `https://getmivu.com/privacy`. The pages live in the private `mivu-site`
+1. **Publish mivuapp.com.** `MivuLinks.privacyPolicy` already points to
+   `https://mivuapp.com/privacy`. The pages live in the private `mivu-site`
    repo and the hosting in `mivu-infra`; the link is dead until the domain is
    registered and both are deployed. Enter the same URL in App Store Connect.
-2. **Support URL** in App Store Connect: `https://getmivu.com/support`.
+2. **Support URL** in App Store Connect: `https://mivuapp.com/support`.
 3. **Written permission from OpenAI** for a third-party app to use a person's
    ChatGPT plan through this sign-in flow. Apple may ask for it (5.2.2).
 4. **A test ChatGPT account** with an eligible plan for App Review (2.1).
