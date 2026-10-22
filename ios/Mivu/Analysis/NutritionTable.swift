@@ -41,9 +41,9 @@ struct NutritionTable: Sendable {
             .map(\.element).prefix(limit))
     }
 
-    /// Grams for one of `unit`: a portion naming the unit or a synonym (general "NFS" first); with `fallbacks`,
-    /// then the "Quantity not specified" serving.
-    func portionGrams(code: Int, unit: String, fallbacks: Bool = true) throws -> Double? {
+    /// Grams for one of `unit`: a portion naming the unit or a synonym, general "NFS" first. No default serving:
+    /// FNDDS "Quantity not specified" is often several units (a 60 g "cookie") and measured worse than the model.
+    func portionGrams(code: Int, unit: String) throws -> Double? {
         let portions = try rows("select description, grams from portions where code = ?", code) { statement in
             (description: String(cString: sqlite3_column_text(statement, 0)), grams: sqlite3_column_double(statement, 1))
         }
@@ -52,10 +52,7 @@ struct NutritionTable: Sendable {
         let unitWords = Self.words(unit)
         let wanted = Set(unitWords.flatMap { synonyms[$0] ?? [$0] })
         let matches = portions.filter { !Self.words($0.description).isDisjoint(with: wanted) }
-        if let match = matches.first(where: { $0.description.contains("NFS") }) ?? matches.min(by: { $0.description.count < $1.description.count }) {
-            return match.grams
-        }
-        return fallbacks ? portions.first { $0.description == "Quantity not specified" }?.grams : nil
+        return (matches.first { $0.description.contains("NFS") } ?? matches.min { $0.description.count < $1.description.count })?.grams
     }
 
     private func rows<T>(_ sql: String, _ value: Any, _ read: (OpaquePointer) -> T) throws -> [T] {

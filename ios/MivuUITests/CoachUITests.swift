@@ -536,7 +536,6 @@ import XCTest
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Coach AI")).firstMatch
         revealList(row, in: app); row.tap()
         XCTAssertTrue(app.navigationBars["Coach AI"].waitForExistence(timeout: 5))
-        app.buttons.matching(NSPredicate(format: "label == %@", "ChatGPT")).firstMatch.tap()
     }
     private func revealList(_ element: XCUIElement, in app: XCUIApplication) {
         guard let list = nativeList(in: app) else { return }

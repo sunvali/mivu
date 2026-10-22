@@ -63,56 +63,35 @@ final class ChatGPTConnection {
     @ObservationIgnored private var isForeground = true
 
     @ObservationIgnored private let appleModelAvailable: @Sendable () -> Bool
-    @ObservationIgnored private let appleCloudModelAvailable: @Sendable () -> Bool
 
-    /// `apple` is the on-device model and keeps its stored raw value; `appleCloud` is Private Cloud Compute.
-    enum Provider: String { case apple, appleCloud, chatGPT }
-
-    // The full Coach request (~16K tokens) needs Private Cloud Compute; the on-device model (4K on iPhone 15 Pro) runs the slim local path.
-    // Without the managed com.apple.developer.private-cloud-compute entitlement PCC reports available yet every call fails.
-    // shortcut: set true in the same change that adds the granted entitlement; until then the Cloud mode stays unavailable.
-    nonisolated static let privateCloudComputeEntitled = false
+    /// `apple` is the on-device model, a no-account fallback for logging; ChatGPT is the main Coach.
+    enum Provider: String { case apple, chatGPT }
 
     nonisolated static let appleIntelligenceAvailable: @Sendable () -> Bool = {
         if #available(iOS 27.0, *) { SystemLanguageModel.default.isAvailable } else { false }
     }
 
-    nonisolated static let appleCloudIntelligenceAvailable: @Sendable () -> Bool = {
-        guard privateCloudComputeEntitled, #available(iOS 27.0, *) else { return false }
-        return PrivateCloudComputeLanguageModel().availability == .available
-    }
-
-    /// The person's choice while it can answer; otherwise the best available Apple mode, then ChatGPT.
+    /// The person's choice while it can answer; otherwise Apple when this iPhone can run it, then ChatGPT.
     var provider: Provider {
         get {
             access(keyPath: \.provider)
             let stored = preferences.string(forKey: "aiProvider").flatMap(Provider.init)
             if let stored, stored == .chatGPT || available(stored) { return stored }
-            // Someone already on a ChatGPT plan keeps it until they pick an Apple mode.
-            if stored == nil, planAuthorized { return .chatGPT }
-            return appleCloudModelAvailable() ? .appleCloud : appleModelAvailable() ? .apple : .chatGPT
+            // Someone with a saved ChatGPT connection keeps it until they pick Apple, also while it restores at launch.
+            if stored == nil, planAuthorized || preferences.string(forKey: "selectedRegistrationID") != nil { return .chatGPT }
+            return appleModelAvailable() ? .apple : .chatGPT
         }
         set { withMutation(keyPath: \.provider) { preferences.set(newValue.rawValue, forKey: "aiProvider") } }
     }
 
-    func available(_ provider: Provider) -> Bool {
-        switch provider {
-        case .apple: appleModelAvailable()
-        case .appleCloud: appleCloudModelAvailable()
-        case .chatGPT: planAuthorized
-        }
-    }
-
-    var appleAvailable: Bool { appleCloudModelAvailable() || appleModelAvailable() }
-    var preferredApple: Provider { appleCloudModelAvailable() ? .appleCloud : .apple }
+    func available(_ provider: Provider) -> Bool { provider == .apple ? appleModelAvailable() : planAuthorized }
+    var appleAvailable: Bool { appleModelAvailable() }
     var canInfer: Bool { available(provider) }
 
     init(auth: AuthSession = AuthSession(), client: ResponsesClient = ResponsesClient(),
          jobStore: ProbeJobStore? = nil, preferences: UserDefaults = .standard,
-         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceAvailable,
-         appleCloudAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleCloudIntelligenceAvailable) {
+         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceAvailable) {
         self.appleModelAvailable = appleModelAvailable
-        self.appleCloudModelAvailable = appleCloudAvailable
         self.auth = auth
         self.client = client
         self.preferences = preferences
@@ -310,9 +289,8 @@ final class ChatGPTConnection {
 
     /// A request on the connected plan, bound to this session; `nil` tools for a plain answer such as onboarding targets.
     func inference() throws -> @Sendable ([CoachInferenceInput], Data?) async throws -> CoachInferenceResult {
-        if provider != .chatGPT {
-            guard #available(iOS 27.0, *), available(provider) else { throw SessionError.noActiveSession }
-            if provider == .appleCloud { return { input, namespace in try await AppleInference.respond(input, namespace: namespace) } }
+        if provider == .apple {
+            guard #available(iOS 27.0, *), appleModelAvailable() else { throw SessionError.noActiveSession }
             return { input, namespace in try await AppleInference.respondLocally(input, namespace: namespace) }
         }
         guard planAuthorized, let owner = activeRegistrationID,

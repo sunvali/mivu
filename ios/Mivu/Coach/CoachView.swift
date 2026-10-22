@@ -379,6 +379,9 @@ struct CoachView: View {
                         .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
                 }
                 .font(.caption)
+            } else if coach.connection.provider == .apple {
+                Text("Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.")
+                    .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachAppleLimits")
             }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)

@@ -13,10 +13,10 @@ struct NutritionTableTests {
         #expect(try table.search("").isEmpty && table.search("\"*)").isEmpty, "Punctuation never reaches the FTS query")
     }
 
-    @Test func portionsResolveUnitsSynonymsAndTheDefaultServing() throws {
+    @Test func portionsResolveUnitsAndSynonymsButNoDefaultServing() throws {
         let apple = try #require(try table.search("apple").first)
         #expect(try table.portionGrams(code: apple.code, unit: "medium") == 200)
-        #expect(try table.portionGrams(code: apple.code, unit: "piece") == 200, "Unknown units use Quantity not specified")
+        #expect(try table.portionGrams(code: apple.code, unit: "piece") == nil, "No default serving: the caller keeps the model estimate")
         let cola = try #require(try table.search("diet cola").first { $0.description == "Soft drink, cola, diet" })
         #expect(try table.portionGrams(code: cola.code, unit: "can") == 360)
         let pizza = try #require(try table.search("pepperoni pizza", limit: 30).first { $0.description == "Pizza with pepperoni, stuffed crust" })

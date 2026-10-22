@@ -56,3 +56,9 @@ Plan: [2026-10-22-on-device-nutrition-table](../superpowers/plans/2026-10-22-on-
 
 - **Gate:** the plan's gate (median ≤ 10%, no matched food > 50% off) is **not met** in either mode. This is reported, not hidden; further gains likely need the Cloud mode or better portion and preparation handling.
 - **Not run yet:** an on-device check on the owner's iPhone 15 Pro; photo turns with the table.
+
+## On-device onboarding targets (2026-10-23)
+
+- **Check:** a live simulator run (iOS 27.0, iPhone 18 Pro Max) of `AppleInference.respondLocally(namespace: nil)` with three synthetic profiles (female, male, unspecified), parsed by `OnboardingTargets.parse`.
+- **Result:** 3 of 3 parsed. The model returned the formula estimate unchanged, plus a one-line explanation.
+- **Test:** none permanent, because the path calls the live model.

@@ -47,6 +47,9 @@ import Testing
     @Test func connectedChatGPTStaysTheDefaultWhenAppleIsAvailable() async throws {
         let fixture = try CoachConnectionFixture(appleAvailable: true)
         defer { fixture.cleanup() }
+        // Before the saved session restores, a captured meal must wait for ChatGPT rather than go on-device.
+        #expect(fixture.connection.provider == .chatGPT && !fixture.connection.canInfer)
+        #expect(throws: SessionError.noActiveSession) { try fixture.connection.coachInference() }
         await fixture.connection.restore()
         #expect(fixture.connection.planAuthorized && fixture.connection.provider == .chatGPT)
         let infer = try fixture.connection.coachInference()

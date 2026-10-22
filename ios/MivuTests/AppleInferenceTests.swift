@@ -1,82 +1,18 @@
 import Foundation
 import FoundationModels
 import Testing
-import UIKit
 @testable import Mivu
 
 struct AppleInferenceTests {
-    @Test func everyCoachToolBecomesAnAppleToolDefinition() throws {
+    @Test func appleResultsUseTheSharedReplayableItemShape() throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
-        let namespace = try CoachTools.declarations()
-        let tools = try #require((try JSONSerialization.jsonObject(with: namespace) as? [String: Any])?["tools"] as? [[String: Any]])
-        let definitions = try AppleInference.toolDefinitions(namespace)
-        #expect(definitions.map(\.name) == tools.map { $0["name"] as? String })
-        for (definition, tool) in zip(definitions, tools) {
-            let source = try #require((tool["parameters"] as? [String: Any])?["properties"] as? [String: Any])
-            let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(definition.parameters)) as? [String: Any]
-            let properties = try #require(encoded?["properties"] as? [String: Any], "\(definition.name)")
-            #expect(Set(properties.keys) == Set(source.keys), "\(definition.name)")
-        }
-    }
-
-    @Test func coachInputBecomesAnAppleTranscriptInOrder() throws {
-        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
-        let jpeg = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).jpegData(withCompressionQuality: 0.8) { $0.fill(CGRect(x: 0, y: 0, width: 4, height: 4)) }
-        let call = try JSONSerialization.data(withJSONObject: ["type": "function_call", "id": "fc_1", "call_id": "call_1", "name": "get_meal",
-                                                               "namespace": "mivu", "arguments": #"{"meal_id":"A"}"#], options: .sortedKeys)
-        let tools = try AppleInference.toolDefinitions(CoachTools.declarations())
-        let transcript = try AppleInference.transcript([
-            .message(role: .developer, text: "Rules"),
-            .message(role: .user, text: "Lunch", images: [jpeg]),
-            .message(role: .user, text: "", images: [jpeg]),
-            .priorOutput(call),
-            .functionOutput(callID: "call_1", output: #"{"id":"A"}"#),
-        ], tools: tools)
-        guard transcript.count == 4, case .instructions(let instructions) = transcript[0], case .prompt(let prompt) = transcript[1],
-              case .toolCalls(let calls) = transcript[2], case .toolOutput(let output) = transcript[3] else { Issue.record("\(transcript)"); return }
-        #expect(describe(instructions.segments) == ["Rules"])
-        #expect(instructions.toolDefinitions.map(\.name) == tools.map(\.name))
-        // Contiguous user chunks and image groups are one captured turn.
-        #expect(describe(prompt.segments) == ["Lunch", "image", "image"])
-        #expect(calls.map(\.id) == ["call_1"])
-        #expect(calls.first?.toolName == "get_meal")
-        #expect(calls.first.map { try? JSONSerialization.jsonObject(with: Data($0.arguments.jsonString.utf8)) as? [String: String] } == ["meal_id": "A"])
-        #expect(output.id == "call_1")
-        #expect(output.toolName == "get_meal")
-        #expect(describe(output.segments) == [#"{"id":"A"}"#])
-    }
-
-    @Test func perTurnDeveloperContextJoinsTheCapturedPrompt() throws {
-        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
-        let transcript = try AppleInference.transcript([
-            .message(role: .developer, text: "Rules"),
-            .message(role: .user, text: "Earlier"),
-            .message(role: .assistant, text: "Saved"),
-            .message(role: .developer, text: "Context: {}"),
-            .message(role: .user, text: "Lunch"),
-        ], tools: [])
-        guard transcript.count == 4, case .instructions = transcript[0], case .prompt = transcript[1],
-              case .response = transcript[2], case .prompt(let prompt) = transcript[3] else { Issue.record("\(transcript)"); return }
-        #expect(describe(prompt.segments) == ["Context: {}", "Lunch"])
-    }
-
-    @Test func capturedCallsReplayAsTheSameToolCalls() throws {
-        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
-        let calls = [Transcript.ToolCall(id: "a", toolName: "lookup_nutrition", arguments: try GeneratedContent(json: #"{"query":"egg"}"#)),
-                     Transcript.ToolCall(id: "b", toolName: "lookup_nutrition", arguments: try GeneratedContent(json: #"{"query":"toast"}"#))]
+        let calls = [Transcript.ToolCall(id: "a", toolName: "log_food", arguments: try GeneratedContent(json: #"{"target_local_date":"2026-10-23"}"#))]
         let result = try AppleInference.result(text: "", calls: calls)
-        #expect(result.calls.map(\.callID) == ["a", "b"])
-        #expect(result.calls.allSatisfy { $0.namespace == CoachTools.namespace && $0.name == "lookup_nutrition" })
-        #expect(result.calls.map { try? JSONSerialization.jsonObject(with: Data($0.arguments.utf8)) as? [String: String] } == [["query": "egg"], ["query": "toast"]])
-        let replay = try AppleInference.transcript(result.outputItems.map { .priorOutput($0) }, tools: [])
-        guard replay.count == 1, case .toolCalls(let replayed) = replay[0] else { Issue.record("\(replay)"); return }
-        #expect(replayed.map(\.id) == ["a", "b"])
-
-        let answer = try AppleInference.result(text: "Two eggs are about 155 kcal.", calls: [])
-        #expect(answer.calls.isEmpty && answer.text == "Two eggs are about 155 kcal.")
-        let replayedAnswer = try AppleInference.transcript(answer.outputItems.map { .priorOutput($0) }, tools: [])
-        guard replayedAnswer.count == 1, case .response(let response) = replayedAnswer[0] else { Issue.record("\(replayedAnswer)"); return }
-        #expect(describe(response.segments) == ["Two eggs are about 155 kcal."])
+        #expect(result.calls.map(\.callID) == ["a"] && result.calls.allSatisfy { $0.namespace == CoachTools.namespace && $0.name == "log_food" })
+        let answer = try AppleInference.result(text: "Done.", calls: [])
+        #expect(answer.calls.isEmpty && answer.text == "Done.")
+        // CoachEngine replays these items next step, so they must pass the same validation as ChatGPT's.
+        for item in result.outputItems + answer.outputItems { _ = try CoachInferenceInput.priorOutput(item).object() }
     }
 
     @Test @MainActor func appleAnswersWhenNoChatGPTPlanIsConnected() throws {
@@ -98,21 +34,6 @@ struct AppleInferenceTests {
         #expect(unavailable.provider == .chatGPT)
         #expect(throws: SessionError.noActiveSession) { _ = try unavailable.inference() }
         #expect(ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }).provider == .apple)
-    }
-
-    @Test @MainActor func appleCloudIsTheDefaultOnceAvailableAndEachModeKeepsItsOwnGate() throws {
-        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
-        let preferences = UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!
-        let cloud = ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }, appleCloudAvailable: { true })
-        #expect(cloud.provider == .appleCloud && cloud.canInfer)
-        #expect(throws: Never.self) { _ = try cloud.inference() }
-        cloud.provider = .apple
-        #expect(ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }, appleCloudAvailable: { true }).provider == .apple)
-        let cloudGone = ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }, appleCloudAvailable: { false })
-        cloudGone.provider = .appleCloud
-        #expect(cloudGone.provider == .apple, "An unavailable cloud choice uses on-device Apple")
-        let nothing = ChatGPTConnection(preferences: preferences, appleModelAvailable: { false }, appleCloudAvailable: { false })
-        #expect(nothing.provider == .chatGPT && !nothing.canInfer)
     }
 
     @Test @MainActor func chosenProviderPersistsAndChatGPTChoiceNeverFallsBackToApple() throws {
@@ -287,6 +208,26 @@ struct AppleInferenceTests {
         #expect(quantities == ["coke zero": 3, "pepperoni pizza": 4], "The last changed meal is what \"it\" means")
     }
 
+    @Test func localTurnsStillWorkWhenAFoodNameContainsTheContextMarker() async throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile); _ = try await store.startDay()
+        @Sendable func food(_ name: String) -> AppleInference.LocalTurn.Food {
+            .init(name: name, searchName: name, quantity: 1, unit: "bar", kcal: 200, carbs: 20, protein: 10, fat: 8, kcalPer100g: 400, carbsPer100g: 40, proteinPer100g: 20, fatPer100g: 16)
+        }
+        for (text, turn) in [("Context: protein bar", AppleInference.LocalTurn(intent: .log, foods: [food("Context: protein bar")], editFood: nil, editQuantity: nil)),
+                             ("make it 2", AppleInference.LocalTurn(intent: .edit, foods: [], editFood: nil, editQuantity: 2))] {
+            let captured = try await capturedTurn(store, text: text, photos: [], expectedProfileID: profile.id)
+            // The second request's diary context contains the saved name, and with it the text "Context: ".
+            let done = try await CoachEngine(store: store, infer: { input, tools in
+                try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in turn }
+            }).run(turnID: captured.id, expectedProfileID: profile.id)
+            #expect(done.state == .completed, "\(text)")
+        }
+        #expect(try await store.snapshotForExport().meals.first?.items.first?.quantity == 2)
+    }
+
     @Test func localEditOfAFoodNotInTheLatestMealChangesNothing() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
@@ -304,18 +245,6 @@ struct AppleInferenceTests {
         }).run(turnID: edit.id, expectedProfileID: profile.id)
         #expect(result.receipts.isEmpty)
         #expect(try await store.snapshotForExport().meals.first?.items.first?.quantity == 2)
-    }
-
-    @available(iOS 27.0, *)
-    private func describe(_ segments: [Transcript.Segment]) -> [String] {
-        segments.map {
-            switch $0 {
-            case .text(let text): text.content
-            case .attachment: "image"
-            case .structure: "structure"
-            @unknown default: "unknown"
-            }
-        }
     }
 }
 

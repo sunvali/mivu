@@ -37,13 +37,12 @@ extension AppleInference {
         let images: [Data]
     }
 
-    static let localLimits = "On-device Apple Intelligence can log new meals and change an amount in your latest meal. For anything else, choose ChatGPT in Settings → Coach AI."
 
     static func respondLocally(_ input: [CoachInferenceInput], namespace: Data?, table: NutritionTable = .bundled,
                                pick: (String, [NutritionTable.Food]) async throws -> Int = pickOnDevice,
                                generate: (LocalPrompt) async throws -> LocalTurn = generateOnDevice) async throws -> CoachInferenceResult {
         // Onboarding asks for plain text without tools, and its prompt already fits on-device.
-        guard namespace != nil else { return try await respond(input, namespace: nil, model: SystemLanguageModel.default) }
+        guard namespace != nil else { return try await respondText(input) }
         // Once the save step has run, CoachEngine words the reply from its own receipts.
         if input.contains(where: { if case .functionOutput = $0 { true } else { false } }) { return try result(text: "Done.", calls: []) }
 
@@ -51,7 +50,8 @@ extension AppleInference {
         var texts: [String] = [], images: [Data] = []
         for item in input {
             guard case let .message(role, text, attached) = item else { continue }
-            if role == .developer, let range = text.range(of: "Context: ", options: .backwards) {
+            // The first marker is CoachEngine's; later ones can be food names inside the context itself.
+            if role == .developer, let range = text.range(of: "Context: ") {
                 context = try JSONDecoder().decode(CoachContext.self, from: Data(text[range.upperBound...].utf8))
                 texts = []; images = [] // Earlier user messages are history, not this capture.
             } else if role == .user {
@@ -62,6 +62,7 @@ extension AppleInference {
         let message = texts.joined(separator: "\n")
         // The small model sees only the message: shown saved foods, it logs them again.
         let turn = try await generate(LocalPrompt(text: message, images: images))
+        let words = NutritionTable.words
         let messageWords = words(message)
         // Without a photo, a food counts only when the message names it.
         let foods = turn.foods.filter { !images.isEmpty || !words($0.name).isDisjoint(with: messageWords) }
@@ -91,7 +92,8 @@ extension AppleInference {
                 let weighed = ["g", "gram", "grams", "ml", "milliliter", "milliliters"].contains(food.unit.lowercased())
                 func rounded(_ value: Double?) -> Double { (min(max(value ?? 0, 0), 100_000) * 10).rounded() / 10 }
                 // Numbers come from the USDA table when the on-device model confirms a match and a portion weight exists.
-                if let (match, grams) = try await tableMatch(food, weighed: weighed, table: table, pick: pick) {                    let nutrition = match.per100Grams.scaled(by: grams / 100)
+                if let (match, grams) = try await tableMatch(food, weighed: weighed, table: table, pick: pick) {
+                    let nutrition = match.per100Grams.scaled(by: grams / 100)
                     items.append(["name": food.name, "quantity": food.quantity, "unit": food.unit, "kcal": rounded(nutrition.kcal),
                                   "carbs": rounded(nutrition.carbs), "protein": rounded(nutrition.protein), "fat": rounded(nutrition.fat)])
                     continue
@@ -108,7 +110,8 @@ extension AppleInference {
             }
             return try result(text: "", calls: [try call("log_food", ["target_local_date": date, "items": items])])
         }
-        return try result(text: localLimits, calls: [])
+        // CoachEngine replaces text-only replies with its recorded summary; Coach shows the Apple limits under the input.
+        return try result(text: "Nothing to change.", calls: [])
     }
 
     /// The matched table entry and total grams, or nil to keep the model's estimate.
@@ -126,7 +129,7 @@ extension AppleInference {
         // shortcut: ml counts as grams, close for drinks; use FNDDS "fl oz" portions if density matters.
         // Only a weighed amount or a portion naming the person's own unit is trusted; synonyms and default servings
         // measured worse than the model's estimate (e.g. a 60 g default "cookie" serving).
-        let portion = (try? table.portionGrams(code: match.code, unit: food.unit, fallbacks: false)).flatMap { $0 }.map { $0 * food.quantity }
+        let portion = (try? table.portionGrams(code: match.code, unit: food.unit)).flatMap { $0 }.map { $0 * food.quantity }
         guard let grams = weighed ? food.quantity : portion, grams > 0 else { return nil }
         return (match, grams)
     }
@@ -159,7 +162,7 @@ extension AppleInference {
         }.content
     }
 
-    static func words(_ text: String) -> Set<String> { NutritionTable.words(text) }
+
 
     private static func call(_ name: String, _ arguments: [String: Any]) throws -> Transcript.ToolCall {
         let json = String(decoding: try JSONSerialization.data(withJSONObject: arguments), as: UTF8.self)

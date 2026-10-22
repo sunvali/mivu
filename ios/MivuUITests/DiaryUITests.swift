@@ -519,7 +519,6 @@ import XCTest
         let connectionRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Coach AI")).firstMatch
         reveal(connectionRow, in: app); connectionRow.tap()
         XCTAssertTrue(app.navigationBars["Coach AI"].waitForExistence(timeout: 5))
-        app.buttons.matching(NSPredicate(format: "label == %@", "ChatGPT")).firstMatch.tap()
         let diagnostic = app.buttons["ChatGPT connection diagnostic"]
         reveal(diagnostic, in: app); diagnostic.tap()
         XCTAssertTrue(app.staticTexts["Connection test"].waitForExistence(timeout: 5))
