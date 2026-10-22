@@ -51,7 +51,8 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.preferences) { settingsRow("Diary preferences", symbol: "list.bullet.rectangle", color: .diaryCarbs) }
                     NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
-                        settingsRow("ChatGPT connection", symbol: "person.crop.circle", color: .diaryFat, value: connection.planAuthorized ? "Connected" : "Connect")
+                        settingsRow("Coach AI", symbol: "sparkles", color: .diaryFat,
+                                    value: connection.provider == .apple ? "Apple Intelligence" : connection.planAuthorized ? "ChatGPT" : "Connect ChatGPT")
                     }
                     NavigationLink(value: SettingsSection.nutritionSource) {
                         settingsRow("Nutrition source", symbol: "fork.knife", color: .diaryCarbs, value: nutritionConfigured ? "Configured" : "Optional")
@@ -203,6 +204,18 @@ struct SettingsView: View {
                 Section("Backup and portability") { DiaryBackupSettings(model: model) }
                 if model.readModel != nil { Section("Share a report") { DiaryReportSettings(model: model) } }
             case .connection:
+                Section {
+                    Picker("Coach AI", selection: $connection.provider) {
+                        Text("Apple Intelligence").tag(ChatGPTConnection.Provider.apple)
+                        Text("ChatGPT").tag(ChatGPTConnection.Provider.chatGPT)
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                } header: { Text("Coach AI") } footer: {
+                    Text(connection.provider == .chatGPT ? "Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI."
+                         : connection.appleAvailable ? "Runs on this iPhone. No account needed."
+                         : "Turn on Apple Intelligence in iPhone Settings, or choose ChatGPT.")
+                }
+                if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
                 Section("Connection") {
                     Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle")
                     Text("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection.").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -225,6 +238,7 @@ struct SettingsView: View {
                     #if DEBUG
                     Button("ChatGPT connection diagnostic") { showConnectionDiagnostic = true }.frame(minHeight: 44)
                     #endif
+                }
                 }
 
             case .nutritionSource:
@@ -301,7 +315,7 @@ struct SettingsView: View {
         case .profiles: "Local profiles"
         case .preferences: "Diary preferences"
         case .backup: "Backup & export"
-        case .connection: "ChatGPT connection"
+        case .connection: "Coach AI"
         case .nutritionSource: "Nutrition source"
         }
     }

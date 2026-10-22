@@ -64,14 +64,27 @@ final class ChatGPTConnection {
 
     @ObservationIgnored private let appleModelAvailable: @Sendable () -> Bool
 
-    /// No account needed: Apple Intelligence answers whenever no ChatGPT plan is connected.
-    var canInfer: Bool { planAuthorized || appleModelAvailable() }
+    enum Provider: String { case apple, chatGPT }
+
+    nonisolated static let onDeviceModelAvailable: @Sendable () -> Bool = {
+        if #available(iOS 27.0, *) { SystemLanguageModel.default.isAvailable } else { false }
+    }
+
+    /// The person's choice; before they choose, Apple when this iPhone can run it, otherwise ChatGPT.
+    var provider: Provider {
+        get {
+            access(keyPath: \.provider)
+            return preferences.string(forKey: "aiProvider").flatMap(Provider.init) ?? (appleModelAvailable() ? .apple : .chatGPT)
+        }
+        set { withMutation(keyPath: \.provider) { preferences.set(newValue.rawValue, forKey: "aiProvider") } }
+    }
+
+    var appleAvailable: Bool { appleModelAvailable() }
+    var canInfer: Bool { provider == .apple ? appleAvailable : planAuthorized }
 
     init(auth: AuthSession = AuthSession(), client: ResponsesClient = ResponsesClient(),
          jobStore: ProbeJobStore? = nil, preferences: UserDefaults = .standard,
-         appleModelAvailable: @escaping @Sendable () -> Bool = {
-             if #available(iOS 27.0, *) { SystemLanguageModel.default.isAvailable } else { false }
-         }) {
+         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.onDeviceModelAvailable) {
         self.appleModelAvailable = appleModelAvailable
         self.auth = auth
         self.client = client
@@ -270,8 +283,8 @@ final class ChatGPTConnection {
 
     /// A request on the connected plan, bound to this session; `nil` tools for a plain answer such as onboarding targets.
     func inference() throws -> @Sendable ([CoachInferenceInput], Data?) async throws -> CoachInferenceResult {
-        // A connected plan wins; otherwise the on-device model answers without an account.
-        if !planAuthorized, #available(iOS 27.0, *), appleModelAvailable() {
+        if provider == .apple {
+            guard #available(iOS 27.0, *), appleModelAvailable() else { throw SessionError.noActiveSession }
             return { input, namespace in try await AppleInference.respond(input, namespace: namespace) }
         }
         guard planAuthorized, let owner = activeRegistrationID,

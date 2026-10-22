@@ -82,11 +82,23 @@ struct AppleInferenceTests {
     @Test @MainActor func appleAnswersWhenNoChatGPTPlanIsConnected() throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let apple = ChatGPTConnection(preferences: UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!, appleModelAvailable: { true })
+        #expect(apple.provider == .apple)
         #expect(!apple.planAuthorized && apple.canInfer)
         #expect(throws: Never.self) { _ = try apple.inference() }
         let none = ChatGPTConnection(preferences: UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!, appleModelAvailable: { false })
+        #expect(none.provider == .chatGPT)
         #expect(!none.canInfer)
         #expect(throws: SessionError.noActiveSession) { _ = try none.inference() }
+    }
+
+    @Test @MainActor func chosenProviderPersistsAndChatGPTChoiceNeverFallsBackToApple() throws {
+        let preferences = UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!
+        let first = ChatGPTConnection(preferences: preferences, appleModelAvailable: { true })
+        first.provider = .chatGPT
+        let relaunched = ChatGPTConnection(preferences: preferences, appleModelAvailable: { true })
+        #expect(relaunched.provider == .chatGPT)
+        #expect(!relaunched.canInfer)
+        #expect(throws: SessionError.noActiveSession) { _ = try relaunched.inference() }
     }
 
     @available(iOS 27.0, *)

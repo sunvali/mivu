@@ -102,7 +102,10 @@ struct DiaryRootView: View {
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
     private let nutritionKeys: NutritionAPIKeyStore
     init() {
-        let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults)
+        // UI tests never reach a live model, so the host Mac's Apple Intelligence cannot change their flows.
+        var appleModelAvailable = ChatGPTConnection.onDeviceModelAvailable
+        if DiaryLaunch.isUITest { appleModelAvailable = { false } }
+        let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults, appleModelAvailable: appleModelAvailable)
         let keys = NutritionAPIKeyStore.local
         nutritionKeys = keys
         let foodSource = FoodEvidenceClient()

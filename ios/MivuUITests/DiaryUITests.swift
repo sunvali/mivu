@@ -516,9 +516,10 @@ import XCTest
         XCTAssertTrue(language.label == "App language, English" || (language.label == "App language" && language.value as? String == "English"))
         XCTAssertEqual(app.segmentedControls.count, 0, "The unsupported language selector must remain hidden")
         app.navigationBars.buttons.firstMatch.tap()
-        let connectionRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch
+        let connectionRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Coach AI")).firstMatch
         reveal(connectionRow, in: app); connectionRow.tap()
-        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Coach AI"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label == %@", "ChatGPT")).firstMatch.tap()
         let diagnostic = app.buttons["ChatGPT connection diagnostic"]
         reveal(diagnostic, in: app); diagnostic.tap()
         XCTAssertTrue(app.staticTexts["Connection test"].waitForExistence(timeout: 5))

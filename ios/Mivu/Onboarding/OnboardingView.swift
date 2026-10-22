@@ -141,8 +141,16 @@ struct OnboardingView: View {
             .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
             .disabled(!canContinue).accessibilityIdentifier("onboardingNext")
             if step == .connect {
-                Button("Use the estimate instead") { go(to: .results) }
-                    .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingSkipConnect")
+                if connection.appleAvailable, connection.provider == .apple {
+                    Button("Connect ChatGPT instead") { connection.provider = .chatGPT; primary() }
+                        .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingChooseChatGPT")
+                } else if connection.appleAvailable {
+                    Button("Use Apple Intelligence instead") { connection.provider = .apple; go(to: .results) }
+                        .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingChooseApple")
+                } else {
+                    Button("Use the estimate instead") { go(to: .results) }
+                        .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingSkipConnect")
+                }
             }
         }
         .padding(.horizontal, 20).padding(.vertical, 8)
@@ -152,6 +160,7 @@ struct OnboardingView: View {
     private var primaryTitle: String {
         switch step {
         case .hello: "Get started"
+        case .connect where connection.appleAvailable && connection.provider == .apple: "Use Apple Intelligence"
         case .connect: connection.activeRegistrationID == nil ? "Continue with ChatGPT" : "Reauthorize ChatGPT"
         case .results: "Save my targets"
         default: "Continue"
@@ -239,6 +248,15 @@ struct OnboardingView: View {
                     .lineLimit(2...5).focused($focus, equals: .notes)
                     .onChange(of: about.healthNotes) { _, text in if text.count > 2_000 { about.healthNotes = String(text.prefix(2_000)) } }
             }
+        case .connect where connection.appleAvailable:
+            header("Choose your AI", "It turns your answers into personal targets and powers the Coach. You can change this in Settings.")
+            card {
+                promise("apple.intelligence", "Apple Intelligence", "Runs on this iPhone. No account, and nothing leaves your device.")
+                Divider()
+                promise("person.crop.circle.badge.checkmark", "ChatGPT", "Uses your ChatGPT plan's allowance. Only what you send the Coach is shared.")
+            }
+            if connection.isConnecting { ProgressView("Waiting for ChatGPT…").frame(maxWidth: .infinity) }
+            if let notice = connection.notice { footnote(notice.rawValue) }
         case .connect:
             header("Let ChatGPT tune it", "Connect your ChatGPT account to turn your answers into personal targets.")
             card {
@@ -326,6 +344,7 @@ struct OnboardingView: View {
 
     private func primary() {
         switch step {
+        case .connect where connection.appleAvailable && connection.provider == .apple: connection.provider = .apple; go(to: .results)
         case .connect: if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
         case .results: Task { await save() }
         default: advance()
@@ -338,13 +357,13 @@ struct OnboardingView: View {
 
     private func advance() {
         var next = Step(rawValue: step.rawValue + 1) ?? .results
-        if next == .connect, connection.canInfer { next = .results }
+        if next == .connect, connection.provider == .chatGPT, connection.planAuthorized { next = .results }
         go(to: next)
     }
 
     private func back() {
         var previous = Step(rawValue: step.rawValue - 1) ?? .hello
-        if previous == .connect, connection.canInfer { previous = .diet }
+        if previous == .connect, connection.provider == .chatGPT, connection.planAuthorized { previous = .diet }
         go(to: previous)
     }
 
