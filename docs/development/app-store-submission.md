@@ -24,14 +24,11 @@ submit.
 
 ## Still needed from the owner
 
-1. **Privacy policy URL.** Replace the placeholder in
-   `ios/Mivu/Connection/OpenAIConsent.swift` (`MivuLinks.privacyPolicy`) and
-   enter the same URL in App Store Connect. The policy should name OpenAI
-   (meal photos, notes, Coach messages and profile details sent through the
-   person's ChatGPT account) and USDA FoodData Central (food search text, only
-   with the person's own key). It should also say that diary data stays on the
-   iPhone and how to disconnect and delete it.
-2. **Support URL** in App Store Connect.
+1. **Publish mivuapp.com.** `MivuLinks.privacyPolicy` already points to
+   `https://mivuapp.com/privacy`. The pages live in the private `mivu-site`
+   repo and the hosting in `mivu-infra`; the link is dead until the domain is
+   registered and both are deployed. Enter the same URL in App Store Connect.
+2. **Support URL** in App Store Connect: `https://mivuapp.com/support`.
 3. **Written permission from OpenAI** for a third-party app to use a person's
    ChatGPT plan through this sign-in flow. Apple may ask for it (5.2.2).
 4. **A test ChatGPT account** with an eligible plan for App Review (2.1).
