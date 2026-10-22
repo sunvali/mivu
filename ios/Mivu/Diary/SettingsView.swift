@@ -52,7 +52,8 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
                         settingsRow("Coach AI", symbol: "sparkles", color: .diaryFat,
-                                    value: connection.provider == .apple ? "Apple Intelligence" : connection.planAuthorized ? "ChatGPT" : "Connect ChatGPT")
+                                    value: connection.provider == .apple ? "Apple · iPhone" : connection.provider == .appleCloud ? "Apple · Cloud"
+                                        : connection.planAuthorized ? "ChatGPT" : "Connect ChatGPT")
                     }
                     NavigationLink(value: SettingsSection.nutritionSource) {
                         settingsRow("Nutrition source", symbol: "fork.knife", color: .diaryCarbs, value: nutritionConfigured ? "Configured" : "Optional")
@@ -206,15 +207,20 @@ struct SettingsView: View {
             case .connection:
                 Section {
                     Picker("Coach AI", selection: $connection.provider) {
-                        Text("Apple Intelligence").tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.appleAvailable)
+                        Text("Apple Intelligence · iPhone").tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.available(.apple))
+                        Text("Apple Intelligence · Cloud").tag(ChatGPTConnection.Provider.appleCloud).selectionDisabled(!connection.available(.appleCloud))
                         Text("ChatGPT").tag(ChatGPTConnection.Provider.chatGPT)
                     }
                     .pickerStyle(.inline).labelsHidden()
                 } header: { Text("Coach AI") } footer: {
-                    Text(!connection.appleAvailable ? "Apple Intelligence isn't available for the Coach yet. Uses your ChatGPT plan; Coach messages and photos you send are shared with OpenAI."
-                         : connection.provider == .chatGPT ? "Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI."
-                         : ChatGPTConnection.privateCloudComputeEntitled ? "Uses Apple Intelligence through Private Cloud Compute. No account needed."
-                         : "Runs on this iPhone with no account. It logs meals and changes amounts; choose ChatGPT for questions and other edits.")
+                    VStack(alignment: .leading, spacing: 6) {
+                        switch connection.provider {
+                        case .apple: Text("Runs on this iPhone with no account. It logs meals and changes amounts, with rougher estimates. Use Cloud or ChatGPT for questions and other edits.")
+                        case .appleCloud: Text("Uses Apple's Private Cloud Compute with no account. Apple doesn't keep your data.")
+                        case .chatGPT: Text("Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI.")
+                        }
+                        if !connection.available(.appleCloud) { Text("Apple Intelligence · Cloud isn't available yet.") }
+                    }
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
                 Section("Connection") {

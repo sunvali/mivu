@@ -100,6 +100,21 @@ struct AppleInferenceTests {
         #expect(ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }).provider == .apple)
     }
 
+    @Test @MainActor func appleCloudIsTheDefaultOnceAvailableAndEachModeKeepsItsOwnGate() throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let preferences = UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!
+        let cloud = ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }, appleCloudAvailable: { true })
+        #expect(cloud.provider == .appleCloud && cloud.canInfer)
+        #expect(throws: Never.self) { _ = try cloud.inference() }
+        cloud.provider = .apple
+        #expect(ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }, appleCloudAvailable: { true }).provider == .apple)
+        let cloudGone = ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }, appleCloudAvailable: { false })
+        cloudGone.provider = .appleCloud
+        #expect(cloudGone.provider == .apple, "An unavailable cloud choice uses on-device Apple")
+        let nothing = ChatGPTConnection(preferences: preferences, appleModelAvailable: { false }, appleCloudAvailable: { false })
+        #expect(nothing.provider == .chatGPT && !nothing.canInfer)
+    }
+
     @Test @MainActor func chosenProviderPersistsAndChatGPTChoiceNeverFallsBackToApple() throws {
         let preferences = UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!
         let first = ChatGPTConnection(preferences: preferences, appleModelAvailable: { true })
@@ -121,8 +136,8 @@ struct AppleInferenceTests {
         let logged = try await CoachEngine(store: store, infer: { input, tools in
             try await AppleInference.respondLocally(input, namespace: tools) { prompt in
                 await prompts.append(prompt.text)
-                return AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11),
-                                                                      .init(name: "Toast", quantity: 1, unit: "slice", kcal: 80, carbs: 14, protein: 3, fat: 1)],
+                return AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11, kcalPer100g: 155, carbsPer100g: 1, proteinPer100g: 13, fatPer100g: 11),
+                                                                      .init(name: "Toast", quantity: 1, unit: "slice", kcal: 80, carbs: 14, protein: 3, fat: 1, kcalPer100g: 265, carbsPer100g: 49, proteinPer100g: 9, fatPer100g: 3)],
                                                 editFood: nil, editQuantity: nil)
             }
         }).run(turnID: log.id, expectedProfileID: profile.id)
@@ -145,6 +160,24 @@ struct AppleInferenceTests {
         #expect(sent == ["Two boiled eggs", "Actually it was 3 eggs"], "One call per turn with only the message, so saved foods cannot be copied")
     }
 
+    @Test func localWeighedAmountsUsePerHundredGramValues() async throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile); _ = try await store.startDay()
+        let turn = try await capturedTurn(store, text: "200g grilled chicken breast", photos: [], expectedProfileID: profile.id)
+        _ = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools) { _ in
+                // The serving total repeats the per-100 g figure, the mistake measured on-device.
+                AppleInference.LocalTurn(intent: .edit, foods: [.init(name: "Grilled chicken breast", quantity: 200, unit: "g", kcal: 165, carbs: 0, protein: 31, fat: 3.6,
+                                                                       kcalPer100g: 165, carbsPer100g: 0, proteinPer100g: 31, fatPer100g: 3.6)],
+                                         editFood: nil, editQuantity: nil)
+            }
+        }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let item = try #require(try await store.snapshotForExport().meals.first?.items.first)
+        #expect(item.nutrition.kcal == 330 && item.nutrition.protein == 62)
+    }
+
     @Test func localEditOfAFoodNotInTheLatestMealChangesNothing() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
@@ -153,7 +186,7 @@ struct AppleInferenceTests {
         let log = try await capturedTurn(store, text: "Two boiled eggs", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
             try await AppleInference.respondLocally(input, namespace: tools) { _ in
-                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11)], editFood: nil, editQuantity: nil)
+                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11, kcalPer100g: 155, carbsPer100g: 1, proteinPer100g: 13, fatPer100g: 11)], editFood: nil, editQuantity: nil)
             }
         }).run(turnID: log.id, expectedProfileID: profile.id)
         let edit = try await capturedTurn(store, text: "make the latte 2", photos: [], expectedProfileID: profile.id)

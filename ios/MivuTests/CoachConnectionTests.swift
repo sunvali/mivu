@@ -44,6 +44,18 @@ import Testing
         #expect(fixture.preferences.string(forKey: "pausedRegistrationID") == nil)
     }
 
+    @Test func connectedChatGPTStaysTheDefaultWhenAppleIsAvailable() async throws {
+        let fixture = try CoachConnectionFixture(appleAvailable: true)
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        #expect(fixture.connection.planAuthorized && fixture.connection.provider == .chatGPT)
+        let infer = try fixture.connection.coachInference()
+        _ = try await infer([.message(role: .user, text: "Synthetic meal")], try CoachTools.declarations())
+        #expect(fixture.requests.count == 1, "A connected plan keeps sending Coach requests to ChatGPT")
+        fixture.connection.provider = .apple
+        #expect(fixture.connection.provider == .apple, "An explicit Apple choice still wins")
+    }
+
     @Test func disconnectedDoesNotCreateInferenceOrSendRequests() async throws {
         let fixture = try CoachConnectionFixture()
         defer { fixture.cleanup() }
@@ -225,7 +237,8 @@ private final class CoachCredentialStore: CredentialStoring, @unchecked Sendable
     let preferences: UserDefaults
     let requests = CoachConnectionRequests()
     let connection: ChatGPTConnection
-    init(usageFailures: Int? = nil, usageFailureStatus: Int = 200, catalogStatusAfterResponse: Int? = nil, response: @escaping @Sendable () throws -> SessionReply = coachConnectionCompletion) throws {
+    init(usageFailures: Int? = nil, usageFailureStatus: Int = 200, catalogStatusAfterResponse: Int? = nil, appleAvailable: Bool = false,
+         response: @escaping @Sendable () throws -> SessionReply = coachConnectionCompletion) throws {
         let store = CoachCredentialStore()
         preferences = UserDefaults(suiteName: preferencesName)!
         preferences.set(try store.registrations().first?.id, forKey: "selectedRegistrationID")
@@ -254,7 +267,7 @@ private final class CoachCredentialStore: CredentialStoring, @unchecked Sendable
             default: throw URLError(.badURL)
             }
         }
-        connection = ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session), jobStore: ProbeJobStore(directory: directory), preferences: preferences, appleModelAvailable: { false })
+        connection = ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session), jobStore: ProbeJobStore(directory: directory), preferences: preferences, appleModelAvailable: { appleAvailable })
     }
     func cleanup() {
         preferences.removePersistentDomain(forName: preferencesName)

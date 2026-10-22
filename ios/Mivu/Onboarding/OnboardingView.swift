@@ -141,11 +141,11 @@ struct OnboardingView: View {
             .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
             .disabled(!canContinue).accessibilityIdentifier("onboardingNext")
             if step == .connect {
-                if connection.appleAvailable, connection.provider == .apple {
+                if connection.appleAvailable, connection.provider != .chatGPT {
                     Button("Connect ChatGPT instead") { connection.provider = .chatGPT; primary() }
                         .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingChooseChatGPT")
                 } else if connection.appleAvailable {
-                    Button("Use Apple Intelligence instead") { connection.provider = .apple; go(to: .results) }
+                    Button("Use Apple Intelligence instead") { connection.provider = connection.preferredApple; go(to: .results) }
                         .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingChooseApple")
                 } else {
                     Button("Use the estimate instead") { go(to: .results) }
@@ -160,7 +160,7 @@ struct OnboardingView: View {
     private var primaryTitle: String {
         switch step {
         case .hello: "Get started"
-        case .connect where connection.appleAvailable && connection.provider == .apple: "Use Apple Intelligence"
+        case .connect where connection.appleAvailable && connection.provider != .chatGPT: "Use Apple Intelligence"
         case .connect: connection.activeRegistrationID == nil ? "Continue with ChatGPT" : "Reauthorize ChatGPT"
         case .results: "Save my targets"
         default: "Continue"
@@ -251,7 +251,7 @@ struct OnboardingView: View {
         case .connect where connection.appleAvailable:
             header("Choose your AI", "It turns your answers into personal targets and powers the Coach. You can change this in Settings.")
             card {
-                promise("apple.intelligence", "Apple Intelligence", ChatGPTConnection.privateCloudComputeEntitled ? "No account. Runs on Apple's Private Cloud Compute, which doesn't keep your data."
+                promise("apple.intelligence", "Apple Intelligence", connection.preferredApple == .appleCloud ? "No account. Runs on Apple's Private Cloud Compute, which doesn't keep your data."
                          : "No account, and it runs on this iPhone. Logs meals and changes amounts.")
                 Divider()
                 promise("person.crop.circle.badge.checkmark", "ChatGPT", "Uses your ChatGPT plan's allowance. Only what you send the Coach is shared.")
@@ -345,7 +345,7 @@ struct OnboardingView: View {
 
     private func primary() {
         switch step {
-        case .connect where connection.appleAvailable && connection.provider == .apple: connection.provider = .apple; go(to: .results)
+        case .connect where connection.appleAvailable && connection.provider != .chatGPT: connection.provider = connection.preferredApple; go(to: .results)
         case .connect: if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
         case .results: Task { await save() }
         default: advance()

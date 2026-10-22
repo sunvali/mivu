@@ -7,16 +7,21 @@ import FoundationModels
 extension AppleInference {
     @Generable struct LocalTurn {
         @Generable enum Intent { case log, edit, other }
+        // Measured on-device: serving totals are reliable for countable servings, per-100 g values for weighed amounts.
         @Generable struct Food {
             var name: String
             var quantity: Double
-            var unit: String
-            var kcal: Double
-            @Guide(description: "grams") var carbs: Double
-            @Guide(description: "grams") var protein: Double
-            @Guide(description: "grams") var fat: Double
+            @Guide(description: "g or ml when the message gives a weight or volume, otherwise the serving unit such as can, slice or piece.") var unit: String
+            @Guide(description: "Total for the whole serving.") var kcal: Double
+            @Guide(description: "Total grams for the whole serving.") var carbs: Double
+            @Guide(description: "Total grams for the whole serving.") var protein: Double
+            @Guide(description: "Total grams for the whole serving.") var fat: Double
+            @Guide(description: "Per 100 g, or per 100 ml for drinks.") var kcalPer100g: Double
+            var carbsPer100g: Double
+            var proteinPer100g: Double
+            var fatPer100g: Double
         }
-        @Guide(description: "log: the message says the person ate or drank something. edit: it corrects the amount of something already logged. other: questions, thanks, greetings and anything else.")
+        @Guide(description: "log: the message says or implies the person ate or drank something; a message that only names food, like coke zero or 200g chicken, is log. edit: it corrects the amount of something already logged, like make it 3. other: questions, thanks, greetings and anything else.")
         var intent: Intent
         @Guide(description: "For log: each food or drink named in the message with a realistic estimated serving and the total nutrition of that serving. Empty otherwise.")
         var foods: [Food]
@@ -59,15 +64,6 @@ extension AppleInference {
         // Without a photo, a food counts only when the message names it.
         let foods = turn.foods.filter { !images.isEmpty || !words($0.name).isDisjoint(with: messageWords) }
 
-        if turn.intent == .log, !foods.isEmpty {
-            let formatter = DateFormatter()
-            formatter.calendar = Calendar(identifier: .gregorian); formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone(identifier: context.captureTimeZoneID); formatter.dateFormat = "yyyy-MM-dd"
-            let date = context.days.first { $0.id == context.activeDayID }?.localDate ?? formatter.string(from: context.capturedAt)
-            let items = foods.map { ["name": $0.name, "quantity": $0.quantity, "unit": $0.unit, "kcal": $0.kcal,
-                                          "carbs": $0.carbs, "protein": $0.protein, "fat": $0.fat] as [String: Any] }
-            return try result(text: "", calls: [try call("log_food", ["target_local_date": date, "items": items])])
-        }
         let latest = context.meals.filter { $0.omittedItemCount == 0 }.max { $0.eatenAt < $1.eatenAt }
         if turn.intent == .edit, let latest, let name = turn.editFood, let quantity = turn.editQuantity, quantity > 0,
            let item = latest.items.max(by: { words($0.name).intersection(words(name)).count < words($1.name).intersection(words(name)).count }),
@@ -75,13 +71,31 @@ extension AppleInference {
             return try result(text: "", calls: [try call("correct_item", ["meal_id": latest.id.uuidString, "item_id": item.id.uuidString,
                                                                           "expected_revision": latest.revision, "quantity": quantity])])
         }
+        // An edit that names no saved food is usually a bare food mention such as "coke zero".
+        if turn.intent != .other, !foods.isEmpty {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian); formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: context.captureTimeZoneID); formatter.dateFormat = "yyyy-MM-dd"
+            let date = context.days.first { $0.id == context.activeDayID }?.localDate ?? formatter.string(from: context.capturedAt)
+            let items = foods.map { food -> [String: Any] in
+                let weighed = ["g", "gram", "grams", "ml", "milliliter", "milliliters"].contains(food.unit.lowercased())
+                func value(_ total: Double, _ per100: Double) -> Double {
+                    (min(max(weighed ? per100 * food.quantity / 100 : total, 0), 100_000) * 10).rounded() / 10
+                }
+                return ["name": food.name, "quantity": food.quantity, "unit": food.unit, "kcal": value(food.kcal, food.kcalPer100g),
+                        "carbs": value(food.carbs, food.carbsPer100g), "protein": value(food.protein, food.proteinPer100g),
+                        "fat": value(food.fat, food.fatPer100g)]
+            }
+            return try result(text: "", calls: [try call("log_food", ["target_local_date": date, "items": items])])
+        }
         return try result(text: localLimits, calls: [])
     }
 
     static func generateOnDevice(_ prompt: LocalPrompt) async throws -> LocalTurn {
         let session = LanguageModelSession(model: SystemLanguageModel.default, instructions: """
             You read one food diary message. A question is other, even when it mentions food. \
-            When an amount is missing, estimate a typical serving. Nutrition values are totals for the serving.
+            When an amount is missing, estimate a typical serving. \
+            Zero, diet and sugar-free drinks, water, black coffee and plain tea have almost no calories or carbs.
             """)
         let images = try prompt.images.map { try attachment($0).cgImage }
         return try await session.respond(generating: LocalTurn.self) {
