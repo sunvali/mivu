@@ -23,6 +23,8 @@ struct FoodSourceTests {
         let item = try #require(try await store.snapshotForExport().meals.first?.items.first)
         #expect(item.estimatedBy == "gpt-5.5" && item.estimatedByLabel == "ChatGPT")
         #expect(item.sourceCaption == "Estimated nutrition · ChatGPT")
+        var edited = item; edited.provenance = .user
+        #expect(edited.sourceCaption == "Edited by you", "A manual edit is not credited to the model")
     }
 
     @Test func appleFoodsAreLabelledAndOlderFoodsShowNoSource() async throws {
