@@ -477,6 +477,10 @@ enum DiaryCaptureResult: Equatable, Sendable {
             if selected { await clearProfileSelection() }
             profiles = try await store.profiles()
         } catch { present(error) }
+        // The transition stopped the open diary's change stream and backup, so reattach them when it stays open.
+        if let current = readModel {
+            do { try await install(current) } catch { await recoverProfileSelection(current.head.profile.id); present(error) }
+        }
     }
     private func beginProfileTransition() -> Bool {
         guard !isChangingProfile, !isSaving else { return false }; isChangingProfile = true; photoRequestGeneration &+= 1

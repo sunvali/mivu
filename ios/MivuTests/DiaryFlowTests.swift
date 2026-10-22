@@ -219,6 +219,10 @@ import ImageIO
         #expect(model.readModel?.profile.id == kept.id && model.readModel?.meals.count == 1)
         #expect(model.profiles.map(\.id) == [kept.id])
         #expect(CompanionLastActive(defaults: defaults).date(for: removed.id) == nil)
+        // A background write (as from Coach) must still reach the open diary.
+        _ = try await capturedMeal(store, text: "Synthetic later meal", photos: [], reviewFirst: false, dayID: day.id, expectedProfileID: kept.id)
+        for _ in 0..<100 where model.readModel?.meals.count != 2 { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(model.readModel?.meals.count == 2)
         await model.deleteProfile(kept.id)
         #expect(model.readModel == nil && model.profiles.isEmpty)
         model.enterBackground()
