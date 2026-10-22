@@ -208,18 +208,16 @@ struct SettingsView: View {
                 Section {
                     Picker("Coach AI", selection: $connection.provider) {
                         Text("Apple Intelligence · iPhone").tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.available(.apple))
-                        Text("Apple Intelligence · Cloud").tag(ChatGPTConnection.Provider.appleCloud).selectionDisabled(!connection.available(.appleCloud))
+                        // Hidden until Apple grants the Private Cloud Compute entitlement.
+                        if connection.available(.appleCloud) { Text("Apple Intelligence · Cloud").tag(ChatGPTConnection.Provider.appleCloud) }
                         Text("ChatGPT").tag(ChatGPTConnection.Provider.chatGPT)
                     }
                     .pickerStyle(.inline).labelsHidden()
                 } header: { Text("Coach AI") } footer: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        switch connection.provider {
-                        case .apple: Text("Runs on this iPhone with no account. It logs meals and changes amounts, with rougher estimates. Use Cloud or ChatGPT for questions and other edits.")
-                        case .appleCloud: Text("Uses Apple's Private Cloud Compute with no account. Apple doesn't keep your data.")
-                        case .chatGPT: Text("Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI.")
-                        }
-                        if !connection.available(.appleCloud) { Text("Apple Intelligence · Cloud isn't available yet.") }
+                    switch connection.provider {
+                    case .apple: Text("Runs on this iPhone with no account. It logs meals and changes amounts, with rougher estimates. Use ChatGPT for questions and other edits.")
+                    case .appleCloud: Text("Uses Apple's Private Cloud Compute with no account. Apple doesn't keep your data.")
+                    case .chatGPT: Text("Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI.")
                     }
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
