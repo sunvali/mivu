@@ -18,7 +18,41 @@ Plan: [2026-10-22-on-device-nutrition-table](../superpowers/plans/2026-10-22-on-
 
   "Apple, raw" portions include "1 medium" (200 g), "1 small" (165 g) and "Quantity not specified" (200 g).
 
-- **Findings for Tasks 2–3:**
+- **Findings that shaped Tasks 2–3** (handled there):
   - Plain `apple` ranks pie, cobbler and crisp first, so ranking must surface plain foods in the top 5.
   - `coke zero` matches "Powerade Zero", so extraction should give generic names ("diet cola").
   - Pizza portions say "piece", not "slice", so unit matching needs synonyms; "Quantity not specified" is the default weight.
+
+## Tasks 2–3: table reader and on-device wiring (2026-10-22)
+
+- **Code:**
+  - `ios/Mivu/Analysis/NutritionTable.swift`: read-only FTS5 search, re-ranked so plain foods come first; portion grams with unit synonyms.
+  - `AppleLocalInference.swift`: extraction adds `searchName`; the on-device pick step chooses a table entry (greedy, 0 = none).
+- **Grams rule:** a weighed amount (g, ml) or a portion naming the person's unit or a synonym; otherwise the model's estimate (with the calorie floor). ChatGPT, Cloud, `CoachEngine`, `CoachTools` and `FoodEvidence` are unchanged.
+- **Tests:** `NutritionTableTests` (2) and `AppleInferenceTests` (15): 17 passed on the iOS 27.0 simulator (iPhone 18 Pro Max).
+- **Live accuracy:** iOS 27.0 simulator, on-device model, 24 synthetic text foods with rough reference calories (several references are themselves approximate, e.g. FNDDS puts a medium apple at 122 kcal).
+
+  | Variant | Median relative error | Worst | Over 50% |
+  |---|---|---|---|
+  | Model only (pick → none) | 23% | 50% | 0 |
+  | Table with default "Quantity not specified" serving | 22% | 269% | 3 |
+  | Table + model serving weight | 28% | 108% | 4 |
+  | **Shipped: table only for weighed or unit-matched portions** | **21%** | 75% (cheesecake slice → large "piece") | 1 |
+
+  Clear wins:
+
+  | Food | Model only | Shipped | Reference |
+  |---|---|---|---|
+  | 200 g chicken | 165 | 302 | 330 |
+  | 150 g salmon | 199 | 282 | 310 |
+  | 2 slices pepperoni pizza | 300 | 531 | 600 |
+  | 2 tbsp peanut butter | 152 | 191 | 190 |
+
+  Remaining misses:
+  - oatmeal 40 g, matched as cooked;
+  - latte;
+  - croissant;
+  - "a can" of Coke Zero read as 3 cans.
+
+- **Gate:** the plan's gate (median ≤ 10%, no matched food > 50% off) is **not met** in either mode. This is reported, not hidden; further gains likely need the Cloud mode or better portion and preparation handling.
+- **Not run yet:** an on-device check on the owner's iPhone 15 Pro; photo turns with the table.

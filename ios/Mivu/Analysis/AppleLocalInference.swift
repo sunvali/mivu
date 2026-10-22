@@ -9,7 +9,8 @@ extension AppleInference {
         @Generable enum Intent { case log, edit, other }
         // Measured on-device: serving totals are reliable for countable servings, per-100 g values for weighed amounts.
         @Generable struct Food {
-            var name: String
+            @Guide(description: "The food as the message names it.") var name: String
+            @Guide(description: "A plain generic name for a nutrition database search, such as diet cola for coke zero.") var searchName: String
             var quantity: Double
             @Guide(description: "g or ml when the message gives a weight or volume, otherwise the serving unit such as can, slice or piece.") var unit: String
             @Guide(description: "Total for the whole serving.") var kcal: Double
@@ -38,7 +39,8 @@ extension AppleInference {
 
     static let localLimits = "On-device Apple Intelligence can log new meals and change an amount in your latest meal. For anything else, choose ChatGPT in Settings → Coach AI."
 
-    static func respondLocally(_ input: [CoachInferenceInput], namespace: Data?,
+    static func respondLocally(_ input: [CoachInferenceInput], namespace: Data?, table: NutritionTable = .bundled,
+                               pick: (String, [NutritionTable.Food]) async throws -> Int = pickOnDevice,
                                generate: (LocalPrompt) async throws -> LocalTurn = generateOnDevice) async throws -> CoachInferenceResult {
         // Onboarding asks for plain text without tools, and its prompt already fits on-device.
         guard namespace != nil else { return try await respond(input, namespace: nil, model: SystemLanguageModel.default) }
@@ -77,8 +79,17 @@ extension AppleInference {
             formatter.calendar = Calendar(identifier: .gregorian); formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.timeZone = TimeZone(identifier: context.captureTimeZoneID); formatter.dateFormat = "yyyy-MM-dd"
             let date = context.days.first { $0.id == context.activeDayID }?.localDate ?? formatter.string(from: context.capturedAt)
-            let items = foods.map { food -> [String: Any] in
+            var items: [[String: Any]] = []
+            for food in foods {
                 let weighed = ["g", "gram", "grams", "ml", "milliliter", "milliliters"].contains(food.unit.lowercased())
+                func rounded(_ value: Double?) -> Double { (min(max(value ?? 0, 0), 100_000) * 10).rounded() / 10 }
+                // Numbers come from the USDA table when the on-device model confirms a match and a portion weight exists.
+                if let (match, grams) = try await tableMatch(food, weighed: weighed, table: table, pick: pick) {
+                    let nutrition = match.per100Grams.scaled(by: grams / 100)
+                    items.append(["name": food.name, "quantity": food.quantity, "unit": food.unit, "kcal": rounded(nutrition.kcal),
+                                  "carbs": rounded(nutrition.carbs), "protein": rounded(nutrition.protein), "fat": rounded(nutrition.fat)])
+                    continue
+                }
                 func value(_ total: Double, _ per100: Double) -> Double {
                     (min(max(weighed ? per100 * food.quantity / 100 : total, 0), 100_000) * 10).rounded() / 10
                 }
@@ -87,11 +98,45 @@ extension AppleInference {
                 // Calories cannot sit far below what the macros imply; alcohol only raises them, so no upper bound.
                 var kcal = value(food.kcal, food.kcalPer100g)
                 if kcal < 0.7 * fromMacros { kcal = fromMacros }
-                return ["name": food.name, "quantity": food.quantity, "unit": food.unit, "kcal": kcal, "carbs": carbs, "protein": protein, "fat": fat]
+                items.append(["name": food.name, "quantity": food.quantity, "unit": food.unit, "kcal": kcal, "carbs": carbs, "protein": protein, "fat": fat])
             }
             return try result(text: "", calls: [try call("log_food", ["target_local_date": date, "items": items])])
         }
         return try result(text: localLimits, calls: [])
+    }
+
+    /// The matched table entry and total grams, or nil to keep the model's estimate.
+    private static func tableMatch(_ food: LocalTurn.Food, weighed: Bool, table: NutritionTable,
+                                   pick: (String, [NutritionTable.Food]) async throws -> Int) async throws -> (NutritionTable.Food, Double)? {
+        var options = (try? table.search(food.searchName)) ?? []
+        if options.isEmpty { options = (try? table.search(food.name)) ?? [] }
+        guard !options.isEmpty else { return nil }
+        let choice: Int
+        do { choice = try await pick("\(food.quantity.formatted()) \(food.unit) \(food.name)", options) }
+        catch is CancellationError { throw CancellationError() }
+        catch { return nil } // A failed pick keeps the estimate rather than failing the turn.
+        guard options.indices.contains(choice - 1) else { return nil }
+        let match = options[choice - 1]
+        // shortcut: ml counts as grams, close for drinks; use FNDDS "fl oz" portions if density matters.
+        // Only a weighed amount or a portion naming the person's own unit is trusted; synonyms and default servings
+        // measured worse than the model's estimate (e.g. a 60 g default "cookie" serving).
+        let portion = (try? table.portionGrams(code: match.code, unit: food.unit, fallbacks: false)).flatMap { $0 }.map { $0 * food.quantity }
+        guard let grams = weighed ? food.quantity : portion, grams > 0 else { return nil }
+        return (match, grams)
+    }
+
+    @Generable struct Pick {
+        @Guide(description: "The number of the option that is the same food, or 0 when none is.", .range(0...5)) var option: Int
+    }
+
+    static func pickOnDevice(_ phrase: String, _ options: [NutritionTable.Food]) async throws -> Int {
+        let session = LanguageModelSession(model: SystemLanguageModel.default, instructions: """
+            Match a food to a nutrition database entry. Choose the plainest entry that is the same food and preparation.
+            """)
+        let list = options.enumerated().map { "\($0.offset + 1). \($0.element.description)" }.joined(separator: "\n")
+        return try await session.respond(generating: Pick.self, options: GenerationOptions(sampling: .greedy)) {
+            "Food: \(phrase)\nOptions:\n\(list)"
+        }.content.option
     }
 
     static func generateOnDevice(_ prompt: LocalPrompt) async throws -> LocalTurn {

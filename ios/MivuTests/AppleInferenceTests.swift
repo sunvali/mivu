@@ -134,10 +134,10 @@ struct AppleInferenceTests {
 
         let log = try await capturedTurn(store, text: "Two boiled eggs", photos: [], expectedProfileID: profile.id)
         let logged = try await CoachEngine(store: store, infer: { input, tools in
-            try await AppleInference.respondLocally(input, namespace: tools) { prompt in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { prompt in
                 await prompts.append(prompt.text)
-                return AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11, kcalPer100g: 155, carbsPer100g: 1, proteinPer100g: 13, fatPer100g: 11),
-                                                                      .init(name: "Toast", quantity: 1, unit: "slice", kcal: 80, carbs: 14, protein: 3, fat: 1, kcalPer100g: 265, carbsPer100g: 49, proteinPer100g: 9, fatPer100g: 3)],
+                return AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", searchName: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11, kcalPer100g: 155, carbsPer100g: 1, proteinPer100g: 13, fatPer100g: 11),
+                                                                      .init(name: "Toast", searchName: "Toast", quantity: 1, unit: "slice", kcal: 80, carbs: 14, protein: 3, fat: 1, kcalPer100g: 265, carbsPer100g: 49, proteinPer100g: 9, fatPer100g: 3)],
                                                 editFood: nil, editQuantity: nil)
             }
         }).run(turnID: log.id, expectedProfileID: profile.id)
@@ -148,7 +148,7 @@ struct AppleInferenceTests {
 
         let edit = try await capturedTurn(store, text: "Actually it was 3 eggs", photos: [], expectedProfileID: profile.id)
         let edited = try await CoachEngine(store: store, infer: { input, tools in
-            try await AppleInference.respondLocally(input, namespace: tools) { prompt in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { prompt in
                 await prompts.append(prompt.text)
                 return AppleInference.LocalTurn(intent: .edit, foods: [], editFood: "eggs", editQuantity: 3)
             }
@@ -167,15 +167,65 @@ struct AppleInferenceTests {
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let turn = try await capturedTurn(store, text: "200g grilled chicken breast", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
-            try await AppleInference.respondLocally(input, namespace: tools) { _ in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
                 // The serving total repeats the per-100 g figure, the mistake measured on-device.
-                AppleInference.LocalTurn(intent: .edit, foods: [.init(name: "Grilled chicken breast", quantity: 200, unit: "g", kcal: 165, carbs: 0, protein: 31, fat: 3.6,
+                AppleInference.LocalTurn(intent: .edit, foods: [.init(name: "Grilled chicken breast", searchName: "Grilled chicken breast", quantity: 200, unit: "g", kcal: 165, carbs: 0, protein: 31, fat: 3.6,
                                                                        kcalPer100g: 165, carbsPer100g: 0, proteinPer100g: 31, fatPer100g: 3.6)],
                                          editFood: nil, editQuantity: nil)
             }
         }).run(turnID: turn.id, expectedProfileID: profile.id)
         let item = try #require(try await store.snapshotForExport().meals.first?.items.first)
         #expect(item.nutrition.kcal == 330 && item.nutrition.protein == 62)
+    }
+
+    @Test func localNutritionComesFromTheTableForSlicesAndWeighedAmounts() async throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile); _ = try await store.startDay()
+        let picks = PromptLog()
+        let turn = try await capturedTurn(store, text: "2 slices of pepperoni pizza and 200g grilled chicken breast", photos: [], expectedProfileID: profile.id)
+        // Model numbers are deliberately wrong: the saved values must come from the table.
+        @Sendable func food(_ name: String, _ quantity: Double, _ unit: String) -> AppleInference.LocalTurn.Food {
+            .init(name: name, searchName: name, quantity: quantity, unit: unit, kcal: 0, carbs: 0, protein: 0, fat: 0, kcalPer100g: 0, carbsPer100g: 0, proteinPer100g: 0, fatPer100g: 0)
+        }
+        _ = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { phrase, options in
+                await picks.append(phrase + " | " + options.map(\.description).joined(separator: " | "))
+                let wanted = phrase.contains("pizza") ? "Pizza with pepperoni, stuffed crust" : "Chicken breast, grilled without sauce, skin eaten"
+                return (options.firstIndex { $0.description == wanted } ?? -1) + 1
+            }) { _ in
+                AppleInference.LocalTurn(intent: .log, foods: [food("pepperoni pizza", 2, "slice"), food("grilled chicken breast", 200, "g")], editFood: nil, editQuantity: nil)
+            }
+        }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let items = try #require(try await store.snapshotForExport().meals.first?.items)
+        // FNDDS: stuffed-crust pepperoni pizza 296 kcal/100 g, "1 piece, NFS" 164 g; grilled chicken breast 206 kcal/100 g.
+        #expect(items.map(\.name) == ["pepperoni pizza", "grilled chicken breast"])
+        #expect(items.map(\.quantity) == [2, 200] && items.map(\.unit) == ["slice", "g"])
+        #expect(items.map(\.nutrition.kcal) == [970.9, 412])
+        let sent = await picks.texts
+        #expect(sent.count == 2 && sent.allSatisfy { $0.contains("Pizza with pepperoni, stuffed crust") || $0.contains("Chicken breast, grilled") })
+        #expect(sent.first?.hasPrefix("2 slice pepperoni pizza |") == true)
+    }
+
+    @Test func localUnitWithoutAMatchingPortionKeepsTheModelEstimate() async throws {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile); _ = try await store.startDay()
+        let turn = try await capturedTurn(store, text: "a chocolate chip cookie", photos: [], expectedProfileID: profile.id)
+        _ = try await CoachEngine(store: store, infer: { input, tools in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, options in
+                (options.firstIndex { $0.description == "Cookie, chocolate chip" } ?? -1) + 1
+            }) { _ in
+                // FNDDS has no "piece" portion for this cookie.
+                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "chocolate chip cookie", searchName: "chocolate chip cookie", quantity: 1, unit: "piece",
+                                                                      kcal: 80, carbs: 10, protein: 1, fat: 4, kcalPer100g: 480, carbsPer100g: 62, proteinPer100g: 5, fatPer100g: 24)],
+                                         editFood: nil, editQuantity: nil)
+            }
+        }).run(turnID: turn.id, expectedProfileID: profile.id)
+        // Not the 60 g "Quantity not specified" serving (295 kcal), which measured worse than the model.
+        #expect(try await store.snapshotForExport().meals.first?.items.first?.nutrition.kcal == 80)
     }
 
     @Test func localCaloriesNeverFallBelowWhatTheMacrosImply() async throws {
@@ -185,9 +235,9 @@ struct AppleInferenceTests {
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let turn = try await capturedTurn(store, text: "a can of coca cola", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
-            try await AppleInference.respondLocally(input, namespace: tools) { _ in
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
                 // Measured on-device: a regular Coke given a diet drink's 3 kcal beside its 35 g of sugar.
-                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Coca cola", quantity: 1, unit: "can", kcal: 3, carbs: 35, protein: 0, fat: 0,
+                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Coca cola", searchName: "Coca cola", quantity: 1, unit: "can", kcal: 3, carbs: 35, protein: 0, fat: 0,
                                                                       kcalPer100g: 1, carbsPer100g: 10.6, proteinPer100g: 0, fatPer100g: 0)],
                                          editFood: nil, editQuantity: nil)
             }
@@ -202,13 +252,13 @@ struct AppleInferenceTests {
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let log = try await capturedTurn(store, text: "Two boiled eggs", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
-            try await AppleInference.respondLocally(input, namespace: tools) { _ in
-                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11, kcalPer100g: 155, carbsPer100g: 1, proteinPer100g: 13, fatPer100g: 11)], editFood: nil, editQuantity: nil)
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in
+                AppleInference.LocalTurn(intent: .log, foods: [.init(name: "Boiled egg", searchName: "Boiled egg", quantity: 2, unit: "egg", kcal: 155, carbs: 1, protein: 13, fat: 11, kcalPer100g: 155, carbsPer100g: 1, proteinPer100g: 13, fatPer100g: 11)], editFood: nil, editQuantity: nil)
             }
         }).run(turnID: log.id, expectedProfileID: profile.id)
         let edit = try await capturedTurn(store, text: "make the latte 2", photos: [], expectedProfileID: profile.id)
         let result = try await CoachEngine(store: store, infer: { input, tools in
-            try await AppleInference.respondLocally(input, namespace: tools) { _ in AppleInference.LocalTurn(intent: .edit, foods: [], editFood: "latte", editQuantity: 2) }
+            try await AppleInference.respondLocally(input, namespace: tools, pick: { _, _ in 0 }) { _ in AppleInference.LocalTurn(intent: .edit, foods: [], editFood: "latte", editQuantity: 2) }
         }).run(turnID: edit.id, expectedProfileID: profile.id)
         #expect(result.receipts.isEmpty)
         #expect(try await store.snapshotForExport().meals.first?.items.first?.quantity == 2)
