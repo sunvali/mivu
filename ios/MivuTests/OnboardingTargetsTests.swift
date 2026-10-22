@@ -49,14 +49,4 @@ import Testing
             try validateDiaryMetadataFields(schemaVersion: 1, revision: 0, profile: profile, lineage: nil, previousDayConfirmedAt: nil)
         }
     }
-
-    @Test func resultsNameTheModelThatRanAndKeepChatGPTWording() {
-        // ChatGPT wording is unchanged; Apple only checks the estimate, so it never claims to have tuned it.
-        #expect(ChatGPTConnection.Provider.chatGPT.targetsWorking == "ChatGPT is tuning your targets…")
-        #expect(ChatGPTConnection.Provider.chatGPT.targetsDone == "Tuned by ChatGPT")
-        #expect(ChatGPTConnection.Provider.chatGPT.targetsFailed == "ChatGPT couldn't answer just now. You can keep the estimate or try again.")
-        #expect(ChatGPTConnection.Provider.apple.targetsWorking == "Apple Intelligence is checking your targets…")
-        #expect(ChatGPTConnection.Provider.apple.targetsDone == "Checked by Apple Intelligence")
-        #expect(ChatGPTConnection.Provider.apple.targetsFailed == "Apple Intelligence couldn't answer just now. You can keep the estimate or try again.")
-    }
 }

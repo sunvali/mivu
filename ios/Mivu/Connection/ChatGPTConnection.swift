@@ -87,6 +87,8 @@ final class ChatGPTConnection {
     func available(_ provider: Provider) -> Bool { provider == .apple ? appleModelAvailable() : planAuthorized }
     var appleAvailable: Bool { appleModelAvailable() }
     var canInfer: Bool { available(provider) }
+    /// Only ChatGPT tunes onboarding targets; the formula estimate beats the on-device model there.
+    var tunesTargets: Bool { provider == .chatGPT && planAuthorized }
 
     init(auth: AuthSession = AuthSession(), client: ResponsesClient = ResponsesClient(),
          jobStore: ProbeJobStore? = nil, preferences: UserDefaults = .standard,

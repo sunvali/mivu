@@ -290,7 +290,7 @@ struct OnboardingView: View {
             }
             if askFailed {
                 VStack(alignment: .leading, spacing: 8) {
-                    footnote(connection.provider.targetsFailed)
+                    footnote("ChatGPT couldn't answer just now. You can keep the estimate or try again.")
                     Button("Try again", systemImage: "arrow.clockwise") { Task { await askChatGPT() } }
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
@@ -307,10 +307,10 @@ struct OnboardingView: View {
 
     @ViewBuilder private var status: some View {
         if asking {
-            Label { Text(connection.provider.targetsWorking) } icon: { ProgressView().controlSize(.small) }
+            Label { Text("ChatGPT is tuning your targets…") } icon: { ProgressView().controlSize(.small) }
                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
         } else {
-            Label(reply == nil ? "Estimate" : connection.provider.targetsDone, systemImage: reply == nil ? "function" : "sparkles")
+            Label(reply == nil ? "Estimate" : "Tuned by ChatGPT", systemImage: reply == nil ? "function" : "sparkles")
                 .font(.footnote.weight(.semibold)).foregroundStyle(Color.diaryAccent)
                 .padding(.horizontal, 10).padding(.vertical, 4)
                 .background(Capsule().fill(Color.diaryAccent.opacity(0.12)))
@@ -370,7 +370,7 @@ struct OnboardingView: View {
     private func showEstimate() {
         guard let answers else { return }
         targets = answers.estimate(); reply = nil; askFailed = false
-        if connection.canInfer { Task { await askChatGPT() } } else { react(.saved) }
+        if connection.tunesTargets { Task { await askChatGPT() } } else { react(.saved) }
     }
 
     private func askChatGPT() async {
@@ -581,14 +581,5 @@ private struct FlowLayout: Layout {
             x += size.width + spacing; line = max(line, size.height); widest = max(widest, x - spacing)
         }
         return (points, CGSize(width: widest, height: y + line))
-    }
-}
-
-/// Onboarding results credit the model that ran; on-device Apple only checks the estimate, so it never claims tuning.
-extension ChatGPTConnection.Provider {
-    var targetsWorking: String { self == .apple ? "Apple Intelligence is checking your targets…" : "ChatGPT is tuning your targets…" }
-    var targetsDone: String { self == .apple ? "Checked by Apple Intelligence" : "Tuned by ChatGPT" }
-    var targetsFailed: String {
-        (self == .apple ? "Apple Intelligence" : "ChatGPT") + " couldn't answer just now. You can keep the estimate or try again."
     }
 }

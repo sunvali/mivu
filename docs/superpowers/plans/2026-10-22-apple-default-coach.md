@@ -13,7 +13,7 @@
   - It returns intent (log, edit, other), foods, and an edit target.
   - It emits one `log_food` or `correct_item` call through the existing `CoachEngine`, `CoachTools` and receipts.
   - Logged foods and edit names must be grounded in the message's words; an unnamed edit targets `focus.lastChanged`.
-  - Onboarding targets use `AppleInference.respondText`.
+  - Onboarding targets are tuned only by ChatGPT (`ChatGPTConnection.tunesTargets`). With Apple, the formula estimate is shown: owner's call on 2026-10-23, since the on-device model only echoed the formula.
 - **Nutrition numbers:**
   - Weighed amounts and unit-matched portions use the bundled USDA FNDDS table, with an on-device pick step choosing the entry; see [nutrition table plan](2026-10-22-on-device-nutrition-table.md).
   - Otherwise the model's estimate is used, with a calorie floor from macros.

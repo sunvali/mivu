@@ -55,8 +55,11 @@ import Testing
         let infer = try fixture.connection.coachInference()
         _ = try await infer([.message(role: .user, text: "Synthetic meal")], try CoachTools.declarations())
         #expect(fixture.requests.count == 1, "A connected plan keeps sending Coach requests to ChatGPT")
+        #expect(fixture.connection.tunesTargets)
         fixture.connection.provider = .apple
         #expect(fixture.connection.provider == .apple, "An explicit Apple choice still wins")
+        // The formula estimate beats the on-device model for daily targets, so Apple never tunes them.
+        #expect(!fixture.connection.tunesTargets)
     }
 
     @Test func disconnectedDoesNotCreateInferenceOrSendRequests() async throws {

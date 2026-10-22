@@ -41,8 +41,8 @@ extension AppleInference {
     static func respondLocally(_ input: [CoachInferenceInput], namespace: Data?, table: NutritionTable = .bundled,
                                pick: (String, [NutritionTable.Food]) async throws -> Int = pickOnDevice,
                                generate: (LocalPrompt) async throws -> LocalTurn = generateOnDevice) async throws -> CoachInferenceResult {
-        // Onboarding asks for plain text without tools, and its prompt already fits on-device.
-        guard namespace != nil else { return try await respondText(input) }
+        // Only Coach turns run on-device; onboarding targets use the formula estimate instead.
+        guard namespace != nil else { throw ResponsesClient.Failure.invalidInput }
         // Once the save step has run, CoachEngine words the reply from its own receipts.
         if input.contains(where: { if case .functionOutput = $0 { true } else { false } }) { return try result(text: "Done.", calls: []) }
 
