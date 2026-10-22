@@ -35,11 +35,14 @@ final class PipRigView: UIView {
     var isDark = false { didSet { if isDark != oldValue { applyFills() } } }
     private(set) var visibleViews: Set<String> = []
     private var pose = PipPose.rest
+    private let bottomCrop = CALayer()
 
     init(asset: PipRigAsset, set: PipPose.BodySet) {
         self.asset = asset
         super.init(frame: .zero)
-        clipsToBounds = true
+        // Only the bottom edge crops (Pip peeks over the bar); head turns and tilts may spill past the others.
+        bottomCrop.backgroundColor = UIColor.black.cgColor
+        layer.mask = bottomCrop
         isAccessibilityElement = false
         build()
         isDark = traitCollection.userInterfaceStyle == .dark
@@ -92,6 +95,7 @@ final class PipRigView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         root.setAffineTransform(CGAffineTransform(a: s, b: 0, c: 0, d: s, tx: tx, ty: ty))
+        bottomCrop.frame = CGRect(x: -bounds.width, y: -bounds.height, width: bounds.width * 3, height: bounds.height * 2)
         CATransaction.commit()
     }
 

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 enum CompanionPose: Int, CaseIterable {
     case resting = 0, attentive = 1, thinking = 2, saved = 3
@@ -79,10 +80,22 @@ struct CompanionContext {
     var isProcessing: Bool
     var needsRecovery: Bool
     var playback: MotionPolicy.Playback
+    /// How far the typing gaze has moved right, 0...60: the draft's length, or on Coach the caret's place across the field.
     var draftLength: Int = 0
 
     /// The gaze only follows the first 60 characters, so longer drafts need no further updates.
     static func draftSignal(_ length: Int) -> Int { min(max(length, 0), 60) }
+
+    /// The caret's place across a field `width` wide, 0...60: where the draft's last wrapped line ends.
+    static func caretSignal(_ text: String, width: CGFloat, font: UIFont) -> Int {
+        guard width > 0, !text.isEmpty else { return 0 }
+        let storage = NSTextStorage(string: text, attributes: [.font: font])
+        let layout = NSLayoutManager(), container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container); storage.addLayoutManager(layout)
+        let end = layout.boundingRect(forGlyphRange: NSRange(location: layout.numberOfGlyphs - 1, length: 1), in: container).maxX
+        return draftSignal(Int((end / width * 60).rounded()))
+    }
 }
 
 enum CompanionTouch { case tap, pat }

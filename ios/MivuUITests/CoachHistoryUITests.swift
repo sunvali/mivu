@@ -24,7 +24,8 @@ import XCTest
     func partialRow(_ app: XCUIApplication) throws {
         var value = try waitHistory(app)
         for _ in 0..<6 where (value["firstVisibleOffset"] as? Double ?? 0) >= -4 || remainder(value) < 44 {
-            let point = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            // The composer floats over the viewport's lower part; drag where the conversation shows.
+            let point = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
             point.press(forDuration: 0.05, thenDragTo: point.withOffset(CGVector(dx: 0, dy: -43)))
             value = try waitHistory(app)
         }
@@ -63,7 +64,7 @@ import XCTest
         for _ in 0..<14 where !element.isHittable {
             let surface = viewport(app), frame = surface.frame
             let down = element.exists && !element.frame.isEmpty && element.frame.minY < frame.minY
-            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
             let step = min(80, frame.height * 0.25) * (down ? 1.0 : -1.0)
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: step)),
                 withVelocity: .slow, thenHoldForDuration: 0.2)
@@ -237,7 +238,8 @@ import XCTest
             XCTAssertTrue(selected.isHittable)
             XCTAssertEqual(selected.value as? String, "Selected source message")
             try assertIdleViewportStopsPublishing(app)
-            let point = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            // The composer floats over the viewport's lower part; drag where the conversation shows.
+            let point = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
             point.press(forDuration: 0.05, thenDragTo: point.withOffset(CGVector(dx: 0, dy: -43)))
             _ = try waitHistory(app)
         }

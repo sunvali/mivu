@@ -44,7 +44,9 @@ import XCTest
         app.buttons["coachPhotos"].tap()
         XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
         let send = app.buttons["coachSend"]
-        XCTAssertTrue(send.isHittable); XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
+        // The camera cover's dismissal and the restored keyboard settle the composer before Send is hittable.
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: send)], timeout: 5), .completed)
+        XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["Apple sample mode"].exists)
