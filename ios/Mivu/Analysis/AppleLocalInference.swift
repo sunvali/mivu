@@ -108,10 +108,7 @@ extension AppleInference {
         }.content
     }
 
-    /// Lowercased words of three or more letters, with a plural "s" dropped, so "eggs" names "Boiled egg".
-    static func words(_ text: String) -> Set<String> {
-        Set(text.lowercased().split { !$0.isLetter }.filter { $0.count >= 3 }.map { $0.hasSuffix("s") ? String($0.dropLast()) : String($0) })
-    }
+    static func words(_ text: String) -> Set<String> { NutritionTable.words(text) }
 
     private static func call(_ name: String, _ arguments: [String: Any]) throws -> Transcript.ToolCall {
         let json = String(decoding: try JSONSerialization.data(withJSONObject: arguments), as: UTF8.self)
