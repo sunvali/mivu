@@ -290,7 +290,7 @@ struct OnboardingView: View {
             }
             if askFailed {
                 VStack(alignment: .leading, spacing: 8) {
-                    footnote("ChatGPT couldn't answer just now. You can keep the estimate or try again.")
+                    footnote(connection.provider.targetsFailed)
                     Button("Try again", systemImage: "arrow.clockwise") { Task { await askChatGPT() } }
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
@@ -307,10 +307,10 @@ struct OnboardingView: View {
 
     @ViewBuilder private var status: some View {
         if asking {
-            Label { Text("ChatGPT is tuning your targets…") } icon: { ProgressView().controlSize(.small) }
+            Label { Text(connection.provider.targetsWorking) } icon: { ProgressView().controlSize(.small) }
                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
         } else {
-            Label(reply == nil ? "Estimate" : "Tuned by ChatGPT", systemImage: reply == nil ? "function" : "sparkles")
+            Label(reply == nil ? "Estimate" : connection.provider.targetsDone, systemImage: reply == nil ? "function" : "sparkles")
                 .font(.footnote.weight(.semibold)).foregroundStyle(Color.diaryAccent)
                 .padding(.horizontal, 10).padding(.vertical, 4)
                 .background(Capsule().fill(Color.diaryAccent.opacity(0.12)))
@@ -581,5 +581,14 @@ private struct FlowLayout: Layout {
             x += size.width + spacing; line = max(line, size.height); widest = max(widest, x - spacing)
         }
         return (points, CGSize(width: widest, height: y + line))
+    }
+}
+
+/// Onboarding results credit the model that ran; on-device Apple only checks the estimate, so it never claims tuning.
+extension ChatGPTConnection.Provider {
+    var targetsWorking: String { self == .apple ? "Apple Intelligence is checking your targets…" : "ChatGPT is tuning your targets…" }
+    var targetsDone: String { self == .apple ? "Checked by Apple Intelligence" : "Tuned by ChatGPT" }
+    var targetsFailed: String {
+        (self == .apple ? "Apple Intelligence" : "ChatGPT") + " couldn't answer just now. You can keep the estimate or try again."
     }
 }
