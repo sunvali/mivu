@@ -14,6 +14,8 @@
 | The 2 iOS 27 VoiceOver tests (iOS 27.0 simulator) | `bd5f5951` | `testSpikePagingPreservesAccessibilityFocus` passed; `testVoiceOverReachesHistoryPagingControl…` failed once with `AXVoiceOverAutomationErrorDomain` "Failed to send moveBackward command", then passed alone |
 | `-only-testing:MivuTests` | `bd5f5951` | **1114 passed, 0 failed, 1 skipped** (`nativeAuthenticationBrowserReachesLoopback`, 169 s) |
 
+After rebasing on `c987be1a` (#46, floating Coach composer), `CoachHistoryUITests.testRealScrollAutomaticallyPagesAndStopsAtExhaustion` failed on `main` itself: its reverse `swipeUp()` landed on the check-in card floating over the viewport. It now drags at 30% height, as #46 did for the other helpers. `CoachHistoryUITests`, `CoachUITests` and `CompanionUITests` then passed: **37 passed, 0 failed**.
+
 ## Causes and fixes
 
 | Test | Cause | Fix |

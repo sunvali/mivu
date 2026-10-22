@@ -199,7 +199,9 @@ import XCTest
         XCTAssertEqual(try metrics(app)["requestedPages"] as? [[Int]], pages)
         let newest = app.staticTexts["coachText-00000000-0000-0000-0000-000000000043"]
         for _ in 0..<16 where !newest.isHittable {
-            viewport(app).swipeUp()
+            // The composer floats over the viewport's lower part; drag where the conversation shows.
+            let point = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+            point.press(forDuration: 0.05, thenDragTo: point.withOffset(CGVector(dx: 0, dy: -150)), withVelocity: .fast, thenHoldForDuration: 0)
             _ = try waitHistory(app)
         }
         XCTAssertTrue(newest.isHittable, "A real reverse gesture must return through the loaded conversation")
