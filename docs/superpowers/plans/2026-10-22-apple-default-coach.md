@@ -8,6 +8,14 @@
 
 **Tech Stack:** Swift 6, FoundationModels (`PrivateCloudComputeLanguageModel`, iOS 27 SDK), Swift Testing, XcodeBuildMCP. Deployment target stays iOS 26.0; the Apple path is `@available(iOS 27, *)`. No new dependency, service, key or billing.
 
+## Status (2026-10-22, revised)
+
+- On the owner's iPhone 15 Pro the on-device model rejected a real Coach request: `Provided 16,476 tokens, but the maximum allowed is 4,096.` The on-device path is dropped.
+- Apple now means `PrivateCloudComputeLanguageModel` (32K). The owner is requesting the managed entitlement. Until it is granted, `ChatGPTConnection.privateCloudComputeEntitled` stays `false`, Apple Intelligence is unavailable, and every person uses ChatGPT (a saved Apple choice falls back too).
+- To enable: add `com.apple.developer.private-cloud-compute` to the app entitlements with the granted profile, set `privateCloudComputeEntitled = true`, then run Task 6 on a device.
+- Known defect before enabling: the schema bridge turns nullable fields into optional ones, so the model omits `kcal`/macros (simulator turn logged foods with "Calories are incomplete"). Fix in Task 1's bridge (required-but-nullable nutrients must stay required) before the accuracy gate.
+- Owner added an explicit Coach AI choice (onboarding step and Settings → Coach AI), replacing "connected ChatGPT wins".
+
 ## Decisions (owner, 2026-10-22)
 
 1. Driver: accountless app, not an App Review workaround.

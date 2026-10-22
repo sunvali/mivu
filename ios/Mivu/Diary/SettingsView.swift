@@ -206,14 +206,14 @@ struct SettingsView: View {
             case .connection:
                 Section {
                     Picker("Coach AI", selection: $connection.provider) {
-                        Text("Apple Intelligence").tag(ChatGPTConnection.Provider.apple)
+                        Text("Apple Intelligence").tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.appleAvailable)
                         Text("ChatGPT").tag(ChatGPTConnection.Provider.chatGPT)
                     }
                     .pickerStyle(.inline).labelsHidden()
                 } header: { Text("Coach AI") } footer: {
-                    Text(connection.provider == .chatGPT ? "Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI."
-                         : connection.appleAvailable ? "Runs on this iPhone. No account needed."
-                         : "Turn on Apple Intelligence in iPhone Settings, or choose ChatGPT.")
+                    Text(!connection.appleAvailable ? "Apple Intelligence isn't available for the Coach yet. Uses your ChatGPT plan; Coach messages and photos you send are shared with OpenAI."
+                         : connection.provider == .chatGPT ? "Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI."
+                         : "Uses Apple Intelligence through Private Cloud Compute. No account needed.")
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
                 Section("Connection") {

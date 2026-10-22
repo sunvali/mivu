@@ -103,7 +103,7 @@ struct DiaryRootView: View {
     private let nutritionKeys: NutritionAPIKeyStore
     init() {
         // UI tests never reach a live model, so the host Mac's Apple Intelligence cannot change their flows.
-        var appleModelAvailable = ChatGPTConnection.onDeviceModelAvailable
+        var appleModelAvailable = ChatGPTConnection.appleIntelligenceAvailable
         if DiaryLaunch.isUITest { appleModelAvailable = { false } }
         let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults, appleModelAvailable: appleModelAvailable)
         let keys = NutritionAPIKeyStore.local

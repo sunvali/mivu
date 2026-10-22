@@ -66,15 +66,22 @@ final class ChatGPTConnection {
 
     enum Provider: String { case apple, chatGPT }
 
-    nonisolated static let onDeviceModelAvailable: @Sendable () -> Bool = {
-        if #available(iOS 27.0, *) { SystemLanguageModel.default.isAvailable } else { false }
+    // The Coach request (~16K tokens) exceeds the on-device model (4K on iPhone 15 Pro), so Apple means Private Cloud Compute.
+    // Without the managed com.apple.developer.private-cloud-compute entitlement PCC reports available yet every call fails.
+    // shortcut: set true in the same change that adds the granted entitlement; until then the Coach uses ChatGPT.
+    nonisolated static let privateCloudComputeEntitled = false
+
+    nonisolated static let appleIntelligenceAvailable: @Sendable () -> Bool = {
+        guard privateCloudComputeEntitled, #available(iOS 27.0, *) else { return false }
+        return PrivateCloudComputeLanguageModel().availability == .available
     }
 
-    /// The person's choice; before they choose, Apple when this iPhone can run it, otherwise ChatGPT.
+    /// The person's choice, Apple by default; ChatGPT whenever Apple Intelligence cannot answer.
     var provider: Provider {
         get {
             access(keyPath: \.provider)
-            return preferences.string(forKey: "aiProvider").flatMap(Provider.init) ?? (appleModelAvailable() ? .apple : .chatGPT)
+            guard appleModelAvailable() else { return .chatGPT }
+            return preferences.string(forKey: "aiProvider").flatMap(Provider.init) ?? .apple
         }
         set { withMutation(keyPath: \.provider) { preferences.set(newValue.rawValue, forKey: "aiProvider") } }
     }
@@ -84,7 +91,7 @@ final class ChatGPTConnection {
 
     init(auth: AuthSession = AuthSession(), client: ResponsesClient = ResponsesClient(),
          jobStore: ProbeJobStore? = nil, preferences: UserDefaults = .standard,
-         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.onDeviceModelAvailable) {
+         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceAvailable) {
         self.appleModelAvailable = appleModelAvailable
         self.auth = auth
         self.client = client

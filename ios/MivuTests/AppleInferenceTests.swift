@@ -91,6 +91,15 @@ struct AppleInferenceTests {
         #expect(throws: SessionError.noActiveSession) { _ = try none.inference() }
     }
 
+    @Test @MainActor func savedAppleChoiceUsesChatGPTWhileAppleIsUnavailable() throws {
+        let preferences = UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!
+        ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }).provider = .apple
+        let unavailable = ChatGPTConnection(preferences: preferences, appleModelAvailable: { false })
+        #expect(unavailable.provider == .chatGPT)
+        #expect(throws: SessionError.noActiveSession) { _ = try unavailable.inference() }
+        #expect(ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }).provider == .apple)
+    }
+
     @Test @MainActor func chosenProviderPersistsAndChatGPTChoiceNeverFallsBackToApple() throws {
         let preferences = UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!
         let first = ChatGPTConnection(preferences: preferences, appleModelAvailable: { true })

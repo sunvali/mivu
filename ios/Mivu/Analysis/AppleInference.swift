@@ -9,7 +9,7 @@ enum AppleInference {
     static let continuation = "Continue the captured turn using the tool results above."
 
     /// One stateless step: Mivu tools only report the calls the model chose; CoachEngine executes them.
-    static func respond(_ input: [CoachInferenceInput], namespace: Data?, model: some LanguageModel = SystemLanguageModel.default) async throws -> CoachInferenceResult {
+    static func respond(_ input: [CoachInferenceInput], namespace: Data?, model: some LanguageModel = PrivateCloudComputeLanguageModel()) async throws -> CoachInferenceResult {
         let definitions = try namespace.map(toolDefinitions) ?? []
         var entries = Array(try transcript(input, tools: definitions))
         // Every respond needs a prompt: the trailing capture is one; after tool outputs a fixed continuation stands in.
