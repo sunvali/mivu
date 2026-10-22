@@ -32,8 +32,8 @@ Token budget: both calls are small (the message, or a phrase plus 5 short lines)
 
 ## Tasks
 
-### Task 1: Build the table (owner approves the download first)
-- [ ] `scripts/nutrition/build_fndds.py`:
+### Task 1: Build the table (owner approves the download first) — done 2026-10-22, see verification doc
+- [x] `scripts/nutrition/build_fndds.py`:
   - Reads the FNDDS 2021–2023 CSVs from a local folder the owner downloads. State the file names and sizes, and ask before downloading.
   - Writes `ios/Mivu/Resources/fndds.sqlite`:
     - `foods(code, description, kcal, carbs, protein, fat)` per 100 g;
