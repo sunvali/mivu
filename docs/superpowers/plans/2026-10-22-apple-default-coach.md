@@ -41,8 +41,8 @@
 - Run tests on an iOS 27 simulator; on iOS 26.5 the suite records "requires iOS 27".
 
 ### Task 2: Transcript mapping
-- [ ] Failing test: a developer message, a user message with one JPEG, a prior `function_call` item and its `function_call_output` map to instructions, prompt (text + image), toolCalls and toolOutput entries in order.
-- [ ] Implement `AppleInference.transcript(_ input: [CoachInferenceInput], tools:)`.
+- [x] Failing test: a developer message, a user message with one JPEG, a prior `function_call` item and its `function_call_output` map to instructions, prompt (text + image), toolCalls and toolOutput entries in order.
+- [x] Implement `AppleInference.transcript(_ input: [CoachInferenceInput], tools:)`. Contiguous user chunks merge into one prompt; ChatGPT reasoning items are skipped.
 
 ### Task 3: Result capture
 - [ ] Failing test: a transcript ending in a `.toolCalls` entry with two calls yields a `CoachInferenceResult` whose `calls` match and whose `outputItems` pass `CoachInferenceInput.priorOutput` validation; a `.response` yields text and no calls.
