@@ -326,6 +326,35 @@ import XCTest
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
     }
 
+    func testSwipeDeletesAnotherProfileAndKeepsTheSelectedOne() {
+        let app = launch()
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["localProfiles"].tap()
+        XCTAssertTrue(app.navigationBars["Local profiles"].waitForExistence(timeout: 5))
+        let create = app.buttons["Create local profile"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5)); create.tap()
+        let name = app.alerts.textFields.firstMatch; XCTAssertTrue(name.waitForExistence(timeout: 5)); name.typeText("Synthetic removable")
+        app.alerts.buttons["Create"].tap()
+        let row = { (name: String) in app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch }
+        let removable = row("Synthetic removable")
+        XCTAssertTrue(removable.waitForExistence(timeout: 5))
+        row("My diary").tap()
+        XCTAssertTrue(app.staticTexts["My diary"].waitForExistence(timeout: 5), "Switching must select the kept profile first")
+        removable.swipeLeft()
+        let delete = app.buttons["Delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        let swipe = XCTAttachment(screenshot: app.screenshot()); swipe.name = "Profile swipe delete"; swipe.lifetime = .keepAlways; add(swipe)
+        delete.tap()
+        XCTAssertTrue(app.staticTexts["Delete Synthetic removable?"].waitForExistence(timeout: 5))
+        let dialog = XCTAttachment(screenshot: app.screenshot()); dialog.name = "Profile delete confirmation"; dialog.lifetime = .keepAlways; add(dialog)
+        app.buttons["Delete profile"].firstMatch.tap()
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: removable)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "The swiped profile must leave the list")
+        XCTAssertTrue(app.staticTexts["My diary"].exists, "The other profile must stay selected")
+        XCTAssertTrue(row("My diary").exists)
+    }
+
     func testUnsavedSettingsRequireExplicitDiscard() {
         let app = launch()
         app.buttons["profileSettings"].tap()

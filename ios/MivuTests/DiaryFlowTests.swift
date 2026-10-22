@@ -204,6 +204,25 @@ import ImageIO
 #endif
 
 @Suite @MainActor struct DiaryRecoveryFlowTests {
+    @Test func deletingAnotherProfileKeepsTheSelectedDiaryOpen() async throws {
+        let name = "MivuFlow-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        let path = URL.temporaryDirectory.appending(path: name)
+        defer { defaults.removePersistentDomain(forName: name); try? FileManager.default.removeItem(at: path) }
+        let store = DiaryStore(directory: path)
+        let kept = DiaryProfile(name: "Synthetic kept"), removed = DiaryProfile(name: "Synthetic removed")
+        _ = try await store.createProfile(removed); _ = try await store.createProfile(kept); let day = try await store.startDay()
+        _ = try await capturedMeal(store, text: "Synthetic meal", photos: [], reviewFirst: false, dayID: day.id)
+        CompanionLastActive(defaults: defaults).record(Date(), for: removed.id)
+        let model = DiaryViewModel(store: store, preferences: defaults); await model.switchProfile(kept.id)
+        await model.deleteProfile(removed.id)
+        #expect(model.readModel?.profile.id == kept.id && model.readModel?.meals.count == 1)
+        #expect(model.profiles.map(\.id) == [kept.id])
+        #expect(CompanionLastActive(defaults: defaults).date(for: removed.id) == nil)
+        await model.deleteProfile(kept.id)
+        #expect(model.readModel == nil && model.profiles.isEmpty)
+        model.enterBackground()
+    }
     @Test func signOutRemainsSignedOutAfterRelaunchAndPreservesProfile() async throws {
         let name = "MivuFlow-" + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))
