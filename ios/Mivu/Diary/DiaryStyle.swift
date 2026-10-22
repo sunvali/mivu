@@ -299,3 +299,8 @@ extension NutritionProvenance {
         }
     }
 }
+
+extension FoodItem {
+    /// "Estimated nutrition · ChatGPT": the provenance plus the Coach model that produced it, when known.
+    var sourceCaption: String { [provenance.description, estimatedByLabel].compactMap { $0 }.joined(separator: " · ") }
+}

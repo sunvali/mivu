@@ -108,7 +108,7 @@ struct MealDetailView: View {
                                                 VStack(alignment: .leading, spacing: 4) {
                                                     Text(item.name).font(.subheadline.weight(.medium))
                                                     Text("\(item.quantity.formatted()) \(item.unit)").font(.subheadline).monospacedDigit()
-                                                    Text(item.provenance.description).font(.caption).foregroundStyle(Color.diarySecondary)
+                                                    Text(item.sourceCaption).font(.caption).foregroundStyle(Color.diarySecondary)
                                                 }.padding(.vertical, 4)
                                             }
                                         }
@@ -350,7 +350,7 @@ struct MealDetailView: View {
                             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
                         }
                     }
-                    Text(item.provenance.description).font(.caption).foregroundStyle(Color.diarySecondary)
+                    Text(item.sourceCaption).font(.caption).foregroundStyle(Color.diarySecondary)
                     if item.uncertain { Text("Portion or nutrients are uncertain").font(.caption).foregroundStyle(Color.diarySecondary) }
                 }.frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).contentShape(Rectangle())
             }
@@ -564,7 +564,7 @@ private struct FoodItemEditor: View {
                         nutrientField("Protein (g)", text: nutrientBinding("protein", $protein))
                         nutrientField("Carbs (g)", text: nutrientBinding("carbs", $carbs))
                         nutrientField("Fat (g)", text: nutrientBinding("fat", $fat))
-                        Text(item.provenance.description).foregroundStyle(Color.diarySecondary)
+                        Text(item.sourceCaption).foregroundStyle(Color.diarySecondary)
                         if !item.reference.isEmpty { Text(item.reference).font(.subheadline).foregroundStyle(Color.diarySecondary) }
                         if item.uncertain { Label("Portion or nutrients are uncertain", systemImage: "info.circle").font(.subheadline).foregroundStyle(Color.diarySecondary) }
                     }
