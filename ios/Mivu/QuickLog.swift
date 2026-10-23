@@ -23,6 +23,8 @@ struct MivuShortcuts: AppShortcutsProvider {
                     shortTitle: "Log Food", systemImageName: "camera")
         AppShortcut(intent: OpenCoachIntent(), phrases: ["Ask \(.applicationName) Coach", "Open \(.applicationName) Coach"],
                     shortTitle: "Coach", systemImageName: "bubble.left.fill")
+        AppShortcut(intent: TellCoachIntent(), phrases: ["Tell \(.applicationName)", "Tell \(.applicationName) Coach", "Message \(.applicationName) Coach"],
+                    shortTitle: "Tell Coach", systemImageName: "bubble.left.and.text.bubble.right")
     }
 }
 
