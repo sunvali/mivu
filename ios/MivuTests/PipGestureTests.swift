@@ -84,6 +84,20 @@ import Testing
         #expect(PipGestureLibrary.gesture(for: .progressEntrance(cheer: true)).keys.contains { $0.pose.eyes == .closedHappy })
     }
 
+    /// The chart card rides the upper arm, drawn for the held elbow, so no Progress key may bend the forearm or paw away from it.
+    @MainActor @Test func progressMomentsKeepTheCardElbowStill() {
+        let moments: [PipMoment] = [.presenting(cheer: true), .presenting(cheer: false), .progressEntrance(cheer: true),
+                                    .progressEntrance(cheer: false), .progressRange] + (0...5).map { .progressTap(level: $0) }
+        for moment in moments {
+            for key in PipGestureLibrary.gesture(for: moment).keys {
+                for part in ["forearm-r", "paw-r"] {
+                    let joint = key.pose.joints[part]
+                    #expect(joint == nil || joint == PipGestureLibrary.progressHeldArm[part], "\(moment) \(key.at) \(part)")
+                }
+            }
+        }
+    }
+
     /// Each tap on Progress Pip plays the next of six silly one-shots, then wraps around.
     @MainActor @Test func tapsCycleThroughFunnyGestures() {
         let names = (0..<6).map { PipGestureLibrary.gesture(for: .progressTap(level: $0)).name }

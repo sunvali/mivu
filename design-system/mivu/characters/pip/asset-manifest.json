@@ -34,14 +34,14 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip-rig.json",
-    "sha256": "469d312cc184c398aa1a1efc343956ef888ac06a8d4c7575b72a24ac1da5d111",
-    "bytes": 313785,
+    "sha256": "91eaf13f016c10a7f60f1da6a810c0144f4355a49cb4911257200b80be29422a",
+    "bytes": 314202,
     "formatVersion": 2,
     "canvas": [
       512,
       512
     ],
-    "parts": 332,
+    "parts": 333,
     "sizeCapBytes": 1048576,
     "generatedBy": "design-system/mivu/characters/pip/rig/build.py"
   },
