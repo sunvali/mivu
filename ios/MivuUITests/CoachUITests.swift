@@ -555,6 +555,9 @@ import XCTest
         if collection.exists { return collection }
         let table = app.tables.firstMatch
         if table.exists { return table }
+        // Progress is a chart-first scroll view rather than a list.
+        let scroll = app.scrollViews.firstMatch
+        if scroll.exists { return scroll }
         XCTFail("The destination must contain its native list")
         return nil
     }
