@@ -125,6 +125,8 @@ struct DiaryProgressView: View {
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("progressRange")
+                    // The last report stays on screen during a range switch, so a failed switch must still say so.
+                    if let loadError { loadFailure(loadError) }
                     ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
                     sectionTitle("Weight")
                     NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
@@ -134,10 +136,7 @@ struct DiaryProgressView: View {
                     sectionTitle("More")
                     more(snapshot, progress)
                 } else if model.selection != nil {
-                    if let loadError {
-                        Text(loadError).foregroundStyle(Color.diaryError)
-                        Button("Retry loading progress") { Task { await reloadProgress() } }.frame(minHeight: 44)
-                    } else { ProgressView("Loading progress…").padding(.top, 40) }
+                    if let loadError { loadFailure(loadError) } else { ProgressView("Loading progress…").padding(.top, 40) }
                 } else {
                     ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle")
                 }
@@ -254,6 +253,10 @@ struct DiaryProgressView: View {
             // Each tap plays the next silly gesture.
             pipReaction = PipReaction(pose: .progressTap, level: pipTaps); pipTaps += 1
         }
+    }
+    @ViewBuilder private func loadFailure(_ message: String) -> some View {
+        Text(message).foregroundStyle(Color.diaryError)
+        Button("Retry loading progress") { Task { await reloadProgress() } }.frame(minHeight: 44)
     }
     private func dates(_ progress: CoachProgress) -> String {
         let format = shownRange.days > 30 ? "MMM d, yyyy" : "MMM d"
