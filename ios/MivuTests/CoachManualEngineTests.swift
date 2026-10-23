@@ -359,6 +359,10 @@ private actor RevisionCoachReplies {
         #expect(snapshot.activeDayID == active)
         #expect(historical.completeness == .untracked && historical.closedAt == nil)
         #expect(snapshot.days.first { $0.id == active }?.closedAt == nil)
+        // Counting the day again stores unknown, never complete.
+        let countTurn = try await capturedTurn(store, text: "Count January 13 again", photos: [], at: now, expectedProfileID: profile.id)
+        _ = try await run(store, profile, countTurn, [try call("set_day_coverage", ["local_date": "2027-01-13", "skipped": false])])
+        #expect(try await store.snapshotForExport().days.first { $0.localDate == "2027-01-13" }?.completeness == .unknown)
     }
 }
 

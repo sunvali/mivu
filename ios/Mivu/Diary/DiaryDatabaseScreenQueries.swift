@@ -62,14 +62,6 @@ extension DiaryDatabase {
             return DiaryWeekPage(days: days, earliestLocalDate: try? mutationText(bounds, 0), latestLocalDate: try? mutationText(bounds, 1))
         }
     }
-    func historyCoverage(expectedProfileID: UUID) throws -> [DayCompleteness: Int] {
-        try domainRead(expectedProfileID: expectedProfileID) { _ in
-            let query = try domainStatement("SELECT json_extract(CAST(payload AS TEXT), '$.completeness'), COUNT(*) FROM day GROUP BY 1")
-            defer { sqlite3_finalize(query) }; var result: [DayCompleteness: Int] = [:]
-            while try mutationStep(query) { if let status = DayCompleteness(rawValue: try mutationText(query, 0)) { result[status] = Int(sqlite3_column_int64(query, 1)) } }
-            return result
-        }
-    }
     func screenRecords<Value: Decodable & Identifiable & Sendable>(_ type: Value.Type, table: String, before: Int? = nil, expectedProfileID: UUID) throws -> DiaryRecordPage<Value> where Value.ID == UUID {
         guard ["goal", "weight", "workout"].contains(table) else { throw DiaryError.invalidData }
         return try domainRead(expectedProfileID: expectedProfileID) { _ in

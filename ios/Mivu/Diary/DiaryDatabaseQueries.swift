@@ -449,7 +449,7 @@ extension DiaryDatabase {
                 else if receipt.operationKey.contains("/update_preferences") { summaries.append("Saved your diary preferences. Timezone: \(head.profile.timeZoneID).") }
                 else if let id = receipt.dayID {
                     let day = try trackingDay(id: id)
-                    summaries.append("\(day.localDate): \(day.completeness.rawValue).")
+                    summaries.append("\(day.localDate): \(day.completeness == .untracked ? "skipped" : "counted").")
                 }
             }
             return summaries.joined(separator: "\n")
