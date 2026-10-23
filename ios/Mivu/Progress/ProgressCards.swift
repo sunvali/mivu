@@ -58,21 +58,18 @@ struct ProgressSnapshot {
     var averageKcal: Double? { averages.kcal }
     var target: Double? { goal?.targets.kcal }
 
-    var evidence: String {
-        let near = bands.filter { $0 == .near }.count, logged = bands.count
-        let calories = target.map { logged == 0 ? nil : "\(near) of \(logged) logged days near your \(kcal($0)) target" } ?? nil
+    /// The hero's one line under the verdict, as short as Today's "Complete day".
+    var shortEvidence: String {
         switch headline {
         case .onTrack, .holdingSteady, .drifting, .atGoal:
-            // Quote the same window the verdict used (the whole load, at least 30 days), so the two never disagree.
             let points = loadedTrend
             let span = points.count >= 2 ? ProgressInsights.days(from: points[0].localDate, to: points[points.count - 1].localDate) : 0
             let change = (ProgressInsights.slopePerDay(points) ?? 0) * Double(span)
-            let weight = "Trend \(change <= 0 ? "down" : "up") \(abs(change).formatted(.number.precision(.fractionLength(1)))) kg over \(loadedDays.count) days"
-            return [weight, calories].compactMap { $0 }.joined(separator: " · ") + "."
+            return "\(change <= 0 ? "Down" : "Up") \(abs(change).formatted(.number.precision(.fractionLength(1)))) kg in \(loadedDays.count) days"
         case let .caloriesOnTrack(near, logged), let .caloriesOff(near, logged):
-            return "\(near) of \(logged) logged days landed near your \(target.map(kcal) ?? "calorie") target."
+            return "\(near) of \(logged) days near your target"
         case .notEnoughData:
-            return loggedDays > 0 ? "Set a calorie goal in Goals to see how close each day lands." : "Log a meal or weigh in, and Pip will show how it's going."
+            return loggedDays > 0 ? "Set a calorie goal to see how close you land" : "Log a meal or weigh in to begin"
         }
     }
 }
@@ -173,167 +170,143 @@ struct ProgressCardTitle: View {
 
 // MARK: Cards
 
+/// Today's hero, for a range: Pip beside one plain verdict, then the bars.
 struct ProgressHeadlineCard: View {
     let snapshot: ProgressSnapshot
     let dates: String
     let companion: CompanionView
     let openDiary: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(dates).font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
-                    Text(snapshot.headline.title).font(.title.weight(.bold)).foregroundStyle(Color.diaryAccent)
-                    Text(snapshot.evidence).font(.subheadline).foregroundStyle(Color.diaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
+        VStack(alignment: .leading, spacing: 16) {
+            Text(dates).font(.subheadline).foregroundStyle(Color.diarySecondary)
+            if typeSize.isAccessibilitySize {
                 companion
+                verdict
+            } else {
+                HStack(alignment: .center, spacing: 8) { companion; verdict.frame(maxWidth: .infinity, alignment: .leading) }
             }
-            .accessibilityElement(children: .combine)
             if snapshot.loggedDays == 0 {
                 Button(action: openDiary) { Label("Open Diary", systemImage: "calendar").frame(minHeight: 44) }
                     .accessibilityIdentifier("openDiaryForCoverage")
             } else {
-                ProgressBucketChart(buckets: snapshot.buckets, range: snapshot.range, zone: snapshot.zone)
+                ProgressBucketChart(buckets: snapshot.buckets, range: snapshot.range, zone: snapshot.zone, height: 96)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Calories by \(snapshot.range == .week || snapshot.range == .month ? "day" : snapshot.range == .quarter ? "week" : "month")")
                     .accessibilityValue(ProgressSummary.buckets(snapshot.buckets, zone: snapshot.zone))
+                    .accessibilityIdentifier("nutritionChartSummary")
             }
-            // One sentence instead of a five-color key.
-            Text("Teal bars landed near your target; orange gets deeper the further off. Empty days are never counted as zero.")
-                .font(.caption).foregroundStyle(Color.diarySecondary).fixedSize(horizontal: false, vertical: true)
+            Text("Empty days aren't counted as zero.").font(.caption).foregroundStyle(Color.diarySecondary)
                 .accessibilityIdentifier("missingDayCopy")
-            if let win = snapshot.wins.first {
-                Label { Text(win.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText) } icon: {
-                    Image(systemName: win.symbol).foregroundStyle(win.color)
-                }
-                .accessibilityIdentifier("progressWin")
-            }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.diarySummarySurface, in: RoundedRectangle(cornerRadius: 24))
+        .diaryProgressCard()
+    }
+
+    private var verdict: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(snapshot.headline.title).font(.system(.title, weight: .bold)).foregroundStyle(Color.diaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(snapshot.shortEvidence).font(.subheadline).foregroundStyle(Color.diaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
+/// Today's average-day hero: one big number, then protein / carbs / fat and the goal line.
 struct ProgressMacrosCard: View {
     let snapshot: ProgressSnapshot
-    @Environment(\.dynamicTypeSize) private var typeSize
-    private struct Slice: Identifiable { let name: String; let grams: Double; let kcal: Double; let goal: Double?; let color: Color; var id: String { name } }
-    private var slices: [Slice] {
-        let goal = snapshot.goal?.targets, average = snapshot.averages
-        return [Slice(name: "Protein", grams: average.protein ?? 0, kcal: (average.protein ?? 0) * 4, goal: goal?.protein, color: .diaryProtein),
-                Slice(name: "Carbs", grams: average.carbs ?? 0, kcal: (average.carbs ?? 0) * 4, goal: goal?.carbs, color: .diaryCarbs),
-                Slice(name: "Fat", grams: average.fat ?? 0, kcal: (average.fat ?? 0) * 9, goal: goal?.fat, color: .diaryFat)]
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ProgressCardTitle(title: "Average day", detail: "\(snapshot.judgedDays) complete days")
-            if slices.allSatisfy({ $0.kcal == 0 }) {
-                ProgressPlaceholder(symbol: "chart.pie", text: "Log a full day to see your average macros.")
-            } else {
-                if typeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 16) { donut.frame(width: 160, height: 160); legend }
-                } else {
-                    HStack(spacing: 18) { donut.frame(width: 132, height: 132); legend }
+        VStack(alignment: .leading, spacing: 16) {
+            if let average = snapshot.averageKcal {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(average.formatted(.number.precision(.fractionLength(0))))
+                        .font(.system(size: 44, weight: .bold)).tracking(-1.5).monospacedDigit().foregroundStyle(Color.diaryText)
+                    Text("kcal on an average day").font(.subheadline).foregroundStyle(Color.diaryText)
                 }
+                HStack(spacing: 8) {
+                    metric("Protein", snapshot.averages.protein, .diaryProtein)
+                    Divider().frame(height: 32)
+                    metric("Carbs", snapshot.averages.carbs, .diaryCarbs)
+                    Divider().frame(height: 32)
+                    metric("Fat", snapshot.averages.fat, .diaryFat)
+                }
+            } else {
+                ProgressPlaceholder(symbol: "fork.knife", text: "Log a full day to see your average day.")
+            }
+            if let target = snapshot.target, target > 0 {
+                ProgressGoalLine(left: "\(kcal(target)) goal", right: snapshot.averageKcal.map { ProgressInsights.plainGap($0, goal: target) } ?? "no full days yet",
+                                 value: (snapshot.averageKcal ?? 0) / target)
+            } else {
+                Text("No energy target set").font(.subheadline).foregroundStyle(Color.diarySecondary)
             }
         }
         .diaryProgressCard()
     }
 
-    private var donut: some View {
-        Chart(slices) { slice in
-            SectorMark(angle: .value("kcal", slice.kcal), innerRadius: .ratio(0.62), angularInset: 1.5)
-                .foregroundStyle(slice.color).cornerRadius(4)
-        }
-        .chartBackground { _ in
-            VStack(spacing: 0) {
-                Text(snapshot.averageKcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—").font(.title2.weight(.bold)).monospacedDigit()
-                Text("kcal avg").font(.caption).foregroundStyle(Color.diarySecondary)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Average macros")
-        .accessibilityValue(slices.map { "\($0.name) \(Int($0.grams.rounded())) grams" }.joined(separator: ", "))
-    }
-
-    private var legend: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(slices) { slice in
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(slice.name) \(Int(slice.grams.rounded())) g").font(.subheadline.weight(.semibold)).foregroundStyle(slice.color)
-                    if let goal = slice.goal, goal > 0 {
-                        Text("of \(Int(goal.rounded())) g goal").font(.caption).foregroundStyle(Color.diarySecondary)
-                        ProgressView(value: min(slice.grams, goal), total: goal).tint(slice.color)
-                    }
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
+    private func metric(_ title: LocalizedStringKey, _ grams: Double?, _ color: Color) -> some View {
+        DiaryMetric(title: title, value: grams.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" }, color: color)
     }
 }
 
+/// The goal line under Today's hero: label left, gap right, one thin bar.
+struct ProgressGoalLine: View {
+    let left: String
+    let right: String
+    let value: Double
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack { Text(left); Spacer(minLength: 12); Text(right).foregroundStyle(Color.diarySecondary) }
+                .font(.subheadline).monospacedDigit()
+            ProgressView(value: max(0, min(value, 1))).tint(Color.diaryAccent)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One big trend number, a line with no axes, and the distance to the goal.
 struct ProgressWeightCard: View {
     let snapshot: ProgressSnapshot
     private var trend: [TrendPoint] { snapshot.trend }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ProgressCardTitle(title: "Weight trend", detail: snapshot.range.title, color: .diaryWeight)
+        VStack(alignment: .leading, spacing: 16) {
             if let last = trend.last {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(last.trend.formatted(.number.precision(.fractionLength(1)))).font(.system(.largeTitle, weight: .semibold)).monospacedDigit().foregroundStyle(Color.diaryWeight)
-                    Text("kg").font(.title3).foregroundStyle(Color.diarySecondary)
-                    Spacer()
-                    if trend.count >= 2, let first = trend.first {
-                        let change = (ProgressInsights.slopePerDay(trend) ?? 0) * Double(ProgressInsights.days(from: first.localDate, to: last.localDate))
-                        Text("\(change <= 0 ? "↓" : "↑") \(abs(change).formatted(.number.precision(.fractionLength(1)))) kg")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryWeight)
-                            .padding(.horizontal, 10).padding(.vertical, 4).background(Color.diaryWeight.opacity(0.12), in: Capsule())
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(last.trend.formatted(.number.precision(.fractionLength(1))))
+                            .font(.system(size: 44, weight: .bold)).tracking(-1.5).monospacedDigit().foregroundStyle(Color.diaryText)
+                        Text("kg trend").font(.subheadline).foregroundStyle(Color.diaryText)
                     }
+                    if trend.count >= 2 { sparkline.frame(maxWidth: .infinity).frame(height: 56) }
                 }
-                .accessibilityElement(children: .combine)
-                chart
+                if let goal = snapshot.goal?.goalWeightKg, let start = snapshot.startKg {
+                    let total = abs(start - goal), left = abs(last.trend - goal)
+                    ProgressGoalLine(left: "\(goal.formatted(.number.precision(.fractionLength(1)))) kg goal",
+                                     right: left < 0.1 ? "At goal" : "\(left.formatted(.number.precision(.fractionLength(1)))) kg to go",
+                                     value: total > 0 ? (total - left) / total : 1)
+                } else {
+                    ProgressPlaceholder(symbol: "flag", text: "Add a goal weight to see how far is left.")
+                }
             }
             if trend.count < 3 {
                 ProgressPlaceholder(symbol: "scalemass", text: "Weigh in on \(3 - trend.count) more \(3 - trend.count == 1 ? "day" : "days") to see your trend.")
-            } else if let goal = snapshot.goal?.goalWeightKg, let start = snapshot.startKg, let last = trend.last {
-                let total = abs(start - goal), done = max(0, total - abs(last.trend - goal))
-                HStack { Text("Start \(start.formatted(.number.precision(.fractionLength(1)))) kg"); Spacer(); Text("Goal \(goal.formatted(.number.precision(.fractionLength(1)))) kg") }
-                    .font(.caption).foregroundStyle(Color.diarySecondary)
-                ProgressView(value: done, total: max(total, 0.1)).tint(Color.diaryWeight)
-                Text("\(abs(last.trend - goal).formatted(.number.precision(.fractionLength(1)))) kg to go · faint dots are weigh-ins, the line smooths out water swings.")
-                    .font(.footnote).foregroundStyle(Color.diarySecondary)
-            } else {
-                ProgressPlaceholder(symbol: "flag", text: "Add a goal weight to see how far is left.")
             }
         }
-        .diaryProgressCard(fill: .diaryChartSurface)
+        .diaryProgressCard()
     }
 
-    private var chart: some View {
-        Chart {
-            ForEach(trend, id: \.localDate) { point in
-                if let date = ProgressDate.date(point.localDate, zone: snapshot.zone) {
-                    PointMark(x: .value("Date", date, unit: .day), y: .value("Weigh-in", point.raw))
-                        .foregroundStyle(Color.diaryWeight.opacity(0.3)).symbolSize(30)
-                    LineMark(x: .value("Date", date, unit: .day), y: .value("Trend", point.trend))
-                        .foregroundStyle(Color.diaryWeight).lineStyle(StrokeStyle(lineWidth: 3.5, lineCap: .round)).interpolationMethod(.monotone)
-                }
-            }
-            if let goal = snapshot.goal?.goalWeightKg {
-                RuleMark(y: .value("Goal", goal)).foregroundStyle(Color.diarySuccess)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                    .annotation(position: .top, alignment: .trailing) { Text("Goal").font(.caption2).foregroundStyle(Color.diarySuccess) }
+    private var sparkline: some View {
+        Chart(trend, id: \.localDate) { point in
+            if let date = ProgressDate.date(point.localDate, zone: snapshot.zone) {
+                LineMark(x: .value("Date", date, unit: .day), y: .value("Trend", point.trend))
+                    .foregroundStyle(Color.diaryWeight).lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round)).interpolationMethod(.monotone)
             }
         }
+        .chartXAxis(.hidden).chartYAxis(.hidden)
         .chartYScale(domain: .automatic(includesZero: false))
-        .environment(\.timeZone, TimeZone(identifier: snapshot.zone) ?? .gmt)
-        .frame(height: 160)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Weight trend")
         .accessibilityValue(ProgressSummary.weights(trend))

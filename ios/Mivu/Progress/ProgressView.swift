@@ -11,6 +11,7 @@ struct DiaryProgressView: View {
     @State private var editingWeight: WeightEntry?
     @State private var selectedWeightDate: Date?
     @State private var companionRuntime = CompanionRuntime()
+    @State private var companionVisible = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -106,9 +107,12 @@ struct DiaryProgressView: View {
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("progressRange")
                     ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
+                    sectionTitle("Weight")
                     NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
                         .buttonStyle(.plain).accessibilityIdentifier("openWeight")
+                    sectionTitle("Average day")
                     detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
+                    sectionTitle("More")
                     more(snapshot, progress)
                 } else if model.selection != nil {
                     if let loadError {
@@ -129,18 +133,27 @@ struct DiaryProgressView: View {
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(item: $editingWeight) { WeightCorrectionView(model: model, entry: $0, localDate: weightDate($0)) }
         .task(id: reportRequest) { await reloadProgress() }
-        .task(id: snapshot?.headline.celebrates) {
-            guard let snapshot else { return }
+        // Keyed on visibility too: leaving the tab stops Pip, and coming back must start the rig again.
+        .task(id: [snapshot?.headline.celebrates, companionVisible, colorScheme == .dark, reduceMotion]) {
+            guard companionVisible, let snapshot else { return }
             await companionRuntime.select(CharacterCatalog.bundled.resolve("pip"))
             await companionRuntime.attach(eligible: true)
             await companionRuntime.apply(companionOutput(snapshot.headline), darkMode: colorScheme == .dark)
         }
-        .onDisappear { companionRuntime.stop() }
+        .onAppear { companionVisible = true }
+        .onDisappear { companionVisible = false; companionRuntime.stop() }
         .onChange(of: model.selection) { _, _ in
             selectedWeightDate = nil
             weightBefore = nil; workoutBefore = nil; editingWeight = nil
             showGoals = false; showWeight = false; showWorkout = false
         }
+    }
+
+    /// Today's "Meals" heading style.
+    private func sectionTitle(_ title: LocalizedStringKey) -> some View {
+        Text(title).font(.title3.weight(.bold)).foregroundStyle(Color.diaryText)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12)
+            .accessibilityAddTraits(.isHeader)
     }
 
     /// Everything else, one line each, a tap deeper.
@@ -165,7 +178,7 @@ struct DiaryProgressView: View {
             moreLink("openWorkouts", "Workouts", "figure.run", value: "\(progress.workoutTotal ?? 0) recorded") { workoutList }
             Divider()
             Button { showGoals = true } label: { moreRow("Goals", "target", value: "Manage") }
-                .buttonStyle(.plain).accessibilityIdentifier("editGoals")
+                .buttonStyle(.plain).accessibilityIdentifier("progressGoals")  // Settings owns "editGoals"; this stack keeps every row on screen
         }
         .padding(.horizontal, 16).padding(.vertical, 4)
         .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
@@ -202,7 +215,7 @@ struct DiaryProgressView: View {
         CompanionOutput(pose: headline.celebrates ? .presentingCheer : .presentingCalm, playback: reduceMotion ? .staticPose : .animated, reactionID: nil, nextDeadline: nil)
     }
     private func companion(_ headline: ProgressHeadline) -> CompanionView {
-        CompanionView(presentation: companionOutput(headline), darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize ? 64 : 104, runtime: companionRuntime)
+        CompanionView(presentation: companionOutput(headline), darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize ? 120 : 150, runtime: companionRuntime)
     }
     private func dates(_ progress: CoachProgress) -> String {
         let format = range.days > 30 ? "MMM d, yyyy" : "MMM d"

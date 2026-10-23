@@ -211,7 +211,7 @@ import Testing
                                      omittedWeightCount: 0, omittedWorkoutCount: 0, truncated: false, dailyReports: days, displayWeights: weights)
         let snapshot = ProgressSnapshot(progress: progress, range: .week, zone: "UTC", today: label(29))
         #expect(snapshot.headline == .onTrack)
-        #expect(snapshot.evidence.hasPrefix("Trend down") && snapshot.evidence.contains("over 30 days"), "\(snapshot.evidence)")
+        #expect(snapshot.shortEvidence.hasPrefix("Down") && snapshot.shortEvidence.hasSuffix("kg in 30 days"), "\(snapshot.shortEvidence)")
     }
 
     // MARK: Plain language
@@ -222,6 +222,21 @@ import Testing
         #expect(ProgressInsights.plainResult(day("2026-10-20", kcal: 1550)) == "1,550 kcal · 550 under")
         #expect(ProgressInsights.plainResult(day("2026-10-20", kcal: nil)) == "No log")
         #expect(ProgressInsights.plainResult(day("2026-10-20", kcal: 1800, target: nil)) == "1,800 kcal")
+    }
+
+    @Test func goalGapReadsInPlainWords() {
+        #expect(ProgressInsights.plainGap(2296, goal: 2100) == "on target")
+        #expect(ProgressInsights.plainGap(2500, goal: 2100) == "400 over")
+        #expect(ProgressInsights.plainGap(1700, goal: 2100) == "400 under")
+    }
+
+    @Test func shortEvidenceIsOneShortLine() {
+        let days = [day("2026-10-21", kcal: 2100), day("2026-10-22", kcal: 2150), day("2026-10-23", kcal: 3000)]
+        let weekly = WeightProgress(endLocalDate: "2026-10-23", currentSevenDayAverageKg: nil, currentSevenDayObservedCount: 0,
+                                    changeFromSevenDaysAgoKg: nil, changeFromThirtyDaysAgoKg: nil, plateau: .insufficientData)
+        let progress = CoachProgress(startLocalDate: "2026-10-21", endLocalDate: "2026-10-23", daily: days[2], period: nil, weight: weekly, weights: [], workouts: [],
+                                     omittedWeightCount: 0, omittedWorkoutCount: 0, truncated: false, dailyReports: days, displayWeights: [])
+        #expect(ProgressSnapshot(progress: progress, range: .week, zone: "UTC", today: "2026-10-23").shortEvidence == "2 of 3 days near your target")
     }
 
     @Test func macroLinesReadInPlainWords() {

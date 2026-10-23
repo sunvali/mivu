@@ -153,6 +153,22 @@ struct NutritionSummary: View {
     }
 }
 
+/// A small dot-labelled value, as in Today's protein / carbs / fat row.
+struct DiaryMetric: View {
+    let title: LocalizedStringKey
+    let value: String?
+    let color: Color
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 3) {
+                Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
+                Text(title).font(.caption).fixedSize(horizontal: true, vertical: false)
+            }
+            Text(value ?? "—").font(.system(size: 17, weight: .medium)).monospacedDigit()
+        }.foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct DiarySectionLabel: View {
     let title: LocalizedStringKey
     let symbol: String

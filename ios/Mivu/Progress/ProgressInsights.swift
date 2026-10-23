@@ -218,6 +218,12 @@ enum ProgressInsights {
         return energy + " · \(whole(abs(kcal - target))) \(kcal > target ? "over" : "under")"
     }
 
+    /// "400 over", or "on target" within 10%.
+    static func plainGap(_ value: Double, goal: Double) -> String {
+        if abs(value - goal) <= goal * 0.1 { return "on target" }
+        return "\(whole(abs(value - goal))) \(value > goal ? "over" : "under")"
+    }
+
     static func plainMacro(_ grams: Double?, goal: Double?) -> String {
         guard let grams else { return "No complete days" }
         let amount = "\(whole(grams)) g a day"

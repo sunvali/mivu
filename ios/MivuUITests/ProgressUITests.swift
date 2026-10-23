@@ -17,7 +17,7 @@ import XCTest
         app.buttons["doneSettings"].tap()
 
         app.tabBars.buttons["Progress"].tap()
-        let target = text(containing: "target 2,000 kcal", in: app)
+        let target = text(containing: "2,000 kcal goal", in: app)
         reveal(target, in: app)
         XCTAssertTrue(target.exists)
         app.tabBars.buttons["Today"].tap()
@@ -125,9 +125,9 @@ import XCTest
         let missing = app.staticTexts["missingDayCopy"]
         reveal(missing, in: app)
         XCTAssertTrue(missing.exists)
-        let empty = text(containing: "Log a meal to see your calories", in: app)
+        let empty = app.buttons["openDiaryForCoverage"]
         reveal(empty, in: app)
-        XCTAssertTrue(empty.exists)
+        XCTAssertTrue(empty.exists, "With nothing logged the hero offers the Diary instead of an empty chart")
         attachScreenshot("English dark accessibility5 Progress", from: app)
         open("openWeight", in: app)
         reveal(app.staticTexts["weightChartSummary"], in: app)
@@ -334,7 +334,8 @@ import XCTest
     }
 
     private func text(containing value: String, in app: XCUIApplication) -> XCUIElement {
-        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", value)).firstMatch
+        // Text inside a card link is part of the link's label, so match any element, not only static text.
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", value)).firstMatch
     }
 
     /// The calories chart's spoken summary, e.g. "Oct 23: 95 kcal".
@@ -367,7 +368,7 @@ import XCTest
         let workoutForm = app.collectionViews["workoutForm"]
         let progress = app.scrollViews["progressList"]
         let scroller = workoutForm.exists && workoutForm.isHittable ? workoutForm
-            : (progress.exists && progress.isHittable ? progress
+            : (progress.exists && progress.isHittable && !app.navigationBars["Settings"].exists ? progress  // a sheet over Progress scrolls itself
                : app.collectionViews.allElementsBoundByIndex.first(where: \.isHittable) ?? app.collectionViews.firstMatch)
         for _ in 0..<8 {
             if readyToUse(element, in: app, scroller: scroller) { break }

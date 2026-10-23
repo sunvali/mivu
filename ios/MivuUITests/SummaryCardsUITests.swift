@@ -70,7 +70,9 @@ import XCTest
     }
 
     private func list(in app: XCUIApplication) -> XCUIElement {
-        app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.tables.firstMatch
+        // Progress is a plain scroll view; the other tabs are lists.
+        app.scrollViews["progressList"].exists ? app.scrollViews["progressList"]
+            : app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.tables.firstMatch
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
