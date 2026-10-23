@@ -172,6 +172,10 @@ enum DiaryCaptureResult: Equatable, Sendable {
                 _ = try await store.importProfile(DiaryHistoryUITestFixture.snapshot())
                 profiles = try await store.profiles()
             }
+            if ProgressUITestFixture.isEnabled, profiles.isEmpty {
+                _ = try await store.importProfile(ProgressUITestFixture.snapshot())
+                profiles = try await store.profiles()
+            }
             if DiaryLaunch.isCoachHistoryFixture, profiles.isEmpty {
                 _ = try await store.importProfile(CoachUITestInference.historySnapshot())
                 profiles = try await store.profiles()

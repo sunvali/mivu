@@ -293,6 +293,25 @@ import XCTest
         XCTAssertTrue(bar.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists)
     }
 
+    func testChartCardsRenderForEveryRange() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--diary-progress-fixture"]
+        app.launch()
+        let tab = app.tabBars.buttons["Progress"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+        XCTAssertTrue(app.otherElements["progressHeadline"].waitForExistence(timeout: 10) || app.staticTexts["missingDayCopy"].waitForExistence(timeout: 5))
+        let picker = app.segmentedControls["progressRange"]
+        for range in ["Week", "Month", "3M", "Year"] {
+            picker.buttons[range].tap()
+            XCTAssertTrue(picker.buttons[range].isSelected)
+            for part in ["top", "middle", "lower", "bottom"] {
+                attachScreenshot("Progress \(range) \(part)", from: app)
+                app.swipeUp()
+            }
+            for _ in 0..<6 { app.swipeDown() }
+        }
+    }
+
     private func launchDiary(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         // Day start at midnight keeps meals, weights and the Day report on one date between 00:00 and 04:00.

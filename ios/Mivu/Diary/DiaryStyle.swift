@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DiarySummaryCardStyle: ViewModifier {
+    var fill: Color = .diarySurface
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -10,7 +11,7 @@ struct DiarySummaryCardStyle: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.diarySurface)
+                    .fill(fill)
                     .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.06), radius: 10, x: 0, y: 4)
             }
             .overlay {

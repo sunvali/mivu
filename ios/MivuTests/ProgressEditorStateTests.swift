@@ -15,11 +15,14 @@ import Testing
         _ = try await store.importProfile(snapshot)
         let model = DiaryViewModel(store: store)
         await model.load(createDefaultProfile: false)
-        let domain = DiaryProgressView(model: model, openDiary: {}).nutritionDomain
+        let report = try await DiaryProgressView.loadProgress(model: model, endingOn: endingOn, days: ProgressRange.week.days)
+        let buckets = ProgressInsights.buckets(report.dailyReports ?? [], range: .week, zone: zone)
         let spring = endingOn == "2026-03-08"
         let formatter = ISO8601DateFormatter()
-        #expect(domain.lowerBound == formatter.date(from: spring ? "2026-03-02T08:00:00Z" : "2026-10-26T07:00:00Z"))
-        #expect(domain.upperBound == formatter.date(from: spring ? "2026-03-09T07:00:00Z" : "2026-11-02T08:00:00Z"))
+        // Seven whole local days, each bar starting at its own local midnight across the clock change.
+        #expect(buckets.count == 7)
+        #expect(buckets.first?.start == formatter.date(from: spring ? "2026-03-02T08:00:00Z" : "2026-10-26T07:00:00Z"))
+        #expect(buckets.last?.start == formatter.date(from: spring ? "2026-03-08T08:00:00Z" : "2026-11-01T07:00:00Z"))
     }
 
     @Test(arguments: [false, true], [false, true])
