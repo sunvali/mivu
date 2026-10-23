@@ -1,22 +1,28 @@
+import os
 import SwiftUI
 
 enum ProgressDate {
     static func label(_ date: Date, zone: String) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: zone) ?? .gmt
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        formatter("yyyy-MM-dd", zone: zone).string(from: date)
     }
 
     static func date(_ label: String, zone: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: zone) ?? .gmt
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        return formatter.date(from: label + " 12:00")
+        formatter("yyyy-MM-dd HH:mm", zone: zone).date(from: label + " 12:00")
+    }
+
+    /// Building a DateFormatter is costly and a Year view converts hundreds of dates per draw; configured formatters are thread-safe to share.
+    private static let formatters = OSAllocatedUnfairLock<[String: DateFormatter]>(uncheckedState: [:])
+    private static func formatter(_ format: String, zone: String) -> DateFormatter {
+        formatters.withLockUnchecked { cache in
+            if let cached = cache[format + "|" + zone] { return cached }
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: zone) ?? .gmt
+            formatter.dateFormat = format
+            cache[format + "|" + zone] = formatter
+            return formatter
+        }
     }
 
     static func number(_ text: String) -> Double? {

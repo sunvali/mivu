@@ -43,10 +43,19 @@ One fresh whole-branch review was done, with Ponytail review values. There were 
 - **Earlier stopped at the first empty window.** It now pages until `hasDays(before:)` finds no older day. Test: `historyBeforeLooksPastEmptyWeeks`.
 - **The protein streak broke on today's unfinished day.** Test: `proteinStreakIgnoresTodayWhileItIsUnfinished`.
 
+## Performance (later fix)
+
+Measured with temporary XCTest metrics (not committed) on the same simulator, Debug build, 90-day synthetic fixture.
+- **Cause:** every `ProgressDate` conversion built a new `DateFormatter`, and the view rebuilt `ProgressSnapshot` on every draw, including each Pip tap.
+- **Fix:** formatters are cached per format and time zone; the snapshot is built once per load.
+- **Snapshot build, median of 7:** Week 12.6 → 3.5 ms, Month 16.0 → 4.7 ms, 3M 49.1 → 13.7 ms, Year 87.3 → 25.1 ms. Store loads unchanged (21–49 ms).
+- **Progress session** (Today → Progress → Month, 3M, Year, Week; 5 rounds): CPU time 4.8 → 2.7 s per round, instructions −58%, physical memory 68 → 65 MB and flat across rounds.
+- **Launch to first responsive frame:** 2.5 s, unchanged.
+- **Tests after the fix:** `ProgressInsightsTests`, `ProgressEditorStateTests` and `ProgressUITests`: 50/51 passed. `testFilledGoalLabelsAndClearingLastTargetSurviveRelaunch` timed out waiting for the keyboard to hide, as before. It passed on an isolated rerun (1/1).
+
 ## Not covered
 
 These minor findings were deferred and not fixed:
-- The snapshot is recomputed on every view update.
 - 3M and Year make 14 and 13 partial buckets, where the spec says 13 and 12.
 - Top foods:
   - Meals still being re-analyzed count at their old values.

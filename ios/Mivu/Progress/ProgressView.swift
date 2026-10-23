@@ -46,6 +46,7 @@ struct DiaryProgressView: View {
     @State private var progress: CoachProgress?
     @State private var foods: [TopFood] = []
     @State private var loadedReport: ReportRequest?
+    @State private var loadedSnapshot: ProgressSnapshot?
     @State private var reportRequestID = UUID()
     @State private var loadError: String?
     @State private var weightPage: DiaryRecordPage<WeightEntry>?
@@ -88,7 +89,8 @@ struct DiaryProgressView: View {
         model.activeDay?.localDate ?? ProgressDate.label(Date(), zone: zone)
     }
     private var weightReport: WeightProgress? { visibleProgress?.weight }
-    private var snapshot: ProgressSnapshot? { visibleProgress.map { ProgressSnapshot(progress: $0, range: shownRange, zone: zone, today: today) } }
+    /// Built once per load, not per draw: Pip's taps and reactions redraw this view often.
+    private var snapshot: ProgressSnapshot? { visibleProgress == nil ? nil : loadedSnapshot }
     var weights: [WeightObservation] {
         Self.weightObservations(progress: visibleProgress, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
@@ -434,6 +436,7 @@ struct DiaryProgressView: View {
             let value = try await Self.loadProgress(model: model, endingOn: key.date, days: ProgressSnapshot.loadDays(key.range))
             let top = try await model.store.topFoods(from: ProgressSnapshot.rangeStart(value, key.range), through: value.endLocalDate, limit: 4, expectedProfileID: ownership.identity.profileID)
             guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
+            loadedSnapshot = ProgressSnapshot(progress: value, range: key.range, zone: zone, today: key.date)
             progress = value; foods = top; loadedReport = key
         } catch {
             guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
