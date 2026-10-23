@@ -61,11 +61,17 @@ professional before making medical or dietary decisions.
 
 First release.
 
-## Screenshot captions (6.9-inch iPhone, in order)
+## Screenshots (6.9-inch iPhone, 1320 × 2868, in order)
 
-1. Log a meal in your own words
-2. Snap your plate, review the estimate
-3. Your day at a glance
-4. See your progress
-5. Pip sets targets that fit you
-6. Your diary stays on your iPhone
+Captured on an iPhone 17 Pro Max simulator (iOS 27.0, status bar 9:41) with a
+real ChatGPT connection: the meals, targets and weights were entered through
+Coach and Pip setup, not test fixtures. Framed with brand teal and a caption.
+
+1. `screenshots/01-coach.png` — Log a meal in your own words
+2. `screenshots/02-today.png` — Your day at a glance
+3. `screenshots/03-progress.png` — See how close you land
+4. `screenshots/04-targets.png` — Targets that fit you
+5. `screenshots/05-diary.png` — Your diary stays on your iPhone
+
+Apple accepts up to 10. A photo-capture shot is not included: it needs a real
+meal photo the owner has rights to.
