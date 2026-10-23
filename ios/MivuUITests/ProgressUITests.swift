@@ -312,6 +312,25 @@ import XCTest
         }
     }
 
+    func testEachCardOpensItsDetail() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--diary-progress-fixture"]
+        app.launch()
+        let tab = app.tabBars.buttons["Progress"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+        app.segmentedControls["progressRange"].buttons["Month"].tap()
+        for (id, title) in [("progressMacros", "Macros"), ("progressCalendar", "Calendar"), ("progressCalories", "Calories"),
+                            ("progressBurn", "Estimated burn"), ("progressTopFoods", "Top foods")] {
+            let card = app.buttons[id]
+            reveal(card, in: app)
+            card.tap()
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "\(id) should open \(title)")
+            attachScreenshot("Detail \(title)", from: app)
+            app.navigationBars[title].buttons.firstMatch.tap()
+            XCTAssertTrue(app.segmentedControls["progressRange"].waitForExistence(timeout: 5) || app.buttons[id].waitForExistence(timeout: 5))
+        }
+    }
+
     private func launchDiary(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         // Day start at midnight keeps meals, weights and the Day report on one date between 00:00 and 04:00.

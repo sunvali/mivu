@@ -247,7 +247,6 @@ struct ProgressMacrosCard: View {
             }
         }
         .diaryProgressCard()
-        .accessibilityIdentifier("progressMacros")
     }
 
     private var donut: some View {
@@ -364,7 +363,6 @@ struct ProgressCalendarCard: View {
             grid.accessibilityHidden(true)
         }
         .diaryProgressCard()
-        .accessibilityIdentifier("progressCalendar")
     }
 
     /// Monday-first weeks: rows for Week and Month, columns for 3M and Year.
@@ -405,10 +403,18 @@ struct ProgressCalendarCard: View {
             shape.fill(band?.color ?? (day.foodTotals?.kcal == nil ? Color.diaryRule.opacity(0.35) : Color.diarySecondary.opacity(0.5)))
                 .overlay { if band == nil && day.foodTotals?.kcal == nil { shape.strokeBorder(Color.diaryRule, style: StrokeStyle(lineWidth: 1, dash: [3, 2])) } }
                 .overlay { if !small { Text(String(Int(day.localDate.suffix(2)) ?? 0)).font(.caption.weight(.medium)).lineLimit(1).fixedSize().foregroundStyle(band == nil ? Color.diarySecondary : .white) } }
-                .frame(maxWidth: .infinity).frame(height: small ? nil : 34).aspectRatio(small ? 1 : nil, contentMode: .fit)
+                .modifier(CalendarCellSize(small: small))
         } else {
-            Color.clear.frame(maxWidth: .infinity).frame(height: small ? nil : 34).aspectRatio(small ? 1 : nil, contentMode: .fit)
+            Color.clear.modifier(CalendarCellSize(small: small))
         }
+    }
+}
+
+/// Square dots for the 3M/Year grid; full-width 34pt tiles for Week and Month.
+private struct CalendarCellSize: ViewModifier {
+    let small: Bool
+    func body(content: Content) -> some View {
+        if small { content.aspectRatio(1, contentMode: .fit) } else { content.frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34) }
     }
 }
 
@@ -430,7 +436,6 @@ struct ProgressCaloriesCard: View {
             }
         }
         .diaryProgressCard()
-        .accessibilityIdentifier("progressCalories")
     }
 }
 
@@ -467,7 +472,6 @@ struct ProgressBurnCard: View {
         }
         .diaryProgressCard(fill: .diaryTintBurn)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("progressBurn")
     }
 }
 
@@ -495,7 +499,6 @@ struct ProgressTopFoodsCard: View {
             }
         }
         .diaryProgressCard(fill: .diaryTintFoods)
-        .accessibilityIdentifier("progressTopFoods")
     }
 }
 

@@ -113,13 +113,15 @@ struct DiaryProgressView: View {
                     if !snapshot.wins.isEmpty {
                         ProgressWinsRow(wins: snapshot.wins).listCardRow()
                     }
-                    ProgressMacrosCard(snapshot: snapshot).listCardRow()
+                    detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
                     NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
                         .buttonStyle(.plain).accessibilityIdentifier("openWeight").listCardRow()
-                    ProgressCalendarCard(snapshot: snapshot, openDiary: openDiary).listCardRow()
-                    ProgressCaloriesCard(snapshot: snapshot).listCardRow()
-                    ProgressBurnCard(snapshot: snapshot).listCardRow()
-                    ProgressTopFoodsCard(foods: foods).listCardRow()
+                    detail("progressCalendar", "Calendar", content: { snapshot, _ in ProgressDetails.calendar(snapshot, openDiary: openDiary) }) {
+                        ProgressCalendarCard(snapshot: snapshot, openDiary: openDiary)
+                    }
+                    detail("progressCalories", "Calories", content: { snapshot, _ in ProgressDetails.calories(snapshot) }) { ProgressCaloriesCard(snapshot: snapshot) }
+                    detail("progressBurn", "Estimated burn", content: { snapshot, _ in ProgressDetails.burn(snapshot) }) { ProgressBurnCard(snapshot: snapshot) }
+                    detail("progressTopFoods", "Top foods", foodLimit: 200, content: { _, foods in ProgressDetails.foods(foods) }) { ProgressTopFoodsCard(foods: foods) }
                 }.listRowSeparator(.hidden)
                 Section {
                     NavigationLink { workoutList } label: {
@@ -163,6 +165,15 @@ struct DiaryProgressView: View {
             weightBefore = nil; workoutBefore = nil; editingWeight = nil
             showGoals = false; showWeight = false; showWorkout = false
         }
+    }
+
+    private func detail<Card: View, Content: View>(_ id: String, _ title: String, foodLimit: Int = 0,
+                                                   @ViewBuilder content: @escaping (ProgressSnapshot, [TopFood]) -> Content,
+                                                   @ViewBuilder card: () -> Card) -> some View {
+        NavigationLink {
+            ProgressDetail(title: title, model: model, range: range, today: today, foodLimit: foodLimit, content: content)
+        } label: { card() }
+            .buttonStyle(.plain).accessibilityIdentifier(id).listCardRow()
     }
 
     /// Pip cheers a good period and greets an off one; never a sad pose.
