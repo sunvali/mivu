@@ -199,10 +199,11 @@ Settled as my calls (marked so the owner can check them):
 - **Target changes inside a range:** each day is banded against that day's own goal
   (`goal(on:)`). The chart's target line is stepped (`RuleMark` segments per goal span). Copy quotes
   the current goal.
-- **Data source:** one shared, bounded range-summary query returns per-day rows for the range (kcal,
-  macros, completeness, pending, goal, weigh-in, workout count) using grouped SQL, not one statement
-  per day. A 365-row result is fine to scan. All cards (headline, bars, calendar, burn, wins) derive
-  from this one result, and `progressRange` stays for the Coach.
+- **Data source:** the display path of `progressRange` (`progressForDisplay`) accepts 91 and 365 days
+  as well as 1/7/30, reusing its existing per-day logic, with a performance test (365 seeded days
+  under 1 s on the simulator). It is rewritten as grouped SQL only if that test fails. All cards
+  (headline, bars, calendar, burn, wins) derive from this one result, and the Coach's own day limits
+  are unchanged.
 - **Top foods:** grouped by case- and whitespace-normalized item name, summing kcal over saved meals
   in the range. Items with unknown kcal and pending meals are excluded, and the footnote says so.
 - **Detail history:** paged by range windows (scroll back loads the previous window) until the first
