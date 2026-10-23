@@ -439,13 +439,17 @@ extension DiaryDatabase {
                         summaries.append(total.map { "Saved — about **\(number(($0 / 10).rounded() * 10))** kcal." } ?? "Saved.")
                     }
                 } else if let id = receipt.weightID {
-                    if (try? transaction.weight(id: id)) == nil { summaries.append("This weight was deleted.") }
-                    else if let value = facts.weightValue, let unit = facts.weightUnit { summaries.append("Weight saved: **\(number(value)) \(unit)**.") }
-                    else { summaries.append("Weight saved.") }
+                    do {
+                        _ = try transaction.weight(id: id)
+                        if let value = facts.weightValue, let unit = facts.weightUnit { summaries.append("Weight saved: **\(number(value)) \(unit)**.") }
+                        else { summaries.append("Weight saved.") }
+                    } catch DiaryError.notFound { summaries.append("This weight was deleted.") }
                 } else if let id = receipt.workoutID {
-                    if (try? transaction.workout(id: id)) == nil { summaries.append("This workout was deleted.") }
-                    else if let kind = facts.workoutKind, let minutes = facts.workoutMinutes { summaries.append("Workout saved: \(kind), \(minutes) minutes.") }
-                    else { summaries.append("Workout saved.") }
+                    do {
+                        _ = try transaction.workout(id: id)
+                        if let kind = facts.workoutKind, let minutes = facts.workoutMinutes { summaries.append("Workout saved: \(kind), \(minutes) minutes.") }
+                        else { summaries.append("Workout saved.") }
+                    } catch DiaryError.notFound { summaries.append("This workout was deleted.") }
                 } else if let id = receipt.goalID {
                     guard try transaction.records("goal", clause: "id = ?", values: [.text(id.uuidString)], limit: 1).first != nil else { throw DiaryError.notFound }
                     summaries.append("Your goals are updated.")

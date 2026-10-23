@@ -463,7 +463,7 @@ private actor CoachInputFixture {
         let question = try await capturedTurn(store, text: "How many calories did I eat today?", photos: [], at: now, expectedProfileID: profile.id)
         let replies = CoachFixture([result(text: "About 1,800 kcal today. Yesterday was 2,100 kcal.")])
         let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: question.id, expectedProfileID: profile.id)
-        #expect(completed.assistantText == (try await store.coachRecordedSummary(expectedProfileID: profile.id)))
+        #expect(completed.assistantText == "There's no food recorded for 2027-01-15 yet.")
         #expect(completed.receipts.isEmpty)
     }
     @Test func unsolicitedModelTimestampCannotEstablishExactMealTime() async throws {
@@ -536,6 +536,29 @@ private actor CoachInputFixture {
         #expect(legacy.weightValue == nil && legacy.weightUnit == nil && legacy.workoutMinutes == nil)
     }
 
+    @Test func progressQuestionKeepsGroundedProse() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic meal", nutrition: NutritionValues(kcal: 500), provenance: .estimate, reference: "Fixture")], expectedProfileID: profile.id)
+        let query = try await capturedTurn(store, text: "How am I doing?", photos: [], at: now, expectedProfileID: profile.id)
+        let prose = "You're at **500** kcal, so about 1,500 left. A protein-rich dinner fits well."
+        let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: prose)])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: query.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == prose)
+    }
+
+    @Test func multiDishPhotoMealIsOneMessageWithGroundedProse() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let names = ["chicken", "rice", "hummus", "salad", "pita", "tahini", "pickles"]
+        let items = names.map { #"{"name":"Synthetic \#($0)","quantity":1,"unit":"serving","kcal":100,"carbs":10,"protein":5,"fat":4}"# }.joined(separator: ",")
+        let prose = "That's a feast! Dinner is saved at about **700** kcal."
+        let replies = CoachFixture([result([call("log_food", #"{"target_local_date":"2027-01-15","items":["# + items + "]}")]), result(text: prose)])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.receipts.count == 1)
+        #expect(DiaryDatabase.coachCommittedReceipt(completed.receipts[0]).items.count == 7)
+        #expect(completed.assistantText == prose)
+    }
+
     @Test func progressAnswerUsesRequestedActualBudget() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
@@ -543,7 +566,7 @@ private actor CoachInputFixture {
         let query = try await capturedTurn(store, text: "What is my remaining budget?", photos: [], at: now, expectedProfileID: profile.id)
         let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: "9999 remaining")])
         let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: query.id, expectedProfileID: profile.id)
-        #expect(completed.assistantText?.contains("1500") == true)
+        #expect(completed.assistantText == "Today: 500 of 2,000 kcal, about 1,500 left.")
         #expect(completed.assistantText?.contains("9999") == false)
     }
 
@@ -596,8 +619,7 @@ private actor CoachInputFixture {
         _ = try await store.setGoals(revised, expectedRevision: goal.revision, expectedProfileID: profile.id)
         await suspended.finish(result(text: "1500 remaining"))
         let completed = try await task.value
-        #expect(completed.assistantText?.contains("1300 kcal") == true)
-        #expect(completed.assistantText?.contains("1500") == false)
+        #expect(completed.assistantText == "Today: 500 of 1,800 kcal, about 1,300 left.")
     }
     @Test func retrievedHistoricalWorkoutEditsCompleteSetsAndReturnsActualRecord() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
@@ -612,8 +634,7 @@ private actor CoachInputFixture {
         #expect(returned.id == original.id); #expect(returned.revision == 2)
         #expect(returned.durationMinutes == 45); #expect(returned.exercises == original.exercises)
         #expect(returned.performedAt == original.performedAt); #expect(returned.dayID == original.dayID)
-        #expect(completed.assistantText?.contains("9999") == false)
-        #expect(completed.assistantText?.contains("8 reps at 40 kg") == true)
+        #expect(completed.assistantText == "Workout saved: strength, 45 minutes.")
     }
     @Test func failedProgressCommitNeverProducesSavedAssistantText() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
@@ -648,8 +669,7 @@ private actor CoachInputFixture {
         #expect(finished.state == .completed)
         #expect(report.daily.hasPending == otherCapture)
         #expect(report.daily.foodTotals?.kcal == (otherCapture ? nil : 0))
-        #expect(finished.assistantText?.contains(otherCapture ? "calories unknown" : "Recorded food: 0 kcal") == true)
-        #expect(finished.assistantText?.contains(otherCapture ? "pending: true" : "complete; pending: false") == true)
+        #expect(finished.assistantText == "Read complete")
     }
 
     @Test func combinedReadOnlySettingsPreserveWeightAndWorkoutFacts() async throws {
@@ -673,18 +693,15 @@ private actor CoachInputFixture {
             call("get_workout", "{\"workout_id\":\"\(workout.id)\"}", id: "workout"),
             call("get_goals", "{\"local_date\":\"2027-01-15\"}", id: "goals"),
             call("get_preferences", "{}", id: "preferences")
-        ]), result(text: "Read complete")])
+        ]), result(text: "You have 9999 kcal left.")])
         let finished = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
             .run(turnID: question.id, expectedProfileID: profile.id)
         let persisted = try await completeSelectedProfile(DiaryStore(directory: root), profile.id)
         let text = try #require(persisted.coachTurns.first { $0.id == question.id }?.assistantText)
         #expect(finished.state == .completed && finished.receipts.isEmpty)
         #expect(text == finished.assistantText)
-        #expect(text.contains("Calories: 2000 kcal"))
-        #expect(text.contains("Quick vegetarian meals"))
-        #expect(text.contains("Weight average: 70 kg"))
-        #expect(text.contains("recorded cardio, 30 minutes"))
-        #expect(text.contains("Estimated burn: 120 kcal"))
+        // Invented prose falls back to an app-written line from the reads, capped at two sentences.
+        #expect(text == "There's no food recorded for 2027-01-15 yet. Goal: 2,000 kcal a day, 100 g protein.")
         #expect(persisted.profile == before.profile)
         #expect(persisted.days == before.days && persisted.meals == before.meals)
         #expect(persisted.goals == before.goals && persisted.weights == before.weights)

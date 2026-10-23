@@ -39,7 +39,7 @@ enum CoachUITestInference {
         }
         if !hasOutput, let result = try clarification(input, context: context) { return result }
         if hasOutput || (text.contains("synthetic partial") && context.replyTo != nil) {
-            return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: [], outputItems: [])
+            return CoachInferenceResult(model: "native-test-fixture", text: "All set.", calls: [], outputItems: [])
         }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: context.captureTimeZoneID) ?? .gmt
@@ -116,7 +116,7 @@ enum CoachUITestInference {
             let id = UUID().uuidString
             let calls = try name.map { [CoachToolCall(id: id, callID: id, name: $0, namespace: "mivu",
                 arguments: String(decoding: try JSONSerialization.data(withJSONObject: args, options: .sortedKeys), as: UTF8.self))] } ?? []
-            return CoachInferenceResult(model: "native-test-fixture", text: "Fixture finished.", calls: calls, outputItems: [])
+            return CoachInferenceResult(model: "native-test-fixture", text: "All set.", calls: calls, outputItems: [])
         }
         // A prior committed increment is a result, never a new serving calculation.
         if !(context.committedReceipts ?? []).isEmpty || (context.omittedReceiptCount ?? 0) > 0 { return try reply() }

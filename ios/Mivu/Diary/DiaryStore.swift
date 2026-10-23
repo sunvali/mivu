@@ -278,22 +278,6 @@ actor DiaryStore {
     func completeCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = nil, incomplete: Bool? = nil, expectedProfileID: UUID) throws {
         _ = try pagedMutation(expectedProfileID) { try $0.updateCoachTurn(turnID: turnID, state: .completed, assistantText: assistantText, question: question, incomplete: incomplete, needsDayChoice: false, expected: $1, maximumBytes: maximumFileBytes) }
     }
-    func coachPreferenceSummary(expectedProfileID: UUID) throws -> String {
-        let profile = try diaryHead(expectedProfileID: expectedProfileID).profile
-        let diet = ((profile.about?.dietTags ?? []) + [profile.about?.healthNotes ?? ""]).filter { !$0.isEmpty }.joined(separator: "; ")
-        return "Timezone: \(profile.timeZoneID). Dietary preferences: \(profile.preferences.isEmpty ? "not set" : profile.preferences). Diet and health from setup: \(diet.isEmpty ? "not set" : diet)."
-    }
-    func coachWorkoutSummary(id: UUID, expectedProfileID: UUID) throws -> String {
-        let workout: WorkoutSession, day: TrackingDay
-        do {
-            workout = try coachWorkout(id: id, expectedProfileID: expectedProfileID)
-            day = try pagedConnection(expectedProfileID: expectedProfileID).database.trackingDay(id: workout.dayID)
-        } catch DiaryError.notFound { return "This workout was deleted." }
-        var facts = ["\(day.localDate): recorded \(workout.kind.rawValue), \(workout.durationMinutes) minutes; revision \(workout.revision)."]
-        for exercise in workout.exercises { facts.append(exercise.name + ": " + exercise.sets.map { "\($0.repetitions) reps" + ($0.loadKg.map { " at \(coachNumber($0)) kg" } ?? " (load unset)") }.joined(separator: ", ")) }
-        facts.append("Estimated burn: " + (workout.estimatedBurnKcal.map { "\(coachNumber($0)) kcal (\(workout.burnSource?.rawValue ?? "source unset"))." } ?? "unknown."))
-        return facts.joined(separator: "\n")
-    }
     func deleteProfile(_ id: UUID) throws {
         do { for url in [legacyFile(id), selectedFile(id)] where FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) } }
         catch { throw DiaryError.persistenceFailed }
@@ -555,13 +539,6 @@ actor DiaryStore {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.coachReceiptSummary(turnID: turnID, expectedProfileID: expectedProfileID)
     }
 
-    func coachGoalSummary(localDate: String, expectedProfileID: UUID) throws -> String {
-        struct Goals: Decodable { var effective: GoalRecord? }
-        let facts = try JSONDecoder().decode(Goals.self, from: Data(coachGoals(localDate: localDate, expectedProfileID: expectedProfileID).utf8))
-        return facts.effective.map(coachGoalDescription) ?? "No goals are set for \(localDate)."
-
-    }
-
     func coachWorkout(id: UUID, expectedProfileID: UUID) throws -> WorkoutSession {
         let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
         return try database.domainRead(expectedProfileID: expectedProfileID) { head in
@@ -573,15 +550,6 @@ actor DiaryStore {
 
     func coachProgress(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, expectedProfileID: UUID) throws -> CoachProgress {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.progressRange(endingOn: endingOn, days: days, finalizingTurnID: finalizingTurnID, expectedProfileID: expectedProfileID)
-    }
-
-    func coachRecordedSummary(expectedProfileID: UUID) throws -> String {
-        let page = try diaryHistory(limit: 14, recordedOnly: true, expectedProfileID: expectedProfileID)
-        let facts = page.days.reversed().map { summary in
-            "\(summary.day.localDate): " + (summary.totals.kcal.map { "\(Int($0.rounded())) kcal" } ?? "calories incomplete") + "."
-        }
-        return "No new food was saved in this turn.\n" + (facts.isEmpty ? "There are no recorded food totals yet." : facts.joined(separator: "\n"))
-
     }
 
     func chooseCoachDay(turnID: UUID, usePrevious: Bool, at: Date = Date(), expectedProfileID: UUID) throws {
@@ -631,50 +599,6 @@ actor DiaryStore {
         try setCoachTurnState(turnID: turnID, state: state, needsDayChoice: needsDayChoice, expectedProfileID: expectedProfileID)
     }
 
-    private func coachGoalDescription(_ goal: GoalRecord) -> String {
-        var parts = ["Effective \(goal.effectiveLocalDate)."]
-        for (name, value, unit) in [("Calories", goal.targets.kcal, "kcal"), ("Carbs", goal.targets.carbs, "g"), ("Protein", goal.targets.protein, "g"), ("Fat", goal.targets.fat, "g"), ("Goal weight", goal.goalWeightKg, "kg")] {
-            parts.append("\(name): \(value.map { coachNumber($0) + " " + unit } ?? "not set").")
-        }
-        parts.append("Workout energy adjustment \(goal.exerciseCreditEnabled ? "enabled" : "disabled"); estimated burn remains separate.")
-        return parts.joined(separator: " ")
-    }
-
-    private func coachNumber(_ value: Double) -> String {
-        value.formatted(.number.grouping(.never).locale(Locale(identifier: "en_US")))
-    }
-
-    func coachProgressSummary(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, expectedProfileID: UUID) throws -> String {
-        let report = try coachProgress(endingOn: endingOn, days: days, finalizingTurnID: finalizingTurnID, expectedProfileID: expectedProfileID)
-        var facts = ["\(report.startLocalDate) through \(report.endLocalDate)."]
-        let daily = report.daily
-        facts.append("Recorded food: " + (daily.foodTotals?.kcal.map { "\(coachNumber($0)) kcal." } ?? "calories unknown."))
-        facts.append("Remaining from recorded food: " + (daily.remainingFromRecorded.kcal.map { "\(coachNumber($0)) kcal." } ?? "unknown (target or intake missing)."))
-        if let goal = daily.goal {
-            facts.append("Configured target: " + (goal.targets.kcal.map { "\(coachNumber($0)) kcal." } ?? "calories unset."))
-        }
-        for (name, field) in [("carbs", \NutritionValues.carbs), ("protein", \NutritionValues.protein), ("fat", \NutritionValues.fat)] {
-            facts.append("Remaining \(name) from recorded food: " + (daily.remainingFromRecorded[keyPath: field].map { "\(coachNumber($0)) g." } ?? "unknown."))
-        }
-        facts.append("Recorded workouts: \(daily.workoutCount).")
-        facts.append("Estimated exercise burn: " + (daily.estimatedBurnKcal.map { "\(coachNumber($0)) kcal." } ?? "unknown."))
-        if let adjusted = daily.exerciseAdjustedKcalRemaining { facts.append("Explicit exercise-adjusted remaining: \(coachNumber(adjusted)) kcal.") }
-        if let period = report.period {
-            facts.append("Coverage: \(period.completeDayCount) complete, \(period.partialDayCount) partial, \(period.untrackedDayCount) untracked, \(period.unknownDayCount) unknown, \(period.missingDayCount) missing, \(period.pendingDayCount) pending days.")
-            facts.append("Average recorded intake: " + (period.averageIntake.kcal.map { "\(coachNumber($0)) kcal from \(period.knownIntakeSamples.kcal) complete known days." } ?? "unknown."))
-            for (name, field, count) in [("carbs", \NutritionValues.carbs, period.knownIntakeSamples.carbs), ("protein", \NutritionValues.protein, period.knownIntakeSamples.protein), ("fat", \NutritionValues.fat, period.knownIntakeSamples.fat)] {
-                facts.append("Average \(name): " + (period.averageIntake[keyPath: field].map { "\(coachNumber($0)) g from \(count) complete known days." } ?? "unknown."))
-            }
-            facts.append("Period recorded workouts: \(period.workoutCount).")
-            facts.append("Within 10% of target: \(period.adherenceNumerator)/\(period.adherenceDenominator) eligible days.")
-        } else { facts.append("Day coverage: \(daily.completeness?.rawValue ?? "missing"); pending: \(daily.hasPending).") }
-        facts.append("Weight average: " + (report.weight.currentSevenDayAverageKg.map { "\(coachNumber($0)) kg" } ?? "unknown") + " from \(report.weight.currentSevenDayObservedCount) measured dates.")
-        facts.append("Weight change versus prior 7-day window: " + (report.weight.changeFromSevenDaysAgoKg.map { "\(coachNumber($0)) kg." } ?? "insufficient data."))
-        facts.append("Weight change versus 30 days ago: " + (report.weight.changeFromThirtyDaysAgoKg.map { "\(coachNumber($0)) kg." } ?? "insufficient data."))
-        facts.append("Observed plateau readiness: \(report.weight.plateau.rawValue).")
-        facts.append("Record references omitted: \(report.omittedWeightCount) weights, \(report.omittedWorkoutCount) workouts.")
-        return facts.joined(separator: "\n")
-    }
     func validateExportRequest(_ request: DiaryExportRequest, cloneHead: DiaryHead? = nil) throws {
         guard request.selectionEpoch == profileSelectionEpoch else { throw DiaryError.wrongOwner }
         let current = try exportRequest(expectedProfileID: request.profileID)
