@@ -10,13 +10,16 @@ import UIKit
     let coach: CoachViewModel
     let nutritionKeys: NutritionAPIKeyStore
     let inbox: CoachInbox
+    private let restore: @MainActor () async -> Void
     private var loading: Task<Void, Never>?
     private var starting: Task<Void, Never>?
     private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
 
     init(diary: DiaryViewModel, connection: ChatGPTConnection, coach: CoachViewModel, nutritionKeys: NutritionAPIKeyStore,
-         inbox: CoachInbox = .local) {
+         inbox: CoachInbox = .local, restore: (@MainActor () async -> Void)? = nil) {
         self.diary = diary; self.connection = connection; self.coach = coach; self.nutritionKeys = nutritionKeys; self.inbox = inbox
+        // UI tests never restore a saved connection.
+        self.restore = restore ?? { if !DiaryLaunch.isUITest { await connection.restore() } }
     }
 
     private static func local() -> MivuServices {
@@ -50,8 +53,8 @@ import UIKit
     func start(createDefaultProfile: Bool) async {
         await loadDiary(createDefaultProfile: createDefaultProfile)
         if starting == nil {
-            starting = Task { [connection, coach, inbox] in
-                if !DiaryLaunch.isUITest { await connection.restore() }
+            starting = Task { [restore, coach, inbox] in
+                await restore()
                 coach.startMonitoring(); coach.resume()
                 await coach.drainInbox(inbox)
             }

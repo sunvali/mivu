@@ -351,7 +351,7 @@ extension CoachFlowTests {
     @Test func externalCaptureCreatesTurnAtSpokenTime() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let coach = siriCoach(diary), id = UUID(), spoken = Date(timeIntervalSinceNow: -600)
-        try await coach.captureExternal("Synthetic eggs", submissionID: id, capturedAt: spoken)
+        try await coach.captureExternal(profileID: try #require(diary.selection?.identity.profileID), "Synthetic eggs", submissionID: id, capturedAt: spoken)
         await coach.waitForWorker()
         let turn = try #require(try await turns(diary).first { $0.id == id })
         #expect(turn.text == "Synthetic eggs")
@@ -362,7 +362,7 @@ extension CoachFlowTests {
         let coach = siriCoach(diary)
         coach.draft.text = "Unsent"
         let draftID = coach.draft.submissionID
-        try await coach.captureExternal("Synthetic eggs", submissionID: UUID(), capturedAt: Date())
+        try await coach.captureExternal(profileID: try #require(diary.selection?.identity.profileID), "Synthetic eggs", submissionID: UUID(), capturedAt: Date())
         await coach.waitForWorker()
         #expect(coach.draft.text == "Unsent")
         #expect(coach.draft.submissionID == draftID)
@@ -370,9 +370,9 @@ extension CoachFlowTests {
     @Test func externalCaptureTwiceStoresOneTurn() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let coach = siriCoach(diary), id = UUID(), spoken = Date()
-        try await coach.captureExternal("Synthetic eggs", submissionID: id, capturedAt: spoken)
+        try await coach.captureExternal(profileID: try #require(diary.selection?.identity.profileID), "Synthetic eggs", submissionID: id, capturedAt: spoken)
         await coach.waitForWorker()
-        try await coach.captureExternal("Synthetic eggs", submissionID: id, capturedAt: spoken)
+        try await coach.captureExternal(profileID: try #require(diary.selection?.identity.profileID), "Synthetic eggs", submissionID: id, capturedAt: spoken)
         await coach.waitForWorker()
         #expect(try await turns(diary).filter { $0.id == id }.count == 1)
     }
@@ -404,7 +404,7 @@ extension CoachFlowTests {
         let entry = CoachInbox.Entry(id: UUID(), profileID: owner, text: "Synthetic toast", capturedAt: Date(timeIntervalSinceNow: -60))
         try inbox.add(entry)
         // A crash after capture but before removal leaves the entry behind.
-        try await coach.captureExternal(entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
+        try await coach.captureExternal(profileID: try #require(diary.selection?.identity.profileID), entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
         await coach.waitForWorker()
         await coach.drainInbox(inbox)
         await coach.waitForWorker()
@@ -414,10 +414,18 @@ extension CoachFlowTests {
     @Test func externalCaptureWithReusedIDKeepsFirstCapture() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let coach = siriCoach(diary), id = UUID()
-        try await coach.captureExternal("Synthetic eggs", submissionID: id, capturedAt: Date())
+        try await coach.captureExternal(profileID: try #require(diary.selection?.identity.profileID), "Synthetic eggs", submissionID: id, capturedAt: Date())
         await coach.waitForWorker()
-        try await coach.captureExternal("Synthetic other", submissionID: id, capturedAt: Date(timeIntervalSinceNow: 60))
+        try await coach.captureExternal(profileID: try #require(diary.selection?.identity.profileID), "Synthetic other", submissionID: id, capturedAt: Date(timeIntervalSinceNow: 60))
         await coach.waitForWorker()
         #expect(try await turns(diary).filter { $0.id == id }.map(\.text) == ["Synthetic eggs"])
+    }
+    @Test func externalCaptureRefusesAnotherProfile() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let coach = siriCoach(diary)
+        await #expect(throws: DiaryError.wrongOwner) {
+            try await coach.captureExternal(profileID: UUID(), "Synthetic eggs", submissionID: UUID(), capturedAt: Date())
+        }
+        #expect(try await turns(diary).isEmpty)
     }
 }

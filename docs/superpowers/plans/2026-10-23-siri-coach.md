@@ -17,7 +17,7 @@
 - Diary file protection stays `completeUnlessOpen`. Inbox files use `FileProtectionType.completeUntilFirstUserAuthentication`.
 - Siri copy, exactly:
   - sent: "Sent to the Coach."
-  - locked: "Saved. The Coach will reply after you unlock."
+  - locked: "Saved. Open Mivu after you unlock to see the Coach's reply."
   - not connected: "Saved. Open Mivu to connect the Coach."
   - no profile: "Open Mivu to finish setup first."
   - failure: "I couldn't save that. Please try again."

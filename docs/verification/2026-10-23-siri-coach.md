@@ -36,7 +36,7 @@ Each item is **not run**. A simulator cannot show locked-device Siri, so do not 
 hands-free completion until these pass on a signed build.
 
 1. Unlocked: "Hey Siri, tell Mivu" → "What should I tell the Coach?" → speak a meal → "Sent to the Coach." and the turn appears in Coach.
-2. Locked: same phrase → "Saved. The Coach will reply after you unlock." → unlock and open Mivu → the message is in Coach history with the spoken time.
+2. Locked: same phrase → "Saved. Open Mivu after you unlock to see the Coach's reply." → unlock and open Mivu → the message is in Coach history with the spoken time.
 3. AirPods or CarPlay invocation with the phone in a pocket.
 4. Airplane mode, then reconnect: the message is saved and processed after the network returns.
 5. A notification with the Coach's reply (or "Your message is saved…" if iOS ended the time) opens the Coach tab when tapped.

@@ -6,7 +6,7 @@ enum TellCoachOutcome: Equatable {
     var dialog: String {
         switch self {
         case .sent: "Sent to the Coach."
-        case .savedLocked: "Saved. The Coach will reply after you unlock."
+        case .savedLocked: "Saved. Open Mivu after you unlock to see the Coach's reply."
         case .savedNeedsConnection: "Saved. Open Mivu to connect the Coach."
         case .needsSetup: "Open Mivu to finish setup first."
         case .failed: "I couldn't save that. Please try again."
@@ -19,7 +19,8 @@ enum TellCoachOutcome: Equatable {
 @MainActor enum TellCoach {
     static func run(_ text: String, services: MivuServices, defaults: UserDefaults, protectedDataAvailable: Bool,
                     appActive: Bool, now: Date = Date(), onBackgroundCapture: @MainActor (UUID) -> Void) async -> TellCoachOutcome {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .failed }
+        // The Coach composer's limit; a longer locked entry could never be captured and would block the inbox.
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 20_000 else { return .failed }
         guard protectedDataAvailable else {
             // The diary file is locked; the selected profile is remembered in defaults, which stay readable.
             guard !defaults.bool(forKey: "diarySignedOut"),
@@ -27,12 +28,18 @@ enum TellCoachOutcome: Equatable {
             do { try services.inbox.add(CoachInbox.Entry(id: UUID(), profileID: profileID, text: text, capturedAt: now)) } catch { return .failed }
             return .savedLocked
         }
-        await services.start(createDefaultProfile: false)
-        guard services.diary.selection != nil else { return .needsSetup }
+        // Save first; restoring the connection can wait on the network.
+        await services.loadDiary(createDefaultProfile: false)
+        guard let profileID = services.diary.selection?.identity.profileID else { return .needsSetup }
         await services.coach.drainInbox(services.inbox)
         let id = UUID()
-        do { try await services.coach.captureExternal(text, submissionID: id, capturedAt: now) } catch { return .failed }
+        func capture() async throws { try await services.coach.captureExternal(profileID: profileID, text, submissionID: id, capturedAt: now) }
+        do { try await capture() } catch {
+            // A throw can follow a committed save; the same ID reconciles instead of saving twice.
+            do { try await capture() } catch { return .failed }
+        }
         if !appActive { onBackgroundCapture(id) }
+        await services.start(createDefaultProfile: false)
         return services.connection.canInfer ? .sent : .savedNeedsConnection
     }
 }
@@ -50,7 +57,8 @@ struct TellCoachIntent: AppIntent {
         let services = MivuServices.shared
         let outcome = await TellCoach.run(message, services: services, defaults: DiaryLaunch.defaults,
                                           protectedDataAvailable: UIApplication.shared.isProtectedDataAvailable,
-                                          appActive: UIApplication.shared.applicationState == .active,
+                                          // Siri over an open Mivu leaves it inactive, not backgrounded.
+                                          appActive: UIApplication.shared.applicationState != .background,
                                           onBackgroundCapture: { CoachReplyNotification.follow($0, services: services) })
         // Not awaited: Siri answers now, and a prompt that cannot show in the background must not hold the reply.
         if outcome == .sent || outcome == .savedNeedsConnection { Task { await MealNotification.requestPermissionIfNeeded() } }

@@ -375,8 +375,10 @@ private final class CoachNavigationReadFence: Sendable {
 
     /// Captures a message from outside the composer (Siri) without touching `draft`; the turn ID is `submissionID`.
     /// Each message gets its own ID, so an existing turn with that ID is this message, already saved.
-    func captureExternal(_ text: String, submissionID: UUID, capturedAt: Date) async throws {
+    /// The message belongs to `profileID`, fixed when it was spoken; it is never captured into another diary.
+    func captureExternal(profileID: UUID, _ text: String, submissionID: UUID, capturedAt: Date) async throws {
         guard let owner = diary.selection, !diary.isChangingProfile else { throw DiaryError.noProfile }
+        guard owner.identity.profileID == profileID else { throw DiaryError.wrongOwner }
         let endCaptureProtection = beginCaptureProtection()
         defer { endCaptureProtection() }
         var dependencies = captureDependencies
@@ -398,7 +400,7 @@ private final class CoachNavigationReadFence: Sendable {
         guard let owner = diary.selection?.identity.profileID else { return }
         for entry in inbox.entries() where entry.profileID == owner {
             do {
-                try await captureExternal(entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
+                try await captureExternal(profileID: entry.profileID, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
                 try inbox.remove(entry.id)
             } catch { return }
         }

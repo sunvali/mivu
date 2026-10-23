@@ -142,7 +142,7 @@ waking day. If the waking-day rule can't decide (an existing
 | Situation | Siri says *(builder's call, settled wording)* |
 | --- | --- |
 | Saved, unlocked | "Sent to the Coach." |
-| Saved to inbox, locked | "Saved. The Coach will reply after you unlock." |
+| Saved to inbox, locked | "Saved. Open Mivu after you unlock to see the Coach's reply." |
 | Saved, ChatGPT not connected | "Saved. Open Mivu to connect the Coach." |
 | No profile yet (onboarding unfinished) | "Open Mivu to finish setup first." Nothing is saved, since there is no owner. |
 | Save failed | "I couldn't save that. Please try again." |
