@@ -25,7 +25,7 @@
 - Phrases: "Tell \(.applicationName)", "Tell \(.applicationName) Coach", "Message \(.applicationName) Coach", added to the existing `MivuShortcuts` in `ios/Mivu/QuickLog.swift`. main already owns "Ask \(.applicationName) Coach" (opens Coach) and "Log food with \(.applicationName)" (camera), so "Ask"/"Log with" phrases would collide.
 - Base: `origin/main` (f66b8896). It already has `MivuShortcuts`, `MivuAppDelegate` as the notification delegate, `QuickLogRequest.openCoach`, and `MealNotification` (posted by the Coach worker for analyzed meals; permission via `MealNotification.requestPermissionIfNeeded()`). Reuse them.
 - "Not connected" means `!connection.canInfer` (ChatGPT or on-device Apple Intelligence available), the same check the worker uses.
-- Native checks run with `xcodebuild test -only-testing:` on a dedicated simulator (XcodeBuildMCP is not available in this environment).
+- Native checks run with the `xcodebuildmcp` CLI, `-testPlan Mivu`, explicit `-only-testing:` selectors, on a dedicated simulator.
 - Fallback notification body: "Your message is saved. Open Mivu for the Coach's reply."
 - English only. Synthetic text in every test. Never log message text or token responses.
 - Commits: Conventional Commits, owner's git identity, no mention of tools or assistants.
