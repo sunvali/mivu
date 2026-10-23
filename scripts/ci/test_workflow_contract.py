@@ -45,9 +45,11 @@ class ReleaseAutomation(unittest.TestCase):
         self.assertEqual(len(checks['steps']), 2)
         checkout, scripts = checks['steps']
         self.assertFalse(checkout['with']['persist-credentials'])
+        self.assertEqual(checkout['with']['fetch-depth'], 2)
         self.assertEqual(scripts['run'].splitlines(), [
             "python3 -m unittest discover -s scripts/ci -p 'test_*.py'",
             'bash -n scripts/ci/native.sh scripts/ci/signed.sh',
+            'python3 scripts/ci/parity.py',
         ])
 
     def test_title_edits_run_only_the_lightweight_title_check(self):
