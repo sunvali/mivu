@@ -119,6 +119,28 @@ import XCTest
         XCTAssertEqual(tallest / oneLine, 4, accuracy: 0.3, "It stops at four lines: \(heights)")
         XCTAssertEqual(heights.last ?? 0, tallest, accuracy: 1)
     }
+    func testRedoSetupFromSettingsKeepsKeyboardNextAndDone() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today", "--proof-english"]
+        app.launch()
+        let settings = app.buttons["profileSettings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 15))
+        settings.tap()
+        let redo = app.buttons["redoOnboarding"]
+        XCTAssertTrue(redo.waitForExistence(timeout: 5))
+        redo.tap()
+        let next = app.buttons["onboardingNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        next.tap()
+        // An empty height focuses itself, as on a real first run.
+        XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 5))
+        // The number pad has no return key; without this bar the person cannot leave the field.
+        let keyboardNext = app.buttons["keyboardNext"], keyboardDone = app.buttons["keyboardDone"]
+        XCTAssertTrue(keyboardNext.waitForExistence(timeout: 3) && keyboardNext.isHittable)
+        XCTAssertTrue(keyboardDone.isHittable)
+        keyboardDone.tap()
+        XCTAssertTrue(next.waitForExistence(timeout: 3) && next.isHittable)
+    }
     func testFirstRunOpensSetupWithoutInventingRecords() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--proof-english"]

@@ -74,7 +74,9 @@ struct OnboardingView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color.diaryCanvas.ignoresSafeArea())
-            .safeAreaInset(edge: .bottom) { if focus == nil { actions } }
+            // Next/Done sit above the keyboard here, not in a keyboard toolbar: that toolbar goes
+            // missing when setup is presented over Settings, and the number pad has no return key.
+            .safeAreaInset(edge: .bottom) { if focus == nil { actions } else { keyboardBar } }
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -111,13 +113,6 @@ struct OnboardingView: View {
         ToolbarItem(placement: .topBarTrailing) {
             if step == .diet { Button("Skip") { advance() } }
         }
-        ToolbarItemGroup(placement: .keyboard) {
-            if let next = nextField {
-                Button("Next") { focus = next }.accessibilityIdentifier("keyboardNext")
-            }
-            Spacer()
-            Button("Done") { focus = nil }.fontWeight(.semibold).accessibilityIdentifier("keyboardDone")
-        }
     }
 
     /// The keyboard's Next walks the About card in reading order.
@@ -128,6 +123,17 @@ struct OnboardingView: View {
         case .weight: .birthYear
         default: nil
         }
+    }
+
+    private var keyboardBar: some View {
+        HStack {
+            if let next = nextField {
+                Button("Next") { focus = next }.frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("keyboardNext")
+            }
+            Spacer()
+            Button("Done") { focus = nil }.fontWeight(.semibold).frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("keyboardDone")
+        }
+        .padding(.horizontal, 20).background(.bar)
     }
 
     private var actions: some View {
