@@ -37,6 +37,18 @@ struct ConnectionTests {
         #expect(connection.sharingConsented)
         #expect(ChatGPTConnection(preferences: preferences).sharingConsented)
     }
+
+    @Test(arguments: [false, true])
+    func planWelcomeShowsOnceAfterPlanUseIsAuthorized(permission: Bool) async throws {
+        let fixture = try ConnectionFixture(permission: permission)
+        defer { fixture.cleanup() }
+        #expect(!fixture.connection.showsPlanWelcome)
+        await fixture.connection.restore()
+        #expect(fixture.connection.showsPlanWelcome == permission)
+        fixture.connection.acknowledgePlanWelcome()
+        #expect(!fixture.connection.showsPlanWelcome)
+        #expect(ChatGPTConnection(preferences: fixture.preferences).planWelcomeSeen)
+    }
 }
 
 private final class ConnectionRequests: @unchecked Sendable {

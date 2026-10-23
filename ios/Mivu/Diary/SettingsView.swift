@@ -239,7 +239,7 @@ struct SettingsView: View {
                         Button("Disconnect ChatGPT", role: .destructive) { Task { await connection.disconnect() } }.frame(minHeight: 44)
                     }
                     if let notice = connection.notice { Text(notice.rawValue).font(.subheadline).foregroundStyle(Color.diarySecondary) }
-                    Link("ChatGPT usage settings", destination: URL(string: "https://chatgpt.com/settings/usage")!).frame(minHeight: 44)
+                    Link("Manage usage", destination: MivuLinks.chatGPTUsage).frame(minHeight: 44)
                     #if DEBUG
                     Button("ChatGPT connection diagnostic") { showConnectionDiagnostic = true }.frame(minHeight: 44)
                     #endif

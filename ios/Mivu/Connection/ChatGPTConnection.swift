@@ -20,7 +20,7 @@ enum ConnectionNotice: String {
     case saveFailed = "Sample could not be saved. No request sent."
     case storageFailed = "Local sample storage unavailable"
     case retry = "Analysis paused. Retry when ready."
-    case quota = "ChatGPT usage limit reached. Check ChatGPT usage settings, then retry when usage is available."
+    case quota = "ChatGPT usage limit reached. Open Manage usage in Settings, then retry when usage is available."
     case permission = "Enable ChatGPT plan usage before sending a request."
     case revoked = "Reconnect to authorize plan usage."
     case disconnected = "Local credentials removed"
@@ -97,6 +97,7 @@ final class ChatGPTConnection {
         self.auth = auth
         self.client = client
         self.preferences = preferences
+        planWelcomeSeen = preferences.bool(forKey: "chatGPTPlanWelcomeSeen")
         let store = jobStore ?? ProbeJobStore(directory: URL.applicationSupportDirectory.appendingPathComponent("Mivu/ConnectionProof", isDirectory: true))
         self.jobStore = store
         runner = ProbeRunner(store: store, client: client,
@@ -130,6 +131,11 @@ final class ChatGPTConnection {
     /// Whether the person agreed to send meal and profile data to OpenAI; asked before connecting.
     var sharingConsented: Bool { preferences.bool(forKey: "openAISharingConsent") }
     func recordSharingConsent() { preferences.set(true, forKey: "openAISharingConsent") }
+
+    /// OpenAI's Sign in with ChatGPT guidelines: confirm plan use once, the first time it is enabled.
+    private(set) var planWelcomeSeen: Bool
+    var showsPlanWelcome: Bool { planAuthorized && !planWelcomeSeen }
+    func acknowledgePlanWelcome() { planWelcomeSeen = true; preferences.set(true, forKey: "chatGPTPlanWelcomeSeen") }
 
     /// Signs in over whichever window is in front, so any screen can start it.
     func connect() async {

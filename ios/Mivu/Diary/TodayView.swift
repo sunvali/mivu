@@ -98,6 +98,7 @@ struct DiaryRootView: View {
     @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
     @State private var thermalState = ProcessInfo.processInfo.thermalState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
     private let nutritionKeys: NutritionAPIKeyStore
@@ -207,6 +208,14 @@ struct DiaryRootView: View {
         }
         .onChange(of: connection.sessionRevision) { _, _ in coach.cancel() }
         .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
+        // Waits for the loaded diary and onboarding to finish, so the alert is not lost behind a swap or cover.
+        .alert("You’re using your ChatGPT plan", isPresented: Binding(get: { hasLoaded && !showOnboarding && connection.showsPlanWelcome },
+                                                                     set: { if !$0 { connection.acknowledgePlanWelcome() } })) {
+            Button("Got it", role: .cancel) {}
+            Button("Manage usage") { openURL(MivuLinks.chatGPTUsage) }
+        } message: {
+            Text("Coach and meal analysis in Mivu use your ChatGPT plan and count toward its usage limits.")
+        }
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
