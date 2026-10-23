@@ -53,3 +53,14 @@ the locked-phone copy (`dialogCopyIsExact`). Siri over an open Mivu now counts a
 (`applicationState != .background`); that line is checked by reading only, since unit tests cannot set the
 application state. Unit selection above: 52 passed, 0 failed. UI classes were not rerun after these fixes;
 the fixes do not touch screen code.
+
+Deferred minor review items (not fixed):
+
+- The `.conflictingPayload` path could be a plain existence check (about six fewer lines).
+- A later background lease (scene backgrounding or a second Siri request) drops the earlier Siri `onExpire`, so that turn may get no notification.
+- The worker's retry break checks `captureReceipt`, which Siri captures do not set; a Siri turn arriving during a failed pass waits for the next resume.
+- After a Siri cold launch, first foreground relies on `onChange(of: phase)` `.active` to reactivate the Coach; check on a device.
+- `loadDiary` memoizes the first caller's `createDefaultProfile` (affects sample mode only).
+- A locked phone with the diary already open still uses the inbox instead of direct capture.
+- Small trims: the redundant `CoachInbox.init`, `[weak self]` in the lease end, one-line view wrappers, the lease name "Finish saved meal".
+- The hosted test init builds `MivuServices` with the real `.local` inbox.
