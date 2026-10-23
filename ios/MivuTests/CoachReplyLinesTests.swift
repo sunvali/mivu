@@ -16,6 +16,7 @@ import Testing
         if let food {
             let turn = try await capturedTurn(store, text: "Synthetic meal", photos: [], at: now, expectedProfileID: profile.id)
             _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic meal", nutrition: NutritionValues(kcal: food), provenance: .estimate)], expectedProfileID: profile.id)
+            try await store.completeCoachTurn(turnID: turn.id, assistantText: "Synthetic reply", expectedProfileID: profile.id)
         }
         return (store, profile, root)
     }
@@ -86,5 +87,17 @@ import Testing
         #expect(CoachReplyLines.dayLabel("2025-12-31", today: "2026-01-02", locale: Locale(identifier: "en_US")) == "Dec 31, 2025")
         #expect(CoachReplyLines.shortDate("2026-10-17", locale: Locale(identifier: "en_US")) == "Oct 17")
         #expect(CoachReplyLines.shortDate("not-a-date") == "not-a-date")
+    }
+
+    @Test func multiDayLinePluralizesAndNamesIncompleteDays() async throws {
+        let (store, profile, root) = try await store(); defer { try? FileManager.default.removeItem(at: root) }
+        let incomplete = try await store.coachProgress(endingOn: "2027-01-15", days: 7, expectedProfileID: profile.id)
+        #expect(CoachReplyLines.factLine(progress: [incomplete], goals: [], workouts: [], preferencesRead: false, today: "2027-01-15")
+            == "No complete days in the last 7 days yet.")
+        let day = try #require(try await store.snapshotForExport().days.first { $0.localDate == "2027-01-15" })
+        try await store.setCompleteness(dayID: day.id, .complete)
+        let complete = try await store.coachProgress(endingOn: "2027-01-15", days: 7, expectedProfileID: profile.id)
+        #expect(CoachReplyLines.factLine(progress: [complete], goals: [], workouts: [], preferencesRead: false, today: "2027-01-15")
+            == "Last 7 days: about 1,140 kcal a day on 1 tracked day.")
     }
 }

@@ -162,16 +162,9 @@ struct CoachReceiptView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 0) { receiptStatus; reviewButton; undoButton }
+                VStack(alignment: .leading, spacing: 4) { receiptStatus; committedDate }
             } else {
-                // Undo joins the header row so it doesn't add a row to every fresh receipt.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { receiptStatus; Spacer(minLength: 0); undoButton; reviewButton }
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack(spacing: 12) { receiptStatus; Spacer(minLength: 0); reviewButton }
-                        undoButton
-                    }
-                }
+                HStack(alignment: .firstTextBaseline, spacing: 12) { receiptStatus; Spacer(minLength: 0); committedDate }
             }
             ForEach(Array(presentation.itemRows.enumerated()), id: \.offset) { _, row in
                 Group {
@@ -193,14 +186,7 @@ struct CoachReceiptView: View {
                 .accessibilityIdentifier("coachReceiptQuantity")
             }
             if presentation.macroShare != nil || presentation.committedNutrition != nil { Divider().overlay(Color.diaryRule).padding(.vertical, 4) }
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 4) { committedDate; committedEnergy }
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { committedDate; committedEnergy }
-                    VStack(alignment: .leading, spacing: 4) { committedDate; committedEnergy }
-                }
-            }
+            committedEnergy
             if let share = presentation.macroShare { macroBar(share); macroLegend }
             if let completeness = presentation.nutritionCompleteness { Text(completeness).accessibilityIdentifier("coachReceiptUnknown") }
             if let notice = presentation.changeNotice {
@@ -220,9 +206,15 @@ struct CoachReceiptView: View {
                 }
                 .disclosureGroupStyle(CoachReceiptDisclosureStyle())
             }
+            // Actions close the card so they stay in view when a tall card sits above the composer.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 0) { reviewButton; undoButton }
+            } else {
+                HStack(spacing: 12) { undoButton; Spacer(minLength: 0); reviewButton }
+            }
         }
-        .font(.subheadline).textSelection(.enabled)
-        .modifier(DiarySummaryCardStyle())
+        .font(.subheadline)
+        .modifier(DiarySummaryCardStyle(padding: 14))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("coachReceipt-" + receipt.operationKey)
     }
@@ -263,14 +255,16 @@ struct CoachReceiptView: View {
     }
     /// One energy split bar in the Today macro colours.
     private func macroBar(_ share: (carbs: Double, protein: Double, fat: Double)) -> some View {
-        GeometryReader { proxy in
-            HStack(spacing: 2) {
-                Capsule().fill(Color.diaryCarbs).frame(width: max(0, proxy.size.width * share.carbs - 2))
-                Capsule().fill(Color.diaryProtein).frame(width: max(0, proxy.size.width * share.protein - 2))
-                Capsule().fill(Color.diaryFat)
+        // Canvas draws at the offered width without feeding a size back into the self-sizing table cell.
+        Canvas { context, size in
+            var x = 0.0
+            for (part, color) in [(share.carbs, Color.diaryCarbs), (share.protein, Color.diaryProtein), (share.fat, Color.diaryFat)] {
+                let width = max(0, size.width * part - 2)
+                context.fill(Capsule().path(in: CGRect(x: x, y: 0, width: width, height: size.height)), with: .color(color))
+                x += width + 2
             }
         }
-        .frame(height: 6)
+        .frame(maxWidth: .infinity).frame(height: 6)
         .padding(.vertical, 4)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.committedMacros ?? "")

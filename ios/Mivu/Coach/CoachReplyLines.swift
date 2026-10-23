@@ -12,8 +12,9 @@ enum CoachReplyLines {
 
     private static func progressLine(_ progress: CoachProgress, today: String) -> String {
         if let period = progress.period, period.dayCount > 1 {
-            guard let average = period.averageIntake.kcal else { return "There's no food recorded for the last \(period.dayCount) days yet." }
-            return "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on \(period.knownIntakeSamples.kcal) tracked days."
+            guard let average = period.averageIntake.kcal else { return "No complete days in the last \(period.dayCount) days yet." }
+            let tracked = period.knownIntakeSamples.kcal
+            return "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on \(tracked) tracked \(tracked == 1 ? "day" : "days")."
         }
         let daily = progress.daily
         let label = daily.localDate == today ? "Today" : daily.localDate

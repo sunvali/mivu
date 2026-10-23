@@ -1,12 +1,13 @@
 import SwiftUI
 
 struct DiarySummaryCardStyle: ViewModifier {
+    var padding: CGFloat = 20
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
         content
-            .padding(20)
+            .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 24)

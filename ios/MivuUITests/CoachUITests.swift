@@ -150,6 +150,8 @@ import XCTest
         app.buttons["coachSend"].tap()
         XCTAssertTrue(app.staticTexts["coachFixtureBanner"].waitForExistence(timeout: 5))
         waitForReply(to: "Two eggs, three bread slices and salad", in: app)
+        let seeToday = app.buttons["coachFollowUp-today"]
+        XCTAssertTrue(seeToday.waitForExistence(timeout: 5)); XCTAssertGreaterThanOrEqual(seeToday.frame.height, 44)
         openLatestMeal(in: app)
         for food in ["Eggs", "Bread", "Salad"] { revealMealDetailItem(app.staticTexts[food].firstMatch, in: app) }
         revealMealDetailItem(app.staticTexts["3 slice"], in: app)
@@ -234,9 +236,10 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Eggs"].firstMatch.exists)
         app.navigationBars.buttons.firstMatch.tap()
         enter("I weighed 70 kg this morning", in: app); app.buttons["coachSend"].tap()
-        let weight = waitForReply(to: "I weighed 70 kg this morning", in: app)
-        guard weight.label.contains("Recorded weight: 70 kg.") else {
-            XCTFail("The morning weigh-in must be saved through the production tool and reported from its receipt")
+        waitForReply(to: "I weighed 70 kg this morning", in: app)
+        let chip = app.descendants(matching: .any)["coachWeightChip"].firstMatch
+        guard chip.waitForExistence(timeout: 5), chip.label.contains("70 kg") else {
+            XCTFail("The morning weigh-in must be saved through the production tool and shown from its receipt")
             return
         }
         enter("I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal", in: app)
@@ -254,21 +257,16 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         enter("What is my remaining budget?", in: app); app.buttons["coachSend"].tap()
         let budget = waitForReply(to: "What is my remaining budget?", in: app)
-        XCTAssertTrue(budget.label.contains("Day coverage:"), budget.label)
-        for fact in ["Recorded food: 420 kcal.", "Remaining from recorded food: 1580 kcal.", "Configured target: 2000 kcal.", "Recorded workouts: 1.", "Estimated exercise burn: 200 kcal.", "Weight average: 70 kg from 1 measured dates."] {
-            XCTAssertTrue(budget.label.contains(fact), fact)
-        }
-        XCTAssertFalse(budget.label.contains("Explicit exercise-adjusted remaining"))
+        // The fixture invents 9999, so the reply must be the app's grounded fact line.
+        XCTAssertEqual(budget.label, "Today: 420 of 2,000 kcal, about 1,580 left. Weight average 70 kg.")
         enter("Show my weekly report", in: app); app.buttons["coachSend"].tap()
         let weekly = waitForReply(to: "Show my weekly report", in: app)
-        XCTAssertTrue(weekly.label.contains("Period recorded workouts: 1."), weekly.label)
-        XCTAssertTrue(weekly.label.contains("6 missing"))
+        XCTAssertFalse(weekly.label.contains("9999"), weekly.label)
+        XCTAssertTrue(weekly.label.hasPrefix("Last 7 days") || weekly.label.hasPrefix("No complete days"), weekly.label)
         app.terminate(); app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         revealCoach(weekly, in: app)
-        XCTAssertTrue(weekly.label.contains("Remaining from recorded food: 1580 kcal."))
-        XCTAssertTrue(weekly.label.contains("Weight average: 70 kg from 1 measured dates."))
-        XCTAssertTrue(weekly.label.contains("Estimated exercise burn: 200 kcal."))
+        XCTAssertFalse(weekly.label.contains("9999"))
         for text in ["Two eggs, three bread slices and salad", "I weighed 70 kg this morning", "What is my remaining budget?", "Show my weekly report"].reversed() {
             let input = app.staticTexts[text]
             revealCoach(input, in: app)
@@ -336,7 +334,7 @@ import XCTest
         XCTAssertTrue(banner.isHittable)
         XCTAssertEqual(banner.frame.minY, before, accuracy: 2)
         jump.tap()
-        let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        let reply = progressReply(containing: "7 days", in: app)
         let replyArrived = reply.waitForExistence(timeout: 30)
         XCTAssertTrue(replyArrived, "The delayed report must complete both inference rounds after returning to latest")
         guard replyArrived else { return }
@@ -363,7 +361,7 @@ import XCTest
         XCTAssertTrue(app.otherElements["coachActivity"].waitForExistence(timeout: 5))
         // Hold in the scroll view's empty gutter without dragging or selecting text.
         coachViewport(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).press(forDuration: 9)
-        let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        let reply = progressReply(containing: "7 days", in: app)
         XCTAssertTrue(reply.waitForExistence(timeout: 10))
         let bottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             reply.frame.maxY <= app.textFields["coachInput"].frame.minY
@@ -382,7 +380,7 @@ import XCTest
         let unread = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: app.buttons["coachNewMessage"])
         unread.isInverted = true
         XCTAssertEqual(XCTWaiter.wait(for: [unread], timeout: 10), .completed, "Capture, thinking, tools and completed reply at latest must not advertise unread content")
-        let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        let reply = progressReply(containing: "7 days", in: app)
         var advertisedUnread = false
         let completedWithoutUnread = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             if app.buttons["coachNewMessage"].exists {

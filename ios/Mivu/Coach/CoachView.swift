@@ -361,8 +361,8 @@ struct CoachView: View {
             }
             if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture {
                 HStack(spacing: 4) {
-                    Text("Input saves on this iPhone.").foregroundStyle(Color.diarySecondary)
-                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for analysis")
+                    Text("Messages save on this iPhone.").foregroundStyle(Color.diarySecondary)
+                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for replies")
                         .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
                 }
                 .font(.caption)
@@ -568,7 +568,7 @@ struct CoachView: View {
                 }
                 if !turn.text.isEmpty { Text(turn.text).font(.body).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
                 if !turn.photos.isEmpty {
-                    Label("\(turn.photos.count) attached photos", systemImage: "photo").font(.caption)
+                    Label(turn.photos.count == 1 ? "1 photo" : "\(turn.photos.count) photos", systemImage: "photo").font(.caption)
                     ForEach(turn.photos) { photo in DiaryPhotoPreview(model: coach.diary, reference: photo, height: 140) }
                 }
             }
@@ -627,9 +627,10 @@ struct CoachView: View {
                 if !followUps.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(followUps, id: \.self) { followUp in
-                            Button(followUp == .today ? "See today" : "See progress", action: followUp == .today ? openToday : openProgress)
-                                .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
-                                .frame(minHeight: 44)
+                            Button(action: followUp == .today ? openToday : openProgress) {
+                                Text(followUp == .today ? "See today" : "See progress").frame(minHeight: 36)
+                            }
+                            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
                                 .accessibilityIdentifier(followUp == .today ? "coachFollowUp-today" : "coachFollowUp-progress")
                         }
                     }

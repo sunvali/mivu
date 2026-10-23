@@ -39,7 +39,9 @@ enum CoachUITestInference {
         }
         if !hasOutput, let result = try clarification(input, context: context) { return result }
         if hasOutput || (text.contains("synthetic partial") && context.replyTo != nil) {
-            return CoachInferenceResult(model: "native-test-fixture", text: "All set.", calls: [], outputItems: [])
+            // Progress questions get an invented number so UI tests see the app's fact-line fallback.
+            let reply = text.contains("remaining budget") || text.contains("weekly report") ? "You have 9999 kcal left." : "All set."
+            return CoachInferenceResult(model: "native-test-fixture", text: reply, calls: [], outputItems: [])
         }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: context.captureTimeZoneID) ?? .gmt

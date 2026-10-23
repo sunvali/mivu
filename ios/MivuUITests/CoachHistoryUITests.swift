@@ -62,8 +62,11 @@ import XCTest
     func reveal(_ element: XCUIElement, app: XCUIApplication) {
         for _ in 0..<14 where !element.isHittable {
             let surface = viewport(app), frame = surface.frame
-            let down = element.exists && !element.frame.isEmpty && element.frame.minY < frame.minY
-            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            // The navigation bar overlaps the viewport's top, so an element under it is still above.
+            let top = max(frame.minY, app.navigationBars.firstMatch.frame.maxY)
+            let down = element.exists && !element.frame.isEmpty && element.frame.minY < top + 8
+            // Drag in the right gutter: a card's selectable text would start a selection instead.
+            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5))
             let step = min(80, frame.height * 0.25) * (down ? 1.0 : -1.0)
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: step)),
                 withVelocity: .slow, thenHoldForDuration: 0.2)
