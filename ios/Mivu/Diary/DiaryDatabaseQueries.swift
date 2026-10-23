@@ -403,35 +403,34 @@ extension DiaryDatabase {
                 if let id = receipt.mealID {
                     let meal: MealReadModel
                     do { meal = try transaction.mealProjection(id: id) }
-                    catch DiaryError.notFound { summaries.append("This meal was deleted. Its prior receipt is retained."); continue }
+                    catch DiaryError.notFound { summaries.append("This meal was deleted."); continue }
                     let proposalItems = meal.submissions.filter { $0.state == .awaitingReview }.flatMap { $0.proposal?.items ?? [] }
                     if let itemID = receipt.itemID, !(meal.items + proposalItems).contains(where: { $0.id == itemID }) {
-                        summaries.append("This item was deleted. Its prior receipt is retained."); continue
+                        summaries.append("This item was deleted."); continue
                     }
                     if receipt.itemID != nil, !facts.items.isEmpty {
                         if meal.state == .awaitingReview { summaries.append("Your estimate is ready for review."); continue }
-                        let items = facts.items.map { "\($0.name) (\(number($0.quantity)) \($0.unit))" }.joined(separator: ", ")
-                        let date = facts.targetLocalDate.map { " on " + $0 } ?? ""
-                        summaries.append("Updated \(items)\(date). Nutrition may be uncertain.")
+                        let items = facts.items.map { "\($0.name) to \(number($0.quantity)) \($0.unit)" }.joined(separator: ", ")
+                        summaries.append("Updated \(items).")
                     } else if receipt.operationKey.contains("/scale_meal/"), meal.state != .awaitingReview {
                         let known = { (items: [FoodItem]) in Int(items.compactMap(\.nutrition.kcal).reduce(0, +).rounded()) }
                         let before = (try transaction.coachUndo(receipt.operationKey)?.before).map { "\(known($0)) → " } ?? ""
                         let unknown = meal.items.filter { $0.nutrition.kcal == nil }.map(\.name)
-                        let note = unknown.isEmpty ? "" : " \(unknown.joined(separator: ", ")) \(unknown.count == 1 ? "has" : "have") no calorie estimate, so \(unknown.count == 1 ? "its amount was" : "their amounts were") scaled but not counted."
-                        summaries.append("Updated \(meal.items.map(\.name).joined(separator: ", ")): \(before)\(known(meal.items)) kcal.\(note) Nutrition may be uncertain.")
+                        let note = unknown.isEmpty ? "" : " \(unknown.joined(separator: ", ")) \(unknown.count == 1 ? "has" : "have") no calories set, so \(unknown.count == 1 ? "it isn't" : "they aren't") counted."
+                        summaries.append("Updated \(meal.items.map(\.name).joined(separator: ", ")): \(before)\(known(meal.items)) kcal.\(note)")
                     } else if receipt.operationKey.contains("/retry_meal/") {
-                        summaries.append("Queued the original saved meal input for analysis. A retry does not add another meal.")
+                        summaries.append("Trying that meal again.")
                     } else if receipt.operationKey.contains("/move_meal/") {
                         let day = try trackingDay(id: meal.dayID)
-                        summaries.append("Meal is now recorded on \(day.localDate). Its original eating time is preserved.")
+                        summaries.append("Moved to \(CoachReplyLines.shortDate(day.localDate)).")
                     } else if receipt.operationKey.contains("/attach_photos/") {
-                        summaries.append("Photos attached to this meal: \(meal.photos.count). Attaching photos does not change food totals.")
+                        summaries.append(meal.photos.count == 1 ? "Added the photo." : "Added \(meal.photos.count) photos.")
                     } else if receipt.operationKey.contains("/delete_photo/") {
                         struct DeletedPhoto: Decodable { let id: UUID }
                         let deleted = try? JSONDecoder().decode(DeletedPhoto.self, from: Data(receipt.resultJSON.utf8))
                         if let deleted, !meal.photos.contains(where: { $0.photoID == deleted.id }) {
-                            summaries.append("Deleted the requested meal photo. The food record is preserved.")
-                        } else { summaries.append("Review the meal's current attached photos.") }
+                            summaries.append("Removed the photo.")
+                        } else { summaries.append("Check the meal's photos.") }
                     } else if meal.state == .awaitingReview { summaries.append("Your estimate is ready for review.") }
                     else {
                         let calories = facts.items.map { $0.nutrition?.kcal }
@@ -457,7 +456,7 @@ extension DiaryDatabase {
                 else if receipt.operationKey.contains("/update_preferences") { summaries.append("Your preferences are updated.") }
                 else if let id = receipt.dayID {
                     let day = try trackingDay(id: id)
-                    summaries.append("\(day.localDate): \(day.completeness.rawValue).")
+                    summaries.append("Marked \(CoachReplyLines.shortDate(day.localDate)) as \(day.completeness.rawValue).")
                 }
             }
             // Cards carry each record; the reply line names only the first.

@@ -45,8 +45,31 @@ enum CoachReplyLines {
     /// For notifications and other plain-text surfaces.
     static func plain(_ text: String) -> String { String(attributed(text).characters) }
 
+    /// "today", "yesterday" or a short date such as "Oct 17"; the year appears only when it differs.
+    static func dayLabel(_ localDate: String, today: String, locale: Locale = .current) -> String {
+        if localDate == today { return "today" }
+        guard let day = date(localDate), let now = date(today) else { return localDate }
+        if Calendar.gregorianUTC.dateComponents([.day], from: day, to: now).day == 1 { return "yesterday" }
+        let sameYear = localDate.prefix(4) == today.prefix(4)
+        var style = Date.FormatStyle(locale: locale, timeZone: .gmt).month(.abbreviated).day()
+        if !sameYear { style = style.year() }
+        return day.formatted(style)
+    }
+
+    static func shortDate(_ localDate: String, locale: Locale = .current) -> String {
+        date(localDate)?.formatted(Date.FormatStyle(locale: locale, timeZone: .gmt).month(.abbreviated).day()) ?? localDate
+    }
+
+    private static func date(_ localDate: String) -> Date? {
+        try? Date(localDate, strategy: Date.ParseStrategy(format: "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits)", timeZone: .gmt))
+    }
+
     static func number(_ value: Double, step: Double = 0) -> String {
         let shown = step > 0 ? (value / step).rounded() * step : value
         return shown.formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US")))
     }
+}
+
+private extension Calendar {
+    static let gregorianUTC: Calendar = { var calendar = Calendar(identifier: .gregorian); calendar.timeZone = .gmt; return calendar }()
 }

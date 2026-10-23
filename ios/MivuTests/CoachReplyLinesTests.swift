@@ -78,4 +78,13 @@ import Testing
         #expect(CoachReplyLines.followUps(for: turn([meal], state: .analyzing)) == [])
         #expect(CoachReplyLines.followUps(for: turn([])) == [])
     }
+
+    @Test func friendlyDaysReadLikeSpeech() {
+        #expect(CoachReplyLines.dayLabel("2026-10-23", today: "2026-10-23") == "today")
+        #expect(CoachReplyLines.dayLabel("2026-10-22", today: "2026-10-23") == "yesterday")
+        #expect(CoachReplyLines.dayLabel("2026-10-17", today: "2026-10-23", locale: Locale(identifier: "en_US")) == "Oct 17")
+        #expect(CoachReplyLines.dayLabel("2025-12-31", today: "2026-01-02", locale: Locale(identifier: "en_US")) == "Dec 31, 2025")
+        #expect(CoachReplyLines.shortDate("2026-10-17", locale: Locale(identifier: "en_US")) == "Oct 17")
+        #expect(CoachReplyLines.shortDate("not-a-date") == "not-a-date")
+    }
 }
