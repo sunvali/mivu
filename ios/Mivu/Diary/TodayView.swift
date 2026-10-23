@@ -170,12 +170,15 @@ struct DiaryRootView: View {
         companionView
         .task {
             if !DiaryLaunch.isUITest, ["today", "diary", "progress", "coach"].contains(restoredTab) { selectedTab = restoredTab }
+            let hadSiriPrompts = !services.inbox.entries().isEmpty
             let createDefaultProfile = (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test")
             await services.loadDiary(createDefaultProfile: createDefaultProfile)
             hasLoaded = true
             if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
             await services.start(createDefaultProfile: createDefaultProfile)
+            // The first Siri use may have been on a locked phone, where no permission prompt can show.
+            if hadSiriPrompts { await MealNotification.requestPermissionIfNeeded() }
         }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
         .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel); syncDayProgressActivity(readModel) }
@@ -215,7 +218,7 @@ struct DiaryRootView: View {
                 refreshCompanion()
             }
             if value == .active, hasLoaded, DiaryLaunch.rollsOverDays { Task { await model.rollOverDay() } }
-            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground(); await coach.drainInbox(services.inbox) }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
+            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground(); await drainSiriPrompts() }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
         }
     }
     private var companionView: some View {
@@ -551,6 +554,11 @@ struct DiaryRootView: View {
         }
     }
     private func continueInBackground() { services.continueCoachInBackground() }
+    private func drainSiriPrompts() async {
+        guard !services.inbox.entries().isEmpty else { return }
+        await coach.drainInbox(services.inbox)
+        await MealNotification.requestPermissionIfNeeded()
+    }
     private func endBackgroundLease() { services.endCoachBackground() }
 
 }

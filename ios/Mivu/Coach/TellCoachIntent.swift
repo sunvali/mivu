@@ -51,7 +51,9 @@ struct TellCoachIntent: AppIntent {
         let outcome = await TellCoach.run(message, services: services, defaults: DiaryLaunch.defaults,
                                           protectedDataAvailable: UIApplication.shared.isProtectedDataAvailable,
                                           appActive: UIApplication.shared.applicationState == .active,
-                                          onBackgroundCapture: { _ in services.continueCoachInBackground() })
+                                          onBackgroundCapture: { CoachReplyNotification.follow($0, services: services) })
+        // Not awaited: Siri answers now, and a prompt that cannot show in the background must not hold the reply.
+        if outcome == .sent || outcome == .savedNeedsConnection { Task { await MealNotification.requestPermissionIfNeeded() } }
         return .result(dialog: IntentDialog(stringLiteral: outcome.dialog))
     }
 }

@@ -37,7 +37,9 @@ final class MivuAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UN
     // Main-actor completion form: the async form finished off the main thread and UIKit crashed the app on tap.
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        if let id = MealNotification.mealID(from: response.notification.request.content.userInfo) { MealNotification.shared.openedMealID = id }
+        let userInfo = response.notification.request.content.userInfo
+        if let id = MealNotification.mealID(from: userInfo) { MealNotification.shared.openedMealID = id }
+        if CoachReplyNotification.turnID(from: userInfo) != nil { QuickLogRequest.shared.openCoach = true }
         completionHandler()
     }
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
