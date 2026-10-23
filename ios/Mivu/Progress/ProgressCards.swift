@@ -15,22 +15,41 @@ struct ProgressSnapshot {
     let wins: [ProgressWin]
     let averages: NutritionValues
 
-    init(progress: CoachProgress, range: ProgressRange, zone: String) {
-        self.range = range; self.zone = zone
-        days = progress.dailyReports ?? []
-        buckets = ProgressInsights.buckets(days, range: range, zone: zone)
-        let trend = WeightTrend.points(progress.displayWeights ?? []), goal = days.last(where: { $0.goal != nil })?.goal
-        self.trend = trend; self.goal = goal
-        // shortcut: the start is the first trend point in the loaded range on or after the goal date, not the first ever weigh-in.
-        startKg = (trend.first { $0.localDate >= (goal?.effectiveLocalDate ?? "") } ?? trend.first)?.trend
-        headline = ProgressInsights.headline(trend: trend, goalWeightKg: goal?.goalWeightKg, startKg: startKg, days: days)
-        burn = ProgressInsights.burn(days: days, trend: trend)
-        wins = ProgressInsights.wins(days: days, weighIns: trend.count)
-        averages = progress.period?.averageIntake ?? NutritionValues()
+    /// Loads hold at least 30 days so burn and the weight verdict have data on Week; the cards show only the range.
+    static func loadDays(_ range: ProgressRange) -> Int { max(30, range.days) }
+    static func rangeStart(_ progress: CoachProgress, _ range: ProgressRange) -> String {
+        (progress.dailyReports ?? []).suffix(range.days).first?.localDate ?? progress.startLocalDate
     }
 
-    var bands: [ProgressBand] { days.compactMap { ProgressBand.of(kcal: $0.foodTotals?.kcal, target: $0.goal?.targets.kcal) } }
-    /// Days with recorded energy, whether or not a calorie goal applied.
+    init(progress: CoachProgress, range: ProgressRange, zone: String, today: String) {
+        self.range = range; self.zone = zone
+        let loaded = progress.dailyReports ?? []
+        let days = Array(loaded.suffix(range.days)), start = days.first?.localDate ?? ""
+        self.days = days; loadedDays = loaded
+        buckets = ProgressInsights.buckets(days, range: range, zone: zone)
+        let allTrend = WeightTrend.points(progress.displayWeights ?? []), goal = loaded.last(where: { $0.goal != nil })?.goal
+        trend = allTrend.filter { $0.localDate >= start }; loadedTrend = allTrend; self.goal = goal
+        // shortcut: the start is the first trend point in the loaded window on or after the goal date, not the first ever weigh-in.
+        startKg = (allTrend.first { $0.localDate >= (goal?.effectiveLocalDate ?? "") } ?? allTrend.first)?.trend
+        headline = ProgressInsights.headline(trend: allTrend, goalWeightKg: goal?.goalWeightKg, startKg: startKg, days: days)
+        burn = ProgressInsights.burn(days: loaded, trend: allTrend)
+        wins = ProgressInsights.wins(days: days, weighIns: trend.count, today: today)
+        // Averages use complete days with nothing pending, the same days the bands judge.
+        let judged = days.filter { $0.completeness == .complete && !$0.hasPending }.compactMap(\.foodTotals)
+        func mean(_ field: KeyPath<NutritionTotals, Double?>) -> Double? {
+            let values = judged.compactMap { $0[keyPath: field] }
+            return values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+        }
+        averages = NutritionValues(kcal: mean(\.kcal), carbs: mean(\.carbs), protein: mean(\.protein), fat: mean(\.fat))
+        judgedDays = judged.filter { $0.kcal != nil }.count
+    }
+
+    var bands: [ProgressBand] { days.compactMap(ProgressInsights.band) }
+    /// Complete days with nothing pending: the ones averages and bands use.
+    let judgedDays: Int
+    /// The whole load (at least 30 days) behind burn and the weight verdict.
+    let loadedDays: [DailyProgress]
+    let loadedTrend: [TrendPoint]
     var loggedDays: Int { days.filter { $0.completeness != nil && $0.foodTotals?.kcal != nil }.count }
     var averageKcal: Double? { averages.kcal }
     var target: Double? { goal?.targets.kcal }
@@ -40,7 +59,8 @@ struct ProgressSnapshot {
         let calories = target.map { logged == 0 ? nil : "\(near) of \(logged) logged days near your \(kcal($0)) target" } ?? nil
         switch headline {
         case .onTrack, .holdingSteady, .drifting, .atGoal:
-            let change = (trend.last?.trend ?? 0) - (trend.first?.trend ?? 0)
+            let span = trend.count >= 2 ? ProgressInsights.days(from: trend[0].localDate, to: trend[trend.count - 1].localDate) : 0
+            let change = (ProgressInsights.slopePerDay(trend) ?? 0) * Double(span)
             let weight = "Trend \(change <= 0 ? "down" : "up") \(abs(change).formatted(.number.precision(.fractionLength(1)))) kg"
             return [weight, calories].compactMap { $0 }.joined(separator: " · ") + "."
         case let .caloriesOnTrack(near, logged), let .caloriesOff(near, logged):
@@ -81,7 +101,7 @@ struct ProgressBucketChart: View {
         Chart(buckets) { bucket in
             if let value = bucket.averageKcal {
                 BarMark(x: .value("Date", bucket.start, unit: unit), y: .value("kcal", value))
-                    .foregroundStyle(bucket.band?.color ?? Color.diarySecondary)
+                    .foregroundStyle(bucket.band?.color ?? Color.diarySecondary.opacity(bucket.complete ? 1 : 0.4))
                     .clipShape(RoundedRectangle(cornerRadius: range == .week ? 8 : 3))
             } else {
                 // A day with no log gets a faint stub, never a zero bar.
@@ -236,7 +256,7 @@ struct ProgressMacrosCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ProgressCardTitle(title: "Average day", detail: "\(snapshot.loggedDays) logged days")
+            ProgressCardTitle(title: "Average day", detail: "\(snapshot.judgedDays) complete days")
             if slices.allSatisfy({ $0.kcal == 0 }) {
                 ProgressPlaceholder(symbol: "chart.pie", text: "Log a full day to see your average macros.")
             } else {
@@ -295,7 +315,7 @@ struct ProgressWeightCard: View {
                     Text("kg").font(.title3).foregroundStyle(Color.diarySecondary)
                     Spacer()
                     if trend.count >= 2, let first = trend.first {
-                        let change = last.trend - first.trend
+                        let change = (ProgressInsights.slopePerDay(trend) ?? 0) * Double(ProgressInsights.days(from: first.localDate, to: last.localDate))
                         Text("\(change <= 0 ? "↓" : "↑") \(abs(change).formatted(.number.precision(.fractionLength(1)))) kg")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryWeight)
                             .padding(.horizontal, 10).padding(.vertical, 4).background(Color.diaryWeight.opacity(0.12), in: Capsule())
@@ -399,7 +419,7 @@ struct ProgressCalendarCard: View {
     @ViewBuilder private func cell(_ day: DailyProgress?, small: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: small ? 2 : 8)
         if let day {
-            let band = ProgressBand.of(kcal: day.foodTotals?.kcal, target: day.goal?.targets.kcal)
+            let band = ProgressInsights.band(day)
             shape.fill(band?.color ?? (day.foodTotals?.kcal == nil ? Color.diaryRule.opacity(0.35) : Color.diarySecondary.opacity(0.5)))
                 .overlay { if band == nil && day.foodTotals?.kcal == nil { shape.strokeBorder(Color.diaryRule, style: StrokeStyle(lineWidth: 1, dash: [3, 2])) } }
                 .overlay { if !small { Text(String(Int(day.localDate.suffix(2)) ?? 0)).font(.caption.weight(.medium)).lineLimit(1).fixedSize().foregroundStyle(band == nil ? Color.diarySecondary : .white) } }

@@ -8,6 +8,14 @@ struct TopFood: Equatable, Sendable {
 }
 
 extension DiaryDatabase {
+    /// Whether any tracking day is older than `date`, so paging back can skip empty weeks.
+    func hasDays(before date: String, expectedProfileID: UUID) throws -> Bool {
+        guard validLocalDate(date) else { throw CoachError.invalidArguments }
+        return try domainRead(expectedProfileID: expectedProfileID) { _ in
+            try mutationInteger("SELECT EXISTS(SELECT 1 FROM day WHERE json_extract(CAST(payload AS TEXT), '$.localDate') < ?)", [.text(date)]) != 0
+        }
+    }
+
     /// Saved foods with known energy, grouped by case- and space-insensitive name; the newest spelling names the group.
     func topFoods(from start: String, through end: String, limit: Int, expectedProfileID: UUID) throws -> [TopFood] {
         guard validLocalDate(start), validLocalDate(end), limit > 0 else { throw CoachError.invalidArguments }

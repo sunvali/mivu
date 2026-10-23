@@ -368,6 +368,14 @@ import Testing
         #expect(throws: DiaryError.wrongOwner) { try f.database.topFoods(from: "2027-01-01", through: "2027-01-15", limit: 10, expectedProfileID: UUID()) }
     }
 
+    @Test func historyBeforeLooksPastEmptyWeeks() throws {
+        // Logged 40 days and 1 day back; the weeks between are empty.
+        let f = try BatchFixture(source: progressSource(offsets: [40, 1])); defer { f.remove() }
+        #expect(try f.database.hasDays(before: "2027-01-01", expectedProfileID: f.owner))
+        #expect(try !f.database.hasDays(before: "2026-12-06", expectedProfileID: f.owner))
+        #expect(throws: DiaryError.wrongOwner) { try f.database.hasDays(before: "2027-01-01", expectedProfileID: UUID()) }
+    }
+
     @Test func topFoodsSkipsUnknownAndPending() throws {
         var source = progressSource(offsets: [2, 1]) { offset in
             offset == 2 ? [FoodItem(name: "Mystery stew", nutrition: NutritionValues(kcal: nil)), FoodItem(name: "Toast", nutrition: NutritionValues(kcal: 90))]

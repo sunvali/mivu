@@ -796,6 +796,7 @@ actor DiaryStore {
     func diaryWeek(from start: String, through end: String, expectedProfileID: UUID) throws -> DiaryWeekPage { try pagedConnection(expectedProfileID: expectedProfileID).database.diaryWeek(from: start, through: end, expectedProfileID: expectedProfileID) }
     func historyCoverage(expectedProfileID: UUID) throws -> [DayCompleteness: Int] { try pagedConnection(expectedProfileID: expectedProfileID).database.historyCoverage(expectedProfileID: expectedProfileID) }
     func progressForDisplay(endingOn: String, days: Int, expectedProfileID: UUID) throws -> CoachProgress { try pagedConnection(expectedProfileID: expectedProfileID).database.progressRange(endingOn: endingOn, days: days, includeDailyReports: true, expectedProfileID: expectedProfileID) }
+    func hasDays(before date: String, expectedProfileID: UUID) throws -> Bool { try pagedConnection(expectedProfileID: expectedProfileID).database.hasDays(before: date, expectedProfileID: expectedProfileID) }
     func topFoods(from start: String, through end: String, limit: Int, expectedProfileID: UUID) throws -> [TopFood] { try pagedConnection(expectedProfileID: expectedProfileID).database.topFoods(from: start, through: end, limit: limit, expectedProfileID: expectedProfileID) }
     func weight(id: UUID, expectedProfileID: UUID) throws -> WeightEntry {
         let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)

@@ -58,6 +58,8 @@ struct ProgressBucket: Identifiable, Equatable {
     let averageTarget: Double?
     let band: ProgressBand?
     let loggedDays: Int
+    /// False when the value comes only from partial or pending days: drawn lighter, never banded.
+    var complete = true
     var id: Date { start }
 }
 
@@ -126,23 +128,31 @@ struct ProgressWin: Equatable, Identifiable {
 }
 
 enum ProgressInsights {
+    /// Only a complete day with nothing still being analyzed is judged against its target.
+    static func band(_ day: DailyProgress) -> ProgressBand? {
+        guard day.completeness == .complete, !day.hasPending else { return nil }
+        return ProgressBand.of(kcal: day.foodTotals?.kcal, target: day.goal?.targets.kcal)
+    }
+
     /// Energy balance: average intake on complete days minus the energy the trend change stored or released (~7,700 kcal per kg).
     static func burn(days: [DailyProgress], trend: [TrendPoint]) -> BurnProgress {
         let intake = days.filter { $0.completeness == .complete && !$0.hasPending }.compactMap { $0.foodTotals?.kcal }
         let span = trend.count >= 2 ? Self.days(from: trend[0].localDate, to: trend[trend.count - 1].localDate) : 0
         let daysNeeded = max(0, 14 - intake.count, 14 - span), weighInsNeeded = max(0, 4 - trend.count)
-        guard daysNeeded == 0, weighInsNeeded == 0, let first = trend.first, let last = trend.last else {
+        guard daysNeeded == 0, weighInsNeeded == 0, let slope = slopePerDay(trend) else {
             return .needs(days: daysNeeded, weighIns: weighInsNeeded)
         }
         let average = intake.reduce(0, +) / Double(intake.count)
-        let kcalPerDay = average - (last.trend - first.trend) * 7_700 / Double(span)
+        let kcalPerDay = average - slope * 7_700
         return .estimate(BurnEstimate(kcalPerDay: kcalPerDay, band: 100 + 300 * Double(max(0, 30 - intake.count)) / 16))
     }
 
     /// At most three, most notable first; never a lost streak.
-    static func wins(days: [DailyProgress], weighIns: Int) -> [ProgressWin] {
+    static func wins(days: [DailyProgress], weighIns: Int, today: String? = nil) -> [ProgressWin] {
         var run = 0
         for day in days.sorted(by: { $0.localDate > $1.localDate }) {
+            // Today is still in progress: it can extend a streak but never break one.
+            if day.localDate == today, (day.foodTotals?.protein ?? 0) < (day.goal?.targets.protein ?? .infinity) { continue }
             guard let protein = day.foodTotals?.protein, let target = day.goal?.targets.protein, protein >= target else { break }
             run += 1
         }
@@ -173,12 +183,25 @@ enum ProgressInsights {
         }
         return order.map { start in
             let logged = groups[start, default: []].filter { $0.foodTotals?.kcal != nil && $0.completeness != nil }
-            let kcal = logged.compactMap { $0.foodTotals?.kcal }, targets = logged.compactMap { $0.goal?.targets.kcal }
+            let judged = logged.filter { $0.completeness == .complete && !$0.hasPending }
+            let source = judged.isEmpty ? logged : judged
+            let kcal = source.compactMap { $0.foodTotals?.kcal }, targets = source.compactMap { $0.goal?.targets.kcal }
             let average = kcal.isEmpty ? nil : kcal.reduce(0, +) / Double(kcal.count)
             let target = targets.isEmpty ? nil : targets.reduce(0, +) / Double(targets.count)
             return ProgressBucket(start: start, averageKcal: average, averageTarget: target,
-                                  band: ProgressBand.of(kcal: average, target: target), loggedDays: logged.count)
+                                  band: judged.isEmpty ? nil : ProgressBand.of(kcal: average, target: target), loggedDays: logged.count,
+                                  complete: !judged.isEmpty)
         }
+    }
+
+    /// Least-squares kg per day through the raw weigh-ins; the smoothed trend lags about nine days, so it only draws the line.
+    static func slopePerDay(_ points: [TrendPoint]) -> Double? {
+        guard let first = points.first, points.count >= 2 else { return nil }
+        let xs = points.map { Double(days(from: first.localDate, to: $0.localDate)) }, ys = points.map(\.raw)
+        let meanX = xs.reduce(0, +) / Double(xs.count), meanY = ys.reduce(0, +) / Double(ys.count)
+        let spread = xs.reduce(0) { $0 + ($1 - meanX) * ($1 - meanX) }
+        guard spread > 0 else { return nil }
+        return zip(xs, ys).reduce(0) { $0 + ($1.0 - meanX) * ($1.1 - meanY) } / spread
     }
 
     static func days(from start: String, to end: String) -> Int {
@@ -192,10 +215,10 @@ enum ProgressInsights {
            case let span = Self.days(from: first.localDate, to: last.localDate), span >= 7 {
             if abs(last.trend - goal) <= 1 { return .atGoal }
             let direction = goal < (startKg ?? first.trend) ? -1.0 : 1.0
-            let towardPerWeek = (last.trend - first.trend) * direction / Double(span) * 7
+            let towardPerWeek = (slopePerDay(trend) ?? 0) * direction * 7
             return towardPerWeek >= 0.1 ? .onTrack : towardPerWeek <= -0.1 ? .drifting : .holdingSteady
         }
-        let bands = days.compactMap { ProgressBand.of(kcal: $0.foodTotals?.kcal, target: $0.goal?.targets.kcal) }
+        let bands = days.compactMap(band)
         guard !bands.isEmpty else { return .notEnoughData }
         let near = bands.filter { $0 == .near }.count
         return near * 2 > bands.count ? .caloriesOnTrack(near: near, logged: bands.count) : .caloriesOff(near: near, logged: bands.count)

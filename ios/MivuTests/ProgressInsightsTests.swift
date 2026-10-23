@@ -92,7 +92,7 @@ import Testing
     }
 
     @Test func burnFromIntakeAndTrend() throws {
-        let trend = [point(label(0), 80), point(label(9), 79.7), point(label(19), 79.3), point(label(28), 79)]
+        let trend = [point(label(0), 80), point(label(7), 79.75), point(label(14), 79.5), point(label(28), 79)]
         guard case let .estimate(estimate) = ProgressInsights.burn(days: loggedDays(28), trend: trend) else { Issue.record("Expected an estimate"); return }
         #expect(abs(estimate.kcalPerDay - (2100 + 7700.0 / 28)) < 1)
     }
@@ -148,6 +148,55 @@ import Testing
         let empty = buckets.filter { $0.loggedDays == 0 }
         #expect(!empty.isEmpty && empty.allSatisfy { $0.averageKcal == nil && $0.band == nil })
         #expect(buckets.last?.averageKcal == 2100 && buckets.last?.band == .near)
+    }
+
+    // MARK: Review fixes
+
+    @Test func partialAndPendingDaysGetNoBandAndStayOutOfTheHeadline() {
+        let complete = day("2026-10-21", kcal: 2100)
+        var partial = day("2026-10-22", kcal: 400)
+        partial = DailyProgress(localDate: partial.localDate, completeness: .partial, hasPending: false, foodTotals: partial.foodTotals, goal: partial.goal,
+                                remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil)
+        var pending = day("2026-10-23", kcal: 300)
+        pending = DailyProgress(localDate: pending.localDate, completeness: .complete, hasPending: true, foodTotals: pending.foodTotals, goal: pending.goal,
+                                remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil)
+        #expect(ProgressInsights.band(complete) == .near)
+        #expect(ProgressInsights.band(partial) == nil && ProgressInsights.band(pending) == nil)
+        #expect(ProgressInsights.headline(trend: [], goalWeightKg: nil, startKg: nil, days: [complete, partial, pending]) == .caloriesOnTrack(near: 1, logged: 1))
+        let buckets = ProgressInsights.buckets([partial], range: .week, zone: "UTC")
+        #expect(buckets.first?.averageKcal == 400 && buckets.first?.band == nil && buckets.first?.complete == false)
+    }
+
+    @Test func steadyLossReadsOnTrackDespiteTheSmoothedLag() {
+        // 0.25 kg a week, weighed daily: the lagging EMA alone would read "holding steady".
+        let weights = (0...7).map { weight(label($0), 80 - 0.25 / 7 * Double($0)) }
+        #expect(ProgressInsights.headline(trend: WeightTrend.points(weights), goalWeightKg: 75, startKg: 80, days: []) == .onTrack)
+    }
+
+    @Test func burnUsesTheWeighInSlopeNotTheLaggingTrend() throws {
+        // 0.5 kg a week over 14 complete days at 2,100 kcal → ~2,650 kcal burn.
+        let weights = (0...14).map { weight(label($0), 80 - 0.5 / 7 * Double($0)) }
+        guard case let .estimate(estimate) = ProgressInsights.burn(days: loggedDays(14), trend: WeightTrend.points(weights)) else { Issue.record("Expected an estimate"); return }
+        #expect(abs(estimate.kcalPerDay - (2100 + 0.5 / 7 * 7700)) < 5)
+    }
+
+    @Test func proteinStreakIgnoresTodayWhileItIsUnfinished() {
+        var days = (0..<5).map { day(label($0), kcal: 2000, protein: 150, proteinTarget: 140) }
+        days.append(day(label(5), kcal: 600, protein: 30, proteinTarget: 140))
+        #expect(ProgressInsights.wins(days: days, weighIns: 0, today: label(5)).first?.title == "Protein goal 5 days running")
+    }
+
+    @Test func weekShowsSevenDaysButJudgesBurnAndWeightOnTheLoadedMonth() {
+        let days = loggedDays(30)
+        let weights = (0..<30).filter { $0.isMultiple(of: 2) }.map { weight(label($0), 80 - 0.5 / 7 * Double($0)) }
+        let weekly = WeightProgress(endLocalDate: label(29), currentSevenDayAverageKg: nil, currentSevenDayObservedCount: 0,
+                                    changeFromSevenDaysAgoKg: nil, changeFromThirtyDaysAgoKg: nil, plateau: .insufficientData)
+        let progress = CoachProgress(startLocalDate: label(0), endLocalDate: label(29), daily: days[29], period: nil, weight: weekly,
+                                     weights: [], workouts: [], omittedWeightCount: 0, omittedWorkoutCount: 0, truncated: false,
+                                     dailyReports: days, displayWeights: weights)
+        let snapshot = ProgressSnapshot(progress: progress, range: .week, zone: "UTC", today: label(29))
+        #expect(snapshot.days.count == 7 && snapshot.days.first?.localDate == label(23))
+        guard case .estimate = snapshot.burn else { Issue.record("A week view with a logged month shows a burn"); return }
     }
 
     @Test func headlineNotEnoughDataWithNothingLogged() {

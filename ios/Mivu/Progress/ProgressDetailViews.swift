@@ -11,6 +11,9 @@ struct ProgressDetail<Content: View>: View {
 
     @State private var endingOn: String?
     @State private var snapshot: ProgressSnapshot?
+    /// The window `snapshot` belongs to; another window shows loading, never stale numbers.
+    @State private var loadedEnd: String?
+    @State private var hasEarlier = false
     @State private var foods: [TopFood] = []
     @State private var loadError: String?
     @State private var ownership: DiarySelectionOwnership?
@@ -25,7 +28,7 @@ struct ProgressDetail<Content: View>: View {
             Section {
                 HStack {
                     Button { endingOn = shift(-range.days) } label: { Label("Earlier", systemImage: "chevron.left").frame(minHeight: 44) }
-                        .disabled(snapshot.map { $0.loggedDays == 0 && $0.trend.isEmpty } ?? true)
+                        .disabled(!hasEarlier || loadedEnd != end)
                         .accessibilityIdentifier("progressDetailEarlier")
                     Spacer()
                     Text(dates).font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)
@@ -36,7 +39,7 @@ struct ProgressDetail<Content: View>: View {
                 .buttonStyle(.borderless)
             }
             .listRowBackground(Color.clear)
-            if let snapshot {
+            if let snapshot, loadedEnd == end {
                 content(snapshot, foods)
             } else if let loadError {
                 Text(loadError).foregroundStyle(Color.diaryError)
@@ -68,10 +71,12 @@ struct ProgressDetail<Content: View>: View {
         let key = end
         loadError = nil
         do {
-            let progress = try await DiaryProgressView.loadProgress(model: model, endingOn: key, days: range.days)
-            let top = foodLimit > 0 ? try await model.store.topFoods(from: progress.startLocalDate, through: progress.endLocalDate, limit: foodLimit, expectedProfileID: owner.identity.profileID) : []
+            let progress = try await DiaryProgressView.loadProgress(model: model, endingOn: key, days: ProgressSnapshot.loadDays(range))
+            let older = try await model.store.hasDays(before: ProgressSnapshot.rangeStart(progress, range), expectedProfileID: owner.identity.profileID)
+            let top = foodLimit > 0 ? try await model.store.topFoods(from: ProgressSnapshot.rangeStart(progress, range), through: progress.endLocalDate, limit: foodLimit, expectedProfileID: owner.identity.profileID) : []
             guard !Task.isCancelled, model.selection == owner, key == end else { return }
-            snapshot = ProgressSnapshot(progress: progress, range: range, zone: zone); foods = top
+            snapshot = ProgressSnapshot(progress: progress, range: range, zone: zone, today: today); foods = top
+            loadedEnd = key; hasEarlier = older
         } catch {
             guard !Task.isCancelled, key == end else { return }
             loadError = "Could not load this range. Your diary is preserved."
@@ -100,7 +105,7 @@ struct ProgressDayRow: View {
 
 extension ProgressSnapshot {
     func dayTitle(_ day: DailyProgress) -> String { DiaryWeek.format(day.localDate, "EEE d MMM") }
-    func band(_ day: DailyProgress) -> ProgressBand? { ProgressBand.of(kcal: day.foodTotals?.kcal, target: day.goal?.targets.kcal) }
+    func band(_ day: DailyProgress) -> ProgressBand? { ProgressInsights.band(day) }
 }
 
 @MainActor enum ProgressDetails {
@@ -145,12 +150,12 @@ extension ProgressSnapshot {
         Group {
             Section { ProgressBurnCard(snapshot: snapshot).listCardRow() }
             Section("How it's worked out") {
-                let complete = snapshot.days.filter { $0.completeness == .complete && !$0.hasPending }.compactMap { $0.foodTotals?.kcal }
+                let complete = snapshot.loadedDays.filter { $0.completeness == .complete && !$0.hasPending }.compactMap { $0.foodTotals?.kcal }
                 LabeledContent("Complete days", value: complete.count.formatted())
                 LabeledContent("Average intake", value: complete.isEmpty ? "—" : kcal(complete.reduce(0, +) / Double(complete.count)))
-                LabeledContent("Weigh-ins", value: snapshot.trend.count.formatted())
-                if let first = snapshot.trend.first, let last = snapshot.trend.last {
-                    LabeledContent("Trend change", value: "\((last.trend - first.trend).formatted(.number.precision(.fractionLength(1)))) kg")
+                LabeledContent("Weigh-ins", value: snapshot.loadedTrend.count.formatted())
+                if let slope = ProgressInsights.slopePerDay(snapshot.loadedTrend) {
+                    LabeledContent("Weight change", value: "\((slope * 7).formatted(.number.precision(.fractionLength(2)))) kg a week")
                 }
                 Text("Each kilogram of body weight stores about 7,700 kcal. Burn = average intake minus the energy your trend stored or released per day.")
                     .font(.footnote).foregroundStyle(Color.diarySecondary)

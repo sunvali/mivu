@@ -70,7 +70,7 @@ struct DiaryProgressView: View {
         model.activeDay?.localDate ?? ProgressDate.label(Date(), zone: zone)
     }
     private var weightReport: WeightProgress? { visibleProgress?.weight }
-    private var snapshot: ProgressSnapshot? { visibleProgress.map { ProgressSnapshot(progress: $0, range: range, zone: zone) } }
+    private var snapshot: ProgressSnapshot? { visibleProgress.map { ProgressSnapshot(progress: $0, range: range, zone: zone, today: today) } }
     var weights: [WeightObservation] {
         Self.weightObservations(progress: visibleProgress, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
@@ -190,7 +190,7 @@ struct DiaryProgressView: View {
     }
     private func dates(_ progress: CoachProgress) -> String {
         let format = range.days > 30 ? "MMM d, yyyy" : "MMM d"
-        return "\(DiaryWeek.format(progress.startLocalDate, format)) – \(DiaryWeek.format(progress.endLocalDate, format))"
+        return "\(DiaryWeek.format(ProgressSnapshot.rangeStart(progress, range), format)) – \(DiaryWeek.format(progress.endLocalDate, format))"
     }
     private var weightDetail: some View {
         List {
@@ -366,8 +366,8 @@ struct DiaryProgressView: View {
         guard let ownership = key.ownership, model.selection == ownership else { return }
         reportRequestID = requestID; loadError = nil
         do {
-            let value = try await Self.loadProgress(model: model, endingOn: key.date, days: key.range.days)
-            let top = try await model.store.topFoods(from: value.startLocalDate, through: value.endLocalDate, limit: 4, expectedProfileID: ownership.identity.profileID)
+            let value = try await Self.loadProgress(model: model, endingOn: key.date, days: ProgressSnapshot.loadDays(key.range))
+            let top = try await model.store.topFoods(from: ProgressSnapshot.rangeStart(value, key.range), through: value.endLocalDate, limit: 4, expectedProfileID: ownership.identity.profileID)
             guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
             progress = value; foods = top; loadedReport = key
         } catch {
