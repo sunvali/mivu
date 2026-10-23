@@ -60,6 +60,9 @@ import Testing
         #expect(fixture.connection.provider == .apple, "An explicit Apple choice still wins")
         // The formula estimate beats the on-device model for daily targets, so Apple never tunes them.
         #expect(!fixture.connection.tunesTargets)
+        #expect(!fixture.connection.showsPlanWelcome, "On-device Coach does not use the ChatGPT plan")
+        fixture.connection.provider = .chatGPT
+        #expect(fixture.connection.showsPlanWelcome, "Welcome waits until ChatGPT is the Coach")
     }
 
     @Test func disconnectedDoesNotCreateInferenceOrSendRequests() async throws {

@@ -98,6 +98,7 @@ struct DiaryRootView: View {
     @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
     @State private var thermalState = ProcessInfo.processInfo.thermalState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
     private let nutritionKeys: NutritionAPIKeyStore
@@ -207,6 +208,14 @@ struct DiaryRootView: View {
         }
         .onChange(of: connection.sessionRevision) { _, _ in coach.cancel() }
         .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
+        // Waits until no sheet or cover is up (e.g. Settings, where people connect), so the alert is not dropped.
+        .alert("You’re using your ChatGPT plan", isPresented: Binding(get: { showsPlanWelcome },
+                                                                     set: { if !$0 { connection.acknowledgePlanWelcome() } })) {
+            Button("Got it", role: .cancel) {}
+            Button("Manage usage") { openURL(MivuLinks.chatGPTUsage) }
+        } message: {
+            Text("Coach and meal analysis in Mivu use your ChatGPT plan and count toward its usage limits.")
+        }
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
@@ -395,6 +404,10 @@ struct DiaryRootView: View {
         // shortcut: sheets presented inside a tab (composer, Coach camera) stay up and block this cover; dismiss them if that shows up in use.
         routes.route = nil; coachHistory = nil; noteMealID = nil
         selectedTab = "today"; quickLogOwner = owner
+    }
+    private var showsPlanWelcome: Bool {
+        hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
+            && noteMealID == nil && notifiedMealID == nil && connection.showsPlanWelcome
     }
     private func openCoachRequest() {
         guard quickLog.openCoach, hasLoaded else { return }

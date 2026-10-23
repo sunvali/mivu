@@ -2,6 +2,7 @@ import SwiftUI
 
 enum MivuLinks {
     static let privacyPolicy = URL(string: "https://mivuapp.com/privacy")!
+    static let chatGPTUsage = URL(string: "https://chatgpt.com/settings/usage")!
 }
 
 extension View {

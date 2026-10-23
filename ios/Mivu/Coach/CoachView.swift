@@ -382,6 +382,13 @@ struct CoachView: View {
             } else if coach.connection.provider == .apple {
                 Text("Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.")
                     .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachAppleLimits")
+            } else if coach.connection.planAuthorized {
+                HStack(spacing: 4) {
+                    Text("Using ChatGPT plan").foregroundStyle(Color.diarySecondary)
+                    Link("Manage usage", destination: MivuLinks.chatGPTUsage)
+                        .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
+                }
+                .font(.caption).accessibilityIdentifier("coachPlanUsage")
             }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)
