@@ -26,6 +26,12 @@ extension Color {
     static let diaryMessage = adaptive(0x007987, 0x006778)
     static let diarySummarySurface = adaptive(0xEAF5F3, 0x142D2D)
     static let diaryChartSurface = adaptive(0xEDF3FC, 0x19283A)
+    // Progress off-target bands; coral stays clear of diaryError so a far-off day never reads as a failure.
+    static let diaryBandBitOff = adaptive(0xF4BC62, 0xF4BC62, highContrastLight: 0xB57A10, highContrastDark: 0xFFD58A)
+    static let diaryBandOff = adaptive(0xE8893A, 0xF0A060, highContrastLight: 0xB45F12, highContrastDark: 0xFFBE8A)
+    static let diaryBandFarOff = adaptive(0xD9604C, 0xF08A78, highContrastLight: 0xA8402F, highContrastDark: 0xFFB2A4)
+    static let diaryTintBurn = adaptive(0xE8F4EC, 0x15291E)
+    static let diaryTintFoods = adaptive(0xFBF3E6, 0x2A2216)
     static let diaryEnergy = diaryAccent
     static let diaryWeight = diaryProtein
     static let diaryWorkout = diaryFat

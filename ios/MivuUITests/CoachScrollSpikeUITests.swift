@@ -87,6 +87,9 @@ import XCTest
     }
     func testSpikeDynamicTypePreservesSemanticPosition() throws {
         let app = launchHistory()
+        // The fixture's empty latest day shows the morning check-in over the timeline; at large text it covers the row's link.
+        let checkIn = app.buttons["morningDismiss"]
+        if checkIn.waitForExistence(timeout: 3) { checkIn.tap() }
         selectHistoryTurn(80, app: app)
         _ = try waitHistory(app)
         let semanticID = "00000000-0000-0000-0000-000000000080"

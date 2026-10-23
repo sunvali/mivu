@@ -13,7 +13,6 @@ struct DayProgressAttributes: ActivityAttributes {
         var carbsTarget: Double?
         var fat: Double?
         var fatTarget: Double?
-        var hasPending: Bool
         var hideWhenLocked: Bool
 
         var isOver: Bool { kcalEaten.flatMap { eaten in kcalTarget.map { eaten > $0 } } ?? false }

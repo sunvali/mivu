@@ -4,8 +4,6 @@ import SwiftUI
 struct HistoryView: View {
     @Bindable var model: DiaryViewModel
     @Environment(\.openDiaryCoach) private var openChat
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var selected = ""
     @State private var week: DiaryWeekPage?
     @State private var weekStart: String?
@@ -45,7 +43,7 @@ struct HistoryView: View {
         List {
             if model.readModel != nil, !selected.isEmpty {
                 Section {
-                    DiaryWeekStrip(selected: $selected, today: lastDate, earliest: week?.earliestLocalDate, summaries: summaries)
+                    DiaryWeekStrip(selected: $selected, today: lastDate, earliest: week?.earliestLocalDate, summaries: summaries, activeDayID: model.activeDay?.id)
                         .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 4, trailing: 12))
                         .listRowSeparator(.hidden).listRowBackground(Color.clear)
                 }
@@ -88,17 +86,6 @@ struct HistoryView: View {
         .contentMargins(.top, 0, for: .scrollContent)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .safeAreaInset(edge: .bottom) {
-            if model.readModel != nil, !selected.isEmpty {
-                HStack(spacing: 12) {
-                    // The composer names its destination from the loaded day, so wait for it.
-                    if let day = recordedDay, model.dayDetail(day.id) != nil { DiaryCaptureAction(identifier: "logMealForDay") { showMeal = true } }
-                    askPip
-                }
-                .padding(.horizontal, 20).padding(.vertical, 12)
-                .background(Color.diaryCanvas)
-            }
-        }
         .task(id: weekScope) { await loadWeek() }
         .task(id: DayLoad(ids: selectedDays.map(\.id), generation: model.changeGeneration)) {
             for day in selectedDays { await model.loadDay(day.id) }
@@ -113,16 +100,26 @@ struct HistoryView: View {
         .navigationTitle("Diary")
         .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            // A leading item collapses into a "More" overflow beside the inline-large title.
+            ToolbarItem(placement: .topBarTrailing) {
                 Button("Choose date", systemImage: "calendar") {
                     pickedDate = ProgressDate.date(selected, zone: zone) ?? Date(); showDatePicker = true
                 }.accessibilityIdentifier("chooseDiaryDate")
             }
             ToolbarItem(placement: .topBarTrailing) {
+                Button("Ask Pip", systemImage: "sparkles", action: askPipAction)
+                    .disabled(!weekLoaded || model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
+                    .accessibilityIdentifier("diaryAskPip")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    // The composer names its destination from the loaded day, so wait for it.
+                    if model.sampleMode, let day = recordedDay, model.dayDetail(day.id) != nil {
+                        Button("Log meal", systemImage: "plus.circle") { showMeal = true }.accessibilityIdentifier("logMealForDay")
+                    }
                     Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }.accessibilityIdentifier("enterNutritionForDay")
-                    Button("Morning weight", systemImage: "scalemass") { showWeight = true }.accessibilityIdentifier("logWeightForDay")
-                    Button("Log workout", systemImage: "figure.strengthtraining.traditional") { showWorkout = true }.accessibilityIdentifier("logWorkoutForDay")
+                    Button("Add weight manually", systemImage: "scalemass") { showWeight = true }.accessibilityIdentifier("logWeightForDay")
+                    Button("Add workout manually", systemImage: "figure.strengthtraining.traditional") { showWorkout = true }.accessibilityIdentifier("logWorkoutForDay")
                 } label: {
                     Image(systemName: "plus").frame(minWidth: 44, minHeight: 44).accessibilityLabel("Add to this day")
                 }
@@ -145,28 +142,11 @@ struct HistoryView: View {
         }
     }
 
-    @ViewBuilder private var askPip: some View {
-        let button = Button(action: askPipAction) {
-            Group {
-                // Beside Log meal at accessibility sizes, an icon keeps the bar to one row.
-                if recordedDay != nil && typeSize.isAccessibilitySize {
-                    Image(systemName: "sparkles").accessibilityLabel("Ask Pip")
-                } else { Label("Ask Pip", systemImage: "sparkles") }
-            }
-            .font(.headline)
-            .frame(maxWidth: recordedDay == nil ? .infinity : nil, minHeight: 52)
-            .padding(.horizontal, 8)
-        }
-        .tint(.diaryAccent)
-        .disabled(!weekLoaded || model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
-        .accessibilityIdentifier("diaryAskPip")
-        if reduceTransparency { button.buttonStyle(.bordered) } else { button.buttonStyle(.glass) }
-    }
-
     private func askPipAction() {
         guard let selection = model.selection else { return }
         if let day = recordedDay {
-            openChat(.day(day.id), expectedSelection: selection)
+            let reply = CoachReply(target: .day(dayID: day.id), excerpt: DiaryWeek.format(day.localDate, "EEEE, d MMM"))
+            openChat(.day(day.id), reply: reply, expectedSelection: selection)
         } else {
             openChat(nil, draft: "For \(DiaryWeek.format(selected, "EEEE, d MMM")): ", expectedSelection: selection)
         }
@@ -277,8 +257,10 @@ private struct DaySections: View {
     }
 
     private func coverage(_ snapshot: DiaryDayReadModel) -> some View {
-        CoverageChip(completeness: snapshot.day.completeness) { value in
-            Task { await model.change { try await model.store.setCompleteness(dayID: dayID, value, expectedProfileID: snapshot.head.profile.id) } }
+        let status = ProgressAnalytics.status(days: [snapshot.day], hasFood: snapshot.meals.contains(where: \.isSaved), activeDayID: snapshot.head.activeDayID) ?? .open
+        return DayStatusChip(status: status, isMarkedSkipped: snapshot.day.completeness == .untracked) { skip in
+            // Counting again stores `unknown`, which reads as open or closed like any unmarked day.
+            Task { await model.change { try await model.store.setCompleteness(dayID: dayID, skip ? .untracked : .unknown, expectedProfileID: snapshot.head.profile.id) } }
         }
     }
 }

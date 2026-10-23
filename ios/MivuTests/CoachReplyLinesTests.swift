@@ -93,9 +93,9 @@ import Testing
         let (store, profile, root) = try await store(); defer { try? FileManager.default.removeItem(at: root) }
         let incomplete = try await store.coachProgress(endingOn: "2027-01-15", days: 7, expectedProfileID: profile.id)
         #expect(CoachReplyLines.factLine(progress: [incomplete], goals: [], workouts: [], preferencesRead: false, today: "2027-01-15")
-            == "No complete days in the last 7 days yet.")
-        let day = try #require(try await store.snapshotForExport().days.first { $0.localDate == "2027-01-15" })
-        try await store.setCompleteness(dayID: day.id, .complete)
+            == "No finished days in the last 7 days yet.")
+        // A day counts once the next one starts.
+        _ = try await store.startDay(at: now.addingTimeInterval(86_400))
         let complete = try await store.coachProgress(endingOn: "2027-01-15", days: 7, expectedProfileID: profile.id)
         #expect(CoachReplyLines.factLine(progress: [complete], goals: [], workouts: [], preferencesRead: false, today: "2027-01-15")
             == "Last 7 days: about 1,140 kcal a day on 1 tracked day.")

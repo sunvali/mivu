@@ -208,11 +208,17 @@ import UIKit
         case .tapped: .tapped(level: tapLevel)
         case .patted: .patted
         case .welcomeBack: .welcomeBack
+        case .presentingCheer: .presenting(cheer: true)
+        case .presentingCalm: .presenting(cheer: false)
+        case .progressEntrance: .progressEntrance(cheer: false)
+        case .progressEntranceCheer: .progressEntrance(cheer: true)
+        case .progressRange: .progressRange
+        case .progressTap: .progressTap(level: tapLevel)
         }
     }
 
     private static func isOneShot(_ pose: CompanionPose) -> Bool {
-        ![.resting, .attentive, .thinking, .recovery].contains(pose)
+        ![.resting, .attentive, .thinking, .recovery, .presentingCheer, .presentingCalm].contains(pose)
     }
 
     /// Looks down at the field below Pip's paws and follows the caret left to right as the draft grows.

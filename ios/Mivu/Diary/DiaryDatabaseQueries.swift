@@ -456,7 +456,7 @@ extension DiaryDatabase {
                 else if receipt.operationKey.contains("/update_preferences") { summaries.append("Your preferences are updated.") }
                 else if let id = receipt.dayID {
                     let day = try trackingDay(id: id)
-                    summaries.append("Marked \(CoachReplyLines.shortDate(day.localDate)) as \(day.completeness.rawValue).")
+                    summaries.append("Marked \(CoachReplyLines.shortDate(day.localDate)) as \(day.completeness == .untracked ? "skipped" : "counted").")
                 }
             }
             // Each line is one short sentence; cards do not show every operation's facts, so keep them all.

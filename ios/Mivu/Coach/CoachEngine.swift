@@ -106,7 +106,7 @@ struct CoachEngine: Sendable {
                 guard Set(response.calls.map(\.callID)).count == response.calls.count,
                       response.calls.allSatisfy({ !$0.callID.isEmpty && $0.callID.utf8.count <= 256 }) else { throw CoachError.invalidArguments }
                 let currentTurn = try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
-                let commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts, workouts: knownWorkouts, found: foundMeals) }
+                let commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts, workouts: knownWorkouts, found: foundMeals).estimated(by: response.model) }
                 let writes = commands.compactMap { command -> CoachWrite? in if case .write(let write) = command { return write }; return nil }
                 if let (kind, candidates) = commands.compactMap({ command -> (CoachClarification, [CoachReply.Target])? in if case .clarification(let kind, let candidates) = command { return (kind, candidates) }; return nil }).first {
                     guard commands.count == 1 else { throw CoachError.invalidArguments }

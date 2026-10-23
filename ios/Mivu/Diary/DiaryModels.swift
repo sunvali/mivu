@@ -78,6 +78,12 @@ struct FoodItem: Codable, Equatable, Sendable, Identifiable {
     var uncertain = true
     var nutrientSources: [String: NutritionProvenance] = [:]
     var nutritionBasis: NutritionValues? = nil
+    /// The Coach model that estimated this food; nil for manual and older foods.
+    var estimatedBy: String? = nil
+
+    var estimatedByLabel: String? {
+        estimatedBy.map { $0 == "apple-intelligence" ? "Apple Intelligence" : "ChatGPT" }
+    }
 }
 
 struct MealPhoto: Codable, Equatable, Sendable, Identifiable {

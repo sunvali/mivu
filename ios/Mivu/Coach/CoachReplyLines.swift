@@ -12,7 +12,7 @@ enum CoachReplyLines {
 
     private static func progressLine(_ progress: CoachProgress, today: String) -> String {
         if let period = progress.period, period.dayCount > 1 {
-            guard let average = period.averageIntake.kcal else { return "No complete days in the last \(period.dayCount) days yet." }
+            guard let average = period.averageIntake.kcal else { return "No finished days in the last \(period.dayCount) days yet." }
             let tracked = period.knownIntakeSamples.kcal
             return "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on \(tracked) tracked \(tracked == 1 ? "day" : "days")."
         }
@@ -40,14 +40,14 @@ enum CoachReplyLines {
     }
 
     /// Inline Markdown for emphasis only; links are dropped so model text cannot add tappable destinations.
-    static func attributed(_ text: String) -> AttributedString {
+    nonisolated static func attributed(_ text: String) -> AttributedString {
         var reply = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
         for run in reply.runs where run.link != nil { reply[run.range].link = nil }
         return reply
     }
 
     /// For notifications and other plain-text surfaces.
-    static func plain(_ text: String) -> String { String(attributed(text).characters) }
+    nonisolated static func plain(_ text: String) -> String { String(attributed(text).characters) }
 
     /// "today", "yesterday" or a short date such as "Oct 17"; the year appears only when it differs.
     static func dayLabel(_ localDate: String, today: String, locale: Locale = .current) -> String {

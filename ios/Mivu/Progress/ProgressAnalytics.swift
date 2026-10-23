@@ -1,9 +1,12 @@
 import Foundation
 
+/// The running day is open; earlier days close on their own. Skipped days (marked, or with no saved food) stay out of statistics.
+enum DayStatus: String, Codable, Sendable { case open, closed, skipped }
+
 struct DailyProgress: Codable, Equatable, Sendable {
     let localDate: String
-    let completeness: DayCompleteness?
-    let hasPending: Bool
+    /// Nil when no tracking day exists for the date.
+    let status: DayStatus?
     let foodTotals: NutritionTotals?
     let goal: GoalRecord?
     let remainingFromRecorded: NutritionValues
@@ -23,12 +26,9 @@ struct PeriodProgress: Codable, Equatable, Sendable {
     let startLocalDate: String
     let endLocalDate: String
     let dayCount: Int
-    let completeDayCount: Int
-    let partialDayCount: Int
-    let untrackedDayCount: Int
-    let unknownDayCount: Int
+    let closedDayCount: Int
+    let skippedDayCount: Int
     let missingDayCount: Int
-    let pendingDayCount: Int
     let knownIntakeSamples: NutrientSampleCounts
     let averageIntake: NutritionValues
     let adherenceNumerator: Int
@@ -54,36 +54,29 @@ enum ProgressAnalytics {
         let burn = readModel.workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? readModel.workouts.reduce(0) { $0 + ($1.estimatedBurnKcal ?? 0) } : nil
         return daily(localDate: readModel.activeDay?.localDate ?? dateLabel(Date(), zone: readModel.profile.timeZoneID),
             days: readModel.activeDay.map { [$0] } ?? [], subtotals: readModel.activeDay == nil ? [] : [readModel.totals],
-            hasPending: readModel.hasPendingOnActiveDay, goal: readModel.activeGoal, workoutCount: readModel.workouts.count, estimatedBurnKcal: burn)
+            hasFood: readModel.meals.contains(where: \.isSaved), activeDayID: readModel.activeDayID,
+            goal: readModel.activeGoal, workoutCount: readModel.workouts.count, estimatedBurnKcal: burn)
     }
     static func daily(snapshot: DiarySnapshot, localDate: String) -> DailyProgress {
         let days = snapshot.days.filter { $0.localDate == localDate }
         let dayIDs = Set(days.map(\.id))
-        let hasPending = Self.hasPending(on: localDate, dayIDs: dayIDs, snapshot: snapshot)
-        let subtotals = days.map { tracked -> NutritionTotals in
-            let pending = Self.hasPending(on: localDate, dayIDs: [tracked.id], snapshot: snapshot)
-            let hasSavedMeal = snapshot.meals.contains { $0.dayID == tracked.id && $0.isSaved }
-            // A pending capture can coexist with a complete empty day; zero is not confirmed then.
-            if pending && !hasSavedMeal {
-                return NutritionTotals(kcal: nil, carbs: nil, protein: nil, fat: nil, unknownItemCount: 0)
-            }
-            return snapshot.totals(dayID: tracked.id)
-        }
         let workouts = snapshot.workouts.filter { dayIDs.contains($0.dayID) }
         let burn = workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? workouts.reduce(0) { $0 + $1.estimatedBurnKcal! } : nil
-        return daily(localDate: localDate, days: days, subtotals: subtotals, hasPending: hasPending,
+        return daily(localDate: localDate, days: days, subtotals: days.map { snapshot.totals(dayID: $0.id) },
+            hasFood: snapshot.meals.contains { dayIDs.contains($0.dayID) && $0.isSaved }, activeDayID: snapshot.activeDayID,
             goal: snapshot.goal(on: localDate), workoutCount: workouts.count, estimatedBurnKcal: burn)
     }
 
-    static func daily(localDate: String, days: [TrackingDay], subtotals: [NutritionTotals], hasPending: Bool,
+    static func status(days: [TrackingDay], hasFood: Bool, activeDayID: UUID?) -> DayStatus? {
+        if days.isEmpty { return nil }
+        // Stored coverage only records the user's skip; older complete/partial/unknown values read as closed.
+        if days.allSatisfy({ $0.completeness == .untracked }) { return .skipped }
+        if days.contains(where: { $0.id == activeDayID }) { return .open }
+        return hasFood ? .closed : .skipped
+    }
+
+    static func daily(localDate: String, days: [TrackingDay], subtotals: [NutritionTotals], hasFood: Bool, activeDayID: UUID?,
                       goal: GoalRecord?, workoutCount: Int, estimatedBurnKcal burn: Double?) -> DailyProgress {
-        let completeness: DayCompleteness?
-        if days.isEmpty { completeness = nil }
-        else if days.allSatisfy({ $0.completeness == .complete }) {
-            completeness = hasPending ? .partial : .complete
-        } else if days.allSatisfy({ $0.completeness == .untracked }) { completeness = .untracked }
-        else if days.allSatisfy({ $0.completeness == .unknown }) { completeness = .unknown }
-        else { completeness = .partial }
         func sum(_ field: KeyPath<NutritionTotals, Double?>) -> Double? {
             guard !subtotals.isEmpty, subtotals.allSatisfy({ $0[keyPath: field] != nil }) else { return nil }
             return subtotals.reduce(0) { $0 + $1[keyPath: field]! }
@@ -98,7 +91,7 @@ enum ProgressAnalytics {
             fat: remaining(goal?.targets.fat, totals?.fat)
         )
         let adjusted = goal?.exerciseCreditEnabled == true ? remaining.kcal.flatMap { kcal in burn.map { kcal + $0 } } : nil
-        return DailyProgress(localDate: localDate, completeness: completeness, hasPending: hasPending,
+        return DailyProgress(localDate: localDate, status: status(days: days, hasFood: hasFood, activeDayID: activeDayID),
                              foodTotals: totals, goal: goal, remainingFromRecorded: remaining,
                              workoutCount: workoutCount, estimatedBurnKcal: burn,
                              exerciseAdjustedKcalRemaining: adjusted)
@@ -112,7 +105,7 @@ enum ProgressAnalytics {
     }
 
     static func period(endingOn: String, days: Int, reports: [DailyProgress]) -> PeriodProgress {
-        let eligible = reports.filter { $0.completeness == .complete && !$0.hasPending }
+        let eligible = reports.filter { $0.status == .closed }
         func average(_ field: KeyPath<NutritionTotals, Double?>) -> (Double?, Int) {
             let values = eligible.compactMap { $0.foodTotals?[keyPath: field] }
             return (values.isEmpty ? nil : values.reduce(0, +) / Double(values.count), values.count)
@@ -126,12 +119,9 @@ enum ProgressAnalytics {
         }
         return PeriodProgress(startLocalDate: reports.first?.localDate ?? endingOn, endLocalDate: endingOn,
                               dayCount: days,
-                              completeDayCount: reports.filter { $0.completeness == .complete }.count,
-                              partialDayCount: reports.filter { $0.completeness == .partial }.count,
-                              untrackedDayCount: reports.filter { $0.completeness == .untracked }.count,
-                              unknownDayCount: reports.filter { $0.completeness == .unknown }.count,
-                              missingDayCount: reports.filter { $0.completeness == nil }.count,
-                              pendingDayCount: reports.filter(\.hasPending).count,
+                              closedDayCount: eligible.count,
+                              skippedDayCount: reports.filter { $0.status == .skipped }.count,
+                              missingDayCount: reports.filter { $0.status == nil }.count,
                               knownIntakeSamples: NutrientSampleCounts(kcal: kcal.1, carbs: carbs.1,
                                                                        protein: protein.1, fat: fat.1),
                               averageIntake: NutritionValues(kcal: kcal.0, carbs: carbs.0,
@@ -159,7 +149,7 @@ enum ProgressAnalytics {
         let completeKcalDays = window(endingOn: endingOn, days: 28, offset: 0,
                                       zone: snapshot.profile.timeZoneID).reduce(0) { count, label in
             let report = daily(snapshot: snapshot, localDate: label)
-            return count + (report.completeness == .complete && !report.hasPending && report.foodTotals?.kcal != nil ? 1 : 0)
+            return count + (report.status == .closed && report.foodTotals?.kcal != nil ? 1 : 0)
         }
         return weight(endingOn: endingOn, zone: snapshot.profile.timeZoneID, latest: latestWeightsByDate(snapshot: snapshot), completeKcalDays: completeKcalDays)
     }
@@ -193,19 +183,6 @@ enum ProgressAnalytics {
     private static func remaining(_ target: Double?, _ recorded: Double?) -> Double? {
         guard let target, let recorded else { return nil }
         return target - recorded
-    }
-
-    private static func hasPending(on localDate: String, dayIDs: Set<UUID>, snapshot: DiarySnapshot) -> Bool {
-        if snapshot.meals.contains(where: { dayIDs.contains($0.dayID) && $0.hasUnresolvedInput }) {
-            return true
-        }
-        return snapshot.coachTurns.contains { turn in
-            guard turn.state != .completed else { return false }
-            if let assignedID = turn.resolvedDayID ?? turn.activeDayID {
-                return dayIDs.contains(assignedID)
-            }
-            return dateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == localDate
-        }
     }
 
     static func dateLabel(_ date: Date, zone: String) -> String {

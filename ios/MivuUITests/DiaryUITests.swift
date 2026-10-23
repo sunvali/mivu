@@ -10,13 +10,38 @@ import XCTest
         return app
     }
 
+    func testLogWithPipOpensCoachAndAddManuallyOpensForm() {
+        let app = launchHistory()
+        app.tabBars.buttons["Today"].tap()
+        app.buttons["logMeal"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Today"].tap()
+        XCTAssertTrue(app.buttons["addManually"].waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(app.buttons["addManually"].frame.height, 44)
+        app.buttons["addManually"].tap()
+        XCTAssertTrue(app.navigationBars["Enter nutrition"].waitForExistence(timeout: 5))
+    }
+
+    func testAddNoteOrPhotoQuotesMealInCoach() {
+        let app = launchHistory()
+        XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
+        let meal = app.buttons["historyMeal"].firstMatch
+        XCTAssertTrue(meal.waitForExistence(timeout: 5)); meal.tap()
+        XCTAssertFalse(app.buttons["halfPortion"].exists)
+        let note = app.buttons["correctMeal"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5)); // The pinned Ask Pip bar covers the list bottom, so scroll the row above it.
+        for _ in 0..<5 where note.frame.maxY > app.buttons["mealAskPip"].frame.minY { app.swipeUp() }
+        note.tap()
+        XCTAssertTrue(app.buttons["coachReplyCancel"].waitForExistence(timeout: 10), "Coach opens quoting the meal")
+    }
+
     func testSelectingPillShowsThatDaysMeals() {
         let app = launchHistory()
         XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
         XCTAssertEqual(app.selectedDiaryDate, "2026-10-12")
         XCTAssertTrue(app.buttons["historyMeal"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Monday, 12 October"].exists)
-        XCTAssertTrue(app.buttons["logMealForDay"].exists && app.buttons["diaryAskPip"].exists)
+        XCTAssertTrue(app.buttons["diaryAskPip"].exists && app.buttons["diaryAddMenu"].isEnabled)
     }
 
     func testCalendarJumpSelectsDate() {
@@ -33,7 +58,6 @@ import XCTest
         let app = launchHistory()
         XCTAssertTrue(app.selectDiaryDate(XCUIApplication.diaryLabel(Date())))
         XCTAssertTrue(app.staticTexts["Nothing logged"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["logMealForDay"].exists)
         XCTAssertFalse(app.buttons["diaryAddMenu"].isEnabled)
         XCTAssertTrue(app.buttons["diaryAskPip"].exists)
     }
@@ -94,6 +118,28 @@ import XCTest
         XCTAssertGreaterThan(heights[1], oneLine, "A second line makes it taller")
         XCTAssertEqual(tallest / oneLine, 4, accuracy: 0.3, "It stops at four lines: \(heights)")
         XCTAssertEqual(heights.last ?? 0, tallest, accuracy: 1)
+    }
+    func testRedoSetupFromSettingsKeepsKeyboardNextAndDone() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today", "--proof-english"]
+        app.launch()
+        let settings = app.buttons["profileSettings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 15))
+        settings.tap()
+        let redo = app.buttons["redoOnboarding"]
+        XCTAssertTrue(redo.waitForExistence(timeout: 5))
+        redo.tap()
+        let next = app.buttons["onboardingNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        next.tap()
+        // An empty height focuses itself, as on a real first run.
+        XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 5))
+        // The number pad has no return key; without this bar the person cannot leave the field.
+        let keyboardNext = app.buttons["keyboardNext"], keyboardDone = app.buttons["keyboardDone"]
+        XCTAssertTrue(keyboardNext.waitForExistence(timeout: 3) && keyboardNext.isHittable)
+        XCTAssertTrue(keyboardDone.isHittable)
+        keyboardDone.tap()
+        XCTAssertTrue(next.waitForExistence(timeout: 3) && next.isHittable)
     }
     func testFirstRunOpensSetupWithoutInventingRecords() {
         let app = XCUIApplication()
@@ -193,11 +239,12 @@ import XCTest
             }
         }
         for _ in 0..<10 where !readyToUse(element, in: app) { list.swipeDown() }
-        XCTAssertTrue(readyToUse(element, in: app), "The target must be reachable; morning weight must clear fixed controls")
+        XCTAssertTrue(readyToUse(element, in: app), "The target must be reachable; rows must clear fixed controls")
     }
     private func readyToUse(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         guard element.exists, element.isHittable else { return false }
-        guard element.identifier == "logWeight" else { return true }
+        // isHittable stays true under the pinned Log meal bar, so list rows must clear it.
+        guard ["logWeight", "mealRow"].contains(element.identifier) else { return true }
         let top = app.navigationBars.firstMatch.frame.maxY
         var bottom = app.frame.maxY
         let tabs = app.tabBars.firstMatch
@@ -243,8 +290,6 @@ import XCTest
         XCTAssertFalse(app.tabBars.buttons["Today"].isHittable, "Focused meal details must hide the tab bar")
         let accept = app.buttons["acceptReview"]
         reveal(accept, in: app); XCTAssertTrue(accept.waitForExistence(timeout: 10)); accept.tap()
-        let half = app.buttons["halfPortion"]
-        reveal(half, in: app); XCTAssertTrue(half.isEnabled); half.tap()
         let edit = app.buttons["editItem"].firstMatch
         reveal(edit, in: app); edit.tap()
         let quantity = app.textFields["itemQuantity"]
@@ -301,6 +346,35 @@ import XCTest
         app.buttons["doneSettings"].tap()
         app.tabBars.buttons["Today"].tap()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
+    }
+
+    func testSwipeDeletesAnotherProfileAndKeepsTheSelectedOne() {
+        let app = launch()
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["localProfiles"].tap()
+        XCTAssertTrue(app.navigationBars["Local profiles"].waitForExistence(timeout: 5))
+        let create = app.buttons["Create local profile"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5)); create.tap()
+        let name = app.alerts.textFields.firstMatch; XCTAssertTrue(name.waitForExistence(timeout: 5)); name.typeText("Synthetic removable")
+        app.alerts.buttons["Create"].tap()
+        let row = { (name: String) in app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch }
+        let removable = row("Synthetic removable")
+        XCTAssertTrue(removable.waitForExistence(timeout: 5))
+        row("My diary").tap()
+        XCTAssertTrue(app.staticTexts["My diary"].waitForExistence(timeout: 5), "Switching must select the kept profile first")
+        removable.swipeLeft()
+        let delete = app.buttons["Delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        let swipe = XCTAttachment(screenshot: app.screenshot()); swipe.name = "Profile swipe delete"; swipe.lifetime = .keepAlways; add(swipe)
+        delete.tap()
+        XCTAssertTrue(app.staticTexts["Delete Synthetic removable?"].waitForExistence(timeout: 5))
+        let dialog = XCTAttachment(screenshot: app.screenshot()); dialog.name = "Profile delete confirmation"; dialog.lifetime = .keepAlways; add(dialog)
+        app.buttons["Delete profile"].firstMatch.tap()
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: removable)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "The swiped profile must leave the list")
+        XCTAssertTrue(app.staticTexts["My diary"].exists, "The other profile must stay selected")
+        XCTAssertTrue(row("My diary").exists)
     }
 
     func testUnsavedSettingsRequireExplicitDiscard() {
@@ -411,16 +485,18 @@ import XCTest
         let date = try XCTUnwrap(dessertDay.value as? String)
         try XCTSkipIf(date == active, "Coach logged yesterday's dessert on the active waking day (run after midnight)")
         XCTAssertTrue(app.selectDiaryDate(date))
-        let log = app.buttons["logMealForDay"]
+        let menu = app.buttons["diaryAddMenu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5)); menu.tap()
+        let log = app.buttons["enterNutritionForDay"]
         XCTAssertTrue(log.waitForExistence(timeout: 5)); log.tap()
-        let note = app.textFields["mealText"]
-        XCTAssertTrue(note.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", date)).firstMatch.exists, "The composer must show its selected destination")
-        note.tap(); note.typeText("Synthetic selected-day meal")
-        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
-        let review = app.switches["reviewFirst"].switches.firstMatch
-        reveal(review, in: app); review.tap()
-        app.buttons["sendMeal"].tap()
+        let food = app.textFields["manualFoodName"]
+        XCTAssertTrue(food.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", date)).firstMatch.exists, "The form must show its selected destination")
+        food.tap(); food.typeText("Synthetic selected-day meal")
+        let kcal = app.textFields["manualCalories"]
+        reveal(kcal, in: app); kcal.tap(); kcal.typeText("10")
+        if app.buttons["doneManualNutrition"].exists { app.buttons["doneManualNutrition"].tap() }
+        app.buttons["saveManualNutrition"].tap()
         let meal = app.buttons["savedDayMealReceipt"]
         XCTAssertTrue(meal.waitForExistence(timeout: 10)); reveal(meal, in: app); meal.tap()
         XCTAssertTrue(app.staticTexts["Time unspecified"].waitForExistence(timeout: 5))
@@ -462,9 +538,9 @@ import XCTest
         XCTAssertTrue(language.label == "App language, English" || (language.label == "App language" && language.value as? String == "English"))
         XCTAssertEqual(app.segmentedControls.count, 0, "The unsupported language selector must remain hidden")
         app.navigationBars.buttons.firstMatch.tap()
-        let connectionRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch
+        let connectionRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Coach AI")).firstMatch
         reveal(connectionRow, in: app); connectionRow.tap()
-        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Coach AI"].waitForExistence(timeout: 5))
         let diagnostic = app.buttons["ChatGPT connection diagnostic"]
         reveal(diagnostic, in: app); diagnostic.tap()
         XCTAssertTrue(app.staticTexts["Connection test"].waitForExistence(timeout: 5))

@@ -676,22 +676,6 @@ private actor CoachInputFixture {
         #expect(reloaded.weights.isEmpty); #expect(reloaded.coachTurns[0].assistantText == nil)
     }
 
-    @Test(arguments: [false, true]) func finishedProgressQuestionDoesNotCountItselfAsPending(otherCapture: Bool) async throws {
-        let (store, profile, existing, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        try await store.completeCoachTurn(turnID: existing.id, assistantText: "Synthetic previous turn", expectedProfileID: profile.id)
-        let day = try await store.snapshotForExport().days[0]
-        try await store.setCompleteness(dayID: day.id, .complete)
-        if otherCapture { _ = try await capturedTurn(store, text: "Unresolved synthetic food", photos: [], at: now, expectedProfileID: profile.id) }
-        let question = try await capturedTurn(store, text: "What is my daily progress?", photos: [], at: now, expectedProfileID: profile.id)
-        let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: "Read complete")])
-        let finished = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: question.id, expectedProfileID: profile.id)
-        let report = try await store.coachProgress(endingOn: day.localDate, days: 1, expectedProfileID: profile.id)
-        #expect(finished.state == .completed)
-        #expect(report.daily.hasPending == otherCapture)
-        #expect(report.daily.foodTotals?.kcal == (otherCapture ? nil : 0))
-        #expect(finished.assistantText == "Read complete")
-    }
-
     @Test func combinedReadOnlySettingsPreserveWeightAndWorkoutFacts() async throws {
         let (store, profile, existing, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         try await store.completeCoachTurn(turnID: existing.id, assistantText: "Synthetic previous turn", expectedProfileID: profile.id)

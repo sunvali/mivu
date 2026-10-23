@@ -17,13 +17,9 @@ import XCTest
         app.buttons["doneSettings"].tap()
 
         app.tabBars.buttons["Progress"].tap()
-        selectReport("reportDaily", in: app)
-        let goalSummary = app.staticTexts["progressGoalSummary"]
-        XCTAssertTrue(goalSummary.waitForExistence(timeout: 5))
-        XCTAssertTrue(goalSummary.label.contains("2,000"))
-        let proteinGoal = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Protein goal 100.0 g")).firstMatch
-        reveal(proteinGoal, in: app)
-        XCTAssertTrue(proteinGoal.exists)
+        let target = text(containing: "2,000 kcal goal", in: app)
+        reveal(target, in: app)
+        XCTAssertTrue(target.exists)
         app.tabBars.buttons["Today"].tap()
         logWeight("70", in: app)
         app.buttons["logMeal"].tap()
@@ -77,23 +73,13 @@ import XCTest
         XCTAssertTrue(savedWorkout.label.contains("35 minutes"))
         app.navigationBars.buttons["Progress"].tap()
 
-        for report in ["reportDaily", "reportWeekly", "reportMonthly"] {
-            selectReport(report, in: app)
-            if report != "reportDaily" {
-                expand("progressCoverage", toShow: app.staticTexts["missingDayCopy"], in: app)
-            }
-            if report == "reportMonthly" {
-                let samples = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Known samples of 30 dates")).firstMatch
-                reveal(samples, in: app)
-                XCTAssertTrue(samples.label.contains("protein 0"))
-            }
+        for range in ["Week", "Month"] {
+            selectRange(range, in: app)
             reveal(app.staticTexts["missingDayCopy"], in: app)
             XCTAssertTrue(app.staticTexts["missingDayCopy"].exists)
-            let nutrition = app.staticTexts["nutritionChartSummary"]
-            expand("nutritionData", toShow: nutrition, in: app)
-            reveal(nutrition, in: app)
-            XCTAssertTrue(nutrition.label.contains("95 kcal"))
-            if report == "reportMonthly" { attachScreenshot("Synthetic saved 30-day progress", from: app) }
+            XCTAssertTrue(calorieSummary(in: app).contains("95 kcal"))
+            if range == "Month" { attachScreenshot("Synthetic saved 30-day progress", from: app) }
+            scrollToTop(in: app)
         }
     }
 
@@ -117,17 +103,15 @@ import XCTest
         app.buttons["saveGoals"].tap()
         app.buttons["doneSettings"].tap()
         app.tabBars.buttons["Progress"].tap()
-        selectReport("reportDaily", in: app)
-        let summary = app.staticTexts["progressGoalSummary"]
+        let summary = text(containing: "No energy target set", in: app)
         reveal(summary, in: app)
-        XCTAssertEqual(summary.label, "No energy target set")
+        XCTAssertTrue(summary.exists)
         app.terminate()
         app.launch()
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 15))
         app.tabBars.buttons["Progress"].tap()
-        selectReport("reportDaily", in: app)
         reveal(summary, in: app)
-        XCTAssertEqual(summary.label, "No energy target set")
+        XCTAssertTrue(summary.exists)
         openSettings(in: app)
         open("editGoals", in: app)
         XCTAssertEqual(app.textFields["goalKcal"].value as? String, "Energy (kcal)")
@@ -137,18 +121,13 @@ import XCTest
     func testLargestTextDarkProgressKeepsReportsAccessible() {
         let app = launchDiary(extra: ["--proof-dark", "--proof-largest-text"])
         app.tabBars.buttons["Progress"].tap()
-        let monthly = app.buttons["reportMonthly"]
-        reveal(monthly, in: app)
-        XCTAssertGreaterThanOrEqual(monthly.frame.height, 44)
-        monthly.tap()
+        selectRange("Month", in: app)
         let missing = app.staticTexts["missingDayCopy"]
-        expand("progressCoverage", toShow: missing, in: app)
         reveal(missing, in: app)
         XCTAssertTrue(missing.exists)
-        let nutrition = app.staticTexts["nutritionChartSummary"]
-        expand("nutritionData", toShow: nutrition, in: app)
-        reveal(nutrition, in: app)
-        XCTAssertTrue(nutrition.label.contains("insufficient data"))
+        let empty = app.buttons["openDiaryForCoverage"]
+        reveal(empty, in: app)
+        XCTAssertTrue(empty.exists, "With nothing logged the hero offers the Diary instead of an empty chart")
         attachScreenshot("English dark accessibility5 Progress", from: app)
         open("openWeight", in: app)
         reveal(app.staticTexts["weightChartSummary"], in: app)
@@ -176,13 +155,8 @@ import XCTest
         attachScreenshot("Synthetic filled workout fields retain visible units", from: app)
         app.buttons["saveWorkout"].tap()
         app.navigationBars.buttons["Progress"].tap()
-        selectReport("reportDaily", in: app)
-        let recordedFood = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Recorded food: 95 kcal")).firstMatch
-        reveal(recordedFood, in: app)
-        XCTAssertTrue(recordedFood.exists)
-        let recordedBurn = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Estimated workout burn: 120 kcal")).firstMatch
-        reveal(recordedBurn, in: app)
-        XCTAssertTrue(recordedBurn.exists)
+        XCTAssertTrue(calorieSummary(in: app).contains("95 kcal"))
+        scrollToTop(in: app)
         open("openWorkouts", in: app)
         let row = app.buttons["workoutRow"].firstMatch
         reveal(row, in: app)
@@ -214,9 +188,8 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Workouts"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["workoutRow"].exists)
         app.navigationBars.buttons["Progress"].tap()
-        selectReport("reportDaily", in: app)
-        reveal(recordedFood, in: app)
-        XCTAssertTrue(recordedFood.exists, "Deleting a workout preserves recorded food")
+        XCTAssertTrue(calorieSummary(in: app).contains("95 kcal"), "Deleting a workout preserves recorded food")
+        scrollToTop(in: app)
         open("openWeight", in: app)
         reveal(app.staticTexts["70 kg"].firstMatch, in: app)
         XCTAssertTrue(app.staticTexts["70 kg"].firstMatch.exists, "Deleting a workout preserves the recorded weight")
@@ -264,9 +237,77 @@ import XCTest
         XCTAssertTrue(selected.label.contains("80.0 kg"))
     }
 
+    func testWeightAskPipQuotesRecord() {
+        let app = launchDiary(extra: ["--coach-inference-fixture"])
+        logWeight("70", in: app)
+        app.tabBars.buttons["Progress"].tap()
+        open("openWeight", in: app)
+        askPip("editWeight", expecting: "Weight · 70", in: app)
+    }
+
+    func testWorkoutAskPipQuotesRecord() {
+        let app = launchDiary(extra: ["--coach-inference-fixture"])
+        app.tabBars.buttons["Progress"].tap()
+        open("openWorkouts", in: app)
+        logWorkout(in: app)
+        replace(app.textFields["workoutDuration"], with: "30")
+        app.buttons["saveWorkout"].tap()
+        askPip("workoutRow", expecting: "30 min", in: app)
+    }
+
+    private func askPip(_ row: String, expecting text: String, in app: XCUIApplication) {
+        let target = app.buttons[row].firstMatch
+        reveal(target, in: app)
+        target.press(forDuration: 1)
+        let ask = app.buttons["Ask Pip"]
+        XCTAssertTrue(ask.waitForExistence(timeout: 5)); ask.tap()
+        let bar = app.otherElements["coachReplyBar"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 10))
+        XCTAssertTrue(bar.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists)
+    }
+
+    func testChartCardsRenderForEveryRange() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--diary-progress-fixture"]
+        app.launch()
+        let tab = app.tabBars.buttons["Progress"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+        XCTAssertTrue(app.staticTexts["missingDayCopy"].waitForExistence(timeout: 10))
+        let picker = app.segmentedControls["progressRange"]
+        for range in ["Week", "Month", "3M", "Year"] {
+            picker.buttons[range].tap()
+            XCTAssertTrue(picker.buttons[range].isSelected)
+            for part in ["top", "middle", "lower", "bottom"] {
+                attachScreenshot("Progress \(range) \(part)", from: app)
+                app.swipeUp()
+            }
+            for _ in 0..<6 { app.swipeDown() }
+        }
+    }
+
+    func testEachCardOpensItsDetail() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--diary-progress-fixture"]
+        app.launch()
+        let tab = app.tabBars.buttons["Progress"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+        app.segmentedControls["progressRange"].buttons["Month"].tap()
+        for (id, title) in [("progressMacros", "Macros"), ("progressCalendar", "Calendar"), ("progressCalories", "Calories"),
+                            ("progressBurn", "Estimated burn"), ("progressTopFoods", "Top foods")] {
+            let card = app.buttons[id]
+            reveal(card, in: app)
+            card.tap()
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "\(id) should open \(title)")
+            attachScreenshot("Detail \(title)", from: app)
+            app.navigationBars[title].buttons.firstMatch.tap()
+            XCTAssertTrue(app.segmentedControls["progressRange"].waitForExistence(timeout: 5) || app.buttons[id].waitForExistence(timeout: 5))
+        }
+    }
+
     private func launchDiary(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"] + extra
+        // Day start at midnight keeps meals, weights and the Day report on one date between 00:00 and 04:00.
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "-dayStartHour", "<integer>0</integer>"] + extra
         app.launch()
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 15))
         return app
@@ -283,9 +324,29 @@ import XCTest
         action.tap()
     }
 
-    private func selectReport(_ id: String, in app: XCUIApplication) {
-        open(id, in: app)
-        XCTAssertTrue(app.buttons[id].isSelected)
+    private func selectRange(_ title: String, in app: XCUIApplication) {
+        let segment = app.segmentedControls["progressRange"].buttons[title]
+        // The picker is the list's first row; a scrolled list drops it from the hierarchy.
+        for _ in 0..<8 where !segment.waitForExistence(timeout: 1) { app.swipeDown() }
+        XCTAssertTrue(segment.waitForExistence(timeout: 10))
+        segment.tap()
+        XCTAssertTrue(segment.isSelected)
+    }
+
+    private func text(containing value: String, in app: XCUIApplication) -> XCUIElement {
+        // Text inside a card link is part of the link's label, so match any element, not only static text.
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", value)).firstMatch
+    }
+
+    /// The calories chart's spoken summary, e.g. "Oct 23: 95 kcal".
+    private func calorieSummary(in app: XCUIApplication) -> String {
+        let chart = app.descendants(matching: .any)["nutritionChartSummary"]
+        reveal(chart, in: app)
+        return chart.value as? String ?? ""
+    }
+
+    private func scrollToTop(in app: XCUIApplication) {
+        for _ in 0..<6 { app.scrollViews["progressList"].swipeDown() }
     }
 
     private func logWeight(_ value: String, in app: XCUIApplication) {
@@ -296,42 +357,6 @@ import XCTest
 
     private func logWorkout(in app: XCUIApplication) { open("logWorkout", in: app) }
 
-    private func expand(_ id: String, toShow element: XCUIElement, in app: XCUIApplication) {
-        let title = id == "progressCoverage" ? "Coverage & averages" : "Recorded intake data"
-        let disclosure = app.buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
-        reveal(disclosure, in: app)
-        for _ in 0..<4 {
-            let top = app.navigationBars["Progress"].frame.maxY + 8
-            let bottom = app.tabBars.firstMatch.frame.minY - 8
-            let frame = disclosure.frame
-            if frame.minY >= top && frame.maxY <= bottom { break }
-            let maximumDrag = (bottom - top) / 3
-            let distance = frame.minY < top ? min(top - frame.minY + 8, maximumDrag)
-                : -min(frame.maxY - bottom + 8, maximumDrag)
-            let start = app.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: app.frame.midX, dy: (top + bottom) / 2))
-            start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)))
-        }
-        XCTAssertGreaterThanOrEqual(disclosure.frame.minY, app.navigationBars["Progress"].frame.maxY)
-        XCTAssertLessThanOrEqual(disclosure.frame.maxY, app.tabBars.firstMatch.frame.minY + 0.5)
-        let state = disclosure.staticTexts[id].firstMatch
-        XCTAssertTrue(state.exists, "The disclosure header exposes its expansion state")
-        let value = state.value as? String
-        XCTAssertTrue(value == "Expanded" || value == "Collapsed")
-        if value == "Collapsed" { disclosure.tap() }
-        let expanded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Expanded"), object: state)
-        let result = XCTWaiter.wait(for: [expanded], timeout: 5)
-        if result != .completed {
-            let hierarchy = XCTAttachment(string: app.debugDescription)
-            hierarchy.name = "Progress disclosure expansion failure"
-            hierarchy.lifetime = .keepAlways
-            add(hierarchy)
-            attachScreenshot("Progress disclosure expansion failure", from: app)
-        }
-        XCTAssertEqual(result, .completed)
-        reveal(element, in: app)
-    }
-
     private func attachScreenshot(_ name: String, from app: XCUIApplication) {
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = name
@@ -341,9 +366,9 @@ import XCTest
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         let workoutForm = app.collectionViews["workoutForm"]
-        let progress = app.collectionViews["progressList"]
+        let progress = app.scrollViews["progressList"]
         let scroller = workoutForm.exists && workoutForm.isHittable ? workoutForm
-            : (progress.exists && progress.isHittable ? progress
+            : (progress.exists && progress.isHittable && !app.navigationBars["Settings"].exists ? progress  // a sheet over Progress scrolls itself
                : app.collectionViews.allElementsBoundByIndex.first(where: \.isHittable) ?? app.collectionViews.firstMatch)
         for _ in 0..<8 {
             if readyToUse(element, in: app, scroller: scroller) { break }

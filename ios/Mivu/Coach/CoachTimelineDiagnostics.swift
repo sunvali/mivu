@@ -226,7 +226,7 @@ import UIKit
             "replyTargetID": replyTarget?.uuidString ?? "", "completedReplyID": completedReply?.uuidString ?? "",
             "focusStage": focusStage, "focusEvictedLatest": focusEvictedLatest, "focusRefetchedLatest": focusRefetchedLatest,
             "focusReplyCommitted": focusStage == 4, "rowOffsets": Dictionary(uniqueKeysWithValues: frames.map { ($0.key.uuidString, $0.value.minY) }),
-            "viewportHeight": table?.bounds.height ?? 0, "lastRowBottom": table?.measuredLastRowBottom() as Any? ?? NSNull(),
+            "viewportHeight": table.map { $0.bounds.height - $0.contentInset.bottom } ?? 0, "lastRowBottom": table?.measuredLastRowBottom() as Any? ?? NSNull(),
             "anchorID": anchor?.rowID.uuidString ?? "", "before": before as Any? ?? NSNull(),
             "after": after as Any? ?? NSNull(), "maxDrift": maximumDrift, "everLost": lost,
             "visibleIDs": visible.map { $0.id.uuidString }, "visibleRowHeights": visible.compactMap { frames[$0.id]?.height },

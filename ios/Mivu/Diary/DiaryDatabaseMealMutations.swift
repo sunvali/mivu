@@ -9,12 +9,8 @@ extension DiaryDatabase {
             let projection = try day.map { try transaction.dayProjection($0) }
             let pending = try mutationInteger("SELECT COUNT(*) FROM submission WHERE json_extract(CAST(payload AS TEXT), '$.state') IN ('captured','waitingForConnection','analyzing','needsRetry')")
                 + mutationInteger("SELECT COUNT(*) FROM coach_index WHERE pendingMealID IS NULL AND state IN ('captured','analyzing','waitingForConnection','waitingForNetwork','needsRetry','needsClarification')")
-            let activePending = try day.map { day in
-                try mutationInteger("SELECT EXISTS(SELECT 1 FROM coach_turn WHERE COALESCE(json_extract(CAST(payload AS TEXT), '$.resolvedDayID'), json_extract(CAST(payload AS TEXT), '$.activeDayID')) = ? AND json_extract(CAST(payload AS TEXT), '$.state') != 'completed') OR EXISTS(SELECT 1 FROM coach_index i JOIN coach_turn t ON t.id = i.turnID WHERE i.displayLocalDate = ? AND i.state != 'completed' AND COALESCE(json_extract(CAST(t.payload AS TEXT), '$.resolvedDayID'), json_extract(CAST(t.payload AS TEXT), '$.activeDayID')) IS NULL)", [.text(day.id.uuidString), .text(day.localDate)]) > 0
-            } ?? false
             return DiaryReadModel(head: head, activeDay: day, meals: projection?.meals ?? [], weight: projection?.weight,
-                workouts: projection?.workouts ?? [], activeGoal: try transaction.goal(on: day?.localDate ?? diaryDateLabel(Date(), zone: head.profile.timeZoneID)), pendingAnalysisCount: pending,
-                hasPendingOnActiveDay: activePending || projection?.meals.contains(where: \.hasUnresolvedInput) == true)
+                workouts: projection?.workouts ?? [], activeGoal: try transaction.goal(on: day?.localDate ?? diaryDateLabel(Date(), zone: head.profile.timeZoneID)), pendingAnalysisCount: pending)
         }
     }
     func diaryDay(id: UUID, expectedProfileID: UUID) throws -> DiaryDayReadModel {

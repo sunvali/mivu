@@ -12,6 +12,14 @@ import AVFoundation
         #expect(QuickLogRequest.shared.pending)
     }
 
+    @Test func logMealPlaceholderOpensTheSameCamera() async throws {
+        QuickLogRequest.shared.pending = false
+        defer { QuickLogRequest.shared.pending = false }
+        _ = try await LogMealIntent().perform()
+        #expect(QuickLogRequest.shared.pending)
+        #expect(MivuShortcuts.appShortcuts.count == 4)
+    }
+
     @Test func openCoachIntentRequestsCoach() async throws {
         QuickLogRequest.shared.openCoach = false
         defer { QuickLogRequest.shared.openCoach = false }
@@ -26,7 +34,7 @@ import AVFoundation
         defer { QuickLogRequest.shared.pending = false }
         #expect(!QuickLogRequest.shared.handle(UIApplicationShortcutItem(type: "other", localizedTitle: "Other")))
         #expect(!QuickLogRequest.shared.pending)
-        #expect(QuickLogRequest.shared.handle(UIApplicationShortcutItem(type: QuickLogRequest.shortcutType, localizedTitle: "Log Food")))
+        #expect(QuickLogRequest.shared.handle(UIApplicationShortcutItem(type: QuickLogRequest.shortcutType, localizedTitle: "Snap It")))
         #expect(QuickLogRequest.shared.pending)
     }
 }

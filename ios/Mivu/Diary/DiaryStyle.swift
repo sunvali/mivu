@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DiarySummaryCardStyle: ViewModifier {
     var padding: CGFloat = 20
+    var fill: Color = .diarySurface
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -11,7 +12,7 @@ struct DiarySummaryCardStyle: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.diarySurface)
+                    .fill(fill)
                     .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.06), radius: 10, x: 0, y: 4)
             }
             .overlay {
@@ -45,6 +46,8 @@ struct SampleBanner: View {
 }
 
 struct DiaryCaptureAction: View {
+    var title: LocalizedStringKey = "Log with Pip"
+    var systemImage = "sparkles"
     var identifier = "logMeal"
     let action: () -> Void
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -57,10 +60,32 @@ struct DiaryCaptureAction: View {
     }
     private var button: some View {
         Button(action: action) {
-            Label("Log meal", systemImage: "plus.circle.fill").font(.headline)
+            Label(title, systemImage: systemImage).font(.headline)
                 .frame(maxWidth: .infinity, minHeight: 52)
         }
         .tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// The secondary entry beside the Pip action: typing nutrition in by hand.
+struct DiaryManualAction: View {
+    let identifier: String
+    let action: () -> Void
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var body: some View {
+        if reduceTransparency {
+            button.buttonStyle(.bordered)
+        } else {
+            button.buttonStyle(.glass)
+        }
+    }
+    private var button: some View {
+        Button(action: action) {
+            Label("Add manually", systemImage: "number").font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 52)
+        }
+        .tint(.diaryAccent)
         .accessibilityIdentifier(identifier)
     }
 }
@@ -129,6 +154,22 @@ struct NutritionSummary: View {
     }
 }
 
+/// A small dot-labelled value, as in Today's protein / carbs / fat row.
+struct DiaryMetric: View {
+    let title: LocalizedStringKey
+    let value: String?
+    let color: Color
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 3) {
+                Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
+                Text(title).font(.caption).fixedSize(horizontal: true, vertical: false)
+            }
+            Text(value ?? "—").font(.system(size: 17, weight: .medium)).monospacedDigit()
+        }.foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct DiarySectionLabel: View {
     let title: LocalizedStringKey
     let symbol: String
@@ -163,13 +204,19 @@ extension SubmissionState {
     }
 }
 
-extension DayCompleteness {
+extension DayStatus {
     var title: LocalizedStringKey {
         switch self {
-        case .unknown: "Unknown"
-        case .complete: "Complete"
-        case .partial: "Partial"
-        case .untracked: "Untracked"
+        case .open: "Open"
+        case .closed: "Closed"
+        case .skipped: "Skipped"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .open: .diaryAccent
+        case .closed: .diarySuccess
+        case .skipped: .diarySecondary
         }
     }
 }
@@ -274,5 +321,12 @@ extension NutritionProvenance {
         case .identifiedSource: "Retrieved nutrition source"
         case .estimate: "Estimated nutrition"
         }
+    }
+}
+
+extension FoodItem {
+    /// "Estimated nutrition · ChatGPT": the provenance plus the Coach model that produced it, unless the person edited it.
+    var sourceCaption: String {
+        [provenance.description, provenance == .user ? nil : estimatedByLabel].compactMap { $0 }.joined(separator: " · ")
     }
 }

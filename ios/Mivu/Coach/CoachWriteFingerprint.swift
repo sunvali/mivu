@@ -8,7 +8,8 @@ extension CoachWrite {
             guard let result = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) as? [String: Any] else { throw DiaryError.invalidData }; return result
         }
         func foods(_ items: [FoodItem]) throws -> [[String: Any]] {
-            try items.map { item in var result = try object(item); result.removeValue(forKey: "id"); return result }
+            // The estimating model is a label, not the command: a retry by the other model must match its receipt.
+            try items.map { item in var result = try object(item); result.removeValue(forKey: "id"); result.removeValue(forKey: "estimatedBy"); return result }
         }
         func workout(_ draft: WorkoutDraft) throws -> [String: Any] {
             ["kind": draft.kind.rawValue, "duration": draft.durationMinutes, "exercises": try draft.exercises.map(object), "burn": nullable(draft.estimatedBurnKcal), "source": nullable(draft.burnSource?.rawValue)]

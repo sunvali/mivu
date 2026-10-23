@@ -35,21 +35,15 @@ enum DiaryWeek {
         return formatter.string(from: day)
     }
 
-    static func pillLabel(_ localDate: String, summaries: [DiaryDaySummary]) -> String {
-        let name = format(localDate, "EEEE d MMMM")
-        guard let first = summaries.first else { return "\(name), nothing logged" }
-        let meals = summaries.reduce(0) { $0 + $1.mealCount }
-        return "\(name), \(first.day.completeness.rawValue), \(meals) \(meals == 1 ? "meal" : "meals")"
+    static func status(_ summaries: [DiaryDaySummary], activeDayID: UUID?) -> DayStatus? {
+        ProgressAnalytics.status(days: summaries.map(\.day), hasFood: summaries.contains { $0.savedMealCount > 0 }, activeDayID: activeDayID)
     }
-}
 
-extension DayCompleteness {
-    var color: Color {
-        switch self {
-        case .complete: .diarySuccess
-        case .partial: .diaryWarning
-        case .unknown, .untracked: .diarySecondary
-        }
+    static func pillLabel(_ localDate: String, summaries: [DiaryDaySummary], activeDayID: UUID? = nil) -> String {
+        let name = format(localDate, "EEEE d MMMM")
+        guard let status = status(summaries, activeDayID: activeDayID) else { return "\(name), nothing logged" }
+        let meals = summaries.reduce(0) { $0 + $1.mealCount }
+        return "\(name), \(status.rawValue), \(meals) \(meals == 1 ? "meal" : "meals")"
     }
 }
 
@@ -59,6 +53,7 @@ struct DiaryWeekStrip: View {
     let today: String
     let earliest: String?
     let summaries: [String: [DiaryDaySummary]]
+    var activeDayID: UUID? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleWeek: String?
     private var calendar: Calendar { .current }
@@ -104,7 +99,7 @@ struct DiaryWeekStrip: View {
                     .foregroundStyle(isSelected ? Color.diaryActionText : Color.diarySecondary)
                 Text(DiaryWeek.format(date, "d")).font(.headline).monospacedDigit()
                     .foregroundStyle(isSelected ? Color.diaryActionText : date == today ? Color.diaryAccent : Color.diaryText)
-                Circle().fill(days.first?.day.completeness.color ?? .clear).frame(width: 6, height: 6)
+                Circle().fill(DiaryWeek.status(days, activeDayID: activeDayID)?.color ?? .clear).frame(width: 6, height: 6)
                     .opacity(days.isEmpty || isSelected ? 0 : 1)
             }
             .frame(maxWidth: .infinity, minHeight: 64)
@@ -113,7 +108,7 @@ struct DiaryWeekStrip: View {
         }
         .buttonStyle(.plain)
         .disabled(isFuture).opacity(isFuture ? 0.35 : 1)
-        .accessibilityLabel(DiaryWeek.pillLabel(date, summaries: days))
+        .accessibilityLabel(DiaryWeek.pillLabel(date, summaries: days, activeDayID: activeDayID))
         .accessibilityValue(date)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityShowsLargeContentViewer()
@@ -121,30 +116,31 @@ struct DiaryWeekStrip: View {
     }
 }
 
-struct CoverageChip: View {
-    let completeness: DayCompleteness
-    let set: (DayCompleteness) -> Void
+/// Shows whether a day is open, closed or skipped, and lets the person skip it or count it again.
+struct DayStatusChip: View {
+    let status: DayStatus
+    let isMarkedSkipped: Bool
+    let setSkipped: (Bool) -> Void
     var body: some View {
         Menu {
-            Section("Complete means all intake was recorded.") {
-                ForEach(DayCompleteness.allCases, id: \.self) { value in
-                    Button { set(value) } label: {
-                        if value == completeness { Label { Text(value.title) } icon: { Image(systemName: "checkmark") } } else { Text(value.title) }
-                    }
+            Section("Skipped days stay out of your statistics.") {
+                Button { setSkipped(!isMarkedSkipped) } label: {
+                    if isMarkedSkipped { Label("Count This Day", systemImage: "arrow.uturn.backward") }
+                    else { Label("Skip This Day", systemImage: "forward.end") }
                 }
             }
         } label: {
             HStack(spacing: 6) {
-                Circle().fill(completeness.color).frame(width: 8, height: 8)
-                Text(completeness.title).font(.subheadline.weight(.medium))
+                Circle().fill(status.color).frame(width: 8, height: 8)
+                Text(status.title).font(.subheadline.weight(.medium))
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
             }
             .foregroundStyle(Color.diaryText)
             .padding(.horizontal, 12).frame(minHeight: 44)
             .background(Capsule().fill(Color.diarySummarySurface))
         }
-        .accessibilityLabel(Text("Day coverage"))
-        .accessibilityValue(Text(completeness.title))
-        .accessibilityIdentifier("diaryCoverageChip")
+        .accessibilityLabel(Text("Day status"))
+        .accessibilityValue(Text(status.title))
+        .accessibilityIdentifier("diaryDayStatusChip")
     }
 }

@@ -666,7 +666,6 @@ import Testing
         #expect(detail.totals == source.totals(dayID: day.id))
         #expect(active.totals == reference.foodTotals)
         #expect(report == reference)
-        #expect(active.hasPendingOnActiveDay == reference.hasPending)
         #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0 && metrics.counters.originalPhotoBytes == 0)
     }
 

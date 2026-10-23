@@ -149,6 +149,8 @@ struct CoachReply: Codable, Equatable, Sendable {
         case meal(mealID: UUID)
         case item(mealID: UUID, itemID: UUID)
         case day(dayID: UUID)
+        case weight(weightID: UUID)
+        case workout(workoutID: UUID)
     }
     var target: Target
     var excerpt: String
@@ -253,6 +255,8 @@ struct CoachContext: Codable, Equatable, Sendable {
         var excerpt: String
         var turn: Turn? = nil
         var meal: Meal? = nil
+        var weight: WeightEntry? = nil
+        var workout: WorkoutSession? = nil
         var unavailable: Bool? = nil
     }
 }

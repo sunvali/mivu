@@ -44,7 +44,9 @@ import XCTest
         app.buttons["coachPhotos"].tap()
         XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
         let send = app.buttons["coachSend"]
-        XCTAssertTrue(send.isHittable); XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
+        // The camera cover's dismissal and the restored keyboard settle the composer before Send is hittable.
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: send)], timeout: 5), .completed)
+        XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["Apple sample mode"].exists)
@@ -181,13 +183,8 @@ import XCTest
         revealMealDetailItem(app.staticTexts[date], in: app)
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()
-        let manual = app.textFields["mealText"]; XCTAssertTrue(manual.waitForExistence(timeout: 5)); manual.tap(); manual.typeText("Fixture review meal")
-        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
-        let review = app.switches["reviewFirst"].switches.firstMatch
-        for _ in 0..<5 where !review.isHittable { app.collectionViews.firstMatch.swipeUp() }
-        XCTAssertTrue(review.isHittable); review.tap(); app.buttons["sendMeal"].tap()
-        app.tabBars.buttons["Coach"].tap(); waitForReply(to: "Fixture review meal", in: app)
+        app.tabBars.buttons["Coach"].tap(); enter("Fixture review meal", in: app); app.buttons["coachSend"].tap()
+        waitForReply(to: "Fixture review meal", in: app)
         let reviewLink = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
         revealCoachLink(reviewLink, in: app)
         XCTAssertTrue(reviewLink.waitForExistence(timeout: 5)); reviewLink.tap()
@@ -262,7 +259,7 @@ import XCTest
         enter("Show my weekly report", in: app); app.buttons["coachSend"].tap()
         let weekly = waitForReply(to: "Show my weekly report", in: app)
         XCTAssertFalse(weekly.label.contains("9999"), weekly.label)
-        XCTAssertTrue(weekly.label.hasPrefix("Last 7 days") || weekly.label.hasPrefix("No complete days"), weekly.label)
+        XCTAssertTrue(weekly.label.hasPrefix("Last 7 days") || weekly.label.hasPrefix("No finished days"), weekly.label)
         app.terminate(); app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         revealCoach(weekly, in: app)
@@ -534,9 +531,9 @@ import XCTest
     private func openConnectionSettings(in app: XCUIApplication) {
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Coach AI")).firstMatch
         revealList(row, in: app); row.tap()
-        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Coach AI"].waitForExistence(timeout: 5))
     }
     private func revealList(_ element: XCUIElement, in app: XCUIApplication) {
         guard let list = nativeList(in: app) else { return }
@@ -556,6 +553,9 @@ import XCTest
         if collection.exists { return collection }
         let table = app.tables.firstMatch
         if table.exists { return table }
+        // Progress is a chart-first scroll view rather than a list.
+        let scroll = app.scrollViews.firstMatch
+        if scroll.exists { return scroll }
         XCTFail("The destination must contain its native list")
         return nil
     }

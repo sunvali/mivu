@@ -74,7 +74,9 @@ struct OnboardingView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color.diaryCanvas.ignoresSafeArea())
-            .safeAreaInset(edge: .bottom) { if focus == nil { actions } }
+            // Next/Done sit above the keyboard here, not in a keyboard toolbar: that toolbar goes
+            // missing when setup is presented over Settings, and the number pad has no return key.
+            .safeAreaInset(edge: .bottom) { if focus == nil { actions } else { keyboardBar } }
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -111,13 +113,6 @@ struct OnboardingView: View {
         ToolbarItem(placement: .topBarTrailing) {
             if step == .diet { Button("Skip") { advance() } }
         }
-        ToolbarItemGroup(placement: .keyboard) {
-            if let next = nextField {
-                Button("Next") { focus = next }.accessibilityIdentifier("keyboardNext")
-            }
-            Spacer()
-            Button("Done") { focus = nil }.fontWeight(.semibold).accessibilityIdentifier("keyboardDone")
-        }
     }
 
     /// The keyboard's Next walks the About card in reading order.
@@ -128,6 +123,17 @@ struct OnboardingView: View {
         case .weight: .birthYear
         default: nil
         }
+    }
+
+    private var keyboardBar: some View {
+        HStack {
+            if let next = nextField {
+                Button("Next") { focus = next }.frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("keyboardNext")
+            }
+            Spacer()
+            Button("Done") { focus = nil }.fontWeight(.semibold).frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("keyboardDone")
+        }
+        .padding(.horizontal, 20).background(.bar)
     }
 
     private var actions: some View {
@@ -141,8 +147,15 @@ struct OnboardingView: View {
             .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
             .disabled(!canContinue).accessibilityIdentifier("onboardingNext")
             if step == .connect {
-                Button("Use the estimate instead") { go(to: .results) }
-                    .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingSkipConnect")
+                if connection.appleAvailable {
+                    Button("Use Apple Intelligence instead") { connection.provider = .apple; go(to: .results) }
+                        .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingChooseApple")
+                    Text("No account, but much less accurate. It only logs meals and changes amounts.")
+                        .font(.caption).foregroundStyle(Color.diarySecondary).multilineTextAlignment(.center)
+                } else {
+                    Button("Use the estimate instead") { go(to: .results) }
+                        .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingSkipConnect")
+                }
             }
         }
         .padding(.horizontal, 20).padding(.vertical, 8)
@@ -244,7 +257,7 @@ struct OnboardingView: View {
             card {
                 promise("lock.shield", "Private by default", "Only these answers are sent, once. Your diary stays on this iPhone.")
                 Divider()
-                promise("person.crop.circle.badge.checkmark", "Your own plan", "Uses your ChatGPT plan's allowance. No extra cost.")
+                promise("person.crop.circle.badge.checkmark", "Your own plan", "Recommended. Works with ChatGPT Plus or Pro and uses its allowance. No extra cost.")
             }
             if connection.isConnecting { ProgressView("Waiting for ChatGPT…").frame(maxWidth: .infinity) }
             if let notice = connection.notice { footnote(notice.rawValue) }
@@ -326,7 +339,7 @@ struct OnboardingView: View {
 
     private func primary() {
         switch step {
-        case .connect: if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
+        case .connect: connection.provider = .chatGPT; if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
         case .results: Task { await save() }
         default: advance()
         }
@@ -363,7 +376,7 @@ struct OnboardingView: View {
     private func showEstimate() {
         guard let answers else { return }
         targets = answers.estimate(); reply = nil; askFailed = false
-        if connection.planAuthorized { Task { await askChatGPT() } } else { react(.saved) }
+        if connection.tunesTargets { Task { await askChatGPT() } } else { react(.saved) }
     }
 
     private func askChatGPT() async {
