@@ -15,7 +15,8 @@ struct DiaryProgressView: View {
     @State private var pipEntered = false
     @State private var pipReaction: PipReaction?
     /// A requested one-shot; a fresh id replays the same pose (two taps in a row).
-    private struct PipReaction: Equatable { let pose: CompanionPose; var id = UUID() }
+    private struct PipReaction: Equatable { let pose: CompanionPose; var level = 0; var id = UUID() }
+    @State private var pipTaps = 0
     private struct PipRequest: Equatable {
         let celebrates: Bool?, visible: Bool, dark: Bool, reduceMotion: Bool, reaction: PipReaction?
     }
@@ -153,11 +154,14 @@ struct DiaryProgressView: View {
             guard companionVisible, let snapshot else { return }
             await companionRuntime.select(CharacterCatalog.bundled.resolve("pip"))
             await companionRuntime.attach(eligible: true)
+            companionRuntime.rig?.showsProgressProps = true
             // A one-shot first (entrance, range switch, tap), then back to holding the chart.
             let reaction = pipReaction?.pose ?? (pipEntered ? nil : (snapshot.headline.celebrates ? .progressEntranceCheer : .progressEntrance))
             pipEntered = true
             if let reaction, !reduceMotion {
-                await companionRuntime.apply(CompanionOutput(pose: reaction, playback: .animated, reactionID: UUID(), nextDeadline: nil), darkMode: colorScheme == .dark)
+                var output = CompanionOutput(pose: reaction, playback: .animated, reactionID: UUID(), nextDeadline: nil)
+                output.tapLevel = pipReaction?.level ?? 0
+                await companionRuntime.apply(output, darkMode: colorScheme == .dark)
                 try? await Task.sleep(for: .seconds(Self.lifetime(of: reaction)))
                 guard !Task.isCancelled else { return }
                 // Clearing the request reruns this task, which settles Pip back into holding the chart.
@@ -242,7 +246,10 @@ struct DiaryProgressView: View {
     }
     private func companion(_ headline: ProgressHeadline) -> CompanionView {
         CompanionView(presentation: companionOutput(headline), darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize ? 120 : 150,
-                      runtime: companionRuntime) { _ in pipReaction = PipReaction(pose: .progressTap) }
+                      runtime: companionRuntime) { _ in
+            // Each tap plays the next silly gesture.
+            pipReaction = PipReaction(pose: .progressTap, level: pipTaps); pipTaps += 1
+        }
     }
     private func dates(_ progress: CoachProgress) -> String {
         let format = range.days > 30 ? "MMM d, yyyy" : "MMM d"

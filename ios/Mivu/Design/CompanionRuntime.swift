@@ -213,7 +213,7 @@ import UIKit
         case .progressEntrance: .progressEntrance(cheer: false)
         case .progressEntranceCheer: .progressEntrance(cheer: true)
         case .progressRange: .progressRange
-        case .progressTap: .progressTap
+        case .progressTap: .progressTap(level: tapLevel)
         }
     }
 

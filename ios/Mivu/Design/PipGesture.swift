@@ -7,8 +7,8 @@ enum PipMoment: Hashable {
     case firstMealToday, dayComplete, curious, tapped(level: Int), patted, earTwitch
     /// Progress: leaning in over the chart; `cheer` on a good period, a calm smile otherwise.
     case presenting(cheer: Bool)
-    /// Progress one-shots: opening the tab (`cheer` on an on-track period), switching range, and a tap on Pip.
-    case progressEntrance(cheer: Bool), progressRange, progressTap
+    /// Progress one-shots: opening the tab (`cheer` on an on-track period), switching range, and taps on Pip (`level` picks the next silly one).
+    case progressEntrance(cheer: Bool), progressRange, progressTap(level: Int)
 }
 
 /// Timed poses. Each key is the full pose Pip should *arrive at* by `at` seconds; the previous key's time is when
@@ -105,7 +105,6 @@ extension PipPose {
     func look(_ x: CGFloat, _ y: CGFloat = 0) -> PipPose { var copy = self; copy.gaze = CGPoint(x: x, y: y); return copy }
     func turn(_ headTurn: CGFloat) -> PipPose { var copy = self; copy.headTurn = headTurn; return copy }
     func blushing() -> PipPose { var copy = self; copy.blush = true; return copy }
-    func holdingChart() -> PipPose { var copy = self; copy.chart = true; return copy }
     /// Shows `count` hearts that have drifted `drift` points upward.
     func hearts(_ count: Int, drift: CGFloat = 0) -> PipPose {
         var copy = self

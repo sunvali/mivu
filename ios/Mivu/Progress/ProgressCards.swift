@@ -182,10 +182,10 @@ struct ProgressHeadlineCard: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(dates).font(.subheadline).foregroundStyle(Color.diarySecondary)
             if typeSize.isAccessibilitySize {
-                companion
+                pip.frame(maxWidth: .infinity, alignment: .trailing)
                 verdict
             } else {
-                HStack(alignment: .center, spacing: 8) { companion; verdict.frame(maxWidth: .infinity, alignment: .leading) }
+                HStack(alignment: .center, spacing: 8) { verdict.frame(maxWidth: .infinity, alignment: .leading); pip }
             }
             if snapshot.loggedDays == 0 {
                 Button(action: openDiary) { Label("Open Diary", systemImage: "calendar").frame(minHeight: 44) }
@@ -202,6 +202,9 @@ struct ProgressHeadlineCard: View {
         }
         .diaryProgressCard()
     }
+
+    /// Pip stands on the right, mirrored to face the verdict and the bars (the rig itself only faces right).
+    private var pip: some View { companion.scaleEffect(x: -1, y: 1) }
 
     private var verdict: some View {
         VStack(alignment: .leading, spacing: 6) {

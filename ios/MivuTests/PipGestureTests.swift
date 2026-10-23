@@ -8,7 +8,8 @@ import Testing
         .saved, .reviewed, .recovery, .firstMealToday, .dayComplete, .curious,
         .tapped(level: 0), .tapped(level: 1), .tapped(level: 2), .tapped(level: 3), .tapped(level: 4),
         .patted, .earTwitch, .presenting(cheer: true), .presenting(cheer: false),
-        .progressEntrance(cheer: true), .progressEntrance(cheer: false), .progressRange, .progressTap,
+        .progressEntrance(cheer: true), .progressEntrance(cheer: false), .progressRange,
+        .progressTap(level: 0), .progressTap(level: 1), .progressTap(level: 2), .progressTap(level: 3), .progressTap(level: 4), .progressTap(level: 5),
     ]
 
     @Test func everyLibraryGestureEndsAtRestWithinTwoSeconds() {
@@ -59,30 +60,40 @@ import Testing
         #expect(PipGestureLibrary.loop(for: .saved) == nil)
     }
 
-    /// Progress holds Pip leaning in toward the chart below, eyes down, paw lifted; never a sad face.
+    /// Progress keeps Pip by the chart sign, eyes down on the bars, a paw on the sign; never a sad face.
     @MainActor @Test func presentingHoldsAKindLookAtTheChart() throws {
         for cheer in [true, false] {
             let loop = try #require(PipGestureLibrary.loop(for: .presenting(cheer: cheer)))
             let held = try #require(loop.keys.first?.pose)
             #expect(held.gaze.y > 0.5, "Looks down at the chart")
             #expect(held.mouth != .concerned)
-            #expect(held.chart, "Holds the chart card up")
             #expect(CompanionRuntime.moment(for: cheer ? .presentingCheer : .presentingCalm, tapLevel: 0, hour: 12) == .presenting(cheer: cheer))
         }
     }
 
-    /// Entrance, range switch and tap all land on Pip holding the chart; the cheer is a happy face, never hearts or points.
+    /// Entrance and range switch are one-shots that settle by the sign; the cheer is a happy face, never hearts or points.
     @MainActor @Test func progressMomentsShowTheChartKindly() throws {
         let cases: [(CompanionPose, PipMoment)] = [(.progressEntrance, .progressEntrance(cheer: false)), (.progressEntranceCheer, .progressEntrance(cheer: true)),
-                                                   (.progressRange, .progressRange), (.progressTap, .progressTap)]
+                                                   (.progressRange, .progressRange), (.progressTap, .progressTap(level: 0))]
         for (pose, moment) in cases {
             #expect(CompanionRuntime.moment(for: pose, tapLevel: 0, hour: 12) == moment)
             let gesture = PipGestureLibrary.gesture(for: moment)
             #expect(!gesture.loops && gesture.keys.last?.pose == .rest, "\(moment) is a one-shot")
-            #expect(PipGestureLibrary.stillPose(for: moment).chart, "\(moment) reads as holding the chart when still")
             #expect(gesture.keys.allSatisfy { $0.pose.hearts == 0 && $0.pose.mouth != .concerned }, "\(moment)")
         }
         #expect(PipGestureLibrary.gesture(for: .progressEntrance(cheer: true)).keys.contains { $0.pose.eyes == .closedHappy })
+    }
+
+    /// Each tap on Progress Pip plays the next of six silly one-shots, then wraps around.
+    @MainActor @Test func tapsCycleThroughFunnyGestures() {
+        let names = (0..<6).map { PipGestureLibrary.gesture(for: .progressTap(level: $0)).name }
+        #expect(Set(names).count == 6, "\(names)")
+        #expect(PipGestureLibrary.gesture(for: .progressTap(level: 6)).name == names[0])
+        #expect(CompanionRuntime.moment(for: .progressTap, tapLevel: 3, hour: 12) == .progressTap(level: 3))
+        for level in 0..<6 {
+            let gesture = PipGestureLibrary.gesture(for: .progressTap(level: level))
+            #expect(!gesture.loops && gesture.keys.last?.pose == .rest && gesture.duration <= MivuMotion.progressTap, "\(gesture.name)")
+        }
     }
 
     @Test func spokenTimingsMatchSpec() {

@@ -220,12 +220,17 @@ import UIKit
         #expect(try rig().layer(named: "heart-1")?.opacity == 0)
     }
 
-    @Test func chartPropIsShownOnlyByPose() throws {
-        let holding = try rig(PipPose.rest.holdingChart())
-        for part in ["prop-chart", "prop-chart.card", "prop-chart.bar-1", "prop-chart.bar-3"] {
+    @Test func progressPropsAreShownOnlyWhenTheScreenAsks() throws {
+        let holding = try rig()
+        holding.showsProgressProps = true
+        for part in ["prop-chart", "prop-chart.card", "prop-chart.bar-1", "prop-chart.bar-3", "glasses@right"] {
             #expect(holding.layer(named: part)?.opacity == 1 && holding.layer(named: part)?.isHidden == false, "\(part) shown")
         }
-        #expect(try rig().layer(named: "prop-chart")?.opacity == 0, "Hidden at rest")
+        holding.apply(PipPose.rest.nod(6).hop(10), animated: false)
+        #expect(holding.layer(named: "prop-chart")?.isHidden == false, "A new pose never hides the card")
+        #expect(holding.layer(named: "glasses@front")?.isHidden == true, "Glasses only show on the active head view")
+        #expect(try rig(PipPose.rest.pawUp(.right)).layer(named: "prop-chart")?.isHidden == true, "Hidden unless Progress shows it")
+        #expect(try rig().layer(named: "glasses@right")?.isHidden == true)
     }
 
     @Test(arguments: [(PipPose.BodySet.seated, PipMoment.saved), (.curled, .earTwitch)])
