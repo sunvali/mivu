@@ -2,7 +2,7 @@ import AppIntents
 
 // Compiled into the app and the widget extension; openAppWhenRun makes the system perform them in the app.
 struct LogFoodIntent: AppIntent {
-    static let title: LocalizedStringResource = "Log Food"
+    static let title: LocalizedStringResource = "Snap It"
     static let description = IntentDescription("Opens the camera to photograph a meal and log it.")
     static let openAppWhenRun = true
 

@@ -660,14 +660,14 @@ actor DiaryStore {
         facts.append("Estimated exercise burn: " + (daily.estimatedBurnKcal.map { "\(coachNumber($0)) kcal." } ?? "unknown."))
         if let adjusted = daily.exerciseAdjustedKcalRemaining { facts.append("Explicit exercise-adjusted remaining: \(coachNumber(adjusted)) kcal.") }
         if let period = report.period {
-            facts.append("Coverage: \(period.completeDayCount) complete, \(period.partialDayCount) partial, \(period.untrackedDayCount) untracked, \(period.unknownDayCount) unknown, \(period.missingDayCount) missing, \(period.pendingDayCount) pending days.")
-            facts.append("Average recorded intake: " + (period.averageIntake.kcal.map { "\(coachNumber($0)) kcal from \(period.knownIntakeSamples.kcal) complete known days." } ?? "unknown."))
+            facts.append("Days: \(period.closedDayCount) closed, \(period.skippedDayCount) skipped, \(period.missingDayCount) missing. Averages use closed days only.")
+            facts.append("Average recorded intake: " + (period.averageIntake.kcal.map { "\(coachNumber($0)) kcal from \(period.knownIntakeSamples.kcal) closed days." } ?? "unknown."))
             for (name, field, count) in [("carbs", \NutritionValues.carbs, period.knownIntakeSamples.carbs), ("protein", \NutritionValues.protein, period.knownIntakeSamples.protein), ("fat", \NutritionValues.fat, period.knownIntakeSamples.fat)] {
-                facts.append("Average \(name): " + (period.averageIntake[keyPath: field].map { "\(coachNumber($0)) g from \(count) complete known days." } ?? "unknown."))
+                facts.append("Average \(name): " + (period.averageIntake[keyPath: field].map { "\(coachNumber($0)) g from \(count) closed days." } ?? "unknown."))
             }
             facts.append("Period recorded workouts: \(period.workoutCount).")
             facts.append("Within 10% of target: \(period.adherenceNumerator)/\(period.adherenceDenominator) eligible days.")
-        } else { facts.append("Day coverage: \(daily.completeness?.rawValue ?? "missing"); pending: \(daily.hasPending).") }
+        } else { facts.append("Day status: \(daily.status?.rawValue ?? "missing").") }
         facts.append("Weight average: " + (report.weight.currentSevenDayAverageKg.map { "\(coachNumber($0)) kg" } ?? "unknown") + " from \(report.weight.currentSevenDayObservedCount) measured dates.")
         facts.append("Weight change versus prior 7-day window: " + (report.weight.changeFromSevenDaysAgoKg.map { "\(coachNumber($0)) kg." } ?? "insufficient data."))
         facts.append("Weight change versus 30 days ago: " + (report.weight.changeFromThirtyDaysAgoKg.map { "\(coachNumber($0)) kg." } ?? "insufficient data."))

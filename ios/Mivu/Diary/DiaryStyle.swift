@@ -203,13 +203,19 @@ extension SubmissionState {
     }
 }
 
-extension DayCompleteness {
+extension DayStatus {
     var title: LocalizedStringKey {
         switch self {
-        case .unknown: "Unknown"
-        case .complete: "Complete"
-        case .partial: "Partial"
-        case .untracked: "Untracked"
+        case .open: "Open"
+        case .closed: "Closed"
+        case .skipped: "Skipped"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .open: .diaryAccent
+        case .closed: .diarySuccess
+        case .skipped: .diarySecondary
         }
     }
 }

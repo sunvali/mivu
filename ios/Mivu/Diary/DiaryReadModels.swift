@@ -68,7 +68,6 @@ struct DiaryReadModel: Equatable, Sendable {
     var workouts: [WorkoutSession]
     var activeGoal: GoalRecord?
     var pendingAnalysisCount: Int
-    var hasPendingOnActiveDay: Bool = false
 }
 
 struct DiaryDayReadModel: Equatable, Sendable {
@@ -155,19 +154,19 @@ extension DiaryReadModel {
     var previousDayConfirmedAt: Date? { head.previousDayConfirmedAt }
     var pendingCount: Int { pendingAnalysisCount }
     var totals: NutritionTotals {
-        dayNutritionTotals(meals: meals, complete: activeDay?.completeness == .complete, hasPending: hasPendingOnActiveDay)
+        dayNutritionTotals(meals: meals, complete: activeDay?.completeness == .complete)
     }
 }
 
 extension DiaryDayReadModel {
     var totals: NutritionTotals {
-        dayNutritionTotals(meals: meals, complete: day.completeness == .complete, hasPending: false)
+        dayNutritionTotals(meals: meals, complete: day.completeness == .complete)
     }
 }
 
-private func dayNutritionTotals(meals: [MealReadModel], complete: Bool, hasPending: Bool) -> NutritionTotals {
+private func dayNutritionTotals(meals: [MealReadModel], complete: Bool) -> NutritionTotals {
     let items = meals.filter(\.isSaved).flatMap(\.items)
-    if items.isEmpty, complete, !hasPending, !meals.contains(where: \.hasUnresolvedInput) {
+    if items.isEmpty, complete, !meals.contains(where: \.hasUnresolvedInput) {
         return NutritionTotals(kcal: 0, carbs: 0, protein: 0, fat: 0, unknownItemCount: 0)
     }
     return nutritionTotals(items)

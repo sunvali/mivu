@@ -626,15 +626,10 @@ struct TodayView: View {
                         if let day = model.activeDay {
                             intakeHero(totals: snapshot.totals, day: day)
                             if snapshot.activeGoal != nil {
-                                todayGoal(snapshot: snapshot, day: day, showCompleteness: typeSize.isAccessibilitySize)
+                                todayGoal(snapshot: snapshot, day: day)
                             }
                         } else {
                             intakeHero(totals: nutritionTotals([]), day: nil)
-                        }
-                        if snapshot.pendingCount > 0 {
-                            Label("\(snapshot.pendingCount) pending", systemImage: "clock")
-                                .font(.subheadline).foregroundStyle(Color.diaryWarning)
-                                .accessibilityIdentifier("pendingCount")
                         }
                     }.diarySummaryCard()
                 }
@@ -652,7 +647,7 @@ struct TodayView: View {
                     }
                 } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
                 if let day = model.activeDay, snapshot.activeGoal == nil {
-                    Section { todayGoal(snapshot: snapshot, day: day, showCompleteness: false).diarySummaryCard() }
+                    Section { todayGoal(snapshot: snapshot, day: day).diarySummaryCard() }
                 }
                 Section {
                     Button { showWeight = true } label: {
@@ -664,17 +659,6 @@ struct TodayView: View {
                             } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
                         }.frame(minHeight: 44)
                     }.accessibilityIdentifier("logWeight").diarySummaryCard()
-                }
-                if let day = model.activeDay {
-                    Section {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Day coverage").font(.title3.weight(.bold))
-                            Picker("Completeness", selection: Binding(get: { day.completeness }, set: { value in
-                                Task { await model.change { try await model.store.setCompleteness(dayID: day.id, value, expectedProfileID: snapshot.profile.id) } }
-                            })) { ForEach(DayCompleteness.allCases, id: \.self) { Text($0.title).tag($0) } }
-                            Text("Complete means all intake was recorded. Partial totals describe only recorded meals.").font(.caption).foregroundStyle(Color.diarySecondary)
-                        }.diarySummaryCard()
-                    }
                 }
             } else {
                 Section { Text("Choose a private local profile in Settings to open your diary.").foregroundStyle(Color.diarySecondary) }
@@ -788,10 +772,7 @@ struct TodayView: View {
                             .animation(companionOutput.playback == .animated ? .snappy(duration: MivuMotion.numeric) : nil, value: totals.kcal)
                         Text("kcal recorded").font(.subheadline).foregroundStyle(Color.diaryText)
                     }
-                    Group {
-                        if let day { Text("\(Text(day.completeness.title)) day") }
-                        else { Text("No meals recorded") }
-                    }.font(.caption).foregroundStyle(Color.diarySecondary)
+                    if day == nil { Text("No meals recorded").font(.caption).foregroundStyle(Color.diarySecondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 8) {
@@ -811,7 +792,7 @@ struct TodayView: View {
         DiaryMetric(title: title, value: value.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" }, color: color)
     }
 
-    @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay, showCompleteness: Bool = true) -> some View {
+    @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay) -> some View {
         let report = ProgressAnalytics.daily(readModel: snapshot)
         if let target = report.goal?.targets.kcal {
             VStack(alignment: .leading, spacing: 8) {
@@ -841,11 +822,6 @@ struct TodayView: View {
                 Label(report.goal == nil ? "Set a goal" : "Edit goals", systemImage: "target").font(.subheadline).frame(minHeight: 44)
             }.accessibilityIdentifier("todayGoalSummary")
         }
-        if showCompleteness { HStack {
-            Image(systemName: day.completeness == .complete ? "checkmark.circle" : "circle.lefthalf.filled")
-            Text(day.completeness.title)
-            Text("day")
-        }.font(.caption).foregroundStyle(Color.diarySecondary) }
     }
 
     @ViewBuilder private func remaining(_ value: Double?) -> some View {

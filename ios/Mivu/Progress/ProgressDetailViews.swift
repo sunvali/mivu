@@ -149,7 +149,7 @@ extension ProgressSnapshot {
         Group {
             Section { ProgressBurnCard(snapshot: snapshot).listCardRow() }
             Section("How it's worked out") {
-                let complete = snapshot.loadedDays.filter { $0.completeness == .complete && !$0.hasPending }.compactMap { $0.foodTotals?.kcal }
+                let complete = snapshot.loadedDays.filter { $0.status == .closed }.compactMap { $0.foodTotals?.kcal }
                 LabeledContent("Complete days", value: complete.count.formatted())
                 LabeledContent("Average intake", value: complete.isEmpty ? "—" : kcal(complete.reduce(0, +) / Double(complete.count)))
                 LabeledContent("Weigh-ins", value: snapshot.loadedTrend.count.formatted())

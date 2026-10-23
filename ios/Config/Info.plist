@@ -10,7 +10,7 @@
 			<key>UIApplicationShortcutItemType</key>
 			<string>com.yakov103.mivu.log-food</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>Log Food</string>
+			<string>Snap It</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>camera</string>
 		</dict>

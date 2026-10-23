@@ -43,7 +43,7 @@ struct HistoryView: View {
         List {
             if model.readModel != nil, !selected.isEmpty {
                 Section {
-                    DiaryWeekStrip(selected: $selected, today: lastDate, earliest: week?.earliestLocalDate, summaries: summaries)
+                    DiaryWeekStrip(selected: $selected, today: lastDate, earliest: week?.earliestLocalDate, summaries: summaries, activeDayID: model.activeDay?.id)
                         .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 4, trailing: 12))
                         .listRowSeparator(.hidden).listRowBackground(Color.clear)
                 }
@@ -257,8 +257,10 @@ private struct DaySections: View {
     }
 
     private func coverage(_ snapshot: DiaryDayReadModel) -> some View {
-        CoverageChip(completeness: snapshot.day.completeness) { value in
-            Task { await model.change { try await model.store.setCompleteness(dayID: dayID, value, expectedProfileID: snapshot.head.profile.id) } }
+        let status = ProgressAnalytics.status(days: [snapshot.day], hasFood: snapshot.meals.contains(where: \.isSaved), activeDayID: snapshot.head.activeDayID) ?? .open
+        return DayStatusChip(status: status, isMarkedSkipped: snapshot.day.completeness == .untracked) { skip in
+            // Counting again stores `unknown`, which reads as open or closed like any unmarked day.
+            Task { await model.change { try await model.store.setCompleteness(dayID: dayID, skip ? .untracked : .unknown, expectedProfileID: snapshot.head.profile.id) } }
         }
     }
 }
