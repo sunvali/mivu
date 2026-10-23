@@ -345,7 +345,7 @@ import XCTest
     }
 
     private func scrollToTop(in app: XCUIApplication) {
-        for _ in 0..<6 { app.collectionViews["progressList"].swipeDown() }
+        for _ in 0..<6 { app.scrollViews["progressList"].swipeDown() }
     }
 
     private func logWeight(_ value: String, in app: XCUIApplication) {
@@ -365,7 +365,7 @@ import XCTest
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         let workoutForm = app.collectionViews["workoutForm"]
-        let progress = app.collectionViews["progressList"]
+        let progress = app.scrollViews["progressList"]
         let scroller = workoutForm.exists && workoutForm.isHittable ? workoutForm
             : (progress.exists && progress.isHittable ? progress
                : app.collectionViews.allElementsBoundByIndex.first(where: \.isHittable) ?? app.collectionViews.firstMatch)

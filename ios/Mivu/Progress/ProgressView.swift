@@ -96,60 +96,31 @@ struct DiaryProgressView: View {
     }
 
     var body: some View {
-        List {
-            if readModel != nil, let snapshot, let progress = visibleProgress {
-                Section {
+        // A plain stack, not a List: List kept stale row heights after a range change and let cards overlap.
+        ScrollView {
+            VStack(spacing: 12) {
+                if readModel != nil, let snapshot, let progress = visibleProgress {
                     Picker("Range", selection: $range) {
                         ForEach(ProgressRange.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("progressRange")
-                    .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
-                    .listRowBackground(Color.clear)
-                }.listRowSeparator(.hidden)
-                Section {
-                    ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline))
-                        .listCardRow()
-                    if !snapshot.wins.isEmpty {
-                        ProgressWinsRow(wins: snapshot.wins).listCardRow()
-                    }
-                    detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
+                    ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
                     NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
-                        .buttonStyle(.plain).accessibilityIdentifier("openWeight").listCardRow()
-                    if snapshot.loggedDays == 0 {
-                        // Nothing to page through yet; keep its Open Diary button tappable.
-                        ProgressCalendarCard(snapshot: snapshot, openDiary: openDiary).listCardRow()
-                    } else {
-                        detail("progressCalendar", "Calendar", content: { snapshot, _ in ProgressDetails.calendar(snapshot, openDiary: openDiary) }) {
-                            ProgressCalendarCard(snapshot: snapshot, openDiary: openDiary)
-                        }
-                    }
-                    detail("progressCalories", "Calories", content: { snapshot, _ in ProgressDetails.calories(snapshot) }) { ProgressCaloriesCard(snapshot: snapshot) }
-                    detail("progressBurn", "Estimated burn", content: { snapshot, _ in ProgressDetails.burn(snapshot) }) { ProgressBurnCard(snapshot: snapshot) }
-                    detail("progressTopFoods", "Top foods", foodLimit: 200, content: { _, foods in ProgressDetails.foods(foods) }) { ProgressTopFoodsCard(foods: foods) }
-                }.listRowSeparator(.hidden)
-                Section {
-                    NavigationLink { workoutList } label: {
-                        LabeledContent("Workouts", value: "\(progress.workoutTotal ?? 0) recorded").frame(minHeight: 48).monospacedDigit()
-                    }.accessibilityIdentifier("openWorkouts").diarySummaryCard()
-                    Button { showGoals = true } label: {
-                        HStack { Text("Goals").foregroundStyle(Color.diaryText); Spacer(); Text("Manage").foregroundStyle(Color.diarySecondary); Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary) }.frame(minHeight: 48)
-                    }.accessibilityIdentifier("editGoals").diarySummaryCard()
-                }
-            } else if model.selection != nil {
-                if let loadError {
-                    Section {
+                        .buttonStyle(.plain).accessibilityIdentifier("openWeight")
+                    detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
+                    more(snapshot, progress)
+                } else if model.selection != nil {
+                    if let loadError {
                         Text(loadError).foregroundStyle(Color.diaryError)
                         Button("Retry loading progress") { Task { await reloadProgress() } }.frame(minHeight: 44)
-                    }
-                } else { ProgressView("Loading progress…") }
-            } else {
-                ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle")
+                    } else { ProgressView("Loading progress…").padding(.top, 40) }
+                } else {
+                    ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle")
+                }
             }
+            .padding(.horizontal, 20).padding(.bottom, 24)
         }
-        .listStyle(.plain)
-        .listRowSpacing(0)
-        .listSectionSpacing(12)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .accessibilityIdentifier("progressList")
         .navigationTitle("Progress")
@@ -172,18 +143,63 @@ struct DiaryProgressView: View {
         }
     }
 
+    /// Everything else, one line each, a tap deeper.
+    private func more(_ snapshot: ProgressSnapshot, _ progress: CoachProgress) -> some View {
+        VStack(spacing: 0) {
+            moreLink("progressCalendar", "Calendar", "calendar", value: "\(snapshot.loggedDays) of \(snapshot.days.count) days logged") {
+                ProgressDetail(title: "Calendar", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calendar(snapshot) }
+            }
+            Divider()
+            moreLink("progressCalories", "Calories", "flame", value: snapshot.averageKcal.map { "avg \(kcal($0))" } ?? "No complete days") {
+                ProgressDetail(title: "Calories", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calories(snapshot) }
+            }
+            Divider()
+            moreLink("progressBurn", "Estimated burn", "bolt.heart", value: snapshot.burnSummary) {
+                ProgressDetail(title: "Estimated burn", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.burn(snapshot) }
+            }
+            Divider()
+            moreLink("progressTopFoods", "Top foods", "fork.knife", value: foods.first?.name ?? "None yet") {
+                ProgressDetail(title: "Top foods", model: model, range: range, today: today, foodLimit: 200) { _, foods in ProgressDetails.foods(foods) }
+            }
+            Divider()
+            moreLink("openWorkouts", "Workouts", "figure.run", value: "\(progress.workoutTotal ?? 0) recorded") { workoutList }
+            Divider()
+            Button { showGoals = true } label: { moreRow("Goals", "target", value: "Manage") }
+                .buttonStyle(.plain).accessibilityIdentifier("editGoals")
+        }
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
+    }
+
+    private func moreLink<Destination: View>(_ id: String, _ title: String, _ symbol: String, value: String,
+                                             @ViewBuilder destination: () -> Destination) -> some View {
+        NavigationLink(destination: destination) { moreRow(title, symbol, value: value) }
+            .buttonStyle(.plain).accessibilityIdentifier(id)
+    }
+
+    private func moreRow(_ title: String, _ symbol: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).foregroundStyle(Color.diaryAccent).frame(width: 24).accessibilityHidden(true)
+            Text(title).foregroundStyle(Color.diaryText)
+            Spacer(minLength: 8)
+            Text(value).foregroundStyle(Color.diarySecondary).lineLimit(1)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
+        }
+        .frame(minHeight: 52).contentShape(Rectangle())
+    }
+
     private func detail<Card: View, Content: View>(_ id: String, _ title: String, foodLimit: Int = 0,
                                                    @ViewBuilder content: @escaping (ProgressSnapshot, [TopFood]) -> Content,
                                                    @ViewBuilder card: () -> Card) -> some View {
         NavigationLink {
             ProgressDetail(title: title, model: model, range: range, today: today, foodLimit: foodLimit, content: content)
         } label: { card() }
-            .buttonStyle(.plain).accessibilityIdentifier(id).listCardRow()
+            .buttonStyle(.plain).accessibilityIdentifier(id)
     }
 
-    /// Pip cheers a good period and greets an off one; never a sad pose.
+    /// Pip leans in over the chart: excited on a good period, a calm smile otherwise; never a sad pose.
     private func companionOutput(_ headline: ProgressHeadline) -> CompanionOutput {
-        CompanionOutput(pose: headline.celebrates ? .dayComplete : .welcomeBack, playback: reduceMotion ? .staticPose : .animated, reactionID: nil, nextDeadline: nil)
+        CompanionOutput(pose: headline.celebrates ? .presentingCheer : .presentingCalm, playback: reduceMotion ? .staticPose : .animated, reactionID: nil, nextDeadline: nil)
     }
     private func companion(_ headline: ProgressHeadline) -> CompanionView {
         CompanionView(presentation: companionOutput(headline), darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize ? 64 : 104, runtime: companionRuntime)

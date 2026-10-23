@@ -37,6 +37,17 @@ enum PipGestureLibrary {
         },
 
         // MARK: Loops
+        // Progress: eyes down on the chart below, a paw lifted toward it, tail going; the first key is the still pose.
+        PipGesture("presenting-cheer", loops: true) {
+            $0.at(0.35) { $0.pawUp(.right, -35, elbow: -70).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
+            $0.at(0.95) { $0.pawUp(.right, -38, elbow: -74).look(0.4, 0.9).nod(9).mouth(.smallOpen).earPerk(14).tailWag(-14) }
+            $0.at(1.55) { $0.pawUp(.right, -35, elbow: -70).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
+        },
+        PipGesture("presenting-calm", loops: true) {
+            $0.at(0.40) { $0.pawUp(.right, -30, elbow: -62).look(0.3, 0.9).nod(7).mouth(.closedSmile).earPerk(8).tailWag(8) }
+            $0.at(1.20) { $0.pawUp(.right, -32, elbow: -66).look(0.4, 0.85).nod(8).mouth(.closedSmile).earPerk(10).tailWag(-8) }
+            $0.at(2.00) { $0.pawUp(.right, -30, elbow: -62).look(0.3, 0.9).nod(7).mouth(.closedSmile).earPerk(8).tailWag(8) }
+        },
         PipGesture("attentive", loops: true) {
             $0.at(0.5) { $0.nod(3).earPerk(10).tilt(1.5).look(0.5, 0.2) }
             $0.at(1.0) { $0.nod(-1).earPerk(6).look(0.8, 0.1) }
@@ -243,6 +254,7 @@ enum PipGestureLibrary {
             return named(level >= 4 ? "shake-off" : rotation[max(level, 0)])
         case .patted: return named("patted")
         case .earTwitch: return named("ear-twitch")
+        case .presenting(let cheer): return named(cheer ? "presenting-cheer" : "presenting-calm")
         }
     }
 

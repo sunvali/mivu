@@ -63,6 +63,19 @@ struct ProgressBucket: Identifiable, Equatable {
     var id: Date { start }
 }
 
+enum ProgressCalendarDot: Equatable {
+    case outside, noLog, logged(ProgressBand?)
+}
+
+/// A calendar line: a Monday week of seven dots (Week, Month) or a month's logged share (3M, Year).
+struct ProgressCalendarRowData: Identifiable, Equatable {
+    let title: String
+    let dots: [ProgressCalendarDot]?
+    let logged: Int
+    let total: Int
+    var id: String { title }
+}
+
 /// One weigh-in in kilograms with its smoothed trend.
 struct TrendPoint: Equatable {
     let localDate: String
@@ -191,6 +204,57 @@ enum ProgressInsights {
             return ProgressBucket(start: start, averageKcal: average, averageTarget: target,
                                   band: judged.isEmpty ? nil : ProgressBand.of(kcal: average, target: target), loggedDays: logged.count,
                                   complete: !judged.isEmpty)
+        }
+    }
+
+    private static func whole(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0))) }
+
+    /// "2,420 kcal · 320 over": the day's energy against its own target, in words.
+    static func plainResult(_ day: DailyProgress) -> String {
+        guard day.completeness != nil, let kcal = day.foodTotals?.kcal else { return "No log" }
+        let energy = whole(kcal) + " kcal"
+        guard let target = day.goal?.targets.kcal, let band = band(day) else { return energy }
+        if band == .near { return energy + " · on target" }
+        return energy + " · \(whole(abs(kcal - target))) \(kcal > target ? "over" : "under")"
+    }
+
+    static func plainMacro(_ grams: Double?, goal: Double?) -> String {
+        guard let grams else { return "No complete days" }
+        let amount = "\(whole(grams)) g a day"
+        guard let goal, goal > 0 else { return amount }
+        if abs(grams - goal) <= goal * 0.1 { return amount + " · on goal" }
+        return amount + " · \(whole(abs(grams - goal))) g \(grams > goal ? "over" : "under") goal"
+    }
+
+    /// Newest first. Week and Month show Monday weeks as dots; 3M and Year show months as counts.
+    static func calendarRows(_ days: [DailyProgress], range: ProgressRange, zone: String) -> [ProgressCalendarRowData] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
+        calendar.firstWeekday = 2
+        let byWeek = range == .week || range == .month
+        var order: [Date] = [], groups: [Date: [(Date, DailyProgress)]] = [:]
+        for day in days.sorted(by: { $0.localDate < $1.localDate }) {
+            guard let date = ProgressDate.date(day.localDate, zone: zone),
+                  let start = calendar.dateInterval(of: byWeek ? .weekOfYear : .month, for: date)?.start else { continue }
+            if groups[start] == nil { order.append(start) }
+            groups[start, default: []].append((date, day))
+        }
+        func dot(_ day: DailyProgress) -> ProgressCalendarDot { day.completeness == nil || day.foodTotals?.kcal == nil ? .noLog : .logged(band(day)) }
+        return order.reversed().map { start in
+            let members = groups[start, default: []]
+            let logged = members.filter { if case .logged = dot($0.1) { true } else { false } }.count
+            guard byWeek else {
+                return ProgressCalendarRowData(title: DiaryWeek.format(ProgressDate.label(start, zone: zone), "MMMM yyyy"), dots: nil, logged: logged, total: members.count)
+            }
+            let dots = (0..<7).map { offset -> ProgressCalendarDot in
+                guard let date = calendar.date(byAdding: .day, value: offset, to: start),
+                      let member = members.first(where: { calendar.isDate($0.0, inSameDayAs: date) }) else { return .outside }
+                return dot(member.1)
+            }
+            let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
+            let first = ProgressDate.label(start, zone: zone), last = ProgressDate.label(end, zone: zone)
+            let title = DiaryWeek.format(first, "MMM d") + " – " + DiaryWeek.format(last, first.prefix(7) == last.prefix(7) ? "d" : "MMM d")
+            return ProgressCalendarRowData(title: title, dots: dots, logged: logged, total: members.count)
         }
     }
 

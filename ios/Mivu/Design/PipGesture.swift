@@ -5,6 +5,8 @@ import Foundation
 enum PipMoment: Hashable {
     case greeting(hour: Int), welcomeBack, attentive, submitted, thinking, saved, reviewed, recovery
     case firstMealToday, dayComplete, curious, tapped(level: Int), patted, earTwitch
+    /// Progress: leaning in over the chart; `cheer` on a good period, a calm smile otherwise.
+    case presenting(cheer: Bool)
 }
 
 /// Timed poses. Each key is the full pose Pip should *arrive at* by `at` seconds; the previous key's time is when

@@ -114,35 +114,34 @@ extension ProgressSnapshot {
             Section { ProgressCaloriesCard(snapshot: snapshot).listCardRow() }
             Section("Days") {
                 ForEach(snapshot.days.reversed(), id: \.localDate) { day in
-                    ProgressDayRow(title: snapshot.dayTitle(day), value: day.foodTotals?.kcal.map(kcal) ?? "No log", band: snapshot.band(day))
+                    ProgressDayRow(title: snapshot.dayTitle(day), value: ProgressInsights.plainResult(day), band: snapshot.band(day))
                 }
             }
         }
     }
 
+    /// Three plain lines: what you eat on an average complete day against each goal.
     static func macros(_ snapshot: ProgressSnapshot) -> some View {
         Group {
             Section { ProgressMacrosCard(snapshot: snapshot).listCardRow() }
-            Section("Days") {
-                ForEach(snapshot.days.reversed().filter { $0.foodTotals?.kcal != nil }, id: \.localDate) { day in
-                    let totals = day.foodTotals
-                    ProgressDayRow(title: snapshot.dayTitle(day),
-                                   value: [("P", totals?.protein), ("C", totals?.carbs), ("F", totals?.fat)]
-                                       .map { "\($0.0) \($0.1.map { Int($0.rounded()).formatted() } ?? "—")" }.joined(separator: " · "))
+            Section {
+                let goal = snapshot.goal?.targets, average = snapshot.averages
+                ForEach([("Protein", average.protein, goal?.protein), ("Carbs", average.carbs, goal?.carbs), ("Fat", average.fat, goal?.fat)], id: \.0) { name, value, target in
+                    ProgressDayRow(title: name, value: ProgressInsights.plainMacro(value, goal: target))
                 }
+            } footer: {
+                Text("Averages use complete days only.")
             }
         }
     }
 
-    static func calendar(_ snapshot: ProgressSnapshot, openDiary: @escaping () -> Void) -> some View {
-        Group {
-            Section { ProgressCalendarCard(snapshot: snapshot, openDiary: openDiary).listCardRow() }
-            Section { ProgressBandKey() }
-            Section("Days") {
-                ForEach(snapshot.days.reversed(), id: \.localDate) { day in
-                    ProgressDayRow(title: snapshot.dayTitle(day), value: snapshot.band(day)?.title ?? "No log", band: snapshot.band(day))
-                }
+    static func calendar(_ snapshot: ProgressSnapshot) -> some View {
+        Section {
+            ForEach(ProgressInsights.calendarRows(snapshot.days, range: snapshot.range, zone: snapshot.zone)) { row in
+                ProgressCalendarRow(row: row)
             }
+        } footer: {
+            Text("Teal: near your target. Orange: further off. Grey: logged, not judged yet. Empty: no log.")
         }
     }
 
@@ -167,10 +166,39 @@ extension ProgressSnapshot {
         Section {
             if foods.isEmpty { ProgressPlaceholder(symbol: "fork.knife", text: "No saved foods with known calories in this range.") }
             ForEach(Array(foods.enumerated()), id: \.offset) { _, food in
-                ProgressDayRow(title: food.name, value: "\(kcal(food.kcal)) · \(food.count)×")
+                ProgressDayRow(title: food.name, value: "\(food.count == 1 ? "once" : "\(food.count) times") · \(kcal(food.kcal))")
             }
         } footer: {
             Text("Foods with unknown calories and meals still being analyzed are left out.")
         }
+    }
+}
+
+/// A week (Week, Month) as seven dots, or a month (3M, Year) as a share of days logged.
+struct ProgressCalendarRow: View {
+    let row: ProgressCalendarRowData
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(row.title).foregroundStyle(Color.diaryText)
+                Spacer()
+                Text("\(row.logged) of \(row.total) logged").monospacedDigit().foregroundStyle(Color.diarySecondary)
+            }
+            if let dots = row.dots {
+                HStack(spacing: 6) {
+                    ForEach(dots.indices, id: \.self) { index in
+                        switch dots[index] {
+                        case .outside: Color.clear.frame(width: 18, height: 18)
+                        case .noLog: Circle().strokeBorder(Color.diaryRule, style: StrokeStyle(lineWidth: 1, dash: [2, 2])).frame(width: 18, height: 18)
+                        case let .logged(band): Circle().fill(band?.color ?? Color.diarySecondary.opacity(0.45)).frame(width: 18, height: 18)
+                        }
+                    }
+                }
+            } else {
+                ProgressView(value: Double(row.logged), total: Double(max(row.total, 1))).tint(Color.diaryAccent)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }

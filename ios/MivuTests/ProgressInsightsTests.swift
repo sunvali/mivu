@@ -199,6 +199,50 @@ import Testing
         guard case .estimate = snapshot.burn else { Issue.record("A week view with a logged month shows a burn"); return }
     }
 
+    @Test func weekEvidenceQuotesTheSameWindowAsTheVerdict() {
+        let goal = GoalRecord(effectiveLocalDate: label(0), timeZoneID: "UTC", targets: NutritionValues(kcal: 2100), goalWeightKg: 75, exerciseCreditEnabled: false)
+        let days = loggedDays(30).map { DailyProgress(localDate: $0.localDate, completeness: .complete, hasPending: false, foodTotals: $0.foodTotals, goal: goal,
+                                                      remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil) }
+        // Down over the month, up a little in the last week.
+        let weights = (0..<30).filter { $0.isMultiple(of: 2) }.map { weight(label($0), $0 < 24 ? 80 - 0.06 * Double($0) : 78.9) }
+        let weekly = WeightProgress(endLocalDate: label(29), currentSevenDayAverageKg: nil, currentSevenDayObservedCount: 0,
+                                    changeFromSevenDaysAgoKg: nil, changeFromThirtyDaysAgoKg: nil, plateau: .insufficientData)
+        let progress = CoachProgress(startLocalDate: label(0), endLocalDate: label(29), daily: days[29], period: nil, weight: weekly, weights: [], workouts: [],
+                                     omittedWeightCount: 0, omittedWorkoutCount: 0, truncated: false, dailyReports: days, displayWeights: weights)
+        let snapshot = ProgressSnapshot(progress: progress, range: .week, zone: "UTC", today: label(29))
+        #expect(snapshot.headline == .onTrack)
+        #expect(snapshot.evidence.hasPrefix("Trend down") && snapshot.evidence.contains("over 30 days"), "\(snapshot.evidence)")
+    }
+
+    // MARK: Plain language
+
+    @Test func dayResultsReadInPlainWords() {
+        #expect(ProgressInsights.plainResult(day("2026-10-20", kcal: 2100)) == "2,100 kcal · on target")
+        #expect(ProgressInsights.plainResult(day("2026-10-20", kcal: 2420)) == "2,420 kcal · 320 over")
+        #expect(ProgressInsights.plainResult(day("2026-10-20", kcal: 1550)) == "1,550 kcal · 550 under")
+        #expect(ProgressInsights.plainResult(day("2026-10-20", kcal: nil)) == "No log")
+        #expect(ProgressInsights.plainResult(day("2026-10-20", kcal: 1800, target: nil)) == "1,800 kcal")
+    }
+
+    @Test func macroLinesReadInPlainWords() {
+        #expect(ProgressInsights.plainMacro(215, goal: 140) == "215 g a day · 75 g over goal")
+        #expect(ProgressInsights.plainMacro(100, goal: 140) == "100 g a day · 40 g under goal")
+        #expect(ProgressInsights.plainMacro(145, goal: 140) == "145 g a day · on goal")
+        #expect(ProgressInsights.plainMacro(nil, goal: 140) == "No complete days")
+        #expect(ProgressInsights.plainMacro(80, goal: nil) == "80 g a day")
+    }
+
+    @Test func calendarRowsAreWeeksOfDotsThenMonthsOfCounts() {
+        // Thu 2026-10-15 … Wed 2026-10-21: one partial week and the start of the next, newest first.
+        let days = range(endingOn: "2026-10-21", days: 7) { $0 == 2 ? nil : 2100 }
+        let weeks = ProgressInsights.calendarRows(days, range: .week, zone: "UTC")
+        #expect(weeks.map(\.title) == ["Oct 19 – 25", "Oct 12 – 18"])
+        #expect(weeks[1].dots == [.outside, .outside, .outside, .logged(.near), .logged(.near), .logged(.near), .logged(.near)])
+        #expect(weeks[0].dots?.prefix(3) == [.noLog, .logged(.near), .logged(.near)] && weeks[0].logged == 2 && weeks[0].total == 3)
+        let months = ProgressInsights.calendarRows(range(endingOn: "2026-10-21", days: 91), range: .quarter, zone: "UTC")
+        #expect(months.first?.title == "October 2026" && months.first?.dots == nil && months.first?.total == 21)
+    }
+
     @Test func headlineNotEnoughDataWithNothingLogged() {
         #expect(ProgressInsights.headline(trend: [], goalWeightKg: 75, startKg: nil, days: [day("2026-10-23", kcal: nil)]) == .notEnoughData)
     }

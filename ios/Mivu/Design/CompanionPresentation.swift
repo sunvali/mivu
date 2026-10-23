@@ -6,6 +6,7 @@ enum CompanionPose: Int, CaseIterable {
     case resting = 0, attentive = 1, thinking = 2, saved = 3
     case reviewed = 4, recovery = 5, greeting = 6, submitted = 7
     case firstMealToday = 8, dayComplete = 9, curious = 10, tapped = 11, patted = 12, welcomeBack = 13
+    case presentingCheer = 14, presentingCalm = 15
 }
 
 enum CompanionSurface: Hashable {

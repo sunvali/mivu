@@ -7,7 +7,7 @@ import Testing
         .greeting(hour: 8), .greeting(hour: 14), .greeting(hour: 22), .welcomeBack, .attentive, .submitted, .thinking,
         .saved, .reviewed, .recovery, .firstMealToday, .dayComplete, .curious,
         .tapped(level: 0), .tapped(level: 1), .tapped(level: 2), .tapped(level: 3), .tapped(level: 4),
-        .patted, .earTwitch,
+        .patted, .earTwitch, .presenting(cheer: true), .presenting(cheer: false),
     ]
 
     @Test func everyLibraryGestureEndsAtRestWithinTwoSeconds() {
@@ -56,6 +56,17 @@ import Testing
         #expect(PipGestureLibrary.loop(for: .thinking)?.loops == true)
         #expect(PipGestureLibrary.loop(for: .attentive)?.loops == true)
         #expect(PipGestureLibrary.loop(for: .saved) == nil)
+    }
+
+    /// Progress holds Pip leaning in toward the chart below, eyes down, paw lifted; never a sad face.
+    @MainActor @Test func presentingHoldsAKindLookAtTheChart() throws {
+        for cheer in [true, false] {
+            let loop = try #require(PipGestureLibrary.loop(for: .presenting(cheer: cheer)))
+            let held = try #require(loop.keys.first?.pose)
+            #expect(held.gaze.y > 0.5, "Looks down at the chart")
+            #expect(held.mouth != .concerned)
+            #expect(CompanionRuntime.moment(for: cheer ? .presentingCheer : .presentingCalm, tapLevel: 0, hour: 12) == .presenting(cheer: cheer))
+        }
     }
 
     @Test func spokenTimingsMatchSpec() {

@@ -45,6 +45,10 @@ struct ProgressSnapshot {
     }
 
     var bands: [ProgressBand] { days.compactMap(ProgressInsights.band) }
+    var burnSummary: String {
+        if case let .estimate(estimate) = burn { return "~" + kcal(estimate.kcalPerDay) + " a day" }
+        return "Needs more data"
+    }
     /// Complete days with nothing pending: the ones averages and bands use.
     let judgedDays: Int
     /// The whole load (at least 30 days) behind burn and the weight verdict.
@@ -59,9 +63,11 @@ struct ProgressSnapshot {
         let calories = target.map { logged == 0 ? nil : "\(near) of \(logged) logged days near your \(kcal($0)) target" } ?? nil
         switch headline {
         case .onTrack, .holdingSteady, .drifting, .atGoal:
-            let span = trend.count >= 2 ? ProgressInsights.days(from: trend[0].localDate, to: trend[trend.count - 1].localDate) : 0
-            let change = (ProgressInsights.slopePerDay(trend) ?? 0) * Double(span)
-            let weight = "Trend \(change <= 0 ? "down" : "up") \(abs(change).formatted(.number.precision(.fractionLength(1)))) kg"
+            // Quote the same window the verdict used (the whole load, at least 30 days), so the two never disagree.
+            let points = loadedTrend
+            let span = points.count >= 2 ? ProgressInsights.days(from: points[0].localDate, to: points[points.count - 1].localDate) : 0
+            let change = (ProgressInsights.slopePerDay(points) ?? 0) * Double(span)
+            let weight = "Trend \(change <= 0 ? "down" : "up") \(abs(change).formatted(.number.precision(.fractionLength(1)))) kg over \(loadedDays.count) days"
             return [weight, calories].compactMap { $0 }.joined(separator: " · ") + "."
         case let .caloriesOnTrack(near, logged), let .caloriesOff(near, logged):
             return "\(near) of \(logged) logged days landed near your \(target.map(kcal) ?? "calorie") target."
@@ -142,27 +148,6 @@ struct ProgressBucketChart: View {
     }
 }
 
-struct ProgressBandKey: View {
-    var body: some View {
-        let entries = ProgressBand.allCases.map { ($0.title, $0.color) } + [("No log", Color.diaryRule.opacity(0.6))]
-        ViewThatFits {
-            HStack(spacing: 10) { items(entries) }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 10) { items(Array(entries.prefix(3))) }
-                HStack(spacing: 10) { items(Array(entries.suffix(2))) }
-            }
-            VStack(alignment: .leading, spacing: 4) { items(entries) }
-        }
-        .font(.caption).foregroundStyle(Color.diarySecondary)
-        .accessibilityElement(children: .combine)
-    }
-    private func items(_ entries: [(String, Color)]) -> some View {
-        ForEach(entries, id: \.0) { title, color in
-            HStack(spacing: 4) { RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 10, height: 10); Text(title) }
-        }
-    }
-}
-
 struct ProgressPlaceholder: View {
     let symbol: String
     let text: String
@@ -192,6 +177,7 @@ struct ProgressHeadlineCard: View {
     let snapshot: ProgressSnapshot
     let dates: String
     let companion: CompanionView
+    let openDiary: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -206,40 +192,29 @@ struct ProgressHeadlineCard: View {
                 companion
             }
             .accessibilityElement(children: .combine)
-            ProgressBucketChart(buckets: snapshot.buckets, range: snapshot.range, zone: snapshot.zone)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Calories by \(snapshot.range == .week || snapshot.range == .month ? "day" : snapshot.range == .quarter ? "week" : "month")")
-                .accessibilityValue(ProgressSummary.buckets(snapshot.buckets, zone: snapshot.zone))
-            ProgressBandKey()
-            Text("Days with no log are never counted as zero.")
-                .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("missingDayCopy")
+            if snapshot.loggedDays == 0 {
+                Button(action: openDiary) { Label("Open Diary", systemImage: "calendar").frame(minHeight: 44) }
+                    .accessibilityIdentifier("openDiaryForCoverage")
+            } else {
+                ProgressBucketChart(buckets: snapshot.buckets, range: snapshot.range, zone: snapshot.zone)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Calories by \(snapshot.range == .week || snapshot.range == .month ? "day" : snapshot.range == .quarter ? "week" : "month")")
+                    .accessibilityValue(ProgressSummary.buckets(snapshot.buckets, zone: snapshot.zone))
+            }
+            // One sentence instead of a five-color key.
+            Text("Teal bars landed near your target; orange gets deeper the further off. Empty days are never counted as zero.")
+                .font(.caption).foregroundStyle(Color.diarySecondary).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("missingDayCopy")
+            if let win = snapshot.wins.first {
+                Label { Text(win.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText) } icon: {
+                    Image(systemName: win.symbol).foregroundStyle(win.color)
+                }
+                .accessibilityIdentifier("progressWin")
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.diarySummarySurface, in: RoundedRectangle(cornerRadius: 24))
-    }
-}
-
-struct ProgressWinsRow: View {
-    let wins: [ProgressWin]
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-                ForEach(wins) { win in
-                    HStack(spacing: 10) {
-                        Image(systemName: win.symbol).font(.subheadline.weight(.bold)).foregroundStyle(.white)
-                            .frame(width: 32, height: 32).background(win.color, in: Circle())
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(win.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
-                            Text(win.detail).font(.caption).foregroundStyle(Color.diarySecondary)
-                        }
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(win.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
-                    .accessibilityElement(children: .combine)
-                }
-        }
-        .accessibilityIdentifier("progressWins")
     }
 }
 
@@ -365,79 +340,6 @@ struct ProgressWeightCard: View {
     }
 }
 
-struct ProgressCalendarCard: View {
-    let snapshot: ProgressSnapshot
-    let openDiary: () -> Void
-    private var columns: Bool { snapshot.range == .quarter || snapshot.range == .year }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ProgressCardTitle(title: "Logging calendar", detail: snapshot.range.title)
-            let near = snapshot.bands.filter { $0 == .near }.count
-            Text("\(snapshot.loggedDays) of \(snapshot.days.count) days logged, \(near) near target.")
-                .font(.subheadline).foregroundStyle(Color.diarySecondary)
-            if snapshot.loggedDays == 0 {
-                Button(action: openDiary) { Label("Open Diary", systemImage: "calendar").frame(minHeight: 44) }
-                    .accessibilityIdentifier("openDiaryForCoverage")
-            }
-            grid.accessibilityHidden(true)
-        }
-        .diaryProgressCard()
-    }
-
-    /// Monday-first weeks: rows for Week and Month, columns for 3M and Year.
-    private var weeks: [[DailyProgress?]] {
-        guard let first = snapshot.days.first, let date = ProgressDate.date(first.localDate, zone: snapshot.zone) else { return [] }
-        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: snapshot.zone) ?? .gmt
-        let lead = (calendar.component(.weekday, from: date) + 5) % 7
-        let cells: [DailyProgress?] = Array(repeating: nil, count: lead) + snapshot.days.map { $0 }
-        return stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<min($0 + 7, cells.count)]) }
-    }
-
-    @ViewBuilder private var grid: some View {
-        let spacing: CGFloat = columns ? 2 : 6
-        if columns {
-            HStack(alignment: .top, spacing: spacing) {
-                ForEach(weeks.indices, id: \.self) { index in
-                    VStack(spacing: spacing) { ForEach(0..<7, id: \.self) { cell(index < weeks.count && $0 < weeks[index].count ? weeks[index][$0] : nil, small: true) } }
-                }
-            }
-        } else {
-            VStack(spacing: spacing) {
-                HStack(spacing: spacing) {
-                    ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) {
-                        Text($0.element).font(.caption2).foregroundStyle(Color.diarySecondary).frame(maxWidth: .infinity)
-                    }
-                }
-                ForEach(weeks.indices, id: \.self) { index in
-                    HStack(spacing: spacing) { ForEach(0..<7, id: \.self) { cell($0 < weeks[index].count ? weeks[index][$0] : nil, small: false) } }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private func cell(_ day: DailyProgress?, small: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: small ? 2 : 8)
-        if let day {
-            let band = ProgressInsights.band(day)
-            shape.fill(band?.color ?? (day.foodTotals?.kcal == nil ? Color.diaryRule.opacity(0.35) : Color.diarySecondary.opacity(0.5)))
-                .overlay { if band == nil && day.foodTotals?.kcal == nil { shape.strokeBorder(Color.diaryRule, style: StrokeStyle(lineWidth: 1, dash: [3, 2])) } }
-                .overlay { if !small { Text(String(Int(day.localDate.suffix(2)) ?? 0)).font(.caption.weight(.medium)).lineLimit(1).fixedSize().foregroundStyle(band == nil ? Color.diarySecondary : .white) } }
-                .modifier(CalendarCellSize(small: small))
-        } else {
-            Color.clear.modifier(CalendarCellSize(small: small))
-        }
-    }
-}
-
-/// Square dots for the 3M/Year grid; full-width 34pt tiles for Week and Month.
-private struct CalendarCellSize: ViewModifier {
-    let small: Bool
-    func body(content: Content) -> some View {
-        if small { content.aspectRatio(1, contentMode: .fit) } else { content.frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34) }
-    }
-}
-
 struct ProgressCaloriesCard: View {
     let snapshot: ProgressSnapshot
     var body: some View {
@@ -492,33 +394,6 @@ struct ProgressBurnCard: View {
         }
         .diaryProgressCard(fill: .diaryTintBurn)
         .accessibilityElement(children: .combine)
-    }
-}
-
-struct ProgressTopFoodsCard: View {
-    let foods: [TopFood]
-    private let palette: [Color] = [.diaryProtein, .diaryBandBitOff, .diaryFat, .diaryAccent]
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ProgressCardTitle(title: "Top foods by calories")
-            if foods.isEmpty {
-                ProgressPlaceholder(symbol: "fork.knife", text: "Log a few meals to see your top foods.")
-            }
-            let top = foods.first?.kcal ?? 1
-            ForEach(Array(foods.prefix(4).enumerated()), id: \.offset) { index, food in
-                HStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 7).fill(palette[index % palette.count])
-                        .frame(width: max(12, 64 * food.kcal / top), height: 24)
-                        .accessibilityHidden(true)
-                    Text(food.name).font(.body.weight(.medium)).foregroundStyle(Color.diaryText).lineLimit(2)
-                    Spacer()
-                    Text(kcal(food.kcal)).font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
-                }
-                .frame(minHeight: 36)
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .diaryProgressCard(fill: .diaryTintFoods)
     }
 }
 
