@@ -38,6 +38,7 @@ class ReleaseAutomation(unittest.TestCase):
         ci = load_workflow('ci.yml')
         triggers = ci.get('on', ci.get('true'))
         self.assertEqual(set(triggers), {'pull_request', 'workflow_dispatch'})
+        self.assertEqual(triggers['pull_request']['types'], ['opened', 'synchronize', 'reopened', 'edited'])
         self.assertEqual(ci['permissions'], {'contents': 'read'})
         self.assertEqual(set(ci['jobs']), {'checks'})
         checks = ci['jobs']['checks']
