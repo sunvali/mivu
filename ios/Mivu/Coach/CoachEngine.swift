@@ -53,12 +53,13 @@ struct CoachEngine: Sendable {
                 guard callCount <= 16 else { throw CoachError.limitExceeded }
                 if response.calls.isEmpty {
                     let stored = try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
+                    // Prose must not claim a mutation the diary never acknowledged.
+                    let lowered = response.text.lowercased()
+                    let actions = ["saved", "logged", "recorded", "updated", "deleted", "closed", "added"]
+                    let subjects = ["i ", "i've ", "i have ", "we ", "we've ", "we have "]
+                    let claimsSave = subjects.contains(where: { subject in actions.contains { lowered.contains(subject + $0) } })
                     if stored.receipts.isEmpty {
-                        // Read-only prose must not claim a food mutation the diary never acknowledged.
-                        let lowered = response.text.lowercased()
-                        let actions = ["saved", "logged", "recorded", "updated", "deleted", "closed", "added"]
-                        let subjects = ["i ", "i've ", "i have ", "we ", "we've ", "we have "]
-                        guard !subjects.contains(where: { subject in actions.contains { lowered.contains(subject + $0) } }) else { throw CoachError.ungroundedConfirmation }
+                        guard !claimsSave else { throw CoachError.ungroundedConfirmation }
                         guard !response.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CoachError.ungroundedConfirmation }
                     }
                     // Reads are repeated now so both the prose check and the fallback use current facts.
@@ -84,6 +85,8 @@ struct CoachEngine: Sendable {
                         let operation = receipt.operationKey.dropFirst(turnID.uuidString.count + 1)
                         return ["food/", "weight/", "workout/"].contains { operation.hasPrefix($0) }
                     } && !receipts.contains { $0.submissionState == .awaitingReview }
+                        // A save claim with no saved meal could name food that was never logged.
+                        && !(claimsSave && !receipts.contains { $0.mealID != nil })
                     let text: String
                     if cardsShowEverything, CoachReplyCheck.passes(response.text, allowed: CoachReplyCheck.allowedNumbers(in: sources, receipts: receipts), receipts: receipts) {
                         text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)

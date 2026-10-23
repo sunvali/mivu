@@ -100,4 +100,18 @@ import Testing
         #expect(CoachReplyLines.factLine(progress: [complete], goals: [], workouts: [], preferencesRead: false, today: "2027-01-15")
             == "Last 7 days: about 1,140 kcal a day on 1 tracked day.")
     }
+
+    @Test func repliesDropLinksButKeepBold() {
+        let reply = CoachReplyLines.attributed("About **500** kcal. [Tap here](https://example.com)")
+        #expect(reply.runs.allSatisfy { $0.link == nil })
+        #expect(String(reply.characters) == "About 500 kcal. Tap here")
+        #expect(reply.runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true })
+    }
+
+    @Test func deletedWeighInHasNoFollowUp() {
+        let deleted = CoachCommittedReceipt(operationKey: "\(UUID())/delete_weight/\(UUID())", turnID: UUID(), weightID: UUID(), committedRevision: 1)
+        let turn = CoachExchangeSummary(id: UUID(), sequence: 1, capturedAt: now, captureTimeZoneID: "UTC", segmentID: UUID(), displayLocalDate: "2027-01-15",
+            displayTimeZoneID: "UTC", text: "Synthetic", state: .completed, photos: [], receipts: [deleted])
+        #expect(CoachReplyLines.followUps(for: turn) == [])
+    }
 }

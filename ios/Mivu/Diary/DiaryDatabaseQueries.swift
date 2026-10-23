@@ -459,10 +459,8 @@ extension DiaryDatabase {
                     summaries.append("Marked \(CoachReplyLines.shortDate(day.localDate)) as \(day.completeness.rawValue).")
                 }
             }
-            // Cards carry each record; the reply line names only the first.
-            let cards = turn.receipts.filter { $0.mealID != nil || $0.weightID != nil || $0.workoutID != nil }.count
-            guard let first = summaries.first else { return "" }
-            return cards > 1 ? first + " Everything is in the cards below." : summaries.joined(separator: " ")
+            // Each line is one short sentence; cards do not show every operation's facts, so keep them all.
+            return summaries.joined(separator: " ")
         }
     }
 }

@@ -98,7 +98,7 @@ import UIKit
         meal.items[0].quantity = 5
         meal.items[0].nutrition.kcal = 250
         let value = CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-18"))
-        #expect(value.changeNotice == "Edited · moved to 2026-10-18")
+        #expect(value.changeNotice == "Edited · moved to " + CoachReplyLines.shortDate("2026-10-18"))
         #expect(value.committedItems == ["Chicken · 3 piece"])
         #expect(value.committedDate == "2026-10-17")
         #expect(value.committedNutrition == "Energy unknown")
@@ -112,7 +112,7 @@ import UIKit
         meal.items.append(FoodItem(name: "Rice", nutrition: NutritionValues(kcal: 200)))
         #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == nil)
         meal.items[0].nutrition.carbs = 1
-        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == "Edited since this receipt")
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == "Edited later")
         receipt.items = []; receipt.targetLocalDate = nil; receipt.submissionState = nil
         #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == nil)
     }
@@ -153,6 +153,19 @@ import UIKit
         #expect(abs(share.fat - 180.0 / 480.0) < 0.0001)
         var unknown = receipt; unknown.items[0].nutrition?.fat = nil
         #expect(CoachReceiptPresentation(receipt: unknown, target: .loading).macroShare == nil)
+    }
+
+    @Test func deletedWeighInShowsNoSavedChip() {
+        let deleted = CoachCommittedReceipt(operationKey: "\(UUID())/delete_weight/\(UUID())", turnID: UUID(), weightID: UUID(), committedRevision: 1)
+        #expect(CoachReceiptPresentation(receipt: deleted, target: .loading).weightLabel == nil)
+    }
+
+    @Test func movedNoticeUsesAFriendlyDate() {
+        var receipt = receipt()
+        receipt.items = []
+        let meal = MealReadModel(id: receipt.mealID!, dayID: UUID(), capturedAt: Date(), eatenAt: Date(), revision: 1, items: [], submissions: [], photos: [])
+        let notice = CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-18")).changeNotice
+        #expect(notice?.contains("2026-10-18") == false)
     }
 
     @Test func weightLabelUsesCommittedValue() {

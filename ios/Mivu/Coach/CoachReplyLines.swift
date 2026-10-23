@@ -36,11 +36,14 @@ enum CoachReplyLines {
 
     static func followUps(for turn: CoachExchangeSummary) -> [FollowUp] {
         guard turn.state == .completed else { return [] }
-        return (turn.receipts.contains { $0.mealID != nil } ? [.today] : []) + (turn.receipts.contains { $0.weightID != nil } ? [.progress] : [])
+        return (turn.receipts.contains { $0.mealID != nil } ? [.today] : []) + (turn.receipts.contains { $0.weightID != nil && !$0.operationKey.contains("/delete_weight/") } ? [.progress] : [])
     }
 
+    /// Inline Markdown for emphasis only; links are dropped so model text cannot add tappable destinations.
     static func attributed(_ text: String) -> AttributedString {
-        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        var reply = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        for run in reply.runs where run.link != nil { reply[run.range].link = nil }
+        return reply
     }
 
     /// For notifications and other plain-text surfaces.

@@ -4,7 +4,8 @@ import Foundation
 /// Independent of the store and UI so a server worker can run the same check.
 enum CoachReplyCheck {
     static func allowedNumbers(in sources: [String], receipts: [CoachCommittedReceipt]) -> Set<Decimal> {
-        var values = sources.flatMap(numbers(in:))
+        // IDs are digit soup: their fragments would ground almost any number.
+        var values = sources.map { $0.replacing(/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/, with: "") }.flatMap(numbers(in:))
         for receipt in receipts {
             for item in receipt.items {
                 values.append(decimal(item.quantity))

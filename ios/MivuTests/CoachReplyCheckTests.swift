@@ -51,4 +51,11 @@ import Testing
     @Test func emptyProseFails() {
         #expect(!CoachReplyCheck.passes("  \n", allowed: [], receipts: []))
     }
+
+    @Test func identifierDigitsDoNotGroundNumbers() {
+        let source = #"{"meals":[{"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","kcal":620},{"id":"45000000-0000-0000-0000-000000000450"}]}"#
+        let allowed = CoachReplyCheck.allowedNumbers(in: [source], receipts: [])
+        #expect(!CoachReplyCheck.passes("About 450 kcal left.", allowed: allowed, receipts: []))
+        #expect(CoachReplyCheck.passes("About 620 kcal so far.", allowed: allowed, receipts: []))
+    }
 }

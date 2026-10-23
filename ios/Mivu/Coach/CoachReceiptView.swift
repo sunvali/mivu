@@ -108,9 +108,9 @@ struct CoachReceiptPresentation: Equatable {
                 }
             }
         }
-        if moved, let date = currentDate { return (edited ? "Edited · moved to " : "Moved to ") + date }
-        if edited { return "Edited since this receipt" }
-        return stateChanged ? "Status changed since this receipt" : nil
+        if moved, let date = currentDate { return (edited ? "Edited · moved to " : "Moved to ") + CoachReplyLines.shortDate(date) }
+        if edited { return "Edited later" }
+        return stateChanged ? "Status changed later" : nil
     }
     private static func macros(carbs: Double?, protein: Double?, fat: Double?) -> String {
         func grams(_ value: Double?) -> String {
@@ -141,7 +141,7 @@ struct CoachReceiptPresentation: Equatable {
         }.joined(separator: "\n")
     }
     var weightLabel: String? {
-        guard receipt.weightID != nil else { return nil }
+        guard receipt.weightID != nil, !receipt.operationKey.contains("/delete_weight/") else { return nil }
         guard let value = receipt.weightValue, let unit = receipt.weightUnit else { return "Weight saved" }
         return "Weight saved · \(value.formatted(.number.grouping(.never))) \(unit)"
     }

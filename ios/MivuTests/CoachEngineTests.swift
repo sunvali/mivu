@@ -520,7 +520,7 @@ private actor CoachInputFixture {
         let workout = DiaryDatabase.coachCommittedReceipt(try #require(completed.receipts.first { $0.workoutID != nil }))
         #expect(weight.weightValue == 70 && weight.weightUnit == "kg")
         #expect(workout.workoutKind == "cardio" && workout.workoutMinutes == 45)
-        #expect(try await store.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id) == "Weight saved: **70 kg**. Everything is in the cards below.")
+        #expect(try await store.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id) == "Weight saved: **70 kg**. Workout saved: cardio, 45 minutes.")
     }
 
     @Test func mealTemplateUsesCommittedCaloriesRoundedToTen() async throws {
@@ -545,6 +545,14 @@ private actor CoachInputFixture {
         let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: prose)])
         let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: query.id, expectedProfileID: profile.id)
         #expect(completed.assistantText == prose)
+    }
+
+    @Test func weightOnlyTurnCannotClaimAMealWasLogged() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result([call("log_weight", "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\"}")]),
+            result(text: "I've logged your lunch and your 70 kg weigh-in.")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == "Weight saved: **70 kg**.")
     }
 
     @Test func mealProseMayStateTheDaysNewTotal() async throws {
