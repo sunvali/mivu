@@ -75,7 +75,54 @@ enum ProgressHeadline: Equatable {
     }
 }
 
+struct BurnEstimate: Equatable {
+    let kcalPerDay: Double
+    /// Half-width of the uncertainty band in kcal.
+    let band: Double
+}
+
+enum BurnProgress: Equatable {
+    case estimate(BurnEstimate)
+    case needs(days: Int, weighIns: Int)
+}
+
+struct ProgressWin: Equatable, Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let symbol: String
+    let color: Color
+}
+
 enum ProgressInsights {
+    /// Energy balance: average intake on complete days minus the energy the trend change stored or released (~7,700 kcal per kg).
+    static func burn(days: [DailyProgress], trend: [TrendPoint]) -> BurnProgress {
+        let intake = days.filter { $0.completeness == .complete && !$0.hasPending }.compactMap { $0.foodTotals?.kcal }
+        let span = trend.count >= 2 ? Self.days(from: trend[0].localDate, to: trend[trend.count - 1].localDate) : 0
+        let daysNeeded = max(0, 14 - intake.count, 14 - span), weighInsNeeded = max(0, 4 - trend.count)
+        guard daysNeeded == 0, weighInsNeeded == 0, let first = trend.first, let last = trend.last else {
+            return .needs(days: daysNeeded, weighIns: weighInsNeeded)
+        }
+        let average = intake.reduce(0, +) / Double(intake.count)
+        let kcalPerDay = average - (last.trend - first.trend) * 7_700 / Double(span)
+        return .estimate(BurnEstimate(kcalPerDay: kcalPerDay, band: 100 + 300 * Double(max(0, 30 - intake.count)) / 16))
+    }
+
+    /// At most three, most notable first; never a lost streak.
+    static func wins(days: [DailyProgress], weighIns: Int) -> [ProgressWin] {
+        var run = 0
+        for day in days.sorted(by: { $0.localDate > $1.localDate }) {
+            guard let protein = day.foodTotals?.protein, let target = day.goal?.targets.protein, protein >= target else { break }
+            run += 1
+        }
+        let logged = days.filter { $0.completeness != nil && $0.foodTotals?.kcal != nil }.count
+        var wins: [ProgressWin] = []
+        if run >= 3 { wins.append(ProgressWin(id: "protein-run", title: "Protein goal \(run) days running", detail: "Keep it going", symbol: "bolt.fill", color: .diaryProtein)) }
+        if logged >= 5 { wins.append(ProgressWin(id: "logged-days", title: "\(logged) days logged", detail: "Every one counts", symbol: "checkmark", color: .diaryAccent)) }
+        if weighIns >= 3 { wins.append(ProgressWin(id: "weigh-ins", title: "\(weighIns) weigh-ins", detail: "Your trend keeps sharpening", symbol: "scalemass.fill", color: .diaryWeight)) }
+        return wins
+    }
+
     static func days(from start: String, to end: String) -> Int {
         guard let from = ProgressDate.date(start, zone: "UTC"), let to = ProgressDate.date(end, zone: "UTC") else { return 0 }
         return Int((to.timeIntervalSince(from) / 86_400).rounded())

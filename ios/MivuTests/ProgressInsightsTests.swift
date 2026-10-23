@@ -81,6 +81,40 @@ import Testing
         #expect(ProgressInsights.headline(trend: trend, goalWeightKg: 75, startKg: 80, days: days) == .caloriesOff(near: 1, logged: 2))
     }
 
+    // MARK: Burn and wins
+
+    private func label(_ offset: Int) -> String { ProgressDate.label(ProgressDate.date("2026-09-01", zone: "UTC")!.addingTimeInterval(Double(offset) * 86_400), zone: "UTC") }
+    private func loggedDays(_ count: Int, kcal: Double = 2100) -> [DailyProgress] { (0..<count).map { day(label($0), kcal: kcal) } }
+
+    @Test func burnNeedsFourteenCompleteDaysAndFourWeighIns() {
+        let trend = [point(label(0), 80), point(label(10), 79.8), point(label(20), 79.6)]
+        #expect(ProgressInsights.burn(days: loggedDays(10), trend: trend) == .needs(days: 4, weighIns: 1))
+    }
+
+    @Test func burnFromIntakeAndTrend() throws {
+        let trend = [point(label(0), 80), point(label(9), 79.7), point(label(19), 79.3), point(label(28), 79)]
+        guard case let .estimate(estimate) = ProgressInsights.burn(days: loggedDays(28), trend: trend) else { Issue.record("Expected an estimate"); return }
+        #expect(abs(estimate.kcalPerDay - (2100 + 7700.0 / 28)) < 1)
+    }
+
+    @Test func burnBandNarrowsWithMoreDays() {
+        let trend = [point(label(0), 80), point(label(10), 79.7), point(label(20), 79.3), point(label(30), 79)]
+        guard case let .estimate(early) = ProgressInsights.burn(days: loggedDays(14), trend: trend),
+              case let .estimate(late) = ProgressInsights.burn(days: loggedDays(30), trend: trend) else { Issue.record("Expected estimates"); return }
+        #expect(early.band > late.band)
+        #expect(late.band == 100)
+    }
+
+    @Test func winsPreferProteinRunThenLoggingThenWeighIns() {
+        let days = (0..<6).map { day(label($0), kcal: 2000, protein: $0 >= 2 ? 150 : 80, proteinTarget: 140) }
+        #expect(ProgressInsights.wins(days: days, weighIns: 5).map(\.id) == ["protein-run", "logged-days", "weigh-ins"])
+        #expect(ProgressInsights.wins(days: days, weighIns: 5).first?.title == "Protein goal 4 days running")
+    }
+
+    @Test func noWinsWhenNothingQualifies() {
+        #expect(ProgressInsights.wins(days: [day(label(0), kcal: 2000)], weighIns: 0).isEmpty)
+    }
+
     @Test func headlineNotEnoughDataWithNothingLogged() {
         #expect(ProgressInsights.headline(trend: [], goalWeightKg: 75, startKg: nil, days: [day("2026-10-23", kcal: nil)]) == .notEnoughData)
     }
