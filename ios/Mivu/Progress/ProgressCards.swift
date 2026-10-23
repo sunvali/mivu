@@ -30,6 +30,8 @@ struct ProgressSnapshot {
     }
 
     var bands: [ProgressBand] { days.compactMap { ProgressBand.of(kcal: $0.foodTotals?.kcal, target: $0.goal?.targets.kcal) } }
+    /// Days with recorded energy, whether or not a calorie goal applied.
+    var loggedDays: Int { days.filter { $0.completeness != nil && $0.foodTotals?.kcal != nil }.count }
     var averageKcal: Double? { averages.kcal }
     var target: Double? { goal?.targets.kcal }
 
@@ -44,7 +46,7 @@ struct ProgressSnapshot {
         case let .caloriesOnTrack(near, logged), let .caloriesOff(near, logged):
             return "\(near) of \(logged) logged days landed near your \(target.map(kcal) ?? "calorie") target."
         case .notEnoughData:
-            return "Log a meal or weigh in, and Pip will show how it's going."
+            return loggedDays > 0 ? "Set a calorie goal in Goals to see how close each day lands." : "Log a meal or weigh in, and Pip will show how it's going."
         }
     }
 }
@@ -195,7 +197,6 @@ struct ProgressHeadlineCard: View {
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.diarySummarySurface, in: RoundedRectangle(cornerRadius: 24))
-        .accessibilityIdentifier("progressHeadline")
     }
 }
 
@@ -235,7 +236,7 @@ struct ProgressMacrosCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ProgressCardTitle(title: "Average day", detail: "\(snapshot.bands.count) logged days")
+            ProgressCardTitle(title: "Average day", detail: "\(snapshot.loggedDays) logged days")
             if slices.allSatisfy({ $0.kcal == 0 }) {
                 ProgressPlaceholder(symbol: "chart.pie", text: "Log a full day to see your average macros.")
             } else {
@@ -341,7 +342,6 @@ struct ProgressWeightCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Weight trend")
         .accessibilityValue(ProgressSummary.weights(trend))
-        .accessibilityIdentifier("weightChartSummary")
     }
 }
 
@@ -354,9 +354,9 @@ struct ProgressCalendarCard: View {
         VStack(alignment: .leading, spacing: 10) {
             ProgressCardTitle(title: "Logging calendar", detail: snapshot.range.title)
             let near = snapshot.bands.filter { $0 == .near }.count
-            Text("\(snapshot.bands.count) of \(snapshot.days.count) days logged, \(near) near target.")
+            Text("\(snapshot.loggedDays) of \(snapshot.days.count) days logged, \(near) near target.")
                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
-            if snapshot.bands.isEmpty {
+            if snapshot.loggedDays == 0 {
                 Button(action: openDiary) { Label("Open Diary", systemImage: "calendar").frame(minHeight: 44) }
                     .accessibilityIdentifier("openDiaryForCoverage")
             }
@@ -423,9 +423,9 @@ struct ProgressCaloriesCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ProgressCardTitle(title: "Calories vs target", detail: snapshot.range.title)
-            Text([snapshot.averageKcal.map { "Average \(kcal($0))" }, snapshot.target.map { "target \(kcal($0))" }].compactMap { $0 }.joined(separator: " · "))
+            Text([snapshot.averageKcal.map { "Average \(kcal($0))" }, snapshot.target.map { "target \(kcal($0))" } ?? "No energy target set"].compactMap { $0 }.joined(separator: " · "))
                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
-            if snapshot.bands.isEmpty {
+            if snapshot.loggedDays == 0 {
                 ProgressPlaceholder(symbol: "chart.bar", text: "Log a meal to see your calories against your target.")
             } else {
                 ProgressBucketChart(buckets: snapshot.buckets, range: snapshot.range, zone: snapshot.zone)

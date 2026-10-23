@@ -25,7 +25,7 @@ struct ProgressDetail<Content: View>: View {
             Section {
                 HStack {
                     Button { endingOn = shift(-range.days) } label: { Label("Earlier", systemImage: "chevron.left").frame(minHeight: 44) }
-                        .disabled(snapshot.map { $0.bands.isEmpty && $0.trend.isEmpty } ?? true)
+                        .disabled(snapshot.map { $0.loggedDays == 0 && $0.trend.isEmpty } ?? true)
                         .accessibilityIdentifier("progressDetailEarlier")
                     Spacer()
                     Text(dates).font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)

@@ -116,8 +116,13 @@ struct DiaryProgressView: View {
                     detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
                     NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
                         .buttonStyle(.plain).accessibilityIdentifier("openWeight").listCardRow()
-                    detail("progressCalendar", "Calendar", content: { snapshot, _ in ProgressDetails.calendar(snapshot, openDiary: openDiary) }) {
-                        ProgressCalendarCard(snapshot: snapshot, openDiary: openDiary)
+                    if snapshot.loggedDays == 0 {
+                        // Nothing to page through yet; keep its Open Diary button tappable.
+                        ProgressCalendarCard(snapshot: snapshot, openDiary: openDiary).listCardRow()
+                    } else {
+                        detail("progressCalendar", "Calendar", content: { snapshot, _ in ProgressDetails.calendar(snapshot, openDiary: openDiary) }) {
+                            ProgressCalendarCard(snapshot: snapshot, openDiary: openDiary)
+                        }
                     }
                     detail("progressCalories", "Calories", content: { snapshot, _ in ProgressDetails.calories(snapshot) }) { ProgressCaloriesCard(snapshot: snapshot) }
                     detail("progressBurn", "Estimated burn", content: { snapshot, _ in ProgressDetails.burn(snapshot) }) { ProgressBurnCard(snapshot: snapshot) }
@@ -238,7 +243,7 @@ struct DiaryProgressView: View {
                         .accessibilityIdentifier("weightChartSummary")
 
                 } header: {
-                    Label { Text("Measurements · last 30 days") } icon: { Image(systemName: "chart.xyaxis.line").foregroundStyle(Color.diaryWeight) }
+                    Label { Text("Measurements · \(range.title)") } icon: { Image(systemName: "chart.xyaxis.line").foregroundStyle(Color.diaryWeight) }
                 }
                 .listRowBackground(Color.diaryChartSurface)
 

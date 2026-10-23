@@ -59,13 +59,14 @@ import XCTest
 
         app.tabBars.buttons["Progress"].tap()
         XCTAssertTrue(app.navigationBars["Progress"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["reportWeekly"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["reportWeekly"].isSelected)
-        try capture("Progress intake card " + variant, in: app)
-        let data = app.staticTexts["nutritionData"]
-        reveal(data, in: app)
-        XCTAssertEqual(data.label, "Recorded intake data")
-        try capture("Progress trend card " + variant, in: app)
+        let week = app.segmentedControls["progressRange"].buttons["Week"]
+        XCTAssertTrue(week.waitForExistence(timeout: 10))
+        XCTAssertTrue(week.isSelected)
+        try capture("Progress headline card " + variant, in: app)
+        let calories = app.descendants(matching: .any)["progressCalories"]
+        reveal(calories, in: app)
+        XCTAssertTrue(calories.exists)
+        try capture("Progress calories card " + variant, in: app)
     }
 
     private func list(in app: XCUIApplication) -> XCUIElement {
