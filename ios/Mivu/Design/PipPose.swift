@@ -20,6 +20,8 @@ struct PipPose: Equatable {
     var blush = false
     /// How many of the rig's `heart-1…3` parts are visible.
     var hearts = 0
+    /// Holding the Progress chart card up in the near paw (shown only where `PipRigView.showsProgressProps` allows).
+    var card = false
     /// Today rests standing; Coach chooses `.seated` explicitly.
     var set = BodySet.standing
     /// -1 left, 0 front, +1 right. Small moves around a view slide features; larger ones swap views.

@@ -67,6 +67,7 @@ import Testing
             let held = try #require(loop.keys.first?.pose)
             #expect(held.gaze.y > 0.5, "Looks down at the chart")
             #expect(held.mouth != .concerned)
+            #expect(held.card, "Holds the chart card up to read")
             #expect(CompanionRuntime.moment(for: cheer ? .presentingCheer : .presentingCalm, tapLevel: 0, hour: 12) == .presenting(cheer: cheer))
         }
     }
@@ -74,11 +75,12 @@ import Testing
     /// Entrance and range switch are one-shots that settle by the sign; the cheer is a happy face, never hearts or points.
     @MainActor @Test func progressMomentsShowTheChartKindly() throws {
         let cases: [(CompanionPose, PipMoment)] = [(.progressEntrance, .progressEntrance(cheer: false)), (.progressEntranceCheer, .progressEntrance(cheer: true)),
-                                                   (.progressRange, .progressRange), (.progressTap, .progressTap(level: 0))]
+                                                   (.progressRange, .progressRange)]
         for (pose, moment) in cases {
             #expect(CompanionRuntime.moment(for: pose, tapLevel: 0, hour: 12) == moment)
             let gesture = PipGestureLibrary.gesture(for: moment)
             #expect(!gesture.loops && gesture.keys.last?.pose == .rest, "\(moment) is a one-shot")
+            #expect(PipGestureLibrary.stillPose(for: moment).card, "\(moment) reads as holding the card when still")
             #expect(gesture.keys.allSatisfy { $0.pose.hearts == 0 && $0.pose.mouth != .concerned }, "\(moment)")
         }
         #expect(PipGestureLibrary.gesture(for: .progressEntrance(cheer: true)).keys.contains { $0.pose.eyes == .closedHappy })

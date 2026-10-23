@@ -151,10 +151,11 @@ final class PipRigView: UIView {
     /// Blush and hearts fade in and out instead of popping; the chart card and glasses follow `showsProgressProps`.
     private func opacity(of part: PipRigAsset.Part, in pose: PipPose) -> Float? {
         if part.name.hasPrefix("cheek-blush") { return pose.blush ? 1 : 0 }
-        // The card's own parts start hidden too, so every `prop-chart…` part follows the flag.
-        if Self.isProgressProp(part) { return showsProgressProps ? 1 : nil }  // nil: not shown at all, like any hidden part
         if part.name.hasPrefix("heart-"), let n = Int(part.name.dropFirst(6)) { return n <= pose.hearts ? 1 : 0 }
-        return nil
+        // nil: not shown at all, like any hidden part. The card's own parts start hidden too, so all follow the flag.
+        guard Self.isProgressProp(part), showsProgressProps else { return nil }
+        // The card rides the upper arm and is drawn for the hold's elbow, so it only shows while held.
+        return part.name.hasPrefix("prop-chart") ? (pose.card ? 1 : 0) : 1
     }
 
     /// Which head view to show and how far (-1...1) to slide features inside it.
