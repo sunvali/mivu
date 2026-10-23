@@ -101,16 +101,11 @@ struct DiaryRootView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
     private let nutritionKeys: NutritionAPIKeyStore
+    private var services: MivuServices
     init() {
-        // UI tests never reach a live model, so the host Mac's Apple Intelligence cannot change their flows.
-        var appleModelAvailable = ChatGPTConnection.appleIntelligenceAvailable
-        if DiaryLaunch.isUITest { appleModelAvailable = { false } }
-        let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults, appleModelAvailable: appleModelAvailable)
-        let keys = NutritionAPIKeyStore.local
-        nutritionKeys = keys
-        let foodSource = FoodEvidenceClient()
-        let fixture: (() throws -> CoachViewModel.Inference)? = DiaryLaunch.isCoachInferenceFixture
-            ? { { input, tools in try await CoachUITestInference.respond(input, tools) } } : nil
+        let services = MivuServices.shared
+        self.services = services
+        nutritionKeys = services.nutritionKeys
         var catalog = CharacterCatalog.bundled
         #if DEBUG
         if DiaryLaunch.isUITest && ProcessInfo.processInfo.arguments.contains("--companion-two-fixtures") {
@@ -133,11 +128,9 @@ struct DiaryRootView: View {
         _companionRuntime = State(initialValue: CompanionRuntime())
         #endif
         _companionSelection = State(initialValue: CompanionSelection(catalog: catalog, defaults: DiaryLaunch.defaults))
-        _model = State(initialValue: diary)
-        _connection = State(initialValue: session)
-        _coach = State(initialValue: CoachViewModel(diary: diary, connection: session, inference: fixture, lookup: { query in
-            try await foodSource.search(query: query, apiKey: keys.load())
-        }))
+        _model = State(initialValue: services.diary)
+        _connection = State(initialValue: services.connection)
+        _coach = State(initialValue: services.coach)
         let startToday = DiaryLaunch.isUITest && ProcessInfo.processInfo.arguments.contains("--coach-navigation-start-today")
         _selectedTab = State(initialValue: DiaryLaunch.isUITest && !DiaryLaunch.isSampleMode && !startToday ? "coach" : "today")
     }
@@ -147,6 +140,7 @@ struct DiaryRootView: View {
          observeCompanionApplication: ((CompanionOutput) -> Void)? = nil,
          observeCompanionOutput: @escaping (CompanionOutput) -> Void) {
         self.init()
+        services = MivuServices(diary: testDiary, connection: testCoach.connection, coach: testCoach, nutritionKeys: nutritionKeys)
         _model = State(initialValue: testDiary)
         _coach = State(initialValue: testCoach)
         _connection = State(initialValue: testCoach.connection)
@@ -160,7 +154,6 @@ struct DiaryRootView: View {
     }
     #endif
     @Environment(\.scenePhase) private var phase
-    @State private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
     var body: some View {
         lifecycleView
         .alert("Could not complete action", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
@@ -177,16 +170,12 @@ struct DiaryRootView: View {
         companionView
         .task {
             if !DiaryLaunch.isUITest, ["today", "diary", "progress", "coach"].contains(restoredTab) { selectedTab = restoredTab }
-            model.resumeCoach = { coach.resume() }
-            model.retryCoachMeal = { id in
-                Task { await coach.retryMeal(id) }
-            }
-            await model.load(createDefaultProfile: (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test"))
+            let createDefaultProfile = (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test")
+            await services.loadDiary(createDefaultProfile: createDefaultProfile)
             hasLoaded = true
             if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
-            if !DiaryLaunch.isUITest { await connection.restore() }
-            coach.startMonitoring(); coach.resume()
+            await services.start(createDefaultProfile: createDefaultProfile)
         }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
         .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel); syncDayProgressActivity(readModel) }
@@ -226,7 +215,7 @@ struct DiaryRootView: View {
                 refreshCompanion()
             }
             if value == .active, hasLoaded, DiaryLaunch.rollsOverDays { Task { await model.rollOverDay() } }
-            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground() }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
+            if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground(); await coach.drainInbox(services.inbox) }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
         }
     }
     private var companionView: some View {
@@ -561,19 +550,8 @@ struct DiaryRootView: View {
             .accessibilityIdentifier("profileSettings")
         }
     }
-    private func continueInBackground() {
-        coach.continueInBackground(begin: { expire in
-            backgroundLease = UIApplication.shared.beginBackgroundTask(withName: "Finish saved meal") {
-                expire() // handler runs on the main actor and must end the task before returning
-            }
-            return backgroundLease != .invalid
-        }, end: {
-            guard backgroundLease != .invalid else { return }
-            let lease = backgroundLease; backgroundLease = .invalid
-            UIApplication.shared.endBackgroundTask(lease)
-        })
-    }
-    private func endBackgroundLease() { coach.endBackgroundLease() }
+    private func continueInBackground() { services.continueCoachInBackground() }
+    private func endBackgroundLease() { services.endCoachBackground() }
 
 }
 
