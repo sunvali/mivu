@@ -377,7 +377,8 @@ struct DiaryRootView: View {
                               onCompanionTouch: touchCompanion,
                               navigationRequest: coachRoutes.request,
                               onNavigationConsumed: { coachRoutes.consume($0) },
-                              openHistory: openCoachHistory) { destination in
+                              openHistory: openCoachHistory, openToday: { selectedTab = "today" },
+                              openProgress: { selectedTab = "progress" }) { destination in
                         routes.route = SettingsRoute(destination: destination)
                     }.toolbar { profileControl }
                 }

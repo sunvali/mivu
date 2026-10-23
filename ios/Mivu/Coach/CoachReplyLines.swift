@@ -31,6 +31,20 @@ enum CoachReplyLines {
         return "Goal: \(number(kcal)) kcal a day" + (goal.targets.protein.map { ", \(number($0)) g protein" } ?? "") + "."
     }
 
+    enum FollowUp: Equatable { case today, progress }
+
+    static func followUps(for turn: CoachExchangeSummary) -> [FollowUp] {
+        guard turn.state == .completed else { return [] }
+        return (turn.receipts.contains { $0.mealID != nil } ? [.today] : []) + (turn.receipts.contains { $0.weightID != nil } ? [.progress] : [])
+    }
+
+    static func attributed(_ text: String) -> AttributedString {
+        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+    }
+
+    /// For notifications and other plain-text surfaces.
+    static func plain(_ text: String) -> String { String(attributed(text).characters) }
+
     static func number(_ value: Double, step: Double = 0) -> String {
         let shown = step > 0 ? (value / step).rounded() * step : value
         return shown.formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US")))

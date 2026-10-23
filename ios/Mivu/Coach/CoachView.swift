@@ -10,6 +10,8 @@ struct CoachView: View {
     var navigationRequest: CoachNavigationRequest? = nil
     var onNavigationConsumed: (UUID) -> Void = { _ in }
     var openHistory: () -> Void = {}
+    var openToday: () -> Void = {}
+    var openProgress: () -> Void = {}
     let openDestination: (CoachDestination) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -269,7 +271,7 @@ struct CoachView: View {
                 inputBubble(turn)
                 VStack(alignment: .leading, spacing: 12) {
                     if let answer = turn.assistantText {
-                        Text(answer).font(.body)
+                        Text(CoachReplyLines.attributed(answer)).font(.body)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
@@ -511,7 +513,7 @@ struct CoachView: View {
     }
     @ViewBuilder private func messageActions(_ turn: CoachExchangeSummary, fromPip: Bool) -> some View {
         Button("Reply", systemImage: "arrowshape.turn.up.left") { reply(to: turn, fromPip: fromPip) }
-        let text = fromPip ? turn.assistantText ?? "" : turn.text
+        let text = fromPip ? CoachReplyLines.plain(turn.assistantText ?? "") : turn.text
         if !text.isEmpty { Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text } }
     }
     private func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
@@ -605,6 +607,19 @@ struct CoachView: View {
                                  undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
+                }
+            }
+            if coach.timeline?.window.isLatest(turn.id) == true {
+                let followUps = CoachReplyLines.followUps(for: turn)
+                if !followUps.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(followUps, id: \.self) { followUp in
+                            Button(followUp == .today ? "See today" : "See progress", action: followUp == .today ? openToday : openProgress)
+                                .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier(followUp == .today ? "coachFollowUp-today" : "coachFollowUp-progress")
+                        }
+                    }
                 }
             }
             if turn.incomplete == true {

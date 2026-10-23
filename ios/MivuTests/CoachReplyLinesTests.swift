@@ -58,4 +58,24 @@ import Testing
         let line = CoachReplyLines.factLine(progress: [progress], goals: [goal], workouts: [], preferencesRead: true, today: "2027-01-15")
         #expect(line == "Today: 1,142 of 1,600 kcal, about 460 left. Goal: 1,600 kcal a day.")
     }
+
+    @Test func plainStripsInlineMarkdownAndSurvivesUnbalancedMarkers() {
+        #expect(CoachReplyLines.plain("About **1,240** kcal") == "About 1,240 kcal")
+        #expect(CoachReplyLines.plain("**x") == "**x")
+        #expect(String(CoachReplyLines.attributed("About **1,240** kcal").characters) == "About 1,240 kcal")
+    }
+
+    @Test func followUpsFollowTheCompletedTurnsReceipts() {
+        func turn(_ receipts: [CoachCommittedReceipt], state: CoachTurnState = .completed) -> CoachExchangeSummary {
+            CoachExchangeSummary(id: UUID(), sequence: 1, capturedAt: now, captureTimeZoneID: "UTC", segmentID: UUID(), displayLocalDate: "2027-01-15",
+                displayTimeZoneID: "UTC", text: "Synthetic", state: state, photos: [], receipts: receipts)
+        }
+        let meal = CoachCommittedReceipt(operationKey: "m", turnID: UUID(), mealID: UUID(), committedRevision: 1, submissionState: .saved)
+        let weight = CoachCommittedReceipt(operationKey: "w", turnID: UUID(), weightID: UUID(), committedRevision: 1)
+        #expect(CoachReplyLines.followUps(for: turn([meal])) == [.today])
+        #expect(CoachReplyLines.followUps(for: turn([weight])) == [.progress])
+        #expect(CoachReplyLines.followUps(for: turn([meal, weight])) == [.today, .progress])
+        #expect(CoachReplyLines.followUps(for: turn([meal], state: .analyzing)) == [])
+        #expect(CoachReplyLines.followUps(for: turn([])) == [])
+    }
 }
