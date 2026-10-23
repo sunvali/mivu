@@ -222,7 +222,9 @@ func animationKeys(in layer: CALayer) -> [String] {
         let cases: [(PipMoment, TimeInterval)] =
             [(.curious, MivuMotion.curious), (.patted, MivuMotion.patted), (.welcomeBack, MivuMotion.welcomeBack),
              (.saved, MivuMotion.saved), (.reviewed, MivuMotion.reviewed), (.submitted, MivuMotion.submitted),
-             (.firstMealToday, MivuMotion.firstMealToday), (.dayComplete, MivuMotion.dayComplete)]
+             (.firstMealToday, MivuMotion.firstMealToday), (.dayComplete, MivuMotion.dayComplete),
+             (.progressEntrance(cheer: false), MivuMotion.progressEntrance), (.progressEntrance(cheer: true), MivuMotion.progressEntrance),
+             (.progressRange, MivuMotion.progressRange), (.progressTap, MivuMotion.progressTap)]
             + (0...5).map { (PipMoment.tapped(level: $0), MivuMotion.tapped) }
             + [3, 8, 14, 21].map { (PipMoment.greeting(hour: $0), MivuMotion.greeting) }
         for (moment, lifetime) in cases {

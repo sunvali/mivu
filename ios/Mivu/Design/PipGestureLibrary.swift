@@ -37,16 +37,46 @@ enum PipGestureLibrary {
         },
 
         // MARK: Loops
-        // Progress: eyes down on the chart below, a paw lifted toward it, tail going; the first key is the still pose.
+        // Progress: Pip holds the chart card up on the right paw and looks down at the bars below. Every key that shows
+        // the card uses `holdsChart` so the paw and card sit in one place; the first key of each loop is its still pose.
         PipGesture("presenting-cheer", loops: true) {
-            $0.at(0.35) { $0.pawUp(.right, -35, elbow: -70).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
-            $0.at(0.95) { $0.pawUp(.right, -38, elbow: -74).look(0.4, 0.9).nod(9).mouth(.smallOpen).earPerk(14).tailWag(-14) }
-            $0.at(1.55) { $0.pawUp(.right, -35, elbow: -70).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
+            $0.at(0.35) { holdsChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
+            $0.at(0.95) { holdsChart($0, lift: 4).look(0.4, 0.9).nod(9).mouth(.smallOpen).earPerk(14).tailWag(-14) }
+            $0.at(1.55) { holdsChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
         },
         PipGesture("presenting-calm", loops: true) {
-            $0.at(0.40) { $0.pawUp(.right, -30, elbow: -62).look(0.3, 0.9).nod(7).mouth(.closedSmile).earPerk(8).tailWag(8) }
-            $0.at(1.20) { $0.pawUp(.right, -32, elbow: -66).look(0.4, 0.85).nod(8).mouth(.closedSmile).earPerk(10).tailWag(-8) }
-            $0.at(2.00) { $0.pawUp(.right, -30, elbow: -62).look(0.3, 0.9).nod(7).mouth(.closedSmile).earPerk(8).tailWag(8) }
+            $0.at(0.40) { holdsChart($0).look(0.3, 0.9).nod(7).mouth(.closedSmile).earPerk(8).tailWag(8) }
+            $0.at(1.20) { holdsChart($0, lift: 3).look(0.4, 0.85).nod(8).mouth(.closedSmile).earPerk(10).tailWag(-8) }
+            $0.at(2.00) { holdsChart($0).look(0.3, 0.9).nod(7).mouth(.closedSmile).earPerk(8).tailWag(8) }
+        },
+        // Opening the tab: a small hop in, then the card comes up.
+        PipGesture("progress-entrance") {
+            $0.at(0.12) { $0.squash(0.06).earPerk(-6) }
+            $0.at(0.34) { $0.hop(10).earPerk(14).look(0.3, 0.6).tailWag(14) }
+            $0.at(0.62) { holdsChart($0).look(0.3, 0.9).nod(6).mouth(.smallOpen).earPerk(10) }
+            $0.at(0.92) { holdsChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(-12) }
+            $0.settle(at: 1.20)
+        },
+        // On an on-track period: the same, with a second happy hop. No hearts or points: it is about the trend, not food.
+        PipGesture("progress-entrance-cheer") {
+            $0.at(0.12) { $0.squash(0.06).earPerk(-6) }
+            $0.at(0.34) { $0.hop(12).earPerk(16).look(0.3, 0.6).tailWag(16) }
+            $0.at(0.58) { holdsChart($0).eyes(.closedHappy).mouth(.bigOpen).earPerk(14).scarf(-6) }
+            $0.at(0.78) { holdsChart($0).hop(8).eyes(.closedHappy).mouth(.smallOpen).tailWag(-16) }
+            $0.at(1.02) { holdsChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12) }
+            $0.settle(at: 1.30)
+        },
+        // Switching Week / Month / 3M / Year: ears up, eyes follow the new bars.
+        PipGesture("progress-range") {
+            $0.at(0.15) { holdsChart($0, lift: 4).earPerk(18).look(0.7, 0.7).eyes(.wide) }
+            $0.at(0.48) { holdsChart($0).look(0.2, 1).nod(7).earPerk(10).mouth(.smallOpen) }
+            $0.settle(at: 0.80)
+        },
+        // A tap: Pip lifts the card a little higher and nods at it.
+        PipGesture("progress-tap") {
+            $0.at(0.12) { holdsChart($0, lift: 8).nod(-3).earPerk(12).mouth(.smallOpen) }
+            $0.at(0.38) { holdsChart($0, lift: 2).nod(8).look(0.3, 1).mouth(.smallOpen).tailWag(12) }
+            $0.settle(at: 0.70)
         },
         PipGesture("attentive", loops: true) {
             $0.at(0.5) { $0.nod(3).earPerk(10).tilt(1.5).look(0.5, 0.2) }
@@ -215,7 +245,14 @@ enum PipGestureLibrary {
         return wake
     }
 
+    /// The right paw raised with the chart card in it; `lift` swings the shoulder a few degrees more (pawUp caps it at 65).
+    /// The elbow stays at -60: `prop-chart` in pip.svg is drawn for exactly that bend, so the card meets the paw.
+    private static func holdsChart(_ pose: PipPose, lift: CGFloat = 0) -> PipPose {
+        pose.pawUp(.right, -57 - lift, elbow: -60).holdingChart()
+    }
+
     /// The held pose a static Pip shows for a moment (Reduce Motion, Low Power, thermal): the key before the final settle.
+
     static func stillPose(for moment: PipMoment) -> PipPose {
         let keys = gesture(for: moment).keys
         return keys.count > 1 ? keys[keys.count - 2].pose : .rest
@@ -255,6 +292,9 @@ enum PipGestureLibrary {
         case .patted: return named("patted")
         case .earTwitch: return named("ear-twitch")
         case .presenting(let cheer): return named(cheer ? "presenting-cheer" : "presenting-calm")
+        case .progressEntrance(let cheer): return named(cheer ? "progress-entrance-cheer" : "progress-entrance")
+        case .progressRange: return named("progress-range")
+        case .progressTap: return named("progress-tap")
         }
     }
 

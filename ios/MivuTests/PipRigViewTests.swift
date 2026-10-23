@@ -220,6 +220,14 @@ import UIKit
         #expect(try rig().layer(named: "heart-1")?.opacity == 0)
     }
 
+    @Test func chartPropIsShownOnlyByPose() throws {
+        let holding = try rig(PipPose.rest.holdingChart())
+        for part in ["prop-chart", "prop-chart.card", "prop-chart.bar-1", "prop-chart.bar-3"] {
+            #expect(holding.layer(named: part)?.opacity == 1 && holding.layer(named: part)?.isHidden == false, "\(part) shown")
+        }
+        #expect(try rig().layer(named: "prop-chart")?.opacity == 0, "Hidden at rest")
+    }
+
     @Test(arguments: [(PipPose.BodySet.seated, PipMoment.saved), (.curled, .earTwitch)])
     func gesturesKeepTheActiveBodySet(set: PipPose.BodySet, moment: PipMoment) async throws {
         let view = PipRigView(asset: try PipRigAsset.load(PipRigAssetTests.bundledData()), set: set)

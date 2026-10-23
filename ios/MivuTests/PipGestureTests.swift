@@ -8,6 +8,7 @@ import Testing
         .saved, .reviewed, .recovery, .firstMealToday, .dayComplete, .curious,
         .tapped(level: 0), .tapped(level: 1), .tapped(level: 2), .tapped(level: 3), .tapped(level: 4),
         .patted, .earTwitch, .presenting(cheer: true), .presenting(cheer: false),
+        .progressEntrance(cheer: true), .progressEntrance(cheer: false), .progressRange, .progressTap,
     ]
 
     @Test func everyLibraryGestureEndsAtRestWithinTwoSeconds() {
@@ -65,8 +66,23 @@ import Testing
             let held = try #require(loop.keys.first?.pose)
             #expect(held.gaze.y > 0.5, "Looks down at the chart")
             #expect(held.mouth != .concerned)
+            #expect(held.chart, "Holds the chart card up")
             #expect(CompanionRuntime.moment(for: cheer ? .presentingCheer : .presentingCalm, tapLevel: 0, hour: 12) == .presenting(cheer: cheer))
         }
+    }
+
+    /// Entrance, range switch and tap all land on Pip holding the chart; the cheer is a happy face, never hearts or points.
+    @MainActor @Test func progressMomentsShowTheChartKindly() throws {
+        let cases: [(CompanionPose, PipMoment)] = [(.progressEntrance, .progressEntrance(cheer: false)), (.progressEntranceCheer, .progressEntrance(cheer: true)),
+                                                   (.progressRange, .progressRange), (.progressTap, .progressTap)]
+        for (pose, moment) in cases {
+            #expect(CompanionRuntime.moment(for: pose, tapLevel: 0, hour: 12) == moment)
+            let gesture = PipGestureLibrary.gesture(for: moment)
+            #expect(!gesture.loops && gesture.keys.last?.pose == .rest, "\(moment) is a one-shot")
+            #expect(PipGestureLibrary.stillPose(for: moment).chart, "\(moment) reads as holding the chart when still")
+            #expect(gesture.keys.allSatisfy { $0.pose.hearts == 0 && $0.pose.mouth != .concerned }, "\(moment)")
+        }
+        #expect(PipGestureLibrary.gesture(for: .progressEntrance(cheer: true)).keys.contains { $0.pose.eyes == .closedHappy })
     }
 
     @Test func spokenTimingsMatchSpec() {

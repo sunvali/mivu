@@ -12,6 +12,20 @@ struct DiaryProgressView: View {
     @State private var selectedWeightDate: Date?
     @State private var companionRuntime = CompanionRuntime()
     @State private var companionVisible = false
+    @State private var pipEntered = false
+    @State private var pipReaction: PipReaction?
+    /// A requested one-shot; a fresh id replays the same pose (two taps in a row).
+    private struct PipReaction: Equatable { let pose: CompanionPose; var id = UUID() }
+    private struct PipRequest: Equatable {
+        let celebrates: Bool?, visible: Bool, dark: Bool, reduceMotion: Bool, reaction: PipReaction?
+    }
+    private static func lifetime(of pose: CompanionPose) -> TimeInterval {
+        switch pose {
+        case .progressRange: MivuMotion.progressRange
+        case .progressTap: MivuMotion.progressTap
+        default: MivuMotion.progressEntrance
+        }
+    }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -134,14 +148,26 @@ struct DiaryProgressView: View {
         .sheet(item: $editingWeight) { WeightCorrectionView(model: model, entry: $0, localDate: weightDate($0)) }
         .task(id: reportRequest) { await reloadProgress() }
         // Keyed on visibility too: leaving the tab stops Pip, and coming back must start the rig again.
-        .task(id: [snapshot?.headline.celebrates, companionVisible, colorScheme == .dark, reduceMotion]) {
+        .task(id: PipRequest(celebrates: snapshot?.headline.celebrates, visible: companionVisible, dark: colorScheme == .dark,
+                             reduceMotion: reduceMotion, reaction: pipReaction)) {
             guard companionVisible, let snapshot else { return }
             await companionRuntime.select(CharacterCatalog.bundled.resolve("pip"))
             await companionRuntime.attach(eligible: true)
+            // A one-shot first (entrance, range switch, tap), then back to holding the chart.
+            let reaction = pipReaction?.pose ?? (pipEntered ? nil : (snapshot.headline.celebrates ? .progressEntranceCheer : .progressEntrance))
+            pipEntered = true
+            if let reaction, !reduceMotion {
+                await companionRuntime.apply(CompanionOutput(pose: reaction, playback: .animated, reactionID: UUID(), nextDeadline: nil), darkMode: colorScheme == .dark)
+                try? await Task.sleep(for: .seconds(Self.lifetime(of: reaction)))
+                guard !Task.isCancelled else { return }
+                // Clearing the request reruns this task, which settles Pip back into holding the chart.
+                if pipReaction != nil { pipReaction = nil; return }
+            }
             await companionRuntime.apply(companionOutput(snapshot.headline), darkMode: colorScheme == .dark)
         }
+        .onChange(of: range) { _, _ in pipReaction = PipReaction(pose: .progressRange) }
         .onAppear { companionVisible = true }
-        .onDisappear { companionVisible = false; companionRuntime.stop() }
+        .onDisappear { companionVisible = false; pipEntered = false; companionRuntime.stop() }
         .onChange(of: model.selection) { _, _ in
             selectedWeightDate = nil
             weightBefore = nil; workoutBefore = nil; editingWeight = nil
@@ -215,7 +241,8 @@ struct DiaryProgressView: View {
         CompanionOutput(pose: headline.celebrates ? .presentingCheer : .presentingCalm, playback: reduceMotion ? .staticPose : .animated, reactionID: nil, nextDeadline: nil)
     }
     private func companion(_ headline: ProgressHeadline) -> CompanionView {
-        CompanionView(presentation: companionOutput(headline), darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize ? 120 : 150, runtime: companionRuntime)
+        CompanionView(presentation: companionOutput(headline), darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize ? 120 : 150,
+                      runtime: companionRuntime) { _ in pipReaction = PipReaction(pose: .progressTap) }
     }
     private func dates(_ progress: CoachProgress) -> String {
         let format = range.days > 30 ? "MMM d, yyyy" : "MMM d"

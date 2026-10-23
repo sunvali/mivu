@@ -210,6 +210,10 @@ import UIKit
         case .welcomeBack: .welcomeBack
         case .presentingCheer: .presenting(cheer: true)
         case .presentingCalm: .presenting(cheer: false)
+        case .progressEntrance: .progressEntrance(cheer: false)
+        case .progressEntranceCheer: .progressEntrance(cheer: true)
+        case .progressRange: .progressRange
+        case .progressTap: .progressTap
         }
     }
 

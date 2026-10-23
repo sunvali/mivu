@@ -47,6 +47,21 @@ import UIKit
         }
     }
 
+    /// The chart card is held out to the side: every Progress pose must stay inside the safe area so the crop never cuts it.
+    @Test func progressPosesKeepTheChartInsideTheArtboard() throws {
+        let moments: [PipMoment] = [.presenting(cheer: true), .presenting(cheer: false), .progressEntrance(cheer: true),
+                                    .progressEntrance(cheer: false), .progressRange, .progressTap]
+        for moment in moments {
+            for key in PipGestureLibrary.gesture(for: moment).keys where key.pose.chart {
+                // Measured in pixels: nothing may be drawn right of x 472 on the 512 artboard.
+                let view = try rig(.standing, side: 512)
+                view.apply(key.pose, animated: false)
+                let image = UIGraphicsImageRenderer(bounds: view.bounds).image { view.layer.render(in: $0.cgContext) }
+                #expect(!Self.hasInk(image, in: CGRect(x: 474, y: 0, width: 38, height: 512)), "\(moment) at \(key.at)")
+            }
+        }
+    }
+
     @Test func restPoseIsStanding() throws {
         #expect(PipPose.rest.set == .standing)
         let view = try rig(.seated)

@@ -137,9 +137,11 @@ final class PipRigView: UIView {
         return t.translated(x: joint.offset.x, y: joint.offset.y)
     }
 
-    /// Blush and hearts fade in and out instead of popping.
+    /// Blush, hearts and the chart prop fade in and out instead of popping.
     private static func opacity(of part: PipRigAsset.Part, in pose: PipPose) -> Float? {
         if part.name.hasPrefix("cheek-blush") { return pose.blush ? 1 : 0 }
+        // The card's own parts start hidden too, so every `prop-chart…` part follows the flag.
+        if part.name.hasPrefix("prop-chart") { return pose.chart ? 1 : 0 }
         if part.name.hasPrefix("heart-"), let n = Int(part.name.dropFirst(6)) { return n <= pose.hearts ? 1 : 0 }
         return nil
     }
