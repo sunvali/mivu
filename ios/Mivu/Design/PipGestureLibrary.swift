@@ -37,8 +37,8 @@ enum PipGestureLibrary {
         },
 
         // MARK: Loops
-        // Progress: Pip, in reading glasses, holds the chart card up and reads it. Keys that hold it use `atChart`; the
-        // silly taps set it aside. The first key of each loop is its still pose.
+        // Progress: Pip, in reading glasses, keeps the chart card in its near paw the whole time (`prop-chart` is part of
+        // the paw). Keys that raise it to read use `atChart`; the first key of each loop is its still pose.
         PipGesture("presenting-cheer", loops: true) {
             $0.at(0.35) { atChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
             $0.at(0.95) { atChart($0, lift: 4).look(0.4, 0.9).nod(9).mouth(.smallOpen).earPerk(14).tailWag(-14) }
@@ -282,10 +282,9 @@ enum PipGestureLibrary {
         return wake
     }
 
-    /// The near front paw raised, holding the chart card up to read; `lift` swings the shoulder a few degrees more.
-    /// The elbow stays at -60: `prop-chart` in pip.svg is drawn for exactly that bend, so the card sits on the paw tip.
+    /// The near front paw raised so Pip can read the chart card in it; `lift` swings the shoulder a few degrees more.
     private static func atChart(_ pose: PipPose, lift: CGFloat = 0) -> PipPose {
-        pose.pawUp(.right, -45 - lift, elbow: -60).holdingCard()
+        pose.pawUp(.right, -45 - lift, elbow: -60)
     }
 
     /// The held pose a static Pip shows for a moment (Reduce Motion, Low Power, thermal): the key before the final settle.

@@ -105,7 +105,6 @@ extension PipPose {
     func look(_ x: CGFloat, _ y: CGFloat = 0) -> PipPose { var copy = self; copy.gaze = CGPoint(x: x, y: y); return copy }
     func turn(_ headTurn: CGFloat) -> PipPose { var copy = self; copy.headTurn = headTurn; return copy }
     func blushing() -> PipPose { var copy = self; copy.blush = true; return copy }
-    func holdingCard() -> PipPose { var copy = self; copy.card = true; return copy }
     /// Shows `count` hearts that have drifted `drift` points upward.
     func hearts(_ count: Int, drift: CGFloat = 0) -> PipPose {
         var copy = self

@@ -221,7 +221,7 @@ import UIKit
     }
 
     @Test func progressPropsAreShownOnlyWhenTheScreenAsks() throws {
-        let held = PipPose.rest.pawUp(.right, -45, elbow: -60).holdingCard()
+        let held = PipPose.rest.pawUp(.right, -45, elbow: -60)
         let view = try rig(held)
         view.showsProgressProps = true
         for part in ["prop-chart", "prop-chart.card", "prop-chart.bar-1", "prop-chart.bar-3", "glasses@right"] {
@@ -229,7 +229,7 @@ import UIKit
         }
         #expect(view.layer(named: "glasses@front")?.isHidden == true, "Glasses only show on the active head view")
         view.apply(PipPose.rest.nod(6).hop(10), animated: false)
-        #expect(view.layer(named: "prop-chart")?.opacity == 0, "Set aside when the pose does not hold it")
+        #expect(view.layer(named: "prop-chart")?.opacity == 1 && view.layer(named: "prop-chart")?.isHidden == false, "Pip never lets go of the card")
         #expect(view.layer(named: "glasses@right")?.opacity == 1, "Glasses stay on")
         let elsewhere = try rig(held)
         #expect(elsewhere.layer(named: "prop-chart")?.isHidden == true && elsewhere.layer(named: "glasses@right")?.isHidden == true,

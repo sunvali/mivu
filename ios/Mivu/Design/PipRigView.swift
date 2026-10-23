@@ -154,8 +154,7 @@ final class PipRigView: UIView {
         if part.name.hasPrefix("heart-"), let n = Int(part.name.dropFirst(6)) { return n <= pose.hearts ? 1 : 0 }
         // nil: not shown at all, like any hidden part. The card's own parts start hidden too, so all follow the flag.
         guard Self.isProgressProp(part), showsProgressProps else { return nil }
-        // The card rides the upper arm and is drawn for the hold's elbow, so it only shows while held.
-        return part.name.hasPrefix("prop-chart") ? (pose.card ? 1 : 0) : 1
+        return 1
     }
 
     /// Which head view to show and how far (-1...1) to slide features inside it.
