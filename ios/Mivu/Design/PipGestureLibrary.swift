@@ -74,9 +74,9 @@ enum PipGestureLibrary {
         },
         // Taps on Progress Pip: six silly one-shots, one per tap, in turn.
         PipGesture("progress-tap-boing") {
-            $0.at(0.10) { $0.squash(0.10).earPerk(-14).eyes(.closedHappy) }
+            $0.at(0.10) { $0.squash(0.07).earPerk(-14).eyes(.closedHappy) }
             $0.at(0.32) { $0.hop(14).earPerk(22).eyes(.wide).mouth(.bigOpen).tailWag(24).scarf(-10) }
-            $0.at(0.55) { $0.squash(0.08).earPerk(-10).mouth(.o) }
+            $0.at(0.55) { $0.squash(0.06).earPerk(-10).mouth(.o) }
             $0.at(0.78) { $0.hop(8).earPerk(16).eyes(.closedHappy).mouth(.smallOpen).tailWag(-20) }
             $0.settle(at: 1.05)
         },
@@ -281,6 +281,9 @@ enum PipGestureLibrary {
         wake.endSet = set
         return wake
     }
+
+    /// The card arm of the hold, which Progress keeps whenever a pose leaves that arm alone (`PipRigView.showsProgressProps`).
+    static let progressHeldArm = atChart(.rest).joints.filter { ["arm-r", "forearm-r", "paw-r"].contains($0.key) }
 
     /// The near front paw raised so Pip can read the chart card in it; `lift` swings the shoulder a few degrees more.
     private static func atChart(_ pose: PipPose, lift: CGFloat = 0) -> PipPose {

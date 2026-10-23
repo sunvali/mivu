@@ -40,9 +40,13 @@ final class PipRigView: UIView {
     var showsProgressProps = false {
         didSet {
             guard showsProgressProps != oldValue else { return }
+            heldJoints = showsProgressProps ? PipGestureLibrary.progressHeldArm : [:]
             apply(pose, animated: false)
         }
     }
+    /// Joints a pose falls back to when it leaves them alone: on Progress the card arm stays raised instead of resting
+    /// on the floor, through rest, settles and tricks that do not move that arm.
+    private var heldJoints: [String: PipPose.Joint] = [:]
     private static func isProgressProp(_ part: PipRigAsset.Part) -> Bool {
         part.name.hasPrefix("prop-chart") || part.name.hasPrefix("glasses")
     }
@@ -125,7 +129,7 @@ final class PipRigView: UIView {
 
     private func joint(of part: PipRigAsset.Part, in pose: PipPose, slide local: CGFloat) -> PipPose.Joint {
         // A joint keyed by the full id (`arm-r@seated`) moves only that set's part; a plain name moves every set's.
-        var joint = pose.joints[part.id] ?? pose.joints[part.name] ?? PipPose.Joint()
+        var joint = pose.joints[part.id] ?? pose.joints[part.name] ?? heldJoints[part.id] ?? PipPose.Joint()
         let gaze = Self.clamped(pose.gaze)
         if let reach = pupilReach[part.id] {
             joint.offset.x += gaze.x * (gaze.x < 0 ? -reach.lo.x : reach.hi.x)

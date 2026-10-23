@@ -34,7 +34,7 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip-rig.json",
-    "sha256": "317e1891ce96cc8005b828207b6b7cf9cb4ea09662e57dd41677b4648b871c39",
+    "sha256": "469d312cc184c398aa1a1efc343956ef888ac06a8d4c7575b72a24ac1da5d111",
     "bytes": 313785,
     "formatVersion": 2,
     "canvas": [
@@ -110,7 +110,7 @@
   "authoringSources": [
     {
       "path": "design-system/mivu/characters/pip/rig/pip.svg",
-      "sha256": "8e000ce5da57435958bd838eaa77f47dd47d64d7e42d0a857c0dcfa1366517ae",
+      "sha256": "e3d464e1b2c165b6e46c6265606114a78a7e30812a9e73f50b369e4c14c3ba83",
       "bytes": 223466,
       "role": "Editable layered vector Pip"
     },

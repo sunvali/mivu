@@ -220,6 +220,18 @@ import UIKit
         #expect(try rig().layer(named: "heart-1")?.opacity == 0)
     }
 
+    /// On Progress the card paw never goes back to the floor: poses that leave that arm alone keep it in the hold.
+    @Test func progressKeepsTheCardArmRaisedWhenAPoseLeavesItAlone() throws {
+        let hold = try rig(PipPose.rest.pawUp(.right, -45, elbow: -60))
+        let progress = try rig()
+        progress.showsProgressProps = true
+        progress.apply(PipPose.rest.nod(6).hop(10), animated: false)
+        for part in ["arm-r", "forearm-r", "paw-r"] {
+            #expect(CATransform3DEqualToTransform(progress.layer(named: part)!.transform, hold.layer(named: part)!.transform), "\(part) held")
+        }
+        #expect(CATransform3DIsIdentity(try rig().layer(named: "forearm-r")!.transform), "Other screens still rest on the floor")
+    }
+
     @Test func progressPropsAreShownOnlyWhenTheScreenAsks() throws {
         let held = PipPose.rest.pawUp(.right, -45, elbow: -60)
         let view = try rig(held)
