@@ -809,14 +809,7 @@ struct TodayView: View {
         }
     }
     private func heroMetric(_ title: LocalizedStringKey, value: Double?, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 3) {
-                Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
-                Text(title).font(.caption).fixedSize(horizontal: true, vertical: false)
-            }
-            Text(value.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" } ?? "—")
-                .font(.system(size: 17, weight: .medium)).monospacedDigit()
-        }.foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
+        DiaryMetric(title: title, value: value.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" }, color: color)
     }
 
     @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay, showCompleteness: Bool = true) -> some View {

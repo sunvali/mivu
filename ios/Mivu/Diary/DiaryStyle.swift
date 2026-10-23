@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DiarySummaryCardStyle: ViewModifier {
+    var fill: Color = .diarySurface
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -10,7 +11,7 @@ struct DiarySummaryCardStyle: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.diarySurface)
+                    .fill(fill)
                     .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.06), radius: 10, x: 0, y: 4)
             }
             .overlay {
@@ -149,6 +150,22 @@ struct NutritionSummary: View {
             Text(label).font(.caption).foregroundStyle(color)
             Text(value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "—").font(.body.weight(.medium)).monospacedDigit().foregroundStyle(color)
         }
+    }
+}
+
+/// A small dot-labelled value, as in Today's protein / carbs / fat row.
+struct DiaryMetric: View {
+    let title: LocalizedStringKey
+    let value: String?
+    let color: Color
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 3) {
+                Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
+                Text(title).font(.caption).fixedSize(horizontal: true, vertical: false)
+            }
+            Text(value ?? "—").font(.system(size: 17, weight: .medium)).monospacedDigit()
+        }.foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

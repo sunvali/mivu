@@ -35,6 +35,21 @@ final class PipRigView: UIView {
     var isDark = false { didSet { if isDark != oldValue { applyFills() } } }
     private(set) var visibleViews: Set<String> = []
     private var pose = PipPose.rest
+    /// Progress dresses Pip with the chart card and reading glasses. They belong to the screen, not a pose, so
+    /// gestures never blink them; head parts only show in the active view.
+    var showsProgressProps = false {
+        didSet {
+            guard showsProgressProps != oldValue else { return }
+            heldJoints = showsProgressProps ? PipGestureLibrary.progressHeldArm : [:]
+            apply(pose, animated: false)
+        }
+    }
+    /// Joints a pose falls back to when it leaves them alone: on Progress the card arm stays raised instead of resting
+    /// on the floor, through rest, settles and tricks that do not move that arm.
+    private var heldJoints: [String: PipPose.Joint] = [:]
+    private static func isProgressProp(_ part: PipRigAsset.Part) -> Bool {
+        part.name.hasPrefix("prop-chart") || part.name.hasPrefix("glasses")
+    }
     private let bottomCrop = CALayer()
 
     init(asset: PipRigAsset, set: PipPose.BodySet) {
@@ -79,7 +94,7 @@ final class PipRigView: UIView {
             guard let container = containers[part.id] else { continue }
             container.isHidden = !isShown(part, view: view, wanted: wanted, pose: pose)
             if !container.isHidden, let partView = part.view { views.insert(partView) }
-            if let opacity = Self.opacity(of: part, in: pose) { container.opacity = opacity }
+            if let opacity = opacity(of: part, in: pose) { container.opacity = opacity }
             container.transform = Self.transform(joint(of: part, in: pose, slide: local))
         }
         visibleViews = views
@@ -114,7 +129,7 @@ final class PipRigView: UIView {
 
     private func joint(of part: PipRigAsset.Part, in pose: PipPose, slide local: CGFloat) -> PipPose.Joint {
         // A joint keyed by the full id (`arm-r@seated`) moves only that set's part; a plain name moves every set's.
-        var joint = pose.joints[part.id] ?? pose.joints[part.name] ?? PipPose.Joint()
+        var joint = pose.joints[part.id] ?? pose.joints[part.name] ?? heldJoints[part.id] ?? PipPose.Joint()
         let gaze = Self.clamped(pose.gaze)
         if let reach = pupilReach[part.id] {
             joint.offset.x += gaze.x * (gaze.x < 0 ? -reach.lo.x : reach.hi.x)
@@ -137,11 +152,13 @@ final class PipRigView: UIView {
         return t.translated(x: joint.offset.x, y: joint.offset.y)
     }
 
-    /// Blush and hearts fade in and out instead of popping.
-    private static func opacity(of part: PipRigAsset.Part, in pose: PipPose) -> Float? {
+    /// Blush and hearts fade in and out instead of popping; the chart card and glasses follow `showsProgressProps`.
+    private func opacity(of part: PipRigAsset.Part, in pose: PipPose) -> Float? {
         if part.name.hasPrefix("cheek-blush") { return pose.blush ? 1 : 0 }
         if part.name.hasPrefix("heart-"), let n = Int(part.name.dropFirst(6)) { return n <= pose.hearts ? 1 : 0 }
-        return nil
+        // nil: not shown at all, like any hidden part. The card's own parts start hidden too, so all follow the flag.
+        guard Self.isProgressProp(part), showsProgressProps else { return nil }
+        return 1
     }
 
     /// Which head view to show and how far (-1...1) to slide features inside it.
@@ -159,7 +176,7 @@ final class PipRigView: UIView {
     private func isShown(_ part: PipRigAsset.Part, view: String, wanted: Set<String>, pose: PipPose) -> Bool {
         guard part.view == nil || part.view == view, part.set == nil || part.set == pose.set.rawValue else { return false }
         if let slot = slots[part.id] { return wanted.contains(slot) }
-        return part.visible || Self.opacity(of: part, in: pose) != nil
+        return part.visible || opacity(of: part, in: pose) != nil
     }
 
     // MARK: - Layer tree
@@ -402,7 +419,7 @@ extension PipRigView {
                 guard abs(from[i] - to) > 0.0005 else { container.removeAnimation(forKey: component.key); continue }
                 container.add(spring(from: from[i], to: to, period: period, follower: follower, saccade: gazePart, on: container, path: component.path), forKey: component.key)
             }
-            guard Self.opacity(of: part, in: pose) != nil, model[part.id]?[Self.components.count] != container.opacity else { continue }
+            guard opacity(of: part, in: pose) != nil, model[part.id]?[Self.components.count] != container.opacity else { continue }
             let fade = CABasicAnimation(keyPath: "opacity")
             fade.fromValue = from[Self.components.count]
             fade.toValue = container.opacity

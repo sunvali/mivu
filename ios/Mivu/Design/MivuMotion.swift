@@ -15,5 +15,8 @@ enum MivuMotion {
     static let tapped: TimeInterval = 0.8
     static let patted: TimeInterval = 1.3
     static let welcomeBack: TimeInterval = 1.6
+    static let progressEntrance: TimeInterval = 1.4
+    static let progressRange: TimeInterval = 0.9
+    static let progressTap: TimeInterval = 1.3
     static let feedbackLifetime: TimeInterval = 10
 }

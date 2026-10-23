@@ -37,6 +37,84 @@ enum PipGestureLibrary {
         },
 
         // MARK: Loops
+        // Progress: Pip, in reading glasses, keeps the chart card in its near paw the whole time (`prop-chart` is part of
+        // the paw). Keys that raise it to read use `atChart`; the first key of each loop is its still pose.
+        PipGesture("presenting-cheer", loops: true) {
+            $0.at(0.35) { atChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
+            $0.at(0.95) { atChart($0, lift: 4).look(0.4, 0.9).nod(9).mouth(.smallOpen).earPerk(14).tailWag(-14) }
+            $0.at(1.55) { atChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(14) }
+        },
+        PipGesture("presenting-calm", loops: true) {
+            $0.at(0.40) { atChart($0).look(0.3, 0.9).nod(7).mouth(.closedSmile).earPerk(8).tailWag(8) }
+            $0.at(1.20) { atChart($0, lift: 3).look(0.4, 0.85).nod(8).mouth(.closedSmile).earPerk(10).tailWag(-8) }
+            $0.at(2.00) { atChart($0).look(0.3, 0.9).nod(7).mouth(.closedSmile).earPerk(8).tailWag(8) }
+        },
+        // Opening the tab: a small hop in, then the card comes up.
+        PipGesture("progress-entrance") {
+            $0.at(0.12) { $0.squash(0.06).earPerk(-6) }
+            $0.at(0.34) { $0.hop(10).earPerk(14).look(0.3, 0.6).tailWag(14) }
+            $0.at(0.62) { atChart($0).look(0.3, 0.9).nod(6).mouth(.smallOpen).earPerk(10) }
+            $0.at(0.92) { atChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12).tailWag(-12) }
+            $0.settle(at: 1.20)
+        },
+        // On an on-track period: the same, with a second happy hop. No hearts or points: it is about the trend, not food.
+        PipGesture("progress-entrance-cheer") {
+            $0.at(0.12) { $0.squash(0.06).earPerk(-6) }
+            $0.at(0.34) { $0.hop(12).earPerk(16).look(0.3, 0.6).tailWag(16) }
+            $0.at(0.58) { atChart($0).eyes(.closedHappy).mouth(.bigOpen).earPerk(14).scarf(-6) }
+            $0.at(0.78) { atChart($0).hop(8).eyes(.closedHappy).mouth(.smallOpen).tailWag(-16) }
+            $0.at(1.02) { atChart($0).look(0.3, 1).nod(8).mouth(.smallOpen).earPerk(12) }
+            $0.settle(at: 1.30)
+        },
+        // Switching Week / Month / 3M / Year: ears up, eyes follow the new bars.
+        PipGesture("progress-range") {
+            $0.at(0.15) { atChart($0, lift: 4).earPerk(18).look(0.7, 0.7).eyes(.wide) }
+            $0.at(0.48) { atChart($0).look(0.2, 1).nod(7).earPerk(10).mouth(.smallOpen) }
+            $0.settle(at: 0.80)
+        },
+        // Taps on Progress Pip: six silly one-shots, one per tap, in turn.
+        PipGesture("progress-tap-boing") {
+            $0.at(0.10) { $0.squash(0.07).earPerk(-14).eyes(.closedHappy) }
+            $0.at(0.32) { $0.hop(14).earPerk(22).eyes(.wide).mouth(.bigOpen).tailWag(24).scarf(-10) }
+            $0.at(0.55) { $0.squash(0.06).earPerk(-10).mouth(.o) }
+            $0.at(0.78) { $0.hop(8).earPerk(16).eyes(.closedHappy).mouth(.smallOpen).tailWag(-20) }
+            $0.settle(at: 1.05)
+        },
+        PipGesture("progress-tap-dizzy") {
+            $0.at(0.15) { $0.tilt(8).eyes(.closedSleepy).mouth(.o).look(-0.6, -0.2) }
+            $0.at(0.35) { $0.tilt(-8).eyes(.closedSleepy).mouth(.o).look(0.6, -0.2) }
+            $0.at(0.55) { $0.tilt(7).eyes(.half).mouth(.o).look(-0.5, 0.2) }
+            $0.at(0.75) { $0.tilt(-6).eyes(.half).mouth(.smallOpen) }
+            $0.at(0.95) { $0.nod(-4).earPerk(16).eyes(.wide).mouth(.smallOpen) }
+            $0.settle(at: 1.20)
+        },
+        PipGesture("progress-tap-tail-chase") {
+            $0.at(0.18) { $0.turn(0).look(-1, 0.4).tilt(-5).earPerk(14).tailWag(30).eyes(.wide) }
+            $0.at(0.40) { $0.turn(0).hop(6).look(-1, 0.5).tilt(5).tailWag(-30).mouth(.o) }
+            $0.at(0.62) { $0.turn(0).look(-1, 0.4).tilt(-5).tailWag(30).eyes(.closedHappy).mouth(.bigOpen) }
+            $0.at(0.86) { $0.turn(1).earPerk(10).tailWag(-12).mouth(.smallOpen) }
+            $0.settle(at: 1.15)
+        },
+        PipGesture("progress-tap-heart-eyes") {
+            $0.at(0.18) { $0.eyes(.heart).blushing().mouth(.bigOpen).earPerk(14).tailWag(16) }
+            $0.at(0.48) { $0.nod(-4).tilt(4).eyes(.heart).blushing().mouth(.smallOpen).tailWag(-16) }
+            $0.at(0.80) { $0.tilt(-3).eyes(.heart).blushing().mouth(.bigOpen).tailWag(16) }
+            $0.settle(at: 1.10)
+        },
+        PipGesture("progress-tap-surprise") {
+            $0.at(0.08) { $0.squash(0.05).earPerk(24).eyes(.wide).mouth(.o) }
+            $0.at(0.24) { $0.hop(12).earPerk(24).eyes(.wide).mouth(.o) }
+            $0.at(0.52) { $0.nod(6).look(0.3, 1).mouth(.smallOpen) }
+            $0.at(0.78) { atChart($0, lift: 4).eyes(.closedHappy).mouth(.bigOpen).tailWag(18) }
+            $0.settle(at: 1.05)
+        },
+        PipGesture("progress-tap-sign-tap") {
+            $0.at(0.15) { atChart($0, lift: 4).look(0.3, 1).mouth(.smallOpen) }
+            $0.at(0.30) { atChart($0).look(0.3, 1).nod(4) }
+            $0.at(0.45) { atChart($0, lift: 4).look(0.3, 1).mouth(.smallOpen) }
+            $0.at(0.62) { atChart($0).nod(6).eyes(.closedHappy).mouth(.bigOpen).tailWag(16) }
+            $0.settle(at: 1.05)
+        },
         PipGesture("attentive", loops: true) {
             $0.at(0.5) { $0.nod(3).earPerk(10).tilt(1.5).look(0.5, 0.2) }
             $0.at(1.0) { $0.nod(-1).earPerk(6).look(0.8, 0.1) }
@@ -204,7 +282,16 @@ enum PipGestureLibrary {
         return wake
     }
 
+    /// The card arm of the hold, which Progress keeps whenever a pose leaves that arm alone (`PipRigView.showsProgressProps`).
+    static let progressHeldArm = atChart(.rest).joints.filter { ["arm-r", "forearm-r", "paw-r"].contains($0.key) }
+
+    /// The near front paw raised so Pip can read the chart card in it; `lift` swings the shoulder a few degrees more.
+    private static func atChart(_ pose: PipPose, lift: CGFloat = 0) -> PipPose {
+        pose.pawUp(.right, -45 - lift, elbow: -60)
+    }
+
     /// The held pose a static Pip shows for a moment (Reduce Motion, Low Power, thermal): the key before the final settle.
+
     static func stillPose(for moment: PipMoment) -> PipPose {
         let keys = gesture(for: moment).keys
         return keys.count > 1 ? keys[keys.count - 2].pose : .rest
@@ -243,6 +330,13 @@ enum PipGestureLibrary {
             return named(level >= 4 ? "shake-off" : rotation[max(level, 0)])
         case .patted: return named("patted")
         case .earTwitch: return named("ear-twitch")
+        case .presenting(let cheer): return named(cheer ? "presenting-cheer" : "presenting-calm")
+        case .progressEntrance(let cheer): return named(cheer ? "progress-entrance-cheer" : "progress-entrance")
+        case .progressRange: return named("progress-range")
+        case .progressTap(let level):
+            let rotation = ["progress-tap-boing", "progress-tap-dizzy", "progress-tap-tail-chase",
+                            "progress-tap-heart-eyes", "progress-tap-surprise", "progress-tap-sign-tap"]
+            return named(rotation[max(level, 0) % rotation.count])
         }
     }
 

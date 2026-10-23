@@ -1,74 +1,42 @@
 import Charts
 import SwiftUI
 
-struct GoalSummaryView: View {
-    let report: DailyProgress
-    let identifier: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label { Text("Your goals") } icon: { Image(systemName: "target").foregroundStyle(Color.diaryEnergy) }.font(.headline)
-            if let goal = report.goal {
-                if let target = goal.targets.kcal {
-                    Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal")
-                        .accessibilityIdentifier(identifier)
-                } else {
-                    Text("No energy target set").foregroundStyle(Color.diarySecondary)
-                        .accessibilityIdentifier(identifier)
-                }
-                if let target = goal.targets.carbs { nutrient("Carbs", color: .diaryCarbs, target: target, recorded: report.foodTotals?.carbs, remaining: report.remainingFromRecorded.carbs) }
-                if let target = goal.targets.protein { nutrient("Protein", color: .diaryProtein, target: target, recorded: report.foodTotals?.protein, remaining: report.remainingFromRecorded.protein) }
-                if let target = goal.targets.fat { nutrient("Fat", color: .diaryFat, target: target, recorded: report.foodTotals?.fat, remaining: report.remainingFromRecorded.fat) }
-                if goal.exerciseCreditEnabled {
-                    Text("Exercise-adjusted remaining: \(amount(report.exerciseAdjustedKcalRemaining))")
-                }
-            } else {
-                Text("Set your own dated goals in Settings.").foregroundStyle(Color.diarySecondary)
-                    .accessibilityIdentifier(identifier)
-            }
-            Text("Recorded food: \(amount(report.foodTotals?.kcal))")
-            Text("Remaining from recorded food: \(amount(report.remainingFromRecorded.kcal))")
-            Text("Estimated workout burn: \(amount(report.estimatedBurnKcal))")
-            if report.completeness != .complete || report.hasPending {
-                Text("Recorded amounts may be incomplete for this day.")
-                    .font(.caption).foregroundStyle(Color.diarySecondary)
-            }
-        }
-    }
-
-    private func amount(_ value: Double?) -> String {
-        value.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "unknown"
-    }
-    private func nutrient(_ name: String, color: Color, target: Double, recorded: Double?, remaining: Double?) -> some View {
-        Text("\(name) goal \(grams(target)); recorded \(grams(recorded)); remaining \(grams(remaining))")
-            .font(.subheadline).foregroundStyle(color)
-    }
-    private func grams(_ value: Double?) -> String {
-        value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "unknown"
-    }
-}
-
 struct DiaryProgressView: View {
     @Bindable var model: DiaryViewModel
     let openDiary: () -> Void
-    @State private var report = Report.weekly
+    @State private var range = ProgressRange.week
     @State private var showGoals = false
     @State private var showWeight = false
-    @ScaledMetric(relativeTo: .largeTitle) private var metricSize = 48.0
     @State private var showWorkout = false
     @State private var editingWeight: WeightEntry?
     @State private var selectedWeightDate: Date?
-    @State private var nutritionExpanded = false
-    @State private var coverageExpanded = false
+    @State private var companionRuntime = CompanionRuntime()
+    @State private var companionVisible = false
+    @State private var pipEntered = false
+    @State private var pipReaction: PipReaction?
+    /// A requested one-shot; a fresh id replays the same pose (two taps in a row).
+    private struct PipReaction: Equatable { let pose: CompanionPose; var level = 0; var id = UUID() }
+    @State private var pipTaps = 0
+    private struct PipRequest: Equatable {
+        let celebrates: Bool?, visible: Bool, dark: Bool, reduceMotion: Bool, reaction: PipReaction?
+    }
+    private static func lifetime(of pose: CompanionPose) -> TimeInterval {
+        switch pose {
+        case .progressRange: MivuMotion.progressRange
+        case .progressTap: MivuMotion.progressTap
+        default: MivuMotion.progressEntrance
+        }
+    }
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.openDiaryCoach) private var openChat
 
-    private enum Report: Equatable { case daily, weekly, monthly }
-    private struct ReportRequest: Equatable {
+    struct ReportRequest: Equatable {
         let ownership: DiarySelectionOwnership?
         let generation: UInt64
         let date: String
-        let report: Report
+        let range: ProgressRange
     }
     private struct LedgerRequest: Equatable {
         let ownership: DiarySelectionOwnership?
@@ -76,7 +44,9 @@ struct DiaryProgressView: View {
         let before: Int?
     }
     @State private var progress: CoachProgress?
+    @State private var foods: [TopFood] = []
     @State private var loadedReport: ReportRequest?
+    @State private var loadedSnapshot: ProgressSnapshot?
     @State private var reportRequestID = UUID()
     @State private var loadError: String?
     @State private var weightPage: DiaryRecordPage<WeightEntry>?
@@ -92,26 +62,20 @@ struct DiaryProgressView: View {
     @State private var workoutDates: [UUID: String] = [:]
     @State private var workoutError: String?
     private var reportRequest: ReportRequest {
-        ReportRequest(ownership: model.selection, generation: model.changeGeneration, date: today, report: report)
+        ReportRequest(ownership: model.selection, generation: model.changeGeneration, date: today, range: range)
     }
     private var weightRequest: LedgerRequest { LedgerRequest(ownership: model.selection, generation: model.changeGeneration, before: weightBefore) }
     private var workoutRequest: LedgerRequest { LedgerRequest(ownership: model.selection, generation: model.changeGeneration, before: workoutBefore) }
-    private var visibleProgress: CoachProgress? {
-        let request = reportRequest
-        guard let loadedReport, loadedReport.ownership == request.ownership,
-              loadedReport.date == request.date, loadedReport.report == request.report else { return nil }
-        return progress
+    private var visibleProgress: CoachProgress? { Self.shows(loaded: loadedReport, for: reportRequest) ? progress : nil }
+    /// The cards follow the range of the data they show, so a range switch keeps the last report until the new one lands.
+    private var shownRange: ProgressRange { loadedReport?.range ?? range }
+    /// A range or edit change keeps the last report on screen while the next loads; a new profile or day never shows the old one.
+    static func shows(loaded: ReportRequest?, for request: ReportRequest) -> Bool {
+        guard let loaded else { return false }
+        return loaded.ownership == request.ownership && loaded.date == request.date
     }
     private var visibleWeights: [WeightEntry] { loadedWeights == weightRequest ? weightPage?.values ?? [] : [] }
     private var visibleWorkouts: [WorkoutSession] { loadedWorkouts == workoutRequest ? workoutPage?.values ?? [] : [] }
-    private struct Observation: Identifiable {
-        let label: String
-        let value: Double
-        let date: Date
-        let complete: Bool
-        let coverage: String
-        var id: String { label }
-    }
     struct WeightObservation: Identifiable {
         let label: String
         let date: Date
@@ -120,35 +84,13 @@ struct DiaryProgressView: View {
     }
 
     private var readModel: DiaryReadModel? { model.readModel }
+    private var zone: String { readModel?.profile.timeZoneID ?? TimeZone.current.identifier }
     private var today: String {
-        model.activeDay?.localDate
-            ?? ProgressDate.label(Date(), zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
+        model.activeDay?.localDate ?? ProgressDate.label(Date(), zone: zone)
     }
-    private var daily: DailyProgress? { visibleProgress?.daily }
-    private var period: PeriodProgress? { visibleProgress?.period }
     private var weightReport: WeightProgress? { visibleProgress?.weight }
-    private var nutrition: [Observation] {
-        let zone = readModel?.profile.timeZoneID ?? TimeZone.current.identifier
-        let savedDates = Set(visibleProgress?.savedFoodDates ?? [])
-        return (visibleProgress?.dailyReports ?? []).compactMap { day in
-            guard savedDates.contains(day.localDate), let value = day.foodTotals?.kcal, let date = ProgressDate.date(day.localDate, zone: zone) else { return nil }
-            return Observation(label: day.localDate, value: value, date: date,
-                               complete: day.completeness == .complete,
-                               coverage: day.completeness?.rawValue.capitalized ?? "No tracking day")
-        }
-    }
-    var nutritionDomain: ClosedRange<Date> {
-        let zone = readModel?.profile.timeZoneID ?? TimeZone.current.identifier
-        let firstLabel = report == .daily ? today : (ProgressAnalytics.window(endingOn: today, days: report == .monthly ? 30 : 7, offset: 0, zone: zone).first ?? today)
-        let firstDate = ProgressDate.date(firstLabel, zone: zone) ?? Date()
-        let lastDate = ProgressDate.date(today, zone: zone) ?? firstDate
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
-        let start = calendar.startOfDay(for: firstDate)
-        let last = calendar.startOfDay(for: lastDate)
-        let end = calendar.date(byAdding: .day, value: 1, to: last) ?? last.addingTimeInterval(86_400)
-        return start...end
-    }
+    /// Built once per load, not per draw: Pip's taps and reactions redraw this view often.
+    private var snapshot: ProgressSnapshot? { visibleProgress == nil ? nil : loadedSnapshot }
     var weights: [WeightObservation] {
         Self.weightObservations(progress: visibleProgress, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
@@ -174,134 +116,33 @@ struct DiaryProgressView: View {
     }
 
     var body: some View {
-        List {
-            if let readModel, let daily {
-                Section {
-                    if typeSize.isAccessibilitySize {
-                        VStack(alignment: .leading, spacing: 8) { reportControls }
-                    } else {
-                        HStack(spacing: 8) { reportControls }
+        // A plain stack, not a List: List kept stale row heights after a range change and let cards overlap.
+        ScrollView {
+            VStack(spacing: 12) {
+                if readModel != nil, let snapshot, let progress = visibleProgress {
+                    Picker("Range", selection: $range) {
+                        ForEach(ProgressRange.allCases) { Text($0.title).tag($0) }
                     }
-                }.listRowSeparator(.hidden)
-                Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if report == .daily {
-                            Text(today).font(.subheadline).foregroundStyle(Color.diarySecondary)
-                            GoalSummaryView(report: daily, identifier: "progressGoalSummary")
-                            Text(daily.completeness.map { "Coverage: \($0.rawValue)" } ?? "No tracking day recorded")
-                                .font(.subheadline)
-                            Text(daily.completeness == nil ? "No entry for this day. Missing does not mean zero intake." : "Missing dates are never counted as zero intake.")
-                                .font(.subheadline).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("missingDayCopy")
-                        } else if let period {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("\(period.startLocalDate) to \(period.endLocalDate)")
-                                    .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                                Text("\(period.completeDayCount) of \(period.dayCount) days complete")
-                                    .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                                Label { Text("Recorded intake") } icon: { Image(systemName: "flame").foregroundStyle(Color.diaryEnergy) }.font(.title3.weight(.bold)).padding(.top, 12)
-                                if typeSize.isAccessibilitySize {
-                                    VStack(alignment: .leading, spacing: 0) { averageValue(period); Text("kcal").foregroundStyle(Color.diarySecondary) }
-                                } else {
-                                    HStack(alignment: .firstTextBaseline, spacing: 8) { averageValue(period); Text("kcal").font(.title3).foregroundStyle(Color.diarySecondary) }
-                                }
-                                Text("Average · \(period.knownIntakeSamples.kcal) complete days with known energy")
-                                    .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                                if period.knownIntakeSamples.kcal == 0 {
-                                    Text("Not enough complete days").font(.headline)
-                                    Button(action: openDiary) {
-                                        Label("Open Diary", systemImage: "calendar").frame(minHeight: 44)
-                                    }.accessibilityIdentifier("openDiaryForCoverage")
-                                }
-                            }.padding(.vertical, 8)
-                        }
-                    }.diarySummaryCard()
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("progressRange")
+                    // The last report stays on screen during a range switch, so a failed switch must still say so.
+                    if let loadError { loadFailure(loadError) }
+                    ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
+                    sectionTitle("Weight")
+                    NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
+                        .buttonStyle(.plain).accessibilityIdentifier("openWeight")
+                    sectionTitle("Average day")
+                    detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
+                    sectionTitle("More")
+                    more(snapshot, progress)
+                } else if model.selection != nil {
+                    if let loadError { loadFailure(loadError) } else { ProgressView("Loading progress…").padding(.top, 40) }
+                } else {
+                    ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle")
                 }
-                Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Label { Text("Nutrition trend") } icon: { Image(systemName: "chart.bar").foregroundStyle(Color.diaryEnergy) }
-                            .font(.title3.weight(.bold))
-                        if nutrition.isEmpty {
-                            Text("No saved food samples in this period.").foregroundStyle(Color.diarySecondary)
-                        } else {
-                            Chart(nutrition) { point in
-                                BarMark(x: .value("Date", point.date, unit: .day), y: .value("Recorded kcal", point.value))
-                                    .foregroundStyle(point.complete ? Color.diaryEnergy : Color.diaryEnergy.opacity(0.70))
-                            }
-                            .chartXScale(domain: nutritionDomain)
-                            .chartXAxis {
-                                AxisMarks(values: .stride(by: .day, count: report == .monthly ? 7 : 1)) { _ in
-                                    AxisGridLine()
-                                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                                }
-                            }
-                            .chartYScale(domain: .automatic(includesZero: true))
-                            .environment(\.timeZone, TimeZone(identifier: readModel.profile.timeZoneID) ?? .gmt)
-                            .frame(height: 200).accessibilityHidden(true)
-                            Text("Lighter bars show days without complete coverage. Missing days have no bar.")
-                                .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                        }
-                        DisclosureGroup(isExpanded: $nutritionExpanded) {
-                            ForEach(nutrition) { point in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    LabeledContent(point.label, value: "\(point.value.formatted(.number.precision(.fractionLength(0)))) kcal").monospacedDigit()
-                                    Text(point.coverage).font(.subheadline).foregroundStyle(Color.diarySecondary)
-                                }
-                            }
-                            Text(nutritionSummary).font(.subheadline).foregroundStyle(Color.diarySecondary)
-                                .accessibilityIdentifier("nutritionChartSummary")
-                        } label: {
-                            Text("Recorded intake data").accessibilityIdentifier("nutritionData")
-                                .accessibilityValue(nutritionExpanded ? "Expanded" : "Collapsed")
-                        }
-                    }.diarySummaryCard()
-                }
-                Section {
-                    NavigationLink { weightDetail } label: {
-                        LabeledContent("Weight", value: (visibleProgress?.latestWeight?.record).map { "\($0.value.formatted()) \($0.unit)" } ?? "No measurements")
-                            .frame(minHeight: 48).monospacedDigit()
-                    }.accessibilityIdentifier("openWeight").diarySummaryCard()
-                    NavigationLink { workoutList } label: {
-                        LabeledContent("Workouts", value: "\(visibleProgress?.workoutTotal ?? 0) recorded").frame(minHeight: 48).monospacedDigit()
-                    }.accessibilityIdentifier("openWorkouts").diarySummaryCard()
-                    Button { showGoals = true } label: {
-                        HStack { Text("Goals").foregroundStyle(Color.diaryText); Spacer(); Text("Manage").foregroundStyle(Color.diarySecondary); Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary) }.frame(minHeight: 48)
-                    }.accessibilityIdentifier("editGoals").diarySummaryCard()
-                }
-                if report != .daily, let period {
-                    Section {
-                        DisclosureGroup(isExpanded: $coverageExpanded) {
-                            LabeledContent("Complete", value: period.completeDayCount.formatted())
-                            LabeledContent("Partial", value: period.partialDayCount.formatted())
-                            LabeledContent("Unknown", value: period.unknownDayCount.formatted())
-                            LabeledContent("Untracked", value: period.untrackedDayCount.formatted())
-                            LabeledContent("Missing", value: period.missingDayCount.formatted())
-                            LabeledContent("Pending analysis", value: period.pendingDayCount.formatted())
-                            Text("\(period.missingDayCount) missing days were excluded; missing does not mean zero intake.")
-                                .font(.subheadline).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("missingDayCopy")
-                            Text("Average recorded macros: \(Text("carbs \(grams(period.averageIntake.carbs))").foregroundColor(.diaryCarbs)), \(Text("protein \(grams(period.averageIntake.protein))").foregroundColor(.diaryProtein)), \(Text("fat \(grams(period.averageIntake.fat))").foregroundColor(.diaryFat))")
-                            Text("Known samples of \(period.dayCount) dates: kcal \(period.knownIntakeSamples.kcal), \(Text("carbs \(period.knownIntakeSamples.carbs)").foregroundColor(.diaryCarbs)), \(Text("protein \(period.knownIntakeSamples.protein)").foregroundColor(.diaryProtein)), \(Text("fat \(period.knownIntakeSamples.fat)").foregroundColor(.diaryFat))")
-                            Text("Within 10% of target: \(period.adherenceNumerator) of \(period.adherenceDenominator) eligible dates")
-                            Text("Workout sessions: \(period.workoutCount)")
-                        } label: {
-                            Label { Text("Coverage & averages") } icon: { Image(systemName: "checkmark.circle").foregroundStyle(Color.diaryEnergy) }.accessibilityIdentifier("progressCoverage")
-                                .accessibilityValue(coverageExpanded ? "Expanded" : "Collapsed")
-                        }.diarySummaryCard()
-                    }
-                }
-            } else if model.selection != nil {
-                if let loadError {
-                    Section {
-                        Text(loadError).foregroundStyle(Color.diaryError)
-                        Button("Retry loading progress") { Task { await reloadProgress() } }.frame(minHeight: 44)
-                    }
-                } else { ProgressView("Loading progress…") }
-            } else {
-                ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle")
             }
+            .padding(.horizontal, 20).padding(.bottom, 24)
         }
-        .listStyle(.plain)
-        .listRowSpacing(0)
-        .listSectionSpacing(12)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .accessibilityIdentifier("progressList")
         .navigationTitle("Progress")
@@ -310,24 +151,117 @@ struct DiaryProgressView: View {
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(item: $editingWeight) { WeightCorrectionView(model: model, entry: $0, localDate: weightDate($0)) }
         .task(id: reportRequest) { await reloadProgress() }
+        // Keyed on visibility too: leaving the tab stops Pip, and coming back must start the rig again.
+        .task(id: PipRequest(celebrates: snapshot?.headline.celebrates, visible: companionVisible, dark: colorScheme == .dark,
+                             reduceMotion: reduceMotion, reaction: pipReaction)) {
+            guard companionVisible, let snapshot else { return }
+            await companionRuntime.select(CharacterCatalog.bundled.resolve("pip"))
+            await companionRuntime.attach(eligible: true)
+            companionRuntime.rig?.showsProgressProps = true
+            // A one-shot first (entrance, range switch, tap), then back to holding the chart.
+            let reaction = pipReaction?.pose ?? (pipEntered ? nil : (snapshot.headline.celebrates ? .progressEntranceCheer : .progressEntrance))
+            pipEntered = true
+            if let reaction, !reduceMotion {
+                var output = CompanionOutput(pose: reaction, playback: .animated, reactionID: UUID(), nextDeadline: nil)
+                output.tapLevel = pipReaction?.level ?? 0
+                await companionRuntime.apply(output, darkMode: colorScheme == .dark)
+                try? await Task.sleep(for: .seconds(Self.lifetime(of: reaction)))
+                guard !Task.isCancelled else { return }
+                // Clearing the request reruns this task, which settles Pip back into holding the chart.
+                if pipReaction != nil { pipReaction = nil; return }
+            }
+            await companionRuntime.apply(companionOutput(snapshot.headline), darkMode: colorScheme == .dark)
+        }
+        .onChange(of: range) { _, _ in pipReaction = PipReaction(pose: .progressRange) }
+        .onAppear { companionVisible = true }
+        .onDisappear { companionVisible = false; pipEntered = false; companionRuntime.stop() }
         .onChange(of: model.selection) { _, _ in
-            selectedWeightDate = nil; nutritionExpanded = false; coverageExpanded = false
+            selectedWeightDate = nil
             weightBefore = nil; workoutBefore = nil; editingWeight = nil
             showGoals = false; showWeight = false; showWorkout = false
         }
     }
 
-    @ViewBuilder private var reportControls: some View {
-        reportButton("Day", id: "reportDaily", value: .daily)
-        reportButton("7 days", id: "reportWeekly", value: .weekly)
-        reportButton("30 days", id: "reportMonthly", value: .monthly)
+    /// Today's "Meals" heading style.
+    private func sectionTitle(_ title: LocalizedStringKey) -> some View {
+        Text(title).font(.title3.weight(.bold)).foregroundStyle(Color.diaryText)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12)
+            .accessibilityAddTraits(.isHeader)
     }
 
-    private func averageValue(_ period: PeriodProgress) -> some View {
-        Text(period.averageIntake.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
-            .font(.system(size: metricSize, weight: .semibold)).monospacedDigit().foregroundStyle(Color.diaryEnergy)
+    /// Everything else, one line each, a tap deeper.
+    private func more(_ snapshot: ProgressSnapshot, _ progress: CoachProgress) -> some View {
+        VStack(spacing: 0) {
+            moreLink("progressCalendar", "Calendar", "calendar", value: "\(snapshot.loggedDays) of \(snapshot.days.count) days logged") {
+                ProgressDetail(title: "Calendar", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calendar(snapshot) }
+            }
+            Divider()
+            moreLink("progressCalories", "Calories", "flame", value: snapshot.averageKcal.map { "avg \(kcal($0))" } ?? "No complete days") {
+                ProgressDetail(title: "Calories", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calories(snapshot) }
+            }
+            Divider()
+            moreLink("progressBurn", "Estimated burn", "bolt.heart", value: snapshot.burnSummary) {
+                ProgressDetail(title: "Estimated burn", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.burn(snapshot) }
+            }
+            Divider()
+            moreLink("progressTopFoods", "Top foods", "fork.knife", value: foods.first?.name ?? "None yet") {
+                ProgressDetail(title: "Top foods", model: model, range: range, today: today, foodLimit: 200) { _, foods in ProgressDetails.foods(foods) }
+            }
+            Divider()
+            moreLink("openWorkouts", "Workouts", "figure.run", value: "\(progress.workoutTotal ?? 0) recorded") { workoutList }
+            Divider()
+            Button { showGoals = true } label: { moreRow("Goals", "target", value: "Manage") }
+                .buttonStyle(.plain).accessibilityIdentifier("progressGoals")  // Settings owns "editGoals"; this stack keeps every row on screen
+        }
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
     }
 
+    private func moreLink<Destination: View>(_ id: String, _ title: String, _ symbol: String, value: String,
+                                             @ViewBuilder destination: () -> Destination) -> some View {
+        NavigationLink(destination: destination) { moreRow(title, symbol, value: value) }
+            .buttonStyle(.plain).accessibilityIdentifier(id)
+    }
+
+    private func moreRow(_ title: String, _ symbol: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).foregroundStyle(Color.diaryAccent).frame(width: 24).accessibilityHidden(true)
+            Text(title).foregroundStyle(Color.diaryText)
+            Spacer(minLength: 8)
+            Text(value).foregroundStyle(Color.diarySecondary).lineLimit(1)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
+        }
+        .frame(minHeight: 52).contentShape(Rectangle())
+    }
+
+    private func detail<Card: View, Content: View>(_ id: String, _ title: String, foodLimit: Int = 0,
+                                                   @ViewBuilder content: @escaping (ProgressSnapshot, [TopFood]) -> Content,
+                                                   @ViewBuilder card: () -> Card) -> some View {
+        NavigationLink {
+            ProgressDetail(title: title, model: model, range: range, today: today, foodLimit: foodLimit, content: content)
+        } label: { card() }
+            .buttonStyle(.plain).accessibilityIdentifier(id)
+    }
+
+    /// Pip leans in over the chart: excited on a good period, a calm smile otherwise; never a sad pose.
+    private func companionOutput(_ headline: ProgressHeadline) -> CompanionOutput {
+        CompanionOutput(pose: headline.celebrates ? .presentingCheer : .presentingCalm, playback: reduceMotion ? .staticPose : .animated, reactionID: nil, nextDeadline: nil)
+    }
+    private func companion(_ headline: ProgressHeadline) -> CompanionView {
+        CompanionView(presentation: companionOutput(headline), darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize ? 120 : 150,
+                      runtime: companionRuntime) { _ in
+            // Each tap plays the next silly gesture.
+            pipReaction = PipReaction(pose: .progressTap, level: pipTaps); pipTaps += 1
+        }
+    }
+    @ViewBuilder private func loadFailure(_ message: String) -> some View {
+        Text(message).foregroundStyle(Color.diaryError)
+        Button("Retry loading progress") { Task { await reloadProgress() } }.frame(minHeight: 44)
+    }
+    private func dates(_ progress: CoachProgress) -> String {
+        let format = shownRange.days > 30 ? "MMM d, yyyy" : "MMM d"
+        return "\(DiaryWeek.format(ProgressSnapshot.rangeStart(progress, shownRange), format)) – \(DiaryWeek.format(progress.endLocalDate, format))"
+    }
     private var weightDetail: some View {
         List {
             if let latest = visibleProgress?.latestWeight?.record {
@@ -379,7 +313,7 @@ struct DiaryProgressView: View {
                         .accessibilityIdentifier("weightChartSummary")
 
                 } header: {
-                    Label { Text("Measurements · last 30 days") } icon: { Image(systemName: "chart.xyaxis.line").foregroundStyle(Color.diaryWeight) }
+                    Label { Text("Measurements · \(range.title)") } icon: { Image(systemName: "chart.xyaxis.line").foregroundStyle(Color.diaryWeight) }
                 }
                 .listRowBackground(Color.diaryChartSurface)
 
@@ -468,22 +402,6 @@ struct DiaryProgressView: View {
             ?? ProgressDate.label(entry.measuredAt, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
 
-    private func reportButton(_ title: String, id: String, value: Report) -> some View {
-        Button { report = value } label: { Text(title).frame(maxWidth: .infinity, minHeight: 44) }
-            .buttonStyle(.bordered)
-            .tint(report == value ? .diaryAccent : .diarySecondary)
-            .accessibilityAddTraits(report == value ? .isSelected : [])
-            .accessibilityIdentifier(id)
-    }
-
-    private var nutritionSummary: String {
-        guard !nutrition.isEmpty else { return "Nutrition chart: no saved food samples; insufficient data." }
-        let values = nutrition.map { "\($0.label): \($0.value.formatted(.number.precision(.fractionLength(0)))) kcal" }
-        return "Nutrition chart: \(nutrition.count) recorded dates. " + values.joined(separator: "; ")
-    }
-    private func grams(_ value: Double?) -> String {
-        value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "insufficient data"
-    }
     private var weightSummary: String {
         let samples = weights.map { "\($0.label): \($0.value.formatted(.number.precision(.fractionLength(1)))) kg" }
         let average = weightReport?.currentSevenDayAverageKg.map { "Seven-day average \($0.formatted(.number.precision(.fractionLength(1)))) kg from \(weightReport!.currentSevenDayObservedCount) dates." }
@@ -518,10 +436,11 @@ struct DiaryProgressView: View {
         guard let ownership = key.ownership, model.selection == ownership else { return }
         reportRequestID = requestID; loadError = nil
         do {
-            let value = try await Self.loadProgress(model: model, endingOn: key.date,
-                days: key.report == .daily ? 1 : (key.report == .monthly ? 30 : 7))
+            let value = try await Self.loadProgress(model: model, endingOn: key.date, days: ProgressSnapshot.loadDays(key.range))
+            let top = try await model.store.topFoods(from: ProgressSnapshot.rangeStart(value, key.range), through: value.endLocalDate, limit: 4, expectedProfileID: ownership.identity.profileID)
             guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
-            progress = value; loadedReport = key
+            loadedSnapshot = ProgressSnapshot(progress: value, range: key.range, zone: zone, today: key.date)
+            progress = value; foods = top; loadedReport = key
         } catch {
             guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
             loadError = "Could not load progress. Your diary is preserved."; return
