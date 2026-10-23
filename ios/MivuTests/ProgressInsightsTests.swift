@@ -20,4 +20,68 @@ import Testing
         #expect(ProgressBand.of(kcal: 2000, target: 2000) == .near)
         #expect(ProgressBand.of(kcal: 2000, target: 1500) == .off)
     }
+
+    // MARK: Weight trend and headline
+
+    private func weight(_ label: String, _ value: Double, unit: String = "kg") -> CoachWeightReference {
+        CoachWeightReference(localDate: label, record: WeightEntry(measuredAt: ProgressDate.date(label, zone: "UTC")!, value: value, unit: unit))
+    }
+    private func point(_ label: String, _ trend: Double) -> TrendPoint { TrendPoint(localDate: label, raw: trend, trend: trend) }
+    private func day(_ label: String, kcal: Double?, target: Double? = 2100, protein: Double? = nil, proteinTarget: Double? = nil) -> DailyProgress {
+        let goal = GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: "UTC",
+                              targets: NutritionValues(kcal: target, protein: proteinTarget), goalWeightKg: nil, exerciseCreditEnabled: false)
+        return DailyProgress(localDate: label, completeness: kcal == nil ? nil : .complete, hasPending: false,
+                             foodTotals: kcal.map { NutritionTotals(kcal: $0, carbs: nil, protein: protein, fat: nil, unknownItemCount: 0) },
+                             goal: goal, remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil)
+    }
+    private let weekTrend = ["2026-10-16", "2026-10-19", "2026-10-23"]
+
+    @Test func trendWeightsByElapsedDays() throws {
+        let points = WeightTrend.points([weight("2026-09-01", 80), weight("2026-09-22", 78)])
+        let last = try #require(points.last)
+        #expect(abs(last.trend - (80 + (78 - 80) * (1 - pow(0.9, 21)))) < 0.01)
+        #expect(abs(last.trend - 78.22) < 0.01)
+    }
+
+    @Test func trendConvertsPounds() throws {
+        let first = try #require(WeightTrend.points([weight("2026-09-01", 176.37, unit: "lb")]).first)
+        #expect(abs(first.raw - 80.0) < 0.01)
+    }
+
+    @Test func headlineOnTrackWhenTrendMovesTowardGoal() {
+        let trend = [point(weekTrend[0], 79.6), point(weekTrend[1], 79.3), point(weekTrend[2], 79.0)]
+        #expect(ProgressInsights.headline(trend: trend, goalWeightKg: 75, startKg: 80, days: []) == .onTrack)
+    }
+
+    @Test func headlineHoldingWhenMoveUnderTenthKgPerWeek() {
+        let trend = [point(weekTrend[0], 79.60), point(weekTrend[1], 79.58), point(weekTrend[2], 79.55)]
+        #expect(ProgressInsights.headline(trend: trend, goalWeightKg: 75, startKg: 80, days: []) == .holdingSteady)
+    }
+
+    @Test func headlineDriftingWhenMovingAway() {
+        let trend = [point(weekTrend[0], 79.0), point(weekTrend[1], 79.1), point(weekTrend[2], 79.3)]
+        #expect(ProgressInsights.headline(trend: trend, goalWeightKg: 75, startKg: 80, days: []) == .drifting)
+    }
+
+    @Test func headlineAtGoalWithinOneKg() {
+        let trend = [point(weekTrend[0], 76.2), point(weekTrend[1], 76.0), point(weekTrend[2], 75.8)]
+        #expect(ProgressInsights.headline(trend: trend, goalWeightKg: 75, startKg: 80, days: []) == .atGoal)
+    }
+
+    @Test func headlineFallsBackToCaloriesWithoutGoalWeight() {
+        let trend = [point(weekTrend[0], 79.6), point(weekTrend[1], 79.3), point(weekTrend[2], 79.0)]
+        let days = [day("2026-10-17", kcal: 2050), day("2026-10-18", kcal: 2180), day("2026-10-19", kcal: 1890),
+                    day("2026-10-20", kcal: 2420), day("2026-10-21", kcal: nil), day("2026-10-22", kcal: 1550), day("2026-10-23", kcal: 1980)]
+        #expect(ProgressInsights.headline(trend: trend, goalWeightKg: nil, startKg: nil, days: days) == .caloriesOnTrack(near: 4, logged: 6))
+    }
+
+    @Test func headlineFallsBackWhenTooFewWeighIns() {
+        let trend = [point("2026-10-16", 79.6), point("2026-10-23", 79.0)]
+        let days = [day("2026-10-22", kcal: 3000), day("2026-10-23", kcal: 2100)]
+        #expect(ProgressInsights.headline(trend: trend, goalWeightKg: 75, startKg: 80, days: days) == .caloriesOff(near: 1, logged: 2))
+    }
+
+    @Test func headlineNotEnoughDataWithNothingLogged() {
+        #expect(ProgressInsights.headline(trend: [], goalWeightKg: 75, startKg: nil, days: [day("2026-10-23", kcal: nil)]) == .notEnoughData)
+    }
 }
