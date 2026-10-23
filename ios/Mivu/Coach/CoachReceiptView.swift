@@ -118,6 +118,33 @@ struct CoachReceiptPresentation: Equatable {
         }
         return "Carbs " + grams(carbs) + " · Protein " + grams(protein) + " · Fat " + grams(fat)
     }
+    var itemRows: [(name: String, amount: String, kcal: String)] {
+        receipt.items.map { ($0.name, "\($0.quantity.formatted(.number.grouping(.never))) \($0.unit)", $0.nutrition?.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—") }
+    }
+    /// Energy share of carbs, protein and fat (4/4/9 kcal per gram); nil when any total is unknown.
+    var macroShare: (carbs: Double, protein: Double, fat: Double)? {
+        guard !receipt.items.isEmpty, let carbs = committedTotal(\.carbs), let protein = committedTotal(\.protein), let fat = committedTotal(\.fat) else { return nil }
+        let energy = carbs * 4 + protein * 4 + fat * 9
+        guard energy > 0 else { return nil }
+        return (carbs * 4 / energy, protein * 4 / energy, fat * 9 / energy)
+    }
+    var macroTotals: (carbs: String, protein: String, fat: String)? {
+        guard let carbs = committedTotal(\.carbs), let protein = committedTotal(\.protein), let fat = committedTotal(\.fat) else { return nil }
+        func grams(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0...1))) + " g" }
+        return (grams(carbs), grams(protein), grams(fat))
+    }
+    /// Per-dish grams for the disclosure; nil for a single dish, whose totals the legend already shows.
+    var itemMacros: String? {
+        guard receipt.items.count > 1 else { return nil }
+        return receipt.items.map { item in
+            "\(item.name): " + Self.macros(carbs: item.nutrition?.carbs, protein: item.nutrition?.protein, fat: item.nutrition?.fat)
+        }.joined(separator: "\n")
+    }
+    var weightLabel: String? {
+        guard receipt.weightID != nil else { return nil }
+        guard let value = receipt.weightValue, let unit = receipt.weightUnit else { return "Weight saved" }
+        return "Weight saved · \(value.formatted(.number.grouping(.never))) \(unit)"
+    }
     var canOpenTarget: Bool {
         switch target { case .meal, .workout: true; default: false }
     }
@@ -146,9 +173,26 @@ struct CoachReceiptView: View {
                     }
                 }
             }
-            ForEach(Array(presentation.committedItems.enumerated()), id: \.offset) { _, item in
-                Text(item).accessibilityIdentifier("coachReceiptQuantity")
+            ForEach(Array(presentation.itemRows.enumerated()), id: \.offset) { _, row in
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 2) { Text(row.name); Text(row.amount).foregroundStyle(Color.diarySecondary); Text(row.kcal + " kcal").monospacedDigit() }
+                    } else {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(row.name).lineLimit(2)
+                            Text(row.amount).foregroundStyle(Color.diarySecondary).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text(row.kcal).monospacedDigit().foregroundStyle(Color.diarySecondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(row.name), \(row.amount), \(row.kcal == "—" ? "calories unknown" : row.kcal + " calories")")
+                .accessibilityAddTraits(.isStaticText)
+                .accessibilityIdentifier("coachReceiptQuantity")
             }
+            if presentation.macroShare != nil || presentation.committedNutrition != nil { Divider().overlay(Color.diaryRule).padding(.vertical, 4) }
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 4) { committedDate; committedEnergy }
             } else {
@@ -157,6 +201,7 @@ struct CoachReceiptView: View {
                     VStack(alignment: .leading, spacing: 4) { committedDate; committedEnergy }
                 }
             }
+            if let share = presentation.macroShare { macroBar(share); macroLegend }
             if let completeness = presentation.nutritionCompleteness { Text(completeness).accessibilityIdentifier("coachReceiptUnknown") }
             if let notice = presentation.changeNotice {
                 Text(notice).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptChange")
@@ -166,7 +211,8 @@ struct CoachReceiptView: View {
             }
             if let macros = presentation.committedMacros {
                 DisclosureGroup {
-                    Text(macros).monospacedDigit().accessibilityIdentifier("coachReceiptMacros")
+                    // The legend shows meal totals; the disclosure holds each dish's grams.
+                    Text(presentation.itemMacros ?? macros).monospacedDigit().foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptMacros")
                 } label: {
                     Text(presentation.estimateLabel ?? "Nutrition details")
                         .fixedSize(horizontal: false, vertical: true)
@@ -176,8 +222,7 @@ struct CoachReceiptView: View {
             }
         }
         .font(.subheadline).textSelection(.enabled)
-        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 12))
+        .modifier(DiarySummaryCardStyle())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("coachReceipt-" + receipt.operationKey)
     }
@@ -198,8 +243,38 @@ struct CoachReceiptView: View {
     }
     @ViewBuilder private var committedEnergy: some View {
         if let energy = presentation.committedNutrition {
-            Text(energy).monospacedDigit().accessibilityIdentifier("coachReceiptNutrition")
+            Text(energy).font(.headline).monospacedDigit().foregroundStyle(Color.diaryEnergy).accessibilityIdentifier("coachReceiptNutrition")
         }
+    }
+    @ViewBuilder private var macroLegend: some View {
+        if let totals = presentation.macroTotals {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { legend(totals) }
+                VStack(alignment: .leading, spacing: 2) { legend(totals) }
+            }
+            .font(.caption.weight(.medium)).monospacedDigit()
+            .accessibilityHidden(true)
+        }
+    }
+    @ViewBuilder private func legend(_ totals: (carbs: String, protein: String, fat: String)) -> some View {
+        Text("Carbs \(totals.carbs)").foregroundStyle(Color.diaryCarbs)
+        Text("Protein \(totals.protein)").foregroundStyle(Color.diaryProtein)
+        Text("Fat \(totals.fat)").foregroundStyle(Color.diaryFat)
+    }
+    /// One energy split bar in the Today macro colours.
+    private func macroBar(_ share: (carbs: Double, protein: Double, fat: Double)) -> some View {
+        GeometryReader { proxy in
+            HStack(spacing: 2) {
+                Capsule().fill(Color.diaryCarbs).frame(width: max(0, proxy.size.width * share.carbs - 2))
+                Capsule().fill(Color.diaryProtein).frame(width: max(0, proxy.size.width * share.protein - 2))
+                Capsule().fill(Color.diaryFat)
+            }
+        }
+        .frame(height: 6)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.committedMacros ?? "")
+        .accessibilityIdentifier("coachReceiptMacroBar")
     }
     @ViewBuilder private var reviewButton: some View {
         if receipt.mealID != nil || receipt.workoutID != nil {

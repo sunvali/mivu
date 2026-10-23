@@ -293,9 +293,10 @@ struct CoachView: View {
             .accessibilityElement(children: .contain).accessibilityIdentifier("coachExchange-" + turn.id.uuidString)
             .accessibilityValue(row.isHighlighted ? "Selected source message" : "")
         } else if let date = row.date {
-            HStack { Rectangle().frame(height: 0.5); Text(date).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
+            let label = CoachReplyLines.dayLabel(date, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)).capitalized(with: .current)
+            HStack { Rectangle().frame(height: 0.5); Text(label).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
                 .foregroundStyle(Color.diarySecondary).padding(.vertical, 8)
-                .accessibilityElement(children: .ignore).accessibilityLabel(date).accessibilityAddTraits(.isHeader)
+                .accessibilityElement(children: .ignore).accessibilityLabel(label).accessibilityAddTraits(.isHeader)
         }
     }
     private var companionRecovery: Bool { coach.companionNeedsRecovery }
@@ -610,6 +611,15 @@ struct CoachView: View {
                                  undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
+                }
+            }
+            ForEach(turn.receipts.filter { $0.weightID != nil }, id: \.operationKey) { receipt in
+                if let label = CoachReceiptPresentation(receipt: receipt, target: .loading).weightLabel {
+                    Label(label, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryWeight)
+                        .padding(.horizontal, 14).frame(minHeight: 44)
+                        .background(Color.diaryWeight.opacity(0.12), in: Capsule())
+                        .accessibilityIdentifier("coachWeightChip")
                 }
             }
             if coach.timeline?.window.isLatest(turn.id) == true {
