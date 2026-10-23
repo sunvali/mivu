@@ -509,6 +509,33 @@ private actor CoachInputFixture {
         #expect(completed.assistantText?.contains("70 kg") == true)
         #expect(completed.assistantText?.contains("9999") == false)
     }
+    @Test func weightAndWorkoutReceiptsCarryCommittedValues() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([
+            result([call("log_weight", "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\"}"),
+                    call("log_workout", "{\"local_date\":\"2027-01-14\",\"kind\":\"cardio\",\"duration_minutes\":45,\"exercises\":[]}", id: "cardio")]),
+            result(text: "Done")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let weight = DiaryDatabase.coachCommittedReceipt(try #require(completed.receipts.first { $0.weightID != nil }))
+        let workout = DiaryDatabase.coachCommittedReceipt(try #require(completed.receipts.first { $0.workoutID != nil }))
+        #expect(weight.weightValue == 70 && weight.weightUnit == "kg")
+        #expect(workout.workoutKind == "cardio" && workout.workoutMinutes == 45)
+        #expect(try await store.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id) == "Weight saved: **70 kg**. Everything is in the cards below.")
+    }
+
+    @Test func mealTemplateUsesCommittedCaloriesRoundedToTen() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let food = #"{"target_local_date":"2027-01-15","items":[{"name":"Synthetic eggs","quantity":2,"unit":"egg","kcal":143,"carbs":1,"protein":12,"fat":10},{"name":"Synthetic toast","quantity":1,"unit":"slice","kcal":80,"carbs":15,"protein":3,"fat":1}]}"#
+        let replies = CoachFixture([result([call("log_food", food, id: "food")]), result(text: "Done")])
+        _ = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(try await store.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id) == "Saved — about **220** kcal.")
+    }
+
+    @Test func legacyReceiptWithoutFactsHasNoCommittedValues() {
+        let legacy = DiaryDatabase.coachCommittedReceipt(CoachReceipt(operationKey: "legacy", turnID: UUID(), dayID: UUID(), weightID: UUID(), committedRevision: 1, resultJSON: "{}"))
+        #expect(legacy.weightValue == nil && legacy.weightUnit == nil && legacy.workoutMinutes == nil)
+    }
+
     @Test func progressAnswerUsesRequestedActualBudget() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)

@@ -296,6 +296,10 @@ extension DiaryDatabase {
         var state: SubmissionState?
         var items: [FoodItem]?
         var item: FoodItem?
+        var value: Double?
+        var unit: String?
+        var kind: String?
+        var durationMinutes: Int?
     }
 
     static func coachCommittedReceipt(_ receipt: CoachReceipt) -> CoachCommittedReceipt {
@@ -313,6 +317,8 @@ extension DiaryDatabase {
         if let id = receipt.dayID, facts.id == id, let date = facts.localDate, validLocalDate(date) { value.targetLocalDate = date }
         if let id = receipt.goalID, facts.id == id, let date = facts.effectiveLocalDate, validLocalDate(date) { value.targetLocalDate = date }
         value.submissionState = facts.state
+        if let id = receipt.weightID, facts.id == id { value.weightValue = facts.value; value.weightUnit = facts.unit }
+        if let id = receipt.workoutID, facts.id == id { value.workoutKind = facts.kind; value.workoutMinutes = facts.durationMinutes }
         var items: [FoodItem] = []
         if facts.state == .saved || facts.state == .awaitingReview {
             if let id = receipt.mealID, facts.id == id, facts.dayID == receipt.dayID { items = facts.items ?? [] }
@@ -403,7 +409,7 @@ extension DiaryDatabase {
                         summaries.append("This item was deleted. Its prior receipt is retained."); continue
                     }
                     if receipt.itemID != nil, !facts.items.isEmpty {
-                        if meal.state == .awaitingReview { summaries.append("Estimate ready for review."); continue }
+                        if meal.state == .awaitingReview { summaries.append("Your estimate is ready for review."); continue }
                         let items = facts.items.map { "\($0.name) (\(number($0.quantity)) \($0.unit))" }.joined(separator: ", ")
                         let date = facts.targetLocalDate.map { " on " + $0 } ?? ""
                         summaries.append("Updated \(items)\(date). Nutrition may be uncertain.")
@@ -426,33 +432,34 @@ extension DiaryDatabase {
                         if let deleted, !meal.photos.contains(where: { $0.photoID == deleted.id }) {
                             summaries.append("Deleted the requested meal photo. The food record is preserved.")
                         } else { summaries.append("Review the meal's current attached photos.") }
-                    } else if meal.state == .awaitingReview { summaries.append("Estimate ready for review.") }
+                    } else if meal.state == .awaitingReview { summaries.append("Your estimate is ready for review.") }
                     else {
-                        let items = meal.items.map { "\($0.name) (\(number($0.quantity)) \($0.unit))" }.joined(separator: ", ")
-                        let calories = meal.totals.kcal.map { " \(Int($0.rounded())) kcal." } ?? " Calories are incomplete."
-                        summaries.append("\(receipt.itemID == nil ? "Logged" : "Updated") \(items)." + calories + " Nutrition may be uncertain.")
+                        let calories = facts.items.map { $0.nutrition?.kcal }
+                        let total = calories.contains(nil) || calories.isEmpty ? nil : calories.compactMap { $0 }.reduce(0, +)
+                        summaries.append(total.map { "Saved — about **\(number(($0 / 10).rounded() * 10))** kcal." } ?? "Saved.")
                     }
                 } else if let id = receipt.weightID {
-                    do {
-                        let weight = try transaction.weight(id: id)
-                        summaries.append("Recorded weight: \(number(weight.value)) \(weight.unit).")
-                    } catch DiaryError.notFound { summaries.append("This weight was deleted.") }
+                    if (try? transaction.weight(id: id)) == nil { summaries.append("This weight was deleted.") }
+                    else if let value = facts.weightValue, let unit = facts.weightUnit { summaries.append("Weight saved: **\(number(value)) \(unit)**.") }
+                    else { summaries.append("Weight saved.") }
                 } else if let id = receipt.workoutID {
-                    do {
-                        let workout = try transaction.workout(id: id)
-                        summaries.append("Recorded \(workout.kind.rawValue): \(workout.durationMinutes) minutes.")
-                    } catch DiaryError.notFound { summaries.append("This workout was deleted.") }
+                    if (try? transaction.workout(id: id)) == nil { summaries.append("This workout was deleted.") }
+                    else if let kind = facts.workoutKind, let minutes = facts.workoutMinutes { summaries.append("Workout saved: \(kind), \(minutes) minutes.") }
+                    else { summaries.append("Workout saved.") }
                 } else if let id = receipt.goalID {
                     guard try transaction.records("goal", clause: "id = ?", values: [.text(id.uuidString)], limit: 1).first != nil else { throw DiaryError.notFound }
-                    summaries.append("Saved your requested goals.")
+                    summaries.append("Your goals are updated.")
                 } else if receipt.destination != nil { summaries.append("Use the Settings link to continue.") }
-                else if receipt.operationKey.contains("/update_preferences") { summaries.append("Saved your diary preferences. Timezone: \(head.profile.timeZoneID).") }
+                else if receipt.operationKey.contains("/update_preferences") { summaries.append("Your preferences are updated.") }
                 else if let id = receipt.dayID {
                     let day = try trackingDay(id: id)
                     summaries.append("\(day.localDate): \(day.completeness.rawValue).")
                 }
             }
-            return summaries.joined(separator: "\n")
+            // Cards carry each record; the reply line names only the first.
+            let cards = turn.receipts.filter { $0.mealID != nil || $0.weightID != nil || $0.workoutID != nil }.count
+            guard let first = summaries.first else { return "" }
+            return cards > 1 ? first + " Everything is in the cards below." : summaries.joined(separator: " ")
         }
     }
 }
