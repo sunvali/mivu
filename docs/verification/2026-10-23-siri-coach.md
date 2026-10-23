@@ -42,3 +42,14 @@ hands-free completion until these pass on a signed build.
 5. A notification with the Coach's reply (or "Your message is saved…" if iOS ended the time) opens the Coach tab when tapped.
 6. Notifications declined: Siri still confirms and the reply waits in Coach history.
 7. Measured seconds between Siri confirming and the reply notification.
+
+## Review fixes
+
+Tested source: `c61eb149746d5e6b838ea86b1d65fa83ce4ec5ef`. Whole-branch review findings fixed, each with a test watched failing first:
+profile-bound capture (`externalCaptureRefusesAnotherProfile`), saving before the network-bound connection
+restore (`savesBeforeRestoringConnection`), reconciling a save that throws after commit
+(`uncertainSaveIsReconciledNotFailed`), the 20,000-character limit on both paths (`overlongTextFails`), and
+the locked-phone copy (`dialogCopyIsExact`). Siri over an open Mivu now counts as foreground
+(`applicationState != .background`); that line is checked by reading only, since unit tests cannot set the
+application state. Unit selection above: 52 passed, 0 failed. UI classes were not rerun after these fixes;
+the fixes do not touch screen code.
