@@ -41,6 +41,7 @@ private final class CoachNavigationReadFence: Sendable {
     private var sendingErrorRevision = 0
     @ObservationIgnored private let timelinePageLoading: (@Sendable (CoachPageRequest, DiarySelectionOwnership) async throws -> CoachPage)?
     @ObservationIgnored private let beginCaptureProtection: @MainActor () -> (@MainActor () -> Void)
+    @ObservationIgnored private let captureDependencies: CoachAttachmentDraft.Dependencies
     @ObservationIgnored private let inference: () throws -> Inference
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let lookup: @Sendable (String) async throws -> [FoodEvidenceRecord]
@@ -74,7 +75,8 @@ private final class CoachNavigationReadFence: Sendable {
             }
         }
         #endif
-        attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter, dependencies: attachmentDependencies ?? dependencies)
+        captureDependencies = attachmentDependencies ?? dependencies
+        attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter, dependencies: captureDependencies)
         self.inference = inference ?? { try connection.coachInference() }
         self.lookup = lookup; self.sleep = sleep
         self.beginCaptureProtection = beginCaptureProtection
@@ -371,6 +373,38 @@ private final class CoachNavigationReadFence: Sendable {
         }
     }
 
+    /// Captures a message from outside the composer (Siri) without touching `draft`; the turn ID is `submissionID`.
+    /// Each message gets its own ID, so an existing turn with that ID is this message, already saved.
+    /// The message belongs to `profileID`, fixed when it was spoken; it is never captured into another diary.
+    func captureExternal(profileID: UUID, _ text: String, submissionID: UUID, capturedAt: Date) async throws {
+        guard let owner = diary.selection, !diary.isChangingProfile else { throw DiaryError.noProfile }
+        guard owner.identity.profileID == profileID else { throw DiaryError.wrongOwner }
+        let endCaptureProtection = beginCaptureProtection()
+        defer { endCaptureProtection() }
+        var dependencies = captureDependencies
+        dependencies.prepare = { [store = diary.store] _, owner in
+            try await store.coachCapturePreparation(at: capturedAt, expectedProfileID: owner.identity.profileID)
+        }
+        let context = try await dependencies.prepare(capturedAt, owner).context
+        let manifest = try CoachSubmissionPayload(submissionID: submissionID, text: text, attachments: [], context: context).manifest
+        if case .absent = try await dependencies.reconcile(submissionID, manifest, owner) {
+            let message = CoachAttachmentDraft(ownership: owner, limiter: diary.photoWorkLimiter, dependencies: dependencies,
+                                               text: text, submissionID: submissionID)
+            _ = try await message.send()
+        }
+        captureNeedsProcessing = true
+        resume()
+    }
+    /// Captures the selected profile's inbox entries, oldest first; each is removed only after its capture is saved.
+    func drainInbox(_ inbox: CoachInbox) async {
+        guard let owner = diary.selection?.identity.profileID else { return }
+        for entry in inbox.entries() where entry.profileID == owner {
+            do {
+                try await captureExternal(profileID: entry.profileID, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
+                try inbox.remove(entry.id)
+            } catch { return }
+        }
+    }
     func resume() {
         if let receipt = diary.captureReceipt, let owner = diary.selection, !diary.isChangingProfile,
            diary.companionCaptureEvent?.profileID == owner.identity.profileID,
