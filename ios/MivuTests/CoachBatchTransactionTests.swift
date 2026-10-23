@@ -315,6 +315,69 @@ import Testing
         try f.assertOrdinaryMetrics(); try f.assertAccounting()
     }
 
+    /// Days `offsets` back from 2027-01-15 (UTC), each with one saved meal of `items`.
+    private func progressSource(offsets: [Int], items: (Int) -> [FoodItem] = { _ in [FoodItem(name: "Synthetic oats", nutrition: NutritionValues(kcal: 300))] }) -> DiarySnapshot {
+        var source = BatchFixture.snapshot()
+        source.days = []; source.weights = []; source.meals = []; source.workouts = []; source.coachTurns = []; source.activeDayID = nil; source.previousDayConfirmedAt = nil
+        source.profile.timeZoneID = "UTC"
+        let end = Date(timeIntervalSince1970: 1_800_000_000.125)
+        for offset in offsets {
+            let at = end.addingTimeInterval(Double(-offset) * 86_400)
+            let day = TrackingDay(localDate: diaryDateLabel(at, zone: "UTC"), timeZoneID: "UTC", startAt: at, completeness: .complete)
+            source.days.append(day)
+            source.meals.append(DiaryMeal(dayID: day.id, capturedAt: at, eatenAt: at, revision: 1, items: items(offset)))
+        }
+        return source
+    }
+
+    @Test func displayRangeAcceptsQuarterAndYear() throws {
+        let f = try BatchFixture(source: progressSource(offsets: [1, 60, 300])); defer { f.remove() }
+        let year = try f.database.progressRange(endingOn: "2027-01-15", days: 365, includeDailyReports: true, expectedProfileID: f.owner)
+        #expect(year.dailyReports?.count == 365)
+        #expect(year.savedFoodDates?.count == 3)
+        let quarter = try f.database.progressRange(endingOn: "2027-01-15", days: 91, includeDailyReports: true, expectedProfileID: f.owner)
+        #expect(quarter.dailyReports?.count == 91 && quarter.savedFoodDates?.count == 2)
+    }
+
+    @Test func coachRangeStillRejectsYear() throws {
+        let f = try BatchFixture(source: progressSource(offsets: [1])); defer { f.remove() }
+        #expect(throws: CoachError.invalidArguments) { try f.database.progressRange(endingOn: "2027-01-15", days: 365, expectedProfileID: f.owner) }
+        #expect(throws: CoachError.invalidArguments) { try f.database.progressRange(endingOn: "2027-01-15", days: 91, expectedProfileID: f.owner) }
+    }
+
+    @Test func yearRangeLoadsUnderOneSecond() throws {
+        let f = try BatchFixture(source: progressSource(offsets: Array(0..<365)) { _ in
+            (0..<3).map { FoodItem(name: "Synthetic meal \($0)", nutrition: NutritionValues(kcal: 600, carbs: 60, protein: 40, fat: 20)) }
+        }); defer { f.remove() }
+        let elapsed = try ContinuousClock().measure {
+            _ = try f.database.progressRange(endingOn: "2027-01-15", days: 365, includeDailyReports: true, expectedProfileID: f.owner)
+        }
+        #expect(elapsed < .seconds(1), "365-day progress took \(elapsed)")
+    }
+
+    @Test func topFoodsGroupsByNormalizedName() throws {
+        let f = try BatchFixture(source: progressSource(offsets: [3, 2, 1]) { offset in
+            switch offset {
+            case 3: [FoodItem(name: " greek Yogurt ", nutrition: NutritionValues(kcal: 150))]
+            case 2: [FoodItem(name: "Pizza", nutrition: NutritionValues(kcal: 721))]
+            default: [FoodItem(name: "Greek yogurt", nutrition: NutritionValues(kcal: 150))]
+            }
+        }); defer { f.remove() }
+        let foods = try f.database.topFoods(from: "2027-01-01", through: "2027-01-15", limit: 10, expectedProfileID: f.owner)
+        #expect(foods == [TopFood(name: "Pizza", kcal: 721, count: 1), TopFood(name: "Greek yogurt", kcal: 300, count: 2)])
+        #expect(throws: DiaryError.wrongOwner) { try f.database.topFoods(from: "2027-01-01", through: "2027-01-15", limit: 10, expectedProfileID: UUID()) }
+    }
+
+    @Test func topFoodsSkipsUnknownAndPending() throws {
+        var source = progressSource(offsets: [2, 1]) { offset in
+            offset == 2 ? [FoodItem(name: "Mystery stew", nutrition: NutritionValues(kcal: nil)), FoodItem(name: "Toast", nutrition: NutritionValues(kcal: 90))]
+                        : [FoodItem(name: "Pending pie", nutrition: NutritionValues(kcal: 500))]
+        }
+        source.meals[1].revision = 0
+        let f = try BatchFixture(source: source); defer { f.remove() }
+        #expect(try f.database.topFoods(from: "2027-01-01", through: "2027-01-15", limit: 10, expectedProfileID: f.owner) == [TopFood(name: "Toast", kcal: 90, count: 1)])
+    }
+
     @Test func boundedProgressRangePreservesAnalyticsAndHistoricalWeightHorizon() throws {
         var source = BatchFixture.snapshot(), calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Asia/Jerusalem")!

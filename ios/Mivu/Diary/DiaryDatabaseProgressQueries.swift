@@ -1,14 +1,37 @@
 import Foundation
 import SQLite3
 
+struct TopFood: Equatable, Sendable {
+    let name: String
+    let kcal: Double
+    let count: Int
+}
+
 extension DiaryDatabase {
+    /// Saved foods with known energy, grouped by case- and space-insensitive name; the newest spelling names the group.
+    func topFoods(from start: String, through end: String, limit: Int, expectedProfileID: UUID) throws -> [TopFood] {
+        guard validLocalDate(start), validLocalDate(end), limit > 0 else { throw CoachError.invalidArguments }
+        return try domainRead(expectedProfileID: expectedProfileID) { _ in
+            let name = "trim(json_extract(CAST(i.payload AS TEXT), '$.name'))", kcal = "json_extract(CAST(i.payload AS TEXT), '$.nutrition.kcal')"
+            // SQLite takes the bare `name` column from the row that holds MAX(eatenAt).
+            let statement = try domainStatement("SELECT \(name), SUM(\(kcal)), COUNT(*), MAX(json_extract(CAST(m.payload AS TEXT), '$.eatenAt')) FROM item i JOIN meal m ON m.id = i.parent JOIN day d ON d.id = m.parent WHERE json_extract(CAST(m.payload AS TEXT), '$.revision') > 0 AND json_extract(CAST(d.payload AS TEXT), '$.localDate') BETWEEN ? AND ? AND \(kcal) IS NOT NULL GROUP BY lower(\(name)) ORDER BY 2 DESC, 1 LIMIT ?", [.text(start), .text(end), .integer(limit)])
+            defer { sqlite3_finalize(statement) }
+            var foods: [TopFood] = []
+            while try mutationStep(statement) {
+                foods.append(TopFood(name: try mutationText(statement, 0), kcal: sqlite3_column_double(statement, 1), count: Int(sqlite3_column_int64(statement, 2))))
+            }
+            return foods
+        }
+    }
+
     func progressRange(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, includeDailyReports: Bool = false, expectedProfileID: UUID) throws -> CoachProgress {
-        guard validLocalDate(endingOn), [1, 7, 30].contains(days) else { throw CoachError.invalidArguments }
+        // Only the Progress screen asks for a quarter or a year; the Coach stays on 1/7/30.
+        guard validLocalDate(endingOn), (includeDailyReports ? [1, 7, 30, 91, 365] : [1, 7, 30]).contains(days) else { throw CoachError.invalidArguments }
         return try domainRead(expectedProfileID: expectedProfileID) { head in
             let transaction = DiaryTransaction(database: self, head: head), zone = head.profile.timeZoneID
             if let id = finalizingTurnID { guard try transaction.turn(id: id) != nil else { throw DiaryError.notFound } }
-            let horizon = ProgressAnalytics.window(endingOn: endingOn, days: 37, offset: 0, zone: zone)
-            guard horizon.count == 37 else { throw DiaryError.invalidData }
+            let length = max(37, days), horizon = ProgressAnalytics.window(endingOn: endingOn, days: length, offset: 0, zone: zone)
+            guard horizon.count == length else { throw DiaryError.invalidData }
             var reports: [String: DailyProgress] = [:], latest: [String: WeightEntry] = [:]
             var savedFoodDates: Set<String> = []
             var weights: [(Int, CoachWeightReference)] = [], workouts: [(Int, WorkoutReference)] = [], workoutCount = 0
@@ -78,7 +101,7 @@ extension DiaryDatabase {
                 weight: ProgressAnalytics.weight(endingOn: endingOn, zone: zone, latest: latest, completeKcalDays: complete),
                 weights: Array(references.suffix(40)), workouts: workouts.map(\.1), omittedWeightCount: max(0, references.count - 40), omittedWorkoutCount: max(0, workoutCount - 100), truncated: references.count > 40 || workoutCount > 100,
                 dailyReports: includeDailyReports ? labels.compactMap { reports[$0] } : nil,
-                displayWeights: includeDailyReports ? horizon.suffix(30).compactMap { label in latest[label].map { CoachWeightReference(localDate: label, record: $0) } } : nil,
+                displayWeights: includeDailyReports ? labels.compactMap { label in latest[label].map { CoachWeightReference(localDate: label, record: $0) } } : nil,
                 latestWeight: newestWeight,
                 workoutTotal: includeDailyReports ? try mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = 'workout'") : nil,
                 savedFoodDates: includeDailyReports ? labels.filter { savedFoodDates.contains($0) } : nil)
