@@ -449,27 +449,6 @@ import Testing
         #expect(try f.durableState() == before)
         try f.assertOrdinaryMetrics(); try f.assertAccounting()
     }
-
-    @Test(arguments: [false, true]) func boundedPendingExistenceExcludesOnlyFinalizingTurn(unassigned: Bool) throws {
-        var source = BatchFixture.snapshot()
-        source.meals = []; source.workouts = []; source.days[0].completeness = .complete
-        if unassigned { source.coachTurns[0].activeDayID = nil }
-        for _ in 0..<120 {
-            source.coachTurns.insert(CoachTurn(capturedAt: source.days[1].startAt, text: String(repeating: "Synthetic historical pending ", count: 40), captureTimeZoneID: source.days[1].timeZoneID, activeDayID: source.days[1].id), at: 0)
-        }
-        let f = try BatchFixture(source: source); defer { f.remove() }
-        let included = try f.database.progressRange(endingOn: "2027-01-15", days: 1, expectedProfileID: f.owner)
-        #expect(included.daily.hasPending && included.daily.completeness == .partial && included.daily.foodTotals?.kcal == nil)
-        let excluded = try f.database.progressRange(endingOn: "2027-01-15", days: 1, finalizingTurnID: f.turnID, expectedProfileID: f.owner)
-        #expect(!excluded.daily.hasPending && excluded.daily.completeness == .complete && excluded.daily.foodTotals?.kcal == 0)
-        let other = try f.capture(text: "Another accepted pending turn")
-        #expect(try f.database.progressRange(endingOn: "2027-01-15", days: 1, finalizingTurnID: f.turnID, expectedProfileID: f.owner).daily.hasPending)
-        _ = try f.database.updateCoachTurn(turnID: other, state: .completed, assistantText: "Synthetic completed", needsDayChoice: false, expected: f.head(), maximumBytes: f.maximum)
-        #expect(try !f.database.progressRange(endingOn: "2027-01-15", days: 1, finalizingTurnID: f.turnID, expectedProfileID: f.owner).daily.hasPending)
-        #expect(f.metrics.counters.queryPlans.contains { $0.contains("coach_turn_pending_day") })
-        #expect(f.metrics.counters.queryPlans.contains { $0.contains("coach_index_display_date") })
-        try f.assertOrdinaryMetrics(); try f.assertAccounting()
-    }
 }
 
 private final class BatchCommitProbe { var attempted = false }

@@ -49,19 +49,6 @@ import UIKit
         #expect(model.companionHabitEvent == event, "the second meal of the day is not a first")
     }
 
-    @Test func dayCompleteFiresOnTransitionOnly() async throws {
-        let (path, store, profile, model) = try await fixture()
-        defer { try? FileManager.default.removeItem(at: path) }
-        let day = try #require(model.activeDay)
-        #expect(await model.change { try await store.setCompleteness(dayID: day.id, .partial, expectedProfileID: profile.id) })
-        #expect(model.companionHabitEvent == nil)
-        #expect(await model.change { try await store.setCompleteness(dayID: day.id, .complete, expectedProfileID: profile.id) })
-        let event = try #require(model.companionHabitEvent)
-        #expect(event.kind == .dayComplete && event.operationID == day.id && event.profileID == profile.id)
-        #expect(await model.change { try await store.setCompleteness(dayID: day.id, .complete, expectedProfileID: profile.id) })
-        #expect(model.companionHabitEvent == event)
-    }
-
     @Test func photoAddedEmitsOncePerAttachment() async throws {
         let f = try await Task10Fixture.make(); defer { f.remove() }
         let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection())

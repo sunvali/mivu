@@ -46,18 +46,11 @@ extension DiaryDatabase {
             for label in horizon {
                 let rows = try transaction.records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(label)])
                 let tracked = try rows.map { row in let day = try decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day }
-                let nilDay = try domainStatement("SELECT EXISTS(SELECT 1 FROM coach_index i JOIN coach_turn t ON t.id = i.turnID WHERE i.displayLocalDate = ? AND i.state != 'completed' AND i.turnID != ? AND COALESCE(json_extract(CAST(t.payload AS TEXT), '$.resolvedDayID'), json_extract(CAST(t.payload AS TEXT), '$.activeDayID')) IS NULL)", [.text(label), .text(finalizingTurnID?.uuidString ?? "")])
-                defer { sqlite3_finalize(nilDay) }; guard try mutationStep(nilDay) else { throw DiaryError.invalidData }
-                let nilDayPending = sqlite3_column_int64(nilDay, 0) != 0
-                var totals: [NutritionTotals] = [], pending = nilDayPending, dailyWorkoutCount = 0, burn: Double? = 0
+                var totals: [NutritionTotals] = [], dailyWorkoutCount = 0, burn: Double? = 0
                 for day in tracked {
                     let summary = try transaction.daySummary(day)
                     if summary.savedMealCount > 0 { savedFoodDates.insert(label) }
-                    let pendingStatement = try domainStatement("SELECT EXISTS(SELECT 1 FROM coach_turn WHERE COALESCE(json_extract(CAST(payload AS TEXT), '$.resolvedDayID'), json_extract(CAST(payload AS TEXT), '$.activeDayID')) = ? AND json_extract(CAST(payload AS TEXT), '$.state') != 'completed' AND id != ?)", [.text(day.id.uuidString), .text(finalizingTurnID?.uuidString ?? "")])
-                    defer { sqlite3_finalize(pendingStatement) }; guard try mutationStep(pendingStatement) else { throw DiaryError.invalidData }
-                    let dayPending = nilDayPending || summary.pendingMealCount > 0 || sqlite3_column_int64(pendingStatement, 0) != 0
-                    pending = pending || dayPending
-                    totals.append(dayPending && summary.savedMealCount == 0 ? NutritionTotals(kcal: nil, carbs: nil, protein: nil, fat: nil, unknownItemCount: 0) : summary.totals)
+                    totals.append(summary.totals)
                     for row in try transaction.records("weight", clause: "parent = ?", values: [.text(day.id.uuidString)]) {
                         let weight = try decode(WeightEntry.self, row); try validateWeightFields(weight)
                         weights.append((row.ordinal, CoachWeightReference(localDate: label, record: weight)))
@@ -77,7 +70,7 @@ extension DiaryDatabase {
                         workouts = Array(workouts.sorted { $0.0 < $1.0 }.suffix(100))
                     }
                 }
-                reports[label] = ProgressAnalytics.daily(localDate: label, days: tracked, subtotals: totals, hasPending: pending, goal: try transaction.goal(on: label), workoutCount: dailyWorkoutCount, estimatedBurnKcal: burn)
+                reports[label] = ProgressAnalytics.daily(localDate: label, days: tracked, subtotals: totals, hasFood: savedFoodDates.contains(label), activeDayID: head.activeDayID, goal: try transaction.goal(on: label), workoutCount: dailyWorkoutCount, estimatedBurnKcal: burn)
             }
             var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone)!
             let start = calendar.startOfDay(for: try diaryDateOnlyInstant(horizon[0], zone: zone))
@@ -93,7 +86,7 @@ extension DiaryDatabase {
                 latest[reference.localDate] = entry
             }
             let labels = Array(horizon.suffix(days)), references = weights.map(\.1).filter { $0.localDate >= labels[0] }
-            let complete = horizon.suffix(28).compactMap { reports[$0] }.filter { $0.completeness == .complete && !$0.hasPending && $0.foodTotals?.kcal != nil }.count
+            let complete = horizon.suffix(28).compactMap { reports[$0] }.filter { $0.status == .closed && $0.foodTotals?.kcal != nil }.count
             var newestWeight: CoachWeightReference?
             if includeDailyReports {
                 let query = try domainStatement("SELECT w.id, w.payload, json_extract(CAST(d.payload AS TEXT), '$.localDate') FROM weight w LEFT JOIN day d ON d.id = w.parent ORDER BY json_extract(CAST(w.payload AS TEXT), '$.measuredAt') DESC, json_extract(CAST(w.payload AS TEXT), '$.revision') DESC, w.ordinal LIMIT 1")

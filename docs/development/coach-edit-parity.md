@@ -16,7 +16,7 @@ and record types.
 | Review a new meal before counting it; retry paused input | `log_food` with `review_first: true`; `retry_meal` requeues the original capture |
 | Move or remove a meal | `move_meal`, `delete_meal` |
 | Attach or remove meal photos | `attach_photos`, `delete_photo` |
-| Set a date's coverage or explicitly close it | `set_day_coverage`, `close_day` |
+| Skip a date or count it again (days close on their own) | `set_day_coverage` |
 | Read and change dated goals | `get_goals`, `set_goals` |
 | Read and change preferences or timezone | `get_preferences`, `update_preferences` |
 | Start the current waking day | `get_context`, `start_day` |

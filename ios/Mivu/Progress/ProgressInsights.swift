@@ -143,13 +143,13 @@ struct ProgressWin: Equatable, Identifiable {
 enum ProgressInsights {
     /// Only a complete day with nothing still being analyzed is judged against its target.
     static func band(_ day: DailyProgress) -> ProgressBand? {
-        guard day.completeness == .complete, !day.hasPending else { return nil }
+        guard day.status == .closed else { return nil }
         return ProgressBand.of(kcal: day.foodTotals?.kcal, target: day.goal?.targets.kcal)
     }
 
     /// Energy balance: average intake on complete days minus the energy the trend change stored or released (~7,700 kcal per kg).
     static func burn(days: [DailyProgress], trend: [TrendPoint]) -> BurnProgress {
-        let intake = days.filter { $0.completeness == .complete && !$0.hasPending }.compactMap { $0.foodTotals?.kcal }
+        let intake = days.filter { $0.status == .closed }.compactMap { $0.foodTotals?.kcal }
         let span = trend.count >= 2 ? Self.days(from: trend[0].localDate, to: trend[trend.count - 1].localDate) : 0
         let daysNeeded = max(0, 14 - intake.count, 14 - span), weighInsNeeded = max(0, 4 - trend.count)
         guard daysNeeded == 0, weighInsNeeded == 0, let slope = slopePerDay(trend) else {
@@ -169,7 +169,7 @@ enum ProgressInsights {
             guard let protein = day.foodTotals?.protein, let target = day.goal?.targets.protein, protein >= target else { break }
             run += 1
         }
-        let logged = days.filter { $0.completeness != nil && $0.foodTotals?.kcal != nil }.count
+        let logged = days.filter { $0.status != nil && $0.foodTotals?.kcal != nil }.count
         var wins: [ProgressWin] = []
         if run >= 3 { wins.append(ProgressWin(id: "protein-run", title: "Protein goal \(run) days running", detail: "Keep it going", symbol: "bolt.fill", color: .diaryProtein)) }
         if logged >= 5 { wins.append(ProgressWin(id: "logged-days", title: "\(logged) days logged", detail: "Every one counts", symbol: "checkmark", color: .diaryAccent)) }
@@ -195,8 +195,8 @@ enum ProgressInsights {
             groups[start, default: []].append(day)
         }
         return order.map { start in
-            let logged = groups[start, default: []].filter { $0.foodTotals?.kcal != nil && $0.completeness != nil }
-            let judged = logged.filter { $0.completeness == .complete && !$0.hasPending }
+            let logged = groups[start, default: []].filter { $0.foodTotals?.kcal != nil && $0.status != nil }
+            let judged = logged.filter { $0.status == .closed }
             let source = judged.isEmpty ? logged : judged
             let kcal = source.compactMap { $0.foodTotals?.kcal }, targets = source.compactMap { $0.goal?.targets.kcal }
             let average = kcal.isEmpty ? nil : kcal.reduce(0, +) / Double(kcal.count)
@@ -211,7 +211,7 @@ enum ProgressInsights {
 
     /// "2,420 kcal · 320 over": the day's energy against its own target, in words.
     static func plainResult(_ day: DailyProgress) -> String {
-        guard day.completeness != nil, let kcal = day.foodTotals?.kcal else { return "No log" }
+        guard day.status != nil, let kcal = day.foodTotals?.kcal else { return "No log" }
         let energy = whole(kcal) + " kcal"
         guard let target = day.goal?.targets.kcal, let band = band(day) else { return energy }
         if band == .near { return energy + " · on target" }
@@ -245,7 +245,7 @@ enum ProgressInsights {
             if groups[start] == nil { order.append(start) }
             groups[start, default: []].append((date, day))
         }
-        func dot(_ day: DailyProgress) -> ProgressCalendarDot { day.completeness == nil || day.foodTotals?.kcal == nil ? .noLog : .logged(band(day)) }
+        func dot(_ day: DailyProgress) -> ProgressCalendarDot { day.status == nil || day.foodTotals?.kcal == nil ? .noLog : .logged(band(day)) }
         return order.reversed().map { start in
             let members = groups[start, default: []]
             let logged = members.filter { if case .logged = dot($0.1) { true } else { false } }.count

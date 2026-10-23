@@ -270,15 +270,9 @@ enum DiaryCaptureResult: Equatable, Sendable {
     }
     @discardableResult func change(_ operation: () async throws -> Void) async -> Bool {
         guard !isChangingProfile, let token = selection else { return false }
-        let before = activeDay
         do {
             try await operation(); try await refresh(profileID: token.identity.profileID)
-            let committed = !Task.isCancelled && selection == token
-            // A day becoming complete is a habit moment; it never gates or delays the change.
-            if committed, let before, before.completeness != .complete, activeDay?.id == before.id, activeDay?.completeness == .complete {
-                companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: before.id, kind: .dayComplete, committedAt: Date())
-            }
-            return committed
+            return !Task.isCancelled && selection == token
         } catch { if selection == token { present(error) }; return false }
     }
     @discardableResult func acceptReview(mealID: UUID, submissionID: UUID, expectedProfileID: UUID, currentTime: () -> Date = Date.init) async -> Bool {

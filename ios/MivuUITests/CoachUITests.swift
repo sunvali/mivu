@@ -251,7 +251,7 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         enter("What is my remaining budget?", in: app); app.buttons["coachSend"].tap()
         let budget = waitForReply(to: "What is my remaining budget?", in: app)
-        XCTAssertTrue(budget.label.contains("Day coverage:"), budget.label)
+        XCTAssertTrue(budget.label.contains("Day status:"), budget.label)
         for fact in ["Recorded food: 420 kcal.", "Remaining from recorded food: 1580 kcal.", "Configured target: 2000 kcal.", "Recorded workouts: 1.", "Estimated exercise burn: 200 kcal.", "Weight average: 70 kg from 1 measured dates."] {
             XCTAssertTrue(budget.label.contains(fact), fact)
         }

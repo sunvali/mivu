@@ -35,7 +35,7 @@ struct ProgressSnapshot {
         burn = ProgressInsights.burn(days: loaded, trend: allTrend)
         wins = ProgressInsights.wins(days: days, weighIns: trend.count, today: today)
         // Averages use complete days with nothing pending, the same days the bands judge.
-        let judged = days.filter { $0.completeness == .complete && !$0.hasPending }.compactMap(\.foodTotals)
+        let judged = days.filter { $0.status == .closed }.compactMap(\.foodTotals)
         func mean(_ field: KeyPath<NutritionTotals, Double?>) -> Double? {
             let values = judged.compactMap { $0[keyPath: field] }
             return values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
@@ -54,7 +54,7 @@ struct ProgressSnapshot {
     /// The whole load (at least 30 days) behind burn and the weight verdict.
     let loadedDays: [DailyProgress]
     let loadedTrend: [TrendPoint]
-    var loggedDays: Int { days.filter { $0.completeness != nil && $0.foodTotals?.kcal != nil }.count }
+    var loggedDays: Int { days.filter { $0.status != nil && $0.foodTotals?.kcal != nil }.count }
     var averageKcal: Double? { averages.kcal }
     var target: Double? { goal?.targets.kcal }
 

@@ -7,7 +7,7 @@ import Testing
     typealias State = DayProgressAttributes.ContentState
 
     /// A synthetic active day with one meal and an optional goal, reported the way Today reports it.
-    private func state(eaten: NutritionValues?, target: NutritionValues?, pending: Bool = false, hide: Bool = true) throws -> State {
+    private func state(eaten: NutritionValues?, target: NutritionValues?, hide: Bool = true) throws -> State {
         let start = try #require(ISO8601DateFormatter().date(from: "2026-10-21T05:00:00Z"))
         let day = TrackingDay(localDate: "2026-10-21", timeZoneID: "Asia/Jerusalem", startAt: start)
         let meals = eaten.map { [MealReadModel(id: UUID(), dayID: day.id, capturedAt: start, eatenAt: start, revision: 1, timePrecision: nil,
@@ -18,7 +18,7 @@ import Testing
         let head = DiaryHead(profile: DiaryProfile(name: "Synthetic island", timeZoneID: "Asia/Jerusalem"), revision: 1,
                              lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
         let model = DiaryReadModel(head: head, activeDay: day, meals: meals, weight: nil, workouts: [], activeGoal: goal,
-                                   pendingAnalysisCount: pending ? 1 : 0, hasPendingOnActiveDay: pending)
+                                   pendingAnalysisCount: 0)
         return State(report: ProgressAnalytics.daily(readModel: model), hideWhenLocked: hide)
     }
 
@@ -53,14 +53,9 @@ import Testing
         #expect(State.fraction(80, nil) == nil)
     }
 
-    @Test func pendingWithoutSavedMeal() throws {
-        let s = try state(eaten: nil, target: targets, pending: true)
-        #expect(s.kcalEaten == nil && s.hasPending && s.figure == "–" && s.compact == "–" && !s.isOver)
-    }
-
-    @Test func unknownItemsCountAsPending() throws {
-        let s = try state(eaten: NutritionValues(kcal: 500), target: targets)
-        #expect(s.hasPending)
+    @Test func noSavedMealShowsDash() throws {
+        let s = try state(eaten: nil, target: targets)
+        #expect(s.kcalEaten == nil && s.figure == "–" && s.compact == "–" && !s.isOver)
     }
 
     @Test func spokenLabel() throws {

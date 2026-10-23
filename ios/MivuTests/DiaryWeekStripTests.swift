@@ -26,10 +26,11 @@ struct DiaryWeekStripTests {
         #expect(DiaryWeek.weekStarts(earliest: "2026-10-14", selected: "2026-10-21", today: "2026-10-21", calendar: calendar) == ["2026-10-12", "2026-10-19"])
     }
 
-    @Test func pillLabelDescribesCoverageAndMeals() {
+    @Test func pillLabelDescribesStatusAndMeals() {
         let day = TrackingDay(localDate: "2027-01-12", timeZoneID: "UTC", startAt: Date(), completeness: .partial)
         let summary = DiaryDaySummary(mealCount: 3, day: day, totals: nutritionTotals([]), savedMealCount: 3, pendingMealCount: 0)
-        #expect(DiaryWeek.pillLabel("2027-01-12", summaries: [summary]) == "Tuesday 12 January, partial, 3 meals")
+        #expect(DiaryWeek.pillLabel("2027-01-12", summaries: [summary]) == "Tuesday 12 January, closed, 3 meals")
+        #expect(DiaryWeek.pillLabel("2027-01-12", summaries: [summary], activeDayID: day.id) == "Tuesday 12 January, open, 3 meals")
         #expect(DiaryWeek.pillLabel("2027-01-12", summaries: []) == "Tuesday 12 January, nothing logged")
     }
 }

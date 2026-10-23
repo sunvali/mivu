@@ -660,14 +660,14 @@ actor DiaryStore {
         facts.append("Estimated exercise burn: " + (daily.estimatedBurnKcal.map { "\(coachNumber($0)) kcal." } ?? "unknown."))
         if let adjusted = daily.exerciseAdjustedKcalRemaining { facts.append("Explicit exercise-adjusted remaining: \(coachNumber(adjusted)) kcal.") }
         if let period = report.period {
-            facts.append("Coverage: \(period.completeDayCount) complete, \(period.partialDayCount) partial, \(period.untrackedDayCount) untracked, \(period.unknownDayCount) unknown, \(period.missingDayCount) missing, \(period.pendingDayCount) pending days.")
-            facts.append("Average recorded intake: " + (period.averageIntake.kcal.map { "\(coachNumber($0)) kcal from \(period.knownIntakeSamples.kcal) complete known days." } ?? "unknown."))
+            facts.append("Days: \(period.closedDayCount) closed, \(period.skippedDayCount) skipped, \(period.missingDayCount) missing. Averages use closed days only.")
+            facts.append("Average recorded intake: " + (period.averageIntake.kcal.map { "\(coachNumber($0)) kcal from \(period.knownIntakeSamples.kcal) closed days." } ?? "unknown."))
             for (name, field, count) in [("carbs", \NutritionValues.carbs, period.knownIntakeSamples.carbs), ("protein", \NutritionValues.protein, period.knownIntakeSamples.protein), ("fat", \NutritionValues.fat, period.knownIntakeSamples.fat)] {
-                facts.append("Average \(name): " + (period.averageIntake[keyPath: field].map { "\(coachNumber($0)) g from \(count) complete known days." } ?? "unknown."))
+                facts.append("Average \(name): " + (period.averageIntake[keyPath: field].map { "\(coachNumber($0)) g from \(count) closed days." } ?? "unknown."))
             }
             facts.append("Period recorded workouts: \(period.workoutCount).")
             facts.append("Within 10% of target: \(period.adherenceNumerator)/\(period.adherenceDenominator) eligible days.")
-        } else { facts.append("Day coverage: \(daily.completeness?.rawValue ?? "missing"); pending: \(daily.hasPending).") }
+        } else { facts.append("Day status: \(daily.status?.rawValue ?? "missing").") }
         facts.append("Weight average: " + (report.weight.currentSevenDayAverageKg.map { "\(coachNumber($0)) kg" } ?? "unknown") + " from \(report.weight.currentSevenDayObservedCount) measured dates.")
         facts.append("Weight change versus prior 7-day window: " + (report.weight.changeFromSevenDaysAgoKg.map { "\(coachNumber($0)) kg." } ?? "insufficient data."))
         facts.append("Weight change versus 30 days ago: " + (report.weight.changeFromThirtyDaysAgoKg.map { "\(coachNumber($0)) kg." } ?? "insufficient data."))
@@ -794,7 +794,6 @@ actor DiaryStore {
     func coachWorkStatus(expectedProfileID: UUID) throws -> CoachWorkStatus { try pagedConnection(expectedProfileID: expectedProfileID).database.coachWorkStatus(expectedProfileID: expectedProfileID) }
     func coachTurnForMeal(_ id: UUID, expectedProfileID: UUID) throws -> UUID? { try pagedConnection(expectedProfileID: expectedProfileID).database.coachTurnForMeal(id, expectedProfileID: expectedProfileID) }
     func diaryWeek(from start: String, through end: String, expectedProfileID: UUID) throws -> DiaryWeekPage { try pagedConnection(expectedProfileID: expectedProfileID).database.diaryWeek(from: start, through: end, expectedProfileID: expectedProfileID) }
-    func historyCoverage(expectedProfileID: UUID) throws -> [DayCompleteness: Int] { try pagedConnection(expectedProfileID: expectedProfileID).database.historyCoverage(expectedProfileID: expectedProfileID) }
     func progressForDisplay(endingOn: String, days: Int, expectedProfileID: UUID) throws -> CoachProgress { try pagedConnection(expectedProfileID: expectedProfileID).database.progressRange(endingOn: endingOn, days: days, includeDailyReports: true, expectedProfileID: expectedProfileID) }
     func hasDays(before date: String, expectedProfileID: UUID) throws -> Bool { try pagedConnection(expectedProfileID: expectedProfileID).database.hasDays(before: date, expectedProfileID: expectedProfileID) }
     func topFoods(from start: String, through end: String, limit: Int, expectedProfileID: UUID) throws -> [TopFood] { try pagedConnection(expectedProfileID: expectedProfileID).database.topFoods(from: start, through: end, limit: limit, expectedProfileID: expectedProfileID) }

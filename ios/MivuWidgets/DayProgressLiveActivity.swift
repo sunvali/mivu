@@ -102,7 +102,7 @@ private struct Headline: View {
                 Text(state.figure).font(figureFont).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                     .foregroundStyle(state.isOver ? Color.diarySecondary : primary)
                     .privacySensitive(state.hideWhenLocked)
-                Text(state.hasPending ? "kcal \(state.word) · pending" : "kcal \(state.word)")
+                Text("kcal \(state.word)")
                     .font(.footnote.weight(.medium)).foregroundStyle(Color.diarySecondary).lineLimit(1)
                     .privacySensitive(state.hideWhenLocked)
             }
@@ -111,7 +111,7 @@ private struct Headline: View {
         // Redacted numbers must not come back through VoiceOver on a locked phone.
         .accessibilityLabel(isStale ? "Open Mivu for today"
                             : redaction.contains(.privacy) ? "Mivu day progress"
-                            : state.spoken + (state.hasPending ? " More meals pending." : ""))
+                            : state.spoken)
     }
 }
 
@@ -175,18 +175,16 @@ private struct MacroRow: View {
 
 private extension DayState {
     static let under = Self(kcalEaten: 1360, kcalTarget: 2000, protein: 80, proteinTarget: 120, carbs: 150, carbsTarget: 200,
-                            fat: 40, fatTarget: 60, hasPending: false, hideWhenLocked: true)
+                            fat: 40, fatTarget: 60, hideWhenLocked: true)
     static let over = Self(kcalEaten: 2300, kcalTarget: 2000, protein: 130, proteinTarget: 120, carbs: 260, carbsTarget: 200,
-                           fat: 70, fatTarget: 60, hasPending: false, hideWhenLocked: true)
-    static let pending = Self(kcalEaten: nil, kcalTarget: 2000, protein: nil, proteinTarget: 120, carbs: nil, carbsTarget: 200,
-                              fat: nil, fatTarget: 60, hasPending: true, hideWhenLocked: false)
+                           fat: 70, fatTarget: 60, hideWhenLocked: true)
     static let noTarget = Self(kcalEaten: 1360, kcalTarget: nil, protein: 80, proteinTarget: nil, carbs: 150, carbsTarget: nil,
-                               fat: 40, fatTarget: nil, hasPending: false, hideWhenLocked: false)
+                               fat: 40, fatTarget: nil, hideWhenLocked: false)
 }
 
 #Preview("Expanded", as: .dynamicIsland(.expanded), using: DayProgressAttributes()) {
     DayProgressLiveActivity()
-} contentStates: { .under; .over; .pending; .noTarget }
+} contentStates: { .under; .over; .noTarget }
 
 #Preview("Compact", as: .dynamicIsland(.compact), using: DayProgressAttributes()) {
     DayProgressLiveActivity()
@@ -194,4 +192,4 @@ private extension DayState {
 
 #Preview("Lock Screen", as: .content, using: DayProgressAttributes()) {
     DayProgressLiveActivity()
-} contentStates: { .under; .over; .pending; .noTarget }
+} contentStates: { .under; .over; .noTarget }

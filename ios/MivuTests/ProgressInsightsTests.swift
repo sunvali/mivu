@@ -30,7 +30,7 @@ import Testing
     private func day(_ label: String, kcal: Double?, target: Double? = 2100, protein: Double? = nil, proteinTarget: Double? = nil) -> DailyProgress {
         let goal = GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: "UTC",
                               targets: NutritionValues(kcal: target, protein: proteinTarget), goalWeightKg: nil, exerciseCreditEnabled: false)
-        return DailyProgress(localDate: label, completeness: kcal == nil ? nil : .complete, hasPending: false,
+        return DailyProgress(localDate: label, status: kcal == nil ? nil : .closed,
                              foodTotals: kcal.map { NutritionTotals(kcal: $0, carbs: nil, protein: protein, fat: nil, unknownItemCount: 0) },
                              goal: goal, remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil)
     }
@@ -152,13 +152,13 @@ import Testing
 
     // MARK: Review fixes
 
-    @Test func partialAndPendingDaysGetNoBandAndStayOutOfTheHeadline() {
+    @Test func openAndSkippedDaysGetNoBandAndStayOutOfTheHeadline() {
         let complete = day("2026-10-21", kcal: 2100)
         var partial = day("2026-10-22", kcal: 400)
-        partial = DailyProgress(localDate: partial.localDate, completeness: .partial, hasPending: false, foodTotals: partial.foodTotals, goal: partial.goal,
+        partial = DailyProgress(localDate: partial.localDate, status: .open, foodTotals: partial.foodTotals, goal: partial.goal,
                                 remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil)
         var pending = day("2026-10-23", kcal: 300)
-        pending = DailyProgress(localDate: pending.localDate, completeness: .complete, hasPending: true, foodTotals: pending.foodTotals, goal: pending.goal,
+        pending = DailyProgress(localDate: pending.localDate, status: .skipped, foodTotals: pending.foodTotals, goal: pending.goal,
                                 remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil)
         #expect(ProgressInsights.band(complete) == .near)
         #expect(ProgressInsights.band(partial) == nil && ProgressInsights.band(pending) == nil)
@@ -201,7 +201,7 @@ import Testing
 
     @Test func weekEvidenceQuotesTheSameWindowAsTheVerdict() {
         let goal = GoalRecord(effectiveLocalDate: label(0), timeZoneID: "UTC", targets: NutritionValues(kcal: 2100), goalWeightKg: 75, exerciseCreditEnabled: false)
-        let days = loggedDays(30).map { DailyProgress(localDate: $0.localDate, completeness: .complete, hasPending: false, foodTotals: $0.foodTotals, goal: goal,
+        let days = loggedDays(30).map { DailyProgress(localDate: $0.localDate, status: .closed, foodTotals: $0.foodTotals, goal: goal,
                                                       remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil) }
         // Down over the month, up a little in the last week.
         let weights = (0..<30).filter { $0.isMultiple(of: 2) }.map { weight(label($0), $0 < 24 ? 80 - 0.06 * Double($0) : 78.9) }

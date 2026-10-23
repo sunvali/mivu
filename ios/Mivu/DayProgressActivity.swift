@@ -10,7 +10,6 @@ extension DayProgressAttributes.ContentState {
                   protein: eaten?.protein, proteinTarget: target?.protein,
                   carbs: eaten?.carbs, carbsTarget: target?.carbs,
                   fat: eaten?.fat, fatTarget: target?.fat,
-                  hasPending: report.hasPending || (eaten?.unknownItemCount ?? 0) > 0,
                   hideWhenLocked: hideWhenLocked)
     }
 }
@@ -52,7 +51,7 @@ private let liveActivityLog = Logger(subsystem: "com.yakov103.mivu", category: "
        let eaten = Double(arguments[index + 1]) {
         content = ActivityContent(state: .init(kcalEaten: eaten, kcalTarget: 2000, protein: eaten * 0.06, proteinTarget: 120,
                                                carbs: eaten * 0.11, carbsTarget: 200, fat: eaten * 0.03, fatTarget: 60,
-                                               hasPending: false, hideWhenLocked: hide), staleDate: nil)
+                                               hideWhenLocked: hide), staleDate: nil)
     }
     #endif
     let authorized = ActivityAuthorizationInfo().areActivitiesEnabled
