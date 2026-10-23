@@ -30,6 +30,37 @@ enum ProgressBand: Int, CaseIterable {
     }
 }
 
+enum ProgressRange: String, CaseIterable, Identifiable {
+    case week, month, quarter, year
+    var id: Self { self }
+    var days: Int {
+        switch self {
+        case .week: 7
+        case .month: 30
+        case .quarter: 91
+        case .year: 365
+        }
+    }
+    var title: String {
+        switch self {
+        case .week: "Week"
+        case .month: "Month"
+        case .quarter: "3M"
+        case .year: "Year"
+        }
+    }
+}
+
+/// One bar of a range chart: a day for Week and Month, a Monday week for 3M, a month for Year.
+struct ProgressBucket: Identifiable, Equatable {
+    let start: Date
+    let averageKcal: Double?
+    let averageTarget: Double?
+    let band: ProgressBand?
+    let loggedDays: Int
+    var id: Date { start }
+}
+
 /// One weigh-in in kilograms with its smoothed trend.
 struct TrendPoint: Equatable {
     let localDate: String
@@ -121,6 +152,33 @@ enum ProgressInsights {
         if logged >= 5 { wins.append(ProgressWin(id: "logged-days", title: "\(logged) days logged", detail: "Every one counts", symbol: "checkmark", color: .diaryAccent)) }
         if weighIns >= 3 { wins.append(ProgressWin(id: "weigh-ins", title: "\(weighIns) weigh-ins", detail: "Your trend keeps sharpening", symbol: "scalemass.fill", color: .diaryWeight)) }
         return wins
+    }
+
+    /// Missing days stay out of every average; a bucket with no logged day has no value at all.
+    static func buckets(_ days: [DailyProgress], range: ProgressRange, zone: String) -> [ProgressBucket] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
+        calendar.firstWeekday = 2
+        let component: Calendar.Component = switch range {
+        case .week, .month: .day
+        case .quarter: .weekOfYear
+        case .year: .month
+        }
+        var order: [Date] = [], groups: [Date: [DailyProgress]] = [:]
+        for day in days.sorted(by: { $0.localDate < $1.localDate }) {
+            guard let date = ProgressDate.date(day.localDate, zone: zone),
+                  let start = calendar.dateInterval(of: component, for: date)?.start else { continue }
+            if groups[start] == nil { order.append(start) }
+            groups[start, default: []].append(day)
+        }
+        return order.map { start in
+            let logged = groups[start, default: []].filter { $0.foodTotals?.kcal != nil && $0.completeness != nil }
+            let kcal = logged.compactMap { $0.foodTotals?.kcal }, targets = logged.compactMap { $0.goal?.targets.kcal }
+            let average = kcal.isEmpty ? nil : kcal.reduce(0, +) / Double(kcal.count)
+            let target = targets.isEmpty ? nil : targets.reduce(0, +) / Double(targets.count)
+            return ProgressBucket(start: start, averageKcal: average, averageTarget: target,
+                                  band: ProgressBand.of(kcal: average, target: target), loggedDays: logged.count)
+        }
     }
 
     static func days(from start: String, to end: String) -> Int {

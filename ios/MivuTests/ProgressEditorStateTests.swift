@@ -64,6 +64,8 @@ import Testing
         let model = DiaryViewModel(store: store)
         await model.load(createDefaultProfile: false)
         let bounded = try await DiaryProgressView.loadProgress(model: model, endingOn: "2026-01-07", days: 30)
+        let year = try await DiaryProgressView.loadProgress(model: model, endingOn: "2026-01-07", days: ProgressRange.year.days)
+        #expect(year.dailyReports?.count == 365 && year.displayWeights == bounded.displayWeights)
         let chart = DiaryProgressView.weightObservations(progress: bounded, zone: snapshot.profile.timeZoneID)
         let report = bounded.weight
         #expect(chart.count == 1)

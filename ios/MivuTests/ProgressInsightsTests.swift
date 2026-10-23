@@ -115,6 +115,41 @@ import Testing
         #expect(ProgressInsights.wins(days: [day(label(0), kcal: 2000)], weighIns: 0).isEmpty)
     }
 
+    // MARK: Buckets
+
+    private func range(endingOn end: String, days: Int, kcal: (Int) -> Double? = { _ in 2000 }) -> [DailyProgress] {
+        let last = ProgressDate.date(end, zone: "UTC")!
+        return (0..<days).reversed().map { back in
+            day(ProgressDate.label(last.addingTimeInterval(Double(-back) * 86_400), zone: "UTC"), kcal: kcal(back))
+        }
+    }
+
+    @Test func weekAndMonthBucketPerDay() {
+        #expect(ProgressInsights.buckets(range(endingOn: "2026-10-22", days: 7), range: .week, zone: "UTC").count == 7)
+        #expect(ProgressInsights.buckets(range(endingOn: "2026-10-22", days: 30), range: .month, zone: "UTC").count == 30)
+    }
+
+    @Test func quarterBucketsByMondayWeek() throws {
+        let buckets = ProgressInsights.buckets(range(endingOn: "2026-10-22", days: 91), range: .quarter, zone: "UTC")
+        #expect(buckets.count == 14)
+        #expect(ProgressDate.label(try #require(buckets.first).start, zone: "UTC") == "2026-07-20")
+        #expect(buckets.first?.loggedDays == 3) // Fri 24 – Sun 26 July
+    }
+
+    @Test func yearBucketsByMonth() throws {
+        let buckets = ProgressInsights.buckets(range(endingOn: "2026-10-22", days: 365), range: .year, zone: "UTC")
+        #expect(buckets.count == 13)
+        #expect(ProgressDate.label(try #require(buckets.first).start, zone: "UTC") == "2025-10-01")
+    }
+
+    @Test func bucketsSkipMissingDaysNotZero() {
+        let days = range(endingOn: "2026-10-22", days: 14) { $0 >= 7 ? nil : 2100 }
+        let buckets = ProgressInsights.buckets(days, range: .quarter, zone: "UTC")
+        let empty = buckets.filter { $0.loggedDays == 0 }
+        #expect(!empty.isEmpty && empty.allSatisfy { $0.averageKcal == nil && $0.band == nil })
+        #expect(buckets.last?.averageKcal == 2100 && buckets.last?.band == .near)
+    }
+
     @Test func headlineNotEnoughDataWithNothingLogged() {
         #expect(ProgressInsights.headline(trend: [], goalWeightKg: 75, startKg: nil, days: [day("2026-10-23", kcal: nil)]) == .notEnoughData)
     }
