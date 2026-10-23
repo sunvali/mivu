@@ -32,7 +32,7 @@ struct DiaryProgressView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.openDiaryCoach) private var openChat
 
-    private struct ReportRequest: Equatable {
+    struct ReportRequest: Equatable {
         let ownership: DiarySelectionOwnership?
         let generation: UInt64
         let date: String
@@ -65,11 +65,13 @@ struct DiaryProgressView: View {
     }
     private var weightRequest: LedgerRequest { LedgerRequest(ownership: model.selection, generation: model.changeGeneration, before: weightBefore) }
     private var workoutRequest: LedgerRequest { LedgerRequest(ownership: model.selection, generation: model.changeGeneration, before: workoutBefore) }
-    private var visibleProgress: CoachProgress? {
-        let request = reportRequest
-        guard let loadedReport, loadedReport.ownership == request.ownership,
-              loadedReport.date == request.date, loadedReport.range == request.range else { return nil }
-        return progress
+    private var visibleProgress: CoachProgress? { Self.shows(loaded: loadedReport, for: reportRequest) ? progress : nil }
+    /// The cards follow the range of the data they show, so a range switch keeps the last report until the new one lands.
+    private var shownRange: ProgressRange { loadedReport?.range ?? range }
+    /// A range or edit change keeps the last report on screen while the next loads; a new profile or day never shows the old one.
+    static func shows(loaded: ReportRequest?, for request: ReportRequest) -> Bool {
+        guard let loaded else { return false }
+        return loaded.ownership == request.ownership && loaded.date == request.date
     }
     private var visibleWeights: [WeightEntry] { loadedWeights == weightRequest ? weightPage?.values ?? [] : [] }
     private var visibleWorkouts: [WorkoutSession] { loadedWorkouts == workoutRequest ? workoutPage?.values ?? [] : [] }
@@ -86,7 +88,7 @@ struct DiaryProgressView: View {
         model.activeDay?.localDate ?? ProgressDate.label(Date(), zone: zone)
     }
     private var weightReport: WeightProgress? { visibleProgress?.weight }
-    private var snapshot: ProgressSnapshot? { visibleProgress.map { ProgressSnapshot(progress: $0, range: range, zone: zone, today: today) } }
+    private var snapshot: ProgressSnapshot? { visibleProgress.map { ProgressSnapshot(progress: $0, range: shownRange, zone: zone, today: today) } }
     var weights: [WeightObservation] {
         Self.weightObservations(progress: visibleProgress, zone: readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
@@ -252,8 +254,8 @@ struct DiaryProgressView: View {
         }
     }
     private func dates(_ progress: CoachProgress) -> String {
-        let format = range.days > 30 ? "MMM d, yyyy" : "MMM d"
-        return "\(DiaryWeek.format(ProgressSnapshot.rangeStart(progress, range), format)) – \(DiaryWeek.format(progress.endLocalDate, format))"
+        let format = shownRange.days > 30 ? "MMM d, yyyy" : "MMM d"
+        return "\(DiaryWeek.format(ProgressSnapshot.rangeStart(progress, shownRange), format)) – \(DiaryWeek.format(progress.endLocalDate, format))"
     }
     private var weightDetail: some View {
         List {
