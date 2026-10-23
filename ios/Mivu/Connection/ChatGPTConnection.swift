@@ -134,7 +134,7 @@ final class ChatGPTConnection {
 
     /// OpenAI's Sign in with ChatGPT guidelines: confirm plan use once, the first time it is enabled.
     private(set) var planWelcomeSeen: Bool
-    var showsPlanWelcome: Bool { planAuthorized && !planWelcomeSeen }
+    var showsPlanWelcome: Bool { provider == .chatGPT && planAuthorized && !planWelcomeSeen }
     func acknowledgePlanWelcome() { planWelcomeSeen = true; preferences.set(true, forKey: "chatGPTPlanWelcomeSeen") }
 
     /// Signs in over whichever window is in front, so any screen can start it.

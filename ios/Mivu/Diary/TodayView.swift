@@ -208,8 +208,8 @@ struct DiaryRootView: View {
         }
         .onChange(of: connection.sessionRevision) { _, _ in coach.cancel() }
         .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
-        // Waits for the loaded diary and onboarding to finish, so the alert is not lost behind a swap or cover.
-        .alert("You’re using your ChatGPT plan", isPresented: Binding(get: { hasLoaded && !showOnboarding && connection.showsPlanWelcome },
+        // Waits until no sheet or cover is up (e.g. Settings, where people connect), so the alert is not dropped.
+        .alert("You’re using your ChatGPT plan", isPresented: Binding(get: { showsPlanWelcome },
                                                                      set: { if !$0 { connection.acknowledgePlanWelcome() } })) {
             Button("Got it", role: .cancel) {}
             Button("Manage usage") { openURL(MivuLinks.chatGPTUsage) }
@@ -404,6 +404,10 @@ struct DiaryRootView: View {
         // shortcut: sheets presented inside a tab (composer, Coach camera) stay up and block this cover; dismiss them if that shows up in use.
         routes.route = nil; coachHistory = nil; noteMealID = nil
         selectedTab = "today"; quickLogOwner = owner
+    }
+    private var showsPlanWelcome: Bool {
+        hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
+            && noteMealID == nil && notifiedMealID == nil && connection.showsPlanWelcome
     }
     private func openCoachRequest() {
         guard quickLog.openCoach, hasLoaded else { return }
