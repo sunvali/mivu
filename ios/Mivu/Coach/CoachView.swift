@@ -314,7 +314,7 @@ struct CoachView: View {
                           onTouch: onCompanionTouch)
             VStack(alignment: .leading, spacing: 4) {
                 if let day = coach.diary.activeDay {
-                    Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
+                    Text("Logging to " + CoachReplyLines.dayLabel(day.localDate, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier))).font(.caption).foregroundStyle(Color.diarySecondary)
                         .accessibilityIdentifier("coachDate")
                 }
                 if let target = coach.diary.readModel?.activeGoal?.targets.kcal {
@@ -323,9 +323,9 @@ struct CoachView: View {
                 }
                 if let error = coach.errorMessage, companionRecovery {
                     Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
-                } else if companionRecovery || companionProcessing {
-                    Text(companionRecovery ? "Your input is safe here" : "Working on your request…")
-                        .foregroundStyle(Color.diaryText)
+                } else if companionRecovery {
+                    // While working, the timeline's activity card already says what is happening.
+                    Text("Your message is safe here").foregroundStyle(Color.diaryText)
                 }
             }
             .font(.subheadline).fixedSize(horizontal: false, vertical: true)
@@ -576,8 +576,11 @@ struct CoachView: View {
             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 20))
             .contextMenu { messageActions(turn, fromPip: false) }
             .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: false) }
-            Label("Input saved on this iPhone", systemImage: "internaldrive")
-                .font(.caption).foregroundStyle(Color.diarySecondary)
+            // A reply or card already shows the message landed; the save note matters only until then.
+            if turn.state != .completed {
+                Label("Saved on this iPhone", systemImage: "checkmark.circle")
+                    .font(.caption).foregroundStyle(Color.diarySecondary)
+            }
         }.frame(maxWidth: .infinity, alignment: .trailing)
     }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
@@ -595,11 +598,11 @@ struct CoachView: View {
                 }
                 if turn.needsDayChoice {
                     if let date = coach.previousDayDate(turn) {
-                        Button("Use previous waking day: " + date) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
+                        Button("Log to " + CoachReplyLines.shortDate(date)) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
                     }
-                    Button("Use capture date: " + coach.captureDate(turn)) { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
+                    Button("Log to " + CoachReplyLines.shortDate(coach.captureDate(turn))) { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
                 } else if [.waitingForConnection, .waitingForNetwork, .needsRetry, .needsClarification].contains(turn.state) {
-                    Button("Retry analysis") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
+                    Button("Try again") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
                 }
             }
             ForEach(turn.receipts.filter { $0.mealID != nil || $0.workoutID != nil }, id: \.operationKey) { receipt in
@@ -642,12 +645,12 @@ struct CoachView: View {
     }
     private func status(_ state: CoachTurnState) -> String {
         switch state {
-        case .captured: "Waiting for analysis"
-        case .analyzing: "Analyzing saved input"
-        case .waitingForConnection: "Waiting for an authorized connection"
-        case .waitingForNetwork: "Waiting for the network. Your input is saved."
-        case .needsRetry: "Analysis paused. Your input is saved."
-        case .needsClarification: "More details are needed. Review the saved record or send a follow-up."
+        case .captured: "Waiting to start"
+        case .analyzing: "Thinking…"
+        case .waitingForConnection: "Connect ChatGPT in Settings to continue"
+        case .waitingForNetwork: "Offline. I'll reply when you're back online."
+        case .needsRetry: "Couldn't finish. Your message is saved."
+        case .needsClarification: "I need a little more detail. Reply with it, or edit the record."
         case .completed: "Completed"
         }
     }

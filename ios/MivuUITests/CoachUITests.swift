@@ -46,7 +46,7 @@ import XCTest
         let send = app.buttons["coachSend"]
         XCTAssertTrue(send.isHittable); XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["Apple sample mode"].exists)
         openConnectionSettings(in: app)
         let connect = settingsConnectButton(in: app)
@@ -59,7 +59,7 @@ import XCTest
         XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].exists)
+        XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Synthetic offline persisted Coach"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 
@@ -294,7 +294,7 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         let history = (1...32).map { "Synthetic history line \($0)." }.joined(separator: " ")
         enter(history, in: app); app.buttons["coachSend"].tap()
-        let status = app.staticTexts["Waiting for an authorized connection"].firstMatch
+        let status = app.staticTexts["Connect ChatGPT in Settings to continue"].firstMatch
         XCTAssertTrue(status.waitForExistence(timeout: 10))
         let latest = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: status)
         XCTAssertEqual(XCTWaiter.wait(for: [latest], timeout: 5), .completed)
@@ -474,7 +474,7 @@ import XCTest
         XCTAssertTrue(send.waitForExistence(timeout: 5), "A photo alone is enough to send")
         XCTAssertFalse(app.buttons["coachVoice"].exists)
         XCTAssertTrue(send.isEnabled); send.tap()
-        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10), "The photo-only turn is saved")
+        XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 10), "The photo-only turn is saved")
     }
 
     func testStarterFillsDraftAndTrailingSlotSwapsMicForSend() {

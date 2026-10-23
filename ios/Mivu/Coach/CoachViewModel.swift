@@ -678,16 +678,16 @@ private final class CoachNavigationReadFence: Sendable {
         return Set(turn.receipts.compactMap(\.workoutID)).compactMap { if case .workout(let workout, _) = receiptTargets[$0] { workout } else { nil } }
     }
     private func message(for error: Error) -> String {
-        if error as? ResponsesClient.Failure == .usageUnavailable { return "ChatGPT is temporarily unavailable. Your input is saved. Retry when usage is available." }
-        if ProbeRunner.isTransient(error) { return "The network is unavailable. Your input is saved and analysis will resume when the connection returns." }
-        if error is CancellationError || error as? SessionError == .sessionChanged { return "Analysis paused after the connection changed. Your input is saved. Retry when ready." }
-        if error as? ResponsesClient.Failure == .quotaReached { return "Your ChatGPT usage limit was reached. Your input is saved. Check ChatGPT usage settings in Settings and retry when usage is available." }
-        if error as? DiaryError == .staleRevision { return "A meal, weigh-in or workout changed while analysis was running. Review the latest record before retrying." }
+        if error as? ResponsesClient.Failure == .usageUnavailable { return "ChatGPT is busy right now. Your message is saved; try again soon." }
+        if ProbeRunner.isTransient(error) { return "You're offline. Your message is saved and I'll reply when you're back online." }
+        if error is CancellationError || error as? SessionError == .sessionChanged { return "The connection changed. Your message is saved; tap Try again." }
+        if error as? ResponsesClient.Failure == .quotaReached { return "You've reached your ChatGPT usage limit. Your message is saved; try again later." }
+        if error as? DiaryError == .staleRevision { return "Something changed while I was working. Check it, then try again." }
         if error as? DiaryError == .invalidAmountUnitChange { return error.localizedDescription }
-        if error as? DiaryError == .ambiguousDay { return "Choose which waking day this capture belongs to. Your input is saved." }
-        if error as? CoachError == .ungroundedConfirmation { return "More details are needed before a meal, weigh-in or workout can be logged. Your input is saved." }
-        if error as? DiaryError == .persistenceFailed { return "Could not update the diary on this iPhone. Your captured input is saved; retry when ready." }
-        return "Analysis could not finish. Your input is saved. Check your connection or retry when ready." }
+        if error as? DiaryError == .ambiguousDay { return "Which day is this for?" }
+        if error as? CoachError == .ungroundedConfirmation { return "I need a little more detail to log that." }
+        if error as? DiaryError == .persistenceFailed { return "Couldn't save that. Your message is kept; tap Try again." }
+        return "Something went wrong. Your message is saved; tap Try again." }
 }
 
 @MainActor enum CoachCaptureProtection {

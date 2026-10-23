@@ -255,7 +255,7 @@ import XCTest
         XCTAssertTrue(app.buttons["mealSourceChat"].waitForExistence(timeout: 5))
         app.buttons["mealSourceChat"].tap()
         let date = app.staticTexts["coachReceiptDate"]
-        XCTAssertTrue(date.waitForExistence(timeout: 10)); XCTAssertTrue(date.label.contains("2027-01-15"))
+        XCTAssertTrue(date.waitForExistence(timeout: 10)); XCTAssertTrue(["Jan 15", "15 Jan"].contains { date.label.contains($0) })
         let details = app.descendants(matching: .any)["coachReceiptDetails"].firstMatch
         reveal(details, app: app); details.tap()
         let unknown = app.staticTexts["coachReceiptUnknown"].firstMatch
@@ -336,7 +336,7 @@ import XCTest
         if app.buttons["Jump to latest"].exists { app.buttons["Jump to latest"].tap() }
         let quantity = app.staticTexts.matching(identifier: "coachReceiptQuantity").matching(NSPredicate(format: "label CONTAINS %@", "3 piece")).firstMatch
         XCTAssertTrue(quantity.waitForExistence(timeout: 10))
-        let committedReceiptShowsThreePiecesAndCapturedYesterday = quantity.exists && app.staticTexts["coachReceiptDate"].label.contains("2027-01-15")
+        let committedReceiptShowsThreePiecesAndCapturedYesterday = quantity.exists && ["Jan 15", "15 Jan"].contains { app.staticTexts["coachReceiptDate"].label.contains($0) }
         XCTAssertTrue(committedReceiptShowsThreePiecesAndCapturedYesterday)
         let details = app.descendants(matching: .any)["coachReceiptDetails"].firstMatch
         reveal(details, app: app); details.tap()

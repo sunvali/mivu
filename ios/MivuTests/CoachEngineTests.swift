@@ -547,6 +547,18 @@ private actor CoachInputFixture {
         #expect(completed.assistantText == prose)
     }
 
+    @Test func mealProseMayStateTheDaysNewTotal() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        let earlier = try await capturedTurn(store, text: "Synthetic breakfast", photos: [], at: now, expectedProfileID: profile.id)
+        _ = try await store.applyCoachFood(turnID: earlier.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic breakfast", nutrition: NutritionValues(kcal: 500), provenance: .estimate)], expectedProfileID: profile.id)
+        let food = #"{"target_local_date":"2027-01-15","items":[{"name":"Synthetic eggs","quantity":2,"unit":"egg","kcal":140,"carbs":1,"protein":12,"fat":10}]}"#
+        let prose = "Saved, about **140** kcal. You're at 640 of 2,000 kcal today, so 1,360 to go."
+        let replies = CoachFixture([result([call("log_food", food, id: "food")]), result(text: prose)])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == prose)
+    }
+
     @Test func multiDishPhotoMealIsOneMessageWithGroundedProse() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let names = ["chicken", "rice", "hummus", "salad", "pita", "tahini", "pickles"]

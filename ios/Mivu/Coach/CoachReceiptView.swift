@@ -192,7 +192,7 @@ struct CoachReceiptView: View {
     }
     @ViewBuilder private var committedDate: some View {
         if let date = presentation.committedDate {
-            Text("Recorded for " + date).fixedSize(horizontal: false, vertical: true)
+            Text(CoachReplyLines.shortDate(date)).fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptDate")
         }
     }

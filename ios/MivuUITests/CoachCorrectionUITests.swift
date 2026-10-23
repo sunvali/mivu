@@ -273,7 +273,7 @@ import XCTest
         if app.buttons["coachNewMessage"].exists { app.buttons["coachNewMessage"].tap() }
         let amount = app.staticTexts.matching(identifier: "coachReceiptQuantity").matching(NSPredicate(format: "label CONTAINS %@", "3 piece")).firstMatch
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["coachReceiptDate"].firstMatch.label.contains("2027-01-15"))
+        XCTAssertTrue(["Jan 15", "15 Jan"].contains { app.staticTexts["coachReceiptDate"].firstMatch.label.contains($0) })
     }
     private func openAndVerifyCommittedMeal(_ app: XCUIApplication, receipt: [String: Any], facts: [String: Any]) throws {
         let key = try XCTUnwrap(receipt["operationKey"] as? String)
