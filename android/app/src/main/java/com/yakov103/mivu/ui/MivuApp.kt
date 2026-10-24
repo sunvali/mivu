@@ -87,6 +87,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CoroutineScope
 import com.yakov103.mivu.coach.CoachActivity
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -150,6 +151,8 @@ fun MivuApp(
     onMealCaptured: (UUID) -> Unit = {},
     coach: CoachHooks = CoachHooks(),
     connection: ChatGPTConnection? = null,
+    /** Outlives screens and configuration changes; a disconnect runs here. */
+    appScope: CoroutineScope = rememberCoroutineScope(),
 ) {
     val state by repository.bootstrapState.collectAsState()
     val scope = rememberCoroutineScope()
@@ -157,7 +160,7 @@ fun MivuApp(
     LaunchedEffect(repository) { if (repository.bootstrapState.value == null) repository.bootstrap() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
-            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection)
+            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection, appScope)
             Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
@@ -199,7 +202,8 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks, connection: ChatGPTConnection?) {
+private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks, connection: ChatGPTConnection?,
+    appScope: CoroutineScope) {
     val navController = rememberNavController()
     // Coach keeps its window across tab switches: its view model belongs to the activity, not the Coach entry.
     val activityOwner = checkNotNull(LocalViewModelStoreOwner.current)
@@ -338,17 +342,15 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             }
             composable<Route.Connection> {
                 val connectionState by connectionState(connection)
-                val activity = LocalContext.current
-                val scope = rememberCoroutineScope()
                 ConnectionScreen(
                     connectionState,
                     onAgree = { connection?.recordConsent() },
-                    // The owner calls back off the main thread; the Custom Tab starts on it.
-                    onConnect = { connection?.connect { url -> activity.mainExecutor.execute { activity.openCustomTab(url) } } },
+                    // The owner calls back off the main thread, maybe after a rotation: the tab starts from the app, on the main thread.
+                    onConnect = { connection?.connect { url -> context.mainExecutor.execute { context.openCustomTab(url) } } },
                     onCancel = { connection?.cancelConnection() },
                     onSelectModel = { connection?.selectModel(it) },
-                    // Leaving the screen must not stop a disconnect halfway through deleting the session.
-                    onDisconnect = { scope.launch { withContext(NonCancellable) { connection?.disconnect() } } },
+                    // Leaving the screen must not stop (or drop) a disconnect halfway through deleting the session.
+                    onDisconnect = { appScope.launch { withContext(NonCancellable) { connection?.disconnect() } } },
                     onBack = { navController.popBackStack() },
                 )
             }

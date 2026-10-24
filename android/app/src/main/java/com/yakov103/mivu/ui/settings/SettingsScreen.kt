@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yakov103.mivu.R
 import com.yakov103.mivu.connection.AccountState
+import com.yakov103.mivu.connection.ConnectionNotice
 import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.ui.today.WhiteCard
 
@@ -136,9 +137,13 @@ fun ConnectionScreen(
             Footnote("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage " +
                 "limits. Captures save locally without a connection.")
             state.notice?.let { notice ->
-                Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.errorContainer) {
+                // A finished disconnect is news, not an error.
+                val neutral = notice == ConnectionNotice.disconnected
+                Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                    color = if (neutral) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.errorContainer) {
                     Text(notice.text, Modifier.padding(16.dp).semantics { liveRegion = LiveRegionMode.Polite },
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (neutral) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
             if (state.isConnecting) {

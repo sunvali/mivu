@@ -1,6 +1,7 @@
 package com.yakov103.mivu.ui.settings
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,8 +31,9 @@ object MivuLinks {
     const val USAGE = "https://chatgpt.com/settings/usage"
 }
 
-/** Opens [url] in a Custom Tab: the system browser, as the sign-in requires. */
-fun Context.openCustomTab(url: String) = CustomTabsIntent.Builder().build().launchUrl(this, Uri.parse(url))
+/** Opens [url] in a Custom Tab: the system browser, as the sign-in requires. A new task, so any context (the app's) works. */
+fun Context.openCustomTab(url: String) =
+    CustomTabsIntent.Builder().build().apply { intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }.launchUrl(this, Uri.parse(url))
 
 enum class ConnectStyle { Filled, Outlined, Link }
 

@@ -25,7 +25,8 @@ import kotlinx.coroutines.launch
 
 class MivuApplication : Application() {
     val repository by lazy { DiaryRepository(this) }
-    private val scope = CoroutineScope(SupervisorJob())
+    /** The process scope: work here outlives any screen, such as a disconnect deleting the session. */
+    val scope = CoroutineScope(SupervisorJob())
     val analysisWorker by lazy { MealAnalysisWorker(repository, SampleAnalyzer::analyze) }
 
     /** Finishes captured meals once the diary is ready; live analysis (milestone 5) replaces this. A failure stays needsRetry. */
