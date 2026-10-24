@@ -1,0 +1,250 @@
+{
+  "cases" : [
+    {
+      "arguments" : "{\"target_local_date\":\"2026-10-24\",\"items\":[{\"name\":\"Synthetic rice/beans\",\"quantity\":150,\"unit\":\"g\",\"kcal\":210.5,\"carbs\":null,\"protein\":4.25,\"fat\":0.1,\"evidence_id\":null}],\"eaten_at\":\"2026-10-24T08:30:00Z\",\"review_first\":true}",
+      "fingerprint" : "962faa00f86269f41c45e0cdc63768e7a3d55ae4f0d950b4f739ffb4a02545a7",
+      "target" : "food/2026-10-24",
+      "tool" : "log_food"
+    },
+    {
+      "arguments" : "{\"target_local_date\":\"2026-10-24\",\"items\":[{\"name\":\"Synthetic tea é\",\"quantity\":1,\"unit\":\"cup\",\"kcal\":null,\"carbs\":null,\"protein\":null,\"fat\":null},{\"name\":\"Synthetic toast\",\"quantity\":2.50,\"unit\":\"slice\",\"kcal\":1e2,\"carbs\":30,\"protein\":6,\"fat\":2}],\"eaten_at\":null}",
+      "fingerprint" : "5e6101bb192c358e837e9e309a34fca6839884fb68d0e23bdd6205affb6bb570",
+      "target" : "food/2026-10-24",
+      "tool" : "log_food"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"item_id\":\"00000000-0000-0000-0000-000000000041\",\"expected_revision\":3,\"quantity\":0.1}",
+      "fingerprint" : "42ee7cbe3f7193f837eb98efa3d05db74ffbdbec1148b89a39ced04a4f6e5e0c",
+      "target" : "correct/00000000-0000-0000-0000-000000000020/00000000-0000-0000-0000-000000000041",
+      "tool" : "correct_item"
+    },
+    {
+      "arguments" : "{\"local_date\":\"2026-10-24\",\"value\":70.3,\"unit\":\"kg\",\"weight_id\":null,\"expected_revision\":null,\"measured_at\":null}",
+      "fingerprint" : "839cfc38107be5a260a55ec9e456829f93812884345a6cbfb16eab14943851b6",
+      "target" : "weight/2026-10-24",
+      "tool" : "log_weight"
+    },
+    {
+      "arguments" : "{\"local_date\":\"2026-10-24\",\"value\":155.5,\"unit\":\"lb\",\"weight_id\":\"00000000-0000-0000-0000-000000000080\",\"expected_revision\":2,\"measured_at\":\"2026-10-24\"}",
+      "fingerprint" : "aab00435db1f614c4971e62f2e83c20ed1388bf6c36ba835f85e67a930659973",
+      "target" : "correct_weight/00000000-0000-0000-0000-000000000080",
+      "tool" : "log_weight"
+    },
+    {
+      "arguments" : "{\"local_date\":\"2026-10-24\",\"kind\":\"strength\",\"duration_minutes\":45,\"exercises\":[{\"name\":\"Synthetic squat\",\"sets\":[{\"repetitions\":8,\"load_kg\":60.5},{\"repetitions\":10,\"load_kg\":null}]}],\"estimated_burn_kcal\":250,\"burn_source\":\"userEstimate\",\"performed_at\":null}",
+      "fingerprint" : "5d9d96407e6b1ca1d1740888bd4bb3f9a28594ea32160bd99776a096d8138d90",
+      "target" : "workout/2026-10-24",
+      "tool" : "log_workout"
+    },
+    {
+      "arguments" : "{\"workout_id\":\"00000000-0000-0000-0000-000000000090\",\"expected_revision\":2,\"kind\":\"cardio\",\"duration_minutes\":30,\"exercises\":[],\"estimated_burn_kcal\":null,\"burn_source\":null,\"performed_at\":null}",
+      "fingerprint" : "64fcb9e9ce16e2b5a6466cd7c90e8f8b0a0afc998109d90321335df10cf78b56",
+      "target" : "edit_workout/00000000-0000-0000-0000-000000000090",
+      "tool" : "edit_workout"
+    },
+    {
+      "arguments" : "{\"weight_id\":\"00000000-0000-0000-0000-000000000080\",\"expected_revision\":2}",
+      "fingerprint" : "1b843ece9c127399b84653f7f5c68f76a0baa8d6c51b1cc80153b57f5d3cc8c3",
+      "target" : "delete_weight/00000000-0000-0000-0000-000000000080",
+      "tool" : "delete_weight"
+    },
+    {
+      "arguments" : "{\"workout_id\":\"00000000-0000-0000-0000-000000000090\",\"expected_revision\":2}",
+      "fingerprint" : "697c5f654f6444efcdba15567a8fb5178ca6fb84717a3d1f162afcf398ad389a",
+      "target" : "delete_workout/00000000-0000-0000-0000-000000000090",
+      "tool" : "delete_workout"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"item_id\":\"00000000-0000-0000-0000-000000000041\",\"review_submission_id\":null,\"name\":\"Synthetic oats/bran\",\"quantity\":null,\"unit\":null,\"nutrients\":[{\"nutrient\":\"protein\",\"value\":6.5},{\"nutrient\":\"kcal\",\"value\":null}]}",
+      "fingerprint" : "78f0b9f64a5fa408890a77cb24e46624386c16cd8ec0c000150ecce4c158a6c5",
+      "target" : "edit_item/00000000-0000-0000-0000-000000000020/saved/00000000-0000-0000-0000-000000000041/c819a641277a5e76bf42b8bfc39466f1f5954b0e201a8dc748b68c4742d39814",
+      "tool" : "edit_item"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"item_id\":\"00000000-0000-0000-0000-000000000043\",\"review_submission_id\":\"00000000-0000-0000-0000-000000000050\",\"quantity\":2}",
+      "fingerprint" : "c2794da97ef63bceb811d082080959570453f7d287d8f8a04acb7c6089b9946c",
+      "target" : "edit_item/00000000-0000-0000-0000-000000000020/00000000-0000-0000-0000-000000000050/00000000-0000-0000-0000-000000000043/52ea93e05008493ea1f16f17147a4b4fbdba987ba4049e47be752b99d7f3dd62",
+      "tool" : "edit_item"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"items\":[{\"name\":\"Synthetic honey\",\"quantity\":1,\"unit\":\"tbsp\",\"kcal\":64,\"carbs\":17.3,\"protein\":0.1,\"fat\":0}]}",
+      "fingerprint" : "abf59cde5ded35dff0f3d96f3f6bf0ab7b907d58ef1058a2476e641fe65e5523",
+      "target" : "append_food/00000000-0000-0000-0000-000000000020",
+      "tool" : "append_food"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"submission_id\":\"00000000-0000-0000-0000-000000000050\"}",
+      "fingerprint" : "20084819ebe5fcce0f644aacf022681cd9177f700ee1ca8d0738b4f7dc0e8e5d",
+      "target" : "accept_review/00000000-0000-0000-0000-000000000020/00000000-0000-0000-0000-000000000050",
+      "tool" : "accept_review"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"target_local_date\":\"2026-10-23\"}",
+      "fingerprint" : "d32c2ffb89372911308164b0b57683d9a756c4eb8fd5f9df3aae028847c7b6f3",
+      "target" : "move_meal/00000000-0000-0000-0000-000000000020/395f5457e42e19fa84068bcced09e7bda6e847532710cd871ea36ba59341c928",
+      "tool" : "move_meal"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3}",
+      "fingerprint" : "dca5b859764ca9f3ac152d86a3ab9ecc96e2b1bc048178300d301231fed4a671",
+      "target" : "delete_meal/00000000-0000-0000-0000-000000000020",
+      "tool" : "delete_meal"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"item_id\":\"00000000-0000-0000-0000-000000000042\"}",
+      "fingerprint" : "056428ded5a999e76ba29fd6f2fb16516cccb8659af048a2ce4d356e6a733252",
+      "target" : "delete_item/00000000-0000-0000-0000-000000000020/00000000-0000-0000-0000-000000000042",
+      "tool" : "delete_item"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"target_kcal\":650}",
+      "fingerprint" : "d258748f1d1f3ffd82f8d00402af82e1ef5a43db61f4f06b8c4b4058cc49aaf4",
+      "target" : "scale_meal/00000000-0000-0000-0000-000000000020",
+      "tool" : "scale_meal"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"photo_ids\":[\"00000000-0000-0000-0000-000000000032\",\"00000000-0000-0000-0000-000000000031\"],\"role\":\"after\"}",
+      "fingerprint" : "e7ed69810a3d900e53bbd2257e0acad9d00ca405dda477b39451aa6f58eabd2a",
+      "target" : "attach_photos/00000000-0000-0000-0000-000000000020/426c01ae71ab52e45097b90918ba187fecaaf9214f4af89f71ca583c8c2122f1",
+      "tool" : "attach_photos"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"photo_id\":\"00000000-0000-0000-0000-000000000030\"}",
+      "fingerprint" : "715b0b6200c6734152b001a446ed8588356163613337e01b9c0ea9c1b6910a05",
+      "target" : "delete_photo/00000000-0000-0000-0000-000000000020/00000000-0000-0000-0000-000000000030",
+      "tool" : "delete_photo"
+    },
+    {
+      "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":0}",
+      "fingerprint" : "67f843211e5e069c13a4fc6a469528cfd957e4885ac0802300a3529eb187f770",
+      "target" : "retry_meal/00000000-0000-0000-0000-000000000020",
+      "tool" : "retry_meal"
+    },
+    {
+      "arguments" : "{\"effective_local_date\":\"2026-10-24\",\"expected_revision\":null,\"targets\":[{\"nutrient\":\"protein\",\"value\":120},{\"nutrient\":\"carbs\",\"value\":null}],\"goal_weight_kg\":68.2,\"clear_goal_weight\":false,\"exercise_credit_enabled\":true}",
+      "fingerprint" : "564fbba13415efca685fc071c400e2dbcdb768cf63e5eee1063d9bbf55d4316d",
+      "target" : "set_goals/2026-10-24/85f8506786e637cb6385f7bf6038dfaf89a4950715f584aeae3e1cfbefa28609",
+      "tool" : "set_goals"
+    },
+    {
+      "arguments" : "{\"expected_diary_revision\":12,\"timezone\":\"Europe/London\",\"preferences\":\"Synthetic: no peanuts \\\"really\\\"\"}",
+      "fingerprint" : "2fbb6e6dea80ae1b7e5062f70fd3cd24ec8a95e5223afd13c7a78c47969c2924",
+      "target" : "update_preferences/52ff4b0ee72a478ad6b75f32818a1bf019e5d3765ef0758da324aa6659622f33",
+      "tool" : "update_preferences"
+    },
+    {
+      "arguments" : "{\"expected_diary_revision\":12}",
+      "fingerprint" : "537d19d636dea0e0d9d3fdb8f68e58f74fc627a684dc15c0384bc528ea152339",
+      "target" : "start_day",
+      "tool" : "start_day"
+    },
+    {
+      "arguments" : "{\"local_date\":\"2026-10-22\",\"skipped\":true}",
+      "fingerprint" : "ec79b97a5d44fdd8352db6259026a7b554ab2d5ddb3d72350c5982d35037aae1",
+      "target" : "set_day_coverage/2026-10-22/6b5251f9419bf45415b576f6839f20fba304ef6470c2566d435747533f17ccbc",
+      "tool" : "set_day_coverage"
+    },
+    {
+      "arguments" : "{\"operation_key\":\"00000000-0000-0000-0000-000000000110/food/2026-10-24\"}",
+      "fingerprint" : "9023376cf1d46019e9e5e4a8a902aed56fe6db0dfba4722d41eb4c361c7da8cf",
+      "target" : "undo/00000000-0000-0000-0000-000000000110/food/2026-10-24",
+      "tool" : "undo_change"
+    },
+    {
+      "arguments" : "{\"destination\":\"backup\"}",
+      "fingerprint" : "4316239f48bb88a3a61474a9004e976094f34a006fd1f4ce31f58ea604000655",
+      "target" : "open_settings/backup",
+      "tool" : "open_settings"
+    }
+  ],
+  "meals" : [
+    {
+      "dayID" : "00000000-0000-0000-0000-000000000010",
+      "eatenAt" : 800000030,
+      "id" : "00000000-0000-0000-0000-000000000020",
+      "items" : [
+        {
+          "id" : "00000000-0000-0000-0000-000000000041",
+          "name" : "Synthetic oats",
+          "nutrientSources" : {
+
+          },
+          "nutrition" : {
+            "carbs" : 27,
+            "fat" : 2.5,
+            "kcal" : 150.5,
+            "protein" : 5
+          },
+          "provenance" : "estimate",
+          "quantity" : 40,
+          "reference" : "Synthetic reference",
+          "uncertain" : true,
+          "unit" : "g"
+        },
+        {
+          "id" : "00000000-0000-0000-0000-000000000042",
+          "name" : "Synthetic milk",
+          "nutrientSources" : {
+
+          },
+          "nutrition" : {
+            "carbs" : 9.6,
+            "fat" : 3.2,
+            "kcal" : 100,
+            "protein" : 6.8
+          },
+          "provenance" : "estimate",
+          "quantity" : 200,
+          "reference" : "Synthetic reference",
+          "uncertain" : true,
+          "unit" : "ml"
+        }
+      ],
+      "omittedItemCount" : 0,
+      "photos" : [
+        {
+          "id" : "00000000-0000-0000-0000-000000000030",
+          "role" : "unspecified"
+        }
+      ],
+      "review" : {
+        "baseRevision" : 3,
+        "items" : [
+          {
+            "id" : "00000000-0000-0000-0000-000000000043",
+            "name" : "Synthetic banana",
+            "nutrientSources" : {
+
+            },
+            "nutrition" : {
+              "kcal" : 105
+            },
+            "provenance" : "estimate",
+            "quantity" : 1,
+            "reference" : "Synthetic reference",
+            "uncertain" : true,
+            "unit" : "medium"
+          }
+        ],
+        "submissionID" : "00000000-0000-0000-0000-000000000050"
+      },
+      "revision" : 3,
+      "state" : "saved",
+      "timePrecision" : "dateOnly"
+    }
+  ],
+  "workouts" : [
+    {
+      "dayID" : "00000000-0000-0000-0000-000000000010",
+      "durationMinutes" : 45,
+      "exercises" : [
+
+      ],
+      "id" : "00000000-0000-0000-0000-000000000090",
+      "kind" : "strength",
+      "performedAt" : 800000500,
+      "revision" : 2,
+      "timePrecision" : "dateOnly"
+    }
+  ]
+}
