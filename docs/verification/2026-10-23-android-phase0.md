@@ -29,6 +29,8 @@ live-provider evidence.
 - Result: **partial — emulator PASS; physical phone not run**
 - Notes: to prove: loopback redirect `http://127.0.0.1:<port>/auth/callback` reaches the listener from a Custom Tab on a real phone, including while backgrounded; listener starts before the browser opens; PKCE S256, `state`, `nonce`; `dynamic_agent_client` plus `agent_name_hint=Mivu` only on first registration; `ext_agent_host_id` persisted before sign-in. Emulator run 2026-10-24 at `ef06a98823460e6762dde1112789b3be7eb304d5` (Medium_Phone_API_37.0, API 37, emulator started with `-dns-server 8.8.8.8,1.1.1.1`). The owner was already signed in to ChatGPT in the emulator browser, chose the account, named the agent `mivu-android-simulator` and tapped Continue on the consent screen; the loopback redirect reached the app and the screen read `PASS: Signed in`. The consent page kept its spinner; closing the Custom Tab showed the result. The kill-and-sign-in-again step was not run. Earlier attempts failed with `NetworkUnavailable` because the emulator's default DNS could not resolve `auth.openai.com` (`UnknownHostException`); the Custom Tab still worked because Chrome resolves names itself.
 
+- Release UI (milestone 5): on 2026-10-24 at `31ece21b`, consent, sign-in, the connected state with the model picker, and a live Coach text turn that saved a meal with nutrition ran through Settings → Coach AI and Coach on the emulator; the photo turn, Disconnect, refresh through the UI and the physical phone were not run. See [the connection record](2026-10-24-android-connection.md).
+
 ## 3. Authorized inference
 
 - Environment: as item 2.
