@@ -89,7 +89,9 @@ class ReleaseAutomation(unittest.TestCase):
             tool = root / 'gh'
             tool.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$COMMAND_LOG"\n')
             tool.chmod(0o755)
-            for branch, accepted in (('release-please--branches--main--components--mivu', True),
+            for branch, accepted in (('release-please--branches--main--components--ios', True),
+                                     ('release-please--branches--main--components--android', True),
+                                     ('release-please--branches--main--components--mivu', False),
                                      ('release-please--branches--main', False),
                                      ('feature/untrusted', False)):
                 with self.subTest(branch=branch):
@@ -111,6 +113,38 @@ class ReleaseAutomation(unittest.TestCase):
                     else:
                         self.assertNotEqual(result.returncode, 0)
                         self.assertFalse(log.exists(), 'Unexpected branches must not dispatch workflows')
+
+
+class PlatformVersions(unittest.TestCase):
+    """iOS and Android are versioned, tagged and released independently."""
+    root = Path(__file__).resolve().parents[2]
+
+    def test_each_platform_is_its_own_release_package(self):
+        config = json.loads((self.root / 'release-please-config.json').read_text())
+        manifest = json.loads((self.root / '.release-please-manifest.json').read_text())
+        self.assertEqual(set(config['packages']), {'ios', 'android'})
+        self.assertEqual(set(manifest), {'ios', 'android'})
+        self.assertTrue(config['separate-pull-requests'], 'One version PR per platform')
+        self.assertTrue(config['include-component-in-tag'], 'Tags must name their platform')
+        self.assertNotIn('plugins', config, 'Plugins such as linked-versions couple the platforms')
+        names = {path: package['package-name'] for path, package in config['packages'].items()}
+        self.assertEqual(names, {'ios': 'ios', 'android': 'android'})
+        for path, package in config['packages'].items():
+            for extra in package.get('extra-files', []):
+                with self.subTest(package=path, file=extra):
+                    file = extra if isinstance(extra, str) else extra['path']
+                    self.assertFalse(file.startswith(('/', '..')), 'Version files stay inside their package')
+                    self.assertTrue((self.root / path / file).exists())
+
+    def test_each_app_reads_only_its_own_version(self):
+        self.assertFalse((self.root / 'version.txt').exists(), 'No shared root version')
+        for platform in ('ios', 'android'):
+            self.assertRegex((self.root / platform / 'version.txt').read_text(), r'^\d+\.\d+\.\d+\n?$')
+        gradle = (self.root / 'android/app/build.gradle.kts').read_text()
+        self.assertIn('file("../version.txt")', gradle)
+        self.assertNotIn('ios/', gradle)
+        xcconfig = (self.root / 'ios/Config/Shared.xcconfig').read_text()
+        self.assertRegex(xcconfig, r'MARKETING_VERSION = [\d.]+ // x-release-please-version')
 
 
 if __name__ == '__main__':
