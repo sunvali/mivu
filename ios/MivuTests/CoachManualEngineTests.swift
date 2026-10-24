@@ -340,7 +340,7 @@ private actor RevisionCoachReplies {
         #expect(updated.items[0].nutrition.protein == original.nutrition.protein)
         #expect(updated.items[0].nutrition.fat == original.nutrition.fat)
         #expect(updated.items[1] == meal.items[1])
-        #expect(updated.totals.kcal == nil)
+        #expect(updated.totals.kcal == meal.items[1].nutrition.kcal && updated.totals.unknownItemCount == 1)
     }
 
     @Test func startDayThenHistoricalCoverageLeavesActiveDayOpen() async throws {

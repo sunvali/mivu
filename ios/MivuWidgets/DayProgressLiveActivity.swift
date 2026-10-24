@@ -166,7 +166,7 @@ private struct MacroRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(name).font(.caption2.weight(.semibold)).foregroundStyle(tint)
                 Spacer(minLength: 0)
-                Text(DayState.macroAmount(value, target)).font(.caption2.weight(.medium)).monospacedDigit()
+                Text(DayState.macroAmount(value, target, partial: state.incomplete == true)).font(.caption2.weight(.medium)).monospacedDigit()
                     .foregroundStyle(Color.diarySecondary)
             }
             .lineLimit(1).minimumScaleFactor(0.7)

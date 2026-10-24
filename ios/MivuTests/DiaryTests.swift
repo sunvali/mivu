@@ -157,12 +157,14 @@ struct DiaryTests {
         #expect(try await store.snapshotForExport().meals[0].photos == [after])
         #expect(try await store.snapshotForExport().meals[0].submissions.flatMap(\.photoIDs) == [after.id])
     }
-    @Test func nullableComponentsAreNeverConvertedToZero() throws {
+    @Test func unknownComponentsAddNothingAndAreCounted() throws {
+        // A calories-only food must not hide the protein the other foods recorded; the count discloses the gap.
         let items = [FoodItem(name: "A", nutrition: NutritionValues(kcal: 10, carbs: 1, protein: nil, fat: 0)), FoodItem(name: "B", nutrition: NutritionValues(kcal: 20, carbs: 2, protein: 3, fat: 4))]
         let totals = nutritionTotals(items)
         #expect(totals.kcal == 30)
-        #expect(totals.protein == nil)
+        #expect(totals.protein == 3)
         #expect(totals.unknownItemCount == 1)
+        #expect(nutritionTotals([items[0]]).protein == nil)
         #expect(nutritionTotals([]).kcal == nil)
     }
     @Test func profileSwitchRejectsWorkFromFormerOwner() async throws {

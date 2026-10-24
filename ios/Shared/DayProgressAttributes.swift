@@ -14,6 +14,8 @@ struct DayProgressAttributes: ActivityAttributes {
         var fat: Double?
         var fatTarget: Double?
         var hideWhenLocked: Bool
+        /// True when some food lacks a nutrient, so the amounts are only what is known. Optional so an older running activity still decodes.
+        var incomplete: Bool? = nil
 
         var isOver: Bool { kcalEaten.flatMap { eaten in kcalTarget.map { eaten > $0 } } ?? false }
         var figure: String {
@@ -26,7 +28,10 @@ struct DayProgressAttributes: ActivityAttributes {
         var spoken: String {
             let macros = [("Protein", protein, proteinTarget), ("Carbs", carbs, carbsTarget), ("Fat", fat, fatTarget)]
                 .compactMap { name, value, target in
-                    value.map { v in target.map { "\(name) \(Self.number(v)) of \(Self.number($0)) grams." } ?? "\(name) \(Self.number(v)) grams." }
+                    value.map { v in
+                        let amount = (incomplete == true ? "at least " : "") + Self.number(v)
+                        return target.map { "\(name) \(amount) of \(Self.number($0)) grams." } ?? "\(name) \(amount) grams."
+                    }
                 }
             let calories = kcalEaten == nil ? "Calories not known yet." : "\(figure) calories \(word)."
             return ([calories] + macros).joined(separator: " ")
@@ -36,9 +41,9 @@ struct DayProgressAttributes: ActivityAttributes {
             "\(letter) \(macroAmount(value, target))"
         }
 
-        /// "80/120g"; an unknown amount shows a dash, never a zero that looks recorded.
-        static func macroAmount(_ value: Double?, _ target: Double?) -> String {
-            let eaten = value.map(number) ?? "–"
+        /// "80/120g"; an unknown amount shows a dash, never a zero that looks recorded, and a partial one reads "80+".
+        static func macroAmount(_ value: Double?, _ target: Double?, partial: Bool = false) -> String {
+            let eaten = value.map { number($0) + (partial ? "+" : "") } ?? "–"
             return target.map { "\(eaten)/\(number($0))g" } ?? (value == nil ? eaten : "\(eaten)g")
         }
 

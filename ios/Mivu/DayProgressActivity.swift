@@ -10,7 +10,7 @@ extension DayProgressAttributes.ContentState {
                   protein: eaten?.protein, proteinTarget: target?.protein,
                   carbs: eaten?.carbs, carbsTarget: target?.carbs,
                   fat: eaten?.fat, fatTarget: target?.fat,
-                  hideWhenLocked: hideWhenLocked)
+                  hideWhenLocked: hideWhenLocked, incomplete: (eaten?.unknownItemCount ?? 0) > 0)
     }
 }
 
