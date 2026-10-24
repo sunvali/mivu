@@ -19,7 +19,7 @@ import Testing
                              lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
         let model = DiaryReadModel(head: head, activeDay: day, meals: meals, weight: nil, workouts: [], activeGoal: goal,
                                    pendingAnalysisCount: 0)
-        return State(report: ProgressAnalytics.daily(readModel: model), hideWhenLocked: hide)
+        return State(readModel: model, hideWhenLocked: hide)
     }
 
     private let full = NutritionValues(kcal: 1360, carbs: 150, protein: 80, fat: 40)
@@ -87,13 +87,26 @@ import Testing
         #expect(s.kcalEaten == nil && s.figure == "–" && s.spoken.hasPrefix("Calories not known yet."))
     }
 
-    @Test func calorieOnlyFoodKeepsKnownMacrosMarkedIncomplete() throws {
-        // A "200 kcal extra" entry has no macros; the rest of the day's protein must still show, as a lower bound.
+    @Test func calorieOnlyFoodMarksOnlyTheMacros() throws {
+        // A "200 kcal extra" entry has no macros; calories stay exact and the macros show as lower bounds.
         let s = try state(eaten: full, also: [NutritionValues(kcal: 200)], target: targets)
-        #expect(s.kcalEaten == 1560 && s.protein == 80 && s.carbs == 150 && s.fat == 40 && s.incomplete == true)
+        #expect(s.kcalEaten == 1560 && s.figure == "440" && s.protein == 80)
+        #expect(s.isPartial("protein") && s.isPartial("carbs") && s.isPartial("fat") && !s.isPartial("kcal"))
         #expect(State.macroAmount(s.protein, s.proteinTarget, partial: true) == "80+/120g")
         #expect(s.spoken == "440 calories left. Protein at least 80 of 120 grams. Carbs at least 150 of 200 grams. Fat at least 40 of 60 grams.")
-        #expect(try state(eaten: full, target: targets).incomplete != true)
+        #expect(try state(eaten: full, target: targets).partial?.isEmpty != false)
+    }
+
+    @Test func foodWithoutCaloriesMarksTheHeadline() throws {
+        // Unknown calories can only add intake: fewer left, more over or eaten.
+        let shake = NutritionValues(protein: 5)
+        let left = try state(eaten: full, also: [shake], target: targets)
+        #expect(left.figure == "≤640" && left.compact == "≤640" && left.word == "left" && !left.isPartial("protein"))
+        #expect(left.spoken == "At most 640 calories left. Protein 85 of 120 grams. Carbs at least 150 of 200 grams. Fat at least 40 of 60 grams.")
+        let over = try state(eaten: NutritionValues(kcal: 2300, carbs: 0, protein: 0, fat: 0), also: [shake], target: targets)
+        #expect(over.figure == "300+" && over.compact == "300+ over" && over.spoken.hasPrefix("At least 300 calories over."))
+        let eaten = try state(eaten: full, also: [shake], target: nil)
+        #expect(eaten.figure == "1,360+" && eaten.spoken.hasPrefix("At least 1,360 calories eaten."))
     }
 
     @Test func onlyActiveOrStaleActivitiesCountAsRunning() {
