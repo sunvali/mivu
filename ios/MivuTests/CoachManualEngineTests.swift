@@ -243,7 +243,7 @@ private actor RevisionCoachReplies {
         let staleDelete = try call("delete_meal", ["meal_id": meal.id.uuidString, "expected_revision": 999_999])
         let retrieve = try call("get_meal", ["meal_id": meal.id.uuidString])
         let replies = ManualCoachReplies([result([retrieve]), result([edit, staleDelete])])
-        await #expect(throws: DiaryError.staleRevision) {
+        await #expect(throws: CoachError.limitExceeded) {
             try await CoachEngine(store: store, infer: { try await replies.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }
         let after = try await store.snapshotForExport()
@@ -258,9 +258,8 @@ private actor RevisionCoachReplies {
         let goal = try call("set_goals", ["effective_local_date": "2027-01-15",
             "targets": [["nutrient": "kcal", "value": 2000]]])
         let replies = RevisionCoachReplies(goal: goal, stale: true)
-        await #expect(throws: DiaryError.staleRevision) {
-            try await CoachEngine(store: store, infer: { try await replies.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
-        }
+        let completed = try await CoachEngine(store: store, infer: { try await replies.next($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.receipts.isEmpty)
         let after = try await store.snapshotForExport()
         #expect(after.goals == before.goals && after.profile == before.profile)
         #expect(after.days.isEmpty && after.coachTurns[0].receipts.isEmpty)

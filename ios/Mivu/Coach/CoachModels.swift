@@ -116,6 +116,8 @@ struct CoachTurn: Codable, Equatable, Sendable, Identifiable {
     var question: CoachQuestion? = nil
     /// True when saved food was kept but the rest of the request failed.
     var incomplete: Bool? = nil
+    /// Error case or domain/code from the last failed run; never user or model text.
+    var failureReason: String? = nil
 }
 
 struct CoachCaptureContext: Codable, Equatable, Sendable {

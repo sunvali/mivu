@@ -451,7 +451,8 @@ func validateCoachTurnFields(_ turn: CoachTurn) throws -> TimeZone {
           turn.assistantText == nil || turn.assistantText!.utf8.count <= 65_536,
           turn.receipts.count <= 16, Set(turn.receipts.map(\.operationKey)).count == turn.receipts.count,
           turn.pendingMealRevision == nil || turn.pendingMealRevision! >= 0,
-          turn.submissionManifest?.reply?.isValid != false else { throw DiaryError.invalidData }
+          turn.submissionManifest?.reply?.isValid != false,
+          turn.failureReason == nil || turn.failureReason!.utf8.count <= 200 else { throw DiaryError.invalidData }
     return zone
 }
 

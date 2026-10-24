@@ -81,11 +81,11 @@ import Testing
             try await store.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 1, expectedProfileID: f.owner)
             try f.clearApplications()
         })
-        await #expect(throws: DiaryError.staleRevision) { try await f.run(store, accepted.id, transport) }
+        #expect(try await f.run(store, accepted.id, transport).receipts.isEmpty)
         let meal = try await store.meal(id: f.mealID, expectedProfileID: f.owner)
         #expect(meal.items[0].quantity == 5 && meal.revision == 2)
         let exchange = try f.database.coachExchangeSummary(turnID: accepted.id, expectedProfileID: f.owner)
-        #expect(exchange.receipts.isEmpty && exchange.assistantText == nil)
+        #expect(exchange.receipts.isEmpty)
         #expect(try f.applications() == 0)
         try await transport.assertGroundedCorrection(date: "2027-01-15", meal: f.mealID, item: meal.items[0].id, quantity: 3)
         f.assertOrdinaryReads()

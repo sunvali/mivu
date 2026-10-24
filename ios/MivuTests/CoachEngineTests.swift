@@ -6,9 +6,10 @@ import Testing
 private actor CoachFixture {
     var results: [CoachInferenceResult]
     var calls = 0
+    var inputs: [[CoachInferenceInput]] = []
     init(_ results: [CoachInferenceResult]) { self.results = results }
     func infer(_ input: [CoachInferenceInput], _ tools: Data) throws -> CoachInferenceResult {
-        calls += 1
+        calls += 1; inputs.append(input)
         guard !results.isEmpty else { throw CoachError.limitExceeded }
         return results.removeFirst()
     }
@@ -154,7 +155,7 @@ private actor CoachInputFixture {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let replies = CoachFixture([result([call("log_food", logArgs), call("log_food", logArgs, id: "other")])])
         let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
-        await #expect(throws: CoachError.invalidArguments) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+        await #expect(throws: CoachError.limitExceeded) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport().meals.isEmpty)
         #expect(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).receipts.isEmpty)
     }
@@ -163,7 +164,7 @@ private actor CoachInputFixture {
         let arguments = logArgs.replacingOccurrences(of: "\"kcal\":140", with: "\"verified\":true,\"kcal\":140")
         let replies = CoachFixture([result([call("log_food", arguments)])])
         let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
-        await #expect(throws: CoachError.invalidArguments) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+        await #expect(throws: CoachError.limitExceeded) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport().meals.isEmpty)
     }
     @Test func readOnlyInventedSaveClaimRequiresClarification() async throws {
@@ -277,7 +278,7 @@ private actor CoachInputFixture {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let before = try await store.snapshotForExport()
         let replies = CoachFixture([result([call("log_food", logArgs), call("ask_clarification", "{\"kind\":\"portion\"}", id: "question")])])
-        await #expect(throws: CoachError.invalidArguments) {
+        await #expect(throws: CoachError.limitExceeded) {
             try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         }
         let after = try await store.snapshotForExport()
@@ -374,7 +375,7 @@ private actor CoachInputFixture {
         let args = "{\"meal_id\":\"\(UUID().uuidString)\",\"item_id\":\"\(UUID().uuidString)\",\"expected_revision\":1,\"quantity\":0.5}"
         let replies = CoachFixture([result([call("log_food", logArgs), call("correct_item", args, id: "foreign")])])
         let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
-        await #expect(throws: CoachError.invalidArguments) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+        await #expect(throws: CoachError.limitExceeded) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport().meals.isEmpty)
     }
     @Test func oversizedEvidenceIDFailsInsteadOfIntegerConversionTrap() async throws {
@@ -382,7 +383,7 @@ private actor CoachInputFixture {
         let args = "{\"target_local_date\":\"2027-01-14\",\"items\":[{\"name\":\"Food\",\"quantity\":30,\"unit\":\"g\",\"evidence_id\":9223372036854775808}]}"
         let replies = CoachFixture([result([call("log_food", args)])])
         let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
-        await #expect(throws: CoachError.invalidArguments) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+        await #expect(throws: CoachError.limitExceeded) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport().meals.isEmpty)
     }
 
@@ -452,6 +453,54 @@ private actor CoachInputFixture {
         #expect(captured.text == turn.text)
         #expect(captured.assistantText == nil)
         #expect(try await store.snapshotForExport().meals.isEmpty)
+    }
+
+    @Test(arguments: [(ResponsesClient.Failure.responseFailed, "Mivu.ResponsesClient.Failure.responseFailed"),
+                      (CoachError.invalidArguments, "Mivu.CoachError.invalidArguments"),
+                      (URLError(.badServerResponse), "NSURLErrorDomain(-1011)")] as [(any Error, String)])
+    func failedTurnKeepsOnlyItsFailureCode(_ error: any Error, _ reason: String) async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let failing = CoachEngine(store: store, infer: { _, _ in throw error })
+        await #expect(throws: (any Error).self) { try await failing.run(turnID: turn.id, expectedProfileID: profile.id) }
+        #expect(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).failureReason == reason)
+        let retry = CoachEngine(store: store, infer: { _, _ in CoachInferenceResult(model: "fixture", text: "Noted.", calls: [], outputItems: []) })
+        _ = try await retry.run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).failureReason == nil)
+    }
+
+    @Test func rejectedCallIsReturnedToModelToCorrect() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let invalid = logArgs.replacingOccurrences(of: "\"kcal\":140", with: "\"verified\":true,\"kcal\":140")
+        let replies = CoachFixture([result([call("log_food", invalid)]), result([call("log_food", logArgs, id: "fixed")]), result(text: "Done")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.state == .completed && completed.receipts.count == 1)
+        #expect(try await store.snapshotForExport().meals.count == 1)
+        let feedback = await replies.inputs[1].compactMap { item -> String? in
+            if case .functionOutput("call1", let output) = item { return output }; return nil
+        }
+        #expect(feedback.count == 1 && feedback[0].contains("\"saved\":false"))
+    }
+
+    @Test func modelOutputFailureRetriesOnceWithoutShowingIt() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result(text: "Nutrition remains uncertain.")])
+        let attempts = CoachFixture([])
+        let engine = CoachEngine(store: store, infer: { input, tools in
+            if await attempts.calls == 0 { _ = try? await attempts.infer(input, tools); throw ResponsesClient.Failure.malformedResponse }
+            return try await replies.infer(input, tools)
+        })
+        let completed = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.state == .completed)
+        #expect(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).failureReason == nil)
+    }
+
+    @Test(arguments: [(ResponsesClient.Failure.responseFailed, 2), (ResponsesClient.Failure.unauthorized, 1)] as [(any Error, Int)])
+    func onlyModelOutputFailuresRetryAndOnlyOnce(_ error: any Error, _ expectedCalls: Int) async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let attempts = CoachFixture([])
+        let engine = CoachEngine(store: store, infer: { input, tools in _ = try? await attempts.infer(input, tools); throw error })
+        await #expect(throws: (any Error).self) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+        #expect(await attempts.calls == expectedCalls)
     }
 
     @Test(arguments: [false, true]) func noToolInventedTotalsUseOnlyRecordedIntake(hasFood: Bool) async throws {
@@ -541,7 +590,7 @@ private actor CoachInputFixture {
     ]) func invalidProgressArgumentsNeverCommit(args: String) async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let replies = CoachFixture([result([call("log_weight", args)])])
-        await #expect(throws: CoachError.invalidArguments) { try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
+        await #expect(throws: CoachError.limitExceeded) { try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport().weights.isEmpty)
         #expect(try await store.snapshotForExport().coachTurns[0].assistantText == nil)
         #expect(try await store.snapshotForExport().coachTurns[0].receipts.isEmpty)
