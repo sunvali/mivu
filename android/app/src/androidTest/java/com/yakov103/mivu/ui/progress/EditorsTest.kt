@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -179,7 +180,7 @@ class EditorsTest {
 
     @Test fun outOfRangeWeightShowsTheIosLine() {
         profileID = TodayFixture.diary(context)
-        host { close -> WeightEditorScreen(WeightEditorViewModel(repo(), profileID!!, null, null), close) }
+        host { close -> WeightEditorScreen(remember { WeightEditorViewModel(repo(), profileID!!, null, null) }, close) }
         type("weightInput", "1200")
         compose.onNodeWithText("Enter a weight greater than 0 and no more than 1,000 kg.").assertIsDisplayed()
         compose.onNodeWithTag("saveWeight").assertIsNotEnabled()
@@ -267,7 +268,7 @@ class EditorsTest {
 
     @Test fun closeWithEditsAsksToDiscard() {
         profileID = TodayFixture.diary(context)
-        host { close -> WeightEditorScreen(WeightEditorViewModel(repo(), profileID!!, null, null), close) }
+        host { close -> WeightEditorScreen(remember { WeightEditorViewModel(repo(), profileID!!, null, null) }, close) }
         type("weightInput", "70")
         compose.onNodeWithTag("cancelWeight").performClick()
         compose.onNodeWithText("Discard this weight entry?").assertIsDisplayed()
