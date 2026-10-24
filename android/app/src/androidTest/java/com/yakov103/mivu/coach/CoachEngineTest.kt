@@ -168,6 +168,15 @@ class CoachEngineTest {
         assertEquals(CoachTurnState.waitingForNetwork, stored(t.id).state)
     }
 
+    @Test fun droppedConnectionIsTransient() {
+        // iOS URLError.networkConnectionLost; a refused certificate is not retried.
+        listOf(java.io.EOFException(), javax.net.ssl.SSLException("synthetic"), java.net.ProtocolException()).forEach {
+            assertTrue(CoachEngine.isTransient(it))
+        }
+        assertEquals(false, CoachEngine.isTransient(javax.net.ssl.SSLHandshakeException("synthetic")))
+        assertEquals(false, CoachEngine.isTransient(javax.net.ssl.SSLPeerUnverifiedException("synthetic")))
+    }
+
     @Test fun roundLimitStops() {
         val t = turn()
         val script = Script(*Array(8) { result(call("get_context", "{}", "context$it")) })

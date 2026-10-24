@@ -23,11 +23,11 @@ class ConnectionProofScreenTest {
     @get:Rule(order = 0) val intents = IntentsRule()
     @get:Rule(order = 1) val compose = createAndroidComposeRule<ConnectionProofActivity>()
 
-    private val buttons = listOf("Sign in", "List models", "Analyze text", "Analyze photo", "Force refresh", "Disconnect")
+    private val buttons = listOf("Sign in", "List models", "Analyze text", "Analyze photo", "Force refresh", "Run Coach turn", "Disconnect")
 
     @After fun stop() = ProofSession.cancelSignIn()
 
-    @Test fun sixButtonsAreLabelledAndTouchSized() {
+    @Test fun buttonsAreLabelledAndTouchSized() {
         buttons.forEach {
             compose.onNodeWithContentDescription(it).assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
         }

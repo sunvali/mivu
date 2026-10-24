@@ -56,6 +56,7 @@ class ConnectionProofActivity : ComponentActivity() {
                     picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
                 Row(ProofSession.FORCE_REFRESH) { ProofSession.forceRefresh(this@ConnectionProofActivity) }
+                Row(ProofSession.RUN_COACH) { ProofSession.runCoachTurn(this@ConnectionProofActivity) }
                 Row(ProofSession.DISCONNECT) { ProofSession.disconnect(this@ConnectionProofActivity) }
             }
         }

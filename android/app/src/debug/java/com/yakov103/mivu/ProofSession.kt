@@ -5,38 +5,36 @@ import android.net.Uri
 import androidx.compose.runtime.mutableStateMapOf
 import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.connection.AuthSession
-import com.yakov103.mivu.connection.CredentialStore
 import com.yakov103.mivu.connection.LoopbackCallback
 import com.yakov103.mivu.connection.OAuthAttempt
+import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.CoachCaptureContext
+import com.yakov103.mivu.diary.CoachSubmissionPayload
+import com.yakov103.mivu.diary.CoachTurnState
+import com.yakov103.mivu.diary.captureCoachSubmission
+import java.time.Instant
+import java.time.ZoneId
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 
 /** One outcome line per button. Text is fixed wording or an error class name, never a token, code or callback URL. */
 data class ProofResult(val ok: Boolean?, val text: String)
 
-/** Process-wide owner of the one AuthSession (its refresh scope is session-owned) and of every proof action. */
+/** Process-wide owner of every proof action; the AuthSession is the app's own, so refresh rotation has one owner. */
 object ProofSession {
     val results = mutableStateMapOf<String, ProofResult>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val client = ResponsesClient()
-    private var store: CredentialStore? = null
-    private var auth: AuthSession? = null
-    private var restored = false
-    private val restoreLock = Mutex()
     private var signInJob: Job? = null
     @Volatile private var live = false
 
-    private fun init(context: Context): Pair<CredentialStore, AuthSession> = synchronized(this) {
-        val s = store ?: CredentialStore(context.applicationContext).also { store = it }
-        s to (auth ?: AuthSession(s).also { auth = it })
-    }
+    private fun app(context: Context) = context.applicationContext as MivuApplication
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences("proof", Context.MODE_PRIVATE)
 
@@ -57,7 +55,8 @@ object ProofSession {
     }
 
     private suspend fun signInAttempt(context: Context, open: (Uri) -> Unit): String {
-        val (store, auth) = init(context)
+        val store = app(context).credentials
+        val auth = restored(context) // restore first, so a later restore cannot replace this sign-in
         val loop = LoopbackCallback()
         live = true
         try {
@@ -69,7 +68,6 @@ object ProofSession {
             val received = withTimeout(5 * 60_000L) { loop.await() }
             val code = attempt.consumeCallback(received)
             auth.establish(code, attempt.verifier, attempt.nonce, returning?.id)
-            restoreLock.withLock { restored = true }
             return "Signed in"
         } finally {
             loop.close()
@@ -113,16 +111,24 @@ object ProofSession {
         return "Model $model: ${text.take(200)}"
     }
 
-    private suspend fun restored(context: Context): AuthSession {
-        val (store, auth) = init(context)
-        restoreLock.withLock {
-            if (!restored) {
-                store.registrations().firstOrNull()?.let { auth.restore(it.id) }
-                restored = true
-            }
-        }
-        return auth
+    /** Captures one synthetic Coach turn in the selected diary and runs it through the app's worker and live inference. */
+    fun runCoachTurn(context: Context) = run(RUN_COACH) {
+        val app = app(context)
+        val ready = app.repository.bootstrapState.value as? Bootstrap.Ready ?: app.repository.bootstrap() as? Bootstrap.Ready
+            ?: error("no diary")
+        val db = app.repository.database(ready.profileID)
+        val h = db.head()
+        val turn = db.captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), COACH_TEXT, emptyList(),
+            CoachCaptureContext(Instant.now(), ZoneId.systemDefault().id, h.activeDayID, h.previousDayConfirmedAt,
+                h.activeConversationSegmentID)), h.revision)
+        app.drainCoach().join()
+        // State and receipt count only; the reply text stays in the diary.
+        val done = db.read { it.coachTurnWithoutPhotos(turn.id) } ?: error("turn missing")
+        check(done.state == CoachTurnState.completed) { "turn ${done.state.name}" }
+        "Turn completed; ${done.receipts.size} saved records"
     }
+
+    private suspend fun restored(context: Context): AuthSession = app(context).connection()
 
     private suspend fun token(context: Context) = restored(context).accessToken()
 
@@ -151,5 +157,7 @@ object ProofSession {
     const val ANALYZE_PHOTO = "Analyze photo"
     const val FORCE_REFRESH = "Force refresh"
     const val DISCONNECT = "Disconnect"
+    const val RUN_COACH = "Run Coach turn"
+    private const val COACH_TEXT = "Synthetic proof: I had two boiled eggs and a slice of toast for breakfast."
     private const val IN_FLIGHT = "signInInFlight"
 }

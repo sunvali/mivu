@@ -13,6 +13,7 @@ class MainActivity : ComponentActivity() {
         SampleMode.configure(intent)
         val app = application as MivuApplication
         app.drainSampleAnalysis()
+        app.watchNetworkForCoach()
         enableEdgeToEdge()
         setContent { MivuTheme { MivuApp(app.repository, onMealCaptured = { app.drainSampleAnalysis() }) } }
     }

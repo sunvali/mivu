@@ -347,6 +347,16 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         }
     }
 
+    /** iOS `nextPendingCoachTurn` (DiaryDatabaseCoachContext.swift:5): the oldest turn the worker may run; needsRetry waits for the person. */
+    fun nextPendingCoachTurn(): UUID? = immediate {
+        head() // owner check, as iOS domainRead
+        db.rawQuery("SELECT id FROM coach_turn WHERE json_extract(CAST(payload AS TEXT), '$.state') IN " +
+            "('captured','analyzing','waitingForNetwork','waitingForConnection') ORDER BY ordinal, id LIMIT 1", null).use {
+            if (!it.moveToFirst()) null
+            else runCatching { UUID.fromString(it.getString(0)) }.getOrElse { throw DiaryError.InvalidData("coach turn") }
+        }
+    }
+
     /** One meal photo's bytes, or null when the photo is gone. */
     fun photoBytes(mealID: UUID, photoID: UUID): ByteArray? = immediate {
         head() // owner check
