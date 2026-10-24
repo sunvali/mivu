@@ -408,16 +408,17 @@ struct CoachView: View {
             if showsStarters { starters }
             if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
-            HStack(alignment: .bottom, spacing: 8) {
-                // Pip stands on the left of the field's flat top edge, never on the round button.
-                VStack(alignment: .leading, spacing: 0) {
-                    companionStrip
+            // Pip stands on the left of the field's flat top edge, never on the round button; his bubble and chip
+            // may run over the button's column so short lines do not wrap.
+            VStack(alignment: .leading, spacing: 0) {
+                companionStrip
+                HStack(alignment: .bottom, spacing: 8) {
                     composerInput
+                    // One round action: the mic while the draft is empty, Send once there is something to send.
+                    Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
                 }
-                // One round action: the mic while the draft is empty, Send once there is something to send.
-                Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
+                .animation(reduceMotion ? nil : .snappy, value: showsSend)
             }
-            .animation(reduceMotion ? nil : .snappy, value: showsSend)
             if let note = voice.note {
                 Text(note).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachVoiceNote")
             }
