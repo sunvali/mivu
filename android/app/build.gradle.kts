@@ -38,8 +38,9 @@ android {
         }
     }
     buildFeatures { compose = true }
-    // Synthetic SSE fixtures live at the repo root, shared with other platforms.
+    // Synthetic SSE and archive fixtures live at the repo root, shared with other platforms.
     sourceSets.getByName("test").resources.srcDir("../../fixtures")
+    sourceSets.getByName("androidTest").resources.srcDir("../../fixtures")
 }
 
 // Release variants take the ledger-derived code; debug keeps 1.
