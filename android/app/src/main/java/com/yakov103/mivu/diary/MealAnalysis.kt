@@ -81,3 +81,11 @@ fun DiaryDatabase.deleteMeal(mealID: UUID, expectedRevision: Long) = transaction
     tx.mealRecord(mealID)
     tx.delete(DiaryDatabase.Tombstone.meal, mealID)
 }
+
+/** iOS `setSubmissionState`: a cancelled submission stays cancelled (NotFound). */
+fun DiaryDatabase.setSubmissionState(mealID: UUID, submissionID: UUID, state: SubmissionState) = atHead { tx ->
+    val meal = tx.mealRecord(mealID)
+    val sub = meal.submission(submissionID)
+    if (sub.state == SubmissionState.cancelled) throw DiaryError.NotFound
+    tx.save(meal.with(sub.copy(state = state)))
+}

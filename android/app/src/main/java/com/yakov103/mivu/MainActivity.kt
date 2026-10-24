@@ -10,6 +10,8 @@ import com.yakov103.mivu.ui.theme.MivuTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SampleMode.configure(intent)
+        (application as MivuApplication).drainSampleAnalysis()
         enableEdgeToEdge()
         setContent { MivuTheme { MivuApp((application as MivuApplication).repository) } }
     }
