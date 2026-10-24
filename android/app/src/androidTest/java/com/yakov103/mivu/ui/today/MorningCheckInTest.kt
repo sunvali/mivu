@@ -1,6 +1,19 @@
 package com.yakov103.mivu.ui.today
 
+import android.Manifest
+import android.app.Application
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.ParcelFileDescriptor
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import com.yakov103.mivu.day.MorningReminder
+import com.yakov103.mivu.day.MorningReminderReceiver
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
@@ -228,6 +241,49 @@ class MorningCheckInTest {
         compose.onNode(hasText("Today") and isSelectable()).performClick()
         waitForTag("todaySummary")
         assertEquals(0, compose.onAllNodes(hasTestTag("morningCheckIn"), useUnmergedTree = true).fetchSemanticsNodes().size)
+    }
+
+    @Test fun appLaunchRebooksTheReminder() {
+        // A force-stop clears alarms without any broadcast; the next launch must book it again.
+        val prefs = DiaryRepository.preferences(context)
+        val alarm = { PendingIntent.getBroadcast(context, MorningReminder.REQUEST,
+            Intent(context, MorningReminderReceiver::class.java).setAction(MorningReminder.ACTION),
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE) }
+        try {
+            prefs.edit(commit = true) { putBoolean(MorningReminder.ENABLED, true) }
+            MorningReminder.cancel(context)
+            assertNull(alarm())
+            InstrumentationRegistry.getInstrumentation().callApplicationOnCreate(context as Application)
+            assertNotNull(alarm())
+        } finally {
+            MorningReminder.cancel(context)
+        }
+    }
+
+    @Test fun deniedNotificationPermissionExplainsTheOffSwitch() {
+        val shell = { command: String ->
+            InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+                .let { ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().readText() }
+        }
+        assumeTrue("permission already granted on this install",
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+        compose.setContent { MivuTheme { SettingsScreen(ConnectionState(), onOpenConnection = {}, onBack = {}) } }
+        val denied = "Notifications are off for Mivu. You can allow them in Android Settings."
+        repeat(2) {
+            compose.onNodeWithTag("morningReminder").performClick()
+            // The system dialog: Back refuses it. A repeat refusal may skip the dialog; it must still explain.
+            var shown = false
+            compose.waitUntil(10_000) {
+                shown = shell("dumpsys window").lines().any { "mCurrentFocus" in it && "permissioncontroller" in it }
+                // While the dialog has focus the screen has no Compose hierarchy to read.
+                shown || runCatching { exists(denied) }.getOrDefault(false)
+            }
+            if (shown) shell("input keyevent 4")
+            waitForText(denied)
+            compose.onNodeWithTag("morningReminder").assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState,
+                ToggleableState.Off))
+            assertEquals(false, DiaryRepository.preferences(context).getBoolean(MorningReminder.ENABLED, false))
+        }
     }
 
     @Test fun dayStartsAtChangesTheFooterAndCutoff() {

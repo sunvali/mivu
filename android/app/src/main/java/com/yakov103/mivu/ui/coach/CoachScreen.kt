@@ -33,6 +33,8 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -103,6 +105,9 @@ fun CoachScreen(
     val atLatest by remember { derivedStateOf { listState.atLatest() } }
     val rows = state.exchanges.asReversed()
     val focusRequester = remember { FocusRequester() }
+    // A failed weigh-in save from the bubble, as Today's snackbar.
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(checkIn) { checkIn?.messages?.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
     val actions = remember(model, onOpenMeal, onSeeToday, onSeeProgress, onOpenConnection, onOpenSettings) {
         CoachRowActions(model::undo, onOpenMeal, { model.retry(it) }, { id, previous -> model.chooseDay(id, previous) }, model::answer,
             model::finishRest, onSeeToday, onSeeProgress, model::turnPhoto, model::mealPhoto,
@@ -172,6 +177,7 @@ fun CoachScreen(
                 if (state.later != EdgeState.Exhausted) model.jumpToLatest().join()
                 if (ValueAnimator.areAnimatorsEnabled()) listState.animateScrollToItem(0) else listState.scrollToItem(0)
             }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp))
         }
         // Failures show in the composer caption beside Pip.
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,

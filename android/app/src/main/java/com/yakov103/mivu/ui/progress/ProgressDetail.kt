@@ -400,7 +400,7 @@ private fun WeightRow(entry: WeightEntry, date: String, onEdit: () -> Unit, onAs
     }
     if (confirming) AlertDialog(
         onDismissRequest = { confirming = false },
-        title = { Text("Delete the weight on $date?") },
+        title = { Text("Delete weight on $date?") },
         text = { Text("This removes only this measurement. Meals, workouts and other weights are preserved.") },
         confirmButton = {
             TextButton({ confirming = false; onDelete() }, Modifier.heightIn(min = 48.dp)) { Text("Delete weight", color = MaterialTheme.colorScheme.error) }

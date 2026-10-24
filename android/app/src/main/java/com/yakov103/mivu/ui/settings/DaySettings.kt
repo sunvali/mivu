@@ -66,13 +66,17 @@ internal fun DaySettings() {
     }
 
     fun setReminder(on: Boolean) {
-        denied = on && !NotificationManagerCompat.from(context).areNotificationsEnabled()
+        if (on) denied = !NotificationManagerCompat.from(context).areNotificationsEnabled()
         reminder = on && !denied
         prefs.edit { putBoolean(MorningReminder.ENABLED, reminder) }
         if (reminder) MorningReminder.schedule(context) else MorningReminder.cancel(context)
     }
     // Permission is asked only here, when the person turns the reminder on.
-    val permission = rememberLauncherForActivityResult(RequestPermission()) { setReminder(it) }
+    val permission = rememberLauncherForActivityResult(RequestPermission()) { granted ->
+        // As iOS: a refusal keeps the switch off and says why, so a repeat refusal is not silent.
+        denied = !granted
+        setReminder(granted)
+    }
     val turnOn = {
         if (Build.VERSION.SDK_INT >= 33 &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED

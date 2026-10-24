@@ -18,6 +18,7 @@ import com.yakov103.mivu.connection.AuthSession
 import com.yakov103.mivu.connection.ChatGPTConnection
 import com.yakov103.mivu.connection.CredentialStore
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.day.MorningReminder
 import com.yakov103.mivu.diary.DayCutoff
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.rollOverDay
@@ -69,6 +70,8 @@ class MivuApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         DayCutoff.load(DiaryRepository.preferences(this))
+        // A force-stop clears alarms with no broadcast: every launch rebooks the reminder (or cancels it when off).
+        MorningReminder.schedule(this)
         restored = scope.launch(Dispatchers.IO) { chatGPT.restore() }
         // As iOS, turns waiting for a connection run once the connection can infer.
         scope.launch { chatGPT.state.map { it.canInfer }.distinctUntilChanged().collect { if (it) drainCoach(retryWaiting = true) } }
