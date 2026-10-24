@@ -62,6 +62,8 @@ import com.yakov103.mivu.R
 import com.yakov103.mivu.ui.coach.CoachHistoryWindow.Direction
 import com.yakov103.mivu.ui.coach.CoachHistoryWindow.EdgeState
 import com.yakov103.mivu.diary.CoachReply
+import com.yakov103.mivu.ui.today.MorningCheckInCard
+import com.yakov103.mivu.ui.today.TodayViewModel
 import java.util.UUID
 import kotlinx.coroutines.launch
 
@@ -89,6 +91,8 @@ fun CoachScreen(
     /** A receipt's handoff links: the Coach AI screen and Settings. */
     onOpenConnection: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    /** Today's model, for the morning weigh-in bubble; dismissal and skip are shared with Today. */
+    checkIn: TodayViewModel? = null,
 ) {
     val state by model.timeline.collectAsStateWithLifecycle()
     val activity by model.activity.collectAsStateWithLifecycle()
@@ -172,8 +176,18 @@ fun CoachScreen(
         // Failures show in the composer caption beside Pip.
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
             onOpenCamera = onOpenCamera, hasCamera = hasCamera, modifier = Modifier.imePadding(),
-            connection = connection, onAgree = onAgree, onConnect = onConnect)
+            connection = connection, onAgree = onAgree, onConnect = onConnect,
+            bubble = checkIn?.let { today -> { WeighInBubble(today) { model.updateText("My weight this morning is "); focusRequester.requestFocus() } } })
     }
+}
+
+/** iOS CoachView's compact MorningCheckInCard: asked only while today has no weight and was not skipped. */
+@Composable
+private fun WeighInBubble(today: TodayViewModel, onTellCoach: () -> Unit) {
+    val morning = today.state.collectAsStateWithLifecycle().value?.morning ?: return
+    val unit by today.weightUnit.collectAsStateWithLifecycle()
+    MorningCheckInCard(morning, unit, today::setWeightUnit, today::saveMorningWeight, today::skipMorningWeight, today::dismissMorning,
+        compact = true, onTellCoach = onTellCoach)
 }
 
 /** iOS openQuote: a message or day seeks the conversation; a meal or food opens the meal. */

@@ -128,6 +128,8 @@ fun CoachComposer(
     connection: ConnectionState = ConnectionState(),
     onAgree: () -> Unit = {},
     onConnect: () -> Unit = {},
+    /** The morning weigh-in bubble above Pip; hidden while the person types or speaks. */
+    bubble: (@Composable () -> Unit)? = null,
 ) {
     val draft by model.draft.collectAsStateWithLifecycle()
     val sending by model.sending.collectAsStateWithLifecycle()
@@ -160,6 +162,7 @@ fun CoachComposer(
     }
     val inset = Modifier.padding(horizontal = 16.dp)
     Column(modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (bubble != null && !focused && phase == CoachVoiceInput.Phase.Idle) Box(inset) { bubble() }
         // Each starter fills the draft for review; nothing is sent until Send.
         if (showStarters && !draft.canSend && !focused && phase == CoachVoiceInput.Phase.Idle) Row(
             // Scrolls under the side margins, so the last chip reads as more, not as clipped.

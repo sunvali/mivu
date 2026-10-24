@@ -380,6 +380,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 )
             }
             composable<Route.Coach> {
+                // The weigh-in bubble reads the same day and preferences as Today's check-in.
+                val checkIn = viewModel(key = "checkIn-$profileID") { TodayViewModel(repository, profileID, SampleMode.enabled) }
                 CoachScreen(
                     coach,
                     onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
@@ -393,6 +395,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onConnect = connect,
                     onOpenConnection = { navController.navigate(Route.Connection) },
                     onOpenSettings = { navController.navigate(Route.Settings) },
+                    checkIn = checkIn,
                 )
             }
             composable<Route.CoachHistory> {
@@ -405,7 +408,9 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onClose = { navController.popBackStack() })
             }
             composable<Route.Settings> {
+                // shortcut: "Redo setup with Pip" and "Backup & export" do nothing until Tasks 6 and 7 add their screens.
                 SettingsScreen(connectionState, onOpenConnection = { navController.navigate(Route.Connection) },
+                    onOpenGoals = { navController.navigate(Route.Goals) },
                     onBack = { navController.popBackStack() })
             }
             composable<Route.Connection> {

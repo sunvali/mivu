@@ -32,7 +32,8 @@ class DiaryRepository(
     private val create: (Context, DiaryProfile) -> DiaryDatabase = DiaryDatabase::create,
 ) {
     private val context = context.applicationContext
-    private val preferences = preferences(context)
+    /** App preferences ([preferences]): the selection, the day cutoff and the morning check-in state. */
+    val preferences: SharedPreferences = preferences(context)
     private val databases = mutableMapOf<UUID, DiaryDatabase>()
     private val bootstrapLock = Mutex()
     private val _bootstrapState = MutableStateFlow<Bootstrap?>(null)

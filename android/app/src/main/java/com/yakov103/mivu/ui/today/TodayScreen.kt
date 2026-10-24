@@ -81,6 +81,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.pip.CompanionContext
+import com.yakov103.mivu.pip.CompanionEvent
+import kotlinx.coroutines.flow.Flow
 import com.yakov103.mivu.pip.CompanionOutput
 import com.yakov103.mivu.pip.CompanionPresentation
 import com.yakov103.mivu.pip.CompanionRuntime
@@ -99,7 +101,7 @@ import kotlin.random.Random
 private val Gutter = 16.dp
 private val CardShape = RoundedCornerShape(24.dp)
 
-/** Port of iOS TodayView in Material 3 Expressive direction B. The morning check-in arrives later in milestone 6. */
+/** Port of iOS TodayView in Material 3 Expressive direction B, with the morning check-in above the summary. */
 @Composable
 fun TodayScreen(
     viewModel: TodayViewModel,
@@ -115,7 +117,8 @@ fun TodayScreen(
     val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
     val state = viewModel.state.collectAsStateWithLifecycle().value
         ?: return Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { if (loadFailed) LoadFailure(viewModel::retry) }
-    val pip = rememberTodayPip(viewModel.profileID)
+    val pip = rememberTodayPip(viewModel.profileID, viewModel.companionEvents)
+    val unit by viewModel.weightUnit.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
     // The receipt and a read failure are inserted above the summary: bring them into view.
     LaunchedEffect(state.savedReceipt != null, loadFailed) { if (state.savedReceipt != null || loadFailed) list.animateScrollToItem(0) }
@@ -131,6 +134,13 @@ fun TodayScreen(
                 if (state.sampleMode) item(key = "sample") { SampleBanner() }
                 state.savedReceipt?.let { id ->
                     item(key = "receipt") { SavedReceipt(state.lateReceipt, onOpenMeal?.let { { it(id) } }) { viewModel.moveToCalendarDay(id) } }
+                }
+                // Inserted after a rollover, removed on the first meal or Close: the list fades it and slides the rest.
+                state.morning?.let { morning ->
+                    item(key = "morning") {
+                        MorningCheckInCard(morning, unit, viewModel::setWeightUnit, viewModel::saveMorningWeight, viewModel::skipMorningWeight,
+                            viewModel::dismissMorning, Modifier.animateItem())
+                    }
                 }
                 item(key = "summary") { SummaryCard(state, viewModel::startNewDay, pip, onEditGoals) }
                 item(key = "mealsHeader") {
@@ -256,10 +266,10 @@ private class TodayPip(val output: CompanionOutput, val runtime: CompanionRuntim
 
 /**
  * Today shows resting, a greeting, idle beats and tap/pat; its context has nothing typing, processing or failing.
- * Today's saved, first meal, day complete, welcome back and reviewed moments arrive in milestone 7.
+ * The morning weigh-in plays Saved; Today's first meal, day complete, welcome back and reviewed moments arrive in milestone 7.
  */
 @Composable
-private fun rememberTodayPip(profileID: UUID): TodayPip {
+private fun rememberTodayPip(profileID: UUID, events: Flow<CompanionEvent>): TodayPip {
     val context = LocalContext.current
     val assets = produceState<Pair<PipRigScene, PipGestureLibrary>?>(null) {
         value = runCatching { PipAssets.load(context) }.getOrNull() // a missing rig keeps the still image
@@ -271,6 +281,8 @@ private fun rememberTodayPip(profileID: UUID): TodayPip {
     }
     val playback = rememberMotionPlayback()
     var refresh by remember { mutableIntStateOf(0) }
+    // The morning weigh-in's saved nod.
+    LaunchedEffect(presentation, events) { events.collect { presentation.receive(it); refresh++ } }
     val output = remember(presentation, playback, refresh) {
         presentation.resolve(CompanionContext(CompanionSurface.Today, isTyping = false, isProcessing = false, needsRecovery = false, playback = playback))
     }

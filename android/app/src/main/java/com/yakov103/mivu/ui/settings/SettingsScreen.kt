@@ -3,6 +3,7 @@ package com.yakov103.mivu.ui.settings
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,10 +61,17 @@ import com.yakov103.mivu.connection.ConnectionNotice
 import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.ui.today.WhiteCard
 
-/** iOS `SettingsView`, reduced to the rows Android can back: the Coach AI connection and Support. */
+/** iOS `SettingsView`, reduced to the rows Android can back: Your day, Setup (goals, setup with Pip, backup, Coach AI) and Support. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(state: ConnectionState, onOpenConnection: () -> Unit, onBack: () -> Unit) {
+fun SettingsScreen(
+    state: ConnectionState,
+    onOpenConnection: () -> Unit,
+    onBack: () -> Unit,
+    onOpenGoals: () -> Unit = {},
+    onRedoSetup: () -> Unit = {},
+    onOpenBackup: () -> Unit = {},
+) {
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val uri = LocalUriHandler.current
     Scaffold(
@@ -82,7 +90,15 @@ fun SettingsScreen(state: ConnectionState, onOpenConnection: () -> Unit, onBack:
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            DaySettings()
             GroupHeader("Setup")
+            WhiteCard {
+                Column {
+                    SettingsRow("Goals", R.drawable.ic_target, onClick = onOpenGoals)
+                    SettingsRow("Redo setup with Pip", R.drawable.ic_pets, onClick = onRedoSetup)
+                    SettingsRow("Backup & export", R.drawable.ic_ios_share, onClick = onOpenBackup)
+                }
+            }
             WhiteCard(onClick = onOpenConnection) {
                 SettingsRow("Coach AI", R.drawable.ic_auto_awesome) {
                     Text(if (state.account == AccountState.connected) "ChatGPT" else "Connect ChatGPT",
@@ -200,21 +216,24 @@ private fun BackButton(onBack: () -> Unit) {
 }
 
 @Composable
-private fun GroupHeader(text: String) {
+internal fun GroupHeader(text: String) {
     Text(text, Modifier.padding(start = 4.dp, top = 8.dp).semantics { heading() },
         style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
 }
 
 @Composable
-private fun Footnote(text: String) {
+internal fun Footnote(text: String) {
     Text(text, Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
-private fun SettingsRow(title: String, @DrawableRes icon: Int, bold: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
+internal fun SettingsRow(
+    title: String, @DrawableRes icon: Int, bold: Boolean = false, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     ListItem(
         headlineContent = { Text(title, fontWeight = if (bold) FontWeight.SemiBold else null) },
-        modifier = Modifier.heightIn(min = 56.dp),
+        modifier = modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).heightIn(min = 56.dp),
         leadingContent = {
             Box(Modifier.size(40.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) {
                 Icon(painterResource(icon), contentDescription = null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
