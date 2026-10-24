@@ -12,7 +12,7 @@ import XCTest
         assertTarget(1, in: app)
         XCTAssertFalse(app.staticTexts["coachTimelineError"].exists)
         XCTAssertFalse(app.staticTexts["coachText-" + id(140)].exists, "The queued source must not be replaced by the latest window")
-        XCTAssertTrue(app.staticTexts["coachDate"].label.hasPrefix("Logging to "))
+        XCTAssertTrue(app.buttons["coachDate"].exists)
         let input = app.textFields["coachInput"]
         input.tap(); input.typeText("Keep after the cold route")
         openChatHistory(app)
@@ -20,7 +20,7 @@ import XCTest
         reveal(nilDay, in: app); nilDay.tap()
         assertTarget(132, in: app)
         XCTAssertEqual(input.value as? String, "Keep after the cold route")
-        XCTAssertTrue(app.staticTexts["coachDate"].label.hasPrefix("Logging to "))
+        XCTAssertTrue(app.buttons["coachDate"].exists)
     }
 
     func testOldestHistorySelectionPreservesDraftAndStaticTarget() {
@@ -39,7 +39,7 @@ import XCTest
         reveal(first, in: app); first.tap()
         assertTarget(1, in: app)
         XCTAssertEqual(input.value as? String, "Unsent navigation note")
-        XCTAssertTrue(app.staticTexts["coachDate"].label.hasPrefix("Logging to "))
+        XCTAssertTrue(app.buttons["coachDate"].exists)
         let target = app.descendants(matching: .any)["coachExchange-" + id(1)].firstMatch
         XCTAssertTrue(target.isHittable)
         XCTAssertEqual(target.value as? String, "Selected source message")

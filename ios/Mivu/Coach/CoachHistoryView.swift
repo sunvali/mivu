@@ -98,7 +98,7 @@ struct CoachHistoryView: View {
             List {
                 if let date = history.dateFilter {
                     Section {
-                        LabeledContent("Selected date", value: date)
+                        LabeledContent("Selected date", value: dayTitle(date, zone: TimeZone.current.identifier))
                         Button("Show all chat history") { Task { await history.show() } }
                             .frame(minHeight: 44).accessibilityIdentifier("coachHistoryShowAll")
                     }
@@ -110,7 +110,7 @@ struct CoachHistoryView: View {
                     ProgressView("Loading chat history")
                 } else if history.page?.segments.isEmpty == true {
                     ContentUnavailableView(history.dateFilter == nil ? "No saved chat" : "No chat for this date", systemImage: "bubble.left", description:
-                        Text(history.dateFilter.map { "No saved conversation is labeled \($0)." } ?? "Your saved conversations will appear here."))
+                        Text(history.dateFilter.map { "No saved conversation is labeled \(dayTitle($0, zone: TimeZone.current.identifier))." } ?? "Your saved conversations will appear here."))
                         .accessibilityIdentifier("coachHistoryEmpty")
                 }
                 ForEach(history.page?.segments ?? []) { row in
@@ -119,7 +119,7 @@ struct CoachHistoryView: View {
                         if open(target, expectedSelection: history.origin.selection) { dismiss() }
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(row.displayLocalDate).font(.headline)
+                            Text(dayTitle(row.displayLocalDate, zone: row.displayTimeZoneID)).font(.headline)
                             Text(captureLabel(row)).font(.subheadline).foregroundStyle(Color.diarySecondary)
                             Text(row.preview).font(.body).lineLimit(2).foregroundStyle(Color.diaryText)
                         }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading).padding(.vertical, 4)
@@ -166,11 +166,13 @@ struct CoachHistoryView: View {
         }
     }
 
+    private func dayTitle(_ localDate: String, zone: String) -> String {
+        CoachReplyLines.dayLabel(localDate, today: ProgressAnalytics.dateLabel(Date(), zone: zone)).capitalized(with: .current)
+    }
     private func captureLabel(_ row: CoachSegmentSummary) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.timeZone = TimeZone(identifier: row.displayTimeZoneID) ?? .gmt
-        formatter.dateFormat = "d MMM yyyy, HH:mm:ss"
-        return formatter.string(from: row.firstCapturedAt) + " · " + row.displayTimeZoneID
+        let zone = TimeZone(identifier: row.displayTimeZoneID) ?? .gmt
+        let time = row.firstCapturedAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: zone))
+        // The zone only matters when the chat happened somewhere other than here.
+        return zone == .current ? time : time + " · " + (zone.localizedName(for: .shortGeneric, locale: .current) ?? zone.identifier)
     }
 }
