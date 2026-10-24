@@ -174,6 +174,31 @@ class CoachComposerTest {
         assertEquals(1, db().coachTurn(turns().single().id)!!.photos.size)
     }
 
+    @Test fun committedSendWithClearedCacheCountsAsSent() {
+        launch()
+        val picked = png("synthetic-cleared.png")
+        try {
+            compose.runOnUiThread { model.importPhotos(listOf(Uri.fromFile(picked))) }
+            waitForText("1 of 8 photos")
+        } finally {
+            picked.delete()
+        }
+        type("Synthetic stew")
+        var lost = false
+        // The capture commits, then the acknowledgement is lost and the cache is cleared, so the reconcile cannot run.
+        CoachViewModel.afterCaptureForTest = {
+            if (!lost) { lost = true; model.draft.value.photos.forEach { File(it).delete() }; throw IOException("synthetic lost acknowledgement") }
+        }
+        compose.onNodeWithContentDescription("Send").performClick()
+        compose.waitUntil(10_000) { lost && model.message.value != null && !model.sending.value }
+        assertEquals(1, turns().size)
+        compose.onNodeWithContentDescription("Send").performClick()
+        compose.waitUntil(10_000) { model.draft.value.text.isEmpty() && !model.sending.value }
+        assertEquals(1, turns().size)
+        assertTrue(model.draft.value.photos.isEmpty())
+        assertNull(model.message.value)
+    }
+
     @Test fun fieldClampsToTheSendableLength() {
         launch()
         type("a".repeat(20_001))

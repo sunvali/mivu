@@ -398,14 +398,13 @@ class CoachViewModel(
             val prior = try {
                 read { reconcileCoachCapture(previous.payload()) }
             } catch (_: IOException) {
-                // Its photos are gone (the cache was cleared): only the ID can be checked; a stored turn makes this a new message.
-                if (read { coachTurn(previous.draft.submissionID) } == null) Reconciliation.Absent else null
+                // Its photos are gone (the cache was cleared): the submission ID is the identity, so a stored turn is this one.
+                read { coachTurn(previous.draft.submissionID) }?.let { Reconciliation.Accepted(it) } ?: Reconciliation.Absent
             }
             when (prior) {
-                is Reconciliation.Accepted, null -> if (prior is Reconciliation.Accepted && previous.draft == draft) return prior.turn
-                    else if (draft.submissionID == previous.draft.submissionID) {
-                        draft = draft.copy(submissionID = UUID.randomUUID()).also(::store) // edited since: a new message
-                    }
+                is Reconciliation.Accepted -> if (previous.draft == draft) return prior.turn else if (draft.submissionID == previous.draft.submissionID) {
+                    draft = draft.copy(submissionID = UUID.randomUUID()).also(::store) // edited since: a new message
+                }
                 Reconciliation.ConflictingPayload -> {
                     store(draft.copy(submissionID = UUID.randomUUID()))
                     storeAttempt(null)
