@@ -117,6 +117,17 @@ class CoachWorkerTest {
         assertEquals(CoachTurnState.completed, state(second.id))
     }
 
+    @Test fun diaryErrorEndsThePassAndLaterDrainsRun() = runBlocking {
+        val worker = worker { _, _ -> answer() }
+        // A profile with no diary: reading its head throws inside the pass.
+        val broken = worker.drain(UUID.randomUUID())!!
+        broken.join()
+        assertTrue(!broken.isCancelled)
+        val t = turn("Synthetic first")
+        worker.drain(profile.id)!!.join()
+        assertEquals(CoachTurnState.completed, state(t.id))
+    }
+
     @Test fun visionCopiesFitTheRequestBudget() = runBlocking {
         // Synthetic noise so JPEG cannot compress it far: about 5 MB at quality 100.
         val random = java.util.Random(7)

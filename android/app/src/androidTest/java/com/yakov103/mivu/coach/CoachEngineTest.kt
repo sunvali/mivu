@@ -175,6 +175,7 @@ class CoachEngineTest {
         }
         assertEquals(false, CoachEngine.isTransient(javax.net.ssl.SSLHandshakeException("synthetic")))
         assertEquals(false, CoachEngine.isTransient(javax.net.ssl.SSLPeerUnverifiedException("synthetic")))
+        assertEquals(false, CoachEngine.isTransient(javax.net.ssl.SSLKeyException("synthetic")))
     }
 
     @Test fun roundLimitStops() {

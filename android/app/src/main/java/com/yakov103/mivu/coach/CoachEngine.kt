@@ -37,6 +37,7 @@ import java.time.ZoneId
 import java.util.UUID
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLKeyException
 import javax.net.ssl.SSLPeerUnverifiedException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -290,7 +291,7 @@ class CoachEngine(
         internal fun isTransient(error: Throwable): Boolean = when (error) {
             is SocketTimeoutException, is UnknownHostException, is ConnectException, is NoRouteToHostException, is SocketException -> true
             // A dropped connection, like iOS `.networkConnectionLost`; a refused handshake or certificate is not retried.
-            is SSLHandshakeException, is SSLPeerUnverifiedException -> false
+            is SSLHandshakeException, is SSLPeerUnverifiedException, is SSLKeyException -> false
             is EOFException, is SSLException, is ProtocolException -> true
             SessionError.NetworkUnavailable, ResponsesClient.Failure.IncompleteResponse, ResponsesClient.Failure.UsageUnavailable -> true
             is ResponsesClient.Failure.Http -> error.code in 500..599 || error.code == 408

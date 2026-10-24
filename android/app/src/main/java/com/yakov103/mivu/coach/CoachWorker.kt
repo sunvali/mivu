@@ -56,22 +56,21 @@ class CoachWorker(
         }
     }
 
-    private suspend fun pass(profileID: UUID) {
+    // Any failure ends the pass: a turn's state is saved by the engine, and a diary error waits for the next request.
+    // Nothing is logged, so no prompt, context or reply leaves the diary; an escaped error would end the process.
+    private suspend fun pass(profileID: UUID) = try {
         val db = repository.database(profileID)
         val engine = CoachEngine(db, ::resilient, prepareImages)
         var previous: UUID? = null
         while (true) {
-            val turnID = db.nextPendingCoachTurn() ?: return
-            if (turnID == previous) return // the engine left it pending; wait for the next request
+            val turnID = db.nextPendingCoachTurn() ?: break
+            if (turnID == previous) break // the engine left it pending; wait for the next request
             previous = turnID
-            try {
-                engine.run(turnID)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                return // the engine saved the turn's state; never log its prompt, context or reply
-            }
+            engine.run(turnID)
         }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
     }
 
     /** iOS `resilient`: retries a transient inference failure after 1, 2 and 4 seconds. */
