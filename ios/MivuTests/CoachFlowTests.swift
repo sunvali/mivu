@@ -244,6 +244,40 @@ extension CoachFlowTests {
         #expect((try? await diary.store.snapshotForExport())?.meals.first?.photos == [photo])
         #expect(diary.readModel?.meals.first?.items.first?.name == "Eggs")
     }
+    /// Re-selecting the same profile mid-reply moves the store's epoch, so the engine cannot record its own failure.
+    private func unrecordedFailure(_ diary: DiaryViewModel, after responses: [CoachInferenceResult]) -> CoachViewModel.Inference {
+        let replies = CoachRetryFixture(responses: responses), store = diary.store, owner = diary.readModel!.profile.id
+        return { _, _ in
+            if await replies.responses.isEmpty {
+                _ = try await store.selectPagedProfile(owner)
+                throw CocoaError(.fileReadUnknown)
+            }
+            return try await replies.respond()
+        }
+    }
+    @Test func unrecordedFailureAfterSavedFoodEndsWithItsSummary() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let owner = try #require(diary.readModel?.profile.id)
+        let day = try await diary.store.startDay(expectedProfileID: owner)
+        try await diary.refresh(profileID: owner)
+        let infer = unrecordedFailure(diary, after: [foodReply(date: day.localDate, name: "Synthetic toast", quantity: 1, kcal: 530, id: "unrecorded-food")])
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { infer })
+        coach.draft.text = "Synthetic toast"
+        #expect(await coach.send()); await coach.waitForWorker()
+        let turn = try #require(try await turns(diary).first)
+        #expect(turn.state == .completed && turn.incomplete == true && turn.assistantText != nil && !turn.receipts.isEmpty)
+        #expect(coach.errorMessage == nil)
+    }
+    @Test func unrecordedFailureWithoutSavedFoodOffersTryAgain() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let infer = unrecordedFailure(diary, after: [])
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { infer })
+        coach.draft.text = "Synthetic question"
+        #expect(await coach.send()); await coach.waitForWorker()
+        let turn = try #require(try await turns(diary).first)
+        #expect(turn.state == .needsRetry && turn.failureReason != nil)
+        #expect(coach.errorMessage != nil)
+    }
 }
 
 extension CoachFlowTests {

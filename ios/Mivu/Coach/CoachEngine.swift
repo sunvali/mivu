@@ -223,10 +223,10 @@ struct CoachEngine: Sendable {
         } catch {
             // Leave the turn analyzing while run retries, so the failure never flashes in the chat.
             if !isFinal && Self.isModelOutputFailure(error) { throw error }
+            let reason = Self.failureReason(error)
+            Self.logger.error("Coach turn failed: \(reason, privacy: .public)")
             // A late account/profile response cannot even change the original turn's state.
             if (try? await store.validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)) != nil {
-                let reason = Self.failureReason(error)
-                Self.logger.error("Coach turn failed: \(reason, privacy: .public)")
                 // Saved food is never reported as a failure; the person can ask for the rest.
                 if !(error is CancellationError || (error as? URLError)?.code == .cancelled || error as? SessionError == .sessionChanged), let stored = try? await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID), !stored.receipts.isEmpty,
                    let text = try? await store.coachCommittedSummary(turnID: turnID, expectedProfileID: expectedProfileID),
@@ -256,7 +256,7 @@ struct CoachEngine: Sendable {
             return messages
         }
     }
-    private static let logger = Logger(subsystem: "com.yakov103.mivu", category: "Coach")
+    static let logger = Logger(subsystem: "com.yakov103.mivu", category: "Coach")
     /// App error cases carry only integer payloads; anything else is reduced to domain and code.
     static func failureReason(_ error: any Error) -> String {
         switch error {
