@@ -99,6 +99,24 @@ data class CoachReply(val target: Target, val excerpt: String) {
     }
 }
 
+/** A dated meal search result (CoachModels.swift:56); edits still require get_meal. */
+@Serializable
+data class CoachMealCandidate(
+    val id: UUID,
+    val dayID: UUID,
+    val localDate: String,
+    val timeZoneID: String,
+    val revision: Int,
+    val eatenAt: Instant,
+    val timePrecision: MealTimePrecision? = null,
+    val items: List<Item>,
+    val omittedItemCount: Int,
+    val capturedDescription: String,
+    val descriptionTruncated: Boolean,
+) {
+    @Serializable data class Item(val id: UUID, val name: String, val quantity: Double, val unit: String)
+}
+
 /** An unanswered Coach question; the next reply is resolved against it. */
 @Serializable
 data class CoachQuestion(val kind: CoachClarification, val candidates: List<CoachReply.Target>, val originalText: String)

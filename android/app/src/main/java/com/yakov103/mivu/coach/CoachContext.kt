@@ -153,6 +153,8 @@ data class CoachCommittedReceipt(
 )
 
 sealed class CoachError : Exception() {
+    object InvalidTool : CoachError()
+    object InvalidArguments : CoachError()
     object LimitExceeded : CoachError()
 }
 

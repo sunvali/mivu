@@ -201,6 +201,14 @@ data class WorkoutSet(val repetitions: Int, val loadKg: Double? = null)
 @Serializable
 data class WorkoutExercise(val name: String, val sets: List<WorkoutSet>)
 
+data class WorkoutDraft(
+    val kind: WorkoutKind,
+    val durationMinutes: Int,
+    val exercises: List<WorkoutExercise>,
+    val estimatedBurnKcal: Double? = null,
+    val burnSource: WorkoutBurnSource? = null,
+)
+
 @Serializable
 data class WorkoutSession(
     val id: UUID,

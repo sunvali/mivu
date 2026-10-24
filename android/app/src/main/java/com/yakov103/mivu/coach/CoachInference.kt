@@ -9,3 +9,6 @@ sealed interface CoachInferenceInput {
     enum class Role { developer, user, assistant }
     data class Message(val role: Role, val text: String) : CoachInferenceInput
 }
+
+/** A model function call (CoachInference.swift:3); arguments are the raw JSON text. */
+data class CoachToolCall(val id: String, val callID: String, val name: String, val namespace: String?, val arguments: String)

@@ -48,6 +48,12 @@ object SwiftDate : KSerializer<Instant> {
 
 private val CANONICAL_UUID = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
+/** Swift `UUID(uuidString:)`: canonical form in either case, else null. */
+internal fun swiftUUID(text: String): UUID? = if (CANONICAL_UUID.matches(text)) UUID.fromString(text) else null
+
+/** Swift `uuidString`. */
+internal val UUID.swift: String get() = toString().uppercase()
+
 /** Swift UUID: uppercase string; read case-insensitively. */
 object SwiftUUID : KSerializer<UUID> {
     override val descriptor = PrimitiveSerialDescriptor("SwiftUUID", PrimitiveKind.STRING)
