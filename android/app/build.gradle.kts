@@ -25,6 +25,7 @@ android {
         applicationId = "com.yakov103.mivu"
         minSdk = 31
         targetSdk = 37
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = file("../../version.txt").readText().trim()
     }
@@ -54,4 +55,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }
