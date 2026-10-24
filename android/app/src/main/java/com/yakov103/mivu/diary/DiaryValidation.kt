@@ -15,6 +15,7 @@ import java.util.UUID
 sealed class DiaryError(message: String? = null) : Exception(message) {
     class InvalidData(val reason: String) : DiaryError(reason)
     object WrongOwner : DiaryError("wrong owner")
+    object InvalidAmountUnitChange : DiaryError("Enter or clear each known nutrient when changing to an unrelated unit.")
     object StaleRevision : DiaryError("stale revision")
     object StaleArchive : DiaryError("stale archive")
     object NotFound : DiaryError("not found")

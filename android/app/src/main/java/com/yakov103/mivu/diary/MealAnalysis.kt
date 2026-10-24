@@ -11,17 +11,17 @@ private val ANALYZABLE = setOf(SubmissionState.captured, SubmissionState.waiting
     SubmissionState.needsRetry)
 
 // iOS DiaryStore wraps each of these in a transaction at the current head (pagedMutation).
-private fun <T> DiaryDatabase.atHead(body: (DiaryDatabase.Tx) -> T): T = transaction(head().revision, body)
+internal fun <T> DiaryDatabase.atHead(body: (DiaryDatabase.Tx) -> T): T = transaction(head().revision, body)
 
-private fun DiaryDatabase.Tx.mealRecord(id: UUID) = meal(id) ?: throw DiaryError.NotFound
+internal fun DiaryDatabase.Tx.mealRecord(id: UUID) = meal(id) ?: throw DiaryError.NotFound
 
-private fun DiaryMeal.submission(id: UUID) = submissions.firstOrNull { it.id == id } ?: throw DiaryError.NotFound
+internal fun DiaryMeal.submission(id: UUID) = submissions.firstOrNull { it.id == id } ?: throw DiaryError.NotFound
 
-private fun DiaryMeal.with(sub: MealSubmission) = copy(submissions = submissions.map { if (it.id == sub.id) sub else it })
+internal fun DiaryMeal.with(sub: MealSubmission) = copy(submissions = submissions.map { if (it.id == sub.id) sub else it })
 
 // shortcut: putMeal rewrites the meal's photo blobs on every call; add a submission-only write if photo-heavy
 // meals make analysis commits slow.
-private fun DiaryDatabase.Tx.save(meal: DiaryMeal) = putMeal(meal)
+internal fun DiaryDatabase.Tx.save(meal: DiaryMeal) = putMeal(meal)
 
 /** iOS `commitSavedItems`: replaces the items and bumps the meal revision, only at [expectedRevision]. */
 internal fun DiaryDatabase.Tx.commitSavedItems(meal: DiaryMeal, items: List<FoodItem>, expectedRevision: Int): DiaryMeal {
@@ -67,13 +67,22 @@ fun DiaryDatabase.acceptReview(mealID: UUID, submissionID: UUID, expectedMealRev
 fun DiaryDatabase.editMealItems(mealID: UUID, items: List<FoodItem>, expectedMealRevision: Int) = atHead { tx ->
     val meal = tx.mealRecord(mealID)
     if (meal.revision != expectedMealRevision) throw DiaryError.StaleRevision
-    // iOS deleteItem/scaleMeal: a pending submission is based on this revision; editing would strand it.
-    if ((meal.submissions.lastOrNull()?.state ?: SubmissionState.saved) != SubmissionState.saved) throw DiaryError.InvalidData("meal not saved")
+    meal.requireSaved()
+    tx.commitDirectEdit(meal, items, "Direct item edit")
+}
+
+/** iOS deleteItem/scaleMeal: a pending submission is based on this revision; editing would strand it. */
+internal fun DiaryMeal.requireSaved() {
+    if ((submissions.lastOrNull()?.state ?: SubmissionState.saved) != SubmissionState.saved) throw DiaryError.InvalidData("meal not saved")
+}
+
+/** Commits [items] with a saved "Direct …" submission recording them, as iOS editItem/deleteItem/scaleMeal. */
+internal fun DiaryDatabase.Tx.commitDirectEdit(meal: DiaryMeal, items: List<FoodItem>, text: String) {
     val id = UUID.randomUUID()
-    val output = AnalysisOutput(1, tx.head.profile.id, mealID, id, meal.revision, items)
-    val saved = MealSubmission(id, meal.revision, "Direct item edit", emptyList(), false, SubmissionState.saved, output)
-    val committed = tx.commitSavedItems(meal, items, meal.revision)
-    tx.save(committed.copy(submissions = committed.submissions + saved))
+    val output = AnalysisOutput(1, head.profile.id, meal.id, id, meal.revision, items)
+    val saved = MealSubmission(id, meal.revision, text, emptyList(), false, SubmissionState.saved, output)
+    val committed = commitSavedItems(meal, items, meal.revision)
+    save(committed.copy(submissions = committed.submissions + saved))
 }
 
 /** iOS `deleteMeal`; the store's meal delete repairs the Coach turns that use its photos. */

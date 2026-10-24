@@ -210,6 +210,17 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         }
 
         /**
+         * iOS `stripUnusedPhotoID`: [turn] keeps the photo ID only while it holds its own copy or another meal it links
+         * (other than [mealID]) still holds the photo.
+         */
+        internal fun stripUnusedPhotoID(turn: CoachTurn, photoID: UUID, mealID: UUID): CoachTurn {
+            if (photoID !in turn.photoIDs || turn.photos.any { it.id == photoID }) return turn
+            val elsewhere = (listOfNotNull(turn.pendingMealID) + turn.receipts.mapNotNull { it.mealID })
+                .filter { it != mealID }.toSet().any { id -> meal(id)?.photos?.any { it.id == photoID } == true }
+            return if (elsewhere) turn else turn.copy(photoIDs = turn.photoIDs - photoID)
+        }
+
+        /**
          * iOS `deleteMeal`: each Coach turn using one of the meal's photos gets its own copy if it has surviving progress
          * (a logged weight or workout), otherwise the photo ID is stripped; pending turns for the meal need clarification.
          */
@@ -226,10 +237,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                 for (photo in deleted.photos) {
                     if (photo.id !in turn.photoIDs || turn.photos.any { it.id == photo.id }) continue // not a consumer of this copy
                     if (progress) { turn = turn.copy(photos = turn.photos + photo); continue }
-                    // iOS stripUnusedPhotoID: keep the ID only while another linked meal still holds the photo.
-                    val elsewhere = (listOfNotNull(turn.pendingMealID) + turn.receipts.mapNotNull { it.mealID })
-                        .filter { it != deleted.id }.toSet().any { id -> meal(id)?.photos?.any { it.id == photo.id } == true }
-                    if (!elsewhere) turn = turn.copy(photoIDs = turn.photoIDs - photo.id)
+                    turn = stripUnusedPhotoID(turn, photo.id, deleted.id)
                 }
                 if (turn.pendingMealID == deleted.id) turn = turn.copy(state = CoachTurnState.needsClarification)
                 if (turn != original) putCoachTurn(turn)
