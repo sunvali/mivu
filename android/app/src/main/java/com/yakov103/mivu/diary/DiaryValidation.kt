@@ -20,6 +20,7 @@ sealed class DiaryError(message: String? = null) : Exception(message) {
     object NotFound : DiaryError("not found")
     object EmptyCapture : DiaryError("empty capture")
     object QuotaExceeded : DiaryError("quota exceeded")
+    object Busy : DiaryError("database busy") // another connection holds the write lock
 }
 
 private fun ok(condition: Boolean, reason: String) {
