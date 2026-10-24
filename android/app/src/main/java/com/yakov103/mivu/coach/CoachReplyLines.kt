@@ -1,5 +1,7 @@
 package com.yakov103.mivu.coach
 
+import com.yakov103.mivu.diary.CoachTurn
+import com.yakov103.mivu.diary.CoachTurnState
 import com.yakov103.mivu.diary.DayCompleteness
 import com.yakov103.mivu.diary.DiaryDatabase
 import com.yakov103.mivu.diary.DiaryError
@@ -61,6 +63,17 @@ object CoachReplyLines {
     private fun goalLine(goal: GoalRecord): String? {
         val kcal = goal.targets.kcal ?: return null
         return "Goal: ${number(kcal)} kcal a day" + (goal.targets.protein?.let { ", ${number(it)} g protein" } ?: "") + "."
+    }
+
+    enum class FollowUp { today, progress }
+
+    /** iOS `followUps`: a completed turn that saved food offers Today; one that saved a weight offers Progress. */
+    fun followUps(turn: CoachTurn): List<FollowUp> {
+        if (turn.state != CoachTurnState.completed) return emptyList()
+        return listOfNotNull(
+            FollowUp.today.takeIf { turn.receipts.any { it.mealID != null } },
+            FollowUp.progress.takeIf { turn.receipts.any { it.weightID != null && "/delete_weight/" !in it.operationKey } },
+        )
     }
 
     /** "today", "yesterday" or a short date such as "Oct 17"; the year appears only when it differs. */

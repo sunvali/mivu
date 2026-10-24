@@ -69,7 +69,9 @@ class MivuApplication : Application() {
     /** Runs saved Coach turns once the diary is ready; the returned job finishes when that pass does. */
     fun drainCoach(): Job = scope.launch {
         val ready = repository.bootstrapState.filterIsInstance<Bootstrap.Ready>().first()
-        coachWorker.drain(ready.profileID)?.join()
+        // iOS `connection.canInfer`: turns waiting for a connection retry only once an account is registered.
+        val connected = runCatching { credentials.registrations().isNotEmpty() }.getOrDefault(false)
+        coachWorker.drain(ready.profileID, includeWaitingForConnection = connected)?.join()
     }
 
     /** Resumes Coach turns now and whenever a network becomes available (the callback also fires for the current one). */

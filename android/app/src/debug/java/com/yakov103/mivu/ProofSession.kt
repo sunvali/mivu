@@ -7,11 +7,15 @@ import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.connection.AuthSession
 import com.yakov103.mivu.connection.LoopbackCallback
 import com.yakov103.mivu.connection.OAuthAttempt
-import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.coach.CoachEngine
 import com.yakov103.mivu.diary.CoachCaptureContext
 import com.yakov103.mivu.diary.CoachSubmissionPayload
 import com.yakov103.mivu.diary.CoachTurnState
+import com.yakov103.mivu.diary.DiaryDatabase
+import com.yakov103.mivu.diary.DiaryProfile
 import com.yakov103.mivu.diary.captureCoachSubmission
+import com.yakov103.mivu.diary.startDay
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
@@ -111,21 +115,26 @@ object ProofSession {
         return "Model $model: ${text.take(200)}"
     }
 
-    /** Captures one synthetic Coach turn in the selected diary and runs it through the app's worker and live inference. */
+    /**
+     * Captures one synthetic Coach turn in a fresh scratch diary (opened as CaptureProbeActivity opens its profile) and runs
+     * it through CoachEngine with live inference. The app's worker and the selected diary are never touched.
+     */
     fun runCoachTurn(context: Context) = run(RUN_COACH) {
-        val app = app(context)
-        val ready = app.repository.bootstrapState.value as? Bootstrap.Ready ?: app.repository.bootstrap() as? Bootstrap.Ready
-            ?: error("no diary")
-        val db = app.repository.database(ready.profileID)
-        val h = db.head()
-        val turn = db.captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), COACH_TEXT, emptyList(),
-            CoachCaptureContext(Instant.now(), ZoneId.systemDefault().id, h.activeDayID, h.previousDayConfirmedAt,
-                h.activeConversationSegmentID)), h.revision)
-        app.drainCoach().join()
-        // State and receipt count only; the reply text stays in the diary.
-        val done = db.read { it.coachTurnWithoutPhotos(turn.id) } ?: error("turn missing")
-        check(done.state == CoachTurnState.completed) { "turn ${done.state.name}" }
-        "Turn completed; ${done.receipts.size} saved records"
+        File(context.filesDir, "profiles/${SCRATCH_PROFILE.toString().uppercase()}").deleteRecursively()
+        val zone = ZoneId.systemDefault().id
+        DiaryDatabase.create(context, DiaryProfile(SCRATCH_PROFILE, "Proof", "en", zone, "")).use { db ->
+            val now = Instant.now()
+            db.startDay(now, db.head().revision)
+            val h = db.head()
+            val turn = db.captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), COACH_TEXT, emptyList(),
+                CoachCaptureContext(now, zone, h.activeDayID, h.previousDayConfirmedAt, h.activeConversationSegmentID)), h.revision)
+            val token = token(context)
+            val model = client.models(token).first().slug
+            val done = CoachEngine(db, { input, tools -> client.respond(model, input, tools, token) }).run(turn.id)
+            // State and receipt count only; the reply text stays in the scratch diary.
+            check(done.state == CoachTurnState.completed) { "turn ${done.state.name}" }
+            "Turn completed; ${done.receipts.size} saved records"
+        }
     }
 
     private suspend fun restored(context: Context): AuthSession = app(context).connection()
@@ -160,4 +169,5 @@ object ProofSession {
     const val RUN_COACH = "Run Coach turn"
     private const val COACH_TEXT = "Synthetic proof: I had two boiled eggs and a slice of toast for breakfast."
     private const val IN_FLIGHT = "signInInFlight"
+    private val SCRATCH_PROFILE: UUID = UUID.fromString("00000000-0000-4000-8000-00000000c0ac")
 }

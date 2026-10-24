@@ -51,11 +51,16 @@ import kotlinx.serialization.json.JsonObject
 // WakingDayInstruction (DiaryDatabaseMealMutations.swift:730) and ProbeRunner.isTransient (ProbeJob.swift:170).
 // Android has one diary per process, so iOS's selection-epoch checks have no counterpart.
 
+/** What a running turn is doing, for the Coach "Thinking" row (iOS CoachModels.swift:6). */
+@Suppress("EnumEntryName") // entry names are the iOS raw values
+enum class CoachActivity { preparingPhotos, thinking, reading, saving }
+
 /** Runs one saved Coach turn through model rounds with Mivu's tools; inference is injected so tests script it. */
 class CoachEngine(
     private val db: DiaryDatabase,
     private val infer: suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult,
     private val prepareImages: suspend (List<ByteArray>) -> List<ByteArray> = { it },
+    private val onActivity: suspend (CoachActivity) -> Unit = {},
 ) {
     suspend fun run(turnID: UUID): CoachTurn = withContext(Dispatchers.IO) {
         val turn = stored(turnID)
@@ -95,6 +100,7 @@ class CoachEngine(
         val turnID = turn.id
         val context = db.coachInferenceContext(turnID)
         val photos = if (mode == CoachWriteMode.replayOnly) emptyList() else inferencePhotos(turnID)
+        if (photos.isNotEmpty()) onActivity(CoachActivity.preparingPhotos)
         val images = prepareImages(photos)
         if (images.size != photos.size || images.size > 30 || images.sumOf { it.size.toLong() } > 4_194_304) throw ResponsesClient.Failure.InvalidInput
         images.forEach { CoachInferenceInput.imageMIME(it) }
@@ -119,6 +125,7 @@ class CoachEngine(
         var callCount = 0
         repeat(8) {
             currentCoroutineContext().ensureActive()
+            onActivity(CoachActivity.thinking)
             val response = infer(input.toList(), tools)
             currentCoroutineContext().ensureActive()
             callCount += response.calls.size
@@ -197,6 +204,7 @@ class CoachEngine(
             val outputs = arrayOfNulls<String>(commands.size)
             commands.forEachIndexed { index, command ->
                 if (command is CoachCommand.Write) return@forEachIndexed
+                onActivity(CoachActivity.reading)
                 val output = db.executeCoachRead(turnID, command).toString()
                 outputs[index] = output
                 when (command) {
@@ -216,6 +224,7 @@ class CoachEngine(
                 }
             }
             currentCoroutineContext().ensureActive()
+            if (writes.isNotEmpty()) onActivity(CoachActivity.saving)
             val receipts = db.applyCoachWrites(turnID, writes, mode)
             for (id in receipts.mapNotNull { it.mealID }.toSet()) {
                 // Receipt results can omit a review that changed without a food revision.

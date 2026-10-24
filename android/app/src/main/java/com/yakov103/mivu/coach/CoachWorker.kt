@@ -14,6 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -36,16 +39,29 @@ class CoachWorker(
     private val running = AtomicBoolean(false)
     private val requested = AtomicBoolean(false)
     @Volatile private var profileID: UUID? = null
+    @Volatile private var includeWaitingForConnection = false
+    private val _activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null)
 
-    /** Starts a worker, or returns null when one is running; that worker then makes one more pass. */
-    fun drain(profileID: UUID): Job? {
+    /** The running turn and its phase, or null between turns. */
+    val activity: StateFlow<Pair<UUID, CoachActivity>?> = _activity.asStateFlow()
+
+    /**
+     * Starts a worker, or returns null when one is running; that worker then makes one more pass. Turns waiting for a
+     * connection run only when [includeWaitingForConnection] (the app can infer).
+     */
+    fun drain(profileID: UUID, includeWaitingForConnection: Boolean): Job? {
         this.profileID = profileID
+        this.includeWaitingForConnection = includeWaitingForConnection
         requested.set(true)
         if (!running.compareAndSet(false, true)) return null
         return scope.launch(Dispatchers.IO) {
+            // iOS resume: after a pass whose turn stayed pending, later passes of this worker run only new captures.
+            var capturedOnly = false
             while (true) {
                 try {
-                    while (requested.getAndSet(false)) pass(this@CoachWorker.profileID ?: break)
+                    while (requested.getAndSet(false)) {
+                        if (pass(this@CoachWorker.profileID ?: break, capturedOnly)) capturedOnly = true
+                    }
                 } catch (e: Throwable) {
                     running.set(false); throw e
                 }
@@ -56,21 +72,30 @@ class CoachWorker(
         }
     }
 
-    // Any failure ends the pass: a turn's state is saved by the engine, and a diary error waits for the next request.
-    // Nothing is logged, so no prompt, context or reply leaves the diary; an escaped error would end the process.
-    private suspend fun pass(profileID: UUID) = try {
-        val db = repository.database(profileID)
-        val engine = CoachEngine(db, ::resilient, prepareImages)
-        var previous: UUID? = null
-        while (true) {
-            val turnID = db.nextPendingCoachTurn() ?: break
-            if (turnID == previous) break // the engine left it pending; wait for the next request
-            previous = turnID
-            engine.run(turnID)
+    /**
+     * Runs pending turns oldest first; returns true when one stayed pending. Any failure ends the pass: a turn's state is
+     * saved by the engine, and a diary error waits for the next request. Nothing is logged, so no prompt, context or reply
+     * leaves the diary; an escaped error would end the process.
+     */
+    private suspend fun pass(profileID: UUID, capturedOnly: Boolean): Boolean {
+        try {
+            val db = repository.database(profileID)
+            var previous: UUID? = null
+            while (true) {
+                val turnID = db.nextPendingCoachTurn(includeWaitingForConnection, capturedOnly) ?: return false
+                if (turnID == previous) return true // the engine left it pending; wait for the next request
+                previous = turnID
+                try {
+                    CoachEngine(db, ::resilient, prepareImages) { _activity.value = turnID to it }.run(turnID)
+                } finally {
+                    _activity.value = null
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return true
         }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (_: Exception) {
     }
 
     /** iOS `resilient`: retries a transient inference failure after 1, 2 and 4 seconds. */

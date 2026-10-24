@@ -185,4 +185,12 @@ class CoachEngineTest {
         assertEquals(8, script.inputs.size)
         assertEquals(CoachTurnState.needsRetry, stored(t.id).state)
     }
+
+    @Test fun photoTurnReportsPreparingThenThinking() {
+        val t = turn(photos = listOf(MealPhoto(UUID.randomUUID(), byteArrayOf(-1, -40, -1, -32, 1, 2, 3), at, PhotoRole.unspecified)))
+        val script = Script(result(call("log_food", logFood)), result(text = "Logged **300** kcal."))
+        val phases = mutableListOf<CoachActivity>()
+        runBlocking { CoachEngine(db, script::infer, onActivity = { phases += it }).run(t.id) }
+        assertEquals(listOf(CoachActivity.preparingPhotos, CoachActivity.thinking, CoachActivity.saving, CoachActivity.thinking), phases)
+    }
 }

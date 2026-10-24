@@ -94,6 +94,8 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                 db.execSQL("CREATE TABLE IF NOT EXISTS coach_undo (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL " +
                     "REFERENCES coach_turn(id) ON DELETE CASCADE, mealID TEXT NOT NULL, afterRevision INTEGER NOT NULL, " +
                     "afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
+                // Coach timeline pages seek by ordinal, so a 10,000-turn diary reads only the page's rows.
+                db.execSQL("CREATE INDEX IF NOT EXISTS coach_turn_ordinal ON coach_turn(ordinal)")
             } catch (e: Throwable) { db.close(); throw e }
             return DiaryDatabase(db, profileID, file)
         }
@@ -347,11 +349,19 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         }
     }
 
-    /** iOS `nextPendingCoachTurn` (DiaryDatabaseCoachContext.swift:5): the oldest turn the worker may run; needsRetry waits for the person. */
-    fun nextPendingCoachTurn(): UUID? = immediate {
+    /**
+     * iOS `nextPendingCoachTurn` (DiaryDatabaseCoachContext.swift:5): the oldest turn the worker may run; needsRetry waits for
+     * the person. [capturedOnly] skips turns waiting on the network or a connection, so a stuck one cannot hold back newer ones.
+     */
+    fun nextPendingCoachTurn(includeWaitingForConnection: Boolean, capturedOnly: Boolean = false): UUID? = immediate {
         head() // owner check, as iOS domainRead
-        db.rawQuery("SELECT id FROM coach_turn WHERE json_extract(CAST(payload AS TEXT), '$.state') IN " +
-            "('captured','analyzing','waitingForNetwork','waitingForConnection') ORDER BY ordinal, id LIMIT 1", null).use {
+        val states = when {
+            capturedOnly -> "'captured','analyzing'"
+            includeWaitingForConnection -> "'captured','analyzing','waitingForNetwork','waitingForConnection'"
+            else -> "'captured','analyzing','waitingForNetwork'"
+        }
+        db.rawQuery("SELECT id FROM coach_turn WHERE json_extract(CAST(payload AS TEXT), '$.state') IN ($states) " +
+            "ORDER BY ordinal, id LIMIT 1", null).use {
             if (!it.moveToFirst()) null
             else runCatching { UUID.fromString(it.getString(0)) }.getOrElse { throw DiaryError.InvalidData("coach turn") }
         }
@@ -361,6 +371,20 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     fun photoBytes(mealID: UUID, photoID: UUID): ByteArray? = immediate {
         head() // owner check
         try { bytes("photo", "${mealID.key}/${photoID.key}") } catch (_: SQLiteDoneException) { null }
+    }
+
+    /**
+     * One Coach photo's bytes, or null when it is gone: the turn's own copy, else the copy a meal the turn links now holds
+     * (a logged photo moves to its meal).
+     */
+    fun coachPhotoBytes(turnID: UUID, photoID: UUID): ByteArray? = immediate {
+        head() // owner check
+        val turn = records("coach_turn", CoachTurn.serializer(), "id = ?", turnID).firstOrNull()?.second ?: return@immediate null
+        if (photoID !in turn.photoIDs) return@immediate null
+        val owners = listOf("coach_photo" to turnID) + (listOfNotNull(turn.pendingMealID) + turn.receipts.mapNotNull { it.mealID }).distinct().map { "photo" to it }
+        owners.firstNotNullOfOrNull { (table, owner) ->
+            try { bytes(table, "${owner.key}/${photoID.key}") } catch (_: SQLiteDoneException) { null }
+        }
     }
 
     fun head(): Head = readHead() ?: throw DiaryError.InvalidData("no diary")

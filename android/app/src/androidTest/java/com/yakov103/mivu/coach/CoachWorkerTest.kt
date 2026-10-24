@@ -76,7 +76,7 @@ class CoachWorkerTest {
         repository = DiaryRepository(context)
         db = repository.database(profile.id)
         val texts = mutableListOf<String>()
-        worker { input, _ -> texts += (input.last() as CoachInferenceInput.Message).text; answer() }.drain(profile.id)!!.join()
+        worker { input, _ -> texts += (input.last() as CoachInferenceInput.Message).text; answer() }.drain(profile.id, true)!!.join()
         assertEquals(listOf("Synthetic first", "Synthetic second"), texts)
         assertEquals(CoachTurnState.completed, state(interrupted.id))
         assertEquals(CoachTurnState.completed, state(later.id))
@@ -90,7 +90,7 @@ class CoachWorkerTest {
         val calls = AtomicInteger()
         // The first turn fails twice then answers; the second fails on every attempt.
         worker { _, _ -> if (calls.incrementAndGet() in setOf(1, 2) || calls.get() > 3) throw SocketTimeoutException() else answer() }
-            .drain(profile.id)!!.join()
+            .drain(profile.id, true)!!.join()
         assertEquals(CoachTurnState.completed, state(recovers.id))
         assertEquals(CoachTurnState.waitingForNetwork, state(offline.id))
         assertEquals(listOf(1_000L, 2_000L, 1_000L, 2_000L, 4_000L), sleeps)
@@ -103,12 +103,12 @@ class CoachWorkerTest {
         val release = CompletableDeferred<Unit>()
         val calls = AtomicInteger()
         val worker = worker { _, _ -> calls.incrementAndGet(); started.complete(Unit); release.await(); answer() }
-        val job = worker.drain(profile.id)!!
+        val job = worker.drain(profile.id, true)!!
         started.await()
         // A turn saved during the running pass is picked up by the requested follow-up pass, not a second worker.
         val second = turn("Synthetic second")
-        assertNull(worker.drain(profile.id))
-        assertNull(worker.drain(profile.id))
+        assertNull(worker.drain(profile.id, true))
+        assertNull(worker.drain(profile.id, true))
         assertEquals(1, calls.get())
         release.complete(Unit)
         job.join()
@@ -120,11 +120,11 @@ class CoachWorkerTest {
     @Test fun diaryErrorEndsThePassAndLaterDrainsRun() = runBlocking {
         val worker = worker { _, _ -> answer() }
         // A profile with no diary: reading its head throws inside the pass.
-        val broken = worker.drain(UUID.randomUUID())!!
+        val broken = worker.drain(UUID.randomUUID(), true)!!
         broken.join()
         assertTrue(!broken.isCancelled)
         val t = turn("Synthetic first")
-        worker.drain(profile.id)!!.join()
+        worker.drain(profile.id, true)!!.join()
         assertEquals(CoachTurnState.completed, state(t.id))
     }
 
@@ -144,5 +144,32 @@ class CoachWorkerTest {
             assertTrue(maxOf(bounds.outWidth, bounds.outHeight) <= 1280)
             assertEquals("image/jpeg", CoachInferenceInput.imageMIME(copy))
         }
+    }
+
+    @Test fun stuckOldestTurnDoesNotHoldBackNewerCapture() = runBlocking {
+        val stuck = turn("Synthetic offline")
+        var newer: CoachTurn? = null
+        val offlineCalls = AtomicInteger()
+        lateinit var w: CoachWorker
+        w = worker { input, _ ->
+            if ((input.last() as CoachInferenceInput.Message).text != "Synthetic offline") return@worker answer()
+            // A message saved while the oldest turn is failing asks the running worker for another pass.
+            if (offlineCalls.incrementAndGet() == 1) { newer = turn("Synthetic newer"); assertNull(w.drain(profile.id, true)) }
+            throw SocketTimeoutException()
+        }
+        w.drain(profile.id, true)!!.join()
+        assertEquals(CoachTurnState.waitingForNetwork, state(stuck.id))
+        assertEquals(CoachTurnState.completed, state(newer!!.id))
+        assertEquals(4, offlineCalls.get()) // one resilient run; the follow-up pass skips the stuck turn
+    }
+
+    @Test fun activityReportsPhases() = runBlocking {
+        val t = turn("Synthetic first")
+        val seen = mutableListOf<Pair<UUID, CoachActivity>?>()
+        lateinit var w: CoachWorker
+        w = worker { _, _ -> seen += w.activity.value; answer() }
+        w.drain(profile.id, true)!!.join()
+        assertEquals(listOf(t.id to CoachActivity.thinking), seen)
+        assertNull(w.activity.value)
     }
 }
