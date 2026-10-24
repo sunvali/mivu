@@ -63,7 +63,7 @@ private actor Replies {
     @Test func unknownCandidateRejected() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Make that bigger", photos: [], at: now, expectedProfileID: profile.id)
-        await #expect(throws: CoachError.invalidArguments) {
+        await #expect(throws: CoachError.limitExceeded) {
             _ = try await run(store, profile, turn, [result([call("ask_clarification", #"{"kind":"meal","candidates":[{"meal_id":"\#(UUID())"}]}"#)])])
         }
         let meal = CoachContext.Meal(id: UUID(), dayID: UUID(), revision: 1, eatenAt: now, timePrecision: .dateOnly, items: [FoodItem(name: "Eggs", nutrition: NutritionValues(kcal: 100))])

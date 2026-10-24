@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 struct CoachEngine: Sendable {
     let store: DiaryStore
@@ -10,6 +11,14 @@ struct CoachEngine: Sendable {
         self.store = store; self.infer = infer; self.lookup = lookup; self.prepareImages = prepareImages; self.onActivity = onActivity
     }
     func run(turnID: UUID, expectedProfileID: UUID) async throws -> CoachTurnResult {
+        do { return try await attempt(turnID: turnID, expectedProfileID: expectedProfileID, isFinal: false) }
+        catch where Self.isModelOutputFailure(error) {
+            // Replies vary between requests, so one fresh attempt usually succeeds; receipts keep it from saving twice.
+            Self.logger.notice("Coach turn retrying after \(Self.failureReason(error), privacy: .public)")
+            return try await attempt(turnID: turnID, expectedProfileID: expectedProfileID, isFinal: true)
+        }
+    }
+    private func attempt(turnID: UUID, expectedProfileID: UUID, isFinal: Bool) async throws -> CoachTurnResult {
         let epoch = try await store.selectionEpoch(expectedProfileID: expectedProfileID)
         let turn = try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
         if turn.state == .completed { return turn }
@@ -106,10 +115,26 @@ struct CoachEngine: Sendable {
                 guard Set(response.calls.map(\.callID)).count == response.calls.count,
                       response.calls.allSatisfy({ !$0.callID.isEmpty && $0.callID.utf8.count <= 256 }) else { throw CoachError.invalidArguments }
                 let currentTurn = try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
-                let commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts, workouts: knownWorkouts, found: foundMeals).estimated(by: response.model) }
-                let writes = commands.compactMap { command -> CoachWrite? in if case .write(let write) = command { return write }; return nil }
-                if let (kind, candidates) = commands.compactMap({ command -> (CoachClarification, [CoachReply.Target])? in if case .clarification(let kind, let candidates) = command { return (kind, candidates) }; return nil }).first {
-                    guard commands.count == 1 else { throw CoachError.invalidArguments }
+                let commands: [CoachCommand], writes: [CoachWrite], clarification: (CoachClarification, [CoachReply.Target])?
+                do {
+                    commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts, workouts: knownWorkouts, found: foundMeals).estimated(by: response.model) }
+                    writes = commands.compactMap { command -> CoachWrite? in if case .write(let write) = command { return write }; return nil }
+                    clarification = commands.compactMap({ command -> (CoachClarification, [CoachReply.Target])? in if case .clarification(let kind, let candidates) = command { return (kind, candidates) }; return nil }).first
+                    guard clarification == nil || commands.count == 1 else { throw CoachError.invalidArguments }
+                    guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
+                    // Validate the whole batch before awaiting lookups or committing any food.
+                    if clarification == nil { try await store.validateCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID, mode: mode) }
+                } catch where Self.isCorrectable(error) {
+                    // Nothing in the batch ran; show the model why so it can send a corrected batch instead of failing the turn.
+                    let reason = Self.failureReason(error)
+                    Self.logger.notice("Coach batch rejected for correction: \(reason, privacy: .public)")
+                    let output = "{\"saved\":false,\"error\":\"\(reason)\",\"detail\":\"This whole batch was rejected and nothing ran. Retry with arguments that match the tool schema and only retrieved IDs, revisions and evidence; call ask_clarification alone; or answer without claiming a save.\"}"
+                    input += response.outputItems.map { .priorOutput($0) }
+                    input += response.calls.map { .functionOutput(callID: $0.callID, output: output) }
+                    guard input.count <= 128 else { throw CoachError.limitExceeded }
+                    continue
+                }
+                if let (kind, candidates) = clarification {
                     var question = candidates.isEmpty ? kind.question : "Which one did you mean?"
                     if kind == .confirm, case .meal(let id) = candidates.first {
                         let names = (knownMeals.first { $0.id == id }?.items.map(\.name) ?? foundMeals.first { $0.id == id }?.items.map(\.name) ?? []).joined(separator: ", ")
@@ -124,9 +149,6 @@ struct CoachEngine: Sendable {
                     try await store.finishCoachTurn(turnID: turnID, assistantText: text, question: CoachQuestion(kind: kind, candidates: candidates, originalText: turn.text), epoch: epoch, expectedProfileID: expectedProfileID)
                     return try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
                 }
-                guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
-                // Validate the whole batch before awaiting lookups or committing any food.
-                try await store.validateCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID, mode: mode)
                 var outputs: [String?] = Array(repeating: nil, count: commands.count)
                 for (index, command) in commands.enumerated() {
                     if case .write = command {} else { await onActivity(.reading) }
@@ -199,8 +221,12 @@ struct CoachEngine: Sendable {
             }
             throw CoachError.limitExceeded
         } catch {
+            // Leave the turn analyzing while run retries, so the failure never flashes in the chat.
+            if !isFinal && Self.isModelOutputFailure(error) { throw error }
             // A late account/profile response cannot even change the original turn's state.
             if (try? await store.validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)) != nil {
+                let reason = Self.failureReason(error)
+                Self.logger.error("Coach turn failed: \(reason, privacy: .public)")
                 // Saved food is never reported as a failure; the person can ask for the rest.
                 if !(error is CancellationError || (error as? URLError)?.code == .cancelled || error as? SessionError == .sessionChanged), let stored = try? await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID), !stored.receipts.isEmpty,
                    let text = try? await store.coachCommittedSummary(turnID: turnID, expectedProfileID: expectedProfileID),
@@ -214,7 +240,7 @@ struct CoachEngine: Sendable {
                 else if error as? ResponsesClient.Failure == .usageUnavailable { state = .needsRetry }
                 else if ProbeRunner.isTransient(error) { state = .waitingForNetwork }
                 else { state = .needsRetry }
-                try? await store.failCoachTurn(turnID: turnID, state: state, needsDayChoice: error as? DiaryError == .ambiguousDay, epoch: epoch, expectedProfileID: expectedProfileID)
+                try? await store.failCoachTurn(turnID: turnID, state: state, needsDayChoice: error as? DiaryError == .ambiguousDay, failureReason: reason, epoch: epoch, expectedProfileID: expectedProfileID)
             }
             throw error
         }
@@ -229,6 +255,27 @@ struct CoachEngine: Sendable {
             if !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { messages.append(.message(role: .assistant, text: reply)) }
             return messages
         }
+    }
+    private static let logger = Logger(subsystem: "com.yakov103.mivu", category: "Coach")
+    /// App error cases carry only integer payloads; anything else is reduced to domain and code.
+    static func failureReason(_ error: any Error) -> String {
+        switch error {
+        case is ResponsesClient.Failure, is CoachError, is DiaryError, is SessionError: String(reflecting: error)
+        // The domain is capped so the reason always fits the stored turn's 200-byte limit.
+        default: "\((error as NSError).domain.prefix(40))(\((error as NSError).code))"
+        }
+    }
+    /// Rejected tool calls the model can fix from feedback; day ambiguity stays a user question.
+    static func isCorrectable(_ error: any Error) -> Bool {
+        if let error = error as? CoachError { return [.invalidTool, .invalidArguments].contains(error) }
+        if let error = error as? DiaryError { return [.invalidData, .notFound, .staleRevision, .invalidAmountUnitChange].contains(error) }
+        return false
+    }
+    static func isModelOutputFailure(_ error: any Error) -> Bool {
+        // limitExceeded is left out: a reply that loops through every round rarely recovers and would double the cost.
+        if let error = error as? CoachError { return [.invalidTool, .invalidArguments].contains(error) }
+        if let error = error as? ResponsesClient.Failure { return [.malformedResponse, .responseFailed].contains(error) }
+        return false
     }
     private func capturedInput(text: String, images: [Data]) -> [CoachInferenceInput] {
         var texts: [String] = [], chunk = "", chunkBytes = 0
