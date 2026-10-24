@@ -19,6 +19,7 @@ are done.
 - Port legacy-capture recovery and the pendingMealID prepare step in the Coach worker.
 
 ## Milestone 5 (live analysis)
+- Sign-in showed only `NetworkUnavailable` when DNS failed. Show a clearer connection error, and note in the dev docs that the emulator may need `-dns-server 8.8.8.8`.
 - `MealAnalysisWorker` must not hold its mutex across network calls. Remove
   duplicate drain requests with a flag instead.
 - `StaleRevision` retries can cost up to 3 paid calls. Revisit this.
