@@ -56,6 +56,14 @@ import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.captureCoachSubmission
 import com.yakov103.mivu.diary.chooseCoachDay
 import com.yakov103.mivu.diary.coachPage
+import com.yakov103.mivu.diary.CoachDayCursor
+import com.yakov103.mivu.diary.CoachDayPage
+import com.yakov103.mivu.diary.coachDays
+import com.yakov103.mivu.diary.coachSegments
+import com.yakov103.mivu.diary.coachSourceTurn
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.yakov103.mivu.diary.retryCoachTurn
 import com.yakov103.mivu.diary.undoCoachChange
 import com.yakov103.mivu.ui.coach.CoachHistoryWindow.Direction
@@ -88,7 +96,15 @@ data class CoachTimelineState(
     val error: String? = null,
     /** Local dates of the days turns were captured on, by day ID, for "Log to <date>". */
     val days: Map<UUID, String> = emptyMap(),
+    /** The exchange a seek opened at, until Jump to latest, the next send, or the reader scrolls it off screen. */
+    val highlighted: UUID? = null,
 )
+
+/** Where a seek opens the conversation: a turn, or the first exchange on a tracking day. */
+sealed interface CoachSeekTarget {
+    data class Turn(val id: UUID) : CoachSeekTarget
+    data class Day(val id: UUID) : CoachSeekTarget
+}
 
 /** The composer's unsent message: text, prepared photo files, an optional quote and the ID its capture will carry. */
 @Serializable
@@ -146,7 +162,13 @@ class CoachViewModel(
     private val _message = MutableStateFlow<String?>(null)
     private var loaded = false
     private var error: String? = null
-    private var visible = emptySet<UUID>()
+    /** The reader's visible rows, as last reported; the history button's paging actions keep them. */
+    var visible = emptySet<UUID>()
+        private set
+    private var highlighted: UUID? = null
+    private var highlightShown = false
+    private val replacing = Mutex()
+    private var seeking: Job? = null
     private var following = true
     private var generation = 0
     private var days = emptyMap<UUID, String>()
@@ -311,6 +333,9 @@ class CoachViewModel(
     fun viewport(visible: Set<UUID>, atLatest: Boolean) {
         this.visible = visible
         following = atLatest
+        val id = highlighted ?: return
+        if (id in visible) highlightShown = true
+        else if (highlightShown) clearHighlight() // scrolled off by the reader
     }
 
     fun loadEarlier(visible: Set<UUID>) = load(Direction.earlier, visible)
@@ -320,7 +345,47 @@ class CoachViewModel(
     /** Reads the latest page when the window lacks it (or the last read failed); the screen scrolls after it returns. */
     fun jumpToLatest(): Job = viewModelScope.launch {
         following = true
+        clearHighlight()
         if (window.newerCursor == null || error != null) replace()
+    }
+
+    /**
+     * iOS `seek`: retires the in-flight page reads, reserves a replacement and resets the window to the page around [target],
+     * then highlights the turn (or the day's first exchange). A newer seek supersedes this one.
+     */
+    fun seek(target: CoachSeekTarget): Job {
+        val previous = seeking
+        return viewModelScope.launch {
+            previous?.cancelAndJoin() // its read has exited before this one reserves
+            val request = when (target) {
+                is CoachSeekTarget.Turn -> CoachPageRequest.AroundTurn(target.id)
+                is CoachSeekTarget.Day -> CoachPageRequest.AtDay(target.id)
+            }
+            if (!replace(request)) return@launch
+            following = false
+            highlighted = when (target) {
+                is CoachSeekTarget.Turn -> target.id
+                is CoachSeekTarget.Day -> window.exchanges.firstOrNull { it.turn.activeDayID == target.id }?.turn?.id
+            }
+            highlightShown = false
+            publish()
+        }.also { seeking = it }
+    }
+
+    /** Meal detail Ask Pip: the turn that logged [mealID], else the meal's day. */
+    fun seekSource(mealID: UUID, dayID: UUID): Job = viewModelScope.launch {
+        val turn = try { read { coachSourceTurn(mealID) } } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+        seek(turn?.let(CoachSeekTarget::Turn) ?: CoachSeekTarget.Day(dayID)).join()
+    }
+
+    /** One bounded page of chat history: every conversation, or those shown under [date]. */
+    suspend fun historyPage(date: String?, before: CoachDayCursor?): CoachDayPage =
+        read { if (date == null) coachDays(before) else coachSegments(date, before) }
+
+    private fun clearHighlight() {
+        if (highlighted == null) return
+        highlighted = null
+        publish()
     }
 
     /** A direct diary edit, not a chat exchange; the card re-reads availability from the change. */
@@ -365,6 +430,7 @@ class CoachViewModel(
         val draft = _draft.value
         if (_sending.value || _importing.value || !draft.canSend) return null
         _sending.value = true // the composer is disabled while sending, so the draft cannot change underneath
+        clearHighlight()
         return viewModelScope.launch {
             try {
                 val turn = capture(draft)
@@ -509,26 +575,35 @@ class CoachViewModel(
         }
     }
 
-    /** Replaces the window with the latest page; in-flight page reads are retired and keep their slots until they exit. */
-    private suspend fun replace() {
+    /**
+     * Replaces the window with the page for [request] (the latest by default); in-flight page reads are retired and keep
+     * their slots until they exit. Replacements run one at a time. False when nothing replaced the window.
+     */
+    private suspend fun replace(request: CoachPageRequest = CoachPageRequest.Latest): Boolean = replacing.withLock {
         window.retireAll()
-        if (!window.reserveReplacement(visible)) return
+        if (!window.reserveReplacement(visible)) return false
         val page = try {
-            read { coachPage(CoachPageRequest.Latest) }
+            read { coachPage(request) }
         } catch (e: Exception) {
             window.releaseReplacement() // the read has exited
             if (e is CancellationException) throw e
-            error = "Could not load this conversation. Try again."
-            loaded = true
-            publish()
-            return
+            if (request == CoachPageRequest.Latest) {
+                error = "Could not load this conversation. Try again."
+                loaded = true
+                publish()
+            } else {
+                _message.value = "This conversation is unavailable for the current diary."
+            }
+            return false
         }
         window.reset(page)
         generation++
         loaded = true
         error = null
+        if (highlighted != null && window.exchanges.none { it.turn.id == highlighted }) highlighted = null
         readDays()
         publish()
+        true
     }
 
     /**
@@ -539,7 +614,7 @@ class CoachViewModel(
         val started = generation
         val spans = window.spans
         val cursor = window.newerCursor
-        if (spans.isEmpty()) return replace() // an empty conversation has no cursor to page after: read the latest again
+        if (spans.isEmpty()) { replace(); return } // an empty conversation has no cursor to page after: read the latest again
         val (reread, hasNewer) = try {
             read {
                 spans.associateWith { coachPage(CoachPageRequest.Range(it.first, it.last), CoachHistoryWindow.maximumExchanges).exchanges } to
@@ -573,7 +648,7 @@ class CoachViewModel(
         if (!loaded) return
         val exchanges = window.exchanges
         _timeline.value = CoachTimelineState(exchanges, window.edgeState(Direction.earlier), window.edgeState(Direction.later),
-            exchanges.lastOrNull()?.turn?.id?.takeIf(window::isLatest), loaded = true, error, days)
+            exchanges.lastOrNull()?.turn?.id?.takeIf(window::isLatest), loaded = true, error, days, highlighted)
     }
 
     companion object {

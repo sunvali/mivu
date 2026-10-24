@@ -1,6 +1,14 @@
 package com.yakov103.mivu.ui.coach
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -95,6 +103,32 @@ fun CoachReplyBar(reply: CoachReply, onCancel: () -> Unit, modifier: Modifier = 
         IconButton(onCancel, Modifier.size(48.dp)) {
             Icon(painterResource(R.drawable.ic_close), contentDescription = "Cancel reply", Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * The quote inside a sent message (iOS `CoachReplyQuote(inMessage: true)`): a white rule, the author and a two-line excerpt
+ * on 14% black. [onOpen] shows the original; null leaves it a plain quote (a weight has no record to open yet).
+ */
+@Composable
+fun CoachSentQuote(reply: CoachReply, onOpen: (() -> Unit)?) {
+    val label = "Reply to ${if (reply.author == "You") "your message" else reply.author}: ${reply.excerpt}"
+    Row(
+        Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.14f))
+            .clearAndSetSemantics {
+                contentDescription = label
+                if (onOpen != null) { role = Role.Button; onClick("Shows the original") { onOpen(); true } }
+            }
+            .then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier)
+            .heightIn(min = 48.dp).padding(horizontal = 10.dp, vertical = 7.dp).height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(3.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.7f), CircleShape))
+        Column(Modifier.padding(start = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(reply.author, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Text(reply.excerpt, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.8f),
+                maxLines = if (isLargeText()) 3 else 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

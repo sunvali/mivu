@@ -4,6 +4,9 @@ import android.animation.ValueAnimator
 import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +73,8 @@ class CoachRowActions(
     val seeProgress: () -> Unit,
     val turnPhoto: suspend (UUID, UUID) -> ByteArray?,
     val mealPhoto: suspend (UUID, UUID) -> ByteArray?,
+    /** A sent quote's target: the original message, day or record. */
+    val openQuote: (com.yakov103.mivu.diary.CoachReply) -> Unit = {},
 )
 
 /** One exchange: the person's message on the right, then Pip's reply, status, receipts and the latest exchange's choices. */
@@ -81,11 +86,17 @@ fun CoachExchangeRow(
     days: Map<UUID, String>,
     actions: CoachRowActions,
     undoing: Set<String> = emptySet(),
+    highlighted: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val turn = exchange.turn
-    Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        InputBubble(turn, actions.turnPhoto)
+    // iOS isHighlighted: an accent ring around the exchange a seek opened at, announced as the selected source.
+    val ring = if (highlighted) Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+        .semantics { stateDescription = "Selected source message" } else Modifier
+    Column(modifier.fillMaxWidth().then(ring).padding(horizontal = if (highlighted) 8.dp else 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        InputBubble(turn, actions.turnPhoto, actions.openQuote)
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             turn.assistantText?.let { Text(coachReplyText(it), style = MaterialTheme.typography.bodyLarge) }
             val question = turn.question
@@ -124,10 +135,13 @@ fun CoachExchangeRow(
 }
 
 @Composable
-private fun InputBubble(turn: CoachTurn, loadPhoto: suspend (UUID, UUID) -> ByteArray?) {
+private fun InputBubble(turn: CoachTurn, loadPhoto: suspend (UUID, UUID) -> ByteArray?, openQuote: (com.yakov103.mivu.diary.CoachReply) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = 48.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primary) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                turn.submissionManifest?.reply?.let { reply ->
+                    CoachSentQuote(reply, if (reply.target is com.yakov103.mivu.diary.CoachReply.Target.Weight) null else ({ openQuote(reply) }))
+                }
                 if (turn.photoIDs.isNotEmpty()) {
                     Text(if (turn.photoIDs.size == 1) "1 photo" else "${turn.photoIDs.size} photos", style = MaterialTheme.typography.labelMedium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

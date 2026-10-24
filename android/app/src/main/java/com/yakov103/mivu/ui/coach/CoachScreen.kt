@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.ui.coach.CoachHistoryWindow.Direction
 import com.yakov103.mivu.ui.coach.CoachHistoryWindow.EdgeState
+import com.yakov103.mivu.diary.CoachReply
 import java.util.UUID
 import kotlinx.coroutines.launch
 
@@ -87,13 +88,19 @@ fun CoachScreen(
     val rows = state.exchanges.asReversed()
     val actions = remember(model, onOpenMeal, onSeeToday, onSeeProgress) {
         CoachRowActions(model::undo, onOpenMeal, { model.retry(it) }, { id, previous -> model.chooseDay(id, previous) }, model::answer,
-            model::finishRest, onSeeToday, onSeeProgress, model::turnPhoto, model::mealPhoto)
+            model::finishRest, onSeeToday, onSeeProgress, model::turnPhoto, model::mealPhoto) { reply -> openQuote(reply, model, onOpenMeal) }
     }
 
     // A new newest row is followed only when the reader sat at the newest one before it arrived (read before layout).
     val newest = state.exchanges.lastOrNull()?.turn?.id
     val following = remember(newest) { listState.atLatest() }
-    LaunchedEffect(newest) { if (following) listState.scrollToItem(0) }
+    LaunchedEffect(newest) { if (following && state.highlighted == null) listState.scrollToItem(0) }
+
+    // A seek lands on its highlighted exchange.
+    LaunchedEffect(state.highlighted, rows.firstOrNull()?.turn?.id) {
+        val index = rows.indexOfFirst { it.turn.id == state.highlighted }
+        if (index >= 0) listState.scrollToItem(index)
+    }
 
     // Report what is visible, and page when the reader nears an edge that can grow.
     LaunchedEffect(listState, state.earlier, state.later, rows.size) {
@@ -126,7 +133,8 @@ fun CoachScreen(
             ) {
                 items(rows, key = { it.turn.id }) { exchange ->
                     CoachExchangeRow(exchange, isLatest = exchange.turn.id == state.latestID,
-                        activity = activity?.takeIf { it.first == exchange.turn.id }?.second, days = state.days, actions = actions, undoing = undoing)
+                        activity = activity?.takeIf { it.first == exchange.turn.id }?.second, days = state.days, actions = actions, undoing = undoing,
+                        highlighted = exchange.turn.id == state.highlighted)
                 }
             }
             when {
@@ -148,6 +156,19 @@ fun CoachScreen(
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
             onAddPhotos = onOpenCamera,
             Modifier.imePadding())
+    }
+}
+
+/** iOS openQuote: a message or day seeks the conversation; a meal or food opens the meal. */
+private fun openQuote(reply: CoachReply, model: CoachViewModel, onOpenMeal: (UUID) -> Unit) {
+    when (val target = reply.target) {
+        is CoachReply.Target.Message -> model.seek(CoachSeekTarget.Turn(target.turnID))
+        is CoachReply.Target.Day -> model.seek(CoachSeekTarget.Day(target.dayID))
+        is CoachReply.Target.Meal -> onOpenMeal(target.mealID)
+        is CoachReply.Target.Item -> onOpenMeal(target.mealID)
+        // shortcut: Android has no workout detail yet, so a workout quote does nothing; open it once that screen exists.
+        is CoachReply.Target.Workout -> Unit
+        is CoachReply.Target.Weight -> Unit // rendered without an action
     }
 }
 

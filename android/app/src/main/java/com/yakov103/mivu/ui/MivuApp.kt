@@ -77,6 +77,14 @@ import com.yakov103.mivu.ui.today.TodayScreen
 import com.yakov103.mivu.ui.coach.CoachCameraScreen
 import com.yakov103.mivu.ui.coach.CoachScreen
 import com.yakov103.mivu.ui.coach.CoachViewModel
+import com.yakov103.mivu.ui.coach.CoachHistoryScreen
+import com.yakov103.mivu.ui.coach.CoachHistoryWindow
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import java.time.ZoneId
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.yakov103.mivu.coach.CoachActivity
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,6 +119,7 @@ sealed interface Route {
     @Serializable data object Composer : Route
     @Serializable data class MealDetail(val mealID: String) : Route
     @Serializable data object CoachCamera : Route
+    @Serializable data object CoachHistory : Route
 }
 
 private enum class Tab(val route: Route, val label: String, @DrawableRes val icon: Int, @DrawableRes val selectedIcon: Int) {
@@ -213,6 +222,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                         style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 },
                 actions = {
+                    if (root == Tab.Coach) CoachHistoryButton(coach) { navController.navigate(Route.CoachHistory) }
                     // shortcut: Settings arrives with its own milestone; the control is in place so every root has it.
                     IconButton(onClick = {}, Modifier.testTag("profileSettings")) {
                         Icon(painterResource(R.drawable.ic_profile), contentDescription = "Profile and settings")
@@ -277,7 +287,12 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     model,
                     onBack = { navController.popBackStack() },
                     // As iOS dismisses meal detail first: the tab it came from is not left on it.
-                    onAskPip = { askPip(it); navController.popBackStack(); selectTab(Route.Coach) },
+                    onAskPip = { ask ->
+                        askPip(ask)
+                        // iOS askPip: Coach opens at the turn that logged the meal, else at the meal's day.
+                        model.state.value?.meal?.let { coach.seekSource(it.id, it.dayID) }
+                        navController.popBackStack(); selectTab(Route.Coach)
+                    },
                     onAddFoodManually = { navController.navigate(Route.ManualEntry(null, mealID.toString())) },
                     onRetryAnalysis = { onMealCaptured(profileID) },
                 )
@@ -293,6 +308,15 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onFocusConsumed = { focusCoach = false },
                     onOpenCamera = { navController.navigate(Route.CoachCamera) },
                 )
+            }
+            composable<Route.CoachHistory> {
+                val zone by produceState(ZoneId.systemDefault()) {
+                    value = withContext(Dispatchers.IO) {
+                        runCatching { ZoneId.of(repository.database(profileID).head().profile.timeZoneID) }.getOrDefault(value)
+                    }
+                }
+                CoachHistoryScreen(coach, zone, onOpen = { coach.seek(it); navController.popBackStack() },
+                    onClose = { navController.popBackStack() })
             }
             // Full screen over Coach: Coach is no longer resumed, so Pip hides; the draft lives in the activity's model.
             dialog<Route.CoachCamera>(
@@ -331,6 +355,31 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 }, onEnterManually = { navController.navigate(Route.ManualEntry(null, null)) })
             }
         }
+    }
+}
+
+/**
+ * iOS Chat history toolbar button. Its accessibility actions page the timeline as iOS `accessibilityPageAction` does:
+ * load (or retry) earlier and later messages around the reader's visible rows.
+ */
+@Composable
+private fun CoachHistoryButton(coach: CoachViewModel, onOpen: () -> Unit) {
+    val state by coach.timeline.collectAsStateWithLifecycle()
+    fun action(direction: CoachHistoryWindow.Direction): CustomAccessibilityAction? {
+        val earlier = direction == CoachHistoryWindow.Direction.earlier
+        val label = when (if (earlier) state.earlier else state.later) {
+            CoachHistoryWindow.EdgeState.Available -> if (earlier) "Load earlier messages" else "Load later messages"
+            is CoachHistoryWindow.EdgeState.Failed -> if (earlier) "Retry earlier messages" else "Retry later messages"
+            else -> return null
+        }
+        return CustomAccessibilityAction(label) {
+            if (earlier) coach.loadEarlier(coach.visible) else coach.loadLater(coach.visible)
+            true
+        }
+    }
+    val actions = listOfNotNull(action(CoachHistoryWindow.Direction.earlier), action(CoachHistoryWindow.Direction.later))
+    IconButton(onOpen, Modifier.semantics { customActions = actions }) {
+        Icon(painterResource(R.drawable.ic_history), contentDescription = "Chat history")
     }
 }
 
