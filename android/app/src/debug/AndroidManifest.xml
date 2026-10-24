@@ -10,5 +10,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Process-kill probe for scripts/android/kill_capture_check.sh; debug builds only. -->
+        <activity
+            android:name=".CaptureProbeActivity"
+            android:exported="true" />
     </application>
 </manifest>

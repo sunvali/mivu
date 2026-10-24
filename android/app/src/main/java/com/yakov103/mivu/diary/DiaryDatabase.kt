@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteDatabaseLockedException
 import android.os.ParcelFileDescriptor
+import androidx.annotation.VisibleForTesting
 import java.io.Closeable
 import java.io.File
 import java.time.Instant
@@ -172,6 +173,18 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         }
     }
 
+    /** Test seam: runs after a transaction's row writes, before its head write and commit. */
+    @VisibleForTesting internal var beforeCommit: (() -> Unit)? = null
+
+    /** A consistent read through the transaction API; the body must not write. */
+    fun <T> read(body: (Tx) -> T): T = immediate {
+        val tx = Tx(head())
+        body(tx).also { check(!tx.changed) { "write in read" } }
+    }
+
+    /** Every Coach turn row in order, without loading photo bytes. */
+    fun coachTurnsWithoutPhotos(): List<CoachTurn> = records("coach_turn", CoachTurn.serializer()).map { it.second }
+
     fun head(): Head = readHead() ?: throw DiaryError.InvalidData("no diary")
 
     fun snapshot(): DiarySnapshot = immediate { readSnapshot(head()) }
@@ -183,6 +196,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         val tx = Tx(original)
         val value = body(tx)
         if (tx.changed) {
+            beforeCommit?.invoke()
             if (tx.head.profile.id != profileID) throw DiaryError.WrongOwner
             val next = tx.head.copy(revision = original.revision + 1,
                 lineage = (original.lineage ?: emptyList()).takeLast(255) + UUID.randomUUID())

@@ -35,12 +35,12 @@ private fun String.graphemes(): Int {
     return n
 }
 
-private fun String.atMost(limit: Int) = length <= limit || graphemes() <= limit
+internal fun String.atMost(limit: Int) = length <= limit || graphemes() <= limit
 // Swift .whitespacesAndNewlines: Unicode Z* separators, U+0009-U+000D and U+0085 (not U+001C-U+001F).
 private fun Char.swiftSpace() = code in 9..13 || code == 0x85 || Character.getType(this).toByte().let {
     it == Character.SPACE_SEPARATOR || it == Character.LINE_SEPARATOR || it == Character.PARAGRAPH_SEPARATOR
 }
-private fun String.blankLikeSwift() = all { it.swiftSpace() }
+internal fun String.blankLikeSwift() = all { it.swiftSpace() }
 private fun String.utf8Size() = toByteArray(Charsets.UTF_8).size
 private fun <T> List<T>.unique() = toSet().size == size
 private fun Double.finite() = !isNaN() && !isInfinite()
@@ -49,7 +49,7 @@ private fun Double?.inRange(low: Double, high: Double, lowInclusive: Boolean) =
 
 // shortcut: Swift TimeZone(identifier:) also takes Foundation-only ids; java ids plus the legacy short ids
 // (EST, GMT, UTC...) cover everything iOS writes. Revisit if a real archive uses another spelling.
-private fun validZone(id: String) =
+internal fun validZone(id: String) =
     id in ZoneId.getAvailableZoneIds() || id in TimeZone.getAvailableIDs()
 
 private val localDateFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT)
@@ -61,8 +61,9 @@ internal fun validLocalDate(value: String) = value.length == 10 &&
     }.getOrDefault(false)
 
 private val hex64 = Regex("[0-9a-f]{64}")
-private fun fingerprint(text: String) =
-    MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+internal fun fingerprint(text: String) = fingerprint(text.toByteArray(Charsets.UTF_8))
+internal fun fingerprint(bytes: ByteArray) =
+    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
 private fun validateItems(items: List<FoodItem>) {
     ok(items.size <= 200 && items.map { it.id }.unique(), "items")
@@ -136,7 +137,7 @@ private fun validateSubmission(sub: MealSubmission, meal: DiaryMeal, profileId: 
     }
 }
 
-private fun validatePhoto(photo: MealPhoto) = ok(photo.data.size in 1..10_000_000, "photo bytes")
+internal fun validatePhoto(photo: MealPhoto) = ok(photo.data.size in 1..10_000_000, "photo bytes")
 
 private fun targetDay(t: ManualNutritionTarget) = when (t) {
     is ManualNutritionTarget.Recorded -> Triple(t.dayID, t.localDate, t.timeZoneID)
