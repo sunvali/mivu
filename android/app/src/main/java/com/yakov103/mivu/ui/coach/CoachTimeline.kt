@@ -80,6 +80,7 @@ fun CoachExchangeRow(
     activity: CoachActivity?,
     days: Map<UUID, String>,
     actions: CoachRowActions,
+    undoing: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
 ) {
     val turn = exchange.turn
@@ -97,7 +98,7 @@ fun CoachExchangeRow(
             }
             exchange.receipts.filter { it.mealID != null || it.workoutID != null }.forEach { receipt ->
                 CoachReceiptCard(receipt, exchange.targets[receipt.operationKey] ?: CoachReceiptTarget.Loading, exchange.undo[receipt.operationKey],
-                    onUndo = { actions.undo(receipt.operationKey) }, onOpen = { receipt.mealID?.let(actions.openMeal) })
+                    undoing = receipt.operationKey in undoing, onUndo = { actions.undo(receipt.operationKey) }, onOpen = { receipt.mealID?.let(actions.openMeal) })
             }
             exchange.receipts.filter { it.weightID != null }.forEach { receipt ->
                 CoachReceiptPresentation(receipt, CoachReceiptTarget.Loading).weightLabel?.let { WeightChip(it) }

@@ -67,9 +67,12 @@ class CoachViewModel(
     private var generation = 0
     private var days = emptyMap<UUID, String>()
     private var sending = false
-    private val undoing = mutableSetOf<String>()
+    private val _undoing = MutableStateFlow(emptySet<String>())
 
     val timeline: StateFlow<CoachTimelineState> = _timeline.asStateFlow()
+
+    /** Receipts whose Undo is being written; their buttons wait. */
+    val undoing: StateFlow<Set<String>> = _undoing.asStateFlow()
 
     /** The last failed action, shown until the next one succeeds. */
     val message: StateFlow<String?> = _message.asStateFlow()
@@ -99,9 +102,10 @@ class CoachViewModel(
 
     /** A direct diary edit, not a chat exchange; the card re-reads availability from the change. */
     fun undo(operationKey: String) {
-        if (!undoing.add(operationKey)) return // a second tap cannot race the first
+        if (operationKey in _undoing.value) return // a second tap cannot race the first
+        _undoing.value += operationKey
         viewModelScope.launch {
-            try { act { undoCoachChange(operationKey) } } finally { undoing -= operationKey }
+            try { act { undoCoachChange(operationKey) } } finally { _undoing.value -= operationKey }
         }
     }
 
@@ -203,15 +207,19 @@ class CoachViewModel(
         publish()
     }
 
-    /** iOS change refresh: resident pages are read again by range, and newer turns join only while the reader follows. */
+    /**
+     * iOS change refresh: resident pages are read again by range and updated in place. Newer turns never join a page here;
+     * they mark the later edge, which loads as a page while the reader follows the latest (or waits for Jump to latest).
+     */
     private suspend fun refresh() {
         val started = generation
         val spans = window.spans
         val cursor = window.newerCursor
-        val (reread, newer) = try {
+        if (spans.isEmpty()) return replace() // an empty conversation has no cursor to page after: read the latest again
+        val (reread, hasNewer) = try {
             read {
                 spans.associateWith { coachPage(CoachPageRequest.Range(it.first, it.last), CoachHistoryWindow.maximumExchanges).exchanges } to
-                    cursor?.let { coachPage(CoachPageRequest.After(it)) }
+                    (cursor != null && coachPage(CoachPageRequest.After(cursor), 1).exchanges.isNotEmpty())
             }
         } catch (e: CancellationException) {
             throw e
@@ -219,9 +227,10 @@ class CoachViewModel(
             return // the rows on screen stay; the next change reads again
         }
         if (started != generation) return // a replacement landed meanwhile
-        window.refresh(reread, newer?.exchanges.orEmpty(), newer?.hasLater == true, following)
+        window.refresh(reread, hasNewer)
         readDays()
         publish()
+        if (following && hasNewer) load(Direction.later, visible)
     }
 
     private suspend fun readDays() {

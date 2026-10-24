@@ -162,7 +162,8 @@ class CoachScreenTest {
         start(); logged()
         launch()
         waitForText("Saved food")
-        listOf("Synthetic oatmeal", "427", "Carbs 62 g", "Protein 14 g", "Fat 13 g", "Review / Edit", "Undo")
+        compose.onNode(hasContentDescription("Synthetic oatmeal, 427 kcal")).assertExists() // title and energy are one stop
+        listOf("Carbs 62 g", "Protein 14 g", "Fat 13 g", "Review / Edit", "Undo")
             .forEach { compose.onNode(hasText(it), useUnmergedTree = true).assertExists() }
         compose.onNodeWithText("Saved on this phone").assertDoesNotExist()
     }

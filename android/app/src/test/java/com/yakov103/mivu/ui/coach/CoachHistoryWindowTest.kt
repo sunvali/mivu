@@ -111,23 +111,32 @@ class CoachHistoryWindowTest {
         assertFalse(window.isLatest(window.exchanges.first().turn.id))
     }
 
-    @Test fun refreshJoinsLatestOnlyWhileFollowing() {
-        val browsing = filled(earlier = 4)
-        browsing.refresh(emptyMap(), listOf(exchange(1_000)), newerContinues = false, following = false)
-        assertEquals(100, browsing.exchanges.size)
-        assertEquals(EdgeState.Available, browsing.edgeState(Direction.later))
+    @Test fun refreshUpdatesInPlaceAndNewRowsPageInWithinHundred() {
+        val window = CoachHistoryWindow()
+        window.reset(page(980))
+        var newest = 999L
+        var conversation = 1_000L
+        repeat(130) { // a long chat: each new turn is a change refresh, then the later page it reveals
+            conversation++
+            window.refresh(emptyMap(), hasNewer = true)
+            assertEquals(EdgeState.Available, window.edgeState(Direction.later))
+            val visible = setOf(window.exchanges.last().turn.id)
+            val reservation = window.reserve(Direction.later, visible)!!
+            val rows = ((newest + 1)..<conversation).map(::exchange)
+            assertTrue(window.complete(reservation, CoachPage(rows, hasEarlier = true, hasLater = false)))
+            window.exited(reservation.id)
+            newest = conversation - 1
+            assertTrue(window.exchanges.size <= CoachHistoryWindow.maximumExchanges)
+            assertEquals(newest, window.exchanges.last().ordinal)
+            assertTrue(window.isLatest(window.exchanges.last().turn.id))
+        }
+        assertEquals(EdgeState.Available, window.edgeState(Direction.earlier))
+        assertTrue(window.exchanges.size > 60) // new turns share pages instead of spending a slot each
 
-        val following = filled(earlier = 4)
-        val newest = exchange(1_000)
-        following.refresh(emptyMap(), listOf(newest), newerContinues = false, following = true)
-        assertEquals(newest.turn.id, following.exchanges.last().turn.id)
-        assertTrue(following.isLatest(newest.turn.id))
-        assertEquals(81, following.exchanges.size) // the earliest page left to keep 100
-        assertEquals(EdgeState.Available, following.edgeState(Direction.earlier))
-
-        val renamed = following.exchanges.first().let { it.copy(turn = it.turn.copy(text = "Synthetic edited")) }
-        val span = following.spans.first()
-        following.refresh(mapOf(span to listOf(renamed) + following.exchanges.drop(1).take(19)), emptyList(), false, true)
-        assertEquals("Synthetic edited", following.exchanges.first().turn.text)
+        val renamed = window.exchanges.first().let { it.copy(turn = it.turn.copy(text = "Synthetic edited")) }
+        val span = window.spans.first()
+        window.refresh(mapOf(span to listOf(renamed) + window.exchanges.drop(1).take(span.count() - 1)), hasNewer = false)
+        assertEquals("Synthetic edited", window.exchanges.first().turn.text)
+        assertEquals(EdgeState.Exhausted, window.edgeState(Direction.later))
     }
 }

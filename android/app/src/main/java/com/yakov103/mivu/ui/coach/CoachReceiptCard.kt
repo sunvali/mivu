@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.clickable
@@ -54,6 +55,8 @@ fun CoachReceiptCard(
     onUndo: () -> Unit,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
+    /** An Undo of this receipt is being written; the button waits for it, as iOS. */
+    undoing: Boolean = false,
 ) {
     val presentation = CoachReceiptPresentation(receipt, target)
     val large = isLargeText()
@@ -66,7 +69,9 @@ fun CoachReceiptCard(
                 Text(if (undo == CoachUndoState.Undone) "Undone" else presentation.committedStatus, style = MaterialTheme.typography.labelLarge,
                     color = if (undo == CoachUndoState.Undone) secondary else MivuTheme.colors.success)
             }
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // One TalkBack stop: "Oatmeal with banana, 427 kcal".
+            val spoken = listOfNotNull(title(receipt), presentation.committedNutrition).joinToString(", ")
+            Row(Modifier.clearAndSetSemantics { contentDescription = spoken }, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(title(receipt), Modifier.weight(1f).padding(bottom = 2.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 presentation.committedNutrition?.let { energy ->
                     val kcal = energy.removeSuffix(" kcal")
@@ -104,7 +109,7 @@ fun CoachReceiptCard(
                 }
             }
             val undoButton = @Composable {
-                if (undo == CoachUndoState.Available) TextButton(onClick = onUndo, Modifier.heightIn(min = 48.dp),
+                if (undo == CoachUndoState.Available) TextButton(onClick = onUndo, Modifier.heightIn(min = 48.dp), enabled = !undoing,
                     contentPadding = ButtonDefaults.TextButtonWithIconContentPadding) {
                     Icon(painterResource(R.drawable.ic_undo), null, Modifier.size(ButtonDefaults.IconSize))
                     Spacer(Modifier.width(ButtonDefaults.IconSpacing))

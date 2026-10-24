@@ -96,6 +96,9 @@ class CoachHistoryWindow {
             page.exchanges.isEmpty() -> if (direction == Direction.earlier) pages[0] = pages[0].copy(hasEarlier = false)
                 else pages[pages.lastIndex] = pages.last().copy(hasLater = false)
             direction == Direction.earlier -> pages.add(0, page)
+            // A few new turns join a last page with room, so a chat does not spend a page slot per turn.
+            pages.last().exchanges.size + page.exchanges.size <= pageSize ->
+                pages[pages.lastIndex] = pages.last().let { it.copy(exchanges = it.exchanges + page.exchanges, hasLater = page.hasLater) }
             else -> pages += page
         }
         return true
@@ -123,26 +126,14 @@ class CoachHistoryWindow {
     val newerCursor: Long? get() = pages.lastOrNull()?.takeIf { !it.hasLater }?.let { exchanges.lastOrNull()?.ordinal ?: Long.MIN_VALUE }
 
     /**
-     * Applies a change refresh. [reread] rows replace each resident page whose span they were read for. [newer] rows (read
-     * after [newerCursor]; [newerContinues] when more follow) join the last page only while the reader is [following] the
-     * latest, evicting the earliest pages past capacity; while browsing, the last page only learns it has later rows.
+     * Applies a change refresh, as iOS `refresh`: [reread] rows replace each resident page whose span they were read for, and
+     * a page left empty goes (the window keeps one). It never adds rows: when [hasNewer] the last page only learns it has
+     * later rows, which then load through [reserve] and [complete] like any page, so the window stays within its limits.
      */
-    fun refresh(reread: Map<LongRange, List<CoachExchange>>, newer: List<CoachExchange>, newerContinues: Boolean, following: Boolean) {
+    fun refresh(reread: Map<LongRange, List<CoachExchange>>, hasNewer: Boolean) {
         for (i in pages.indices) span(pages[i])?.let { reread[it] }?.let { pages[i] = pages[i].copy(exchanges = it) }
-        val last = pages.lastOrNull()?.takeIf { !it.hasLater } ?: return
-        val cursor = exchanges.lastOrNull()?.ordinal ?: Long.MIN_VALUE
-        val resident = exchanges.map { it.turn.id }.toSet()
-        val fresh = newer.filter { it.ordinal > cursor && it.turn.id !in resident }
-        if (fresh.isEmpty()) return
-        if (!following) {
-            pages[pages.lastIndex] = last.copy(hasLater = true)
-            return
-        }
-        pages[pages.lastIndex] = last.copy(exchanges = last.exchanges + fresh, hasLater = newerContinues)
-        while (pages.size > 1 && reservations.isEmpty() && exchanges.size + reservedCapacity > maximumExchanges) {
-            pages.removeAt(0); pages[0] = pages[0].copy(hasEarlier = true)
-            failures -= Direction.earlier
-        }
+        if (pages.size > 1) pages.removeAll { it.exchanges.isEmpty() }
+        if (hasNewer && pages.isNotEmpty()) pages[pages.lastIndex] = pages.last().copy(hasLater = true)
     }
 
     private fun span(page: CoachPage) = page.exchanges.takeIf { it.isNotEmpty() }?.let { it.first().ordinal..it.last().ordinal }

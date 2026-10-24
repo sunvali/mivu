@@ -65,6 +65,7 @@ fun CoachScreen(model: CoachViewModel, onOpenMeal: (UUID) -> Unit, onSeeToday: (
     val state by model.timeline.collectAsStateWithLifecycle()
     val activity by model.activity.collectAsStateWithLifecycle()
     val message by model.message.collectAsStateWithLifecycle()
+    val undoing by model.undoing.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val twoDp = with(LocalDensity.current) { 2.dp.toPx() }
     fun LazyListState.atLatest() = firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset < twoDp
@@ -102,7 +103,7 @@ fun CoachScreen(model: CoachViewModel, onOpenMeal: (UUID) -> Unit, onSeeToday: (
             ) {
                 items(rows, key = { it.turn.id }) { exchange ->
                     CoachExchangeRow(exchange, isLatest = exchange.turn.id == state.latestID,
-                        activity = activity?.takeIf { it.first == exchange.turn.id }?.second, days = state.days, actions = actions)
+                        activity = activity?.takeIf { it.first == exchange.turn.id }?.second, days = state.days, actions = actions, undoing = undoing)
                 }
             }
             when {
