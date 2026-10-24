@@ -121,6 +121,9 @@ import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.ui.settings.ConnectionScreen
 import com.yakov103.mivu.ui.settings.SettingsScreen
 import com.yakov103.mivu.ui.settings.openCustomTab
+import com.yakov103.mivu.connection.SessionError
+import com.yakov103.mivu.ui.onboarding.OnboardingScreen
+import com.yakov103.mivu.ui.onboarding.OnboardingViewModel
 
 /** The app's Coach worker as the Coach tab uses it: run saved turns, whether ChatGPT is connected, and the running turn. */
 class CoachHooks(
@@ -154,6 +157,8 @@ sealed interface Route {
     @Serializable data object Goals : Route
     /** A Progress card's full screen: [kind] is a [ProgressDetailKind] and [range] the [ProgressRange] it opened on. */
     @Serializable data class ProgressDetail(val kind: String, val range: String = ProgressRange.Week.name) : Route
+    /** Setup with Pip: once over a diary this launch created, and from Settings' "Redo setup with Pip". */
+    @Serializable data object Onboarding : Route
 }
 
 private enum class Tab(val route: Route, val label: String, @DrawableRes val icon: Int, @DrawableRes val selectedIcon: Int) {
@@ -167,6 +172,7 @@ private enum class Tab(val route: Route, val label: String, @DrawableRes val ico
  * The app root, as iOS `DiaryRootView`: diary setup until a diary is open, then the four tabs. [onMealCaptured] runs
  * after a capture is saved, with its profile, to start analysis outside the screen. [coach] connects the Coach tab to the
  * app's Coach worker. [connection] backs Settings' Coach AI screen; without it (tests) the screen shows a disconnected state.
+ * [setupNewDiary] opens setup with Pip once over a diary this launch created (the activity passes true; tests opt in).
  */
 @Composable
 fun MivuApp(
@@ -176,6 +182,7 @@ fun MivuApp(
     connection: ChatGPTConnection? = null,
     /** Outlives screens and configuration changes; a disconnect runs here. */
     appScope: CoroutineScope = rememberCoroutineScope(),
+    setupNewDiary: Boolean = false,
 ) {
     val state by repository.bootstrapState.collectAsState()
     val scope = rememberCoroutineScope()
@@ -183,7 +190,7 @@ fun MivuApp(
     LaunchedEffect(repository) { if (repository.bootstrapState.value == null) repository.bootstrap() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
-            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection, appScope)
+            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection, appScope, setupNewDiary)
             Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
@@ -226,8 +233,9 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks, connection: ChatGPTConnection?,
-    appScope: CoroutineScope) {
+    appScope: CoroutineScope, setupNewDiary: Boolean) {
     val navController = rememberNavController()
+    LaunchedEffect(profileID) { if (setupNewDiary && repository.takeCreated()) navController.navigate(Route.Onboarding) }
     // Coach keeps its window across tab switches: its view model belongs to the activity, not the Coach entry.
     val activityOwner = checkNotNull(LocalViewModelStoreOwner.current)
     val context = LocalContext.current.applicationContext
@@ -408,9 +416,10 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onClose = { navController.popBackStack() })
             }
             composable<Route.Settings> {
-                // shortcut: "Redo setup with Pip" and "Backup & export" do nothing until Tasks 6 and 7 add their screens.
+                // shortcut: "Backup & export" does nothing until Task 7 adds its screen.
                 SettingsScreen(connectionState, onOpenConnection = { navController.navigate(Route.Connection) },
                     onOpenGoals = { navController.navigate(Route.Goals) },
+                    onRedoSetup = { navController.navigate(Route.Onboarding) },
                     onBack = { navController.popBackStack() })
             }
             composable<Route.Connection> {
@@ -466,6 +475,15 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             dialog<Route.Goals>(dialogProperties = editor) {
                 GoalEditorScreen(viewModel { GoalEditorViewModel(repository, profileID) },
                     onClose = { navController.popBackStack<Route.Goals>(inclusive = true) })
+            }
+            // Full screen; the screen owns back after its first step, where back is "Later".
+            dialog<Route.Onboarding>(dialogProperties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+                val model = viewModel {
+                    OnboardingViewModel(repository, profileID, connection?.state ?: MutableStateFlow(ConnectionState()),
+                        { connection?.inference() ?: { _, _ -> throw SessionError.NoActiveSession } }, createSavedStateHandle())
+                }
+                OnboardingScreen(model, onAgree = { connection?.recordConsent() }, onConnect = connect,
+                    onFinish = { navController.popBackStack<Route.Onboarding>(inclusive = true) })
             }
             // Sample mode only: Today offers "Log meal" there. Analysis runs outside the screen, after it closes.
             dialog<Route.Composer>(

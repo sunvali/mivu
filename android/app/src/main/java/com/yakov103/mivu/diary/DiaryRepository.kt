@@ -17,7 +17,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 sealed interface Bootstrap {
-    data class Ready(val profileID: UUID) : Bootstrap
+    /** [created]: this launch made the diary, so setup with Pip opens once. */
+    data class Ready(val profileID: UUID, val created: Boolean = false) : Bootstrap
     data object Failed : Bootstrap
     /** The stored diary is gone but others exist: the person picks one rather than the app guessing. */
     data class Choose(val profiles: List<DiaryProfile>) : Bootstrap
@@ -55,7 +56,7 @@ class DiaryRepository(
             .mapNotNull { dir -> runCatching { UUID.fromString(dir.name) }.getOrNull()?.let { it to dir } }
         val stored = preferences.getString(SELECTED_PROFILE, null)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         when {
-            diaries.isEmpty() -> open(createFirstDiary())
+            diaries.isEmpty() -> open(createFirstDiary(), created = true)
             diaries.any { it.first == stored } -> open(stored!!)
             // A device transfer brings files but not preferences: with no selection at all, take the latest diary.
             stored == null -> open(diaries.maxBy { File(it.second, DIARY_FILE).lastModified() }.first)
@@ -63,6 +64,12 @@ class DiaryRepository(
                 .sortedBy { it.name }
                 .let { if (it.isEmpty()) Bootstrap.Failed else Bootstrap.Choose(it) }
         }
+    }
+
+    /** True once for a diary this launch created, so setup opens a single time even when the activity is recreated. */
+    fun takeCreated(): Boolean {
+        val ready = _bootstrapState.value as? Bootstrap.Ready ?: return false
+        return ready.created && _bootstrapState.compareAndSet(ready, ready.copy(created = false))
     }
 
     /** Opens [profileID] and stores it as the selection. */
@@ -81,10 +88,10 @@ class DiaryRepository(
         result.also { _bootstrapState.value = it }
     }
 
-    private fun open(id: UUID): Bootstrap {
+    private fun open(id: UUID, created: Boolean = false): Bootstrap {
         database(id).head() // owner and schema check before showing or selecting the diary
         select(id)
-        return Bootstrap.Ready(id)
+        return Bootstrap.Ready(id, created)
     }
 
     private fun watched(db: DiaryDatabase) = db.apply { onCommit = { _changes.tryEmit(Unit) } }

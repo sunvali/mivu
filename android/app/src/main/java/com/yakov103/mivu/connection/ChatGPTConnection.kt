@@ -209,7 +209,7 @@ class ChatGPTConnection(
      * iOS `inference()`: binds one Coach turn to the session, account and model current now. Every round and retry of
      * that turn goes through the returned function and ends with [SessionError.SessionChanged] once any of them changes.
      */
-    fun inference(): suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult {
+    fun inference(): suspend (List<CoachInferenceInput>, JsonObject?) -> CoachInferenceResult {
         val binding = synchronized(lock) {
             val s = _state.value
             if (s.canInfer) Binding(generation, s.registrationID, s.selectedModel) else null
@@ -218,7 +218,7 @@ class ChatGPTConnection(
     }
 
     /** iOS `respondForCoach`. */
-    private suspend fun respond(binding: Binding, input: List<CoachInferenceInput>, tools: JsonObject): CoachInferenceResult {
+    private suspend fun respond(binding: Binding, input: List<CoachInferenceInput>, tools: JsonObject?): CoachInferenceResult {
         val (revision, owner, model) = binding
         suspend fun validate() {
             currentCoroutineContext().ensureActive()
