@@ -1,0 +1,2 @@
+event: response.incomplete
+data: {"type":"response.incomplete"}
