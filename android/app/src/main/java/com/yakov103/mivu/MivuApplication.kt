@@ -51,7 +51,7 @@ class MivuApplication : Application() {
         scope.launch { chatGPT.state.map { it.canInfer }.distinctUntilChanged().collect { if (it) drainCoach(retryWaiting = true) } }
     }
 
-    val coachWorker by lazy { CoachWorker(repository, chatGPT::respond, scope = scope) }
+    val coachWorker by lazy { CoachWorker(repository, chatGPT::inference, scope = scope) }
     private val watchingNetwork = AtomicBoolean(false)
 
     /** Runs saved Coach turns once the diary is ready; the returned job finishes when that pass does. */

@@ -64,7 +64,10 @@ class CoachWorkerTest {
     private fun state(id: UUID) = db.read { it.coachTurnWithoutPhotos(id) }!!.state
     private fun answer() = CoachInferenceResult("fixture-model", "Synthetic answer.", emptyList(), emptyList())
     private fun worker(infer: suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult) =
-        CoachWorker(repository, infer, sleep = { sleeps += it }, scope = scope)
+        bound { infer }
+
+    private fun bound(bind: () -> suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult) =
+        CoachWorker(repository, bind, sleep = { sleeps += it }, scope = scope)
 
     @Test fun resumesPendingAfterRestart() = runBlocking {
         val interrupted = turn("Synthetic first")
@@ -95,6 +98,22 @@ class CoachWorkerTest {
         assertEquals(CoachTurnState.waitingForNetwork, state(offline.id))
         assertEquals(listOf(1_000L, 2_000L, 1_000L, 2_000L, 4_000L), sleeps)
         assertEquals(7, calls.get())
+    }
+
+    // iOS binds the connection once per turn; its retries reuse that binding instead of rebinding to a new model or account.
+    @Test fun bindsOncePerTurnAcrossRetries() = runBlocking {
+        val first = turn("Synthetic first")
+        val second = turn("Synthetic second")
+        val binds = AtomicInteger()
+        val calls = AtomicInteger()
+        bound {
+            binds.incrementAndGet()
+            ({ _, _ -> if (calls.incrementAndGet() == 1) throw SocketTimeoutException() else answer() })
+        }.drain(profile.id, true)!!.join()
+        assertEquals(CoachTurnState.completed, state(first.id))
+        assertEquals(CoachTurnState.completed, state(second.id))
+        assertEquals(2, binds.get())
+        assertEquals(3, calls.get())
     }
 
     @Test fun duplicateDrainRequestsCoalesce() = runBlocking {

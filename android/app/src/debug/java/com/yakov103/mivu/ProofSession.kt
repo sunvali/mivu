@@ -127,7 +127,7 @@ object ProofSession {
             val h = db.head()
             val turn = db.captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), COACH_TEXT, emptyList(),
                 CoachCaptureContext(now, zone, h.activeDayID, h.previousDayConfirmedAt, h.activeConversationSegmentID)), h.revision)
-            val done = CoachEngine(db, app(context).chatGPT::respond).run(turn.id)
+            val done = CoachEngine(db, app(context).chatGPT.inference()).run(turn.id)
             // State and receipt count only; the reply text stays in the scratch diary.
             check(done.state == CoachTurnState.completed) { "turn ${done.state.name}" }
             "Turn completed; ${done.receipts.size} saved records"

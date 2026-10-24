@@ -88,10 +88,9 @@ class ChatGPTConnection(
         if (s.isConnecting || s.isDisconnecting || !s.consented) return
         val revision = synchronized(lock) { generation }
         try {
-            restoring.withLock {
-                // Registration records outlive sign-out, so restore the first one that still has credentials.
-                for (registration in store.registrations()) if (auth.restore(registration.id) != null) break
-            }
+            // Only the account the person chose; other saved credentials stay unused (iOS `selectedRegistrationID`).
+            val selection = prefs.getString(SELECTED, null) ?: return
+            restoring.withLock { auth.restore(selection) }
             if (!ifCurrent(revision) { apply(auth.snapshot()) }) return
             if (state.value.account == AccountState.connected) loadModels(revision)
         } catch (e: CancellationException) {
@@ -131,7 +130,8 @@ class ChatGPTConnection(
         try {
             restoring.withLock {}
             val current = state.value
-            val returning = store.registrations().firstOrNull { it.id == current.registrationID }
+            val selection = current.registrationID ?: prefs.getString(SELECTED, null)
+            val returning = store.registrations().firstOrNull { it.id == selection }
             val attempt = OAuthAttempt.make(store.hostID(), returning?.issuedClientID, loop.start(),
                 requestPlanConsent = returning != null && current.account == AccountState.planPermissionMissing)
             if (!ifCurrent(revision) {}) return
@@ -139,6 +139,7 @@ class ChatGPTConnection(
             val code = attempt.consumeCallback(withTimeout(5 * 60_000L) { loop.await() })
             val session = auth.establish(code, attempt.verifier, attempt.nonce, returning?.id)
             val applied = ifCurrent(revision) {
+                prefs.edit().putString(SELECTED, session.registration.id).apply()
                 if (prefs.getString(PAUSED, null) == session.registration.id) prefs.edit().remove(PAUSED).apply()
                 _state.update { it.copy(models = emptyList(), selectedModel = "") }
                 apply(auth.snapshot())
@@ -183,6 +184,7 @@ class ChatGPTConnection(
             val outcome = try { auth.disconnect() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
             ifCurrent(revision) {
                 if (outcome != null) {
+                    if (prefs.getString(SELECTED, null) == previous.registrationID) prefs.edit().remove(SELECTED).apply()
                     val notice = if (outcome == RevocationOutcome.Confirmed) ConnectionNotice.disconnected else ConnectionNotice.unconfirmed
                     _state.update { it.copy(notice = notice) }
                 } else {
@@ -190,6 +192,7 @@ class ChatGPTConnection(
                     val retained = auth.snapshot()
                     apply(retained)
                     if (retained != null && retained.registrationID == previous.registrationID) {
+                        prefs.edit().putString(SELECTED, retained.registrationID).apply()
                         _state.update { it.copy(models = previous.models, selectedModel = previous.selectedModel) }
                     }
                     _state.update { it.copy(notice = ConnectionNotice.storageFailed) }
@@ -200,13 +203,23 @@ class ChatGPTConnection(
         }
     }
 
-    /** iOS `respondForCoach`: one request bound to the session, account and model current when it starts. */
-    suspend fun respond(input: List<CoachInferenceInput>, tools: JsonObject): CoachInferenceResult {
-        val (revision, owner, model) = synchronized(lock) {
+    private data class Binding(val generation: Int, val owner: String?, val model: String)
+
+    /**
+     * iOS `inference()`: binds one Coach turn to the session, account and model current now. Every round and retry of
+     * that turn goes through the returned function and ends with [SessionError.SessionChanged] once any of them changes.
+     */
+    fun inference(): suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult {
+        val binding = synchronized(lock) {
             val s = _state.value
-            if (!s.canInfer) throw SessionError.NoActiveSession
-            Triple(generation, s.registrationID, s.selectedModel)
-        }
+            if (s.canInfer) Binding(generation, s.registrationID, s.selectedModel) else null
+        } ?: return { _, _ -> throw SessionError.NoActiveSession }
+        return { input, tools -> respond(binding, input, tools) }
+    }
+
+    /** iOS `respondForCoach`. */
+    private suspend fun respond(binding: Binding, input: List<CoachInferenceInput>, tools: JsonObject): CoachInferenceResult {
+        val (revision, owner, model) = binding
         suspend fun validate() {
             currentCoroutineContext().ensureActive()
             synchronized(lock) {
@@ -265,6 +278,7 @@ class ChatGPTConnection(
                     _state.update { it.copy(account = AccountState.planPermissionMissing) }
                     ConnectionNotice.permission
                 }
+                error == SessionError.NetworkUnavailable -> ConnectionNotice.offline
                 else -> ConnectionNotice.unavailable
             }
             _state.update { it.copy(notice = notice) }
@@ -300,5 +314,6 @@ class ChatGPTConnection(
         const val CONSENT = "openAISharingConsent"
         const val WELCOME = "chatGPTPlanWelcomeSeen"
         const val PAUSED = "pausedRegistrationID"
+        const val SELECTED = "selectedRegistrationID"
     }
 }

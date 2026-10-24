@@ -31,7 +31,8 @@ import kotlinx.serialization.json.JsonObject
  */
 class CoachWorker(
     private val repository: DiaryRepository,
-    private val infer: suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult,
+    /** Binds one turn's inference (iOS `connection.coachInference()`); called once per turn, before its first round. */
+    private val bind: () -> suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult,
     private val prepareImages: suspend (List<ByteArray>) -> List<ByteArray> = ::visionCopies,
     private val sleep: suspend (Long) -> Unit = { delay(it) },
     private val scope: CoroutineScope,
@@ -94,7 +95,8 @@ class CoachWorker(
                 if (turnID == previous) { capturedOnly = true; return } // the engine left it pending; wait for the next request
                 previous = turnID
                 try {
-                    CoachEngine(db, ::resilient, prepareImages) { _activity.value = turnID to it }.run(turnID)
+                    val infer = bind()
+                    CoachEngine(db, { input, tools -> resilient(infer, input, tools) }, prepareImages) { _activity.value = turnID to it }.run(turnID)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -111,7 +113,11 @@ class CoachWorker(
     }
 
     /** iOS `resilient`: retries a transient inference failure after 1, 2 and 4 seconds. */
-    private suspend fun resilient(input: List<CoachInferenceInput>, tools: JsonObject): CoachInferenceResult {
+    private suspend fun resilient(
+        infer: suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult,
+        input: List<CoachInferenceInput>,
+        tools: JsonObject,
+    ): CoachInferenceResult {
         for (delayMs in DELAYS) {
             try {
                 return infer(input, tools)

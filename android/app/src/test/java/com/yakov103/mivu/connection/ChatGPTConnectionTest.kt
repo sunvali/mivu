@@ -37,6 +37,7 @@ class ChatGPTConnectionTest {
     private val tokenPath = "/api/accounts/oauth/token"
     private val registration = AccountRegistration(VerifiedIdentity("https://auth.openai.com", "synthetic-account"), identity.clientID)
     @Volatile private var nonce = ""
+    @Volatile private var subject = "synthetic-account"
 
     // Synthetic Responses host: two listed models; `/v1/responses` replies with [status] after [release] opens.
     private val apiPaths = CopyOnWriteArrayList<String>()
@@ -84,13 +85,17 @@ class ChatGPTConnectionTest {
     private fun now() = System.currentTimeMillis() / 1000
 
     private fun tokenReply() = JSONObject(mapOf("access_token" to "synthetic-access", "refresh_token" to "synthetic-refresh",
-        "id_token" to identity.token(mapOf("nonce" to nonce, "iat" to now() - 10, "exp" to now() + 300)),
+        "id_token" to identity.token(mapOf("nonce" to nonce, "sub" to subject, "iat" to now() - 10, "exp" to now() + 300)),
         "token_type" to "Bearer", "expires_in" to 3600, "scope" to planScopes)).toString()
 
     private fun consent() { prefs.edit().putBoolean("openAISharingConsent", true).commit() }
 
-    private fun saved() = store.replace(Credentials(registration, "synthetic-access", "synthetic-refresh", "synthetic-id-token",
-        planScopes.split(" ").toSet(), now() + 3600))
+    /** A session saved by an earlier sign-in: its credentials and the chosen registration. */
+    private fun saved(expiresAt: Long = now() + 3600) {
+        store.replace(Credentials(registration, "synthetic-access", "synthetic-refresh", "synthetic-id-token",
+            planScopes.split(" ").toSet(), expiresAt))
+        prefs.edit().putString("selectedRegistrationID", registration.id).commit()
+    }
 
     private fun restored() = connection().also { runBlocking { it.restore() } }
 
@@ -108,7 +113,7 @@ class ChatGPTConnectionTest {
 
     private val input = listOf(CoachInferenceInput.Message(CoachInferenceInput.Role.user, "two boiled eggs and a slice of toast"))
 
-    private fun respond(c: ChatGPTConnection): Result<*> = runBlocking { runCatching { c.respond(input, CoachTools.declarations()) } }
+    private fun respond(c: ChatGPTConnection): Result<*> = runBlocking { runCatching { c.inference()(input, CoachTools.declarations()) } }
 
     private fun awaitResponseRequest() {
         val deadline = System.currentTimeMillis() + 5_000
@@ -246,6 +251,40 @@ class ChatGPTConnectionTest {
         }
         assertEquals(SessionError.SessionChanged, result.exceptionOrNull())
         assertEquals(AccountState.connected, c.state.value.account)
+    }
+
+    @Test fun restoreBringsBackOnlyTheChosenAccount() {
+        consent()
+        // Account A's credentials remain from before consent; the person connects B, then disconnects it.
+        store.replace(Credentials(registration, "synthetic-access", "synthetic-refresh", "synthetic-id-token",
+            planScopes.split(" ").toSet(), now() + 3600))
+        subject = "synthetic-account-b"
+        val c = connection()
+        connect(c)
+        assertEquals(AccountState.connected, c.state.value.account)
+        assertTrue(c.state.value.registrationID != registration.id)
+        runBlocking { c.disconnect() }
+        val relaunched = restored()
+        assertEquals(AccountState.disconnected, relaunched.state.value.account)
+        assertNull(relaunched.state.value.registrationID)
+        assertNull(relaunched.auth.snapshot())
+    }
+
+    @Test fun modelChangeMidTurnEndsTheTurn() {
+        consent(); saved()
+        val c = restored()
+        val turn = c.inference()
+        runBlocking { turn(input, CoachTools.declarations()) }
+        c.selectModel("synthetic-model-b")
+        val next = runBlocking { runCatching { turn(input, CoachTools.declarations()) } }
+        assertEquals(SessionError.SessionChanged, next.exceptionOrNull())
+        assertEquals(1, apiPaths.count { it == "/v1/responses" })
+    }
+
+    @Test fun offlineRefreshShowsOfflineNotice() {
+        consent(); saved(expiresAt = now())
+        auth.delayMs = 1_000
+        assertEquals(ConnectionNotice.offline, restored().state.value.notice)
     }
 
     @Test fun respondReturnsTheModelReply() {
