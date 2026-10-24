@@ -27,6 +27,8 @@ android {
         minSdk = 31
         targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Screenshot seeding wipes the app's diary: run it only by hand with `am instrument -e class`.
+        testInstrumentationRunnerArguments["notClass"] = "com.yakov103.mivu.ui.today.TodayFixtureSeed"
         versionCode = 1
         versionName = file("../../version.txt").readText().trim()
     }
@@ -57,6 +59,8 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)

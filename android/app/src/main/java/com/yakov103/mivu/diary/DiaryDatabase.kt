@@ -114,6 +114,11 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         fun isLive(kind: Tombstone, id: UUID): Boolean = exists(kind.name, id)
         fun isTombstoned(kind: Tombstone, id: UUID): Boolean = exists("tombstone_${kind.name}", id)
         fun days(): List<TrackingDay> = this@DiaryDatabase.days()
+        /** One day's meals, as iOS `readModel`: bounded by the day instead of loading every meal's photos. */
+        fun dayMeals(dayID: UUID): List<DiaryMeal> =
+            records("meal", DiaryMeal.serializer(), "parent = ?", dayID).mapNotNull { meal(it.second.id) }
+        fun goals(): List<GoalRecord> = records("goal", GoalRecord.serializer()).map { it.second }
+        fun dayWorkouts(dayID: UUID): List<WorkoutSession> = records("workout", WorkoutSession.serializer(), "parent = ?", dayID).map { it.second }
         fun coachTurnsWithoutPhotos(): List<CoachTurn> = this@DiaryDatabase.coachTurnsWithoutPhotos()
         fun submissionParent(id: UUID): UUID? =
             records("submission", MealSubmission.serializer(), "id = ?", id).firstOrNull()?.first?.parent?.let(UUID::fromString)

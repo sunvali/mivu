@@ -40,19 +40,30 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yakov103.mivu.R
+import com.yakov103.mivu.SampleMode
+import com.yakov103.mivu.ui.today.TodayScreen
+import com.yakov103.mivu.ui.today.TodayViewModel
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.DiaryProfile
 import com.yakov103.mivu.diary.DiaryRepository
 import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+
+/** The savedStateHandle key a capture screen sets on the Today entry when it saves a meal. */
+const val SAVED_MEAL_ID = "savedMealID"
 
 @Serializable
 sealed interface Route {
@@ -80,7 +91,7 @@ fun MivuApp(repository: DiaryRepository) {
     LaunchedEffect(repository) { if (repository.bootstrapState.value == null) repository.bootstrap() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
-            is Bootstrap.Ready -> Shell()
+            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID)
             Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
@@ -122,10 +133,17 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Shell() {
+private fun Shell(repository: DiaryRepository, profileID: UUID) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val current = Tab.entries.firstOrNull { tab -> entry?.destination?.hasRoute(tab.route::class) == true } ?: Tab.Today
+    val selectTab = { route: Route ->
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -148,32 +166,49 @@ private fun Shell() {
                     val selected = tab == current
                     ShortNavigationBarItem(
                         selected = selected,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                        onClick = { selectTab(tab.route) },
+                        icon = { Icon(painterResource(if (selected) tab.selectedIcon else tab.icon), contentDescription = null) },
+                        label = {
+                            // Labels scale to 150% at most: at 200% "Progress" no longer fits a quarter of a phone and breaks mid-word.
+                            val density = LocalDensity.current
+                            CompositionLocalProvider(LocalDensity provides Density(density.density, minOf(density.fontScale, 1.5f))) {
+                                Text(tab.label, maxLines = 1)
                             }
                         },
-                        icon = { Icon(painterResource(if (selected) tab.selectedIcon else tab.icon), contentDescription = null) },
-                        label = { Text(tab.label) },
                     )
                 }
             }
         },
     ) { padding ->
         NavHost(navController, startDestination = Route.Today, Modifier.padding(padding)) {
-            composable<Route.Today> { Box(Modifier.fillMaxSize()) } // Today's content arrives with the Today screen.
+            composable<Route.Today> { entry ->
+                val today = viewModel(key = profileID.toString()) { TodayViewModel(repository, profileID, SampleMode.enabled) }
+                // Capture screens hand back the saved meal through this entry, for the "Saved on this phone" receipt.
+                val saved by entry.savedStateHandle.getStateFlow<String?>(SAVED_MEAL_ID, null).collectAsStateWithLifecycle()
+                LaunchedEffect(saved) {
+                    saved?.let { today.showReceipt(UUID.fromString(it)); entry.savedStateHandle[SAVED_MEAL_ID] = null }
+                }
+                TodayScreen(
+                    today,
+                    onOpenMeal = null, // shortcut: meal detail arrives with the Diary milestone; rows open it then.
+                    onLogWithPip = { selectTab(Route.Coach) },
+                    onAddManually = { day -> navController.navigate(Route.ManualEntry(day?.toString(), null)) },
+                    onLogMeal = { navController.navigate(Route.Composer) },
+                )
+            }
             composable<Route.Diary> { LaterUpdate() }
             composable<Route.Progress> { LaterUpdate() }
             composable<Route.Coach> { LaterUpdate() }
+            // shortcut: placeholders until the manual entry and composer screens replace them.
+            composable<Route.ManualEntry> { LaterUpdate(Modifier.testTag("manualEntryRoute")) }
+            composable<Route.Composer> { LaterUpdate() }
         }
     }
 }
 
 @Composable
-private fun LaterUpdate() {
-    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+private fun LaterUpdate(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Text("Arrives in a later update", style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
     }
