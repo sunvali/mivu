@@ -3,11 +3,19 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Next Play version code: the last ledger line's code + 1, or 1 when empty.
-fun nextVersionCode(ledger: File): Int =
-    ledger.readLines()
-        .filter { it.isNotBlank() && !it.startsWith("#") }
-        .lastOrNull()?.trim()?.split(Regex("\\s+"))?.first()?.toInt()?.plus(1) ?: 1
+// Next Play version code: last ledger code + 1 (1 when empty); fails on a missing or non-increasing ledger.
+fun nextVersionCode(ledger: File): Int {
+    require(ledger.isFile) { "Play upload ledger missing: $ledger" }
+    var last = 0
+    ledger.readLines().forEachIndexed { i, line ->
+        if (line.isBlank() || line.startsWith("#")) return@forEachIndexed
+        val code = line.trim().split(Regex("\\s+")).first().toIntOrNull()
+            ?: error("${ledger.name} line ${i + 1}: first field must be an integer code")
+        require(code > last) { "${ledger.name} line ${i + 1}: code $code must exceed $last" }
+        last = code
+    }
+    return last + 1
+}
 
 android {
     namespace = "com.yakov103.mivu"
