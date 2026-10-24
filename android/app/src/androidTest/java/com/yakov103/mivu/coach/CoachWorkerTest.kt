@@ -24,6 +24,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import org.junit.After
@@ -134,6 +136,23 @@ class CoachWorkerTest {
         assertEquals(2, calls.get())
         assertEquals(CoachTurnState.completed, state(first.id))
         assertEquals(CoachTurnState.completed, state(second.id))
+    }
+
+    // A background job that finds a worker already running must hold the process open until that worker is done.
+    @Test fun awaitIdleWaitsForTheRunningWorker() = runBlocking {
+        val t = turn("Synthetic first")
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val worker = worker { _, _ -> started.complete(Unit); release.await(); answer() }
+        worker.drain(profile.id, true)!!
+        started.await()
+        assertNull(worker.drain(profile.id, true))
+        val idle = scope.launch { worker.awaitIdle() }
+        delay(200)
+        assertTrue(idle.isActive)
+        release.complete(Unit)
+        idle.join()
+        assertEquals(CoachTurnState.completed, state(t.id))
     }
 
     @Test fun diaryErrorEndsThePassAndLaterDrainsRun() = runBlocking {

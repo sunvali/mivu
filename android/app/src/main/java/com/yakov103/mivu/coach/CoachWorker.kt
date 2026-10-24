@@ -17,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -37,7 +38,7 @@ class CoachWorker(
     private val sleep: suspend (Long) -> Unit = { delay(it) },
     private val scope: CoroutineScope,
 ) {
-    private val running = AtomicBoolean(false)
+    private val running = MutableStateFlow(false)
     private val requested = AtomicBoolean(false)
     @Volatile private var profileID: UUID? = null
     @Volatile private var includeWaitingForConnection = false
@@ -68,12 +69,24 @@ class CoachWorker(
                 try {
                     while (requested.getAndSet(false)) pass(this@CoachWorker.profileID ?: break)
                 } catch (e: Throwable) {
-                    running.set(false); throw e
+                    running.value = false; throw e
                 }
-                running.set(false)
+                running.value = false
                 // A request that arrived after the last pass found nothing is served here, unless another worker took it.
                 if (!requested.get() || !running.compareAndSet(false, true)) return@launch
             }
+        }
+    }
+
+    /**
+     * Suspends until no worker runs and no request waits, so a background job holds the process open for a pass it did not
+     * start. A request seen between workers is taken by the finishing worker or its requester within a moment.
+     */
+    suspend fun awaitIdle() {
+        while (true) {
+            running.first { !it }
+            if (!requested.get()) return
+            delay(10)
         }
     }
 

@@ -62,7 +62,6 @@ import com.yakov103.mivu.diary.coachDays
 import com.yakov103.mivu.diary.coachSegments
 import com.yakov103.mivu.diary.coachSourceTurn
 import com.yakov103.mivu.diary.coachTurnForMeal
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -220,8 +219,6 @@ class CoachViewModel(
             }
         }
         viewModelScope.launch { combine(activity, _message, _sending, _timeline) { _, _, _, _ -> }.collect { resolveCompanion() } }
-        // iOS onChange(planAuthorized): turns waiting for a connection resume once ChatGPT connects.
-        viewModelScope.launch { connected.drop(1).collect { if (it) drain(true) } }
     }
 
     fun updateText(value: String) { if (!_sending.value) store(_draft.value.copy(text = value.take(MAX_TEXT))) }

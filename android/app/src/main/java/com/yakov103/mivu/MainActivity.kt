@@ -11,6 +11,7 @@ import com.yakov103.mivu.ui.theme.MivuTheme
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,5 +27,12 @@ class MainActivity : ComponentActivity() {
             activity = app.coachWorker.activity,
         )
         setContent { MivuTheme { MivuApp(app.repository, onMealCaptured = { app.drainSampleAnalysis() }, coach = coach, connection = app.chatGPT, appScope = app.scope) } }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val app = application as MivuApplication
+        // The process scope, so the check outlives an activity that is finishing.
+        app.scope.launch { if (app.hasPendingWork()) app.scheduleBackgroundDrain() }
     }
 }

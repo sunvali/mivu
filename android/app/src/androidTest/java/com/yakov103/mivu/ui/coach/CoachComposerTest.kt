@@ -28,9 +28,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.coach.CoachActivity
 import com.yakov103.mivu.diary.CoachReply
 import com.yakov103.mivu.diary.CoachTurn
-import com.yakov103.mivu.diary.captureCoachSubmission
-import com.yakov103.mivu.diary.CoachSubmissionPayload
-import com.yakov103.mivu.diary.CoachCaptureContext
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.startDay
 import com.yakov103.mivu.pip.CompanionPose
@@ -48,8 +45,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import com.yakov103.mivu.connection.ConnectionState
-import com.yakov103.mivu.diary.CoachTurnState
-import com.yakov103.mivu.diary.failCoachTurn
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -66,7 +61,6 @@ class CoachComposerTest {
     private lateinit var repository: DiaryRepository
     private lateinit var profileID: UUID
     private var drains = 0
-    private val retryWaiting = mutableListOf<Boolean>()
     private val connected = MutableStateFlow(false)
     private var connection by mutableStateOf(ConnectionState())
     private var agreed = 0
@@ -91,7 +85,7 @@ class CoachComposerTest {
 
     private fun db() = repository.database(profileID)
 
-    private fun model(saved: SavedStateHandle = SavedStateHandle()) = CoachViewModel(repository, profileID, drain = { drains++; retryWaiting += it },
+    private fun model(saved: SavedStateHandle = SavedStateHandle()) = CoachViewModel(repository, profileID, drain = { drains++ },
         connected = connected, activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = saved,
         prepare = { preparePhoto(context.contentResolver, it, folder) })
 
@@ -389,18 +383,5 @@ class CoachComposerTest {
         compose.onNodeWithText("Using ChatGPT plan", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Manage usage").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         compose.onNodeWithText("Connect ChatGPT for replies").assertDoesNotExist()
-    }
-
-    @Test fun connectingResumesWaitingTurns() {
-        val waiting = db().captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), "Synthetic eggs", emptyList(), db().head().let {
-            CoachCaptureContext(Instant.now(), it.profile.timeZoneID, it.activeDayID, it.previousDayConfirmedAt, it.activeConversationSegmentID)
-        }), db().head().revision)
-        db().transaction(null) { it.failCoachTurn(waiting.id, CoachTurnState.waitingForConnection) }
-        launch()
-        compose.waitForIdle()
-        assertFalse(true in retryWaiting)
-        connected.value = true
-        compose.waitUntil(10_000) { true in retryWaiting }
-        assertEquals(CoachTurnState.waitingForConnection, db().coachTurnsWithoutPhotos().single().state) // the worker runs it, not Coach
     }
 }
