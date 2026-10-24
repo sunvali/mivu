@@ -5,6 +5,8 @@ on each one. Each milestone's plan reads this file and removes items once they
 are done.
 
 ## Milestone 4 (Coach)
+- Port iOS `capturedOnly` retry in `CoachWorker`: an oldest turn stuck on a retryable error must not hold back newer messages.
+- The debug "Run Coach turn" button writes into the selected diary and can report a false failure while a worker pass runs; use a scratch profile.
 - Add camera capture, ported from iOS `PhotoCapture` (camera plus the
   permission flow).
 - Wire the Ask Pip entry points (Today, Diary, meal, food) to Coach drafts.

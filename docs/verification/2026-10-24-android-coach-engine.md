@@ -2,7 +2,9 @@
 
 Recorded 2026-10-24. Plan: Android Coach engine (plan 4a).
 
-- Source SHA tested: `f829f5f0db0c798f218387977ea2af2dc7542df0` (branch `docs/android-design`, clean tree).
+- Source SHA tested: `f7e2c830da16f5706285dff5a06b4714c882be1b` (branch `docs/android-design`, clean tree).
+  CoachWorkerTest (5/5) and CoachEngineTest (10/10) were re-run at `753c2388`, which includes the
+  worker fix `f829f5f0`, with 0 failures.
 - Environment: macOS 27.0.1, Android Studio JBR, Gradle 9.8.2; emulator `Medium_Phone_API_37.0`
   (emulator-5554, API 37) for instrumented tests. Counts come from the JUnit result XML.
 - Scope: focused Coach classes only. The full connected suite was not run, per the owner.
@@ -37,7 +39,7 @@ Recorded 2026-10-24. Plan: Android Coach engine (plan 4a).
 ## What was ported
 
 - Turn storage: Coach turn state, undo rows, finish and fail transitions (`DiaryCapture.kt`, `DiaryDatabase.kt`).
-- Bounded Coach context (`CoachContext.kt`): 14-day window, 8,192-byte receipt cap, 65,536-byte JSON cap, no full snapshot.
+- Bounded Coach context (`CoachContext.kt`): 14-day window, 8,192-byte receipt cap, 60,000-byte context cap (65,536-byte cap on stored Coach JSON), no full snapshot.
 - Tools: declarations, strict parsing, fingerprints checked against iOS golden fixtures (`CoachTools.kt`).
 - Reads, meal and progress writes, undo (`CoachReads`, `CoachWrites`, `ProgressWrites.kt`).
 - Engine (`CoachEngine.kt`): up to 8 rounds and 16 calls, photo limits, ungrounded-claim guard, clarification rule, reply lines.
