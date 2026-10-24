@@ -14,13 +14,20 @@ struct DayProgressAttributes: ActivityAttributes {
         var fat: Double?
         var fatTarget: Double?
         var hideWhenLocked: Bool
-        /// True when some food lacks a nutrient, so the amounts are only what is known. Optional so an older running activity still decodes.
-        var incomplete: Bool? = nil
+        /// Nutrients ("kcal", "protein", "carbs", "fat") some food lacks, so their amounts are only what is known.
+        /// Optional so an older running activity still decodes.
+        var partial: [String]? = nil
 
+        func isPartial(_ nutrient: String) -> Bool { partial?.contains(nutrient) == true }
         var isOver: Bool { kcalEaten.flatMap { eaten in kcalTarget.map { eaten > $0 } } ?? false }
+        private var kcalNumber: String? {
+            kcalEaten.map { eaten in Self.number(kcalTarget.map { abs($0 - eaten) } ?? eaten) }
+        }
+        /// Unknown calories can only add intake, so a partial figure is at most what is left, or at least what is over or eaten.
         var figure: String {
-            guard let kcalEaten else { return "–" }
-            return Self.number(kcalTarget.map { abs($0 - kcalEaten) } ?? kcalEaten)
+            guard let kcalNumber else { return "–" }
+            guard isPartial("kcal") else { return kcalNumber }
+            return word == "left" ? "≤" + kcalNumber : kcalNumber + "+"
         }
         var word: String { kcalTarget == nil ? "eaten" : isOver ? "over" : "left" }
         var compact: String { isOver ? "\(figure) over" : figure }
@@ -29,11 +36,12 @@ struct DayProgressAttributes: ActivityAttributes {
             let macros = [("Protein", protein, proteinTarget), ("Carbs", carbs, carbsTarget), ("Fat", fat, fatTarget)]
                 .compactMap { name, value, target in
                     value.map { v in
-                        let amount = (incomplete == true ? "at least " : "") + Self.number(v)
+                        let amount = (isPartial(name.lowercased()) ? "at least " : "") + Self.number(v)
                         return target.map { "\(name) \(amount) of \(Self.number($0)) grams." } ?? "\(name) \(amount) grams."
                     }
                 }
-            let calories = kcalEaten == nil ? "Calories not known yet." : "\(figure) calories \(word)."
+            let bound = isPartial("kcal") ? (word == "left" ? "At most " : "At least ") : ""
+            let calories = kcalNumber.map { "\(bound)\($0) calories \(word)." } ?? "Calories not known yet."
             return ([calories] + macros).joined(separator: " ")
         }
 
