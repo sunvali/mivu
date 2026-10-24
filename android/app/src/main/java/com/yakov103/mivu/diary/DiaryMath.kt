@@ -1,8 +1,11 @@
 package com.yakov103.mivu.diary
 
+import kotlinx.serialization.Serializable
+
 // Ports of iOS nutritionTotals (DiaryModels.swift:360), dayNutritionTotals (DiaryReadModels.swift:167),
 // ProgressAnalytics.daily(snapshot:) (ProgressAnalytics.swift:53,80) and DiarySnapshot.goal(on:) (DiaryModels.swift:272).
 
+@Serializable
 data class NutritionTotals(
     val kcal: Double?,
     val carbs: Double?,

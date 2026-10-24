@@ -3,12 +3,14 @@ package com.yakov103.mivu.diary
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 // Ports of iOS diaryWeek (DiaryDatabaseScreenQueries.swift:43), daySummary (DiaryDatabaseMealMutations.swift:238),
 // dayProjection (:224), setCompleteness (:133) and ProgressAnalytics.status (ProgressAnalytics.swift:70).
 // Meals are read without photo bytes.
 
-enum class DayStatus { Open, Closed, Skipped }
+@Serializable enum class DayStatus { @SerialName("open") Open, @SerialName("closed") Closed, @SerialName("skipped") Skipped }
 
 /** One date of a week; [day] is null when nothing was recorded. Several days sharing a date (zones) are combined. */
 data class DiaryDaySummary(

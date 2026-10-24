@@ -156,8 +156,6 @@ sealed class CoachError : Exception() {
     object InvalidTool : CoachError()
     object InvalidArguments : CoachError()
     object LimitExceeded : CoachError()
-    /** A write whose diary port has not landed yet (weight, workout, goal and preference writes). */
-    object NotImplemented : CoachError()
 }
 
 /** iOS `coachJSON`: sorted keys, at most 64 KiB. */
@@ -389,22 +387,22 @@ private fun receiptLine(receipts: List<CoachReceipt>): String? {
 private fun CoachTurn.contextTurn() = CoachContext.Turn(id, capturedAt, coachBoundedText(text, 1024),
     assistantText?.let { coachBoundedText(it, 1024) }, receiptLine(receipts))
 
-private fun DiaryDatabase.Tx.mealRow(id: UUID): DiaryMeal =
+internal fun DiaryDatabase.Tx.mealRow(id: UUID): DiaryMeal =
     boundedRecords("meal", DiaryMeal.serializer(), "id = ?", listOf(id.key), "ordinal", 1).firstOrNull() ?: throw DiaryError.NotFound
 
-private fun DiaryDatabase.Tx.mealItems(id: UUID): List<FoodItem> =
+internal fun DiaryDatabase.Tx.mealItems(id: UUID): List<FoodItem> =
     boundedRecords("item", FoodItem.serializer(), "parent = ?", listOf(id.key), "ordinal", 201)
 
 private fun <T> DiaryDatabase.Tx.byID(table: String, serializer: KSerializer<T>, id: UUID): T =
     boundedRecords(table, serializer, "id = ?", listOf(id.key), "ordinal", 1).firstOrNull() ?: throw DiaryError.NotFound
 
-private fun DiaryDatabase.Tx.count(sql: String, args: List<String>) = query(sql, args) { it.moveToFirst(); it.getInt(0) }
+internal fun DiaryDatabase.Tx.count(sql: String, args: List<String>) = query(sql, args) { it.moveToFirst(); it.getInt(0) }
 
-private fun DiaryDatabase.Tx.ids(sql: String, args: List<String>): List<UUID> =
+internal fun DiaryDatabase.Tx.ids(sql: String, args: List<String>): List<UUID> =
     query(sql, args) { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }.map(::uuid)
 
 private fun uuid(text: String?): UUID = runCatching { UUID.fromString(text) }.getOrElse { throw DiaryError.InvalidData("coach context id") }
 
-private fun <T> size(serializer: KSerializer<T>, value: T) = SwiftJson.encodeToString(serializer, value).toByteArray().size
+internal fun <T> size(serializer: KSerializer<T>, value: T) = SwiftJson.encodeToString(serializer, value).toByteArray().size
 
 private val UUID.key get() = toString().uppercase()

@@ -275,10 +275,4 @@ class CoachWritesTest {
         assertEquals(CoachDestination.connection, open.destination)
         assertEquals("{\"completed\":false,\"destination\":\"connection\"}", open.resultJSON)
     }
-
-    @Test fun partBWritesAreNotYetApplied() {
-        val head = db.head()
-        throws<CoachError.NotImplemented> { apply(CoachWrite.Weight(today, 70.0, "kg", null)) }
-        assertEquals(head.revision + 1, db.head().revision) // only the capture committed
-    }
 }

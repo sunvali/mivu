@@ -7,11 +7,10 @@ import com.yakov103.mivu.coach.CoachError
 import com.yakov103.mivu.coach.CoachManualEdit
 import com.yakov103.mivu.coach.CoachWrite
 import com.yakov103.mivu.coach.CoachWriteMode
+import com.yakov103.mivu.coach.set
 import com.yakov103.mivu.coach.coachJSON
 import com.yakov103.mivu.coach.commandFingerprint
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -37,10 +36,10 @@ fun DiaryDatabase.applyCoachWrites(
 ): List<CoachReceipt> =
     atHead { tx ->
         val turn = tx.coachTurn(turnID) ?: throw DiaryError.NotFound
-        tx.validateCoachWrites(turn, writes, mode, at)
+        val normalized = tx.validateCoachWrites(turn, writes, mode, at)
         val batch = CoachBatch(turn, at)
         val results = mutableListOf<CoachReceipt>()
-        for (write in writes) {
+        for (write in normalized) {
             val key = "${turnID.swift}/${write.target}"
             val prior = turn.receipts.firstOrNull { it.operationKey == key }
             if (prior != null) { results += prior; continue }
@@ -71,7 +70,19 @@ private class CoachBatch(val turn: CoachTurn, val at: Instant) {
 @Serializable private data class Deleted(val id: UUID, val deleted: Boolean = true)
 @Serializable private data class Queued(val queued: Boolean = true, val turnID: UUID)
 @Serializable private data class Handoff(val destination: CoachDestination, val completed: Boolean = false)
+@Serializable internal data class PreferencesResult(val profile: DiaryProfile, val diaryRevision: Int)
 @Serializable private data class CorrectionResult(val mealID: UUID, val targetLocalDate: String, val revision: Int, val state: SubmissionState, val item: FoodItem)
+
+private fun WorkoutSession.edited(draft: WorkoutDraft) = copy(kind = draft.kind, durationMinutes = draft.durationMinutes,
+    exercises = draft.exercises, estimatedBurnKcal = draft.estimatedBurnKcal, burnSource = draft.burnSource, revision = revision + 1)
+
+/** iOS `weightReceiptDay`: a legacy weight without a day names the profile-zone day of its measurement. */
+private fun DiaryDatabase.Tx.weightReceiptDay(weight: WeightEntry): TrackingDay {
+    weight.dayID?.let { return trackingDay(it) }
+    val zone = head.profile.timeZoneID
+    val date = diaryDateLabel(weight.measuredAt, zone)
+    return resolveDay(date, zone, diaryDateOnlyInstant(date, zone))
+}
 
 private val DiaryMeal.state get() = submissions.lastOrNull()?.state ?: SubmissionState.saved
 
@@ -85,16 +96,11 @@ private fun DiaryDatabase.Tx.mealResult(id: UUID): String {
     return coachJSON(CoachContext.Meal.serializer(), CoachContext.Meal(m.id, m.dayID, m.revision, m.eatenAt, m.timePrecision, m.items, m.state))
 }
 
-/** iOS `diaryDateOnlyInstant`: noon of [date] in [zone]. */
-private fun dateOnlyInstant(date: String, zone: String): Instant {
-    if (!validLocalDate(date) || !validZone(zone)) throw DiaryError.InvalidData("date")
-    return LocalDate.parse(date).atTime(12, 0).atZone(ZoneId.of(zone, ZoneId.SHORT_IDS)).toInstant()
-}
-
-internal fun DiaryDatabase.Tx.validateCoachWrites(turn: CoachTurn, writes: List<CoachWrite>, mode: CoachWriteMode, at: Instant) {
+/** The batch as it will apply: a dated weight that already exists becomes its correction. */
+internal fun DiaryDatabase.Tx.validateCoachWrites(turn: CoachTurn, original: List<CoachWrite>, mode: CoachWriteMode, at: Instant): List<CoachWrite> {
+    if (original.map { it.target }.toSet().size != original.size) throw CoachError.InvalidArguments
+    val writes = original.map { resolvedWeightWrite(it, turn) }
     if (writes.map { it.target }.toSet().size != writes.size) throw CoachError.InvalidArguments
-    // shortcut: iOS first resolves a dated weight to a correction of the existing entry (resolvedWeightWrite); weight
-    // writes are refused below until the weight port lands, so the targets are already final.
     val records = writes.mapNotNull {
         when (it) {
             is CoachWrite.CorrectWeight -> "weight/${it.id.swift}"
@@ -121,6 +127,20 @@ internal fun DiaryDatabase.Tx.validateCoachWrites(turn: CoachTurn, writes: List<
         }
     }
     if (turn.receipts.size + newCount > MAX_RECEIPTS) throw CoachError.LimitExceeded
+    return writes
+}
+
+/** iOS `resolvedWeightWrite`: log_weight for a date that already has a weight corrects it (revision required). */
+private fun DiaryDatabase.Tx.resolvedWeightWrite(write: CoachWrite, turn: CoachTurn): CoachWrite {
+    if (write !is CoachWrite.Weight) return write
+    val prefix = "${turn.id.swift}/"
+    if (turn.receipts.any { it.operationKey == "${prefix}weight/${write.date}" }) return write
+    val days = boundedRecords("day", TrackingDay.serializer(), "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND " +
+        "json_extract(CAST(payload AS TEXT), '$.timeZoneID') = ?", listOf(write.date, turn.captureTimeZoneID), "ordinal", 10_000)
+    val dayIDs = days.map { it.id }.toSet()
+    val existing = turn.receipts.firstOrNull { r -> r.weightID != null && r.operationKey == "${prefix}correct_weight/${r.weightID.swift}" && r.dayID in dayIDs }
+        ?.weightID ?: days.firstNotNullOfOrNull { weightOn(it.id) }?.id ?: return write
+    return CoachWrite.CorrectWeight(existing, write.value, write.unit, write.revision ?: throw DiaryError.StaleRevision)
 }
 
 /** A replayed receipt still names live records, and a replayed delete is still deleted. */
@@ -160,7 +180,7 @@ private fun DiaryDatabase.Tx.validateCoachWrite(write: CoachWrite, turn: CoachTu
         is CoachWrite.Food -> {
             if (write.items.isEmpty()) throw DiaryError.InvalidData("food")
             validateItems(write.items)
-            dateOnlyInstant(write.date, zone)
+            diaryDateOnlyInstant(write.date, zone)
             if (write.eatenAt != null && diaryDateLabel(write.eatenAt, zone) != write.date) throw DiaryError.InvalidData("eaten at")
             turn.pendingMealID?.let { id ->
                 val current = mealRecord(id)
@@ -174,7 +194,7 @@ private fun DiaryDatabase.Tx.validateCoachWrite(write: CoachWrite, turn: CoachTu
             val previous = meal(write.mealID, write.revision).items.firstOrNull { it.id == write.item.id } ?: throw DiaryError.NotFound
             validateItems(listOf(diaryCorrectedItem(write.item, previous, emptySet())))
         }
-        is CoachWrite.Close -> dateOnlyInstant(write.date, zone)
+        is CoachWrite.Close -> diaryDateOnlyInstant(write.date, zone)
         is CoachWrite.Manual -> when (val e = write.edit) {
             is CoachManualEdit.Item -> {
                 val m = meal(e.mealID, e.revision)
@@ -190,7 +210,7 @@ private fun DiaryDatabase.Tx.validateCoachWrite(write: CoachWrite, turn: CoachTu
             is CoachManualEdit.Accept -> meal(e.mealID, e.revision).submission(e.submissionID)
             is CoachManualEdit.Move -> {
                 if (meal(e.mealID, e.revision).dayID != e.originalDayID) throw DiaryError.StaleRevision
-                dateOnlyInstant(e.date, zone)
+                diaryDateOnlyInstant(e.date, zone)
             }
             is CoachManualEdit.DeleteMeal -> meal(e.mealID, e.revision)
             is CoachManualEdit.Retry -> meal(e.mealID, e.revision)
@@ -217,25 +237,44 @@ private fun DiaryDatabase.Tx.validateCoachWrite(write: CoachWrite, turn: CoachTu
                 val ordered = head.activeDayID?.let { trackingDay(it).startAt <= turn.capturedAt } ?: true
                 if (zone != profileZone || diaryDateLabel(turn.capturedAt, zone) != diaryDateLabel(at, profileZone) || !ordered) throw DiaryError.AmbiguousDay
             }
-            is CoachManualEdit.Coverage -> dateOnlyInstant(e.date, zone)
+            is CoachManualEdit.Coverage -> diaryDateOnlyInstant(e.date, zone)
             is CoachManualEdit.Undo -> {
                 val undo = coachUndo(e.operationKey) ?: throw CoachError.InvalidArguments
                 if (undo.undone || undoState(mealInfo(undo.mealID)) != undo.afterState) throw DiaryError.StaleRevision
             }
             is CoachManualEdit.Open -> {}
-            // shortcut: goal and preference writes throw until their port lands (plan 4a task 4 part B).
-            is CoachManualEdit.Goals, is CoachManualEdit.Preferences -> throw CoachError.NotImplemented
+            is CoachManualEdit.Goals -> {
+                if (exactGoal(e.date)?.revision != e.revision) throw DiaryError.StaleRevision
+                if (e.targets.map { it.nutrient }.toSet().size != e.targets.size ||
+                    e.targets.any { it.nutrient !in setOf("kcal", "carbs", "protein", "fat") }) throw DiaryError.InvalidData("targets")
+            }
+            is CoachManualEdit.Preferences -> if (head.revision != e.revision.toLong()) throw DiaryError.StaleRevision
         }
-        // shortcut: weight and workout writes throw until their port lands (plan 4a task 4 part B).
-        is CoachWrite.Weight, is CoachWrite.CorrectWeight, is CoachWrite.Workout, is CoachWrite.EditWorkout,
-        is CoachWrite.DeleteWeight, is CoachWrite.DeleteWorkout -> throw CoachError.NotImplemented
+        is CoachWrite.Workout -> diaryDateOnlyInstant(write.date, zone)
+        is CoachWrite.Weight -> {
+            diaryDateOnlyInstant(write.date, zone)
+            if (write.revision != null) throw DiaryError.StaleRevision
+            validateWeight(WeightEntry(UUID.randomUUID(), null, turn.capturedAt, write.value, write.unit))
+        }
+        is CoachWrite.CorrectWeight -> {
+            val record = weight(write.id)
+            if (record.revision != write.revision) throw DiaryError.StaleRevision
+            validateWeight(record.copy(value = write.value, unit = write.unit, revision = record.revision + 1))
+        }
+        is CoachWrite.EditWorkout -> {
+            val record = workout(write.id)
+            if (record.revision != write.revision) throw DiaryError.StaleRevision
+            validateWorkout(record.edited(write.draft))
+        }
+        is CoachWrite.DeleteWeight -> if (weight(write.id).revision != write.revision) throw DiaryError.StaleRevision
+        is CoachWrite.DeleteWorkout -> if (workout(write.id).revision != write.revision) throw DiaryError.StaleRevision
     }
 }
 
 /** iOS `coachDay`: the tracking day a Coach write for [date] lands on, from the turn's persisted capture clock. */
 private fun DiaryDatabase.Tx.coachDay(date: String, turn: CoachTurn, activateIfEmpty: Boolean = true, exact: Boolean = false): TrackingDay {
     val zone = turn.captureTimeZoneID
-    val noon = dateOnlyInstant(date, zone)
+    val noon = diaryDateOnlyInstant(date, zone)
     val current = diaryDateLabel(turn.capturedAt, zone) == date
     var rollsOver = false
     if (!exact && current) {
@@ -325,9 +364,43 @@ private fun DiaryDatabase.Tx.applyCoachWrite(write: CoachWrite, batch: CoachBatc
             receipt = receipt.copy(dayID = day.id, resultJSON = coachJSON(TrackingDay.serializer(), day))
         }
         is CoachWrite.Manual -> receipt = applyManual(write.edit, batch, receipt)
-        // shortcut: refused in validateCoachWrite until the weight and workout port (plan 4a task 4 part B).
-        is CoachWrite.Weight, is CoachWrite.CorrectWeight, is CoachWrite.Workout, is CoachWrite.EditWorkout,
-        is CoachWrite.DeleteWeight, is CoachWrite.DeleteWorkout -> throw CoachError.NotImplemented
+        is CoachWrite.Weight -> {
+            val profileZone = head.profile.timeZoneID
+            val current = write.date == diaryDateLabel(turn.capturedAt, turn.captureTimeZoneID)
+            val day = coachDay(write.date, if (current) turn.copy(activeDayID = null, resolvedDayID = null) else turn, activateIfEmpty = false)
+            val conflicting = boundedRecords("day", TrackingDay.serializer(), "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND id != ?",
+                listOf(write.date, day.id.swift), "ordinal", 10_000)
+            if (conflicting.any { weightOn(it.id) != null }) throw DiaryError.StaleRevision
+            val active = head.activeDayID?.let { trackingDay(it) }
+            if (current && write.date == diaryDateLabel(batch.at, profileZone) &&
+                (active == null || (active.localDate <= write.date && active.startAt <= turn.capturedAt))) activateDay(day)
+            val saved = setWeight(day.id, write.value, write.unit, write.revision)
+            receipt = receipt.copy(dayID = day.id, weightID = saved.id, resultJSON = coachJSON(WeightEntry.serializer(), saved))
+        }
+        is CoachWrite.CorrectWeight -> {
+            val record = weight(write.id).let { it.copy(value = write.value, unit = write.unit, revision = it.revision + 1) }
+            putWeight(record)
+            receipt = receipt.copy(dayID = weightReceiptDay(record).id, weightID = record.id, resultJSON = coachJSON(WeightEntry.serializer(), record))
+        }
+        is CoachWrite.Workout -> {
+            val saved = createWorkout(coachDay(write.date, turn).id, write.draft)
+            receipt = receipt.copy(dayID = saved.dayID, workoutID = saved.id, resultJSON = coachJSON(WorkoutSession.serializer(), saved))
+        }
+        is CoachWrite.EditWorkout -> {
+            val record = workout(write.id).edited(write.draft)
+            putWorkout(record)
+            receipt = receipt.copy(dayID = record.dayID, workoutID = record.id, resultJSON = coachJSON(WorkoutSession.serializer(), record))
+        }
+        is CoachWrite.DeleteWeight -> {
+            val dayID = weightReceiptDay(weight(write.id)).id
+            deleteWeight(write.id, write.revision)
+            receipt = receipt.copy(dayID = dayID, weightID = write.id, resultJSON = coachJSON(Deleted.serializer(), Deleted(write.id)))
+        }
+        is CoachWrite.DeleteWorkout -> {
+            val dayID = workout(write.id).dayID
+            deleteWorkout(write.id, write.revision)
+            receipt = receipt.copy(dayID = dayID, workoutID = write.id, resultJSON = coachJSON(Deleted.serializer(), Deleted(write.id)))
+        }
     }
     return receipt
 }
@@ -414,8 +487,21 @@ private fun DiaryDatabase.Tx.applyManual(edit: CoachManualEdit, batch: CoachBatc
         }
         is CoachManualEdit.Open -> receipt.copy(destination = edit.destination,
             resultJSON = coachJSON(Handoff.serializer(), Handoff(edit.destination)))
-        // shortcut: refused in validateCoachWrite until the goal and preference port (plan 4a task 4 part B).
-        is CoachManualEdit.Goals, is CoachManualEdit.Preferences -> throw CoachError.NotImplemented
+        is CoachManualEdit.Goals -> {
+            val exact = exactGoal(edit.date)
+            var value = exact ?: (effectiveGoal(edit.date) ?: GoalRecord(UUID.randomUUID(), edit.date, turn.captureTimeZoneID, 1, NutritionValues(), null, false))
+                .copy(id = UUID.randomUUID(), effectiveLocalDate = edit.date, timeZoneID = turn.captureTimeZoneID)
+            value = value.copy(targets = edit.targets.fold(value.targets) { targets, target -> targets.set(target) })
+            if (edit.clearWeight) value = value.copy(goalWeightKg = null) else if (edit.weight != null) value = value.copy(goalWeightKg = edit.weight)
+            if (edit.exerciseCredit != null) value = value.copy(exerciseCreditEnabled = edit.exerciseCredit)
+            val saved = setGoal(value, exact?.revision)
+            receipt.copy(goalID = saved.id, resultJSON = coachJSON(GoalRecord.serializer(), saved))
+        }
+        is CoachManualEdit.Preferences -> {
+            val profile = head.profile.copy(timeZoneID = edit.timezone ?: head.profile.timeZoneID, preferences = edit.text ?: head.profile.preferences)
+            updateProfile(profile, null)
+            receipt.copy(resultJSON = coachJSON(PreferencesResult.serializer(), PreferencesResult(profile, (head.revision + 1).toInt())))
+        }
     }
 }
 

@@ -258,12 +258,12 @@ internal fun strictJsonContainer(text: String): Boolean {
     return value(1).also { ws() } && i == text.length
 }
 
-private fun validateWeight(w: WeightEntry) = ok(
+internal fun validateWeight(w: WeightEntry) = ok(
     w.value.finite() && w.value > 0 && w.value <= 1500 && w.unit in setOf("kg", "lb") && w.revision > 0 && w.revision < 1_000_000,
     "weight",
 )
 
-private fun validateWorkout(w: WorkoutSession) {
+internal fun validateWorkout(w: WorkoutSession) {
     ok(
         w.revision > 0 && w.revision < 1_000_000 && w.durationMinutes in 1..1440 && w.exercises.size <= 100 &&
             w.estimatedBurnKcal.inRange(0.0, 100_000.0, true) && (w.burnSource == null || w.estimatedBurnKcal != null),
