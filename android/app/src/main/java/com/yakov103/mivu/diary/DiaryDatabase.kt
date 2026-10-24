@@ -123,6 +123,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             meals("parent = ?", "parent IN (SELECT id FROM meal WHERE parent = ?)", dayID, photoBytes = false)
         fun goals(): List<GoalRecord> = records("goal", GoalRecord.serializer()).map { it.second }
         fun dayWorkouts(dayID: UUID): List<WorkoutSession> = records("workout", WorkoutSession.serializer(), "parent = ?", dayID).map { it.second }
+        fun dayWeight(dayID: UUID): WeightEntry? = records("weight", WeightEntry.serializer(), "parent = ?", dayID).firstOrNull()?.second
         fun coachTurnsWithoutPhotos(): List<CoachTurn> = this@DiaryDatabase.coachTurnsWithoutPhotos()
         fun submissionParent(id: UUID): UUID? =
             records("submission", MealSubmission.serializer(), "id = ?", id).firstOrNull()?.first?.parent?.let(UUID::fromString)
