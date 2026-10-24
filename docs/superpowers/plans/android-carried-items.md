@@ -5,13 +5,16 @@ on each one. Each milestone's plan reads this file and removes items once they
 are done.
 
 ## Milestone 4 (Coach)
-- Normalize the attachment and context instants in `CoachSubmissionPayload`
-  with `.stored` before comparing manifests (`DiaryCapture.kt`,
-  `MealCapture.kt`), and add a test that retries within the same second.
-  Otherwise Coach retries on a real device get `StaleRevision`.
 - Add camera capture, ported from iOS `PhotoCapture` (camera plus the
   permission flow).
 - Wire the Ask Pip entry points (Today, Diary, meal, food) to Coach drafts.
+- Compare the Coach reply summary lines with iOS for undo, scale, move, photos, weight, workout, goals and day
+  coverage. Only the food "Saved" line is tested.
+- Add a model picker; the engine uses the first entry of the model catalog.
+- Add `record_source`, then make `delete_workout` strip photo copies from turns whose only progress was that
+  workout, and make `find_meals` use the real origin instead of the earliest turn naming the meal.
+- Run the live Coach turn against ChatGPT once the owner has signed in on the emulator (Phase 0 evidence).
+- Port legacy-capture recovery and the pendingMealID prepare step in the Coach worker.
 
 ## Milestone 5 (live analysis)
 - `MealAnalysisWorker` must not hold its mutex across network calls. Remove
