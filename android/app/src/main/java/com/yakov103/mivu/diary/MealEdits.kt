@@ -14,7 +14,10 @@ private fun DiaryMeal.checkRevision(expected: Int?) {
 /** Replaces one food; with [reviewSubmissionID] it edits that pending review's proposal instead of the meal. */
 fun DiaryDatabase.editItem(
     mealID: UUID, item: FoodItem, explicitNutrients: Set<String>, reviewSubmissionID: UUID? = null, expectedRevision: Int? = null,
-) = atHead { tx ->
+) = atHead { it.editItem(mealID, item, explicitNutrients, reviewSubmissionID, expectedRevision) }
+
+internal fun DiaryDatabase.Tx.editItem(mealID: UUID, item: FoodItem, explicitNutrients: Set<String>, reviewSubmissionID: UUID?, expectedRevision: Int?) {
+    val tx = this
     val meal = tx.mealRecord(mealID)
     meal.checkRevision(expectedRevision)
     if (reviewSubmissionID != null) {
@@ -26,7 +29,7 @@ fun DiaryDatabase.editItem(
         val items = proposal.items.toMutableList().also { it[index] = diaryCorrectedItem(item, it[index], explicitNutrients) }
         validateItems(items)
         tx.save(meal.with(sub.copy(proposal = proposal.copy(items = items))))
-        return@atHead
+        return
     }
     val index = meal.items.indexOfFirst { it.id == item.id }
     if (index < 0) throw DiaryError.NotFound
@@ -35,7 +38,10 @@ fun DiaryDatabase.editItem(
     tx.commitDirectEdit(meal, items, "Direct item edit")
 }
 
-fun DiaryDatabase.deleteItem(mealID: UUID, itemID: UUID, expectedRevision: Int) = atHead { tx ->
+fun DiaryDatabase.deleteItem(mealID: UUID, itemID: UUID, expectedRevision: Int) = atHead { it.deleteItem(mealID, itemID, expectedRevision) }
+
+internal fun DiaryDatabase.Tx.deleteItem(mealID: UUID, itemID: UUID, expectedRevision: Int?) {
+    val tx = this
     val meal = tx.mealRecord(mealID)
     meal.checkRevision(expectedRevision)
     if (meal.items.none { it.id == itemID }) throw DiaryError.NotFound
@@ -46,7 +52,10 @@ fun DiaryDatabase.deleteItem(mealID: UUID, itemID: UUID, expectedRevision: Int) 
 }
 
 /** Resizes every portion by one ratio so the foods with a known energy total [targetKcal]. */
-fun DiaryDatabase.scaleMeal(mealID: UUID, targetKcal: Double, expectedRevision: Int) = atHead { tx ->
+fun DiaryDatabase.scaleMeal(mealID: UUID, targetKcal: Double, expectedRevision: Int) = atHead { it.scaleMeal(mealID, targetKcal, expectedRevision) }
+
+internal fun DiaryDatabase.Tx.scaleMeal(mealID: UUID, targetKcal: Double, expectedRevision: Int?) {
+    val tx = this
     val meal = tx.mealRecord(mealID)
     meal.checkRevision(expectedRevision)
     meal.requireSaved()
@@ -64,9 +73,12 @@ fun DiaryDatabase.scaleMeal(mealID: UUID, targetKcal: Double, expectedRevision: 
  * iOS `deleteMealPhoto`: removes one photo and keeps the meal. Coach turns using it drop the ID unless they still reach
  * it elsewhere; unsaved submissions naming it are cancelled. A photo already gone commits nothing.
  */
-fun DiaryDatabase.deletePhoto(mealID: UUID, photoID: UUID) = atHead { tx ->
+fun DiaryDatabase.deletePhoto(mealID: UUID, photoID: UUID) = atHead { it.deletePhoto(mealID, photoID) }
+
+internal fun DiaryDatabase.Tx.deletePhoto(mealID: UUID, photoID: UUID) {
+    val tx = this
     val meal = tx.mealRecord(mealID)
-    if (meal.photos.none { it.id == photoID }) return@atHead
+    if (meal.photos.none { it.id == photoID }) return
     // Turns first: the meal write re-validates turns that still name the photo.
     for (row in tx.coachTurnsWithoutPhotos()) {
         if (photoID !in row.photoIDs || (row.pendingMealID != mealID && row.receipts.none { it.mealID == mealID })) continue
@@ -85,7 +97,10 @@ fun DiaryDatabase.deletePhoto(mealID: UUID, photoID: UUID) = atHead { tx ->
 /** Moves a meal to [toDayID]; an [eatenAt] must fall on that day's date and makes the time exact. */
 fun DiaryDatabase.moveMeal(
     mealID: UUID, toDayID: UUID, eatenAt: Instant? = null, expectedRevision: Int? = null, expectedDayID: UUID? = null,
-) = atHead { tx ->
+) = atHead { it.moveMeal(mealID, toDayID, eatenAt, expectedRevision, expectedDayID) }
+
+internal fun DiaryDatabase.Tx.moveMeal(mealID: UUID, toDayID: UUID, eatenAt: Instant?, expectedRevision: Int?, expectedDayID: UUID?) {
+    val tx = this
     val meal = tx.mealRecord(mealID)
     val day = tx.trackingDay(toDayID)
     meal.checkRevision(expectedRevision)

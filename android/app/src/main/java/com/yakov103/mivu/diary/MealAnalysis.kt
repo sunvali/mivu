@@ -37,13 +37,16 @@ fun DiaryDatabase.prepareAnalysis(mealID: UUID, submissionID: UUID) = atHead { t
     if (sub.baseRevision != meal.revision) tx.save(meal.with(sub.copy(baseRevision = meal.revision, proposal = null)))
 }
 
-fun DiaryDatabase.applyAnalysis(output: AnalysisOutput) = atHead { tx ->
+fun DiaryDatabase.applyAnalysis(output: AnalysisOutput) = atHead { it.applyAnalysis(output) }
+
+internal fun DiaryDatabase.Tx.applyAnalysis(output: AnalysisOutput) {
+    val tx = this
     if (output.profileID != tx.head.profile.id) throw DiaryError.WrongOwner
     if (output.schemaVersion != 1 || output.items.isEmpty()) throw DiaryError.InvalidData("analysis output")
     validateItems(output.items)
     val meal = tx.mealRecord(output.mealID)
     val sub = meal.submission(output.submissionID)
-    if (sub.state == SubmissionState.saved || sub.state == SubmissionState.awaitingReview) return@atHead
+    if (sub.state == SubmissionState.saved || sub.state == SubmissionState.awaitingReview) return
     if (sub.state == SubmissionState.cancelled) throw DiaryError.NotFound
     if (output.baseRevision != meal.revision || output.baseRevision != sub.baseRevision) throw DiaryError.StaleRevision
     tx.save(if (sub.reviewFirst) meal.with(sub.copy(proposal = output, state = SubmissionState.awaitingReview))
@@ -51,13 +54,17 @@ fun DiaryDatabase.applyAnalysis(output: AnalysisOutput) = atHead { tx ->
 }
 
 /** iOS `acceptReview`, plus the caller's [expectedMealRevision] (checked after the idempotent return). */
-fun DiaryDatabase.acceptReview(mealID: UUID, submissionID: UUID, expectedMealRevision: Int) = atHead { tx ->
+fun DiaryDatabase.acceptReview(mealID: UUID, submissionID: UUID, expectedMealRevision: Int) =
+    atHead { it.acceptReview(mealID, submissionID, expectedMealRevision) }
+
+internal fun DiaryDatabase.Tx.acceptReview(mealID: UUID, submissionID: UUID, expectedMealRevision: Int?) {
+    val tx = this
     val meal = tx.mealRecord(mealID)
     val sub = meal.submission(submissionID)
-    if (sub.state == SubmissionState.saved) return@atHead
+    if (sub.state == SubmissionState.saved) return
     val proposal = sub.proposal
     if (sub.state != SubmissionState.awaitingReview || proposal == null) throw DiaryError.InvalidData("review")
-    if (meal.revision != proposal.baseRevision || meal.revision != expectedMealRevision) throw DiaryError.StaleRevision
+    if (meal.revision != proposal.baseRevision || (expectedMealRevision != null && meal.revision != expectedMealRevision)) throw DiaryError.StaleRevision
     tx.save(tx.commitSavedItems(meal, proposal.items, meal.revision).with(sub.copy(state = SubmissionState.saved)))
 }
 
@@ -87,9 +94,11 @@ internal fun DiaryDatabase.Tx.commitDirectEdit(meal: DiaryMeal, items: List<Food
 }
 
 /** iOS `deleteMeal`; the store's meal delete repairs the Coach turns that use its photos. */
-fun DiaryDatabase.deleteMeal(mealID: UUID, expectedRevision: Long) = transaction(expectedRevision) { tx ->
-    tx.mealRecord(mealID)
-    tx.delete(DiaryDatabase.Tombstone.meal, mealID)
+fun DiaryDatabase.deleteMeal(mealID: UUID, expectedRevision: Long) = transaction(expectedRevision) { it.deleteMeal(mealID) }
+
+internal fun DiaryDatabase.Tx.deleteMeal(mealID: UUID) {
+    mealRecord(mealID)
+    delete(DiaryDatabase.Tombstone.meal, mealID)
 }
 
 /** iOS `setSubmissionState`: a cancelled submission stays cancelled (NotFound). */

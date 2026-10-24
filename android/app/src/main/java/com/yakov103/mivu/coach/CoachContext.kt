@@ -156,6 +156,8 @@ sealed class CoachError : Exception() {
     object InvalidTool : CoachError()
     object InvalidArguments : CoachError()
     object LimitExceeded : CoachError()
+    /** A write whose diary port has not landed yet (weight, workout, goal and preference writes). */
+    object NotImplemented : CoachError()
 }
 
 /** iOS `coachJSON`: sorted keys, at most 64 KiB. */

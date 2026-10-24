@@ -169,6 +169,9 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             CoachUndo(mealID, it.getInt(1), it.getString(2), before, it.getLong(4) != 0L)
         }
 
+        /** Marks [key]'s snapshot used; the caller's meal write commits it. */
+        internal fun markUndone(key: String) = db.execSQL("UPDATE coach_undo SET undone = 1 WHERE operationKey = ?", arrayOf(key))
+
         /** iOS `undoState`: captures, photos and moves keep the revision, so the day, submissions and photos count too. */
         internal fun undoState(meal: DiaryMeal): String =
             "${meal.revision}/${meal.dayID.key}/" + meal.submissions.map { it.id.key }.sorted().joinToString(",") + "/" +
