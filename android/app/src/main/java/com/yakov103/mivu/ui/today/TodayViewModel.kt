@@ -64,7 +64,7 @@ data class TodayUiState(
 
 private class TodayData(val day: TrackingDay?, val meals: List<DiaryMeal>, val goals: List<GoalRecord>, val workouts: List<WorkoutSession>)
 
-class TodayViewModel(private val repository: DiaryRepository, private val profileID: UUID, sampleMode: Boolean) : ViewModel() {
+class TodayViewModel(private val repository: DiaryRepository, val profileID: UUID, sampleMode: Boolean) : ViewModel() {
     private val receipt = MutableStateFlow<UUID?>(null)
     private val retries = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val _loadFailed = MutableStateFlow(false)

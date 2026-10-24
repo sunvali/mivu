@@ -75,7 +75,7 @@ private class Tools {
     }
 }
 
-private fun path(ops: List<PathOp>) = Path().apply {
+internal fun path(ops: List<PathOp>) = Path().apply {
     for (op in ops) when (op) {
         is PathOp.MoveTo -> moveTo(op.x, op.y)
         is PathOp.LineTo -> lineTo(op.x, op.y)

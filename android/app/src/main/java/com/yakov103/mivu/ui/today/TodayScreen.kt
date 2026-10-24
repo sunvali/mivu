@@ -43,6 +43,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -72,8 +76,21 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.diary.DiaryMeal
+import com.yakov103.mivu.pip.CompanionContext
+import com.yakov103.mivu.pip.CompanionOutput
+import com.yakov103.mivu.pip.CompanionPresentation
+import com.yakov103.mivu.pip.CompanionRuntime
+import com.yakov103.mivu.pip.CompanionSurface
+import com.yakov103.mivu.pip.CompanionTouch
+import com.yakov103.mivu.pip.PipAssets
+import com.yakov103.mivu.pip.PipCompanion
+import com.yakov103.mivu.pip.PipGestureLibrary
+import com.yakov103.mivu.pip.PipRigScene
+import com.yakov103.mivu.pip.rememberMotionPlayback
 import com.yakov103.mivu.ui.theme.MivuTheme
+import kotlinx.coroutines.delay
 import java.util.UUID
+import kotlin.random.Random
 
 private val Gutter = 16.dp
 private val CardShape = RoundedCornerShape(24.dp)
@@ -92,6 +109,7 @@ fun TodayScreen(
     val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
     val state = viewModel.state.collectAsStateWithLifecycle().value
         ?: return Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { if (loadFailed) LoadFailure(viewModel::retry) }
+    val pip = rememberTodayPip(viewModel.profileID)
     val list = rememberLazyListState()
     // The receipt and a read failure are inserted above the summary: bring them into view.
     LaunchedEffect(state.savedReceipt != null, loadFailed) { if (state.savedReceipt != null || loadFailed) list.animateScrollToItem(0) }
@@ -106,7 +124,7 @@ fun TodayScreen(
                 if (loadFailed) item(key = "loadFailed") { LoadFailure(viewModel::retry) }
                 if (state.sampleMode) item(key = "sample") { SampleBanner() }
                 state.savedReceipt?.let { id -> item(key = "receipt") { SavedReceipt(onOpenMeal?.let { { it(id) } }) } }
-                item(key = "summary") { SummaryCard(state, viewModel::startNewDay) }
+                item(key = "summary") { SummaryCard(state, viewModel::startNewDay, pip) }
                 item(key = "mealsHeader") {
                     Text("Meals", Modifier.padding(top = 12.dp).semantics { heading() },
                         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -121,18 +139,18 @@ fun TodayScreen(
 }
 
 @Composable
-private fun SummaryCard(state: TodayUiState, onStartNewDay: () -> Unit) {
+private fun SummaryCard(state: TodayUiState, onStartNewDay: () -> Unit, pip: TodayPip) {
     val large = isLargeText()
     Surface(Modifier.fillMaxWidth().testTag("todaySummary"), shape = RoundedCornerShape(28.dp), color = MivuTheme.colors.summarySurface) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             DayActions(state.displayDate, onStartNewDay)
             if (large) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Pip(144.dp) }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Pip(144.dp, pip) }
                 Intake(state)
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // 186 dp as iOS: taller pushes the first meal under the pinned actions.
-                    Pip(186.dp)
+                    Pip(186.dp, pip)
                     Intake(state, Modifier.weight(1f))
                 }
             }
@@ -188,12 +206,44 @@ private fun DayActions(date: String, onStartNewDay: () -> Unit) {
     }
 }
 
+/** Today's one Pip: the presentation outlives the summary item scrolling away; the runtime waits for the rig. */
+private class TodayPip(val output: CompanionOutput, val runtime: CompanionRuntime?, val onTouch: (CompanionTouch) -> Unit)
+
+/**
+ * Today shows resting, a greeting, idle beats and tap/pat; its context has nothing typing, processing or failing.
+ * Today's saved, first meal, day complete, welcome back and reviewed moments arrive in milestone 7.
+ */
+@Composable
+private fun rememberTodayPip(profileID: UUID): TodayPip {
+    val context = LocalContext.current
+    val assets = produceState<Pair<PipRigScene, PipGestureLibrary>?>(null) {
+        value = runCatching { PipAssets.load(context) }.getOrNull() // a missing rig keeps the still image
+    }.value
+    val scope = rememberCoroutineScope()
+    val presentation = remember(profileID) { CompanionPresentation(System::currentTimeMillis).apply { attach(profileID) } }
+    val runtime = assets?.let { (scene, library) ->
+        remember(scene) { CompanionRuntime(library, scene, scope, { System.nanoTime() / 1_000_000 }, Random.Default) }
+    }
+    val playback = rememberMotionPlayback()
+    var refresh by remember { mutableIntStateOf(0) }
+    val output = remember(presentation, playback, refresh) {
+        presentation.resolve(CompanionContext(CompanionSurface.Today, isTyping = false, isProcessing = false, needsRecovery = false, playback = playback))
+    }
+    LaunchedEffect(output.nextDeadline) {
+        val deadline = output.nextDeadline ?: return@LaunchedEffect
+        delay(deadline - System.currentTimeMillis())
+        refresh++
+    }
+    return TodayPip(output, runtime) { if (presentation.touch(it)) refresh++ else runtime?.earTwitch() }
+}
+
 /** Pip on the expressive cookie backdrop. Decorative, as iOS CompanionView. */
 @Composable
-private fun Pip(size: Dp) {
+private fun Pip(size: Dp, pip: TodayPip) {
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         Box(Modifier.matchParentSize().padding(size * 0.04f).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), CookieShape))
-        Image(painterResource(R.drawable.pip_preview), contentDescription = null, Modifier.size(size * 0.86f))
+        if (pip.runtime != null) PipCompanion(pip.output, CompanionSurface.Today, size * 0.86f, pip.runtime, pip.onTouch)
+        else Image(painterResource(R.drawable.pip_preview), contentDescription = null, Modifier.size(size * 0.86f))
     }
 }
 
