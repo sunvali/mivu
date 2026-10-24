@@ -9,8 +9,6 @@ struct DayProgressLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: DayProgressAttributes.self) { context in
             LockScreenProgress(state: context.state, isStale: context.isStale)
-                .activityBackgroundTint(Color.diarySurface)
-                .activitySystemActionForegroundColor(Color.diaryText)
                 .widgetURL(URL(string: "mivu://today"))
         } dynamicIsland: { context in
             let state = context.state, stale = context.isStale
@@ -59,6 +57,7 @@ private struct CompactFigure: View {
 
 /// The Lock Screen banner mirrors the expanded island: Pip, figure, ring, then the macros.
 private struct LockScreenProgress: View {
+    @Environment(\.colorScheme) private var colorScheme
     let state: DayState
     let isStale: Bool
 
@@ -74,6 +73,9 @@ private struct LockScreenProgress: View {
             if !isStale { MacroRow(state: state) }
         }
         .padding(.horizontal, 18).padding(.vertical, 16)
+        // ActivityKit resolves the tint outside these traits; a dynamic surface turned white behind dark-scheme text.
+        .activityBackgroundTint(Color.diarySurface.fixed(for: colorScheme))
+        .activitySystemActionForegroundColor(Color.diaryText.fixed(for: colorScheme))
     }
 }
 
