@@ -223,6 +223,9 @@ struct DiaryRootView: View {
             if value == .inactive { coach.pauseForInactiveScene() }
             if value == .background { continueInBackground() }
             if value == .active {
+                // A suspended app misses power and thermal notifications, so a cooled phone would keep Pip still.
+                lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+                thermalState = ProcessInfo.processInfo.thermalState
                 attachCompanion()
                 refreshCompanion()
             }
@@ -256,10 +259,10 @@ struct DiaryRootView: View {
         .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionPhotoEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: [coach.isSending, coach.companionNeedsRecovery, coach.companionIsProcessing]) { _, _ in refreshCompanion() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange).receive(on: RunLoop.main)) { _ in
             lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
-        .onReceive(NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification).receive(on: RunLoop.main)) { _ in
             thermalState = ProcessInfo.processInfo.thermalState
         }
         .task(id: runtimeUpdate) {
