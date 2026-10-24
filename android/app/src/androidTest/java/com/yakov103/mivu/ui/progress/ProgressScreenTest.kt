@@ -137,8 +137,9 @@ class ProgressScreenTest {
     private fun waitForTag(tag: String) = waitFor(hasTestTag(tag))
     private fun waitForText(text: String) = waitFor(hasText(text, substring = true))
     private fun scrollTo(matcher: SemanticsMatcher) = compose.onAllNodes(hasScrollToNodeAction()).onFirst().performScrollToNode(matcher)
+    /** Charts inside tappable cards are merged into the card, so their own node is read from the unmerged tree. */
     private fun description(tag: String) =
-        compose.onNodeWithTag(tag).fetchSemanticsNode().config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }.joinToString()
+        compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }.joinToString()
     private fun dates() = compose.onNodeWithTag("progressDates").fetchSemanticsNode().config[SemanticsProperties.Text].joinToString()
     private fun label(date: LocalDate) = date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
     private fun range(title: String) = compose.onNode(hasText(title) and isSelectable()).performClick()
@@ -151,7 +152,7 @@ class ProgressScreenTest {
 
     private fun back() {
         compose.onNodeWithTag("progressDetailBack").performClick()
-        waitForTag("progressHeadline")
+        waitForTag("progressList") // the list comes back where it was scrolled
     }
 
     @Test fun everyRangeRendersHeadlineWeightAndMacros() {
@@ -181,6 +182,7 @@ class ProgressScreenTest {
         assertTrue(summary.contains("${label(today.minusDays(1))}:"))
         assertFalse(summary.contains("${label(missing)}:"))
         openDetail("progressCalories", "Calories")
+        waitForTag("nutritionChartSummary")
         val row = missing.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.US))
         scrollTo(hasText(row))
         waitFor(hasTestTag("progressDayRow") and hasText(row, substring = true) and hasText("No log", substring = true))
@@ -214,6 +216,7 @@ class ProgressScreenTest {
         launchApp()
         openDetail("openWeight", "Weight")
         waitForTag("weightChart")
+        waitForTag("editWeight")
         scrollTo(hasText("Older measurements"))
         compose.onNode(hasText("Older measurements") and hasClickAction()).performClick()
         // The oldest weigh-in (89 days back) is only on the second page.
@@ -256,11 +259,12 @@ class ProgressScreenTest {
         seed()
         launchApp()
         assertTrue(description("nutritionChartSummary").startsWith("Calories by day"))
-        scrollTo(hasTestTag("weightTrendSummary"))
+        scrollTo(hasTestTag("openWeight"))
         assertTrue(description("weightTrendSummary").contains("weigh-ins"))
-        scrollTo(hasTestTag("macroDonut"))
+        scrollTo(hasTestTag("progressMacros"))
         assertTrue(description("macroDonut").contains("Protein"))
         openDetail("progressCalendar", "Calendar")
+        waitForTag("progressCalendarRow")
         assertTrue(compose.onAllNodesWithTag("progressCalendarRow").fetchSemanticsNodes().first()
             .config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }.joinToString().contains("logged"))
     }
