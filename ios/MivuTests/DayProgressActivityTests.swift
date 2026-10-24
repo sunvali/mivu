@@ -7,11 +7,11 @@ import Testing
     typealias State = DayProgressAttributes.ContentState
 
     /// A synthetic active day with one meal and an optional goal, reported the way Today reports it.
-    private func state(eaten: NutritionValues?, target: NutritionValues?, hide: Bool = true) throws -> State {
+    private func state(eaten: NutritionValues?, also: [NutritionValues] = [], target: NutritionValues?, hide: Bool = true) throws -> State {
         let start = try #require(ISO8601DateFormatter().date(from: "2026-10-21T05:00:00Z"))
         let day = TrackingDay(localDate: "2026-10-21", timeZoneID: "Asia/Jerusalem", startAt: start)
         let meals = eaten.map { [MealReadModel(id: UUID(), dayID: day.id, capturedAt: start, eatenAt: start, revision: 1, timePrecision: nil,
-                                               items: [FoodItem(name: "Synthetic bowl", nutrition: $0)],
+                                               items: ([$0] + also).map { FoodItem(name: "Synthetic bowl", nutrition: $0) },
                                                submissions: [], photos: [], sourceTurnID: nil)] } ?? []
         let goal = target.map { GoalRecord(effectiveLocalDate: "2026-10-01", timeZoneID: "Asia/Jerusalem", targets: $0,
                                            goalWeightKg: nil, exerciseCreditEnabled: false) }
@@ -19,7 +19,7 @@ import Testing
                              lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
         let model = DiaryReadModel(head: head, activeDay: day, meals: meals, weight: nil, workouts: [], activeGoal: goal,
                                    pendingAnalysisCount: 0)
-        return State(report: ProgressAnalytics.daily(readModel: model), hideWhenLocked: hide)
+        return State(readModel: model, hideWhenLocked: hide)
     }
 
     private let full = NutritionValues(kcal: 1360, carbs: 150, protein: 80, fat: 40)
@@ -85,6 +85,15 @@ import Testing
         // One saved item without calories makes the day's total unknown; "2,000 left" would overstate it.
         let s = try state(eaten: NutritionValues(carbs: 10, protein: 5, fat: 2), target: targets)
         #expect(s.kcalEaten == nil && s.figure == "–" && s.spoken.hasPrefix("Calories not known yet."))
+    }
+
+    @Test func calorieOnlyFoodKeepsKnownMacrosMarkedPartial() throws {
+        // A "200 kcal extra" entry has no macros; the rest of the day's protein must still show, as a lower bound.
+        let s = try state(eaten: full, also: [NutritionValues(kcal: 200)], target: targets)
+        #expect(s.kcalEaten == 1560 && s.protein == 80 && s.carbs == 150 && s.fat == 40 && s.macrosPartial == true)
+        #expect(State.macroAmount(s.protein, s.proteinTarget, partial: true) == "80+/120g")
+        #expect(s.spoken == "440 calories left. Protein at least 80 of 120 grams. Carbs at least 150 of 200 grams. Fat at least 40 of 60 grams.")
+        #expect(try state(eaten: full, target: targets).macrosPartial != true)
     }
 
     @Test func onlyActiveOrStaleActivitiesCountAsRunning() {

@@ -366,6 +366,15 @@ func nutritionTotals(_ items: [FoodItem]) -> NutritionTotals {
         unknownItemCount: items.filter { [$0.nutrition.kcal, $0.nutrition.carbs, $0.nutrition.protein, $0.nutrition.fat].contains(nil) }.count)
 }
 
+/// Each nutrient summed over the items that have it; nil only when none do. Display only, beside a partial marker.
+func knownNutritionSums(_ items: [FoodItem]) -> NutritionValues {
+    func sum(_ field: KeyPath<NutritionValues, Double?>) -> Double? {
+        let values = items.compactMap { $0.nutrition[keyPath: field] }
+        return values.isEmpty ? nil : values.reduce(0, +)
+    }
+    return NutritionValues(kcal: sum(\.kcal), carbs: sum(\.carbs), protein: sum(\.protein), fat: sum(\.fat))
+}
+
 private func unique(_ ids: [UUID]) -> Bool { Set(ids).count == ids.count }
 
 func validLocalDate(_ value: String) -> Bool {
