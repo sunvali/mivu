@@ -40,7 +40,7 @@ object CoachFixture {
         DiaryRepository(context).database(id).apply { startDay(now, head().revision); close() }
     }
 
-    /** Today's meals plus a logged receipt, a question with chips and one pending message. */
+    /** Today's meals plus a logged receipt, one waiting message, then the latest question with chips. */
     fun timeline(context: Context) {
         val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
         val id = TodayFixture.seed(context)
@@ -51,12 +51,12 @@ object CoachFixture {
         val receipt = db.applyCoachWrites(logged.id, listOf(CoachWrite.Food(LocalDate.now(ZoneId.systemDefault()).toString(), listOf(food), null)),
             at = now.minus(20, ChronoUnit.MINUTES)).single()
         db.transaction(null) { it.finishCoachTurn(logged.id, "Saved — about **410** kcal.") }
+        turn(db, "A flat white with oat milk", now.minus(15, ChronoUnit.MINUTES)) // waits for a connection
         val asked = turn(db, "Make that a smaller bowl", now.minus(10, ChronoUnit.MINUTES))
         db.transaction(null) {
             it.finishCoachTurn(asked.id, "Which meal should I change?",
                 CoachQuestion(CoachClarification.meal, listOf(CoachReply.Target.Meal(receipt.mealID!!)), "Make that a smaller bowl"))
         }
-        turn(db, "A flat white with oat milk", now)
         db.close()
     }
 
