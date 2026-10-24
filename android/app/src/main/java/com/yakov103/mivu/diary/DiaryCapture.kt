@@ -24,8 +24,11 @@ data class CoachSubmissionPayload(
         ) throw DiaryError.InvalidData("coach submission")
         if (text.blankLikeSwift() && attachments.isEmpty()) throw DiaryError.EmptyCapture
         attachments.forEach(::validatePhoto)
-        manifest = CoachSubmissionManifest(submissionID, context, fingerprint(text),
-            attachments.map { CoachSubmissionManifest.Attachment(it.id, it.role, it.createdAt, fingerprint(it.data)) },
+        // Instants as a stored row reads them back, so a retry of a sub-second capture compares equal.
+        manifest = CoachSubmissionManifest(submissionID,
+            context.copy(capturedAt = context.capturedAt.stored, previousDayConfirmedAt = context.previousDayConfirmedAt?.stored),
+            fingerprint(text),
+            attachments.map { CoachSubmissionManifest.Attachment(it.id, it.role, it.createdAt.stored, fingerprint(it.data)) },
             pendingMealID, pendingMealRevision, reply)
     }
 }
@@ -43,7 +46,7 @@ fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expect
             if (existing.submissionManifest != payload.manifest) throw DiaryError.StaleRevision
             return@transaction existing
         }
-        val c = payload.context
+        val c = payload.manifest.context
         val head = tx.head
         // shortcut: iOS compares the segment with its derived "effective" ID; Android has no segment index yet, so the
         // raw head value is compared. Upgrade with the Coach timeline segment port.
@@ -53,7 +56,8 @@ fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expect
         ) throw DiaryError.StaleRevision
         // Pending-meal captures compose their own meal/turn batch, as on iOS.
         if (payload.manifest.pendingMealID != null) throw DiaryError.InvalidData("pending meal capture")
-        CoachTurn(id = payload.submissionID, capturedAt = c.capturedAt, text = payload.text, photos = payload.attachments,
+        CoachTurn(id = payload.submissionID, capturedAt = c.capturedAt, text = payload.text,
+            photos = payload.attachments.map { it.copy(createdAt = it.createdAt.stored) },
             state = CoachTurnState.captured, receipts = emptyList(), captureTimeZoneID = c.timeZoneID,
             activeDayID = c.activeDayID, photoIDs = payload.attachments.map { it.id },
             submissionManifest = payload.manifest, captureSegmentID = c.activeConversationSegmentID,
@@ -78,3 +82,23 @@ fun DiaryDatabase.pendingCoachTurns(): List<UUID> = coachTurnsWithoutPhotos()
     .filter { it.state in PENDING }
     .sortedWith(compareBy<CoachTurn> { it.capturedAt }.thenBy { it.id.toString().uppercase() })
     .map { it.id }
+
+/** iOS `updateCoachTurn`: sets the turn's progress; a day choice only belongs to a clarification. */
+fun DiaryDatabase.Tx.updateCoachTurn(
+    turnID: UUID, state: CoachTurnState, assistantText: String?, question: CoachQuestion? = null,
+    incomplete: Boolean? = null, needsDayChoice: Boolean = false,
+) {
+    val turn = coachTurn(turnID) ?: throw DiaryError.NotFound
+    putCoachTurn(turn.copy(state = state, assistantText = assistantText, question = question, incomplete = incomplete,
+        needsDayChoice = if (state == CoachTurnState.needsClarification && needsDayChoice) true else null))
+}
+
+/** iOS `failCoachTurn` (`setCoachTurnState`): a completed turn keeps its reply; any other state clears it. */
+fun DiaryDatabase.Tx.failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Boolean = false) {
+    val kept = if (state == CoachTurnState.completed) coachTurn(turnID) else null
+    updateCoachTurn(turnID, state, kept?.assistantText, kept?.question, kept?.incomplete, needsDayChoice)
+}
+
+/** iOS `finishCoachTurn` (`completeCoachTurn`): the turn is completed with its reply; receipts are untouched. */
+fun DiaryDatabase.Tx.finishCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = null, incomplete: Boolean? = null) =
+    updateCoachTurn(turnID, CoachTurnState.completed, assistantText, question, incomplete)

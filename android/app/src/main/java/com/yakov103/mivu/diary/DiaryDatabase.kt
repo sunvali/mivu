@@ -18,6 +18,7 @@ import java.util.UUID
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.builtins.ListSerializer
 
 // Port of the row layout in ios/Mivu/Diary/DiaryDatabase.swift (`write`/`rows`) and the transaction rule in
 // DiaryDatabaseMutations.swift. Each record is one row of SwiftJson ordered by `ordinal`; photo bytes sit beside it.
@@ -44,6 +45,9 @@ private val PARENTS = mapOf(
 )
 private const val MAX_REVISION = 10_000_000L
 private const val MAX_COACH_TURNS = 10_000L // iOS appendCapture
+
+/** One `coach_undo` row: [before] is null when undoing deletes the meal the change created. */
+data class CoachUndo(val mealID: UUID, val afterRevision: Int, val afterState: String, val before: List<FoodItem>?, val undone: Boolean)
 
 private class Row(val id: String, val parent: String?, val payload: ByteArray)
 
@@ -84,6 +88,10 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                     } finally { db.endTransaction() }
                 }
                 if (db.version != 1) throw DiaryError.InvalidData("database version")
+                // Outside the version gate, as iOS: existing diaries gain it too. Derived Coach state, never archived.
+                db.execSQL("CREATE TABLE IF NOT EXISTS coach_undo (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL " +
+                    "REFERENCES coach_turn(id) ON DELETE CASCADE, mealID TEXT NOT NULL, afterRevision INTEGER NOT NULL, " +
+                    "afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
             } catch (e: Throwable) { db.close(); throw e }
             return DiaryDatabase(db, profileID, file)
         }
@@ -129,6 +137,33 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         fun coachTurnsWithoutPhotos(): List<CoachTurn> = this@DiaryDatabase.coachTurnsWithoutPhotos()
         fun submissionParent(id: UUID): UUID? =
             records("submission", MealSubmission.serializer(), "id = ?", id).firstOrNull()?.first?.parent?.let(UUID::fromString)
+
+        /**
+         * iOS `saveUndo`: the meal's items before a Coach change (empty: the change created it, so undo deletes it), keyed by
+         * the write's operation key. Only saved meals; the first snapshot for a key wins. Writes no revision.
+         */
+        fun saveUndo(key: String, turnID: UUID, mealID: UUID, before: List<FoodItem>) {
+            val meal = mealWithoutPhotoBytes(mealID) ?: throw DiaryError.NotFound
+            if ((meal.submissions.lastOrNull()?.state ?: SubmissionState.saved) != SubmissionState.saved) return // review keeps its own flow
+            val payload = if (before.isEmpty()) null else SwiftJson.encodeToString(ListSerializer(FoodItem.serializer()), before).toByteArray()
+            db.execSQL("INSERT OR IGNORE INTO coach_undo (operationKey, turnID, mealID, afterRevision, afterState, beforePayload) " +
+                "VALUES (?, ?, ?, ?, ?, ?)", arrayOf(key, turnID.key, mealID.key, meal.revision.toLong(), undoState(meal), payload))
+        }
+
+        /** iOS `coachUndo`: the stored snapshot for [key], or null. */
+        fun coachUndo(key: String): CoachUndo? = db.rawQuery(
+            "SELECT mealID, afterRevision, afterState, beforePayload, undone FROM coach_undo WHERE operationKey = ?", arrayOf(key),
+        ).use {
+            if (!it.moveToFirst()) return null
+            val mealID = runCatching { UUID.fromString(it.getString(0)) }.getOrElse { throw DiaryError.InvalidData("coach undo") }
+            val before = if (it.isNull(3)) null else decode(it.getBlob(3), ListSerializer(FoodItem.serializer()))
+            CoachUndo(mealID, it.getInt(1), it.getString(2), before, it.getLong(4) != 0L)
+        }
+
+        /** iOS `undoState`: captures, photos and moves keep the revision, so the day, submissions and photos count too. */
+        internal fun undoState(meal: DiaryMeal): String =
+            "${meal.revision}/${meal.dayID.key}/" + meal.submissions.map { it.id.key }.sorted().joinToString(",") + "/" +
+                meal.photos.map { it.id.key }.sorted().joinToString(",")
 
         /** Import-style rewrite: every record row and the head's non-revision fields come from [snapshot]. */
         internal fun write(snapshot: DiarySnapshot) {
@@ -258,6 +293,8 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         val tx = Tx(head())
         body(tx).also { check(!tx.changed) { "write in read" } }
     }
+
+    fun coachTurn(id: UUID): CoachTurn? = read { it.coachTurn(id) }
 
     /** Every Coach turn row in order, without loading photo bytes. */
     fun coachTurnsWithoutPhotos(): List<CoachTurn> = records("coach_turn", CoachTurn.serializer()).map { it.second }

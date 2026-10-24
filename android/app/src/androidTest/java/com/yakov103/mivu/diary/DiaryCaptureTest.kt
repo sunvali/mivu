@@ -3,11 +3,15 @@ package com.yakov103.mivu.diary
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.Instant
 import java.util.UUID
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
@@ -106,6 +110,84 @@ class DiaryCaptureTest {
         db.close()
         db = DiaryDatabase.open(context, profile.id)
         assertEquals(listOf(earlier.id, later.id), db.pendingCoachTurns())
+    }
+
+    @Test fun subSecondRetryReturnsSameTurn() {
+        val fine = Instant.parse("2026-10-24T12:00:00.123456789Z")
+        val p = payload(photos = listOf(photo().copy(createdAt = fine.plusNanos(7))), capturedAt = fine)
+        val turn = db.captureCoachSubmission(p, db.head().revision)
+        db.close()
+        db = DiaryDatabase.open(context, profile.id)
+        val head = db.head()
+        assertEquals(turn, db.captureCoachSubmission(p, head.revision))
+        assertEquals(head, db.head())
+        assertEquals(Reconciliation.Accepted(turn), db.reconcileCoachCapture(p))
+    }
+
+    @Test fun updateCoachTurnSetsStateAndText() {
+        val turn = db.captureCoachSubmission(payload(), db.head().revision)
+        db.transaction(db.head().revision) {
+            it.updateCoachTurn(turn.id, CoachTurnState.needsClarification, "Which day?", incomplete = true, needsDayChoice = true)
+        }
+        var stored = db.coachTurn(turn.id)!!
+        assertEquals(CoachTurnState.needsClarification, stored.state)
+        assertEquals("Which day?", stored.assistantText)
+        assertEquals(true, stored.incomplete)
+        assertEquals(true, stored.needsDayChoice)
+        // A day choice only belongs to a clarification; any other state clears it and the text.
+        db.transaction(db.head().revision) { it.failCoachTurn(turn.id, CoachTurnState.needsRetry, needsDayChoice = true) }
+        stored = db.coachTurn(turn.id)!!
+        assertEquals(CoachTurnState.needsRetry, stored.state)
+        assertNull(stored.assistantText)
+        assertNull(stored.incomplete)
+        assertNull(stored.needsDayChoice)
+        val head = db.head()
+        throws<DiaryError.NotFound> { db.transaction(head.revision) { it.failCoachTurn(UUID.randomUUID(), CoachTurnState.needsRetry) } }
+        assertEquals(head, db.head())
+    }
+
+    @Test fun finishIncompleteKeepsReceipts() {
+        val turn = db.captureCoachSubmission(payload(), db.head().revision)
+        val receipt = CoachReceipt("${turn.id.toString().uppercase()}/open_settings", turn.id, destination = CoachDestination.settings,
+            committedRevision = db.head().revision.toInt(), resultJSON = "{}")
+        db.transaction(db.head().revision) { it.putCoachTurn(it.coachTurn(turn.id)!!.copy(state = CoachTurnState.analyzing, receipts = listOf(receipt))) }
+        db.transaction(db.head().revision) { it.finishCoachTurn(turn.id, "Opened Settings; the rest needs another try.", incomplete = true) }
+        val stored = db.coachTurn(turn.id)!!
+        assertEquals(CoachTurnState.completed, stored.state)
+        assertEquals("Opened Settings; the rest needs another try.", stored.assistantText)
+        assertEquals(true, stored.incomplete)
+        assertEquals(listOf(receipt), stored.receipts)
+        // Completing again without new text keeps the finished reply, as iOS setCoachTurnState.
+        db.transaction(db.head().revision) { it.failCoachTurn(turn.id, CoachTurnState.completed) }
+        assertEquals(stored, db.coachTurn(turn.id))
+    }
+
+    @Test fun undoRowIsNotArchived() {
+        val day = db.startDay(at, db.head().revision)
+        val item = FoodItem(UUID.randomUUID(), "synthetic rice", 100.0, "g", NutritionValues(kcal = 130.0),
+            NutritionProvenance.estimate, "", false, emptyMap())
+        val meal = DiaryMeal(UUID.randomUUID(), day.id, at, at, 1, items = listOf(item), photos = emptyList(), submissions = emptyList())
+        db.transaction(db.head().revision) { it.putMeal(meal) }
+        val h = db.head()
+        val turn = db.captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), "synthetic lunch", emptyList(),
+            CoachCaptureContext(at, "UTC", h.activeDayID, h.previousDayConfirmedAt, h.activeConversationSegmentID)), h.revision)
+        val key = "${turn.id.toString().uppercase()}/synthetic-undo-key"
+        val head = db.head()
+        db.transaction(head.revision) { it.saveUndo(key, turn.id, meal.id, listOf(item)) }
+        assertEquals(head, db.head()) // derived state: no revision
+        val undo = db.read { it.coachUndo(key) }!!
+        assertEquals(meal.id, undo.mealID)
+        assertEquals(1, undo.afterRevision)
+        assertEquals(listOf(item), undo.before)
+        assertFalse(undo.undone)
+        assertEquals(1, rows("coach_undo"))
+        val out = ByteArrayOutputStream().also { DiaryArchive.encode(db.snapshot(), it) }.toString()
+        assertTrue(turn.id.toString().uppercase() in out)
+        assertFalse("synthetic-undo-key" in out)
+        // Survives reopening: the table is created outside the version gate.
+        db.close()
+        db = DiaryDatabase.open(context, profile.id)
+        assertEquals(undo, db.read { it.coachUndo(key) })
     }
 
     @Test fun emptyCaptureRejected() {
