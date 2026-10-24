@@ -1,5 +1,11 @@
 package com.yakov103.mivu.ui.coach
 
+import android.Manifest
+import android.animation.ValueAnimator
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +31,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
@@ -40,6 +47,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -50,6 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -62,6 +73,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.pip.CompanionOutput
@@ -102,6 +114,7 @@ fun CoachComposer(
     focusRequester: FocusRequester,
     onAddPhotos: () -> Unit,
     modifier: Modifier = Modifier,
+    voice: CoachVoiceInput = rememberCoachVoice(),
 ) {
     val draft by model.draft.collectAsStateWithLifecycle()
     val sending by model.sending.collectAsStateWithLifecycle()
@@ -109,15 +122,31 @@ fun CoachComposer(
     val message by model.message.collectAsStateWithLifecycle()
     val logging by model.logging.collectAsStateWithLifecycle()
     val companion by model.companion.collectAsStateWithLifecycle()
+    val phase by voice.phase.collectAsStateWithLifecycle()
+    val levels by voice.levels.collectAsStateWithLifecycle()
+    val note by voice.note.collectAsStateWithLifecycle()
     var focused by remember { mutableStateOf(false) }
     val connected = remember(model) { model.isConnected() }
     val large = isLargeText()
 
     val focus = LocalFocusManager.current
+    val context = LocalContext.current
+    val listen = { voice.start(model.draft.value.text, model::updateText) }
+    // start() re-checks the grant, so a refusal shows the Settings note.
+    val microphone = rememberLauncherForActivityResult(RequestPermission()) { listen() }
+    // Leaving, backgrounding or covering Coach (the camera, a picker) pauses it: the microphone is released, the text stays.
+    LifecycleResumeEffect(voice, model) { onPauseOrDispose { voice.stop() } }
+    val view = LocalView.current
+    var announced by remember { mutableStateOf(false) }
+    LaunchedEffect(phase) {
+        if (phase == CoachVoiceInput.Phase.Listening) view.announceForAccessibility("Listening")
+        else if (phase == CoachVoiceInput.Phase.Idle && announced) view.announceForAccessibility("Stopped listening")
+        announced = phase == CoachVoiceInput.Phase.Listening
+    }
     val inset = Modifier.padding(horizontal = 16.dp)
     Column(modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Each starter fills the draft for review; nothing is sent until Send.
-        if (showStarters && !draft.canSend && !focused) Row(
+        if (showStarters && !draft.canSend && !focused && phase == CoachVoiceInput.Phase.Idle) Row(
             // Scrolls under the side margins, so the last chip reads as more, not as clipped.
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -137,16 +166,30 @@ fun CoachComposer(
                     Caption(logging, message, companion.pose == CompanionPose.Recovery, large,
                         Modifier.weight(1f).padding(bottom = 6.dp))
                 }
-                Field(model, draft, sending, focusRequester, onFocus = { focused = it }, onAddPhotos = onAddPhotos)
+                // Typing stops listening, so later speech never overwrites typed words.
+                Field(model, draft, sending, focusRequester, phase == CoachVoiceInput.Phase.Listening, levels,
+                    onFocus = { focused = it; if (it) voice.stop() }, onAddPhotos = onAddPhotos)
             }
-            // One round action: the mic while the draft is empty, Send once there is something to send.
-            if (draft.canSend || sending) FilledIconButton({ focus.clearFocus(); model.send() },
+            // One round action: Stop while voice runs, the mic while the draft is empty, Send once there is something to send.
+            if (phase != CoachVoiceInput.Phase.Idle) FilledIconButton(voice::stop, Modifier.size(48.dp).semantics { contentDescription = "Stop listening" },
+                colors = IconButtonDefaults.filledIconButtonColors(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.onError)) {
+                if (phase == CoachVoiceInput.Phase.Preparing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onError)
+                else Icon(painterResource(R.drawable.ic_stop), contentDescription = null)
+            } else if (draft.canSend || sending) FilledIconButton({ focus.clearFocus(); model.send() },
                 Modifier.size(48.dp).semantics { contentDescription = "Send" }, enabled = !sending && !importing) {
                 if (sending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                 else Icon(painterResource(R.drawable.ic_arrow_upward), contentDescription = null)
-            } else FilledTonalIconButton({ /* shortcut: voice input arrives in Task 8; the mic is inert until then. */ }, Modifier.size(48.dp)) {
+            } else FilledTonalIconButton({
+                focus.clearFocus()
+                if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) listen()
+                else microphone.launch(Manifest.permission.RECORD_AUDIO)
+            }, Modifier.size(48.dp), enabled = voice.available) {
                 Icon(painterResource(R.drawable.ic_mic), contentDescription = "Speak your meal")
             }
+        }
+        note?.let {
+            Text(it, inset.testTag("coachVoiceNote").semantics { liveRegion = LiveRegionMode.Polite },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Footnote(connected, inset)
     }
@@ -188,6 +231,8 @@ private fun Field(
     draft: CoachDraft,
     sending: Boolean,
     focusRequester: FocusRequester,
+    listening: Boolean,
+    levels: List<Float>,
     onFocus: (Boolean) -> Unit,
     onAddPhotos: () -> Unit,
 ) {
@@ -196,7 +241,7 @@ private fun Field(
     LaunchedEffect(draft.text) { if (value.text != draft.text) value = TextFieldValue(draft.text, TextRange(draft.text.length)) }
     var focused by remember { mutableStateOf(false) }
     var caret by remember { mutableStateOf(0) }
-    LaunchedEffect(focused, caret) { model.reportComposer(focused, listening = false, caret = caret) }
+    LaunchedEffect(focused, caret, listening) { model.reportComposer(focused, listening, caret) }
     val shape = RoundedCornerShape(24.dp)
     Column(
         Modifier.fillMaxWidth().testTag("coachField").clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -227,16 +272,37 @@ private fun Field(
                 },
                 decorationBox = { inner ->
                     Box {
-                        if (value.text.isEmpty()) Text("Describe a meal…", style = MaterialTheme.typography.bodyLarge,
+                        if (value.text.isEmpty() && !listening) Text("Describe a meal…", style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         inner()
                     }
                 },
             )
+            if (listening) Wave(levels, Modifier.padding(start = 4.dp, bottom = 16.dp))
             IconButton(onAddPhotos, Modifier.size(48.dp), enabled = !sending && draft.photos.size < MAX_PHOTOS) {
                 Icon(painterResource(R.drawable.ic_photo_camera), contentDescription = "Add photos", Modifier.size(22.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+    }
+}
+
+@Composable
+private fun rememberCoachVoice(): CoachVoiceInput {
+    val context = LocalContext.current.applicationContext
+    return remember(context) { CoachVoiceInput(context) }
+}
+
+/** iOS waveImage: three rounded bars that follow the microphone level; still at mid height with animations off. */
+@Composable
+private fun Wave(levels: List<Float>, modifier: Modifier) {
+    val color = MaterialTheme.colorScheme.primary
+    val still = !ValueAnimator.areAnimatorsEnabled()
+    Canvas(modifier.size(16.dp)) {
+        val bar = 3.dp.toPx()
+        levels.forEachIndexed { index, level ->
+            val height = 4.dp.toPx() + (if (still) 0.5f else level) * (size.height - 4.dp.toPx())
+            drawRoundRect(color, Offset(index * 6.dp.toPx(), (size.height - height) / 2), Size(bar, height), CornerRadius(bar / 2))
         }
     }
 }
