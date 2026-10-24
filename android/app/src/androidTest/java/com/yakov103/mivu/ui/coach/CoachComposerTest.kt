@@ -68,6 +68,7 @@ class CoachComposerTest {
 
     @After fun close() {
         CoachViewModel.afterCaptureForTest = null
+        CoachViewModel.beforeCaptureForTest = null
         db().close()
         folder.deleteRecursively()
         TodayFixture.wipe(context)
@@ -149,6 +150,36 @@ class CoachComposerTest {
         compose.onNodeWithContentDescription("Remove photo 1").performClick()
         waitForText("7 of 8 photos")
         assertEquals(7, model.draft.value.photos.size)
+    }
+
+    @Test fun failedSendThenRemovedPhotoStillSendsOnce() {
+        launch()
+        val picked = (1..2).map { png("synthetic-retry-$it.png") }
+        try {
+            compose.runOnUiThread { model.importPhotos(picked.map(Uri::fromFile)) }
+            waitForText("2 of 8 photos")
+        } finally {
+            picked.forEach { it.delete() }
+        }
+        var failed = false
+        CoachViewModel.beforeCaptureForTest = { if (!failed) { failed = true; throw IOException("synthetic write failure") } }
+        compose.onNodeWithContentDescription("Send").performClick()
+        compose.waitUntil(10_000) { failed && model.message.value != null && !model.sending.value }
+        assertTrue(turns().isEmpty())
+        compose.onNodeWithContentDescription("Remove photo 1").performClick()
+        compose.waitUntil(5_000) { model.draft.value.photos.size == 1 }
+        compose.onNodeWithContentDescription("Send").performClick()
+        compose.waitUntil(10_000) { turns().size == 1 && model.draft.value.photos.isEmpty() }
+        assertNull(model.message.value)
+        assertEquals(1, db().coachTurn(turns().single().id)!!.photos.size)
+    }
+
+    @Test fun fieldClampsToTheSendableLength() {
+        launch()
+        type("a".repeat(20_001))
+        compose.waitUntil(5_000) { model.draft.value.text.length == 20_000 }
+        val shown = compose.onNodeWithTag("coachInput").fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+        assertEquals(20_000, shown.length)
     }
 
     @Test fun suggestionChipFillsDraftOnly() {

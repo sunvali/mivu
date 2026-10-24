@@ -276,7 +276,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 MealDetailScreen(
                     model,
                     onBack = { navController.popBackStack() },
-                    onAskPip = { askPip(it); selectTab(Route.Coach) },
+                    // As iOS dismisses meal detail first: the tab it came from is not left on it.
+                    onAskPip = { askPip(it); navController.popBackStack(); selectTab(Route.Coach) },
                     onAddFoodManually = { navController.navigate(Route.ManualEntry(null, mealID.toString())) },
                     onRetryAnalysis = { onMealCaptured(profileID) },
                 )

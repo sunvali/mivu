@@ -73,6 +73,7 @@ import com.yakov103.mivu.pip.PipCompanion
 import com.yakov103.mivu.pip.PipGestureLibrary
 import com.yakov103.mivu.pip.PipRigScene
 import com.yakov103.mivu.ui.composer.MealComposerViewModel.Companion.MAX_PHOTOS
+import com.yakov103.mivu.ui.composer.MealComposerViewModel.Companion.MAX_TEXT
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.decode
 import com.yakov103.mivu.ui.today.isLargeText
@@ -205,7 +206,11 @@ private fun Field(
         Row(verticalAlignment = Alignment.Bottom) {
             BasicTextField(
                 value,
-                onValueChange = { value = it; model.updateText(it.text) },
+                // Clamped as the model clamps, so the field never shows text that would not be sent.
+                onValueChange = { next ->
+                    value = if (next.text.length <= MAX_TEXT) next else TextFieldValue(next.text.take(MAX_TEXT), TextRange(MAX_TEXT))
+                    model.updateText(value.text)
+                },
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp).padding(start = 16.dp, top = 12.dp, bottom = 12.dp)
                     .focusRequester(focusRequester).onFocusChanged { focused = it.isFocused; onFocus(it.isFocused) }.testTag("coachInput"),
                 enabled = !sending,
@@ -242,7 +247,7 @@ private val THUMB = 64.dp
 @Composable
 private fun DraftPhotos(photos: List<String>, enabled: Boolean, onRemove: (String) -> Unit, modifier: Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()).padding(top = 8.dp, end = 8.dp),
+        Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()).padding(top = 8.dp, end = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             photos.forEachIndexed { index, path ->
                 Box(Modifier.size(THUMB)) {

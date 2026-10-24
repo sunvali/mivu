@@ -222,7 +222,8 @@ class CoachViewModel(
     fun removePhoto(path: String) {
         if (_sending.value) return
         store(_draft.value.copy(photos = _draft.value.photos - path))
-        File(path).delete()
+        // A send that may have committed still needs these bytes to reconcile; storeAttempt deletes them once it resolves.
+        if (attempt?.draft?.photos?.contains(path) != true) File(path).delete()
     }
 
     /** iOS `importSelections`: each picked image is prepared off the main thread, up to [MAX_PHOTOS]; the rest are reported. */
@@ -394,10 +395,17 @@ class CoachViewModel(
         var draft = start
         attempt?.let { previous ->
             // An earlier send may have committed: ask the store about that exact payload before sending again.
-            when (val prior = read { reconcileCoachCapture(previous.payload()) }) {
-                is Reconciliation.Accepted -> if (previous.draft == draft) return prior.turn else if (draft.submissionID == previous.draft.submissionID) {
-                    draft = draft.copy(submissionID = UUID.randomUUID()).also(::store) // edited since: a new message
-                }
+            val prior = try {
+                read { reconcileCoachCapture(previous.payload()) }
+            } catch (_: IOException) {
+                // Its photos are gone (the cache was cleared): only the ID can be checked; a stored turn makes this a new message.
+                if (read { coachTurn(previous.draft.submissionID) } == null) Reconciliation.Absent else null
+            }
+            when (prior) {
+                is Reconciliation.Accepted, null -> if (prior is Reconciliation.Accepted && previous.draft == draft) return prior.turn
+                    else if (draft.submissionID == previous.draft.submissionID) {
+                        draft = draft.copy(submissionID = UUID.randomUUID()).also(::store) // edited since: a new message
+                    }
                 Reconciliation.ConflictingPayload -> {
                     store(draft.copy(submissionID = UUID.randomUUID()))
                     storeAttempt(null)
@@ -415,7 +423,7 @@ class CoachViewModel(
             }
             val next = CoachAttempt(draft, context).also(::storeAttempt) // kept before the write, so a lost answer can be reconciled
             try {
-                return read { captureCoachSubmission(next.payload(), revision).also { afterCaptureForTest?.invoke() } }
+                return read { beforeCaptureForTest?.invoke(); captureCoachSubmission(next.payload(), revision).also { afterCaptureForTest?.invoke() } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: DiaryError.StaleRevision) {
@@ -435,6 +443,8 @@ class CoachViewModel(
     }
 
     private fun storeAttempt(value: CoachAttempt?) {
+        // Photos kept only for the resolved attempt (removed from the draft meanwhile) go with it.
+        attempt?.draft?.photos?.filter { it !in _draft.value.photos && value?.draft?.photos?.contains(it) != true }?.forEach { File(it).delete() }
         attempt = value
         saved[ATTEMPT] = value?.let { SwiftJson.encodeToString(CoachAttempt.serializer(), it) }
     }
@@ -573,5 +583,7 @@ class CoachViewModel(
 
         /** Runs after the store commits a capture, so a test can lose its acknowledgement. */
         @VisibleForTesting internal var afterCaptureForTest: (() -> Unit)? = null
+        /** Runs before the capture writes, so a test can fail a send that never committed. */
+        @VisibleForTesting internal var beforeCaptureForTest: (() -> Unit)? = null
     }
 }
