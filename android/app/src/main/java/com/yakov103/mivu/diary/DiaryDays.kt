@@ -66,9 +66,9 @@ internal fun DiaryDatabase.Tx.resolveDay(localDate: String, timeZoneID: String, 
 internal fun DiaryDatabase.Tx.activateDay(day: TrackingDay) {
     if (day(day.id) != day) throw DiaryError.InvalidData("day")
     if (head.activeDayID != day.id) {
-        // shortcut: iOS also avoids IDs in its capture-segment index; Android has none yet. Add with the Coach segment port.
+        // As iOS: the new conversation's ID is not the current one nor any indexed segment.
         var boundary = UUID.randomUUID()
-        while (boundary == head.activeConversationSegmentID) boundary = UUID.randomUUID()
+        while (boundary == head.activeConversationSegmentID || coachSegmentExists(boundary)) boundary = UUID.randomUUID()
         head = head.copy(activeDayID = day.id, activeConversationSegmentID = boundary)
     }
     head = head.copy(previousDayConfirmedAt = null)

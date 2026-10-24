@@ -2,6 +2,7 @@
 
 package com.yakov103.mivu.coach
 
+import com.yakov103.mivu.diary.COACH_TURN_NAMES_MEAL
 import com.yakov103.mivu.diary.CoachMealCandidate
 import com.yakov103.mivu.diary.DayCompleteness
 import com.yakov103.mivu.diary.DayStatus
@@ -135,8 +136,7 @@ private fun DiaryDatabase.Tx.coachCandidate(id: UUID): CoachMealCandidate {
     // shortcut: iOS falls back to the origin turn via record_source; Android finds the earliest turn naming the meal.
     val description = text("SELECT substr(json_extract(CAST(payload AS TEXT), '$.text'),1,513) FROM submission WHERE parent = ? ORDER BY ordinal, id LIMIT 1")
         .ifEmpty {
-            text("SELECT substr(json_extract(CAST(t.payload AS TEXT), '$.text'),1,513) FROM coach_turn t WHERE json_extract(CAST(t.payload AS TEXT), '$.pendingMealID') = ?1 " +
-                "OR EXISTS (SELECT 1 FROM json_each(CAST(t.payload AS TEXT), '$.receipts') r WHERE json_extract(r.value, '$.mealID') = ?1) ORDER BY t.ordinal LIMIT 1")
+            text("SELECT substr(json_extract(CAST(t.payload AS TEXT), '$.text'),1,513) FROM coach_turn t WHERE $COACH_TURN_NAMES_MEAL ORDER BY t.ordinal LIMIT 1")
         }
     return CoachMealCandidate(id, day.id, day.localDate, day.timeZoneID, meal.revision, meal.eatenAt, meal.timePrecision, items,
         itemCount - items.size, coachBoundedText(description, 512), description.toByteArray().size > 512)

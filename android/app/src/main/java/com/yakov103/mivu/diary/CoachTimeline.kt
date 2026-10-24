@@ -15,6 +15,10 @@ sealed interface CoachPageRequest {
     data class After(val ordinal: Long) : CoachPageRequest
     /** Rows with an ordinal in [from]...[to], for refreshing resident rows. */
     data class Range(val from: Long, val to: Long) : CoachPageRequest
+    /** Opens history at the turn: up to nine earlier turns, the turn, then later ones; 20 in all when there are that many. */
+    data class AroundTurn(val turnID: UUID) : CoachPageRequest
+    /** As [AroundTurn], at the first turn of the day's first conversation; [DiaryError.NotFound] for a day without chat. */
+    data class AtDay(val dayID: UUID) : CoachPageRequest
 }
 
 /** Current target availability, independent of the original committed receipt. */
@@ -51,6 +55,8 @@ fun DiaryDatabase.coachPage(request: CoachPageRequest, limit: Int = 20): CoachPa
         is CoachPageRequest.Before -> Triple("ordinal < ?", listOf(request.ordinal.toString()), true)
         is CoachPageRequest.After -> Triple("ordinal > ?", listOf(request.ordinal.toString()), false)
         is CoachPageRequest.Range -> Triple("ordinal BETWEEN ? AND ?", listOf(request.from.toString(), request.to.toString()), false)
+        is CoachPageRequest.AroundTurn, is CoachPageRequest.AtDay ->
+            Triple("ordinal >= ?", listOf(tx.coachWindowStart(request).toString()), false)
     }
     val sql = "SELECT id, ordinal FROM coach_turn${where?.let { " WHERE $it" } ?: ""} ORDER BY ordinal ${if (descending) "DESC" else "ASC"} LIMIT ${limit + 1}"
     val found = tx.query(sql, args) { c -> buildList { while (c.moveToNext()) add(c.getString(0) to c.getLong(1)) } }

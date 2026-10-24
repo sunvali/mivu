@@ -48,8 +48,8 @@ fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expect
         }
         val c = payload.manifest.context
         val head = tx.head
-        // shortcut: iOS compares the segment with its derived "effective" ID; Android has no segment index yet, so the
-        // raw head value is compared. Upgrade with the Coach timeline segment port.
+        // shortcut: iOS compares the segment with its derived "effective" ID (DiaryDatabaseMutations.swift:55); the
+        // coach_segment index now exists but the raw head value is still compared. Upgrade with the empty-segment port.
         if (c.timeZoneID != head.profile.timeZoneID || c.activeDayID != head.activeDayID ||
             c.previousDayConfirmedAt != head.previousDayConfirmedAt ||
             c.activeConversationSegmentID != head.activeConversationSegmentID

@@ -172,6 +172,8 @@ class CoachHistoryWindow {
                 is CoachPageRequest.Before -> rows.all { it.ordinal < request.ordinal }
                 is CoachPageRequest.After -> rows.all { it.ordinal > request.ordinal }
                 is CoachPageRequest.Range -> rows.all { it.ordinal in request.from..request.to }
+                is CoachPageRequest.AroundTurn -> rows.any { it.turn.id == request.turnID }
+                is CoachPageRequest.AtDay -> rows.any { it.turn.activeDayID == request.dayID }
             }
         }
     }

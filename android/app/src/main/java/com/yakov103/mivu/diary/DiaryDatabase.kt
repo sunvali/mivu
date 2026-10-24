@@ -96,8 +96,16 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                     "afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
                 // Coach timeline pages seek by ordinal, so a 10,000-turn diary reads only the page's rows.
                 db.execSQL("CREATE INDEX IF NOT EXISTS coach_turn_ordinal ON coach_turn(ordinal)")
+                // Derived Coach conversations for history and seek (CoachSegments.kt), rebuilt from coach_turn, never archived.
+                db.execSQL("CREATE TABLE IF NOT EXISTS coach_segment (segmentID TEXT PRIMARY KEY, trackingDayID TEXT, " +
+                    "displayLocalDate TEXT NOT NULL, displayTimeZoneID TEXT NOT NULL, firstTurnID TEXT NOT NULL, firstCapturedAt TEXT NOT NULL, " +
+                    "firstOrdinal INTEGER NOT NULL, lastOrdinal INTEGER NOT NULL, preview TEXT NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS coach_segment_last ON coach_segment(lastOrdinal, segmentID)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS coach_segment_date_last ON coach_segment(displayLocalDate, lastOrdinal, segmentID)")
+                val lagging = db.rawQuery("SELECT (SELECT MAX(ordinal) FROM coach_turn) IS NOT (SELECT MAX(lastOrdinal) FROM coach_segment)", null)
+                    .use { it.moveToFirst() && it.getInt(0) == 1 }
+                return DiaryDatabase(db, profileID, file).also { if (lagging) it.immediate { it.Tx(it.head()).rebuildCoachSegments() } }
             } catch (e: Throwable) { db.close(); throw e }
-            return DiaryDatabase(db, profileID, file)
         }
 
         /** A new, empty diary at revision 0 with a one-entry lineage, as iOS `DiaryStore.createProfile`. */
@@ -146,6 +154,8 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             records(table, serializer, where, args.toTypedArray(), order, limit).map { it.second }
         /** A raw read in this transaction; row queries must carry a LIMIT. */
         internal fun <T> query(sql: String, args: List<String>, body: (Cursor) -> T): T = db.rawQuery(sql, args.toTypedArray()).use(body)
+        /** A raw write to derived tables only (they carry no revision). */
+        internal fun exec(sql: String, args: List<Any?>) = db.execSQL(sql, args.toTypedArray())
         fun submissionParent(id: UUID): UUID? =
             records("submission", MealSubmission.serializer(), "id = ?", id).firstOrNull()?.first?.parent?.let(UUID::fromString)
 
@@ -183,6 +193,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         internal fun write(snapshot: DiarySnapshot) {
             snapshot.validate()
             writeRows(snapshot)
+            rebuildCoachSegments()
             head = head.copy(profile = snapshot.profile, activeDayID = snapshot.activeDayID,
                 previousDayConfirmedAt = snapshot.previousDayConfirmedAt,
                 activeConversationSegmentID = snapshot.activeConversationSegmentID)
@@ -254,6 +265,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             put("coach_turn", turn.id.key, turn.copy(photos = emptyList()), CoachTurn.serializer())
             db.delete("coach_photo", "parent = ?", arrayOf(turn.id.key))
             putPhotos("coach_photo", turn.id, turn.photos)
+            if (original == null) indexCoachSegment(turn)
             changed = true
         }
 
@@ -430,8 +442,10 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         if (snapshot.profile.id != profileID) throw DiaryError.WrongOwner
         validateArchiveManifests(snapshot)
         writeRows(snapshot)
-        writeHead(Head(snapshot.revision.toLong(), snapshot.lineage, snapshot.profile, snapshot.activeDayID,
-            snapshot.previousDayConfirmedAt, snapshot.activeConversationSegmentID))
+        val head = Head(snapshot.revision.toLong(), snapshot.lineage, snapshot.profile, snapshot.activeDayID,
+            snapshot.previousDayConfirmedAt, snapshot.activeConversationSegmentID)
+        writeHead(head)
+        Tx(head).rebuildCoachSegments()
     }.also { notifyCommit() }
 
     // The write is durable by now; a failing listener must not make the caller think it was not.
