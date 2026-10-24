@@ -103,6 +103,16 @@ import XCTest
         XCTAssertEqual(app.descendants(matching: .any)["coachInput"].value as? String, "My weight this morning is ")
         XCTAssertFalse(card.exists, "The check-in steps aside while typing")
     }
+    /// The visible box, from Pip's strip on its top edge to the camera at its bottom edge. The text
+    /// field's own accessibility frame stays one line tall while the vertical field grows on screen.
+    private func boxHeight(in app: XCUIApplication) -> CGFloat {
+        app.buttons["coachPhotos"].frame.maxY - app.descendants(matching: .any)["coachCompanionStrip"].firstMatch.frame.maxY
+    }
+    /// typeText returns before the box re-lays out; give it up to a second to change height.
+    private func boxHeightAfterTyping(in app: XCUIApplication, from previous: CGFloat) -> CGFloat {
+        for _ in 0..<10 where boxHeight(in: app) == previous { usleep(100_000) }
+        return boxHeight(in: app)
+    }
     func testCoachMessageBoxGrowsLineByLineUpToFourThenScrolls() {
         let app = launch()
         app.tabBars.buttons["Coach"].tap()
@@ -110,13 +120,12 @@ import XCTest
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
         let line = "Synthetic oatmeal with berries and "
-        var heights = [input.frame.height]
-        for _ in 0..<7 { input.typeText(line); heights.append(input.frame.height) }
+        var heights = [boxHeight(in: app)]
+        for _ in 0..<7 { input.typeText(line); heights.append(boxHeightAfterTyping(in: app, from: heights.last ?? 0)) }
         // Each new line makes the box taller until the fourth; after that the text scrolls inside it.
-        let oneLine = heights[0], tallest = heights.max() ?? 0
+        let tallest = heights.max() ?? 0
         XCTAssertEqual(heights, heights.sorted(), "The box never shrinks while typing: \(heights)")
-        XCTAssertGreaterThan(heights[1], oneLine, "A second line makes it taller")
-        XCTAssertEqual(tallest / oneLine, 4, accuracy: 0.3, "It stops at four lines: \(heights)")
+        XCTAssertEqual(Set(heights.map { Int($0.rounded()) }).count, 4, "It grows one line at a time to four lines: \(heights)")
         XCTAssertEqual(heights.last ?? 0, tallest, accuracy: 1)
     }
     func testRedoSetupFromSettingsKeepsKeyboardNextAndDone() {
