@@ -1,17 +1,31 @@
 package com.yakov103.mivu.connection
 
 import java.security.MessageDigest
-import org.json.JSONArray
 
 data class VerifiedIdentity(val issuer: String, val subject: String)
 
 data class AccountRegistration(val identity: VerifiedIdentity, val issuedClientID: String) {
-    // Same bytes as iOS JSONEncoder, which escapes every "/".
+    // Encoded by hand to match iOS JSONEncoder bytes; org.json escaping differs between device and JVM.
     val id: String
-        get() = JSONArray(listOf(identity.issuer, identity.subject, issuedClientID)).toString()
-            .replace("<\\/", "</").replace("/", "\\/")
+        get() = listOf(identity.issuer, identity.subject, issuedClientID).joinToString(",", "[", "]", transform = ::json)
             .let { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()) }
             .joinToString("") { "%02x".format(it) }
+}
+
+private fun json(value: String) = buildString {
+    append('"')
+    for (c in value) when (c) {
+        '"' -> append("\\\"")
+        '\\' -> append("\\\\")
+        '/' -> append("\\/")
+        '\n' -> append("\\n")
+        '\r' -> append("\\r")
+        '\t' -> append("\\t")
+        '\b' -> append("\\b")
+        '\u000C' -> append("\\f")
+        else -> if (c < ' ') append("\\u%04x".format(c.code)) else append(c)
+    }
+    append('"')
 }
 
 data class Credentials(

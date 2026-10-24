@@ -4,10 +4,13 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runInterruptible
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 sealed class SessionError : Exception() {
@@ -33,15 +36,17 @@ class Endpoints(base: String = "https://auth.openai.com", val timeoutMs: Int = 3
 
 class AuthSession(private val store: CredentialStoring, private val http: Endpoints = Endpoints()) {
     private val lock = Any()
-    private val refreshing = Mutex()
+    // Refresh runs here, not in the caller, so a cancelled caller cannot lose a rotated refresh token.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var refreshing: Deferred<Credentials>? = null
     @Volatile private var active: Credentials? = null
     @Volatile private var trustedKeys: String? = null
     // Logout, restore and commits bump generation; each sign-in also bumps attempt so a later one wins.
     private var generation = 0
     private var attempt = 0
 
-    suspend fun restore(registrationID: String): Credentials? = refreshing.withLock {
-        synchronized(lock) { store.load(registrationID).also { invalidate(); active = it } }
+    suspend fun restore(registrationID: String): Credentials? = afterRefresh {
+        store.load(registrationID).also { invalidate(); active = it }
     }
 
     suspend fun establish(
@@ -81,56 +86,84 @@ class AuthSession(private val store: CredentialStoring, private val http: Endpoi
         val credentials = Credentials(AccountRegistration(identity, clientID), reply.accessToken,
             reply.refreshToken, idToken, scopes, receivedAt + reply.expiresIn)
         // Waiting for a running refresh lets it persist its rotated token before the switch.
-        refreshing.withLock {
-            synchronized(lock) {
-                checkCurrent()
-                store.replace(credentials)
-                invalidate()
-                active = credentials
-            }
+        return afterRefresh {
+            checkCurrent()
+            store.replace(credentials)
+            invalidate()
+            active = credentials
+            credentials
         }
-        return credentials
     }
 
     suspend fun accessToken(nowSec: Long = epochNow(), expectedRegistrationID: String? = null): String {
         val current = usable(expectedRegistrationID)
         if (current.expiresAtEpochSec > nowSec + 30) return current.accessToken
-        return refreshing.withLock {
-            // A concurrent caller may have refreshed while this one waited.
+        val pending = synchronized(lock) {
+            // Another caller may have refreshed since the check above.
             val credentials = usable(current.registration.id)
-            if (credentials.expiresAtEpochSec > nowSec + 30) return@withLock credentials.accessToken
-            val revision = synchronized(lock) { generation }
-            val refreshToken = credentials.refreshToken?.takeIf { it.isNotEmpty() }
-                ?: throw forget(credentials, revision)
-            val reply = try {
-                exchange(mapOf("grant_type" to "refresh_token", "client_id" to credentials.registration.issuedClientID,
-                    "refresh_token" to refreshToken, "resource" to RESOURCE), isRefresh = true)
-            } catch (e: SessionError.InvalidRefresh) { throw forget(credentials, revision) }
-            val rotated = reply.refreshToken?.takeIf { it.isNotEmpty() } ?: throw SessionError.InvalidResponse
-            val replacement = credentials.copy(accessToken = reply.accessToken, refreshToken = rotated,
-                scopes = reply.scope?.let(::scopes) ?: credentials.scopes, expiresAtEpochSec = nowSec + reply.expiresIn)
-            synchronized(lock) {
-                if (generation != revision) throw SessionError.SessionChanged
-                store.replace(replacement)
-                active = replacement
-            }
-            if (!replacement.planPermissionGranted) throw SessionError.PlanPermissionMissing
-            replacement.accessToken
+            if (credentials.expiresAtEpochSec > nowSec + 30) return credentials.accessToken
+            refreshing ?: refresh(credentials, nowSec).also { refreshing = it }
         }
+        val replacement = pending.await()
+        if (active !== replacement) throw SessionError.SessionChanged
+        if (!replacement.planPermissionGranted) throw SessionError.PlanPermissionMissing
+        return replacement.accessToken
     }
 
     suspend fun disconnect(): RevocationOutcome {
         // Delete before suspending so a later sign-in cannot be erased by this logout.
-        val credentials = synchronized(lock) {
+        val (credentials, pending) = synchronized(lock) {
             invalidate()
-            active?.also { store.delete(it.registration.id); active = null }
-        } ?: return RevocationOutcome.Confirmed
+            val current = active?.also { store.delete(it.registration.id); active = null }
+            current to refreshing
+        }
+        credentials ?: return RevocationOutcome.Confirmed
+        // A refresh already sent may rotate the token; revoke whichever token the provider still honours.
+        val rotated = pending?.let { runCatching { it.await() }.getOrNull() }
+        val latest = rotated?.takeIf { it.registration == credentials.registration } ?: credentials
+        return revoke(latest)
+    }
+
+    // Called under lock; the task's commit waits for that lock, so `refreshing` is set first.
+    private fun refresh(credentials: Credentials, nowSec: Long): Deferred<Credentials> {
+        val revision = generation
+        return scope.async {
+            try {
+                val refreshToken = credentials.refreshToken?.takeIf { it.isNotEmpty() }
+                    ?: throw forget(credentials, revision)
+                val reply = try {
+                    exchange(mapOf("grant_type" to "refresh_token", "client_id" to credentials.registration.issuedClientID,
+                        "refresh_token" to refreshToken, "resource" to RESOURCE), isRefresh = true)
+                } catch (e: SessionError.InvalidRefresh) { throw forget(credentials, revision) }
+                val rotated = reply.refreshToken?.takeIf { it.isNotEmpty() } ?: throw SessionError.InvalidResponse
+                val replacement = credentials.copy(accessToken = reply.accessToken, refreshToken = rotated,
+                    scopes = reply.scope?.let(::scopes) ?: credentials.scopes, expiresAtEpochSec = nowSec + reply.expiresIn)
+                synchronized(lock) {
+                    // Superseded results still return so a logout can revoke the rotated token.
+                    if (generation == revision) {
+                        store.replace(replacement)
+                        active = replacement
+                    }
+                }
+                replacement
+            } finally {
+                synchronized(lock) { if (refreshing === coroutineContext[Job]) refreshing = null }
+            }
+        }
+    }
+
+    private suspend fun revoke(credentials: Credentials): RevocationOutcome {
         val token = credentials.refreshToken?.takeIf { it.isNotEmpty() } ?: return RevocationOutcome.Unconfirmed
         return try {
             val status = send(http.revoke, mapOf("token" to token, "token_type_hint" to "refresh_token",
                 "client_id" to credentials.registration.issuedClientID)).status
             if (status == 200) RevocationOutcome.Confirmed else RevocationOutcome.Unconfirmed
         } catch (_: SessionError) { RevocationOutcome.Unconfirmed }
+    }
+
+    /** Runs [block] under the lock once no refresh is in flight. */
+    private suspend fun <T> afterRefresh(block: () -> T): T {
+        while (true) synchronized(lock) { refreshing ?: return block() }.join()
     }
 
     private fun usable(expectedRegistrationID: String?): Credentials {

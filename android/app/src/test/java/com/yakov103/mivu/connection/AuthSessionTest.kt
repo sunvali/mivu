@@ -7,8 +7,11 @@ import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.After
@@ -99,6 +102,56 @@ class AuthSessionTest {
 
     @Test fun registrationIdMatchesIos() {
         assertEquals("c6ae4edc7569e9d158b5df9dc6d02b0b39fe4a4506cc0e4bcde04c1dc180146b", registration.id)
+        // iOS bytes: ["https:\/\/auth.openai.com","a\/b\"c\\d\u0001\né","oaiapp_synthetic"]
+        val escaped = AccountRegistration(VerifiedIdentity("https://auth.openai.com", "a/b\"c\\d\u0001\né"), identity.clientID)
+        assertEquals("9f21ff3ab5d3efc4b4d9b84fb3cbeab1153d259b699e25e65229d54dfe37a40d", escaped.id)
+    }
+
+    private fun awaitTokenRequest() {
+        val deadline = System.currentTimeMillis() + 2_000
+        while (server.hits(tokenPath) == 0) {
+            check(System.currentTimeMillis() < deadline) { "no token request" }
+            Thread.sleep(5)
+        }
+    }
+
+    @Test fun cancelledCallerStillStoresRotatedToken() {
+        restore(identity.now)
+        server.delayMs = 150
+        serve { 200 to reply("access_token" to "new-access", "refresh_token" to "new-refresh") }
+        runBlocking {
+            val caller = launch(Dispatchers.IO) { session.accessToken(identity.now) }
+            awaitTokenRequest()
+            caller.cancelAndJoin()
+            assertEquals("new-access", session.accessToken(identity.now))
+        }
+        assertEquals("new-refresh", store.load(registration.id)?.refreshToken)
+        assertEquals(1, server.hits(tokenPath))
+    }
+
+    @Test fun disconnectDuringRefreshRevokesRotatedToken() {
+        restore(identity.now)
+        server.delayMs = 150
+        server.respond = { if (it.path == tokenPath) 200 to reply("refresh_token" to "new-refresh") else 200 to "" }
+        runBlocking {
+            val caller = async(Dispatchers.IO) { runCatching { session.accessToken(identity.now) } }
+            awaitTokenRequest()
+            assertEquals(RevocationOutcome.Confirmed, session.disconnect())
+            assertEquals(SessionError.SessionChanged, caller.await().exceptionOrNull())
+        }
+        assertEquals(listOf("new-refresh"), server.requests.filter { it.path.endsWith("/revoke") }.map { it.form["token"] })
+        assertTrue(store.records.isEmpty())
+    }
+
+    @Test fun waitersShareAFailedRefresh() {
+        restore(identity.now)
+        server.delayMs = 100
+        serve { 503 to "" }
+        val errors = runBlocking {
+            List(2) { async(Dispatchers.IO) { runCatching { session.accessToken(identity.now) }.exceptionOrNull() } }.awaitAll()
+        }
+        assertEquals(listOf(SessionError.ProviderFailure(503), SessionError.ProviderFailure(503)), errors)
+        assertEquals(1, server.hits(tokenPath))
     }
 
     @Test fun establishPostsCodeExchangeFormAndStoresVerifiedCredentials() {
@@ -202,7 +255,7 @@ class AuthSessionTest {
         restore(identity.now)
         server.delayMs = 100
         serve { 200 to reply("access_token" to "new-access") }
-        val tokens = runBlocking { List(2) { async(kotlinx.coroutines.Dispatchers.IO) { session.accessToken(identity.now) } }.awaitAll() }
+        val tokens = runBlocking { List(2) { async(Dispatchers.IO) { session.accessToken(identity.now) } }.awaitAll() }
         assertEquals(listOf("new-access", "new-access"), tokens)
         assertEquals(1, server.hits(tokenPath))
     }
