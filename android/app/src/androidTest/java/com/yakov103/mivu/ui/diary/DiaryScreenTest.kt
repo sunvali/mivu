@@ -219,7 +219,7 @@ class DiaryScreenTest {
         launchApp()
         waitFor(hasTestTag("mealRow"))
         compose.onAllNodesWithTag("mealRow").onFirst().performClick()
-        waitFor(hasText("Meal") and isHeading())
+        waitFor(hasTestTag("mealActions"))
         compose.onNodeWithContentDescription("Back").performClick()
         waitFor(hasText("Today") and isHeading())
     }

@@ -121,6 +121,8 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
          */
         fun dayMeals(dayID: UUID): List<DiaryMeal> =
             meals("parent = ?", "parent IN (SELECT id FROM meal WHERE parent = ?)", dayID, photoBytes = false)
+        /** One meal for a detail screen, with photo metadata only, as [dayMeals]. */
+        fun mealWithoutPhotoBytes(id: UUID): DiaryMeal? = meals("id = ?", "parent = ?", id, photoBytes = false).firstOrNull()
         fun goals(): List<GoalRecord> = records("goal", GoalRecord.serializer()).map { it.second }
         fun dayWorkouts(dayID: UUID): List<WorkoutSession> = records("workout", WorkoutSession.serializer(), "parent = ?", dayID).map { it.second }
         fun dayWeight(dayID: UUID): WeightEntry? = records("weight", WeightEntry.serializer(), "parent = ?", dayID).firstOrNull()?.second

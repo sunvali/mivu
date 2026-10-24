@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -61,7 +62,7 @@ import java.text.NumberFormat
 import java.util.UUID
 
 // Swift `.number.precision(.fractionLength(n))`: grouped, fixed decimals.
-private fun Double.fixed(digits: Int): String =
+internal fun Double.fixed(digits: Int): String =
     NumberFormat.getNumberInstance().apply { minimumFractionDigits = digits; maximumFractionDigits = digits }.format(this)
 
 /** iOS DaySections summary: the date and status chip, recorded intake, the kcal target and the morning weight. */
@@ -102,12 +103,16 @@ internal fun DaySummaryCard(title: String, detail: DayDetail, totals: NutritionT
     }
 }
 
-/** iOS NutritionSummary: "Recorded intake", kcal at 48 sp in the accent, and protein, carbs and fat to one decimal. */
+/**
+ * iOS NutritionSummary: the [title], kcal at 48 sp in the accent, and protein, carbs and fat to one decimal. [trailing]
+ * sits beside the kcal (below it at large text).
+ */
 @Composable
-private fun NutritionSummary(kcal: Double?, protein: Double?, carbs: Double?, fat: Double?, unknownNote: Boolean) {
+internal fun NutritionSummary(kcal: Double?, protein: Double?, carbs: Double?, fat: Double?, unknownNote: Boolean,
+                              title: String? = "Recorded intake", trailing: (@Composable () -> Unit)? = null) {
     val large = isLargeText()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Recorded intake", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
+        if (title != null) Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AnimatedContent(
@@ -124,7 +129,9 @@ private fun NutritionSummary(kcal: Double?, protein: Double?, carbs: Double?, fa
             }
             Text("kcal", Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (trailing != null && !large) { Spacer(Modifier.weight(1f)); Box(Modifier.padding(bottom = 4.dp)) { trailing() } }
         }
+        if (trailing != null && large) trailing()
         val metrics = listOf(Triple("Protein", protein, MivuTheme.colors.protein), Triple("Carbs", carbs, MivuTheme.colors.carbs),
             Triple("Fat", fat, MivuTheme.colors.fat))
         if (large) {

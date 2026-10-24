@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +22,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Surface
@@ -53,6 +55,8 @@ import androidx.lifecycle.createSavedStateHandle
 import com.yakov103.mivu.ui.composer.MealComposerScreen
 import com.yakov103.mivu.ui.composer.MealComposerViewModel
 import com.yakov103.mivu.ui.manual.ManualNutritionScreen
+import com.yakov103.mivu.ui.meal.MealDetailScreen
+import com.yakov103.mivu.ui.meal.MealDetailViewModel
 import androidx.compose.ui.platform.LocalContext
 import com.yakov103.mivu.ui.manual.ManualNutritionViewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -160,6 +164,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
         }
     }
     Scaffold(
+        // Pushed screens such as meal detail draw edge to edge and handle their own insets.
+        contentWindowInsets = if (root != null) ScaffoldDefaults.contentWindowInsets else WindowInsets(0),
         topBar = {
             // Diary has its own actions; pushed screens such as meal detail bring their own bar.
             if (root != null && root != Tab.Diary) TopAppBar(
@@ -224,8 +230,18 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onProfile = {},
                 )
             }
-            // shortcut: a placeholder until meal detail lands with its own task.
-            composable<Route.MealDetail> { MealDetailPlaceholder(onBack = { navController.popBackStack() }) }
+            composable<Route.MealDetail> { entry ->
+                val mealID = UUID.fromString(entry.toRoute<Route.MealDetail>().mealID)
+                val model = viewModel { MealDetailViewModel(repository, profileID, mealID, SampleMode.enabled) }
+                MealDetailScreen(
+                    model,
+                    onBack = { navController.popBackStack() },
+                    // shortcut: Ask Pip opens Coach without a meal reply until Coach arrives in milestone 4.
+                    onAskPip = { selectTab(Route.Coach) },
+                    onAddFoodManually = { navController.navigate(Route.ManualEntry(null, mealID.toString())) },
+                    onRetryAnalysis = { onMealCaptured(profileID) },
+                )
+            }
             composable<Route.Progress> { LaterUpdate() }
             composable<Route.Coach> { LaterUpdate() }
             // The screen owns back (and Escape), so an edited draft always asks before it is discarded.
@@ -259,21 +275,6 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 }, onEnterManually = { navController.navigate(Route.ManualEntry(null, null)) })
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MealDetailPlaceholder(onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("Meal", Modifier.semantics { heading() }) },
-            navigationIcon = {
-                IconButton(onBack) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back") }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-        )
-        LaterUpdate(Modifier.weight(1f))
     }
 }
 

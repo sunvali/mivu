@@ -110,4 +110,29 @@ class TodayFixtureSeed {
         TodayFixture.wipe(context)
         com.yakov103.mivu.ui.diary.DiaryFixture.seed(context)
     }
+
+    /** The meal detail screenshots' meal: three foods and a photo; run with `-e seedMealFixture true`. */
+    @Test fun seedMealFixture() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("seedMealFixture") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        TodayFixture.wipe(context)
+        val id = TodayFixture.diary(context)
+        val db = DiaryRepository(context).database(id)
+        val at = Instant.now().truncatedTo(ChronoUnit.SECONDS).minus(1, ChronoUnit.HOURS)
+        db.startDay(at, db.head().revision)
+        fun food(name: String, quantity: Double, unit: String, kcal: Double, p: Double, c: Double, f: Double, source: NutritionProvenance,
+                 uncertain: Boolean = false) = FoodItem(UUID.randomUUID(), name, quantity, unit, NutritionValues(kcal, c, p, f), source, "",
+            uncertain, emptyMap())
+        val photo = MealPhoto(UUID.randomUUID(), TodayFixture.plateJpeg(), at, PhotoRole.unspecified)
+        val items = listOf(food("Greek yogurt", 200.0, "g", 190.0, 17.0, 8.0, 5.0, NutritionProvenance.estimate),
+            food("Blueberries", 80.0, "g", 46.0, 0.6, 11.5, 0.3, NutritionProvenance.user),
+            food("Honey", 1.0, "tbsp", 74.0, 0.4, 13.0, 3.8, NutritionProvenance.user, uncertain = true))
+        db.transaction(db.head().revision) {
+            it.putMeal(com.yakov103.mivu.diary.DiaryMeal(UUID.randomUUID(), db.head().activeDayID!!, at, at, 1,
+                timePrecision = MealTimePrecision.exact, items = items, photos = listOf(photo),
+                submissions = listOf(com.yakov103.mivu.diary.MealSubmission(UUID.randomUUID(), 0, "", listOf(photo.id), false,
+                    com.yakov103.mivu.diary.SubmissionState.saved))))
+        }
+        db.close()
+    }
 }
