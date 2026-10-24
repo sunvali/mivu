@@ -34,6 +34,10 @@ import kotlinx.serialization.json.booleanOrNull
 
 // Port of ios/Mivu/Coach/CoachTools.swift: CoachWrite (:6), CoachCommand (:47), declarations (:76-115), parse (:116-276).
 
+/** A resumed turn that already committed writes may only replay them (iOS CoachEngine.run). */
+@Suppress("EnumEntryName") // iOS case names
+enum class CoachWriteMode { uninterrupted, replayOnly }
+
 sealed interface CoachWrite {
     data class Manual(val edit: CoachManualEdit, val patchKey: String? = null) : CoachWrite
     data class Food(val date: String, val items: List<FoodItem>, val eatenAt: Instant?, val reviewFirst: Boolean = false) : CoachWrite

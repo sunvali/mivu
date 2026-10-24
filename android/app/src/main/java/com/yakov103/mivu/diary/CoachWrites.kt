@@ -6,6 +6,7 @@ import com.yakov103.mivu.coach.CoachContext
 import com.yakov103.mivu.coach.CoachError
 import com.yakov103.mivu.coach.CoachManualEdit
 import com.yakov103.mivu.coach.CoachWrite
+import com.yakov103.mivu.coach.CoachWriteMode
 import com.yakov103.mivu.coach.coachJSON
 import com.yakov103.mivu.coach.commandFingerprint
 import java.time.Instant
@@ -24,15 +25,19 @@ import kotlinx.serialization.UseSerializers
 private const val MAX_RECEIPTS = 16
 
 /** Validates [writes] for [turnID] against the current diary without writing. */
-fun DiaryDatabase.validateCoachWrites(turnID: UUID, writes: List<CoachWrite>, at: Instant = Instant.now()) {
-    read { tx -> tx.validateCoachWrites(tx.coachTurnWithoutPhotos(turnID) ?: throw DiaryError.NotFound, writes, at) }
+fun DiaryDatabase.validateCoachWrites(
+    turnID: UUID, writes: List<CoachWrite>, mode: CoachWriteMode = CoachWriteMode.uninterrupted, at: Instant = Instant.now(),
+) {
+    read { tx -> tx.validateCoachWrites(tx.coachTurnWithoutPhotos(turnID) ?: throw DiaryError.NotFound, writes, mode, at) }
 }
 
 /** Applies the batch with one receipt per write; a write whose key already has a receipt returns it unchanged. */
-fun DiaryDatabase.applyCoachWrites(turnID: UUID, writes: List<CoachWrite>, at: Instant = Instant.now()): List<CoachReceipt> =
+fun DiaryDatabase.applyCoachWrites(
+    turnID: UUID, writes: List<CoachWrite>, mode: CoachWriteMode = CoachWriteMode.uninterrupted, at: Instant = Instant.now(),
+): List<CoachReceipt> =
     atHead { tx ->
         val turn = tx.coachTurn(turnID) ?: throw DiaryError.NotFound
-        tx.validateCoachWrites(turn, writes, at)
+        tx.validateCoachWrites(turn, writes, mode, at)
         val batch = CoachBatch(turn, at)
         val results = mutableListOf<CoachReceipt>()
         for (write in writes) {
@@ -86,7 +91,7 @@ private fun dateOnlyInstant(date: String, zone: String): Instant {
     return LocalDate.parse(date).atTime(12, 0).atZone(ZoneId.of(zone, ZoneId.SHORT_IDS)).toInstant()
 }
 
-internal fun DiaryDatabase.Tx.validateCoachWrites(turn: CoachTurn, writes: List<CoachWrite>, at: Instant) {
+internal fun DiaryDatabase.Tx.validateCoachWrites(turn: CoachTurn, writes: List<CoachWrite>, mode: CoachWriteMode, at: Instant) {
     if (writes.map { it.target }.toSet().size != writes.size) throw CoachError.InvalidArguments
     // shortcut: iOS first resolves a dated weight to a correction of the existing entry (resolvedWeightWrite); weight
     // writes are refused below until the weight port lands, so the targets are already final.
@@ -110,6 +115,7 @@ internal fun DiaryDatabase.Tx.validateCoachWrites(turn: CoachTurn, writes: List<
             if (receipt.commandFingerprint != null && receipt.commandFingerprint != write.commandFingerprint()) throw CoachError.InvalidArguments
             validateReplay(write, receipt)
         } else {
+            if (mode == CoachWriteMode.replayOnly) throw CoachError.InvalidArguments
             newCount++
             validateCoachWrite(write, turn, at)
         }
@@ -284,9 +290,9 @@ private fun DiaryDatabase.Tx.applyCoachWrite(write: CoachWrite, batch: CoachBatc
                 val proposal = AnalysisOutput(1, head.profile.id, meal.id, turn.id, 0, write.items)
                 meal = meal.copy(submissions = listOf(MealSubmission(turn.id, 0, turn.text, turn.photoIDs, true, SubmissionState.awaitingReview, proposal)))
             } else meal = commitSavedItems(meal, write.items, meal.revision)
-            // The turn's own photo copies move into the meal; the receipt links them for the turn.
+            // The turn's own photo copies move into the meal (a pending meal may hold them already); the receipt links them.
             val photos = turn.photos.filter { it.id !in batch.moved }
-            saveMeal(meal.copy(photos = meal.photos + photos))
+            saveMeal(meal.copy(photos = meal.photos + photos.filter { p -> meal.photos.none { it.id == p.id } }))
             batch.moved += photos.map { it.id }
             receipt = receipt.copy(dayID = day.id, mealID = meal.id, resultJSON = mealResult(meal.id))
         }
