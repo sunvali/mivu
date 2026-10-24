@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.AlertDialog
@@ -22,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yakov103.mivu.R
 import com.yakov103.mivu.connection.ConnectionState
@@ -54,7 +56,10 @@ fun ChatGPTConnectButton(
         ConnectStyle.Filled -> Button(onClick, modifier.fillMaxWidth(), enabled) { Text(title) }
         ConnectStyle.Outlined -> OutlinedButton(onClick, modifier.fillMaxWidth(), enabled,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)) { Text(title) }
-        ConnectStyle.Link -> TextButton(onClick, modifier, enabled) { Text(title) }
+        // An inline footnote link, as Coach's "Manage usage".
+        ConnectStyle.Link -> TextButton(onClick, modifier, enabled, contentPadding = PaddingValues(horizontal = 4.dp)) {
+            Text(title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        }
     }
     if (askConsent) OpenAIConsent(onAgree = { askConsent = false; onAgree(); onConnect() }, onDismiss = { askConsent = false })
 }

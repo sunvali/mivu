@@ -199,7 +199,7 @@ fun MealDetailScreen(
                 title = { if (collapsed) Text("Meal", Modifier.semantics { heading() }) },
                 navigationIcon = { FloatingIcon(R.drawable.ic_arrow_back, "Back", "mealBack", collapsed, onBack) },
                 actions = {
-                    if (meal != null) MealActions(meal, viewModel.sampleMode, collapsed, busy,
+                    if (meal != null) MealActions(meal, collapsed, busy,
                         onMove = { moveFrom = listOf(meal.revision.toString(), meal.dayID.toString()) }, onRetry = onRetryAnalysis) {
                         deletion = Deletion.Meal(meal.revision, mealTitle(meal), state.day?.localDate.orEmpty())
                     }
@@ -310,9 +310,9 @@ private fun FloatingIcon(icon: Int, label: String, tag: String, plain: Boolean, 
     }
 }
 
-/** iOS "Meal actions": Move to another day, Retry analysis (sample mode, failed or captured) and Delete meal. */
+/** iOS "Meal actions": Move to another day, Retry analysis (failed or captured) and Delete meal. */
 @Composable
-private fun MealActions(meal: DiaryMeal, sampleMode: Boolean, plain: Boolean, busy: Boolean, onMove: () -> Unit, onRetry: () -> Unit, onDelete: () -> Unit) {
+private fun MealActions(meal: DiaryMeal, plain: Boolean, busy: Boolean, onMove: () -> Unit, onRetry: () -> Unit, onDelete: () -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     Box {
         FloatingIcon(R.drawable.ic_more_vert, "Meal actions", "mealActions", plain) { open = true }
@@ -324,7 +324,7 @@ private fun MealActions(meal: DiaryMeal, sampleMode: Boolean, plain: Boolean, bu
                 leadingIcon = { Icon(painterResource(R.drawable.ic_event), contentDescription = null) },
                 modifier = Modifier.testTag("moveMeal"),
             )
-            if (sampleMode && (meal.state == SubmissionState.needsRetry || meal.state == SubmissionState.captured)) DropdownMenuItem(
+            if (meal.state == SubmissionState.needsRetry || meal.state == SubmissionState.captured) DropdownMenuItem(
                 text = { Text("Retry analysis") },
                 onClick = { open = false; onRetry() },
                 leadingIcon = { Icon(painterResource(R.drawable.ic_refresh), contentDescription = null) },

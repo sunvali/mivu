@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasContentDescription
@@ -30,7 +31,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.coach.CoachActivity
 import com.yakov103.mivu.coach.CoachReplyLines
+import com.yakov103.mivu.coach.CoachManualEdit
 import com.yakov103.mivu.coach.CoachWrite
+import com.yakov103.mivu.diary.CoachDestination
 import com.yakov103.mivu.diary.CoachCaptureContext
 import com.yakov103.mivu.diary.CoachClarification
 import com.yakov103.mivu.diary.CoachPageRequest
@@ -77,6 +80,7 @@ class CoachScreenTest {
     private val activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null)
     private var drains = 0
     private var opened: UUID? = null
+    private val destinations = mutableListOf<String>()
     private lateinit var model: CoachViewModel
     private val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
     private val today = LocalDate.now(ZoneId.systemDefault()).toString()
@@ -101,7 +105,8 @@ class CoachScreenTest {
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
-                MivuTheme { CoachScreen(model, onOpenMeal = { opened = it }, onSeeToday = {}, onSeeProgress = {}) }
+                MivuTheme { CoachScreen(model, onOpenMeal = { opened = it }, onSeeToday = {}, onSeeProgress = {},
+                    onOpenConnection = { destinations += "connection" }, onOpenSettings = { destinations += "settings" }) }
             }
         }
         compose.waitUntil(10_000) { model.timeline.value.loaded }
@@ -319,5 +324,33 @@ class CoachScreenTest {
         val review = compose.onNodeWithText("Review / Edit", useUnmergedTree = true).getBoundsInRoot()
         val undo = compose.onNodeWithText("Undo", useUnmergedTree = true).getBoundsInRoot()
         assertTrue("Undo $undo sits below Review / Edit $review", undo.top >= review.bottom)
+    }
+
+    /** A finished turn whose receipt hands off to [destination]. */
+    private fun handoff(destination: CoachDestination, reply: String) {
+        val t = turn("Synthetic help")
+        db().applyCoachWrites(t.id, listOf(CoachWrite.Manual(CoachManualEdit.Open(destination))), at = now)
+        db().transaction(null) { it.finishCoachTurn(t.id, reply) }
+    }
+
+    @Test fun connectionReceiptOpensConnection() {
+        start()
+        handoff(CoachDestination.settings, "Synthetic settings reply")
+        handoff(CoachDestination.connection, "Synthetic connection reply")
+        launch()
+        waitForText("Synthetic connection reply")
+        compose.onNodeWithText("Open ChatGPT connection").assertHeightIsAtLeast(48.dp).performClick()
+        compose.onNodeWithText("Open Settings").assertHeightIsAtLeast(48.dp).performClick()
+        assertEquals(listOf("connection", "settings"), destinations)
+    }
+
+    @Test fun unsupportedDestinationShowsNoLink() {
+        start()
+        handoff(CoachDestination.profiles, "Synthetic profiles reply")
+        launch()
+        waitForText("Synthetic profiles reply")
+        compose.onNodeWithText("Open local profiles").assertDoesNotExist()
+        compose.onNodeWithText("Open Settings").assertDoesNotExist()
+        compose.onNodeWithText("Open ChatGPT connection").assertDoesNotExist()
     }
 }

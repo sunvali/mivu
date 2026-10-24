@@ -28,6 +28,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.coach.CoachActivity
 import com.yakov103.mivu.diary.CoachReply
 import com.yakov103.mivu.diary.CoachTurn
+import com.yakov103.mivu.diary.captureCoachSubmission
+import com.yakov103.mivu.diary.CoachSubmissionPayload
+import com.yakov103.mivu.diary.CoachCaptureContext
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.startDay
 import com.yakov103.mivu.pip.CompanionPose
@@ -40,6 +43,13 @@ import java.io.IOException
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.diary.CoachTurnState
+import com.yakov103.mivu.diary.failCoachTurn
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,6 +66,11 @@ class CoachComposerTest {
     private lateinit var repository: DiaryRepository
     private lateinit var profileID: UUID
     private var drains = 0
+    private val retryWaiting = mutableListOf<Boolean>()
+    private val connected = MutableStateFlow(false)
+    private var connection by mutableStateOf(ConnectionState())
+    private var agreed = 0
+    private var connects = 0
     private lateinit var model: CoachViewModel
     private val folder get() = File(context.cacheDir, "coach-test")
 
@@ -76,8 +91,8 @@ class CoachComposerTest {
 
     private fun db() = repository.database(profileID)
 
-    private fun model(saved: SavedStateHandle = SavedStateHandle()) = CoachViewModel(repository, profileID, drain = { drains++ },
-        connected = MutableStateFlow(false), activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = saved,
+    private fun model(saved: SavedStateHandle = SavedStateHandle()) = CoachViewModel(repository, profileID, drain = { drains++; retryWaiting += it },
+        connected = connected, activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = saved,
         prepare = { preparePhoto(context.contentResolver, it, folder) })
 
     private var retaking: String? = null
@@ -88,7 +103,8 @@ class CoachComposerTest {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
                 MivuTheme {
-                    CoachScreen(model, onOpenMeal = {}, onSeeToday = {}, onSeeProgress = {}, onOpenCamera = { retaking = it }, hasCamera = hasCamera)
+                    CoachScreen(model, onOpenMeal = {}, onSeeToday = {}, onSeeProgress = {}, onOpenCamera = { retaking = it }, hasCamera = hasCamera,
+                        connection = connection, onAgree = { agreed++ }, onConnect = { connects++ })
                 }
             }
         }
@@ -347,5 +363,44 @@ class CoachComposerTest {
         assertTrue(send.right - send.left >= 48.dp && send.bottom - send.top >= 48.dp)
         compose.onNodeWithContentDescription("Send").performClick()
         compose.waitUntil(10_000) { turns().size == 1 }
+    }
+
+    @Test fun notConnectedFootnoteOffersConnect() {
+        launch()
+        compose.onNodeWithText("Messages save on this phone.").assertIsDisplayed()
+        compose.onNodeWithText("Connect ChatGPT for replies").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithText("Manage usage").assertDoesNotExist()
+    }
+
+    @Test fun connectLinkAsksConsentFirst() {
+        launch()
+        compose.onNodeWithText("Connect ChatGPT for replies").performClick()
+        compose.onNodeWithText("Share with OpenAI?").assertIsDisplayed()
+        assertEquals(0, connects)
+        compose.onNodeWithText("Agree and Continue").performClick()
+        compose.waitForIdle()
+        assertEquals(1, agreed)
+        assertEquals(1, connects)
+    }
+
+    @Test fun connectedFootnoteShowsManageUsage() {
+        connected.value = true
+        launch()
+        compose.onNodeWithText("Using ChatGPT plan", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Manage usage").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithText("Connect ChatGPT for replies").assertDoesNotExist()
+    }
+
+    @Test fun connectingResumesWaitingTurns() {
+        val waiting = db().captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), "Synthetic eggs", emptyList(), db().head().let {
+            CoachCaptureContext(Instant.now(), it.profile.timeZoneID, it.activeDayID, it.previousDayConfirmedAt, it.activeConversationSegmentID)
+        }), db().head().revision)
+        db().transaction(null) { it.failCoachTurn(waiting.id, CoachTurnState.waitingForConnection) }
+        launch()
+        compose.waitForIdle()
+        assertFalse(true in retryWaiting)
+        connected.value = true
+        compose.waitUntil(10_000) { true in retryWaiting }
+        assertEquals(CoachTurnState.waitingForConnection, db().coachTurnsWithoutPhotos().single().state) // the worker runs it, not Coach
     }
 }

@@ -109,7 +109,8 @@ import com.yakov103.mivu.ui.settings.openCustomTab
 
 /** The app's Coach worker as the Coach tab uses it: run saved turns, whether ChatGPT is connected, and the running turn. */
 class CoachHooks(
-    val drain: () -> Unit = {},
+    /** Runs saved turns; true marks a connection or network change. */
+    val drain: (retryWaiting: Boolean) -> Unit = {},
     val connected: StateFlow<Boolean> = MutableStateFlow(false),
     val activity: StateFlow<Pair<UUID, CoachActivity>?> = MutableStateFlow(null),
 )
@@ -220,6 +221,9 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
         coach.startReply(reply, draft)
         focusCoach = true
     }
+    val connectionState by connectionState(connection)
+    // The owner calls back off the main thread, maybe after a rotation: the tab starts from the app, on the main thread.
+    val connect: () -> Unit = { connection?.connect { url -> context.mainExecutor.execute { context.openCustomTab(url) } } }
     val entry by navController.currentBackStackEntryAsState()
     val root = Tab.entries.firstOrNull { tab -> entry?.destination?.hasRoute(tab.route::class) == true }
     val current = root ?: Tab.Today
@@ -285,6 +289,9 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     // As iOS Today: the current day (a new one when it has turned over), not a recorded-day target.
                     onAddManually = { navController.navigate(Route.ManualEntry(null, null)) },
                     onLogMeal = { navController.navigate(Route.Composer) },
+                    // As iOS, it waits until no capture or manual-entry dialog covers Today, so it is not dropped.
+                    planWelcome = connectionState.showsPlanWelcome && root == Tab.Today,
+                    onPlanWelcomeDone = { connection?.acknowledgePlanWelcome() },
                 )
             }
             composable<Route.Diary> {
@@ -311,7 +318,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                         navController.popBackStack(); selectTab(Route.Coach)
                     },
                     onAddFoodManually = { navController.navigate(Route.ManualEntry(null, mealID.toString())) },
-                    onRetryAnalysis = { onMealCaptured(profileID) },
+                    // Live analysis runs through Coach, as on iOS: the meal's own saved turn runs again.
+                    onRetryAnalysis = { if (SampleMode.enabled) onMealCaptured(profileID) else coach.retryMeal(mealID) },
                 )
             }
             composable<Route.Progress> { LaterUpdate() }
@@ -324,6 +332,11 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     focusRequested = focusCoach,
                     onFocusConsumed = { focusCoach = false },
                     onOpenCamera = { navController.navigate(Route.CoachCamera(it)) },
+                    connection = connectionState,
+                    onAgree = { connection?.recordConsent() },
+                    onConnect = connect,
+                    onOpenConnection = { navController.navigate(Route.Connection) },
+                    onOpenSettings = { navController.navigate(Route.Settings) },
                 )
             }
             composable<Route.CoachHistory> {
@@ -336,17 +349,14 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onClose = { navController.popBackStack() })
             }
             composable<Route.Settings> {
-                val connectionState by connectionState(connection)
                 SettingsScreen(connectionState, onOpenConnection = { navController.navigate(Route.Connection) },
                     onBack = { navController.popBackStack() })
             }
             composable<Route.Connection> {
-                val connectionState by connectionState(connection)
                 ConnectionScreen(
                     connectionState,
                     onAgree = { connection?.recordConsent() },
-                    // The owner calls back off the main thread, maybe after a rotation: the tab starts from the app, on the main thread.
-                    onConnect = { connection?.connect { url -> context.mainExecutor.execute { context.openCustomTab(url) } } },
+                    onConnect = connect,
                     onCancel = { connection?.cancelConnection() },
                     onSelectModel = { connection?.selectModel(it) },
                     // Leaving the screen must not stop (or drop) a disconnect halfway through deleting the session.

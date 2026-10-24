@@ -47,6 +47,10 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.yakov103.mivu.diary.CoachTurn
+import com.yakov103.mivu.diary.CoachTurnState
+import com.yakov103.mivu.ui.coach.CoachViewModel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -95,9 +99,11 @@ class MealDetailScreenTest {
 
     private fun meal(id: UUID) = db().read { it.meal(id) }
 
-    private fun open(mealID: UUID) {
+    private fun open(mealID: UUID, onRetryAnalysis: () -> Unit = {}) {
         val model = MealDetailViewModel(repository, profileID, mealID, sampleMode = false, SavedStateHandle())
-        compose.setContent { MivuTheme { MealDetailScreen(model, onBack = { wentBack = true }, onAskPip = { asked = it }, onAddFoodManually = {}) } }
+        compose.setContent {
+            MivuTheme { MealDetailScreen(model, onBack = { wentBack = true }, onAskPip = { asked = it }, onAddFoodManually = {}, onRetryAnalysis = onRetryAnalysis) }
+        }
     }
 
     private fun waitFor(matcher: SemanticsMatcher) =
@@ -240,5 +246,42 @@ class MealDetailScreenTest {
         waitFor(hasText("Blueberries"))
         compose.onNode(hasText("Greek yogurt") and isHeading()).assertIsDisplayed()
         assertEquals(listOf("Greek yogurt", "Blueberries"), meal(meal.id)!!.items.map { it.name })
+    }
+
+    private fun captured(): DiaryMeal = db().head().let {
+        db().captureProjection("Synthetic eggs and toast", emptyList(), false, it.activeDayID!!, Instant.now().truncatedTo(ChronoUnit.SECONDS),
+            expectedRevision = it.revision)
+    }
+
+    private fun coach() = CoachViewModel(repository, profileID, drain = {}, connected = MutableStateFlow(true),
+        activity = MutableStateFlow(null), saved = SavedStateHandle())
+
+    private fun retry() {
+        waitFor(hasText("Synthetic eggs and toast", substring = true))
+        compose.onNodeWithTag("mealActions").performClick()
+        waitFor(hasText("Retry analysis"))
+        compose.onNodeWithText("Retry analysis").performClick()
+    }
+
+    @Test fun liveRetryAnalysisRerunsSameTurn() {
+        val meal = captured()
+        val turn = CoachTurn(meal.submissions.single().id, meal.capturedAt, "Synthetic eggs and toast", emptyList(), CoachTurnState.needsRetry,
+            null, emptyList(), "UTC", meal.dayID, emptyList(), pendingMealID = meal.id, pendingMealRevision = 0)
+        db().replaceAll(db().snapshot().let { it.copy(coachTurns = it.coachTurns + turn) })
+        val coach = coach()
+        open(meal.id) { coach.retryMeal(meal.id) }
+        retry()
+        compose.waitUntil(10_000) { db().coachTurnsWithoutPhotos().single().state == CoachTurnState.captured }
+        assertEquals(listOf(turn.id), db().coachTurnsWithoutPhotos().map { it.id })
+        assertNull(coach.message.value)
+    }
+
+    @Test fun retryWithoutTurnShowsMealChanged() {
+        val meal = captured()
+        val coach = coach()
+        open(meal.id) { coach.retryMeal(meal.id) }
+        retry()
+        compose.waitUntil(10_000) { coach.message.value == "This meal changed. Review it before retrying its earlier input." }
+        assertTrue(db().coachTurnsWithoutPhotos().isEmpty())
     }
 }

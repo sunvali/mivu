@@ -98,6 +98,17 @@ private fun DiaryDatabase.Tx.coachExchange(id: UUID, ordinal: Long): CoachExchan
     return CoachExchange(turn, ordinal, turn.receipts.map(::coachCommittedReceipt), targets, undo, questionMeals)
 }
 
+/**
+ * iOS `coachTurnForMeal`: the newest turn still pending on [mealID] whose submission that meal holds, so meal detail's
+ * "Retry analysis" reruns the same saved input. Null when the meal changed (or never came from Coach).
+ */
+fun DiaryDatabase.coachTurnForMeal(mealID: UUID): UUID? = read { tx ->
+    tx.query("SELECT t.id FROM coach_turn t JOIN submission s ON s.id = t.id AND s.parent = ?1 " +
+        "WHERE json_extract(CAST(t.payload AS TEXT), '$.pendingMealID') = ?1 ORDER BY t.ordinal DESC LIMIT 1", listOf(mealID.swift)) {
+        if (it.moveToFirst()) swiftUUID(it.getString(0)) else null
+    }
+}
+
 /** iOS `retry`: the person asks for the turn again; the worker picks it up as newly captured. */
 fun DiaryDatabase.retryCoachTurn(turnID: UUID) = atHead { it.failCoachTurn(turnID, CoachTurnState.captured) }
 

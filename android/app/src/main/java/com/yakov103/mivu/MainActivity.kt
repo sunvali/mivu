@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
         app.watchNetworkForCoach()
         enableEdgeToEdge()
         val coach = CoachHooks(
-            drain = { app.drainCoach() },
+            drain = { app.drainCoach(retryWaiting = it) },
             connected = app.chatGPT.state.map { it.canInfer }.stateIn(lifecycleScope, SharingStarted.Eagerly, app.chatGPT.state.value.canInfer),
             activity = app.coachWorker.activity,
         )

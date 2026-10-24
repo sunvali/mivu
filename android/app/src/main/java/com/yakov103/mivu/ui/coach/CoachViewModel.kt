@@ -61,6 +61,8 @@ import com.yakov103.mivu.diary.CoachDayPage
 import com.yakov103.mivu.diary.coachDays
 import com.yakov103.mivu.diary.coachSegments
 import com.yakov103.mivu.diary.coachSourceTurn
+import com.yakov103.mivu.diary.coachTurnForMeal
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -150,7 +152,8 @@ private val RECOVERY = setOf(CoachTurnState.needsRetry, CoachTurnState.waitingFo
 class CoachViewModel(
     private val repository: DiaryRepository,
     private val profileID: UUID,
-    private val drain: () -> Unit,
+    /** Runs saved turns; true after a connection or network change, so stuck turns run first again. */
+    private val drain: (retryWaiting: Boolean) -> Unit,
     val connected: StateFlow<Boolean>,
     val activity: StateFlow<Pair<UUID, CoachActivity>?>,
     private val saved: SavedStateHandle,
@@ -217,6 +220,8 @@ class CoachViewModel(
             }
         }
         viewModelScope.launch { combine(activity, _message, _sending, _timeline) { _, _, _, _ -> }.collect { resolveCompanion() } }
+        // iOS onChange(planAuthorized): turns waiting for a connection resume once ChatGPT connects.
+        viewModelScope.launch { connected.drop(1).collect { if (it) drain(true) } }
     }
 
     fun updateText(value: String) { if (!_sending.value) store(_draft.value.copy(text = value.take(MAX_TEXT))) }
@@ -440,9 +445,21 @@ class CoachViewModel(
         }
     }
 
-    fun retry(turnID: UUID) = viewModelScope.launch { if (act { retryCoachTurn(turnID) }) drain() }
+    fun retry(turnID: UUID) = viewModelScope.launch { if (act { retryCoachTurn(turnID) }) drain(false) }
 
-    fun chooseDay(turnID: UUID, usePrevious: Boolean) = viewModelScope.launch { if (act { chooseCoachDay(turnID, usePrevious) }) drain() }
+    /** iOS `retryMeal`: meal detail's "Retry analysis" reruns the meal's own pending turn; it never captures a new one. */
+    fun retryMeal(mealID: UUID): Job = viewModelScope.launch {
+        val turnID = try {
+            read { coachTurnForMeal(mealID) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _message.value = coachMessage(e); return@launch
+        }
+        if (turnID == null) _message.value = "This meal changed. Review it before retrying its earlier input." else retry(turnID).join()
+    }
+
+    fun chooseDay(turnID: UUID, usePrevious: Boolean) = viewModelScope.launch { if (act { chooseCoachDay(turnID, usePrevious) }) drain(false) }
 
     /** Answers Coach's question with one tap: the chosen record is quoted and the label is the message. */
     fun answer(target: CoachReply.Target, label: String, excerpt: String) = sendTap(label, CoachReply(target, excerpt.take(280)))
@@ -481,7 +498,7 @@ class CoachViewModel(
                 store(CoachDraft())
                 storeAttempt(null)
                 _message.value = null
-                drain()
+                drain(false)
                 val now = System.currentTimeMillis()
                 presentation.receive(CompanionSubmission(profileID, turn.id, now))
                 presentation.receive(CompanionEvent(profileID, turn.id, CompanionEvent.Kind.Saved, now))

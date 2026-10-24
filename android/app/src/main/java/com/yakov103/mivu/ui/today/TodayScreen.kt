@@ -1,5 +1,9 @@
 package com.yakov103.mivu.ui.today
 
+import com.yakov103.mivu.ui.settings.MivuLinks
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -103,7 +107,12 @@ fun TodayScreen(
     onLogWithPip: () -> Unit,
     onAddManually: (dayID: UUID?) -> Unit,
     onLogMeal: () -> Unit,
+    /** iOS plan welcome: ChatGPT just connected and nothing covers Today. */
+    planWelcome: Boolean = false,
+    /** Got it, Manage usage or dismissal: the welcome is seen. */
+    onPlanWelcomeDone: () -> Unit = {},
 ) {
+    if (planWelcome) PlanWelcome(onPlanWelcomeDone)
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
     val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
@@ -136,6 +145,19 @@ fun TodayScreen(
         }
         BottomActions(state.sampleMode, onLogWithPip, { onAddManually(state.activeDayID) }, onLogMeal)
     }
+}
+
+/** iOS TodayView plan welcome alert, shown once. */
+@Composable
+private fun PlanWelcome(onDone: () -> Unit) {
+    val uri = LocalUriHandler.current
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text("You're using your ChatGPT plan") },
+        text = { Text("Coach and meal analysis in Mivu use your ChatGPT plan and count toward its usage limits.") },
+        confirmButton = { TextButton(onDone, Modifier.heightIn(min = 48.dp)) { Text("Got it") } },
+        dismissButton = { TextButton({ uri.openUri(MivuLinks.USAGE); onDone() }, Modifier.heightIn(min = 48.dp)) { Text("Manage usage") } },
+    )
 }
 
 @Composable

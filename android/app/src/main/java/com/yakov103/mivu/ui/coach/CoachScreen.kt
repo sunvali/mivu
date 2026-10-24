@@ -1,5 +1,7 @@
 package com.yakov103.mivu.ui.coach
 
+import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.diary.CoachDestination
 import android.animation.ValueAnimator
 import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.imePadding
@@ -80,6 +82,13 @@ fun CoachScreen(
     /** The field's camera: opens the in-app camera, which also offers the Photo Picker; a path retakes that draft photo. */
     onOpenCamera: (String?) -> Unit = {},
     hasCamera: Boolean = LocalContext.current.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY),
+    /** The footnote's "Connect ChatGPT for replies": sharing consent first ([onAgree]), then sign-in ([onConnect]). */
+    connection: ConnectionState = ConnectionState(),
+    onAgree: () -> Unit = {},
+    onConnect: () -> Unit = {},
+    /** A receipt's handoff links: the Coach AI screen and Settings. */
+    onOpenConnection: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     val state by model.timeline.collectAsStateWithLifecycle()
     val activity by model.activity.collectAsStateWithLifecycle()
@@ -90,11 +99,14 @@ fun CoachScreen(
     val atLatest by remember { derivedStateOf { listState.atLatest() } }
     val rows = state.exchanges.asReversed()
     val focusRequester = remember { FocusRequester() }
-    val actions = remember(model, onOpenMeal, onSeeToday, onSeeProgress) {
+    val actions = remember(model, onOpenMeal, onSeeToday, onSeeProgress, onOpenConnection, onOpenSettings) {
         CoachRowActions(model::undo, onOpenMeal, { model.retry(it) }, { id, previous -> model.chooseDay(id, previous) }, model::answer,
             model::finishRest, onSeeToday, onSeeProgress, model::turnPhoto, model::mealPhoto,
             // As iOS reply(to:), typing follows the quote.
-            reply = { turn, fromPip -> model.replyTo(turn, fromPip); focusRequester.requestFocus() }) { reply -> openQuote(reply, model, onOpenMeal) }
+            reply = { turn, fromPip -> model.replyTo(turn, fromPip); focusRequester.requestFocus() },
+            openQuote = { reply -> openQuote(reply, model, onOpenMeal) },
+            openDestination = { if (it == CoachDestination.connection) onOpenConnection() else onOpenSettings() },
+        )
     }
 
     // A new newest row is followed only when the reader sat at the newest one before it arrived (read before layout).
@@ -159,7 +171,8 @@ fun CoachScreen(
         }
         // Failures show in the composer caption beside Pip.
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
-            onOpenCamera = onOpenCamera, hasCamera = hasCamera, modifier = Modifier.imePadding())
+            onOpenCamera = onOpenCamera, hasCamera = hasCamera, modifier = Modifier.imePadding(),
+            connection = connection, onAgree = onAgree, onConnect = onConnect)
     }
 }
 

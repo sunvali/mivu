@@ -155,4 +155,31 @@ class CoachTimelineTest {
         db = DiaryDatabase.open(context, profile.id)
         assertEquals(CoachReceiptTarget.Unavailable, exchange(receipt).targets[receipt.operationKey])
     }
+
+    /** A meal captured outside Coach with its Coach turn still pending on it (the turn ID is the meal's submission). */
+    private fun pendingMeal(): Pair<DiaryMeal, CoachTurn> {
+        val h = db.head()
+        val meal = db.captureProjection("Synthetic plate", emptyList(), false, h.activeDayID!!, at, expectedRevision = h.revision)
+        val turn = CoachTurn(meal.submissions.single().id, at, "Synthetic plate", emptyList(), CoachTurnState.needsRetry, null, emptyList(),
+            "UTC", h.activeDayID, emptyList(), pendingMealID = meal.id, pendingMealRevision = 0)
+        db.replaceAll(db.snapshot().let { it.copy(coachTurns = it.coachTurns + turn) })
+        return meal to turn
+    }
+
+    @Test fun coachTurnForMealFindsPendingTurn() {
+        val (meal, pending) = pendingMeal()
+        turn("Synthetic later message")
+        assertEquals(pending.id, db.coachTurnForMeal(meal.id))
+        assertNull(db.coachTurnForMeal(UUID.randomUUID()))
+    }
+
+    @Test fun coachTurnForMealIgnoresReceiptOnlyTurns() {
+        val receipt = logged()
+        assertNull(db.coachTurnForMeal(receipt.mealID!!))
+        // A turn naming the meal as pending without the meal holding its submission is not the meal's input either.
+        val (meal, _) = pendingMeal()
+        val stray = stored("Synthetic stray").copy(pendingMealID = meal.id, pendingMealRevision = 0)
+        db.replaceAll(db.snapshot().let { it.copy(revision = it.revision + 1, coachTurns = it.coachTurns + stray) })
+        assertEquals(meal.submissions.single().id, db.coachTurnForMeal(meal.id))
+    }
 }

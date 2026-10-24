@@ -1,5 +1,10 @@
 package com.yakov103.mivu.ui.coach
 
+import androidx.compose.foundation.layout.FlowRow
+import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.ui.settings.ChatGPTConnectButton
+import com.yakov103.mivu.ui.settings.ConnectStyle
+import com.yakov103.mivu.ui.settings.MivuLinks
 import android.Manifest
 import android.animation.ValueAnimator
 import android.content.pm.PackageManager
@@ -105,8 +110,6 @@ import kotlinx.coroutines.withContext
 private val STARTERS = listOf("Log breakfast" to "For breakfast I had ", "Log my weight" to "My weight this morning is ",
     "How am I doing today?" to "How am I doing today?")
 
-const val CHATGPT_USAGE = "https://chatgpt.com/settings/usage"
-
 /**
  * The docked composer: suggestion chips (empty conversation only), draft photos, Pip peeking over the field with the
  * logging caption, the field with its quote and camera, one round action, and the footnote.
@@ -122,6 +125,9 @@ fun CoachComposer(
     hasCamera: Boolean,
     modifier: Modifier = Modifier,
     voice: CoachVoiceInput = rememberCoachVoice(),
+    connection: ConnectionState = ConnectionState(),
+    onAgree: () -> Unit = {},
+    onConnect: () -> Unit = {},
 ) {
     val draft by model.draft.collectAsStateWithLifecycle()
     val sending by model.sending.collectAsStateWithLifecycle()
@@ -202,7 +208,7 @@ fun CoachComposer(
             Text(it, inset.testTag("coachVoiceNote").semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Footnote(connected, inset)
+        Footnote(connected, connection, onAgree, onConnect, inset)
     }
 }
 
@@ -362,20 +368,20 @@ private fun DraftPhotos(photos: List<String>, enabled: Boolean, onRemove: (Strin
     }
 }
 
-/** Not connected: messages still save here. Connected: the plan in use, with Manage usage. */
+/** iOS footnote: not connected, messages still save here and the link connects; connected, the plan in use with Manage usage. */
 @Composable
-private fun Footnote(connected: Boolean, modifier: Modifier) {
+private fun Footnote(connected: Boolean, connection: ConnectionState, onAgree: () -> Unit, onConnect: () -> Unit, modifier: Modifier) {
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
-    if (!connected) {
-        // shortcut: "Connect ChatGPT for replies" waits for the release sign-in screen (carried to 4c).
-        Text("Messages save on this phone.", modifier.padding(start = 4.dp), style = MaterialTheme.typography.bodySmall, color = secondary)
-    } else {
-        val uri = LocalUriHandler.current
-        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-            Text("Using ChatGPT plan · ", Modifier.padding(start = 4.dp), style = MaterialTheme.typography.bodySmall, color = secondary)
-            TextButton({ uri.openUri(CHATGPT_USAGE) }, Modifier.heightIn(min = 48.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp)) {
-                Text("Manage usage", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+    val small = MaterialTheme.typography.bodySmall
+    FlowRow(modifier, itemVerticalAlignment = Alignment.CenterVertically) {
+        if (!connected) {
+            Text("Messages save on this phone.", Modifier.padding(start = 4.dp), style = small, color = secondary)
+            ChatGPTConnectButton(connection, onAgree, onConnect, title = "Connect ChatGPT for replies", style = ConnectStyle.Link)
+        } else {
+            val uri = LocalUriHandler.current
+            Text("Using ChatGPT plan · ", Modifier.padding(start = 4.dp), style = small, color = secondary)
+            TextButton({ uri.openUri(MivuLinks.USAGE) }, Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
+                Text("Manage usage", style = small, fontWeight = FontWeight.SemiBold)
             }
         }
     }

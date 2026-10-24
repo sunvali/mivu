@@ -84,6 +84,7 @@ import com.yakov103.mivu.R
 import com.yakov103.mivu.coach.CoachActivity
 import com.yakov103.mivu.coach.CoachReplyLines
 import com.yakov103.mivu.diary.CoachExchange
+import com.yakov103.mivu.diary.CoachDestination
 import com.yakov103.mivu.diary.CoachReceiptTarget
 import com.yakov103.mivu.diary.CoachTurn
 import com.yakov103.mivu.diary.CoachTurnState
@@ -115,6 +116,8 @@ class CoachRowActions(
     val reply: (CoachTurn, Boolean) -> Unit = { _, _ -> },
     /** A sent quote's target: the original message, day or record. */
     val openQuote: (com.yakov103.mivu.diary.CoachReply) -> Unit = {},
+    /** A receipt's handoff link: only Settings and the ChatGPT connection exist on Android. */
+    val openDestination: (CoachDestination) -> Unit = {},
 )
 
 /** One exchange: the person's message on the right, then Pip's reply, status, receipts and the latest exchange's choices. */
@@ -157,6 +160,10 @@ fun CoachExchangeRow(
                 }
                 exchange.receipts.filter { it.weightID != null }.forEach { receipt ->
                     CoachReceiptPresentation(receipt, CoachReceiptTarget.Loading).weightLabel?.let { WeightChip(it) }
+                }
+                // iOS turnActions: one link per handoff destination, in CoachDestination order.
+                LINKS.filterKeys { d -> exchange.receipts.any { it.destination == d } }.forEach { (destination, title) ->
+                    TextButton({ actions.openDestination(destination) }, Modifier.heightIn(min = 48.dp)) { Text(title) }
                 }
                 if (isLatest) {
                     val followUps = CoachReplyLines.followUps(turn)
@@ -316,6 +323,9 @@ private fun TurnChoices(turn: CoachTurn, days: Map<UUID, String>, actions: Coach
         }
     }
 }
+
+// shortcut: profiles, nutrition source and backup have no Android screen yet, so their handoffs show no link; add them with those screens.
+private val LINKS = mapOf(CoachDestination.settings to "Open Settings", CoachDestination.connection to "Open ChatGPT connection")
 
 private val RETRYABLE = setOf(CoachTurnState.waitingForConnection, CoachTurnState.waitingForNetwork, CoachTurnState.needsRetry,
     CoachTurnState.needsClarification)
