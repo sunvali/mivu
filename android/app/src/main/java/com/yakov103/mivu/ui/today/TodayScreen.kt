@@ -127,7 +127,9 @@ fun TodayScreen(
             ) {
                 if (loadFailed) item(key = "loadFailed") { LoadFailure(viewModel::retry) }
                 if (state.sampleMode) item(key = "sample") { SampleBanner() }
-                state.savedReceipt?.let { id -> item(key = "receipt") { SavedReceipt(onOpenMeal?.let { { it(id) } }) } }
+                state.savedReceipt?.let { id ->
+                    item(key = "receipt") { SavedReceipt(state.lateReceipt, onOpenMeal?.let { { it(id) } }) { viewModel.moveToCalendarDay(id) } }
+                }
                 item(key = "summary") { SummaryCard(state, viewModel::startNewDay, pip) }
                 item(key = "mealsHeader") {
                     Text("Meals", Modifier.padding(top = 12.dp).semantics { heading() },
@@ -381,9 +383,12 @@ internal fun SampleBanner() {
     }
 }
 
-/** Opens the saved meal once meal detail exists; until then it is a plain status line, not a button. */
+/**
+ * Opens the saved meal once meal detail exists; until then it is a plain status line, not a button. A late meal says which
+ * waking day it joined and, while its calendar date is still today, offers to move it there.
+ */
 @Composable
-private fun SavedReceipt(onOpen: (() -> Unit)?) {
+private fun SavedReceipt(late: LateReceipt?, onOpen: (() -> Unit)?, onMove: () -> Unit) = Column {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp)
             .then(if (onOpen != null) Modifier.clickable(role = Role.Button, onClick = onOpen) else Modifier)
@@ -392,7 +397,14 @@ private fun SavedReceipt(onOpen: (() -> Unit)?) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(painterResource(R.drawable.ic_check_circle), contentDescription = null, tint = MivuTheme.colors.success)
-        Text("Saved on this phone", style = MaterialTheme.typography.bodyMedium, color = MivuTheme.colors.success)
+        Text(late?.added ?: "Saved on this phone", style = MaterialTheme.typography.bodyMedium, color = MivuTheme.colors.success)
+    }
+    late?.moveTo?.let { label ->
+        TextButton(onMove, Modifier.heightIn(min = 48.dp).testTag("moveLateMeal")) {
+            Icon(painterResource(R.drawable.ic_arrow_forward), contentDescription = null, Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(label)
+        }
     }
 }
 

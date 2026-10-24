@@ -31,6 +31,17 @@ import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.DiaryRepository
+import com.yakov103.mivu.diary.DiaryMeal
+import com.yakov103.mivu.diary.FoodItem
+import com.yakov103.mivu.diary.MealTimePrecision
+import com.yakov103.mivu.diary.NutritionProvenance
+import com.yakov103.mivu.diary.NutritionValues
+import com.yakov103.mivu.diary.startDay
+import com.yakov103.mivu.diary.wakingDayTitle
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.UUID
 import com.yakov103.mivu.ui.MivuApp
 import com.yakov103.mivu.ui.theme.MivuTheme
 import org.junit.After
@@ -206,5 +217,58 @@ class TodayScreenTest {
         listOf("1,020", "56 g", "129 g", "25 g", "2,000 kcal goal", "980 to goal").forEach {
             compose.onNodeWithText(it, useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         }
+    }
+
+    /** A diary whose active day started at [dayAt], holding one synthetic meal captured at [capturedAt]; returns the meal ID. */
+    private fun dayWithMeal(db: com.yakov103.mivu.diary.DiaryDatabase, dayAt: Instant, capturedAt: Instant): UUID {
+        val day = db.startDay(dayAt, db.head().revision)
+        val item = FoodItem(UUID.randomUUID(), "Toast", 1.0, "slice", NutritionValues(90.0, 15.0, 3.0, 1.0), NutritionProvenance.user,
+            "Entered manually", false, emptyMap())
+        val meal = DiaryMeal(UUID.randomUUID(), day.id, capturedAt, capturedAt, 1, timePrecision = MealTimePrecision.exact,
+            items = listOf(item), photos = emptyList(), submissions = emptyList())
+        db.transaction(db.head().revision) { it.putMeal(meal) }
+        return meal.id
+    }
+
+    @Test fun lateMealReceiptOffersMove() {
+        val id = TodayFixture.diary(context)
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val repo = DiaryRepository(context)
+        val db = repo.database(id)
+        try {
+            // 01:30 today, still on yesterday's waking day.
+            val mealID = dayWithMeal(db, today.minusDays(1).atTime(12, 0).atZone(zone).toInstant(), today.atTime(1, 30).atZone(zone).toInstant())
+            val model = TodayViewModel(repo, id, sampleMode = false)
+            model.showReceipt(mealID)
+            compose.setContent { MivuTheme { TodayScreen(model, null, {}, {}, {}) } }
+            waitForText("Added to Yesterday")
+            compose.onNodeWithTag("moveLateMeal").assertIsDisplayed()
+                .assert(hasText("Move to ${wakingDayTitle(today.toString())}"))
+                .performClick()
+            compose.waitUntil(10_000) {
+                db.read { tx -> tx.meal(mealID)?.dayID?.let(tx::day)?.localDate } == today.toString()
+            }
+            assertEquals(db.read { it.meal(mealID)?.dayID }, db.head().activeDayID)
+            waitForText("Saved on this phone")
+            compose.onAllNodesWithTag("moveLateMeal").assertCountEquals(0)
+        } finally { db.close() }
+    }
+
+    @Test fun ordinaryReceiptStaysSavedOnThisPhone() {
+        val id = TodayFixture.diary(context)
+        val zone = ZoneId.systemDefault()
+        val yesterday = LocalDate.now(zone).minusDays(1)
+        val repo = DiaryRepository(context)
+        val db = repo.database(id)
+        try {
+            val mealID = dayWithMeal(db, yesterday.atTime(12, 0).atZone(zone).toInstant(), yesterday.atTime(12, 30).atZone(zone).toInstant())
+            val model = TodayViewModel(repo, id, sampleMode = false)
+            model.showReceipt(mealID)
+            compose.setContent { MivuTheme { TodayScreen(model, null, {}, {}, {}) } }
+            waitForText("Saved on this phone")
+            compose.onAllNodes(hasText("Added to", substring = true)).assertCountEquals(0)
+            compose.onAllNodesWithTag("moveLateMeal").assertCountEquals(0)
+        } finally { db.close() }
     }
 }

@@ -29,6 +29,11 @@ class MainActivity : ComponentActivity() {
         setContent { MivuTheme { MivuApp(app.repository, onMealCaptured = { app.drainSampleAnalysis() }, coach = coach, connection = app.chatGPT, appScope = app.scope) } }
     }
 
+    override fun onStart() {
+        super.onStart()
+        (application as MivuApplication).rollOverDay()
+    }
+
     override fun onStop() {
         super.onStop()
         val app = application as MivuApplication

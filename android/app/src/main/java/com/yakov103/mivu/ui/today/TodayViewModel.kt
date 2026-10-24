@@ -10,6 +10,9 @@ import com.yakov103.mivu.diary.GoalRecord
 import com.yakov103.mivu.diary.TrackingDay
 import com.yakov103.mivu.diary.WorkoutSession
 import com.yakov103.mivu.diary.dailyProgress
+import com.yakov103.mivu.diary.diaryDateLabel
+import com.yakov103.mivu.diary.moveMeal
+import com.yakov103.mivu.diary.wakingDayTitle
 import com.yakov103.mivu.diary.nutritionTotals
 import com.yakov103.mivu.diary.startDay
 import java.text.NumberFormat
@@ -58,9 +61,13 @@ data class TodayUiState(
     val meals: List<DiaryMeal>,
     val sampleMode: Boolean,
     val savedReceipt: UUID?,
+    val lateReceipt: LateReceipt? = null,
 ) {
     val hasDay get() = activeDayID != null
 }
+
+/** iOS Today's late-meal receipt: "Added to Yesterday", and "Move to Sat, Oct 24" while that date is still today. */
+data class LateReceipt(val added: String, val moveTo: String?)
 
 private class TodayData(val day: TrackingDay?, val meals: List<DiaryMeal>, val goals: List<GoalRecord>, val workouts: List<WorkoutSession>)
 
@@ -80,7 +87,7 @@ class TodayViewModel(private val repository: DiaryRepository, val profileID: UUI
     ) { data, saved ->
         // Coach and Diary own other days' receipts; Today shows one only while its meal is on this day.
         todayUiState(data.day, data.meals, data.goals, data.workouts, sampleMode, saved?.takeIf { id -> data.meals.any { it.id == id } },
-            Locale.getDefault(), DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd"))
+            Locale.getDefault(), DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd"), Instant.now())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Reads the day again after a failed read. */
@@ -101,6 +108,23 @@ class TodayViewModel(private val repository: DiaryRepository, val profileID: UUI
             val start = { db.startDay(Instant.now(), db.head().revision) }
             try {
                 try { start() } catch (_: DiaryError.StaleRevision) { start() }
+            } catch (e: Exception) {
+                _messages.send("Could not complete action. ${failureMessage(e)}")
+            }
+        }
+    }
+
+    /** iOS `moveToCalendarDay`: a late meal moves to its calendar date. Starting before the cutoff opens that date. */
+    fun moveToCalendarDay(mealID: UUID) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val db = repository.database(profileID)
+                val meal = db.read { it.meal(mealID) } ?: throw DiaryError.NotFound
+                // One write, so a failed move leaves no new day behind.
+                db.transaction(db.head().revision) { tx ->
+                    val day = tx.startDay(Instant.now())
+                    tx.moveMeal(mealID, day.id, null, expectedRevision = meal.revision, expectedDayID = meal.dayID)
+                }
             } catch (e: Exception) {
                 _messages.send("Could not complete action. ${failureMessage(e)}")
             }
@@ -135,6 +159,7 @@ internal fun todayUiState(
     savedReceipt: UUID?,
     locale: Locale,
     datePattern: String,
+    now: Instant = Instant.now(),
 ): TodayUiState {
     // Swift `.number.precision(.fractionLength(0))`: grouped, rounded half-even.
     val number = NumberFormat.getIntegerInstance(locale)
@@ -169,5 +194,12 @@ internal fun todayUiState(
         meals = meals.sortedByDescending { it.capturedAt },
         sampleMode = sampleMode,
         savedReceipt = savedReceipt,
+        lateReceipt = meals.firstOrNull { it.id == savedReceipt }?.takeIf { day != null }?.let { meal ->
+            val date = diaryDateLabel(meal.capturedAt, day!!.timeZoneID)
+            if (day.localDate >= date) null
+            // Moving opens today's calendar date, so offer it only while that is still the meal's date.
+            else LateReceipt("Added to ${wakingDayTitle(day.localDate, relativeTo = date)}",
+                wakingDayTitle(date).takeIf { date == diaryDateLabel(now, day.timeZoneID) }?.let { "Move to $it" })
+        },
     )
 }

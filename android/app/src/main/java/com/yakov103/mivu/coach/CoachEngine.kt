@@ -7,7 +7,7 @@ import com.yakov103.mivu.diary.CoachQuestion
 import com.yakov103.mivu.diary.CoachReply
 import com.yakov103.mivu.diary.CoachTurn
 import com.yakov103.mivu.diary.CoachTurnState
-import com.yakov103.mivu.diary.DAY_CUTOFF_HOUR
+import com.yakov103.mivu.diary.DayCutoff
 import com.yakov103.mivu.diary.DiaryDatabase
 import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.GoalRecord
@@ -288,7 +288,7 @@ class CoachEngine(
          * Which waking day new intake goes to. In the first three hours after the cutoff the model judges from the food:
          * a late drink or fast food belongs to the night before, breakfast to the new day.
          */
-        internal fun wakingDayInstruction(capturedAt: Instant, zone: String, cutoffHour: Int = DAY_CUTOFF_HOUR): String {
+        internal fun wakingDayInstruction(capturedAt: Instant, zone: String, cutoffHour: Int = DayCutoff.hour): String {
             val today = wakingDateLabel(capturedAt, zone, cutoffHour)
             val hour = capturedAt.atZone(runCatching { ZoneId.of(zone, ZoneId.SHORT_IDS) }.getOrDefault(ZoneId.of("GMT"))).hour
             if (hour !in cutoffHour until cutoffHour + 3) return "The current waking day is $today; log new intake to it unless the person names another day."

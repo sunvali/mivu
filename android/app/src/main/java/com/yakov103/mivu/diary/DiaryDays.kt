@@ -1,7 +1,12 @@
 package com.yakov103.mivu.diary
 
+import android.content.SharedPreferences
+import androidx.core.content.edit
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 
 // Ports of ios/Mivu/Diary/DiaryDatabaseMealMutations.swift (startDay, resolveDay, activateDay, newDayLabel,
@@ -12,14 +17,23 @@ sealed interface DayAssignment {
     object NewDay : DayAssignment
 }
 
-// shortcut: iOS reads a per-device "dayStartHour" preference (default 4); Android has no day settings yet, so the
-// default is fixed. Read the preference here once the settings screen exists.
-const val DAY_CUTOFF_HOUR = 4
+/** iOS `DayCutoff`: the hour a new waking day starts, a per-device preference (default 4 AM). */
+object DayCutoff {
+    const val KEY = "dayStartHour"
+    @Volatile var hour: Int = 4
+
+    fun load(prefs: SharedPreferences) { hour = prefs.getInt(KEY, 4).coerceIn(0, 8) }
+
+    fun set(prefs: SharedPreferences, hour: Int) {
+        this.hour = hour.coerceIn(0, 8)
+        prefs.edit { putInt(KEY, this@DayCutoff.hour) }
+    }
+}
 
 fun diaryDateLabel(at: Instant, zone: String): String = at.atZone(ZoneId.of(zone, ZoneId.SHORT_IDS)).toLocalDate().toString()
 
 /** The waking day an instant belongs to: before the cutoff hour it still counts for the previous date. */
-fun wakingDateLabel(at: Instant, zone: String, cutoffHour: Int = DAY_CUTOFF_HOUR) =
+fun wakingDateLabel(at: Instant, zone: String, cutoffHour: Int = DayCutoff.hour) =
     diaryDateLabel(at.minusSeconds(cutoffHour * 3600L), zone)
 
 /** The instant after its Swift Date (Double) round trip: the value a stored row reads back as. */
@@ -30,6 +44,26 @@ internal fun DiaryDatabase.Tx.trackingDay(id: UUID) = day(id) ?: throw DiaryErro
 fun DiaryDatabase.startDay(at: Instant, expectedRevision: Long): TrackingDay = transaction(expectedRevision) { it.startDay(at) }
 
 fun DiaryDatabase.dayAssignment(at: Instant): DayAssignment = read { it.dayAssignment(at) }
+
+/**
+ * iOS `rollOverDay`: starts the new waking day once the cutoff has passed, so logging never has to ask which day. Null when
+ * there is no active day or it still covers [at]. A write that raced this one is retried once.
+ */
+fun DiaryDatabase.rollOverDay(at: Instant): TrackingDay? {
+    val roll = {
+        transaction(head().revision) { tx ->
+            if (tx.head.activeDayID == null || tx.dayAssignment(at) is DayAssignment.Existing) null else tx.startDay(at)
+        }
+    }
+    return try { roll() } catch (_: DiaryError.StaleRevision) { roll() }
+}
+
+/** iOS `wakingDayTitle`: "Yesterday" for the day before [relativeTo], otherwise e.g. "Tue, Oct 20". */
+fun wakingDayTitle(localDate: String, relativeTo: String? = null): String {
+    val date = runCatching { LocalDate.parse(localDate) }.getOrElse { return localDate }
+    if (relativeTo != null && runCatching { LocalDate.parse(relativeTo) }.getOrNull() == date.plusDays(1)) return "Yesterday"
+    return date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))
+}
 
 internal fun DiaryDatabase.Tx.startDay(at: Instant): TrackingDay {
     val day = resolveDay(newDayLabel(at), head.profile.timeZoneID, at)

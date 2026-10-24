@@ -18,7 +18,10 @@ import com.yakov103.mivu.connection.AuthSession
 import com.yakov103.mivu.connection.ChatGPTConnection
 import com.yakov103.mivu.connection.CredentialStore
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.DayCutoff
 import com.yakov103.mivu.diary.DiaryRepository
+import com.yakov103.mivu.diary.rollOverDay
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +51,12 @@ class MivuApplication : Application() {
         }
     }
 
+    /** iOS Today's rollover on launch and on return: starts the new waking day once the cutoff has passed. */
+    fun rollOverDay(): Job = scope.launch(Dispatchers.IO) {
+        val ready = repository.bootstrapState.filterIsInstance<Bootstrap.Ready>().first()
+        runCatching { repository.database(ready.profileID).rollOverDay(Instant.now()) } // the next activity starts the day instead
+    }
+
     // The one ChatGPT connection for the process; the debug proof screen shares it so refresh rotation has one owner.
     val chatGPT by lazy {
         val store = CredentialStore(this)
@@ -59,6 +68,7 @@ class MivuApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        DayCutoff.load(DiaryRepository.preferences(this))
         restored = scope.launch(Dispatchers.IO) { chatGPT.restore() }
         // As iOS, turns waiting for a connection run once the connection can infer.
         scope.launch { chatGPT.state.map { it.canInfer }.distinctUntilChanged().collect { if (it) drainCoach(retryWaiting = true) } }
