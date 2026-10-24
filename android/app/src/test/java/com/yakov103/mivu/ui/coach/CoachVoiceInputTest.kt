@@ -1,8 +1,10 @@
 package com.yakov103.mivu.ui.coach
 
+import com.yakov103.mivu.ui.coach.CoachVoiceInput.Companion.begin
 import com.yakov103.mivu.ui.coach.CoachVoiceInput.Companion.level
 import com.yakov103.mivu.ui.coach.CoachVoiceInput.Companion.merged
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class CoachVoiceInputTest {
@@ -23,5 +25,13 @@ class CoachVoiceInputTest {
         assertEquals(0.5f, level(4f))
         assertEquals(1f, level(10f))
         assertEquals(1f, level(30f))
+    }
+
+    @Test fun startFailureDestroysRecognizer() {
+        var destroyed = 0
+        assertThrows(IllegalStateException::class.java) { begin({ throw IllegalStateException("synthetic") }, { destroyed++ }) }
+        assertEquals(1, destroyed)
+        begin({}, { destroyed++ })()
+        assertEquals(2, destroyed)
     }
 }

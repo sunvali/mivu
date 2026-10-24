@@ -118,12 +118,17 @@ class CoachVoiceInput(
         /** Maps onRmsChanged, about -2...10 dB, onto 0...1. */
         fun level(rmsDb: Float): Float = ((rmsDb + 2f) / 12f).coerceIn(0f, 1f)
 
+        /** Runs [start]; if it throws, [destroy]s first so the microphone is never left held. Returns the release. */
+        internal fun begin(start: () -> Unit, destroy: () -> Unit): () -> Unit {
+            try { start() } catch (e: RuntimeException) { destroy(); throw e }
+            return destroy
+        }
+
+        // The default recognizer on every phone (it may use the network, as iOS allows); the on-device one is API 33
+        // and fails without an offline en-US pack.
         private fun platform(context: Context, intent: Intent, listener: RecognitionListener): () -> Unit {
-            val recognizer = if (SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            else SpeechRecognizer.createSpeechRecognizer(context)
-            recognizer.setRecognitionListener(listener)
-            recognizer.startListening(intent)
-            return recognizer::destroy
+            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            return begin({ recognizer.setRecognitionListener(listener); recognizer.startListening(intent) }, recognizer::destroy)
         }
     }
 }

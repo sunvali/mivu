@@ -28,6 +28,8 @@ import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -127,5 +129,16 @@ class CoachVoiceTest {
         compose.waitUntil(5_000) { voice.phase.value == Phase.Idle }
         assertEquals(1, released)
         assertEquals("Synthetic rice", model.draft.value.text)
+    }
+
+    /** The default recognizer starts and releases on any supported API level (no on-device-only calls). */
+    @Test fun defaultRecognizerStartsAndReleases() {
+        assumeTrue(SpeechRecognizer.isRecognitionAvailable(context))
+        val real = CoachVoiceInput(context)
+        compose.runOnUiThread { real.start("") {} }
+        assertEquals(Phase.Preparing, real.phase.value)
+        assertNull(real.note.value)
+        compose.runOnUiThread { real.stop() }
+        assertEquals(Phase.Idle, real.phase.value)
     }
 }
