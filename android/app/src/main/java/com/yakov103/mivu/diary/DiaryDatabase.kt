@@ -4,6 +4,7 @@
 package com.yakov103.mivu.diary
 
 import android.content.Context
+import android.database.Cursor
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
@@ -138,6 +139,11 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         fun dayWorkouts(dayID: UUID): List<WorkoutSession> = records("workout", WorkoutSession.serializer(), "parent = ?", dayID).map { it.second }
         fun dayWeight(dayID: UUID): WeightEntry? = records("weight", WeightEntry.serializer(), "parent = ?", dayID).firstOrNull()?.second
         fun coachTurnsWithoutPhotos(): List<CoachTurn> = this@DiaryDatabase.coachTurnsWithoutPhotos()
+        /** At most [limit] rows of [table] matching [where], in [order]: the bounded reads Coach context uses. */
+        internal fun <T> boundedRecords(table: String, serializer: KSerializer<T>, where: String?, args: List<String>, order: String, limit: Int): List<T> =
+            records(table, serializer, where, args.toTypedArray(), order, limit).map { it.second }
+        /** A raw read in this transaction; row queries must carry a LIMIT. */
+        internal fun <T> query(sql: String, args: List<String>, body: (Cursor) -> T): T = db.rawQuery(sql, args.toTypedArray()).use(body)
         fun submissionParent(id: UUID): UUID? =
             records("submission", MealSubmission.serializer(), "id = ?", id).firstOrNull()?.first?.parent?.let(UUID::fromString)
 
@@ -309,6 +315,9 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
 
     /** Runs after every committed write (a changed transaction or a replace), outside the database transaction. */
     @Volatile var onCommit: (() -> Unit)? = null
+
+    /** Test seam: how many complete diary reads ran; ordinary Coach paths keep it at zero. */
+    @VisibleForTesting internal var snapshotReads = 0
 
     /** Test seam: runs after a transaction's row writes, before its head write and commit. */
     @VisibleForTesting internal var beforeCommit: (() -> Unit)? = null
@@ -496,9 +505,10 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     }
 
     // Photo rows are listed without `bytes`: a blob over the 2 MB CursorWindow cannot be read through a cursor.
-    private fun rows(table: String, where: String?, arg: String?): List<Row> {
+    private fun rows(table: String, where: String?, args: Array<String>?, order: String, limit: Int?): List<Row> {
         val parent = if (table in PARENTS) "parent" else "NULL"
-        return db.rawQuery("SELECT id, $parent, payload FROM $table${where?.let { " WHERE $it" } ?: ""} ORDER BY ordinal", arg?.let { arrayOf(it) }).use {
+        val sql = "SELECT id, $parent, payload FROM $table${where?.let { " WHERE $it" } ?: ""} ORDER BY $order${limit?.let { " LIMIT $it" } ?: ""}"
+        return db.rawQuery(sql, args).use {
             buildList { while (it.moveToNext()) add(Row(it.getString(0), it.getString(1), it.getBlob(2))) }
         }
     }
@@ -510,7 +520,10 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
 
     // Decodes each row and checks it is stored under its own key, as iOS `decode` does.
     private fun <T> records(table: String, serializer: KSerializer<T>, where: String? = null, arg: UUID? = null): List<Pair<Row, T>> =
-        rows(table, where, arg?.key).map { row ->
+        records(table, serializer, where, arg?.let { arrayOf(it.key) }, "ordinal", null)
+
+    private fun <T> records(table: String, serializer: KSerializer<T>, where: String?, args: Array<String>?, order: String, limit: Int?): List<Pair<Row, T>> =
+        rows(table, where, args, order, limit).map { row ->
             val value = decode(row.payload, serializer)
             val id = when (value) {
                 is UUID -> value
@@ -548,6 +561,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     }
 
     private fun readSnapshot(head: Head): DiarySnapshot {
+        snapshotReads++
         fun ids(kind: Tombstone) = records("tombstone_${kind.name}", SwiftUUID).map { it.second }
         return DiarySnapshot(
             schemaVersion = 1,
