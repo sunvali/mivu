@@ -281,7 +281,7 @@ private fun MealCard(meal: DiaryMeal, loadPhoto: suspend (UUID, UUID) -> ByteArr
 
 /** iOS diarySummaryCard on Android: a white card with a hairline edge instead of a shadow. */
 @Composable
-private fun WhiteCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+internal fun WhiteCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
     val m = modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CardShape)
     val color = MaterialTheme.colorScheme.surface
     if (onClick != null) Surface(onClick, m, shape = CardShape, color = color, content = content)

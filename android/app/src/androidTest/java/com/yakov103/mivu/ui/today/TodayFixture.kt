@@ -82,7 +82,7 @@ object TodayFixture {
     }
 
     /** A drawn plate: synthetic photo bytes, no real food image. */
-    private fun plateJpeg(): ByteArray {
+    internal fun plateJpeg(): ByteArray {
         val bitmap = Bitmap.createBitmap(640, 640, Bitmap.Config.ARGB_8888)
         Canvas(bitmap).apply {
             drawColor(Color.rgb(222, 205, 178))
@@ -101,5 +101,13 @@ class TodayFixtureSeed {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         TodayFixture.wipe(context)
         TodayFixture.seed(context)
+    }
+
+    /** The Diary screenshots' synthetic week; run with `-e seedDiaryFixture true`. */
+    @Test fun seedDiaryFixture() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("seedDiaryFixture") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        TodayFixture.wipe(context)
+        com.yakov103.mivu.ui.diary.DiaryFixture.seed(context)
     }
 }

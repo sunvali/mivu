@@ -81,8 +81,8 @@ class ManualNutritionScreenTest {
         compose.onNodeWithTag("saveManualNutrition").performClick()
         waitGone("manualFoodName")
         waitForText("Oat porridge")
-        // A status line until meal detail exists, not a button that does nothing.
-        compose.onNodeWithTag("savedMealReceipt").assertIsDisplayed().assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick))
+        // The receipt opens the saved meal.
+        compose.onNodeWithTag("savedMealReceipt").assertIsDisplayed().assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick))
         val meal = todayMeals(repository, id).single { it.items.single().name == "Oat porridge" }
         assertEquals(8.5, meal.items.single().nutrition.protein!!, 0.0)
         assertEquals(null, meal.items.single().nutrition.carbs)

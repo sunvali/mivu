@@ -11,6 +11,7 @@ import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -96,7 +97,7 @@ class AppShellTest {
         waitForTitle("Today")
         tab("Diary").performClick()
         waitForTitle("Diary")
-        compose.onNodeWithText("Arrives in a later update").assertIsDisplayed()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("diaryDayPill").fetchSemanticsNodes().isNotEmpty() }
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         waitForTitle("Today")
         tab("Today").assertIsSelected()

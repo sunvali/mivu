@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Box
@@ -61,6 +62,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yakov103.mivu.R
 import com.yakov103.mivu.SampleMode
 import com.yakov103.mivu.ui.today.TodayScreen
+import com.yakov103.mivu.ui.diary.DiaryScreen
+import com.yakov103.mivu.ui.diary.DiaryViewModel
 import com.yakov103.mivu.ui.today.TodayViewModel
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.DiaryProfile
@@ -80,6 +83,7 @@ sealed interface Route {
     @Serializable data object Coach : Route
     @Serializable data class ManualEntry(val dayID: String?, val mealID: String?) : Route
     @Serializable data object Composer : Route
+    @Serializable data class MealDetail(val mealID: String) : Route
 }
 
 private enum class Tab(val route: Route, val label: String, @DrawableRes val icon: Int, @DrawableRes val selectedIcon: Int) {
@@ -146,7 +150,8 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
-    val current = Tab.entries.firstOrNull { tab -> entry?.destination?.hasRoute(tab.route::class) == true } ?: Tab.Today
+    val root = Tab.entries.firstOrNull { tab -> entry?.destination?.hasRoute(tab.route::class) == true }
+    val current = root ?: Tab.Today
     val selectTab = { route: Route ->
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -156,7 +161,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
     }
     Scaffold(
         topBar = {
-            TopAppBar(
+            // Diary has its own actions; pushed screens such as meal detail bring their own bar.
+            if (root != null && root != Tab.Diary) TopAppBar(
                 title = {
                     Text(current.label, Modifier.semantics { heading() },
                         style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -171,7 +177,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             )
         },
         bottomBar = {
-            ShortNavigationBar {
+            if (root != null) ShortNavigationBar {
                 Tab.entries.forEach { tab ->
                     val selected = tab == current
                     ShortNavigationBarItem(
@@ -190,7 +196,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             }
         },
     ) { padding ->
-        NavHost(navController, startDestination = Route.Today, Modifier.padding(padding)) {
+        NavHost(navController, startDestination = Route.Today, Modifier.padding(padding).consumeWindowInsets(padding)) {
             composable<Route.Today> { entry ->
                 val today = viewModel(key = profileID.toString()) { TodayViewModel(repository, profileID, SampleMode.enabled) }
                 // Capture screens hand back the saved meal through this entry, for the "Saved on this phone" receipt.
@@ -200,14 +206,26 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 }
                 TodayScreen(
                     today,
-                    onOpenMeal = null, // shortcut: meal detail arrives with the Diary milestone; rows open it then.
+                    onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
                     onLogWithPip = { selectTab(Route.Coach) },
                     // As iOS Today: the current day (a new one when it has turned over), not a recorded-day target.
                     onAddManually = { navController.navigate(Route.ManualEntry(null, null)) },
                     onLogMeal = { navController.navigate(Route.Composer) },
                 )
             }
-            composable<Route.Diary> { LaterUpdate() }
+            composable<Route.Diary> {
+                val diary = viewModel(key = "diary-$profileID") { DiaryViewModel(repository, profileID, SampleMode.enabled) }
+                DiaryScreen(
+                    diary,
+                    onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
+                    // shortcut: Ask Pip opens Coach without a day draft until Coach arrives in milestone 4.
+                    onAskPip = { selectTab(Route.Coach) },
+                    onEnterNutrition = { navController.navigate(Route.ManualEntry(it.toString(), null)) },
+                    onProfile = {},
+                )
+            }
+            // shortcut: a placeholder until meal detail lands with its own task.
+            composable<Route.MealDetail> { MealDetailPlaceholder(onBack = { navController.popBackStack() }) }
             composable<Route.Progress> { LaterUpdate() }
             composable<Route.Coach> { LaterUpdate() }
             // The screen owns back (and Escape), so an edited draft always asks before it is discarded.
@@ -241,6 +259,21 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 }, onEnterManually = { navController.navigate(Route.ManualEntry(null, null)) })
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MealDetailPlaceholder(onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text("Meal", Modifier.semantics { heading() }) },
+            navigationIcon = {
+                IconButton(onBack) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back") }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+        )
+        LaterUpdate(Modifier.weight(1f))
     }
 }
 
