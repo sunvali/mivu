@@ -147,7 +147,7 @@ import Testing
         let report = ProgressAnalytics.daily(snapshot: data, localDate: "2026-01-07")
         #expect(report.status == .closed)
         #expect(report.foodTotals?.kcal == 80)
-        #expect(report.foodTotals?.protein == nil)
+        #expect(report.foodTotals?.protein == 5 && report.foodTotals?.unknownItemCount == 1)
         #expect(report.workoutCount == 2)
         #expect(report.estimatedBurnKcal == 60)
         let period = ProgressAnalytics.period(snapshot: data, endingOn: "2026-01-07", days: 7)

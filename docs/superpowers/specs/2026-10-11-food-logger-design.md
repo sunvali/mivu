@@ -173,7 +173,8 @@ values take precedence over generic estimates for that item.
 Meal totals are the sum of the current saved food items; day totals sum saved
 meals assigned to that day. Calculate from stored numeric quantities, not from
 the analyzer's prose or an independently returned day total. Round for display
-after summing. Disclose unknown components rather than treating them as zero.
+after summing. Each nutrient adds the items that record it and is unknown only
+when none do; disclose unknown components rather than treating them as zero.
 Direct edits update the applicable value's provenance.
 
 Apply each accepted correction atomically against its base revision. Reject or

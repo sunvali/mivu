@@ -14,8 +14,8 @@ struct DayProgressAttributes: ActivityAttributes {
         var fat: Double?
         var fatTarget: Double?
         var hideWhenLocked: Bool
-        /// True when some food has no macros, so the macro amounts are only what is known. Optional so an older running activity still decodes.
-        var macrosPartial: Bool? = nil
+        /// True when some food lacks a nutrient, so the amounts are only what is known. Optional so an older running activity still decodes.
+        var incomplete: Bool? = nil
 
         var isOver: Bool { kcalEaten.flatMap { eaten in kcalTarget.map { eaten > $0 } } ?? false }
         var figure: String {
@@ -29,7 +29,7 @@ struct DayProgressAttributes: ActivityAttributes {
             let macros = [("Protein", protein, proteinTarget), ("Carbs", carbs, carbsTarget), ("Fat", fat, fatTarget)]
                 .compactMap { name, value, target in
                     value.map { v in
-                        let amount = (macrosPartial == true ? "at least " : "") + Self.number(v)
+                        let amount = (incomplete == true ? "at least " : "") + Self.number(v)
                         return target.map { "\(name) \(amount) of \(Self.number($0)) grams." } ?? "\(name) \(amount) grams."
                     }
                 }

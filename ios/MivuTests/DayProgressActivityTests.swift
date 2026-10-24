@@ -19,7 +19,7 @@ import Testing
                              lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
         let model = DiaryReadModel(head: head, activeDay: day, meals: meals, weight: nil, workouts: [], activeGoal: goal,
                                    pendingAnalysisCount: 0)
-        return State(readModel: model, hideWhenLocked: hide)
+        return State(report: ProgressAnalytics.daily(readModel: model), hideWhenLocked: hide)
     }
 
     private let full = NutritionValues(kcal: 1360, carbs: 150, protein: 80, fat: 40)
@@ -87,13 +87,13 @@ import Testing
         #expect(s.kcalEaten == nil && s.figure == "–" && s.spoken.hasPrefix("Calories not known yet."))
     }
 
-    @Test func calorieOnlyFoodKeepsKnownMacrosMarkedPartial() throws {
+    @Test func calorieOnlyFoodKeepsKnownMacrosMarkedIncomplete() throws {
         // A "200 kcal extra" entry has no macros; the rest of the day's protein must still show, as a lower bound.
         let s = try state(eaten: full, also: [NutritionValues(kcal: 200)], target: targets)
-        #expect(s.kcalEaten == 1560 && s.protein == 80 && s.carbs == 150 && s.fat == 40 && s.macrosPartial == true)
+        #expect(s.kcalEaten == 1560 && s.protein == 80 && s.carbs == 150 && s.fat == 40 && s.incomplete == true)
         #expect(State.macroAmount(s.protein, s.proteinTarget, partial: true) == "80+/120g")
         #expect(s.spoken == "440 calories left. Protein at least 80 of 120 grams. Carbs at least 150 of 200 grams. Fat at least 40 of 60 grams.")
-        #expect(try state(eaten: full, target: targets).macrosPartial != true)
+        #expect(try state(eaten: full, target: targets).incomplete != true)
     }
 
     @Test func onlyActiveOrStaleActivitiesCountAsRunning() {

@@ -240,7 +240,8 @@ extension DiaryTransaction {
         defer { sqlite3_finalize(statement) }; guard try database.mutationStep(statement) else { throw DiaryError.invalidData }
         let saved = Int(sqlite3_column_int64(statement, 1)), pending = Int(sqlite3_column_int64(statement, 2))
         let fields = ["kcal", "carbs", "protein", "fat"]
-        let expressions = fields.map { "CASE WHEN COUNT(*) = COUNT(json_extract(CAST(i.payload AS TEXT), '$.nutrition.\($0)')) THEN SUM(json_extract(CAST(i.payload AS TEXT), '$.nutrition.\($0)')) ELSE NULL END" }
+        // SUM skips unknown values and is NULL only when no item knows the nutrient, matching nutritionTotals.
+        let expressions = fields.map { "SUM(json_extract(CAST(i.payload AS TEXT), '$.nutrition.\($0)'))" }
         let totals = try database.domainStatement("SELECT COUNT(*), " + expressions.joined(separator: ", ") + ", COALESCE(SUM(CASE WHEN " + fields.map { "json_extract(CAST(i.payload AS TEXT), '$.nutrition.\($0)') IS NULL" }.joined(separator: " OR ") + " THEN 1 ELSE 0 END), 0) FROM meal m JOIN item i ON i.parent = m.id WHERE m.parent = ? AND json_extract(CAST(m.payload AS TEXT), '$.revision') > 0", [.text(day.id.uuidString)])
         defer { sqlite3_finalize(totals) }; guard try database.mutationStep(totals) else { throw DiaryError.invalidData }
         let emptyComplete = sqlite3_column_int64(totals, 0) == 0 && day.completeness == .complete && pending == 0

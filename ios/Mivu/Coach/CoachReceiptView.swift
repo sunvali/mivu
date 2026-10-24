@@ -32,13 +32,10 @@ struct CoachReceiptPresentation: Equatable {
         guard !receipt.items.isEmpty else { return nil }
         return Self.macros(carbs: committedTotal(\.carbs), protein: committedTotal(\.protein), fat: committedTotal(\.fat))
     }
+    /// Adds the items that know the nutrient, like the diary totals; nutritionCompleteness discloses the gap.
     private func committedTotal(_ nutrient: KeyPath<NutritionValues, Double?>) -> Double? {
-        var total = 0.0
-        for item in receipt.items {
-            guard let value = item.nutrition?[keyPath: nutrient] else { return nil }
-            total += value
-        }
-        return total
+        let known = receipt.items.compactMap { $0.nutrition?[keyPath: nutrient] }
+        return known.isEmpty ? nil : known.reduce(0, +)
     }
     var nutritionCompleteness: String? {
         guard !receipt.items.isEmpty else { return nil }

@@ -357,22 +357,14 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     }
 }
 
+/// Each nutrient adds the items that know it and is nil only when none do; unknownItemCount discloses the gap.
 func nutritionTotals(_ items: [FoodItem]) -> NutritionTotals {
     func sum(_ field: KeyPath<NutritionValues, Double?>) -> Double? {
-        guard !items.isEmpty, items.allSatisfy({ $0.nutrition[keyPath: field] != nil }) else { return nil }
-        return items.reduce(0) { $0 + $1.nutrition[keyPath: field]! }
+        let known = items.compactMap { $0.nutrition[keyPath: field] }
+        return known.isEmpty ? nil : known.reduce(0, +)
     }
     return NutritionTotals(kcal: sum(\.kcal), carbs: sum(\.carbs), protein: sum(\.protein), fat: sum(\.fat),
         unknownItemCount: items.filter { [$0.nutrition.kcal, $0.nutrition.carbs, $0.nutrition.protein, $0.nutrition.fat].contains(nil) }.count)
-}
-
-/// Each nutrient summed over the items that have it; nil only when none do. Display only, beside a partial marker.
-func knownNutritionSums(_ items: [FoodItem]) -> NutritionValues {
-    func sum(_ field: KeyPath<NutritionValues, Double?>) -> Double? {
-        let values = items.compactMap { $0.nutrition[keyPath: field] }
-        return values.isEmpty ? nil : values.reduce(0, +)
-    }
-    return NutritionValues(kcal: sum(\.kcal), carbs: sum(\.carbs), protein: sum(\.protein), fat: sum(\.fat))
 }
 
 private func unique(_ ids: [UUID]) -> Bool { Set(ids).count == ids.count }

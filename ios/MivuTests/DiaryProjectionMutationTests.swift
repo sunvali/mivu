@@ -271,6 +271,17 @@ import Testing
         #expect(week.earliestLocalDate == "2027-01-10" && week.latestLocalDate == "2027-01-18")
     }
 
+    @Test func weekTotalsAddKnownValuesWhenOneFoodHasCaloriesOnly() throws {
+        var source = ChatHistoryFixture.snapshot(exchanges: 0)
+        let day = source.days[0]
+        source.meals.append(DiaryMeal(dayID: day.id, capturedAt: day.startAt, eatenAt: day.startAt, revision: 1, items: [
+            FoodItem(name: "Synthetic bowl", nutrition: NutritionValues(kcal: 300, carbs: 30, protein: 20, fat: 10)),
+            FoodItem(name: "Synthetic extra", nutrition: NutritionValues(kcal: 200))]))
+        let f = try MealProjectionFixture(source); defer { f.remove() }
+        let totals = try #require(try f.database.diaryWeek(from: day.localDate, through: day.localDate, expectedProfileID: f.owner).days.first).totals
+        #expect(totals.kcal == 500 && totals.protein == 20 && totals.carbs == 30 && totals.fat == 10 && totals.unknownItemCount == 1)
+    }
+
     @Test func weekRejectsSpanOverSevenDays() throws {
         let f = try weekFixture(extra: []); defer { f.remove() }
         #expect(throws: DiaryError.invalidData) { try f.database.diaryWeek(from: "2027-01-01", through: "2027-01-08", expectedProfileID: f.owner) }
