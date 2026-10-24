@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         val app = application as MivuApplication
+        if (isChangingConfigurations) return // a rotation, not leaving the app
         // The process scope, so the check outlives an activity that is finishing.
         app.scope.launch { if (app.hasPendingWork()) app.scheduleBackgroundDrain() }
     }

@@ -54,9 +54,12 @@ class MivuApplication : Application() {
         ChatGPTConnection(store, AuthSession(store), ResponsesClient(), getSharedPreferences("chatgpt", MODE_PRIVATE), scope)
     }
 
+    /** The launch restore of the chosen ChatGPT account; Coach work waits for it, as iOS `start` runs restore before `resume`. */
+    @VisibleForTesting internal lateinit var restored: Job
+
     override fun onCreate() {
         super.onCreate()
-        scope.launch(Dispatchers.IO) { chatGPT.restore() }
+        restored = scope.launch(Dispatchers.IO) { chatGPT.restore() }
         // As iOS, turns waiting for a connection run once the connection can infer.
         scope.launch { chatGPT.state.map { it.canInfer }.distinctUntilChanged().collect { if (it) drainCoach(retryWaiting = true) } }
     }
@@ -69,6 +72,7 @@ class MivuApplication : Application() {
     /** Runs saved Coach turns once the diary is ready; the returned job finishes when the worker is idle, whoever started it. */
     fun drainCoach(retryWaiting: Boolean = false): Job = scope.launch {
         val ready = repository.bootstrapState.filterIsInstance<Bootstrap.Ready>().first()
+        restored.join() // a cold start must not save a healthy turn as waiting for a connection
         coachWorker.drain(ready.profileID, includeWaitingForConnection = chatGPT.state.value.canInfer, retryWaiting = retryWaiting)
         coachWorker.awaitIdle()
     }

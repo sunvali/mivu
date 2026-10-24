@@ -110,7 +110,11 @@ fun DiaryDatabase.coachTurnForMeal(mealID: UUID): UUID? = read { tx ->
 }
 
 /** iOS `retry`: the person asks for the turn again; the worker picks it up as newly captured. */
-fun DiaryDatabase.retryCoachTurn(turnID: UUID) = atHead { it.failCoachTurn(turnID, CoachTurnState.captured) }
+/** Leaves a turn the worker is running, or has finished, alone; Android has no worker cancel as iOS `retry` has. */
+fun DiaryDatabase.retryCoachTurn(turnID: UUID) = atHead { tx ->
+    val state = tx.coachTurn(turnID)?.state
+    if (state != CoachTurnState.analyzing && state != CoachTurnState.completed) tx.failCoachTurn(turnID, CoachTurnState.captured)
+}
 
 /** iOS `chooseCoachDay` then `retry`: the turn is recorded on the previous (active-at-capture) day or the capture date. */
 fun DiaryDatabase.chooseCoachDay(turnID: UUID, usePrevious: Boolean, at: Instant = Instant.now()) = atHead { tx ->

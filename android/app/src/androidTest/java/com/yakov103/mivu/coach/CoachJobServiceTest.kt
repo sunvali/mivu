@@ -9,6 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yakov103.mivu.MainActivity
 import com.yakov103.mivu.MivuApplication
+import com.yakov103.mivu.connection.SessionError
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.CoachCaptureContext
 import com.yakov103.mivu.diary.CoachSubmissionPayload
@@ -22,7 +23,9 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
@@ -44,6 +47,7 @@ class CoachJobServiceTest {
     private lateinit var db: DiaryDatabase
     private var gate = CompletableDeferred<Unit>().apply { complete(Unit) }
     private val calls = AtomicInteger()
+    private lateinit var restored: Job
 
     companion object {
         private var today = ""
@@ -56,6 +60,7 @@ class CoachJobServiceTest {
 
     @Before fun open() = runBlocking {
         jobs.cancelAll()
+        restored = app.restored
         // Each round waits on the gate; the first logs a meal, the next answers, so a finished turn has one receipt.
         app.coachInferenceForTest = {
             { input, _ ->
@@ -77,6 +82,7 @@ class CoachJobServiceTest {
         withTimeout(10_000) { app.drainCoach(retryWaiting = true).join() }
         jobs.cancelAll()
         app.coachInferenceForTest = null
+        app.restored = restored
     }
 
     private fun logFood(): CoachInferenceResult {
@@ -130,6 +136,22 @@ class CoachJobServiceTest {
         until { stored(t.id).state == CoachTurnState.completed }
         until { pending() == null } // jobFinished without a reschedule
         assertEquals(1, stored(t.id).receipts.size)
+    }
+
+    // A cold start: the job runs before ChatGPT restore finishes, when the connection cannot infer yet.
+    @Test fun jobWaitsForRestoreBeforeRunningTurn() = runBlocking {
+        val restore = app.scope.launch { delay(1_500) }
+        app.restored = restore
+        val scripted = app.coachInferenceForTest!!
+        app.coachInferenceForTest = { if (restore.isCompleted) scripted() else { _, _ -> throw SessionError.NoActiveSession } }
+        val t = turn("Synthetic snack")
+        app.scheduleBackgroundDrain()
+        shell("cmd jobscheduler run -f ${app.packageName} ${MivuApplication.COACH_JOB}")
+        delay(500)
+        assertEquals(CoachTurnState.captured, stored(t.id).state)
+        until { stored(t.id).state == CoachTurnState.completed }
+        assertEquals(1, stored(t.id).receipts.size)
+        until { pending() == null }
     }
 
     @Test fun stoppedJobLeavesTurnPendingAndRelaunchResumes() = runBlocking {

@@ -379,7 +379,7 @@ private fun Footnote(connected: Boolean, connection: ConnectionState, onAgree: (
             ChatGPTConnectButton(connection, onAgree, onConnect, title = "Connect ChatGPT for replies", style = ConnectStyle.Link)
         } else {
             val uri = LocalUriHandler.current
-            Text("Using ChatGPT plan · ", Modifier.padding(start = 4.dp), style = small, color = secondary)
+            Text("Using ChatGPT plan", Modifier.padding(start = 4.dp), style = small, color = secondary)
             TextButton({ uri.openUri(MivuLinks.USAGE) }, Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
                 Text("Manage usage", style = small, fontWeight = FontWeight.SemiBold)
             }

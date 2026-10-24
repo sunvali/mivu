@@ -13,6 +13,7 @@ import com.yakov103.mivu.diary.DiaryProfile
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.captureCoachSubmission
 import com.yakov103.mivu.diary.failCoachTurn
+import com.yakov103.mivu.diary.retryCoachTurn
 import com.yakov103.mivu.diary.startDay
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -153,6 +154,18 @@ class CoachWorkerTest {
         release.complete(Unit)
         idle.join()
         assertEquals(CoachTurnState.completed, state(t.id))
+    }
+
+    // Retry on a turn the worker is running (or has finished) must not reset it to captured under the worker.
+    @Test fun retryLeavesARunningOrFinishedTurnAlone() {
+        val running = turn("Synthetic first")
+        db.transaction(null) { it.failCoachTurn(running.id, CoachTurnState.analyzing) }
+        val finished = turn("Synthetic second")
+        db.transaction(null) { it.failCoachTurn(finished.id, CoachTurnState.completed) }
+        db.retryCoachTurn(running.id)
+        db.retryCoachTurn(finished.id)
+        assertEquals(CoachTurnState.analyzing, state(running.id))
+        assertEquals(CoachTurnState.completed, state(finished.id))
     }
 
     @Test fun diaryErrorEndsThePassAndLaterDrainsRun() = runBlocking {

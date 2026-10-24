@@ -74,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yakov103.mivu.R
 import com.yakov103.mivu.SampleMode
+import com.yakov103.mivu.ui.today.PlanWelcome
 import com.yakov103.mivu.ui.today.TodayScreen
 import com.yakov103.mivu.ui.coach.CoachCameraScreen
 import com.yakov103.mivu.ui.coach.CoachScreen
@@ -289,9 +290,6 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     // As iOS Today: the current day (a new one when it has turned over), not a recorded-day target.
                     onAddManually = { navController.navigate(Route.ManualEntry(null, null)) },
                     onLogMeal = { navController.navigate(Route.Composer) },
-                    // As iOS, it waits until no capture or manual-entry dialog covers Today, so it is not dropped.
-                    planWelcome = connectionState.showsPlanWelcome && root == Tab.Today,
-                    onPlanWelcomeDone = { connection?.acknowledgePlanWelcome() },
                 )
             }
             composable<Route.Diary> {
@@ -403,6 +401,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             }
         }
     }
+    // As iOS, over any tab once no route (capture, manual entry, meal detail) covers it, so it waits instead of being dropped.
+    if (connectionState.showsPlanWelcome && root != null) PlanWelcome { connection?.acknowledgePlanWelcome() }
 }
 
 /**

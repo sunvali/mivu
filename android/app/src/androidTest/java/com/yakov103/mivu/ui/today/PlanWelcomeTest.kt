@@ -40,9 +40,9 @@ class PlanWelcomeTest {
         val model = TodayViewModel(repository, profileID, false)
         compose.setContent {
             MivuTheme {
-                TodayScreen(model, onOpenMeal = null, onLogWithPip = {}, onAddManually = {}, onLogMeal = {},
-                    planWelcome = connection.showsPlanWelcome && !covered,
-                    onPlanWelcomeDone = { acknowledged++; connection = connection.copy(planWelcomeSeen = true) })
+                TodayScreen(model, onOpenMeal = null, onLogWithPip = {}, onAddManually = {}, onLogMeal = {})
+                // As MivuApp: shown over any tab while no route covers it.
+                if (connection.showsPlanWelcome && !covered) PlanWelcome { acknowledged++; connection = connection.copy(planWelcomeSeen = true) }
             }
         }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Meals")).fetchSemanticsNodes().isNotEmpty() }

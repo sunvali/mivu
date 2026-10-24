@@ -107,12 +107,7 @@ fun TodayScreen(
     onLogWithPip: () -> Unit,
     onAddManually: (dayID: UUID?) -> Unit,
     onLogMeal: () -> Unit,
-    /** iOS plan welcome: ChatGPT just connected and nothing covers Today. */
-    planWelcome: Boolean = false,
-    /** Got it, Manage usage or dismissal: the welcome is seen. */
-    onPlanWelcomeDone: () -> Unit = {},
 ) {
-    if (planWelcome) PlanWelcome(onPlanWelcomeDone)
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
     val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
@@ -147,9 +142,9 @@ fun TodayScreen(
     }
 }
 
-/** iOS TodayView plan welcome alert, shown once. */
+/** iOS TodayView plan welcome alert, shown once; Got it, Manage usage or dismissal marks it seen. */
 @Composable
-private fun PlanWelcome(onDone: () -> Unit) {
+internal fun PlanWelcome(onDone: () -> Unit) {
     val uri = LocalUriHandler.current
     AlertDialog(
         onDismissRequest = onDone,
