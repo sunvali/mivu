@@ -142,7 +142,8 @@ class PlatformVersions(unittest.TestCase):
             self.assertRegex((self.root / platform / 'version.txt').read_text(), r'^\d+\.\d+\.\d+\n?$')
         gradle = (self.root / 'android/app/build.gradle.kts').read_text()
         self.assertIn('file("../version.txt")', gradle)
-        self.assertNotIn('ios/', gradle)
+        # Shared assets (Pip's rig) may live under ios/; version sources may not.
+        self.assertNotRegex(gradle, r'ios/(version\.txt|Config/)')
         xcconfig = (self.root / 'ios/Config/Shared.xcconfig').read_text()
         self.assertRegex(xcconfig, r'MARKETING_VERSION = [\d.]+ // x-release-please-version')
 
