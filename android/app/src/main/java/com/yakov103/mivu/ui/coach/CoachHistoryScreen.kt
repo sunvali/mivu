@@ -233,10 +233,13 @@ private fun ChooseDate(zone: ZoneId, onDismiss: () -> Unit, onChoose: (String) -
         },
         dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
     ) {
+        // The note lives in the title slot: a sibling of DatePicker in the dialog draws over the title.
         DatePicker(picker, Modifier.weight(1f, fill = false), title = {
-            Text("Conversation date", Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp))
+            Column(Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)) {
+                Text("Conversation date")
+                Text("Choose the date shown in your conversation. Separate visits remain separate choices.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         })
-        Text("Choose the date shown in your conversation. Separate visits remain separate choices.",
-            Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
