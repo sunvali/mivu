@@ -15,6 +15,10 @@ struct CoachReplyNotificationTests {
         let long = try #require(CoachReplyNotification.text(for: turn(.completed, reply: String(repeating: "a", count: 500))))
         #expect(long.body.count <= 180 && long.body.hasSuffix("…"))
     }
+    @Test func notificationShowsReplyWithoutMarkdown() throws {
+        let text = try #require(CoachReplyNotification.text(for: turn(.completed, reply: "About **740** kcal so far.")))
+        #expect(text.body == "About 740 kcal so far.")
+    }
     @Test func clarificationTurnAsksForAnswer() {
         #expect(CoachReplyNotification.text(for: turn(.needsClarification, reply: "Which bread?"))?.body == "The Coach needs a quick answer.")
     }

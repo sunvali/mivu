@@ -49,7 +49,7 @@ private actor CaptureOptionReplies {
         #expect(snapshot.meals.count == 1 && snapshot.meals[0].items.isEmpty)
         #expect(snapshot.coachTurns.first { $0.id == original.id }?.state == .captured)
         #expect(snapshot.coachTurns.first { $0.id == original.id }?.text == original.text)
-        #expect(done.assistantText?.contains("Queued") == true)
+        #expect(done.assistantText == "Trying that meal again.")
     }
     @Test func manualPreferenceSaveRejectsAConcurrentCoachChange() async throws {
         let path = URL.temporaryDirectory.appending(path: "CoachPreferenceRace-" + UUID().uuidString)

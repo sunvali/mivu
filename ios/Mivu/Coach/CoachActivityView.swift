@@ -26,16 +26,16 @@ struct CoachActivityView: View {
         .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 20))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue("Analysis in progress. Input saved on this iPhone.")
+        .accessibilityValue("Your message is saved.")
         .accessibilityIdentifier("coachActivity")
     }
 
     private var title: String {
         switch activity {
-        case .preparingPhotos: "Preparing photos"
-        case .thinking: "Thinking"
-        case .reading: "Reading diary"
-        case .saving: "Saving changes"
+        case .preparingPhotos: "Looking at your photos…"
+        case .thinking: "Thinking…"
+        case .reading: "Checking your diary…"
+        case .saving: "Saving…"
         }
     }
 }

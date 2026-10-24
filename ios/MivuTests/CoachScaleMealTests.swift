@@ -100,7 +100,7 @@ private actor ScaleReplies {
         let receipt = try #require(done.receipts.first)
         #expect(receipt.mealID == meal.id && receipt.dayID == meal.dayID)
         #expect(coach.revision == meal.revision + 1)
-        #expect(done.assistantText == "Updated Pasta, Sauce: 845 → \(Int(try #require(coach.totals.kcal).rounded())) kcal. Nutrition may be uncertain.")
+        #expect(done.assistantText == "Updated Pasta, Sauce: 845 → \(Int(try #require(coach.totals.kcal).rounded())) kcal.")
     }
     @Test func scaleSummaryNamesUnknownKcalFoods() async throws {
         let (store, profile, meal, root) = try await fixture([item("Rice", 2, kcal: 400), item("Herbs", 4, kcal: nil)]); defer { try? FileManager.default.removeItem(at: root) }
@@ -112,6 +112,6 @@ private actor ScaleReplies {
         let replies = ScaleReplies([result([try call("get_meal", ["meal_id": meal.id.uuidString])]),
             result([try call("scale_meal", ["meal_id": meal.id.uuidString, "target_kcal": 200, "expected_revision": meal.revision])]), result([])])
         let done = try await CoachEngine(store: store, infer: { _, _ in try await replies.next() }).run(turnID: turn.id, expectedProfileID: profile.id)
-        #expect(done.assistantText == "Updated Rice, Herbs: 400 → 200 kcal. Herbs has no calorie estimate, so its amount was scaled but not counted. Nutrition may be uncertain.")
+        #expect(done.assistantText == "Updated Rice, Herbs: 400 → 200 kcal. Herbs has no calories set, so it isn't counted.")
     }
 }

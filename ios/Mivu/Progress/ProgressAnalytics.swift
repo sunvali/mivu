@@ -185,7 +185,7 @@ enum ProgressAnalytics {
         return target - recorded
     }
 
-    private static func dateLabel(_ date: Date, zone: String) -> String {
+    static func dateLabel(_ date: Date, zone: String) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
