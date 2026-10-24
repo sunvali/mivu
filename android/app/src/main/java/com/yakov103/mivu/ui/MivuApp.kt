@@ -1,7 +1,12 @@
 package com.yakov103.mivu.ui
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +16,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ShortNavigationBar
@@ -41,7 +48,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.yakov103.mivu.R
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.DiaryProfile
 import com.yakov103.mivu.diary.DiaryRepository
+import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
@@ -75,6 +84,7 @@ fun MivuApp(repository: DiaryRepository) {
             Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
+            is Bootstrap.Choose -> ChooseDiary((state as Bootstrap.Choose).profiles) { id -> scope.launch { repository.choose(id) } }
             null -> SetupMessage("Setting up your diary") { CircularProgressIndicator() }
         }
     }
@@ -89,6 +99,24 @@ private fun SetupMessage(text: String, action: @Composable () -> Unit) {
     ) {
         Text(text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         action()
+    }
+}
+
+/** The stored diary is gone: list the ones on this phone instead of opening one silently. */
+@Composable
+private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) {
+    LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(), contentPadding = PaddingValues(vertical = 24.dp)) {
+        item {
+            Text("Choose a diary", Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics { heading() },
+                style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        }
+        items(profiles, key = { it.id }) { profile ->
+            ListItem(
+                headlineContent = { Text(profile.name) },
+                modifier = Modifier.clickable { onChoose(profile.id) },
+                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.background),
+            )
+        }
     }
 }
 

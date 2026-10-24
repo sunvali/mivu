@@ -19,6 +19,8 @@ import kotlinx.coroutines.withContext
 sealed interface Bootstrap {
     data class Ready(val profileID: UUID) : Bootstrap
     data object Failed : Bootstrap
+    /** The stored diary is gone but others exist: the person picks one rather than the app guessing. */
+    data class Choose(val profiles: List<DiaryProfile>) : Bootstrap
 }
 
 /**
@@ -42,38 +44,49 @@ class DiaryRepository(
     /** Emits after every committed write to any diary this repository opened. */
     val changes: SharedFlow<Unit> = _changes
 
-    /** Opens the selected diary, or creates "My diary" when there is none. Never touches an existing diary's data. */
-    suspend fun bootstrap(): Bootstrap = bootstrapLock.withLock {
-        _bootstrapState.value = null
-        val result = withContext(Dispatchers.IO) {
-            try {
-                val id = selectedProfile() ?: createFirstDiary()
-                database(id).head() // owner and schema check before showing the diary
-                Bootstrap.Ready(id)
-            } catch (e: Exception) {
-                Bootstrap.Failed
-            }
+    /**
+     * Opens the selected diary, or creates "My diary" when there is none. Never touches an existing diary's data, and
+     * never silently opens a different diary than the stored selection: when that diary is gone it asks to [choose].
+     */
+    suspend fun bootstrap(): Bootstrap = publish {
+        val diaries = File(context.filesDir, "profiles").listFiles().orEmpty()
+            .filter { File(it, DIARY_FILE).isFile }
+            .mapNotNull { dir -> runCatching { UUID.fromString(dir.name) }.getOrNull()?.let { it to dir } }
+        val stored = preferences.getString(SELECTED_PROFILE, null)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        when {
+            diaries.isEmpty() -> open(createFirstDiary())
+            diaries.any { it.first == stored } -> open(stored!!)
+            // A device transfer brings files but not preferences: with no selection at all, take the latest diary.
+            stored == null -> open(diaries.maxBy { File(it.second, DIARY_FILE).lastModified() }.first)
+            else -> diaries.mapNotNull { runCatching { database(it.first).head().profile }.getOrNull() }
+                .sortedBy { it.name }
+                .let { if (it.isEmpty()) Bootstrap.Failed else Bootstrap.Choose(it) }
         }
-        result.also { _bootstrapState.value = it }
     }
+
+    /** Opens [profileID] and stores it as the selection. */
+    suspend fun choose(profileID: UUID): Bootstrap = publish { open(profileID) }
 
     fun database(profileID: UUID): DiaryDatabase = synchronized(databases) {
         databases.getOrPut(profileID) { watched(DiaryDatabase.open(context, profileID)) }
     }
 
-    private fun watched(db: DiaryDatabase) = db.apply { onCommit = { _changes.tryEmit(Unit) } }
-
-    /** The stored selection, else the most recently written diary (a device transfer brings files, not preferences). */
-    private fun selectedProfile(): UUID? {
-        val diaries = File(context.filesDir, "profiles").listFiles().orEmpty()
-            .filter { File(it, DIARY_FILE).isFile }
-            .mapNotNull { dir -> runCatching { UUID.fromString(dir.name) }.getOrNull()?.let { it to dir } }
-        val stored = preferences.getString(SELECTED_PROFILE, null)
-        // shortcut: picks one diary when several exist without a selection; add a chooser with profile switching.
-        val id = diaries.firstOrNull { it.first.toString().equals(stored, ignoreCase = true) }?.first
-            ?: diaries.maxByOrNull { File(it.second, DIARY_FILE).lastModified() }?.first
-        return id?.also(::select)
+    /** Runs [step] off the main thread, publishing loading (null) and then its result; any error is [Bootstrap.Failed]. */
+    private suspend fun publish(step: () -> Bootstrap): Bootstrap = bootstrapLock.withLock {
+        _bootstrapState.value = null
+        val result = withContext(Dispatchers.IO) {
+            try { step() } catch (e: Exception) { Bootstrap.Failed }
+        }
+        result.also { _bootstrapState.value = it }
     }
+
+    private fun open(id: UUID): Bootstrap {
+        database(id).head() // owner and schema check before showing or selecting the diary
+        select(id)
+        return Bootstrap.Ready(id)
+    }
+
+    private fun watched(db: DiaryDatabase) = db.apply { onCommit = { _changes.tryEmit(Unit) } }
 
     private fun createFirstDiary(): UUID {
         val profile = DiaryProfile(UUID.randomUUID(), "My diary", "en", ZoneId.systemDefault().id, "")
@@ -85,7 +98,6 @@ class DiaryRepository(
             throw e
         }
         synchronized(databases) { databases[profile.id] = watched(db) }
-        select(profile.id)
         return profile.id
     }
 

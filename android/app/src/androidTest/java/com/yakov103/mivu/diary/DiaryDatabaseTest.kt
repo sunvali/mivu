@@ -95,6 +95,13 @@ class DiaryDatabaseTest {
         assertEquals(2, commits)
     }
 
+    @Test fun throwingOnCommitListenerDoesNotFailTheCommittedWrite() {
+        val before = db.head().revision
+        db.onCommit = { error("synthetic listener failure") }
+        db.transaction(before) { it.putWeight(weight()) }
+        assertEquals(before + 1, db.head().revision)
+    }
+
     @Test fun staleExpectedRevisionThrowsAndChangesNothing() {
         val before = db.head()
         try {

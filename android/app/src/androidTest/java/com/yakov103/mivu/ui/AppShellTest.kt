@@ -17,10 +17,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.DiaryDatabase
+import com.yakov103.mivu.diary.DiaryProfile
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.ui.theme.MivuTheme
 import java.io.File
 import java.io.IOException
+import java.util.UUID
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -69,6 +72,23 @@ class AppShellTest {
         launch(DiaryRepository(context, create = { _, _ -> throw IOException("synthetic") }))
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Couldn't create your diary")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Try again").assertIsDisplayed()
+    }
+
+    @Test fun missingSelectedDiaryAsksToChooseInsteadOfOpeningAnother() {
+        val older = DiaryProfile(UUID.randomUUID(), "Diary A", "en", "UTC", "")
+        val newer = DiaryProfile(UUID.randomUUID(), "Diary B", "en", "UTC", "")
+        listOf(older, newer).forEach { DiaryDatabase.create(context, it).close() }
+        val gone = UUID.randomUUID().toString()
+        DiaryRepository.preferences(context).edit().putString("selectedProfile", gone).commit()
+        launch(DiaryRepository(context))
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Choose a diary") and isHeading()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Diary B").assertIsDisplayed()
+        assertEquals(gone, DiaryRepository.preferences(context).getString("selectedProfile", null))
+        compose.onNodeWithText("Diary A").performClick()
+        waitForTitle("Today")
+        assertEquals(Bootstrap.Ready(older.id), repository!!.bootstrapState.value)
+        assertEquals(older.id.toString(), DiaryRepository.preferences(context).getString("selectedProfile", null))
+        repository!!.database(newer.id).close()
     }
 
     @Test fun backFromDiaryReturnsToToday() {

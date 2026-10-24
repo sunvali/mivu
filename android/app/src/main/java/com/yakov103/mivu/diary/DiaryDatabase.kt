@@ -223,7 +223,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     }
 
     /** Runs after every committed write (a changed transaction or a replace), outside the database transaction. */
-    var onCommit: (() -> Unit)? = null
+    @Volatile var onCommit: (() -> Unit)? = null
 
     /** Test seam: runs after a transaction's row writes, before its head write and commit. */
     @VisibleForTesting internal var beforeCommit: (() -> Unit)? = null
@@ -270,7 +270,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                 committed = true
             }
             value
-        }.also { if (committed) onCommit?.invoke() }
+        }.also { if (committed) notifyCommit() }
     }
 
     /** Import: validates, then replaces every row and the head with [snapshot] as given (no revision bump). */
@@ -290,7 +290,10 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         writeRows(snapshot)
         writeHead(Head(snapshot.revision.toLong(), snapshot.lineage, snapshot.profile, snapshot.activeDayID,
             snapshot.previousDayConfirmedAt, snapshot.activeConversationSegmentID))
-    }.also { onCommit?.invoke() }
+    }.also { notifyCommit() }
+
+    // The write is durable by now; a failing listener must not make the caller think it was not.
+    private fun notifyCommit() { onCommit?.let { runCatching(it) } }
 
     // beginTransactionNonExclusive issues `BEGIN IMMEDIATE` (SQLiteSession.TRANSACTION_MODE_IMMEDIATE).
     private fun <T> immediate(body: () -> T): T {
