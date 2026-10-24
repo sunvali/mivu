@@ -59,6 +59,18 @@ class DiaryDatabaseTest {
         assertEquals(fixture.lineage, db.head().lineage)
     }
 
+    @Test fun dayMealsLeavePhotoBytesToPhotoBytes() {
+        val withPhotos = fixture.meals.filter { it.photos.isNotEmpty() }
+        assertTrue("fixture has a photo meal", withPhotos.isNotEmpty())
+        for (day in fixture.days) {
+            val expected = fixture.meals.filter { it.dayID == day.id }.map { m -> m.copy(photos = m.photos.map { it.copy(data = ByteArray(0)) }) }
+            assertEquals(expected, db.read { it.dayMeals(day.id) })
+        }
+        val meal = withPhotos.first()
+        assertTrue(meal.photos.first().data.contentEquals(db.photoBytes(meal.id, meal.photos.first().id)))
+        assertEquals(null, db.photoBytes(meal.id, UUID.randomUUID()))
+    }
+
     @Test fun transactionBumpsRevisionAndLineage() {
         val before = db.head()
         val added = weight()

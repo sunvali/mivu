@@ -85,7 +85,7 @@ val SubmissionState.color: Color
 
 /** One meal: thumbnail, title, time or state, kcal when saved, and its macro bar. Stacks at large text. */
 @Composable
-fun MealRow(meal: DiaryMeal, modifier: Modifier = Modifier) {
+fun MealRow(meal: DiaryMeal, loadPhoto: suspend (mealID: UUID, photoID: UUID) -> ByteArray?, modifier: Modifier = Modifier) {
     val large = isLargeText()
     val state = meal.state
     val needsReview = state == SubmissionState.awaitingReview
@@ -96,7 +96,7 @@ fun MealRow(meal: DiaryMeal, modifier: Modifier = Modifier) {
     } else "${state.title} · $time"
     val totals = nutritionTotals(meal.items)
 
-    val thumbnail = @Composable { MealThumbnail(meal.photos.firstOrNull()) }
+    val thumbnail = @Composable { MealThumbnail(meal.id, meal.photos.firstOrNull(), loadPhoto) }
     val text = @Composable { m: Modifier ->
         Column(m, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -134,15 +134,18 @@ fun MealRow(meal: DiaryMeal, modifier: Modifier = Modifier) {
 
 private val THUMBNAIL = 56.dp
 
-// Decoded thumbnails by photo ID; the bytes of a stored photo never change under its ID.
+// Decoded thumbnails by photo ID (bytes are loaded by ID, never held in screen state); a stored photo never changes under its ID.
 private val thumbnails = LruCache<UUID, ImageBitmap>(64)
 
 @Composable
-private fun MealThumbnail(photo: MealPhoto?) {
+private fun MealThumbnail(mealID: UUID, photo: MealPhoto?, loadPhoto: suspend (UUID, UUID) -> ByteArray?) {
     val shape = RoundedCornerShape(14.dp)
     val px = with(LocalDensity.current) { THUMBNAIL.roundToPx() }
     val bitmap by produceState(photo?.let { thumbnails.get(it.id) }, photo?.id) {
-        if (photo != null && value == null) value = withContext(Dispatchers.Default) { decode(photo.data, px) }?.also { thumbnails.put(photo.id, it) }
+        if (photo != null && value == null) {
+            val bytes = loadPhoto(mealID, photo.id) ?: return@produceState
+            value = withContext(Dispatchers.Default) { decode(bytes, px) }?.also { thumbnails.put(photo.id, it) }
+        }
     }
     val image = bitmap
     if (image != null) {

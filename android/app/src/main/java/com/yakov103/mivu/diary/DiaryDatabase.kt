@@ -8,6 +8,7 @@ import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteDatabaseLockedException
+import android.database.sqlite.SQLiteDoneException
 import android.os.ParcelFileDescriptor
 import androidx.annotation.VisibleForTesting
 import java.io.Closeable
@@ -114,9 +115,12 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         fun isLive(kind: Tombstone, id: UUID): Boolean = exists(kind.name, id)
         fun isTombstoned(kind: Tombstone, id: UUID): Boolean = exists("tombstone_${kind.name}", id)
         fun days(): List<TrackingDay> = this@DiaryDatabase.days()
-        /** One day's meals, as iOS `readModel`: bounded by the day instead of loading every meal's photos. */
+        /**
+         * One day's meals for list screens, as iOS `readModel`: photos carry their ID and metadata with empty `data`;
+         * read the bytes one photo at a time with [photoBytes].
+         */
         fun dayMeals(dayID: UUID): List<DiaryMeal> =
-            records("meal", DiaryMeal.serializer(), "parent = ?", dayID).mapNotNull { meal(it.second.id) }
+            meals("parent = ?", "parent IN (SELECT id FROM meal WHERE parent = ?)", dayID, photoBytes = false)
         fun goals(): List<GoalRecord> = records("goal", GoalRecord.serializer()).map { it.second }
         fun dayWorkouts(dayID: UUID): List<WorkoutSession> = records("workout", WorkoutSession.serializer(), "parent = ?", dayID).map { it.second }
         fun coachTurnsWithoutPhotos(): List<CoachTurn> = this@DiaryDatabase.coachTurnsWithoutPhotos()
@@ -256,6 +260,12 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             else runCatching { UUID.fromString(it.getString(0)) to UUID.fromString(it.getString(1)) }
                 .getOrElse { throw DiaryError.InvalidData("submission") }
         }
+    }
+
+    /** One meal photo's bytes, or null when the photo is gone. */
+    fun photoBytes(mealID: UUID, photoID: UUID): ByteArray? = immediate {
+        head() // owner check
+        try { bytes("photo", "${mealID.key}/${photoID.key}") } catch (_: SQLiteDoneException) { null }
     }
 
     fun head(): Head = readHead() ?: throw DiaryError.InvalidData("no diary")
@@ -438,17 +448,20 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             row to value
         }
 
-    private fun photos(table: String, where: String? = null, arg: UUID? = null): Map<String?, List<MealPhoto>> =
-        records(table, MealPhoto.serializer(), where, arg).groupBy({ it.first.parent }, { (r, p) -> p.copy(data = bytes(table, r.id)) })
+    private fun photos(table: String, where: String? = null, arg: UUID? = null, withBytes: Boolean = true): Map<String?, List<MealPhoto>> =
+        records(table, MealPhoto.serializer(), where, arg)
+            .groupBy({ it.first.parent }, { (r, p) -> if (withBytes) p.copy(data = bytes(table, r.id)) else p })
 
     private fun days(id: UUID? = null) = records("day", TrackingDay.serializer(), id?.let { "id = ?" }, id).map { it.second }
 
-    private fun meals(id: UUID? = null): List<DiaryMeal> {
-        val child = id?.let { "parent = ?" }
-        val submissions = records("submission", MealSubmission.serializer(), child, id).groupBy({ it.first.parent }, { it.second })
-        val items = records("item", FoodItem.serializer(), child, id).groupBy({ it.first.parent }, { it.second })
-        val photos = photos("photo", child, id)
-        return records("meal", DiaryMeal.serializer(), id?.let { "id = ?" }, id).map { (_, m) ->
+    private fun meals(id: UUID? = null): List<DiaryMeal> = meals(id?.let { "id = ?" }, id?.let { "parent = ?" }, id)
+
+    /** Meals matching [where] with their children matching [childWhere], both bound to [arg]. */
+    private fun meals(where: String?, childWhere: String?, arg: UUID?, photoBytes: Boolean = true): List<DiaryMeal> {
+        val submissions = records("submission", MealSubmission.serializer(), childWhere, arg).groupBy({ it.first.parent }, { it.second })
+        val items = records("item", FoodItem.serializer(), childWhere, arg).groupBy({ it.first.parent }, { it.second })
+        val photos = photos("photo", childWhere, arg, photoBytes)
+        return records("meal", DiaryMeal.serializer(), where, arg).map { (_, m) ->
             m.copy(items = items[m.id.key].orEmpty(), photos = photos[m.id.key].orEmpty(), submissions = submissions[m.id.key].orEmpty())
         }
     }

@@ -3,6 +3,7 @@ package com.yakov103.mivu.ui.today
 import android.text.format.DateFormat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.GoalRecord
@@ -19,7 +20,11 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -72,20 +77,41 @@ class TodayViewModel(private val repository: DiaryRepository, private val profil
     /** The "Saved on this phone" receipt after a capture screen saves [mealID]. */
     fun showReceipt(mealID: UUID) { receipt.value = mealID }
 
-    /** No confirmation, as iOS: a repeated start reuses the open day. */
+    private val _messages = Channel<String>(Channel.BUFFERED)
+
+    /** One-shot failure messages for the snackbar, as iOS's "Could not complete action" alert. */
+    val messages: Flow<String> = _messages.receiveAsFlow()
+
+    /** No confirmation, as iOS: a repeated start reuses the open day. A write that raced this one is retried once. */
     fun startNewDay() {
         viewModelScope.launch(Dispatchers.IO) {
             val db = repository.database(profileID)
-            // shortcut: a failed start (a concurrent write) is dropped like a no-op tap; surface it once Today has an error banner.
-            runCatching { db.startDay(Instant.now(), db.head().revision) }
+            val start = { db.startDay(Instant.now(), db.head().revision) }
+            try {
+                try { start() } catch (_: DiaryError.StaleRevision) { start() }
+            } catch (e: Exception) {
+                _messages.send("Could not complete action. ${failureMessage(e)}")
+            }
         }
     }
+
+    /** The first photo's bytes for a meal thumbnail, read off the main thread. */
+    suspend fun photoBytes(mealID: UUID, photoID: UUID): ByteArray? =
+        withContext(Dispatchers.IO) { runCatching { repository.database(profileID).photoBytes(mealID, photoID) }.getOrNull() }
 
     private fun load(): TodayData = repository.database(profileID).read { tx ->
         val day = tx.head.activeDayID?.let(tx::day)
         if (day == null) TodayData(null, emptyList(), emptyList(), emptyList())
         else TodayData(day, tx.dayMeals(day.id), tx.goals(), tx.dayWorkouts(day.id))
     }
+}
+
+/** iOS `DiaryError.errorDescription` for the errors a Today action can meet, else iOS's fallback. */
+internal fun failureMessage(e: Throwable): String = when (e) {
+    is DiaryError.InvalidData -> "This diary contains invalid or unsupported data."
+    DiaryError.WrongOwner -> "The profile changed. Please try again."
+    DiaryError.NotFound -> "This diary entry no longer exists."
+    else -> "Could not save on this phone. Your input is still here."
 }
 
 internal fun todayUiState(

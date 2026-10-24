@@ -40,9 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -169,11 +167,11 @@ private fun Shell(repository: DiaryRepository, profileID: UUID) {
                         onClick = { selectTab(tab.route) },
                         icon = { Icon(painterResource(if (selected) tab.selectedIcon else tab.icon), contentDescription = null) },
                         label = {
-                            // Labels scale to 150% at most: at 200% "Progress" no longer fits a quarter of a phone and breaks mid-word.
-                            val density = LocalDensity.current
-                            CompositionLocalProvider(LocalDensity provides Density(density.density, minOf(density.fontScale, 1.5f))) {
-                                Text(tab.label, maxLines = 1)
-                            }
+                            // The label grows with the system's (nonlinear) font scale up to 18 dp: at 200% a full-size
+                            // "Progress" no longer fits a quarter of a phone and breaks mid-word.
+                            val style = MaterialTheme.typography.labelMedium
+                            val size = with(LocalDensity.current) { minOf(style.fontSize.toDp(), 18.dp).toSp() }
+                            Text(tab.label, maxLines = 1, style = style.copy(fontSize = size, lineHeight = size * 1.34f))
                         },
                     )
                 }

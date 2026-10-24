@@ -29,10 +29,14 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -69,22 +73,27 @@ fun TodayScreen(
     onAddManually: (dayID: UUID?) -> Unit,
     onLogMeal: () -> Unit,
 ) {
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
     val state = viewModel.state.collectAsStateWithLifecycle().value ?: return Box(Modifier.fillMaxSize())
     Column(Modifier.fillMaxSize()) {
-        LazyColumn(
-            Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 4.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (state.sampleMode) item(key = "sample") { SampleBanner() }
-            state.savedReceipt?.let { id -> item(key = "receipt") { SavedReceipt { onOpenMeal?.invoke(id) } } }
-            item(key = "summary") { SummaryCard(state, viewModel::startNewDay) }
-            item(key = "mealsHeader") {
-                Text("Meals", Modifier.padding(top = 12.dp).semantics { heading() },
-                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 4.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (state.sampleMode) item(key = "sample") { SampleBanner() }
+                state.savedReceipt?.let { id -> item(key = "receipt") { SavedReceipt { onOpenMeal?.invoke(id) } } }
+                item(key = "summary") { SummaryCard(state, viewModel::startNewDay) }
+                item(key = "mealsHeader") {
+                    Text("Meals", Modifier.padding(top = 12.dp).semantics { heading() },
+                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
+                if (state.meals.isEmpty()) item(key = "empty") { FirstMealCard() }
+                items(state.meals, key = { it.id }) { meal -> MealCard(meal, viewModel::photoBytes, onOpenMeal) }
             }
-            if (state.meals.isEmpty()) item(key = "empty") { FirstMealCard() }
-            items(state.meals, key = { it.id }) { meal -> MealCard(meal, onOpenMeal) }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = Gutter))
         }
         BottomActions(state.sampleMode, onLogWithPip, { onAddManually(state.activeDayID) }, onLogMeal)
     }
@@ -97,7 +106,7 @@ private fun SummaryCard(state: TodayUiState, onStartNewDay: () -> Unit) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             DayActions(state.displayDate, onStartNewDay)
             if (large) {
-                Pip(144.dp)
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Pip(144.dp) }
                 Intake(state)
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -121,6 +130,7 @@ private fun SummaryCard(state: TodayUiState, onStartNewDay: () -> Unit) {
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            // shortcut: iOS offers "Set a goal" / "Edit goals" here when there is no kcal target; add it with the goal editor.
             state.goal?.let { Goal(it, large) }
         }
     }
@@ -226,9 +236,9 @@ private fun FirstMealCard() {
 }
 
 @Composable
-private fun MealCard(meal: DiaryMeal, onOpenMeal: ((UUID) -> Unit)?) {
+private fun MealCard(meal: DiaryMeal, loadPhoto: suspend (UUID, UUID) -> ByteArray?, onOpenMeal: ((UUID) -> Unit)?) {
     WhiteCard(Modifier.testTag("mealRow"), onClick = onOpenMeal?.let { { it(meal.id) } }) {
-        MealRow(meal, Modifier.padding(16.dp))
+        MealRow(meal, loadPhoto, Modifier.padding(16.dp))
     }
 }
 

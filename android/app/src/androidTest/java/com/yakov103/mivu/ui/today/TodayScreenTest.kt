@@ -23,10 +23,12 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.ui.MivuApp
 import com.yakov103.mivu.ui.theme.MivuTheme
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -99,6 +101,31 @@ class TodayScreenTest {
         compose.waitUntil(10_000) { repository!!.database(id).head().activeDayID != null }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("No meals recorded")).fetchSemanticsNodes().isEmpty() }
         assertNotNull(repository!!.database(id).head().activeDayID)
+    }
+
+    @Test fun startNewDayRetriesARacedWriteOnce() {
+        val id = TodayFixture.diary(context)
+        launch()
+        waitFor("todayDayActions")
+        var raced = false
+        repository!!.database(id).beforeCommit = { if (!raced) { raced = true; throw DiaryError.StaleRevision } }
+        compose.onNodeWithTag("todayDayActions").performClick()
+        compose.onNodeWithTag("startNewDay").performClick()
+        compose.waitUntil(10_000) { repository!!.database(id).head().activeDayID != null }
+        assertTrue(raced)
+        compose.onAllNodes(hasText("Could not complete action", substring = true)).assertCountEquals(0)
+    }
+
+    @Test fun startNewDayFailureShowsSnackbar() {
+        val id = TodayFixture.diary(context)
+        launch()
+        waitFor("todayDayActions")
+        repository!!.database(id).beforeCommit = { throw DiaryError.InvalidData("synthetic") }
+        compose.onNodeWithTag("todayDayActions").performClick()
+        compose.onNodeWithTag("startNewDay").performClick()
+        waitForText("Could not complete action. This diary contains invalid or unsupported data.")
+        assertEquals(null, repository!!.database(id).head().activeDayID)
+        repository!!.database(id).beforeCommit = null
     }
 
     @Test fun addManuallyOpensManualEntry() {
