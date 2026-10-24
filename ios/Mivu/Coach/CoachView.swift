@@ -10,6 +10,8 @@ struct CoachView: View {
     var navigationRequest: CoachNavigationRequest? = nil
     var onNavigationConsumed: (UUID) -> Void = { _ in }
     var openHistory: () -> Void = {}
+    var openToday: () -> Void = {}
+    var openProgress: () -> Void = {}
     let openDestination: (CoachDestination) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -267,7 +269,7 @@ struct CoachView: View {
                 inputBubble(turn)
                 VStack(alignment: .leading, spacing: 12) {
                     if let answer = turn.assistantText {
-                        Text(answer).font(.body)
+                        Text(CoachReplyLines.attributed(answer)).font(.body)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
@@ -289,9 +291,10 @@ struct CoachView: View {
             .accessibilityElement(children: .contain).accessibilityIdentifier("coachExchange-" + turn.id.uuidString)
             .accessibilityValue(row.isHighlighted ? "Selected source message" : "")
         } else if let date = row.date {
-            HStack { Rectangle().frame(height: 0.5); Text(date).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
+            let label = CoachReplyLines.dayLabel(date, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)).capitalized(with: .current)
+            HStack { Rectangle().frame(height: 0.5); Text(label).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
                 .foregroundStyle(Color.diarySecondary).padding(.vertical, 8)
-                .accessibilityElement(children: .ignore).accessibilityLabel(date).accessibilityAddTraits(.isHeader)
+                .accessibilityElement(children: .ignore).accessibilityLabel(label).accessibilityAddTraits(.isHeader)
         }
     }
     private var companionRecovery: Bool { coach.companionNeedsRecovery }
@@ -316,7 +319,7 @@ struct CoachView: View {
                 let caption = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))
                 caption {
                     if let day = coach.diary.activeDay {
-                        Text("Logging to " + day.localDate).accessibilityIdentifier("coachDate")
+                        Text("Logging to " + CoachReplyLines.dayLabel(day.localDate, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier))).accessibilityIdentifier("coachDate")
                     }
                     if let target = coach.diary.readModel?.activeGoal?.targets.kcal {
                         if coach.diary.activeDay != nil, !typeSize.isAccessibilitySize { Text("·").accessibilityHidden(true) }
@@ -326,9 +329,9 @@ struct CoachView: View {
                 .font(.caption).foregroundStyle(Color.diarySecondary)
                 if let error = coach.errorMessage, companionRecovery {
                     Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
-                } else if companionRecovery || companionProcessing {
-                    Text(companionRecovery ? "Your input is safe here" : "Working on your request…")
-                        .foregroundStyle(Color.diaryText)
+                } else if companionRecovery {
+                    // While working, the timeline's activity card already says what is happening.
+                    Text("Your message is safe here").foregroundStyle(Color.diaryText)
                 }
             }
             .font(.subheadline).fixedSize(horizontal: false, vertical: true)
@@ -374,8 +377,8 @@ struct CoachView: View {
             }
             if !coach.connection.canInfer && !DiaryLaunch.isCoachInferenceFixture {
                 HStack(spacing: 4) {
-                    Text("Input saves on this iPhone.").foregroundStyle(Color.diarySecondary)
-                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for analysis")
+                    Text("Messages save on this iPhone.").foregroundStyle(Color.diarySecondary)
+                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for replies")
                         .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
                 }
                 .font(.caption)
@@ -544,7 +547,7 @@ struct CoachView: View {
     }
     @ViewBuilder private func messageActions(_ turn: CoachExchangeSummary, fromPip: Bool) -> some View {
         Button("Reply", systemImage: "arrowshape.turn.up.left") { reply(to: turn, fromPip: fromPip) }
-        let text = fromPip ? turn.assistantText ?? "" : turn.text
+        let text = fromPip ? CoachReplyLines.plain(turn.assistantText ?? "") : turn.text
         if !text.isEmpty { Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text } }
     }
     private func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
@@ -602,7 +605,7 @@ struct CoachView: View {
                 }
                 if !turn.text.isEmpty { Text(turn.text).font(.body).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
                 if !turn.photos.isEmpty {
-                    Label("\(turn.photos.count) attached photos", systemImage: "photo").font(.caption)
+                    Label(turn.photos.count == 1 ? "1 photo" : "\(turn.photos.count) photos", systemImage: "photo").font(.caption)
                     ForEach(turn.photos) { photo in DiaryPhotoPreview(model: coach.diary, reference: photo, height: 140) }
                 }
             }
@@ -611,8 +614,11 @@ struct CoachView: View {
             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 20))
             .contextMenu { messageActions(turn, fromPip: false) }
             .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: false) }
-            Label("Input saved on this iPhone", systemImage: "internaldrive")
-                .font(.caption).foregroundStyle(Color.diarySecondary)
+            // A reply or card already shows the message landed; the save note matters only until then.
+            if turn.state != .completed {
+                Label("Saved on this iPhone", systemImage: "checkmark.circle")
+                    .font(.caption).foregroundStyle(Color.diarySecondary)
+            }
         }.frame(maxWidth: .infinity, alignment: .trailing)
     }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
@@ -630,11 +636,11 @@ struct CoachView: View {
                 }
                 if turn.needsDayChoice {
                     if let date = coach.previousDayDate(turn) {
-                        Button("Use previous waking day: " + date) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
+                        Button("Log to " + CoachReplyLines.shortDate(date)) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
                     }
-                    Button("Use capture date: " + coach.captureDate(turn)) { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
+                    Button("Log to " + CoachReplyLines.shortDate(coach.captureDate(turn))) { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
                 } else if [.waitingForConnection, .waitingForNetwork, .needsRetry, .needsClarification].contains(turn.state) {
-                    Button("Retry analysis") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
+                    Button("Try again") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
                 }
             }
             ForEach(turn.receipts.filter { $0.mealID != nil || $0.workoutID != nil }, id: \.operationKey) { receipt in
@@ -642,6 +648,29 @@ struct CoachView: View {
                                  undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
+                }
+            }
+            ForEach(turn.receipts.filter { $0.weightID != nil }, id: \.operationKey) { receipt in
+                if let label = CoachReceiptPresentation(receipt: receipt, target: .loading).weightLabel {
+                    Label(label, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryWeight)
+                        .padding(.horizontal, 14).frame(minHeight: 44)
+                        .background(Color.diaryWeight.opacity(0.12), in: Capsule())
+                        .accessibilityIdentifier("coachWeightChip")
+                }
+            }
+            if coach.timeline?.window.isLatest(turn.id) == true {
+                let followUps = CoachReplyLines.followUps(for: turn)
+                if !followUps.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(followUps, id: \.self) { followUp in
+                            Button(action: followUp == .today ? openToday : openProgress) {
+                                Text(followUp == .today ? "See today" : "See progress").frame(minHeight: 36)
+                            }
+                            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
+                                .accessibilityIdentifier(followUp == .today ? "coachFollowUp-today" : "coachFollowUp-progress")
+                        }
+                    }
                 }
             }
             if turn.incomplete == true {
@@ -664,12 +693,12 @@ struct CoachView: View {
     }
     private func status(_ state: CoachTurnState) -> String {
         switch state {
-        case .captured: "Waiting for analysis"
-        case .analyzing: "Analyzing saved input"
-        case .waitingForConnection: "Waiting for an authorized connection"
-        case .waitingForNetwork: "Waiting for the network. Your input is saved."
-        case .needsRetry: "Analysis paused. Your input is saved."
-        case .needsClarification: "More details are needed. Review the saved record or send a follow-up."
+        case .captured: "Waiting to start"
+        case .analyzing: "Thinking…"
+        case .waitingForConnection: "Connect ChatGPT in Settings to continue"
+        case .waitingForNetwork: "Offline. I'll reply when you're back online."
+        case .needsRetry: "Couldn't finish. Your message is saved."
+        case .needsClarification: "I need a little more detail. Reply with it, or edit the record."
         case .completed: "Completed"
         }
     }

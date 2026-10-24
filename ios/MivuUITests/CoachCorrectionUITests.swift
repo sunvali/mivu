@@ -16,7 +16,6 @@ import XCTest
         XCTAssertEqual(receipt["targetLocalDate"] as? String, "2027-01-15")
         XCTAssertEqual(after["captureZone"] as? String, "UTC")
         XCTAssertEqual(number(after, "capturedAt"), 1_800_093_600)
-        XCTAssertTrue((after["assistantText"] as? String)?.contains("2027-01-15") == true)
         XCTAssertTrue((after["assistantText"] as? String)?.contains("3 piece") == true)
         try showCommittedReceipt(app)
         evidence(app, "Grounded original-date correction", after)
@@ -273,13 +272,19 @@ import XCTest
         if app.buttons["coachNewMessage"].exists { app.buttons["coachNewMessage"].tap() }
         let amount = app.staticTexts.matching(identifier: "coachReceiptQuantity").matching(NSPredicate(format: "label CONTAINS %@", "3 piece")).firstMatch
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["coachReceiptDate"].firstMatch.label.contains("2027-01-15"))
+        XCTAssertTrue(["Jan 15", "15 Jan"].contains { app.staticTexts["coachReceiptDate"].firstMatch.label.contains($0) })
     }
     private func openAndVerifyCommittedMeal(_ app: XCUIApplication, receipt: [String: Any], facts: [String: Any]) throws {
         let key = try XCTUnwrap(receipt["operationKey"] as? String)
         let card = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == %@", "coachReceipt-" + key)).firstMatch
         let link = card.buttons.matching(identifier: "coachMealLink").firstMatch
-        for _ in 0..<6 where !link.isHittable { app.swipeUp() }
+        // Scroll toward the link: a tall card can leave its header under the navigation bar.
+        let top = app.navigationBars.firstMatch.frame.maxY
+        for _ in 0..<6 where !link.isHittable {
+            // Drag in the right gutter: the card's selectable text would start a selection instead.
+            let start = app.descendants(matching: .any)["coachViewport"].firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: link.frame.minY < top + 8 ? 160 : -160)))
+        }
         XCTAssertTrue(link.isHittable); link.tap()
         XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["2027-01-15"].waitForExistence(timeout: 5))

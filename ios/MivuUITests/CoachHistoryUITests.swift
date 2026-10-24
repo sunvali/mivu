@@ -61,15 +61,23 @@ import XCTest
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
     func reveal(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<14 where !element.isHittable {
+        // The floating composer overlays the chat's bottom; a control under it reports hittable but taps the composer.
+        func clear() -> Bool {
+            let composer = app.textFields["coachInput"]
+            return element.isHittable && (!composer.exists || element.frame.maxY <= composer.frame.minY - 8)
+        }
+        for _ in 0..<14 where !clear() {
             let surface = viewport(app), frame = surface.frame
-            let down = element.exists && !element.frame.isEmpty && element.frame.minY < frame.minY
-            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+            // The navigation bar overlaps the viewport's top, so an element under it is still above.
+            let top = max(frame.minY, app.navigationBars.firstMatch.frame.maxY)
+            let down = element.exists && !element.frame.isEmpty && element.frame.minY < top + 8
+            // Drag in the right gutter: a card's selectable text would start a selection instead.
+            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5))
             let step = min(80, frame.height * 0.25) * (down ? 1.0 : -1.0)
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: step)),
                 withVelocity: .slow, thenHoldForDuration: 0.2)
         }
-        if !element.isHittable { printRouteDiagnostics(app, target: element) }
+        if !clear() { printRouteDiagnostics(app, target: element) }
         XCTAssertTrue(element.isHittable)
     }
     func printRouteDiagnostics(_ app: XCUIApplication, target: XCUIElement? = nil) {
@@ -259,7 +267,7 @@ import XCTest
         XCTAssertTrue(app.buttons["mealSourceChat"].waitForExistence(timeout: 5))
         app.buttons["mealSourceChat"].tap()
         let date = app.staticTexts["coachReceiptDate"]
-        XCTAssertTrue(date.waitForExistence(timeout: 10)); XCTAssertTrue(date.label.contains("2027-01-15"))
+        XCTAssertTrue(date.waitForExistence(timeout: 10)); XCTAssertTrue(["Jan 15", "15 Jan"].contains { date.label.contains($0) })
         // The Diary quote focuses the composer; the keyboard leaves too little viewport to reveal the receipt.
         let keyboard = app.keyboards.firstMatch
         if keyboard.exists { // interactive dismissal needs the drag to continue into the keyboard
@@ -347,7 +355,7 @@ import XCTest
         if app.buttons["Jump to latest"].exists { app.buttons["Jump to latest"].tap() }
         let quantity = app.staticTexts.matching(identifier: "coachReceiptQuantity").matching(NSPredicate(format: "label CONTAINS %@", "3 piece")).firstMatch
         XCTAssertTrue(quantity.waitForExistence(timeout: 10))
-        let committedReceiptShowsThreePiecesAndCapturedYesterday = quantity.exists && app.staticTexts["coachReceiptDate"].label.contains("2027-01-15")
+        let committedReceiptShowsThreePiecesAndCapturedYesterday = quantity.exists && ["Jan 15", "15 Jan"].contains { app.staticTexts["coachReceiptDate"].label.contains($0) }
         XCTAssertTrue(committedReceiptShowsThreePiecesAndCapturedYesterday)
         let details = app.descendants(matching: .any)["coachReceiptDetails"].firstMatch
         reveal(details, app: app); details.tap()

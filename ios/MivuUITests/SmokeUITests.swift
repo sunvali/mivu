@@ -21,11 +21,11 @@ import XCTest
         XCTAssertTrue(send.isHittable)
         send.tap()
         XCTAssertTrue(app.staticTexts["Synthetic smoke lunch"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 5))
         app.terminate()
         app.launch()
         XCTAssertTrue(app.staticTexts["Synthetic smoke lunch"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].exists)
+        XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].exists)
         for tab in ["Today", "Diary", "Progress", "Coach"] {
             let button = app.tabBars.buttons[tab]
             XCTAssertTrue(button.isHittable)

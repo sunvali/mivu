@@ -240,14 +240,15 @@ import Testing
         let yogurt = FoodItem(name: "Synthetic yogurt", quantity: 150, unit: "g", nutrition: NutritionValues(kcal: 90), provenance: .estimate)
         let bread = food("Synthetic bread", 1.5, 120)
         let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [yogurt, bread], expectedProfileID: profile.id)
+        // Quantities live on the receipt card; the reply line is one short sentence.
         let summary = try await store.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id)
-        #expect(summary.contains("150 g")); #expect(summary.contains("1.5 portion"))
+        #expect(summary == "Saved — about **210** kcal.")
+        #expect(DiaryDatabase.coachCommittedReceipt(receipt).items.map { "\($0.quantity) \($0.unit)" } == ["150.0 g", "1.5 portion"])
         var corrected = yogurt; corrected.quantity = 75
         try await store.editItem(mealID: receipt.mealID!, item: corrected, explicitNutrients: [])
         let restored = DiaryStore(directory: root); _ = try await restored.selectProfile(profile.id)
-        let updated = try await restored.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id)
-        #expect(updated.contains("75 g")); #expect(!updated.contains("150 g"))
-        #expect(updated.contains("1.5 portion"))
+        #expect(try await restored.snapshotForExport().meals[0].items.map(\.quantity) == [75, 1.5])
+        #expect(try await restored.coachCommittedSummary(turnID: turn.id, expectedProfileID: profile.id) == summary)
     }
 
     @Test func validLargeUnicodeHistoryProjectsWithinTransportWithoutChangingDiary() async throws {
@@ -294,7 +295,7 @@ import Testing
         #expect(snapshot.meals[0].state == .awaitingReview)
         #expect(snapshot.meals[0].submissions.last?.proposal?.items.first?.nutrition.kcal == 120)
         let summary = try await store.coachCommittedSummary(turnID: id, expectedProfileID: profile.id)
-        #expect(summary == "Estimate ready for review.")
+        #expect(summary == "Your estimate is ready for review.")
         try await store.acceptReview(mealID: meal.id, submissionID: id)
         #expect(try await store.snapshotForExport().meals[0].totals.kcal == 120)
         #expect(try await store.snapshotForExport().meals[0].state == .saved)

@@ -16,7 +16,7 @@ enum CoachReplyNotification {
         switch turn.state {
         case .captured, .analyzing: return nil
         case .completed:
-            let reply = (turn.assistantText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let reply = CoachReplyLines.plain(turn.assistantText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !reply.isEmpty else { return nil }
             return ("Coach", reply.count <= 180 ? reply : String(reply.prefix(179)) + "…")
         case .needsClarification: return ("Coach", "The Coach needs a quick answer.")

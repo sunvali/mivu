@@ -29,7 +29,7 @@ import Testing
         let recovered = CoachJourneyTransport()
         let completed = try await CoachEngine(store: fresh, infer: { try await recovered.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: source.profile.id)
         #expect(completed.state == .completed && completed.receipts == [receipt])
-        #expect(completed.assistantText?.contains("2027-01-15") == true && completed.assistantText?.contains("3 piece") == true)
+        #expect(completed.assistantText?.contains("3 piece") == true && completed.assistantText?.contains("Nutrition may be uncertain") == false)
         #expect(await recovered.calls.isEmpty)
         let capturedContext = try #require(await recovered.contexts.first)
         #expect(capturedContext.committedReceipts?.first?.targetLocalDate == "2027-01-15")

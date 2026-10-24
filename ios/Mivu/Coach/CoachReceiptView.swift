@@ -108,15 +108,42 @@ struct CoachReceiptPresentation: Equatable {
                 }
             }
         }
-        if moved, let date = currentDate { return (edited ? "Edited · moved to " : "Moved to ") + date }
-        if edited { return "Edited since this receipt" }
-        return stateChanged ? "Status changed since this receipt" : nil
+        if moved, let date = currentDate { return (edited ? "Edited · moved to " : "Moved to ") + CoachReplyLines.shortDate(date) }
+        if edited { return "Edited later" }
+        return stateChanged ? "Status changed later" : nil
     }
     private static func macros(carbs: Double?, protein: Double?, fat: Double?) -> String {
         func grams(_ value: Double?) -> String {
             value.map { $0.formatted(.number.precision(.fractionLength(0...1))) + " g" } ?? "unknown"
         }
         return "Carbs " + grams(carbs) + " · Protein " + grams(protein) + " · Fat " + grams(fat)
+    }
+    var itemRows: [(name: String, amount: String, kcal: String)] {
+        receipt.items.map { ($0.name, "\($0.quantity.formatted(.number.grouping(.never))) \($0.unit)", $0.nutrition?.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—") }
+    }
+    /// Energy share of carbs, protein and fat (4/4/9 kcal per gram); nil when any total is unknown.
+    var macroShare: (carbs: Double, protein: Double, fat: Double)? {
+        guard !receipt.items.isEmpty, let carbs = committedTotal(\.carbs), let protein = committedTotal(\.protein), let fat = committedTotal(\.fat) else { return nil }
+        let energy = carbs * 4 + protein * 4 + fat * 9
+        guard energy > 0 else { return nil }
+        return (carbs * 4 / energy, protein * 4 / energy, fat * 9 / energy)
+    }
+    var macroTotals: (carbs: String, protein: String, fat: String)? {
+        guard let carbs = committedTotal(\.carbs), let protein = committedTotal(\.protein), let fat = committedTotal(\.fat) else { return nil }
+        func grams(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0...1))) + " g" }
+        return (grams(carbs), grams(protein), grams(fat))
+    }
+    /// Per-dish grams for the disclosure; nil for a single dish, whose totals the legend already shows.
+    var itemMacros: String? {
+        guard receipt.items.count > 1 else { return nil }
+        return receipt.items.map { item in
+            "\(item.name): " + Self.macros(carbs: item.nutrition?.carbs, protein: item.nutrition?.protein, fat: item.nutrition?.fat)
+        }.joined(separator: "\n")
+    }
+    var weightLabel: String? {
+        guard receipt.weightID != nil, !receipt.operationKey.contains("/delete_weight/") else { return nil }
+        guard let value = receipt.weightValue, let unit = receipt.weightUnit else { return "Weight saved" }
+        return "Weight saved · \(value.formatted(.number.grouping(.never))) \(unit)"
     }
     var canOpenTarget: Bool {
         switch target { case .meal, .workout: true; default: false }
@@ -135,28 +162,32 @@ struct CoachReceiptView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 0) { receiptStatus; reviewButton; undoButton }
+                VStack(alignment: .leading, spacing: 4) { receiptStatus; committedDate }
             } else {
-                // Undo joins the header row so it doesn't add a row to every fresh receipt.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { receiptStatus; Spacer(minLength: 0); undoButton; reviewButton }
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack(spacing: 12) { receiptStatus; Spacer(minLength: 0); reviewButton }
-                        undoButton
+                HStack(alignment: .firstTextBaseline, spacing: 12) { receiptStatus; Spacer(minLength: 0); committedDate }
+            }
+            ForEach(Array(presentation.itemRows.enumerated()), id: \.offset) { _, row in
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 2) { Text(row.name); Text(row.amount).foregroundStyle(Color.diarySecondary); Text(row.kcal + " kcal").monospacedDigit() }
+                    } else {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(row.name).lineLimit(2)
+                            Text(row.amount).foregroundStyle(Color.diarySecondary).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text(row.kcal).monospacedDigit().foregroundStyle(Color.diarySecondary)
+                        }
                     }
                 }
+                .padding(.vertical, 2)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(row.name), \(row.amount), \(row.kcal == "—" ? "calories unknown" : row.kcal + " calories")")
+                .accessibilityAddTraits(.isStaticText)
+                .accessibilityIdentifier("coachReceiptQuantity")
             }
-            ForEach(Array(presentation.committedItems.enumerated()), id: \.offset) { _, item in
-                Text(item).accessibilityIdentifier("coachReceiptQuantity")
-            }
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 4) { committedDate; committedEnergy }
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { committedDate; committedEnergy }
-                    VStack(alignment: .leading, spacing: 4) { committedDate; committedEnergy }
-                }
-            }
+            if presentation.macroShare != nil || presentation.committedNutrition != nil { Divider().overlay(Color.diaryRule).padding(.vertical, 4) }
+            committedEnergy
+            if let share = presentation.macroShare { macroBar(share); macroLegend }
             if let completeness = presentation.nutritionCompleteness { Text(completeness).accessibilityIdentifier("coachReceiptUnknown") }
             if let notice = presentation.changeNotice {
                 Text(notice).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptChange")
@@ -166,7 +197,8 @@ struct CoachReceiptView: View {
             }
             if let macros = presentation.committedMacros {
                 DisclosureGroup {
-                    Text(macros).monospacedDigit().accessibilityIdentifier("coachReceiptMacros")
+                    // The legend shows meal totals; the disclosure holds each dish's grams.
+                    Text(presentation.itemMacros ?? macros).monospacedDigit().foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptMacros")
                 } label: {
                     Text(presentation.estimateLabel ?? "Nutrition details")
                         .fixedSize(horizontal: false, vertical: true)
@@ -174,10 +206,15 @@ struct CoachReceiptView: View {
                 }
                 .disclosureGroupStyle(CoachReceiptDisclosureStyle())
             }
+            // Actions close the card so they stay in view when a tall card sits above the composer.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 0) { reviewButton; undoButton }
+            } else {
+                HStack(spacing: 12) { undoButton; Spacer(minLength: 0); reviewButton }
+            }
         }
-        .font(.subheadline).textSelection(.enabled)
-        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 12))
+        .font(.subheadline)
+        .modifier(DiarySummaryCardStyle(padding: 14))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("coachReceipt-" + receipt.operationKey)
     }
@@ -192,14 +229,46 @@ struct CoachReceiptView: View {
     }
     @ViewBuilder private var committedDate: some View {
         if let date = presentation.committedDate {
-            Text("Recorded for " + date).fixedSize(horizontal: false, vertical: true)
+            Text(CoachReplyLines.shortDate(date)).fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptDate")
         }
     }
     @ViewBuilder private var committedEnergy: some View {
         if let energy = presentation.committedNutrition {
-            Text(energy).monospacedDigit().accessibilityIdentifier("coachReceiptNutrition")
+            Text(energy).font(.headline).monospacedDigit().foregroundStyle(Color.diaryEnergy).accessibilityIdentifier("coachReceiptNutrition")
         }
+    }
+    @ViewBuilder private var macroLegend: some View {
+        if let totals = presentation.macroTotals {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { legend(totals) }
+                VStack(alignment: .leading, spacing: 2) { legend(totals) }
+            }
+            .font(.caption.weight(.medium)).monospacedDigit()
+            .accessibilityHidden(true)
+        }
+    }
+    @ViewBuilder private func legend(_ totals: (carbs: String, protein: String, fat: String)) -> some View {
+        Text("Carbs \(totals.carbs)").foregroundStyle(Color.diaryCarbs)
+        Text("Protein \(totals.protein)").foregroundStyle(Color.diaryProtein)
+        Text("Fat \(totals.fat)").foregroundStyle(Color.diaryFat)
+    }
+    /// One energy split bar in the Today macro colours.
+    private func macroBar(_ share: (carbs: Double, protein: Double, fat: Double)) -> some View {
+        // Canvas draws at the offered width without feeding a size back into the self-sizing table cell.
+        Canvas { context, size in
+            var x = 0.0
+            for (part, color) in [(share.carbs, Color.diaryCarbs), (share.protein, Color.diaryProtein), (share.fat, Color.diaryFat)] {
+                let width = max(0, size.width * part - 2)
+                context.fill(Capsule().path(in: CGRect(x: x, y: 0, width: width, height: size.height)), with: .color(color))
+                x += width + 2
+            }
+        }
+        .frame(maxWidth: .infinity).frame(height: 6)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.committedMacros ?? "")
+        .accessibilityIdentifier("coachReceiptMacroBar")
     }
     @ViewBuilder private var reviewButton: some View {
         if receipt.mealID != nil || receipt.workoutID != nil {
