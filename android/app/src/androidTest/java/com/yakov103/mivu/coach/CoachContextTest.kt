@@ -179,7 +179,7 @@ class CoachContextTest {
                 CoachInferenceInput.Message(CoachInferenceInput.Role.assistant, "Logged it.\n$line"),
                 CoachInferenceInput.Message(CoachInferenceInput.Role.user, "[photo]"),
             ),
-            db.coachHistoryMessages(current.id),
+            coachHistoryMessages(db.coachInferenceContext(current.id).recentTurns),
         )
     }
 
@@ -202,8 +202,7 @@ class CoachContextTest {
         val turns = List(10_000) { turn("Synthetic $it", day = days[0]) }
         seed(days, turns = turns)
         val started = System.nanoTime()
-        db.coachInferenceContext(turns.last().id)
-        db.coachHistoryMessages(turns.last().id)
+        coachHistoryMessages(db.coachInferenceContext(turns.last().id).recentTurns)
         assertEquals(0, db.snapshotReads)
         assertTrue((System.nanoTime() - started) / 1_000_000 < 2_000)
     }

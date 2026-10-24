@@ -1,6 +1,8 @@
 package com.yakov103.mivu.analysis
 
 import com.sun.net.httpserver.HttpServer
+import com.yakov103.mivu.coach.CoachInferenceInput
+import com.yakov103.mivu.coach.CoachTools
 import java.net.InetSocketAddress
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -113,5 +115,60 @@ class ResponsesClientTest {
         assertEquals("Bearer tok", seenHeaders["Authorization"])
         reply = """{"models":[{"slug":"","display_name":"A","visibility":"list"}]}"""
         assertTrue(failure { client.models("tok") } is ResponsesClient.Failure.Malformed)
+    }
+
+    private fun sse(vararg events: String) = events.joinToString("") { e ->
+        "event: ${JSONObject(e).getString("type")}\ndata: $e\n\n"
+    }
+    private val reasoning = """{"type":"reasoning","id":"rs_1","summary":[],"encrypted_content":"synthetic-opaque"}"""
+    private val call = """{"type":"function_call","id":"fc_1","call_id":"call_1","name":"get_context","namespace":"mivu","arguments":"{}","status":"completed"}"""
+    private fun completed(output: String) = """{"type":"response.completed","response":{"status":"completed","model":"fixture-model","output":[$output]}}"""
+    private fun respond(vararg input: CoachInferenceInput) = runBlocking {
+        client.respond("fixture-model", input.toList().ifEmpty { listOf(CoachInferenceInput.Message(CoachInferenceInput.Role.user, "Synthetic")) },
+            CoachTools.declarations(), "tok-secret")
+    }
+
+    @Test fun streamWithToolCallsParses() {
+        reply = sse("""{"type":"response.output_item.done","output_index":0,"item":$reasoning}""",
+            """{"type":"response.output_item.done","output_index":1,"item":$call}""", completed("$reasoning,$call"))
+        val result = respond(CoachInferenceInput.Message(CoachInferenceInput.Role.developer, "Synthetic rules"),
+            CoachInferenceInput.FunctionOutput("call_0", "{}"))
+        assertEquals("fixture-model", result.model)
+        assertEquals("", result.text)
+        assertEquals(listOf(com.yakov103.mivu.coach.CoachToolCall("fc_1", "call_1", "get_context", "mivu", "{}")), result.calls)
+        val body = JSONObject(seenBody)
+        assertEquals(setOf("model", "input", "store", "stream", "tools"), body.keys().asSequence().toSet())
+        assertEquals("namespace", body.getJSONArray("tools").getJSONObject(0).getString("type"))
+        assertEquals("function_call_output", body.getJSONArray("input").getJSONObject(1).getString("type"))
+        // A call whose arguments are not a JSON object is refused.
+        reply = sse(completed(call.replace("\"arguments\":\"{}\"", "\"arguments\":\"[]\"")))
+        assertTrue(failure { respond() } is ResponsesClient.Failure.Malformed)
+        // The probe path still needs text.
+        reply = sse(completed(call))
+        assertTrue(failure { run() } is ResponsesClient.Failure.Malformed)
+    }
+
+    @Test fun reasoningItemsAreKept() {
+        // Final items only in done events, with an empty terminal output.
+        val message = """{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Synthetic reply"}]}"""
+        reply = sse("""{"type":"response.output_item.done","output_index":0,"item":$reasoning}""",
+            """{"type":"response.output_item.done","output_index":1,"item":$message}""", completed(""))
+        val result = respond()
+        assertEquals("Synthetic reply", result.text)
+        assertEquals(2, result.outputItems.size)
+        val kept = JSONObject(result.outputItems[0])
+        assertEquals("reasoning", kept.getString("type"))
+        assertEquals("synthetic-opaque", kept.getString("encrypted_content"))
+        // Kept items replay as prior outputs unchanged.
+        respond(CoachInferenceInput.Message(CoachInferenceInput.Role.user, "Synthetic"), CoachInferenceInput.PriorOutput(result.outputItems[0]))
+        assertEquals("synthetic-opaque", JSONObject(seenBody).getJSONArray("input").getJSONObject(1).getString("encrypted_content"))
+    }
+
+    @Test fun respondBoundsInput() {
+        val many = List(129) { CoachInferenceInput.Message(CoachInferenceInput.Role.user, "x") }
+        assertEquals(ResponsesClient.Failure.InvalidInput, failure { client.respond("m", many, null, "tok") })
+        assertEquals(ResponsesClient.Failure.InvalidInput,
+            failure { client.respond("m", listOf(CoachInferenceInput.Message(CoachInferenceInput.Role.assistant, "x", listOf(byteArrayOf(-1, -40, -1, 0)))), null, "tok") })
+        assertEquals("", seenBody)
     }
 }

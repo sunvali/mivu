@@ -156,6 +156,8 @@ sealed class CoachError : Exception() {
     object InvalidTool : CoachError()
     object InvalidArguments : CoachError()
     object LimitExceeded : CoachError()
+    object UngroundedConfirmation : CoachError()
+    object ConnectionRequired : CoachError()
 }
 
 /** iOS `coachJSON`: sorted keys, at most 64 KiB. */
@@ -193,9 +195,6 @@ fun coachHistoryMessages(turns: List<CoachContext.Turn>): List<CoachInferenceInp
         if (reply.blankLikeSwift()) null else CoachInferenceInput.Message(CoachInferenceInput.Role.assistant, reply),
     )
 }
-
-fun DiaryDatabase.coachHistoryMessages(turnID: UUID): List<CoachInferenceInput> =
-    coachHistoryMessages(coachInferenceContext(turnID).recentTurns)
 
 fun DiaryDatabase.coachInferenceContext(turnID: UUID): CoachContext = read { it.coachInferenceContext(turnID) }
 
