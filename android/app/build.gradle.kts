@@ -28,8 +28,7 @@ android {
         targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Screenshot seeding wipes the app's diary: run it only by hand with `am instrument -e class`.
-        testInstrumentationRunnerArguments["notClass"] =
-            "com.yakov103.mivu.ui.today.TodayFixtureSeed,com.yakov103.mivu.ui.coach.CoachFixtureSeed"
+        testInstrumentationRunnerArguments["notClass"] = "com.yakov103.mivu.ui.today.TodayFixtureSeed"
         versionCode = 1
         versionName = file("../version.txt").readText().trim()
     }

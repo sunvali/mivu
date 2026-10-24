@@ -1,6 +1,6 @@
 package com.yakov103.mivu.ui.coach
 
-import androidx.test.platform.app.InstrumentationRegistry
+import android.content.Context
 import com.yakov103.mivu.coach.CoachWrite
 import com.yakov103.mivu.diary.CoachCaptureContext
 import com.yakov103.mivu.diary.CoachClarification
@@ -24,35 +24,25 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.UUID
-import org.junit.Assume.assumeTrue
-import org.junit.Test
 
-/** Seeds synthetic Coach turns for screenshots; each test is skipped unless run with its `-e <name> true` argument. */
-class CoachFixtureSeed {
-    private val context = InstrumentationRegistry.getInstrumentation().targetContext
-    private val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
-
-    private fun only(argument: String) {
-        assumeTrue(InstrumentationRegistry.getArguments().getString(argument) == "true")
-        TodayFixture.wipe(context)
-    }
-
-    private fun turn(db: DiaryDatabase, text: String, at: Instant = now): CoachTurn {
+/** Synthetic Coach turns for screenshots, seeded through the real store; run from `TodayFixtureSeed`, which the suite excludes. */
+object CoachFixture {
+    private fun turn(db: DiaryDatabase, text: String, at: Instant): CoachTurn {
         val h = db.head()
         return db.captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), text, emptyList(),
             CoachCaptureContext(at, h.profile.timeZoneID, h.activeDayID, h.previousDayConfirmedAt, h.activeConversationSegmentID)), h.revision)
     }
 
-    /** An empty Coach on a started day: `-e seedCoachEmpty true`. */
-    @Test fun seedCoachEmpty() {
-        only("seedCoachEmpty")
+    /** An empty Coach on a started day. */
+    fun empty(context: Context) {
+        val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
         val id = TodayFixture.diary(context)
         DiaryRepository(context).database(id).apply { startDay(now, head().revision); close() }
     }
 
-    /** Today's meals plus a logged receipt, a question with chips and one pending message: `-e seedCoachTimeline true`. */
-    @Test fun seedCoachTimeline() {
-        only("seedCoachTimeline")
+    /** Today's meals plus a logged receipt, a question with chips and one pending message. */
+    fun timeline(context: Context) {
+        val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
         val id = TodayFixture.seed(context)
         val db = DiaryRepository(context).database(id)
         val logged = turn(db, "Greek yogurt with granola and a banana", now.minus(20, ChronoUnit.MINUTES))
@@ -66,13 +56,13 @@ class CoachFixtureSeed {
             it.finishCoachTurn(asked.id, "Which meal should I change?",
                 CoachQuestion(CoachClarification.meal, listOf(CoachReply.Target.Meal(receipt.mealID!!)), "Make that a smaller bowl"))
         }
-        turn(db, "A flat white with oat milk")
+        turn(db, "A flat white with oat milk", now)
         db.close()
     }
 
-    /** Thirty finished exchanges to browse, for Jump to latest: `-e seedCoachHistory true`. */
-    @Test fun seedCoachHistory() {
-        only("seedCoachHistory")
+    /** Thirty finished exchanges to browse, for Jump to latest. */
+    fun history(context: Context) {
+        val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
         val id = TodayFixture.diary(context)
         val db = DiaryRepository(context).database(id)
         db.startDay(now.minus(2, ChronoUnit.HOURS), db.head().revision)

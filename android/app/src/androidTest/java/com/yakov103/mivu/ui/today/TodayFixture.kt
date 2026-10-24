@@ -139,4 +139,18 @@ class TodayFixtureSeed {
         }
         db.close()
     }
+
+    /** The Coach screenshots: `-e seedCoach empty|timeline|history`. */
+    @Test fun seedCoachFixture() {
+        val which = InstrumentationRegistry.getArguments().getString("seedCoach")
+        assumeTrue(which != null)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        TodayFixture.wipe(context)
+        when (which) {
+            "empty" -> com.yakov103.mivu.ui.coach.CoachFixture.empty(context)
+            "timeline" -> com.yakov103.mivu.ui.coach.CoachFixture.timeline(context)
+            "history" -> com.yakov103.mivu.ui.coach.CoachFixture.history(context)
+            else -> error("unknown seedCoach $which")
+        }
+    }
 }
