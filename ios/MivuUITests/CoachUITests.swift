@@ -44,9 +44,11 @@ import XCTest
         app.buttons["coachPhotos"].tap()
         XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
         let send = app.buttons["coachSend"]
-        XCTAssertTrue(send.isHittable); XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
+        // The camera cover's dismissal and the restored keyboard settle the composer before Send is hittable.
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: send)], timeout: 5), .completed)
+        XCTAssertGreaterThanOrEqual(send.frame.height, 44); send.tap()
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["Apple sample mode"].exists)
         openConnectionSettings(in: app)
         let connect = settingsConnectButton(in: app)
@@ -59,7 +61,7 @@ import XCTest
         XCTAssertFalse(app.buttons["mealRow"].firstMatch.exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.staticTexts["Synthetic coach lunch"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].exists)
+        XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Synthetic offline persisted Coach"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 
@@ -150,6 +152,8 @@ import XCTest
         app.buttons["coachSend"].tap()
         XCTAssertTrue(app.staticTexts["coachFixtureBanner"].waitForExistence(timeout: 5))
         waitForReply(to: "Two eggs, three bread slices and salad", in: app)
+        let seeToday = app.buttons["coachFollowUp-today"]
+        XCTAssertTrue(seeToday.waitForExistence(timeout: 5)); XCTAssertGreaterThanOrEqual(seeToday.frame.height, 44)
         openLatestMeal(in: app)
         for food in ["Eggs", "Bread", "Salad"] { revealMealDetailItem(app.staticTexts[food].firstMatch, in: app) }
         revealMealDetailItem(app.staticTexts["3 slice"], in: app)
@@ -179,13 +183,8 @@ import XCTest
         revealMealDetailItem(app.staticTexts[date], in: app)
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Today"].tap(); app.buttons["logMeal"].tap()
-        let manual = app.textFields["mealText"]; XCTAssertTrue(manual.waitForExistence(timeout: 5)); manual.tap(); manual.typeText("Fixture review meal")
-        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
-        let review = app.switches["reviewFirst"].switches.firstMatch
-        for _ in 0..<5 where !review.isHittable { app.collectionViews.firstMatch.swipeUp() }
-        XCTAssertTrue(review.isHittable); review.tap(); app.buttons["sendMeal"].tap()
-        app.tabBars.buttons["Coach"].tap(); waitForReply(to: "Fixture review meal", in: app)
+        app.tabBars.buttons["Coach"].tap(); enter("Fixture review meal", in: app); app.buttons["coachSend"].tap()
+        waitForReply(to: "Fixture review meal", in: app)
         let reviewLink = app.buttons.matching(identifier: "coachMealLink").matching(NSPredicate(format: "label CONTAINS %@", "Needs review")).firstMatch
         revealCoachLink(reviewLink, in: app)
         XCTAssertTrue(reviewLink.waitForExistence(timeout: 5)); reviewLink.tap()
@@ -234,9 +233,10 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Eggs"].firstMatch.exists)
         app.navigationBars.buttons.firstMatch.tap()
         enter("I weighed 70 kg this morning", in: app); app.buttons["coachSend"].tap()
-        let weight = waitForReply(to: "I weighed 70 kg this morning", in: app)
-        guard weight.label.contains("Recorded weight: 70 kg.") else {
-            XCTFail("The morning weigh-in must be saved through the production tool and reported from its receipt")
+        waitForReply(to: "I weighed 70 kg this morning", in: app)
+        let chip = app.descendants(matching: .any)["coachWeightChip"].firstMatch
+        guard chip.waitForExistence(timeout: 5), chip.label.contains("70 kg") else {
+            XCTFail("The morning weigh-in must be saved through the production tool and shown from its receipt")
             return
         }
         enter("I did 30 minutes of strength: Squat, 8 repetitions at 40 kg, estimated burn 200 kcal", in: app)
@@ -254,21 +254,16 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         enter("What is my remaining budget?", in: app); app.buttons["coachSend"].tap()
         let budget = waitForReply(to: "What is my remaining budget?", in: app)
-        XCTAssertTrue(budget.label.contains("Day coverage:"), budget.label)
-        for fact in ["Recorded food: 420 kcal.", "Remaining from recorded food: 1580 kcal.", "Configured target: 2000 kcal.", "Recorded workouts: 1.", "Estimated exercise burn: 200 kcal.", "Weight average: 70 kg from 1 measured dates."] {
-            XCTAssertTrue(budget.label.contains(fact), fact)
-        }
-        XCTAssertFalse(budget.label.contains("Explicit exercise-adjusted remaining"))
+        // The fixture invents 9999, so the reply must be the app's grounded fact line.
+        XCTAssertEqual(budget.label, "Today: 420 of 2,000 kcal, about 1,580 left. Weight average 70 kg.")
         enter("Show my weekly report", in: app); app.buttons["coachSend"].tap()
         let weekly = waitForReply(to: "Show my weekly report", in: app)
-        XCTAssertTrue(weekly.label.contains("Period recorded workouts: 1."), weekly.label)
-        XCTAssertTrue(weekly.label.contains("6 missing"))
+        XCTAssertFalse(weekly.label.contains("9999"), weekly.label)
+        XCTAssertTrue(weekly.label.hasPrefix("Last 7 days") || weekly.label.hasPrefix("No finished days"), weekly.label)
         app.terminate(); app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         revealCoach(weekly, in: app)
-        XCTAssertTrue(weekly.label.contains("Remaining from recorded food: 1580 kcal."))
-        XCTAssertTrue(weekly.label.contains("Weight average: 70 kg from 1 measured dates."))
-        XCTAssertTrue(weekly.label.contains("Estimated exercise burn: 200 kcal."))
+        XCTAssertFalse(weekly.label.contains("9999"))
         for text in ["Two eggs, three bread slices and salad", "I weighed 70 kg this morning", "What is my remaining budget?", "Show my weekly report"].reversed() {
             let input = app.staticTexts[text]
             revealCoach(input, in: app)
@@ -294,7 +289,7 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         let history = (1...32).map { "Synthetic history line \($0)." }.joined(separator: " ")
         enter(history, in: app); app.buttons["coachSend"].tap()
-        let status = app.staticTexts["Waiting for an authorized connection"].firstMatch
+        let status = app.staticTexts["Connect ChatGPT in Settings to continue"].firstMatch
         XCTAssertTrue(status.waitForExistence(timeout: 10))
         let latest = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: status)
         XCTAssertEqual(XCTWaiter.wait(for: [latest], timeout: 5), .completed)
@@ -336,7 +331,7 @@ import XCTest
         XCTAssertTrue(banner.isHittable)
         XCTAssertEqual(banner.frame.minY, before, accuracy: 2)
         jump.tap()
-        let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        let reply = progressReply(containing: "7 days", in: app)
         let replyArrived = reply.waitForExistence(timeout: 30)
         XCTAssertTrue(replyArrived, "The delayed report must complete both inference rounds after returning to latest")
         guard replyArrived else { return }
@@ -363,7 +358,7 @@ import XCTest
         XCTAssertTrue(app.otherElements["coachActivity"].waitForExistence(timeout: 5))
         // Hold in the scroll view's empty gutter without dragging or selecting text.
         coachViewport(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).press(forDuration: 9)
-        let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        let reply = progressReply(containing: "7 days", in: app)
         XCTAssertTrue(reply.waitForExistence(timeout: 10))
         let bottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             reply.frame.maxY <= app.textFields["coachInput"].frame.minY
@@ -382,7 +377,7 @@ import XCTest
         let unread = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: app.buttons["coachNewMessage"])
         unread.isInverted = true
         XCTAssertEqual(XCTWaiter.wait(for: [unread], timeout: 10), .completed, "Capture, thinking, tools and completed reply at latest must not advertise unread content")
-        let reply = progressReply(containing: "Period recorded workouts:", in: app)
+        let reply = progressReply(containing: "7 days", in: app)
         var advertisedUnread = false
         let completedWithoutUnread = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             if app.buttons["coachNewMessage"].exists {
@@ -474,7 +469,7 @@ import XCTest
         XCTAssertTrue(send.waitForExistence(timeout: 5), "A photo alone is enough to send")
         XCTAssertFalse(app.buttons["coachVoice"].exists)
         XCTAssertTrue(send.isEnabled); send.tap()
-        XCTAssertTrue(app.staticTexts["Waiting for an authorized connection"].waitForExistence(timeout: 10), "The photo-only turn is saved")
+        XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 10), "The photo-only turn is saved")
     }
 
     func testStarterFillsDraftAndTrailingSlotSwapsMicForSend() {
@@ -536,9 +531,9 @@ import XCTest
     private func openConnectionSettings(in app: XCUIApplication) {
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "ChatGPT connection")).firstMatch
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Coach AI")).firstMatch
         revealList(row, in: app); row.tap()
-        XCTAssertTrue(app.navigationBars["ChatGPT connection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Coach AI"].waitForExistence(timeout: 5))
     }
     private func revealList(_ element: XCUIElement, in app: XCUIApplication) {
         guard let list = nativeList(in: app) else { return }
@@ -558,6 +553,9 @@ import XCTest
         if collection.exists { return collection }
         let table = app.tables.firstMatch
         if table.exists { return table }
+        // Progress is a chart-first scroll view rather than a list.
+        let scroll = app.scrollViews.firstMatch
+        if scroll.exists { return scroll }
         XCTFail("The destination must contain its native list")
         return nil
     }

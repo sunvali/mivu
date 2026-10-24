@@ -220,6 +220,34 @@ import UIKit
         #expect(try rig().layer(named: "heart-1")?.opacity == 0)
     }
 
+    /// On Progress the card paw never goes back to the floor: poses that leave that arm alone keep it in the hold.
+    @Test func progressKeepsTheCardArmRaisedWhenAPoseLeavesItAlone() throws {
+        let hold = try rig(PipPose.rest.pawUp(.right, -45, elbow: -60))
+        let progress = try rig()
+        progress.showsProgressProps = true
+        progress.apply(PipPose.rest.nod(6).hop(10), animated: false)
+        for part in ["arm-r", "forearm-r", "paw-r"] {
+            #expect(CATransform3DEqualToTransform(progress.layer(named: part)!.transform, hold.layer(named: part)!.transform), "\(part) held")
+        }
+        #expect(CATransform3DIsIdentity(try rig().layer(named: "forearm-r")!.transform), "Other screens still rest on the floor")
+    }
+
+    @Test func progressPropsAreShownOnlyWhenTheScreenAsks() throws {
+        let held = PipPose.rest.pawUp(.right, -45, elbow: -60)
+        let view = try rig(held)
+        view.showsProgressProps = true
+        for part in ["prop-chart", "prop-chart.card", "prop-chart.bar-1", "prop-chart.bar-3", "glasses@right"] {
+            #expect(view.layer(named: part)?.opacity == 1 && view.layer(named: part)?.isHidden == false, "\(part) shown")
+        }
+        #expect(view.layer(named: "glasses@front")?.isHidden == true, "Glasses only show on the active head view")
+        view.apply(PipPose.rest.nod(6).hop(10), animated: false)
+        #expect(view.layer(named: "prop-chart")?.opacity == 1 && view.layer(named: "prop-chart")?.isHidden == false, "Pip never lets go of the card")
+        #expect(view.layer(named: "glasses@right")?.opacity == 1, "Glasses stay on")
+        let elsewhere = try rig(held)
+        #expect(elsewhere.layer(named: "prop-chart")?.isHidden == true && elsewhere.layer(named: "glasses@right")?.isHidden == true,
+                "Hidden on every screen but Progress")
+    }
+
     @Test(arguments: [(PipPose.BodySet.seated, PipMoment.saved), (.curled, .earTwitch)])
     func gesturesKeepTheActiveBodySet(set: PipPose.BodySet, moment: PipMoment) async throws {
         let view = PipRigView(asset: try PipRigAsset.load(PipRigAssetTests.bundledData()), set: set)

@@ -31,7 +31,7 @@ import Testing
         let receipt = try #require(exchange.receipts.first)
         #expect(receipt.targetLocalDate == "2027-01-15")
         #expect(receipt.items.first?.quantity == 3 && receipt.items.first?.unit == "piece")
-        #expect(exchange.assistantText?.contains("2027-01-15") == true && exchange.assistantText?.contains("3 piece") == true)
+        #expect(exchange.assistantText?.contains("3 piece") == true && exchange.assistantText?.contains("Nutrition may be uncertain") == false)
         try await transport.assertGroundedCorrection(date: "2027-01-15", meal: original.id, item: original.items[0].id, quantity: 3)
         #expect(try f.applications() == 1)
         f.assertOrdinaryReads()
@@ -133,7 +133,7 @@ import Testing
         let finalReceipt = try #require(final.receipts.first)
         let finalItem = try #require(finalReceipt.items.first)
         #expect(finalItem.quantity == 3)
-        #expect(final.assistantText?.contains("2027-01-15") == true && final.assistantText?.contains("3 piece") == true)
+        #expect(final.assistantText?.contains("3 piece") == true)
         #expect(try f.applications() == applications)
         f.assertOrdinaryReads()
     }

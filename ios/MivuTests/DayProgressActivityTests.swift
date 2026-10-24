@@ -7,19 +7,19 @@ import Testing
     typealias State = DayProgressAttributes.ContentState
 
     /// A synthetic active day with one meal and an optional goal, reported the way Today reports it.
-    private func state(eaten: NutritionValues?, target: NutritionValues?, pending: Bool = false, hide: Bool = true) throws -> State {
+    private func state(eaten: NutritionValues?, also: [NutritionValues] = [], target: NutritionValues?, hide: Bool = true) throws -> State {
         let start = try #require(ISO8601DateFormatter().date(from: "2026-10-21T05:00:00Z"))
         let day = TrackingDay(localDate: "2026-10-21", timeZoneID: "Asia/Jerusalem", startAt: start)
         let meals = eaten.map { [MealReadModel(id: UUID(), dayID: day.id, capturedAt: start, eatenAt: start, revision: 1, timePrecision: nil,
-                                               items: [FoodItem(name: "Synthetic bowl", nutrition: $0)],
+                                               items: ([$0] + also).map { FoodItem(name: "Synthetic bowl", nutrition: $0) },
                                                submissions: [], photos: [], sourceTurnID: nil)] } ?? []
         let goal = target.map { GoalRecord(effectiveLocalDate: "2026-10-01", timeZoneID: "Asia/Jerusalem", targets: $0,
                                            goalWeightKg: nil, exerciseCreditEnabled: false) }
         let head = DiaryHead(profile: DiaryProfile(name: "Synthetic island", timeZoneID: "Asia/Jerusalem"), revision: 1,
                              lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
         let model = DiaryReadModel(head: head, activeDay: day, meals: meals, weight: nil, workouts: [], activeGoal: goal,
-                                   pendingAnalysisCount: pending ? 1 : 0, hasPendingOnActiveDay: pending)
-        return State(report: ProgressAnalytics.daily(readModel: model), hideWhenLocked: hide)
+                                   pendingAnalysisCount: 0)
+        return State(readModel: model, hideWhenLocked: hide)
     }
 
     private let full = NutritionValues(kcal: 1360, carbs: 150, protein: 80, fat: 40)
@@ -53,14 +53,9 @@ import Testing
         #expect(State.fraction(80, nil) == nil)
     }
 
-    @Test func pendingWithoutSavedMeal() throws {
-        let s = try state(eaten: nil, target: targets, pending: true)
-        #expect(s.kcalEaten == nil && s.hasPending && s.figure == "–" && s.compact == "–" && !s.isOver)
-    }
-
-    @Test func unknownItemsCountAsPending() throws {
-        let s = try state(eaten: NutritionValues(kcal: 500), target: targets)
-        #expect(s.hasPending)
+    @Test func noSavedMealShowsDash() throws {
+        let s = try state(eaten: nil, target: targets)
+        #expect(s.kcalEaten == nil && s.figure == "–" && s.compact == "–" && !s.isOver)
     }
 
     @Test func spokenLabel() throws {
@@ -90,6 +85,28 @@ import Testing
         // One saved item without calories makes the day's total unknown; "2,000 left" would overstate it.
         let s = try state(eaten: NutritionValues(carbs: 10, protein: 5, fat: 2), target: targets)
         #expect(s.kcalEaten == nil && s.figure == "–" && s.spoken.hasPrefix("Calories not known yet."))
+    }
+
+    @Test func calorieOnlyFoodMarksOnlyTheMacros() throws {
+        // A "200 kcal extra" entry has no macros; calories stay exact and the macros show as lower bounds.
+        let s = try state(eaten: full, also: [NutritionValues(kcal: 200)], target: targets)
+        #expect(s.kcalEaten == 1560 && s.figure == "440" && s.protein == 80)
+        #expect(s.isPartial("protein") && s.isPartial("carbs") && s.isPartial("fat") && !s.isPartial("kcal"))
+        #expect(State.macroAmount(s.protein, s.proteinTarget, partial: true) == "80+/120g")
+        #expect(s.spoken == "440 calories left. Protein at least 80 of 120 grams. Carbs at least 150 of 200 grams. Fat at least 40 of 60 grams.")
+        #expect(try state(eaten: full, target: targets).partial?.isEmpty != false)
+    }
+
+    @Test func foodWithoutCaloriesMarksTheHeadline() throws {
+        // Unknown calories can only add intake: fewer left, more over or eaten.
+        let shake = NutritionValues(protein: 5)
+        let left = try state(eaten: full, also: [shake], target: targets)
+        #expect(left.figure == "≤640" && left.compact == "≤640" && left.word == "left" && !left.isPartial("protein"))
+        #expect(left.spoken == "At most 640 calories left. Protein 85 of 120 grams. Carbs at least 150 of 200 grams. Fat at least 40 of 60 grams.")
+        let over = try state(eaten: NutritionValues(kcal: 2300, carbs: 0, protein: 0, fat: 0), also: [shake], target: targets)
+        #expect(over.figure == "300+" && over.compact == "300+ over" && over.spoken.hasPrefix("At least 300 calories over."))
+        let eaten = try state(eaten: full, also: [shake], target: nil)
+        #expect(eaten.figure == "1,360+" && eaten.spoken.hasPrefix("At least 1,360 calories eaten."))
     }
 
     @Test func onlyActiveOrStaleActivitiesCountAsRunning() {

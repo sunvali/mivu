@@ -10,7 +10,8 @@ struct SettingsView: View {
     @State private var nutritionConfigured = false
     @State private var profileName = ""
     @State private var creatingProfile = false
-    @State private var showDelete = false
+    @State private var pendingDeletion: DiaryProfile?
+    @State private var pendingRowDeletion: DiaryProfile?
     @State private var showDiagnostic = false
     @State private var showConnectionDiagnostic = false
     @State private var showGoals = false
@@ -50,7 +51,8 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.preferences) { settingsRow("Diary preferences", symbol: "list.bullet.rectangle", color: .diaryCarbs) }
                     NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
-                        settingsRow("ChatGPT connection", symbol: "person.crop.circle", color: .diaryFat, value: connection.planAuthorized ? "Connected" : "Connect")
+                        settingsRow("Coach AI", symbol: "sparkles", color: .diaryFat,
+                                    value: connection.provider == .apple ? "Apple Intelligence" : connection.planAuthorized ? "ChatGPT" : "Connect ChatGPT")
                     }
                     NavigationLink(value: SettingsSection.nutritionSource) {
                         settingsRow("Nutrition source", symbol: "fork.knife", color: .diaryCarbs, value: nutritionConfigured ? "Configured" : "Optional")
@@ -66,7 +68,7 @@ struct SettingsView: View {
                     Text("Keep a backup or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 } header: { Text("Support") }
                 Section {
-                    Button(role: .destructive) { showDelete = true } label: { Label("Delete profile", systemImage: "trash").frame(minHeight: 44) }
+                    Button(role: .destructive) { pendingDeletion = model.readModel?.profile } label: { Label("Delete profile", systemImage: "trash").frame(minHeight: 44) }
                 }
             }
             if model.sampleMode { Section { SampleBanner() } }
@@ -103,16 +105,7 @@ struct SettingsView: View {
         .fullScreenCover(isPresented: $showOnboarding) { OnboardingView(model: model, connection: connection) { showOnboarding = false } }
         .onChange(of: model.readModel?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.readModel?.profile, restoreGeneration: model.restoreGeneration) }
-        .confirmationDialog("Delete \(model.readModel?.profile.name ?? "this private local profile")?", isPresented: $showDelete, titleVisibility: .visible) {
-            Button("Delete profile", role: .destructive) {
-                Task {
-                    await model.deleteCurrentProfile()
-                    // The ChatGPT connection is shared by all profiles, so it goes with the last one.
-                    if model.profiles.isEmpty, connection.activeRegistrationID != nil { await connection.disconnect() }
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("This removes the selected profile's meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved. Deleting your last profile also disconnects ChatGPT.") }
+        .modifier(DeleteProfileDialog(model: model, connection: connection, pending: $pendingDeletion))
         .onAppear {
             guard !openedInitialDestination else { return }
             openedInitialDestination = true
@@ -164,6 +157,10 @@ struct SettingsView: View {
                     Button { Task { await model.switchProfile(profile.id) } } label: {
                         HStack { Text(profile.name); Spacer(); if model.readModel?.profile.id == profile.id { Image(systemName: "checkmark").accessibilityLabel("Selected profile") } }
                     }.frame(minHeight: 44)
+                    .swipeActions {
+                        // No destructive role: it removes the row before the confirmation and the later delete then crashes the list.
+                        Button("Delete", systemImage: "trash") { pendingRowDeletion = profile }.tint(Color.diaryError)
+                    }
                 }
                 Button("Create local profile") { creatingProfile = true }.frame(minHeight: 44)
                 if model.readModel != nil { Button("Sign out of local profile") { Task { await model.signOut() } }.frame(minHeight: 44) }
@@ -207,6 +204,23 @@ struct SettingsView: View {
                 Section("Backup and portability") { DiaryBackupSettings(model: model) }
                 if model.readModel != nil { Section("Share a report") { DiaryReportSettings(model: model) } }
             case .connection:
+                Section {
+                    Picker("Coach AI", selection: $connection.provider) {
+                        Text("ChatGPT (recommended)").tag(ChatGPTConnection.Provider.chatGPT)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Apple Intelligence on iPhone")
+                            Text("No account, but much lower accuracy").font(.caption).foregroundStyle(Color.diarySecondary)
+                        }
+                        .tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.available(.apple))
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                } header: { Text("Coach AI") } footer: {
+                    switch connection.provider {
+                    case .apple: Text("Runs on this iPhone with no account, but estimates are much less accurate. It only logs meals and changes amounts; connect ChatGPT for accurate estimates, questions and other edits.")
+                    case .chatGPT: Text("Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI.")
+                    }
+                }
+                if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
                 Section("Connection") {
                     Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle")
                     Text("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection.").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -225,10 +239,11 @@ struct SettingsView: View {
                         Button("Disconnect ChatGPT", role: .destructive) { Task { await connection.disconnect() } }.frame(minHeight: 44)
                     }
                     if let notice = connection.notice { Text(notice.rawValue).font(.subheadline).foregroundStyle(Color.diarySecondary) }
-                    Link("ChatGPT usage settings", destination: URL(string: "https://chatgpt.com/settings/usage")!).frame(minHeight: 44)
+                    Link("Manage usage", destination: MivuLinks.chatGPTUsage).frame(minHeight: 44)
                     #if DEBUG
                     Button("ChatGPT connection diagnostic") { showConnectionDiagnostic = true }.frame(minHeight: 44)
                     #endif
+                }
                 }
 
             case .nutritionSource:
@@ -267,6 +282,7 @@ struct SettingsView: View {
             }.disabled(model.isChangingProfile || profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("Cancel", role: .cancel) {}
         } message: { Text("This profile is stored privately on this iPhone.") }
+        .modifier(DeleteProfileDialog(model: model, connection: connection, pending: $pendingRowDeletion))
         .alert("Settings error", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }
@@ -304,7 +320,7 @@ struct SettingsView: View {
         case .profiles: "Local profiles"
         case .preferences: "Diary preferences"
         case .backup: "Backup & export"
-        case .connection: "ChatGPT connection"
+        case .connection: "Coach AI"
         case .nutritionSource: "Nutrition source"
         }
     }
@@ -317,5 +333,25 @@ struct SettingsView: View {
         case .nutritionSource: linkedSection = .nutritionSource
         case .settings, nil: break
         }
+    }
+}
+
+/// Settings and its pushed Local profiles page each present this, since a covered root cannot.
+private struct DeleteProfileDialog: ViewModifier {
+    let model: DiaryViewModel
+    let connection: ChatGPTConnection
+    @Binding var pending: DiaryProfile?
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Delete \(pending?.name ?? "this private local profile")?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible, presenting: pending) { profile in
+            Button("Delete profile", role: .destructive) {
+                Task {
+                    await model.deleteProfile(profile.id)
+                    // The ChatGPT connection is shared by all profiles, so it goes with the last one.
+                    if model.profiles.isEmpty, connection.activeRegistrationID != nil { await connection.disconnect() }
+                }
+            }
+            Button("Cancel", role: .cancel) { pending = nil }
+        } message: { profile in Text("This removes \(profile.name)'s meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved. Deleting your last profile also disconnects ChatGPT.") }
     }
 }

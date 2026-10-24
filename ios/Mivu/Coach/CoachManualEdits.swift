@@ -81,7 +81,7 @@ extension CoachTools {
             ("set_goals", "Apply only explicit user-requested target changes, never an inferred prescription. First get_goals for this effective_local_date. targets is a patch: omitted nutrients remain; null value unsets a target. Null goal_weight_kg keeps it; clear_goal_weight true unsets it. Unspecified exercise credit remains unchanged. Existing exact date requires expected_revision; new date uses null. Returns saved settings; creates no intake day.", object(["effective_local_date": string, "expected_revision": integer, "targets": nutrients, "goal_weight_kg": number, "clear_goal_weight": boolean, "exercise_credit_enabled": boolean], required: ["effective_local_date", "targets"])),
             ("update_preferences", "Update explicitly requested preferences/timezone after reading complete get_preferences. Null fields preserve saved values; empty preferences clears them. expected_diary_revision protects unseen concurrent changes. Does not change historical day labels, credentials, or language.", object(["expected_diary_revision": integer, "timezone": string, "preferences": string], required: ["expected_diary_revision"])),
             ("start_day", "Explicitly start the current waking day from the persisted capture clock. Read fresh context for expected_diary_revision. Delayed captures cannot reverse a newer waking-day choice.", object(["expected_diary_revision": integer], required: ["expected_diary_revision"])),
-            ("set_day_coverage", "Set the requested local date's coverage without closing it or activating it. Missing intake remains unknown. Use close_day only when the user explicitly closes a day.", object(["local_date": string, "completeness": ["type": "string", "enum": DayCompleteness.allCases.map(\.rawValue)]], required: ["local_date", "completeness"])),
+            ("set_day_coverage", "Mark a local date skipped so it stays out of statistics, or count it again. Days close on their own at the waking-day rollover; this never closes or activates a day.", object(["local_date": string, "skipped": boolean], required: ["local_date", "skipped"])),
             ("undo_change", "Undo one earlier Coach food change by the operation key from its [saved key=…] line: log_food, append_food, edit_item, correct_item, scale_meal or delete_item. Restores the meal exactly as it was before that change (an undone log_food removes the meal), refused if anything changed the meal since. Not for whole-meal deletes, weights, workouts, goals or settings.", object(["operation_key": string], required: ["operation_key"])),
             ("open_settings", "Offer a native Settings link for accounts, local profiles, secrets or Files backup. The user must tap and complete the native action; this tool never authorizes, deletes a profile, restores a backup or claims those actions succeeded.", object(["destination": ["type": "string", "enum": CoachDestination.allCases.map(\.rawValue)]], required: ["destination"]))
         ]
@@ -200,9 +200,9 @@ extension CoachTools {
         case "start_day":
             try keys(["expected_diary_revision"], ["expected_diary_revision"]); write = .startDay(revision: try revision("expected_diary_revision", allowZero: true))
         case "set_day_coverage":
-            try keys(["local_date", "completeness"], ["local_date", "completeness"])
-            guard let completeness = DayCompleteness(rawValue: try string("completeness")) else { throw CoachError.invalidArguments }
-            write = .coverage(date: try date("local_date"), completeness: completeness)
+            try keys(["local_date", "skipped"], ["local_date", "skipped"])
+            guard let skipped = try bool("skipped") else { throw CoachError.invalidArguments }
+            write = .coverage(date: try date("local_date"), completeness: skipped ? .untracked : .unknown)
         case "undo_change":
             try keys(["operation_key"], ["operation_key"])
             let key = try string("operation_key"), parts = key.split(separator: "/", maxSplits: 1).map(String.init)

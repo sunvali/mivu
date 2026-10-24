@@ -1,8 +1,8 @@
 import SwiftUI
 
 enum MivuLinks {
-    // shortcut: placeholder until the owner supplies the hosted policy; must be replaced before submission.
-    static let privacyPolicy = URL(string: "https://example.com/mivu/privacy")!
+    static let privacyPolicy = URL(string: "https://mivuapp.com/privacy")!
+    static let chatGPTUsage = URL(string: "https://chatgpt.com/settings/usage")!
 }
 
 extension View {

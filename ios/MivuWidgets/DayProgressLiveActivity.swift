@@ -9,8 +9,6 @@ struct DayProgressLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: DayProgressAttributes.self) { context in
             LockScreenProgress(state: context.state, isStale: context.isStale)
-                .activityBackgroundTint(Color.diarySurface)
-                .activitySystemActionForegroundColor(Color.diaryText)
                 .widgetURL(URL(string: "mivu://today"))
         } dynamicIsland: { context in
             let state = context.state, stale = context.isStale
@@ -59,6 +57,7 @@ private struct CompactFigure: View {
 
 /// The Lock Screen banner mirrors the expanded island: Pip, figure, ring, then the macros.
 private struct LockScreenProgress: View {
+    @Environment(\.colorScheme) private var colorScheme
     let state: DayState
     let isStale: Bool
 
@@ -74,6 +73,9 @@ private struct LockScreenProgress: View {
             if !isStale { MacroRow(state: state) }
         }
         .padding(.horizontal, 18).padding(.vertical, 16)
+        // ActivityKit resolves the tint outside these traits; a dynamic surface turned white behind dark-scheme text.
+        .activityBackgroundTint(Color.diarySurface.fixed(for: colorScheme))
+        .activitySystemActionForegroundColor(Color.diaryText.fixed(for: colorScheme))
     }
 }
 
@@ -102,7 +104,7 @@ private struct Headline: View {
                 Text(state.figure).font(figureFont).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                     .foregroundStyle(state.isOver ? Color.diarySecondary : primary)
                     .privacySensitive(state.hideWhenLocked)
-                Text(state.hasPending ? "kcal \(state.word) · pending" : "kcal \(state.word)")
+                Text("kcal \(state.word)")
                     .font(.footnote.weight(.medium)).foregroundStyle(Color.diarySecondary).lineLimit(1)
                     .privacySensitive(state.hideWhenLocked)
             }
@@ -111,7 +113,7 @@ private struct Headline: View {
         // Redacted numbers must not come back through VoiceOver on a locked phone.
         .accessibilityLabel(isStale ? "Open Mivu for today"
                             : redaction.contains(.privacy) ? "Mivu day progress"
-                            : state.spoken + (state.hasPending ? " More meals pending." : ""))
+                            : state.spoken)
     }
 }
 
@@ -145,15 +147,15 @@ private struct MacroRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            column("Protein", state.protein, state.proteinTarget, Color.diaryProtein)
-            column("Carbs", state.carbs, state.carbsTarget, Color.diaryCarbs)
-            column("Fat", state.fat, state.fatTarget, Color.diaryFat)
+            column("Protein", state.protein, state.proteinTarget, Color.diaryProtein, partial: state.isPartial("protein"))
+            column("Carbs", state.carbs, state.carbsTarget, Color.diaryCarbs, partial: state.isPartial("carbs"))
+            column("Fat", state.fat, state.fatTarget, Color.diaryFat, partial: state.isPartial("fat"))
         }
         .privacySensitive(state.hideWhenLocked)
         .accessibilityHidden(true)
     }
 
-    private func column(_ name: String, _ value: Double?, _ target: Double?, _ tint: Color) -> some View {
+    private func column(_ name: String, _ value: Double?, _ target: Double?, _ tint: Color, partial: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Capsule().fill(tint.opacity(0.22)).frame(height: 5)
                 .overlay(alignment: .leading) {
@@ -164,7 +166,7 @@ private struct MacroRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(name).font(.caption2.weight(.semibold)).foregroundStyle(tint)
                 Spacer(minLength: 0)
-                Text(DayState.macroAmount(value, target)).font(.caption2.weight(.medium)).monospacedDigit()
+                Text(DayState.macroAmount(value, target, partial: partial)).font(.caption2.weight(.medium)).monospacedDigit()
                     .foregroundStyle(Color.diarySecondary)
             }
             .lineLimit(1).minimumScaleFactor(0.7)
@@ -175,18 +177,16 @@ private struct MacroRow: View {
 
 private extension DayState {
     static let under = Self(kcalEaten: 1360, kcalTarget: 2000, protein: 80, proteinTarget: 120, carbs: 150, carbsTarget: 200,
-                            fat: 40, fatTarget: 60, hasPending: false, hideWhenLocked: true)
+                            fat: 40, fatTarget: 60, hideWhenLocked: true)
     static let over = Self(kcalEaten: 2300, kcalTarget: 2000, protein: 130, proteinTarget: 120, carbs: 260, carbsTarget: 200,
-                           fat: 70, fatTarget: 60, hasPending: false, hideWhenLocked: true)
-    static let pending = Self(kcalEaten: nil, kcalTarget: 2000, protein: nil, proteinTarget: 120, carbs: nil, carbsTarget: 200,
-                              fat: nil, fatTarget: 60, hasPending: true, hideWhenLocked: false)
+                           fat: 70, fatTarget: 60, hideWhenLocked: true)
     static let noTarget = Self(kcalEaten: 1360, kcalTarget: nil, protein: 80, proteinTarget: nil, carbs: 150, carbsTarget: nil,
-                               fat: 40, fatTarget: nil, hasPending: false, hideWhenLocked: false)
+                               fat: 40, fatTarget: nil, hideWhenLocked: false)
 }
 
 #Preview("Expanded", as: .dynamicIsland(.expanded), using: DayProgressAttributes()) {
     DayProgressLiveActivity()
-} contentStates: { .under; .over; .pending; .noTarget }
+} contentStates: { .under; .over; .noTarget }
 
 #Preview("Compact", as: .dynamicIsland(.compact), using: DayProgressAttributes()) {
     DayProgressLiveActivity()
@@ -194,4 +194,4 @@ private extension DayState {
 
 #Preview("Lock Screen", as: .content, using: DayProgressAttributes()) {
     DayProgressLiveActivity()
-} contentStates: { .under; .over; .pending; .noTarget }
+} contentStates: { .under; .over; .noTarget }

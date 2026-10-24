@@ -15,11 +15,14 @@ import Testing
         _ = try await store.importProfile(snapshot)
         let model = DiaryViewModel(store: store)
         await model.load(createDefaultProfile: false)
-        let domain = DiaryProgressView(model: model, openDiary: {}).nutritionDomain
+        let report = try await DiaryProgressView.loadProgress(model: model, endingOn: endingOn, days: ProgressRange.week.days)
+        let buckets = ProgressInsights.buckets(report.dailyReports ?? [], range: .week, zone: zone)
         let spring = endingOn == "2026-03-08"
         let formatter = ISO8601DateFormatter()
-        #expect(domain.lowerBound == formatter.date(from: spring ? "2026-03-02T08:00:00Z" : "2026-10-26T07:00:00Z"))
-        #expect(domain.upperBound == formatter.date(from: spring ? "2026-03-09T07:00:00Z" : "2026-11-02T08:00:00Z"))
+        // Seven whole local days, each bar starting at its own local midnight across the clock change.
+        #expect(buckets.count == 7)
+        #expect(buckets.first?.start == formatter.date(from: spring ? "2026-03-02T08:00:00Z" : "2026-10-26T07:00:00Z"))
+        #expect(buckets.last?.start == formatter.date(from: spring ? "2026-03-08T08:00:00Z" : "2026-11-01T07:00:00Z"))
     }
 
     @Test(arguments: [false, true], [false, true])
@@ -64,6 +67,8 @@ import Testing
         let model = DiaryViewModel(store: store)
         await model.load(createDefaultProfile: false)
         let bounded = try await DiaryProgressView.loadProgress(model: model, endingOn: "2026-01-07", days: 30)
+        let year = try await DiaryProgressView.loadProgress(model: model, endingOn: "2026-01-07", days: ProgressRange.year.days)
+        #expect(year.dailyReports?.count == 365 && year.displayWeights == bounded.displayWeights)
         let chart = DiaryProgressView.weightObservations(progress: bounded, zone: snapshot.profile.timeZoneID)
         let report = bounded.weight
         #expect(chart.count == 1)
@@ -72,6 +77,17 @@ import Testing
         #expect(report.currentSevenDayAverageKg == expectedKg)
         #expect(report.currentSevenDayObservedCount == 1)
         #expect(report.changeFromSevenDaysAgoKg == nil)
+    }
+
+    /// Switching range keeps the last report on screen until the new one loads; another profile's or day's report is never shown.
+    @Test func rangeSwitchKeepsTheLastReportWhileLoading() {
+        let owner = DiarySelectionOwnership(identity: CoachTimelineIdentity(profileID: UUID(), timelineGeneration: UUID()), selectionEpoch: 1)
+        let other = DiarySelectionOwnership(identity: CoachTimelineIdentity(profileID: UUID(), timelineGeneration: UUID()), selectionEpoch: 1)
+        let week = DiaryProgressView.ReportRequest(ownership: owner, generation: 1, date: "2026-10-23", range: .week)
+        #expect(DiaryProgressView.shows(loaded: week, for: DiaryProgressView.ReportRequest(ownership: owner, generation: 1, date: "2026-10-23", range: .month)))
+        #expect(!DiaryProgressView.shows(loaded: nil, for: week))
+        #expect(!DiaryProgressView.shows(loaded: week, for: DiaryProgressView.ReportRequest(ownership: other, generation: 1, date: "2026-10-23", range: .week)))
+        #expect(!DiaryProgressView.shows(loaded: week, for: DiaryProgressView.ReportRequest(ownership: owner, generation: 1, date: "2026-10-24", range: .week)))
     }
 
     @Test func savedWorkoutBoundsRemainEditable() {

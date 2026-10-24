@@ -42,6 +42,35 @@ import XCTest
         XCTAssertFalse(app.otherElements["coachReplyBar"].waitForExistence(timeout: 1))
     }
 
+    func testDiaryDayAskPipQuotesDay() {
+        let app = launchDiary()
+        XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
+        app.buttons["diaryAskPip"].tap()
+        let quote = app.otherElements["coachReplyBar"]
+        XCTAssertTrue(quote.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["coachReplyCancel"].exists)
+        XCTAssertTrue(quote.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Monday, 12 Oct")).firstMatch.exists)
+    }
+
+    func testUnrecordedDayAskPipPrefillsDate() {
+        let app = launchDiary()
+        XCTAssertTrue(app.selectDiaryDate(XCUIApplication.diaryLabel(Date())))
+        app.buttons["diaryAskPip"].tap()
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        let prefilled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value BEGINSWITH %@", "For "), object: input)
+        XCTAssertEqual(XCTWaiter.wait(for: [prefilled], timeout: 10), .completed)
+    }
+
+    private func launchDiary() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Diary"].tap()
+        return app
+    }
+
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]

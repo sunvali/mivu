@@ -19,10 +19,26 @@ import UserNotifications
 
 struct MivuShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: LogFoodIntent(), phrases: ["Log food with \(.applicationName)", "Log a meal in \(.applicationName)"],
-                    shortTitle: "Log Food", systemImageName: "camera")
+        AppShortcut(intent: LogFoodIntent(), phrases: ["Snap it with \(.applicationName)", "Snap a meal in \(.applicationName)"],
+                    shortTitle: "Snap It", systemImageName: "camera")
+        AppShortcut(intent: LogMealIntent(), phrases: ["Log a meal in \(.applicationName)", "Log food with \(.applicationName)"],
+                    shortTitle: "Log Meal", systemImageName: "fork.knife")
         AppShortcut(intent: OpenCoachIntent(), phrases: ["Ask \(.applicationName) Coach", "Open \(.applicationName) Coach"],
                     shortTitle: "Coach", systemImageName: "bubble.left.fill")
+        AppShortcut(intent: TellCoachIntent(), phrases: ["Tell \(.applicationName)", "Tell \(.applicationName) Coach", "Message \(.applicationName) Coach"],
+                    shortTitle: "Tell Coach", systemImageName: "bubble.left.and.text.bubble.right")
+    }
+}
+
+// shortcut: Log Meal opens the same camera as Snap It for now; give it its own flow when that is designed.
+struct LogMealIntent: AppIntent {
+    static let title: LocalizedStringResource = "Log Meal"
+    static let description = IntentDescription("Opens the camera to log a meal.")
+    static let openAppWhenRun = true
+
+    @MainActor func perform() async throws -> some IntentResult {
+        QuickLogRequest.shared.pending = true
+        return .result()
     }
 }
 
@@ -35,7 +51,9 @@ final class MivuAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UN
     // Main-actor completion form: the async form finished off the main thread and UIKit crashed the app on tap.
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        if let id = MealNotification.mealID(from: response.notification.request.content.userInfo) { MealNotification.shared.openedMealID = id }
+        let userInfo = response.notification.request.content.userInfo
+        if let id = MealNotification.mealID(from: userInfo) { MealNotification.shared.openedMealID = id }
+        if CoachReplyNotification.turnID(from: userInfo) != nil { QuickLogRequest.shared.openCoach = true }
         completionHandler()
     }
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,

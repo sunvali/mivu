@@ -27,7 +27,9 @@ import XCTest
         XCTAssertTrue(app.tabBars.buttons["Diary"].isHittable,
             "Coverage must select the existing Diary tab, preserving the four root destinations")
         select("Progress", in: app)
-        XCTAssertTrue(app.buttons["reportWeekly"].waitForExistence(timeout: 5))
+        let picker = app.segmentedControls["progressRange"]
+        for _ in 0..<8 where !picker.waitForExistence(timeout: 1) { app.swipeDown() }
+        XCTAssertTrue(picker.exists)
         XCTAssertFalse(app.navigationBars["Diary"].exists,
             "Progress must not retain a second Diary screen in its navigation stack")
     }

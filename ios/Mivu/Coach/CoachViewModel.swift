@@ -41,6 +41,7 @@ private final class CoachNavigationReadFence: Sendable {
     private var sendingErrorRevision = 0
     @ObservationIgnored private let timelinePageLoading: (@Sendable (CoachPageRequest, DiarySelectionOwnership) async throws -> CoachPage)?
     @ObservationIgnored private let beginCaptureProtection: @MainActor () -> (@MainActor () -> Void)
+    @ObservationIgnored private let captureDependencies: CoachAttachmentDraft.Dependencies
     @ObservationIgnored private let inference: () throws -> Inference
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let lookup: @Sendable (String) async throws -> [FoodEvidenceRecord]
@@ -74,7 +75,8 @@ private final class CoachNavigationReadFence: Sendable {
             }
         }
         #endif
-        attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter, dependencies: attachmentDependencies ?? dependencies)
+        captureDependencies = attachmentDependencies ?? dependencies
+        attachmentDraft = CoachAttachmentDraft(ownership: diary.selection, limiter: diary.photoWorkLimiter, dependencies: captureDependencies)
         self.inference = inference ?? { try connection.coachInference() }
         self.lookup = lookup; self.sleep = sleep
         self.beginCaptureProtection = beginCaptureProtection
@@ -371,6 +373,38 @@ private final class CoachNavigationReadFence: Sendable {
         }
     }
 
+    /// Captures a message from outside the composer (Siri) without touching `draft`; the turn ID is `submissionID`.
+    /// Each message gets its own ID, so an existing turn with that ID is this message, already saved.
+    /// The message belongs to `profileID`, fixed when it was spoken; it is never captured into another diary.
+    func captureExternal(profileID: UUID, _ text: String, submissionID: UUID, capturedAt: Date) async throws {
+        guard let owner = diary.selection, !diary.isChangingProfile else { throw DiaryError.noProfile }
+        guard owner.identity.profileID == profileID else { throw DiaryError.wrongOwner }
+        let endCaptureProtection = beginCaptureProtection()
+        defer { endCaptureProtection() }
+        var dependencies = captureDependencies
+        dependencies.prepare = { [store = diary.store] _, owner in
+            try await store.coachCapturePreparation(at: capturedAt, expectedProfileID: owner.identity.profileID)
+        }
+        let context = try await dependencies.prepare(capturedAt, owner).context
+        let manifest = try CoachSubmissionPayload(submissionID: submissionID, text: text, attachments: [], context: context).manifest
+        if case .absent = try await dependencies.reconcile(submissionID, manifest, owner) {
+            let message = CoachAttachmentDraft(ownership: owner, limiter: diary.photoWorkLimiter, dependencies: dependencies,
+                                               text: text, submissionID: submissionID)
+            _ = try await message.send()
+        }
+        captureNeedsProcessing = true
+        resume()
+    }
+    /// Captures the selected profile's inbox entries, oldest first; each is removed only after its capture is saved.
+    func drainInbox(_ inbox: CoachInbox) async {
+        guard let owner = diary.selection?.identity.profileID else { return }
+        for entry in inbox.entries() where entry.profileID == owner {
+            do {
+                try await captureExternal(profileID: entry.profileID, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
+                try inbox.remove(entry.id)
+            } catch { return }
+        }
+    }
     func resume() {
         if let receipt = diary.captureReceipt, let owner = diary.selection, !diary.isChangingProfile,
            diary.companionCaptureEvent?.profileID == owner.identity.profileID,
@@ -396,7 +430,7 @@ private final class CoachNavigationReadFence: Sendable {
                         captureNeedsProcessing = false
                         let next: CoachTurnResult?
                         do {
-                            next = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.planAuthorized, capturedOnly: capturedOnly, expectedProfileID: owner)
+                            next = try await diary.store.nextCoachResult(includeWaitingForConnection: connection.canInfer, capturedOnly: capturedOnly, expectedProfileID: owner)
                         } catch {
                             captureNeedsProcessing = captureNeedsProcessing || pendingCaptureWake
                             throw error
@@ -678,16 +712,16 @@ private final class CoachNavigationReadFence: Sendable {
         return Set(turn.receipts.compactMap(\.workoutID)).compactMap { if case .workout(let workout, _) = receiptTargets[$0] { workout } else { nil } }
     }
     private func message(for error: Error) -> String {
-        if error as? ResponsesClient.Failure == .usageUnavailable { return "ChatGPT is temporarily unavailable. Your input is saved. Retry when usage is available." }
-        if ProbeRunner.isTransient(error) { return "The network is unavailable. Your input is saved and analysis will resume when the connection returns." }
-        if error is CancellationError || error as? SessionError == .sessionChanged { return "Analysis paused after the connection changed. Your input is saved. Retry when ready." }
-        if error as? ResponsesClient.Failure == .quotaReached { return "Your ChatGPT usage limit was reached. Your input is saved. Check ChatGPT usage settings in Settings and retry when usage is available." }
-        if error as? DiaryError == .staleRevision { return "A meal, weigh-in or workout changed while analysis was running. Review the latest record before retrying." }
+        if error as? ResponsesClient.Failure == .usageUnavailable { return "ChatGPT is busy right now. Your message is saved; try again soon." }
+        if ProbeRunner.isTransient(error) { return "You're offline. Your message is saved and I'll reply when you're back online." }
+        if error is CancellationError || error as? SessionError == .sessionChanged { return "The connection changed. Your message is saved; tap Try again." }
+        if error as? ResponsesClient.Failure == .quotaReached { return "You've reached your ChatGPT usage limit. Your message is saved; see Manage usage in Settings." }
+        if error as? DiaryError == .staleRevision { return "Something changed while I was working. Check it, then try again." }
         if error as? DiaryError == .invalidAmountUnitChange { return error.localizedDescription }
-        if error as? DiaryError == .ambiguousDay { return "Choose which waking day this capture belongs to. Your input is saved." }
-        if error as? CoachError == .ungroundedConfirmation { return "More details are needed before a meal, weigh-in or workout can be logged. Your input is saved." }
-        if error as? DiaryError == .persistenceFailed { return "Could not update the diary on this iPhone. Your captured input is saved; retry when ready." }
-        return "Analysis could not finish. Your input is saved. Check your connection or retry when ready." }
+        if error as? DiaryError == .ambiguousDay { return "Which day is this for?" }
+        if error as? CoachError == .ungroundedConfirmation { return "I need a little more detail to log that." }
+        if error as? DiaryError == .persistenceFailed { return "Couldn't save that. Your message is kept; tap Try again." }
+        return "Something went wrong. Your message is saved; tap Try again." }
 }
 
 @MainActor enum CoachCaptureProtection {

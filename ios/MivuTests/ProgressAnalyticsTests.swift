@@ -38,105 +38,41 @@ import Testing
         WeightEntry(dayID: day.id, measuredAt: date(day.localDate, hour: hour), value: value, unit: unit)
     }
 
-    @Test func completeEmptyDayIsKnownZeroButAbsentDayIsMissing() {
+    @Test func closedDaysCountWhileOpenAndSkippedDaysStayOutOfStatistics() {
         var data = snapshot()
-        let known = day("2026-01-02", .complete)
-        data.days = [known]
+        let closed = day("2026-01-02", .partial), skipped = day("2026-01-03", .untracked)
+        let empty = day("2026-01-04", .complete), open = day("2026-01-05", .unknown)
+        data.days = [closed, skipped, empty, open]
+        data.activeDayID = open.id
+        data.goals = [goal("2026-01-01", kcal: 500)]
+        var analyzing = DiaryMeal(dayID: closed.id, capturedAt: closed.startAt, eatenAt: closed.startAt)
+        analyzing.submissions = [MealSubmission(baseRevision: 0, text: "Synthetic capture", photoIDs: [], reviewFirst: false, state: .analyzing)]
+        data.meals = [meal(closed, kcal: 500), analyzing, meal(skipped, kcal: 900), meal(open, kcal: 300)]
+        let status = { ProgressAnalytics.daily(snapshot: data, localDate: $0).status }
+        #expect(status(closed.localDate) == .closed)
+        #expect(status(skipped.localDate) == .skipped)
+        #expect(status(empty.localDate) == .skipped)
+        #expect(status(open.localDate) == .open)
+        #expect(status("2026-01-01") == nil)
+        let period = ProgressAnalytics.period(snapshot: data, endingOn: open.localDate, days: 7)
+        #expect(period.averageIntake.kcal == 500)
+        #expect(period.closedDayCount == 1 && period.skippedDayCount == 2 && period.missingDayCount == 3)
+        #expect(period.adherenceNumerator == 1 && period.adherenceDenominator == 1)
+    }
+
+    @Test func emptyClosedDayIsSkippedAndAbsentDayIsMissing() {
+        var data = snapshot()
+        let empty = day("2026-01-02", .complete)
+        data.days = [empty]
         data.goals = [goal("2026-01-01")]
-        let recorded = ProgressAnalytics.daily(snapshot: data, localDate: known.localDate)
+        var analyzing = DiaryMeal(dayID: empty.id, capturedAt: empty.startAt, eatenAt: empty.startAt)
+        analyzing.submissions = [MealSubmission(baseRevision: 0, text: "Synthetic capture", photoIDs: [], reviewFirst: false, state: .captured)]
+        data.meals = [analyzing]
+        #expect(ProgressAnalytics.daily(snapshot: data, localDate: empty.localDate).status == .skipped)
         let missing = ProgressAnalytics.daily(snapshot: data, localDate: "2026-01-01")
-        #expect(recorded.foodTotals?.kcal == 0)
-        #expect(recorded.remainingFromRecorded.kcal == 100)
-        #expect(missing.foodTotals == nil)
-        #expect(missing.remainingFromRecorded.kcal == nil)
-        #expect(missing.completeness == nil)
-        let period = ProgressAnalytics.period(snapshot: data, endingOn: known.localDate, days: 7)
-        #expect(period.adherenceNumerator == 0)
-        #expect(period.adherenceDenominator == 1)
-    }
-
-    @Test func cancelledUnsavedCaptureDoesNotEraseCompleteEmptyDayZero() {
-        var data = snapshot()
-        let tracked = day("2026-01-07", .complete)
-        data.days = [tracked]
-        data.goals = [goal("2026-01-01")]
-        var cancelled = DiaryMeal(dayID: tracked.id, capturedAt: tracked.startAt, eatenAt: tracked.startAt)
-        cancelled.submissions = [MealSubmission(baseRevision: 0, text: "Synthetic cancelled capture",
-                                                photoIDs: [], reviewFirst: false, state: .cancelled)]
-        data.meals = [cancelled]
-        #expect(data.totals(dayID: tracked.id).kcal == 0)
-        let report = ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate)
-        #expect(!report.hasPending)
-        #expect(report.completeness == .complete)
-        #expect(report.foodTotals?.kcal == 0)
-        #expect(report.remainingFromRecorded.kcal == 100)
-        #expect(ProgressAnalytics.period(snapshot: data, endingOn: tracked.localDate, days: 7).knownIntakeSamples.kcal == 1)
-    }
-
-    @Test func activeUnsavedCaptureKeepsCompleteEmptyDayUnknown() {
-        var data = snapshot()
-        let tracked = day("2026-01-07", .complete)
-        data.days = [tracked]
-        var pending = DiaryMeal(dayID: tracked.id, capturedAt: tracked.startAt, eatenAt: tracked.startAt)
-        pending.submissions = [MealSubmission(baseRevision: 0, text: "Synthetic pending capture",
-                                              photoIDs: [], reviewFirst: false, state: .captured)]
-        data.meals = [pending]
-        #expect(data.totals(dayID: tracked.id).kcal == nil)
-        let report = ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate)
-        #expect(report.hasPending)
-        #expect(report.foodTotals?.kcal == nil)
-        #expect(ProgressAnalytics.period(snapshot: data, endingOn: tracked.localDate, days: 7).knownIntakeSamples.kcal == 0)
-    }
-
-    @Test func earlierActiveSubmissionStaysUnknownAfterLaterSubmissionIsCancelled() {
-        var data = snapshot()
-        let tracked = day("2026-01-07", .complete)
-        data.days = [tracked]
-        data.goals = [goal("2026-01-01")]
-        var meal = DiaryMeal(dayID: tracked.id, capturedAt: tracked.startAt, eatenAt: tracked.startAt)
-        meal.submissions = [
-            MealSubmission(baseRevision: 0, text: "Synthetic earlier capture", photoIDs: [], reviewFirst: false, state: .captured),
-            MealSubmission(baseRevision: 0, text: "Synthetic later cancelled capture", photoIDs: [], reviewFirst: false, state: .cancelled)
-        ]
-        data.meals = [meal]
-        #expect(data.totals(dayID: tracked.id).kcal == nil)
-        let report = ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate)
-        #expect(report.hasPending)
-        #expect(report.completeness == .partial)
-        #expect(report.foodTotals?.kcal == nil)
-        #expect(report.remainingFromRecorded.kcal == nil)
-        #expect(ProgressAnalytics.period(snapshot: data, endingOn: tracked.localDate, days: 7).knownIntakeSamples.kcal == 0)
-    }
-
-    @Test func legacyUnsavedMealWithoutSubmissionsStaysUnknown() {
-        var data = snapshot()
-        let tracked = day("2026-01-07", .complete)
-        data.days = [tracked]
-        data.meals = [DiaryMeal(dayID: tracked.id, capturedAt: tracked.startAt, eatenAt: tracked.startAt)]
-        #expect(data.totals(dayID: tracked.id).kcal == nil)
-        let report = ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate)
-        #expect(report.hasPending)
-        #expect(report.completeness == .partial)
-        #expect(report.foodTotals?.kcal == nil)
-        #expect(ProgressAnalytics.period(snapshot: data, endingOn: tracked.localDate, days: 7).knownIntakeSamples.kcal == 0)
-    }
-
-    @Test func unknownPartialAndUntrackedDaysDoNotEnterCompleteAverages() {
-        var data = snapshot()
-        let complete = day("2026-01-07", .complete)
-        let partial = day("2026-01-06", .partial)
-        let untracked = day("2026-01-05", .untracked)
-        let unknown = day("2026-01-04", .unknown)
-        data.days = [complete, partial, untracked, unknown]
-        data.meals = [meal(complete, kcal: 50), meal(partial, kcal: 80), meal(unknown, kcal: 30)]
-        let report = ProgressAnalytics.period(snapshot: data, endingOn: "2026-01-07", days: 7)
-        #expect(report.completeDayCount == 1)
-        #expect(report.partialDayCount == 1)
-        #expect(report.untrackedDayCount == 1)
-        #expect(report.unknownDayCount == 1)
-        #expect(report.missingDayCount == 3)
-        #expect(report.knownIntakeSamples.kcal == 1)
-        #expect(report.averageIntake.kcal == 50)
+        #expect(missing.status == nil && missing.foodTotals == nil && missing.remainingFromRecorded.kcal == nil)
+        let period = ProgressAnalytics.period(snapshot: data, endingOn: empty.localDate, days: 7)
+        #expect(period.knownIntakeSamples.kcal == 0 && period.adherenceDenominator == 0)
     }
 
     @Test func incompleteNutrientDoesNotEraseOtherKnownNutrientSamples() {
@@ -201,81 +137,22 @@ import Testing
         #expect(unknown.exerciseAdjustedKcalRemaining == nil)
     }
 
-    @Test func pendingCaptureBlocksCompleteSampleOnlyOnItsTrackedDate() {
-        var data = snapshot()
-        let historical = day("2026-01-06", .complete)
-        let active = day("2026-01-07", .complete)
-        data.days = [historical, active]
-        data.activeDayID = active.id
-        data.meals = [meal(historical, kcal: 50), meal(active, kcal: 80)]
-        var pending = DiaryMeal(dayID: active.id, capturedAt: active.startAt, eatenAt: active.startAt)
-        pending.submissions = [MealSubmission(baseRevision: 0, text: "Synthetic capture", photoIDs: [], reviewFirst: false)]
-        data.meals.append(pending)
-        let report = ProgressAnalytics.period(snapshot: data, endingOn: active.localDate, days: 7)
-        #expect(ProgressAnalytics.daily(snapshot: data, localDate: active.localDate).hasPending)
-        #expect(!ProgressAnalytics.daily(snapshot: data, localDate: historical.localDate).hasPending)
-        #expect(report.knownIntakeSamples.kcal == 1)
-        #expect(report.averageIntake.kcal == 50)
-    }
-
-    @Test func unresolvedCoachTurnOnlyBlocksItsActiveCaptureDate() {
-        var data = snapshot()
-        let historical = day("2026-01-06", .complete)
-        let active = day("2026-01-07", .complete)
-        data.days = [historical, active]
-        data.activeDayID = active.id
-        data.meals = [meal(historical, kcal: 50), meal(active, kcal: 80)]
-        data.coachTurns = [CoachTurn(capturedAt: active.startAt, text: "Synthetic capture", captureTimeZoneID: "UTC")]
-        let report = ProgressAnalytics.period(snapshot: data, endingOn: active.localDate, days: 7)
-        #expect(ProgressAnalytics.daily(snapshot: data, localDate: active.localDate).hasPending)
-        #expect(!ProgressAnalytics.daily(snapshot: data, localDate: historical.localDate).hasPending)
-        #expect(report.knownIntakeSamples.kcal == 1)
-        #expect(report.averageIntake.kcal == 50)
-    }
-
-    @Test func resolvedPendingCoachTurnUsesResolvedDayInsteadOfCaptureDay() {
-        var data = snapshot()
-        let historical = day("2026-01-06", .complete)
-        let active = day("2026-01-07", .complete)
-        data.days = [historical, active]
-        data.activeDayID = active.id
-        var turn = CoachTurn(capturedAt: active.startAt, text: "Synthetic earlier meal", captureTimeZoneID: "UTC")
-        turn.resolvedDayID = historical.id
-        data.coachTurns = [turn]
-        #expect(ProgressAnalytics.daily(snapshot: data, localDate: historical.localDate).hasPending)
-        #expect(!ProgressAnalytics.daily(snapshot: data, localDate: active.localDate).hasPending)
-    }
-
-    @Test func pendingCoachCaptureOnAbsentDayIsPendingAndMissing() {
-        var data = snapshot()
-        data.coachTurns = [CoachTurn(capturedAt: date("2026-01-07"), text: "Synthetic capture", captureTimeZoneID: "UTC")]
-        let report = ProgressAnalytics.daily(snapshot: data, localDate: "2026-01-07")
-        #expect(report.hasPending)
-        #expect(report.completeness == nil)
-        #expect(report.foodTotals == nil)
-        #expect(ProgressAnalytics.period(snapshot: data, endingOn: "2026-01-07", days: 7).pendingDayCount == 1)
-    }
-
-    @Test func sameStoredDateAcrossTravelCombinesAllDayIDsAndIncompleteCoverage() {
+    @Test func sameStoredDateAcrossTravelCombinesAllDayIDs() {
         var data = snapshot(zone: "America/Los_Angeles")
         let first = day("2026-01-07", .complete, zone: "Asia/Jerusalem")
         let second = day("2026-01-07", .partial, zone: "America/Los_Angeles")
         data.days = [first, second]
         data.meals = [meal(first, kcal: 50, protein: 5), meal(second, kcal: 30, protein: nil)]
         data.workouts = [workout(first, burn: 40), workout(second, burn: 20)]
-        var pending = DiaryMeal(dayID: second.id, capturedAt: second.startAt, eatenAt: second.startAt)
-        pending.submissions = [MealSubmission(baseRevision: 0, text: "Synthetic pending", photoIDs: [], reviewFirst: false)]
-        data.meals.append(pending)
         let report = ProgressAnalytics.daily(snapshot: data, localDate: "2026-01-07")
-        #expect(report.completeness == .partial)
-        #expect(report.hasPending)
+        #expect(report.status == .closed)
         #expect(report.foodTotals?.kcal == 80)
-        #expect(report.foodTotals?.protein == nil)
+        #expect(report.foodTotals?.protein == 5 && report.foodTotals?.unknownItemCount == 1)
         #expect(report.workoutCount == 2)
         #expect(report.estimatedBurnKcal == 60)
         let period = ProgressAnalytics.period(snapshot: data, endingOn: "2026-01-07", days: 7)
-        #expect(period.partialDayCount == 1)
-        #expect(period.knownIntakeSamples.kcal == 0)
+        #expect(period.closedDayCount == 1)
+        #expect(period.knownIntakeSamples.kcal == 1)
         #expect(period.workoutCount == 2)
     }
 
@@ -287,7 +164,7 @@ import Testing
         data.days = [included, excluded, end]
         let weekly = ProgressAnalytics.period(snapshot: data, endingOn: end.localDate, days: 7)
         #expect(weekly.startLocalDate == "2026-10-26")
-        #expect(weekly.completeDayCount == 2)
+        #expect(weekly.skippedDayCount == 2)
         #expect(weekly.missingDayCount == 5)
         let monthly = ProgressAnalytics.period(snapshot: data, endingOn: end.localDate, days: 30)
         #expect(monthly.startLocalDate == "2026-10-03")
@@ -329,7 +206,7 @@ import Testing
         #expect(report.changeFromThirtyDaysAgoKg == nil)
     }
 
-    @Test func plateauNeedsThreeDatesInEachEdgeWeekAndFourteenCompleteKcalDays() {
+    @Test func plateauNeedsThreeDatesInEachEdgeWeekAndFourteenClosedKcalDays() {
         var data = snapshot()
         let calendar = Calendar(identifier: .gregorian)
         let end = date("2026-03-31")
@@ -343,7 +220,7 @@ import Testing
         }
         var report = ProgressAnalytics.weight(snapshot: data, endingOn: "2026-03-31")
         #expect(report.plateau == .stable)
-        data.days[13].completeness = .partial
+        data.days[13].completeness = .untracked
         report = ProgressAnalytics.weight(snapshot: data, endingOn: "2026-03-31")
         #expect(report.plateau == .insufficientData)
         data.days[13].completeness = .complete

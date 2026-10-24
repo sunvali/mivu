@@ -84,6 +84,22 @@ xcodebuildmcp simulator test --project-path "$PWD/ios/Mivu.xcodeproj" \
   --output json
 ```
 
+The `Mivu` plan fails any test after 300 seconds (600-second cap), so a hung UI
+test cannot stall a run. Run the complete UI suite with
+`-only-testing:MivuUITests -parallel-testing-enabled YES -parallel-testing-worker-count 3 -collect-test-diagnostics never`:
+about 30 minutes, where a serial run takes over an hour. A newly created
+simulator shows the swipe-typing introduction over the keyboard and fails
+text-entry tests; mark it as shown while the simulator is shut down:
+
+```sh
+P=~/Library/Developer/CoreSimulator/Devices/<reserved-UUID>/data/Library/Preferences
+for f in com.apple.Preferences com.apple.keyboard.preferences; do
+  plutil -create xml1 "$P/$f.plist"
+  plutil -insert DidShowContinuousPathIntroduction -bool YES "$P/$f.plist"
+  plutil -insert DidShowGestureKeyboardIntroduction -bool YES "$P/$f.plist"
+done
+```
+
 The smoke runner has a **120-second wall-clock limit**, including compilation,
 installation and testing. It stops only its own process group and fails on
 an overrun, failed/skipped/zero-test result, malformed output or missing result
@@ -179,6 +195,9 @@ For local delivery, check out the immutable version tag already merged into
 the intended device/archive destination and signing team, then archive and export
 through Organizer. Record the exact source SHA, build number, local test evidence
 and exported product. An unsigned archive cannot be installed on a phone.
+`CURRENT_PROJECT_VERSION` stays `1` in source; every App Store Connect upload needs
+a higher build number, so keep Organizer's "Automatically manage version and build
+number" on and record the number it assigns.
 
 Apple membership, signing identity, provisioning and any required agreements
 remain owner prerequisites. Keep signing credentials in the local Apple tooling;

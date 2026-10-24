@@ -10,12 +10,16 @@ struct CoachView: View {
     var navigationRequest: CoachNavigationRequest? = nil
     var onNavigationConsumed: (UUID) -> Void = { _ in }
     var openHistory: () -> Void = {}
+    var openToday: () -> Void = {}
+    var openProgress: () -> Void = {}
     let openDestination: (CoachDestination) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var surfaceVisible = false
     @State private var showingDetail = false
     @State private var showPhotos = false
+    @State private var composerHeight: CGFloat = 0
+    @State private var textWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var voice = CoachVoiceInput()
@@ -50,7 +54,7 @@ struct CoachView: View {
                 if DiaryLaunch.isCoachHistoryFixture { diagnosticControls }
                 #endif
                 CoachTimelineView(timeline: timeline, rows: timelineRows(timeline), diagnostics: fixtureDiagnostics,
-                    jumpToLatest: jumpToLatestAction(timeline), onViewportRefreshReady: { refreshViewport = $0 },
+                    jumpToLatest: jumpToLatestAction(timeline), bottomInset: composerHeight, onViewportRefreshReady: { refreshViewport = $0 },
                     onAccessibilityPageRequestReady: { requestAccessibilityPage = $0 },
                     onReply: { turn in reply(to: turn, fromPip: turn.assistantText != nil) }) { row in
                     AnyView(timelineContent(row))
@@ -60,25 +64,21 @@ struct CoachView: View {
                     if timeline.exchanges.isEmpty, timeline.error == nil {
                         ContentUnavailableView("What would you like to record?", systemImage: "text.bubble",
                             description: Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate. Coach gives estimates, not medical advice."))
-                            .allowsHitTesting(false)
+                            .allowsHitTesting(false).padding(.bottom, composerHeight)
                     }
                 }
                 .overlay(alignment: .top) { edge(.earlier, timeline: timeline) }
-                .overlay(alignment: .bottom) { edge(.later, timeline: timeline) }
-                if timeline.error != nil {
-                    HStack {
-                        Text(navigationError(timeline.queryError)).font(.caption).foregroundStyle(Color.diaryError)
-                            .accessibilityIdentifier("coachTimelineError")
-                        if timeline.queryError == nil {
-                            Button("Try again") { Task { await timeline.jumpToLatest() } }.frame(minWidth: 44, minHeight: 44)
-                        }
-                    }.padding(.horizontal, 20)
-                }
+                .overlay(alignment: .bottom) { edge(.later, timeline: timeline).padding(.bottom, composerHeight) }
             } else if coach.diary.readModel == nil {
                 ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile."))
             } else { ProgressView("Loading conversation").frame(maxWidth: .infinity, maxHeight: .infinity) }
-            // The composer takes its full height first (up to four lines); the timeline above gives way.
-            if coach.diary.readModel != nil { composer.fixedSize(horizontal: false, vertical: true) }
+        }
+        // The conversation scrolls behind Pip and the composer; the table insets its content by the composer's height.
+        .overlay(alignment: .bottom) {
+            if coach.diary.readModel != nil {
+                composer.fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
+            }
         }
         .background(Color.diaryCanvas)
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
@@ -165,7 +165,7 @@ struct CoachView: View {
         // A route change (headphones, Bluetooth) stops the audio engine underneath us.
         .onReceive(NotificationCenter.default.publisher(for: .AVAudioEngineConfigurationChange)) { _ in stopListening() }
         .sensoryFeedback(trigger: listening) { _, on in on ? .start : .stop }
-        .onChange(of: CompanionContext.draftSignal(coach.attachmentDraft.text.count)) { _, _ in reportCompanionContext() }
+        .onChange(of: caretSignal) { _, _ in reportCompanionContext() }
         .onChange(of: coach.diary.selection) { _, _ in
             coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; selectedRecord = nil
             stopListening()
@@ -269,7 +269,7 @@ struct CoachView: View {
                 inputBubble(turn)
                 VStack(alignment: .leading, spacing: 12) {
                     if let answer = turn.assistantText {
-                        Text(answer).font(.body)
+                        Text(CoachReplyLines.attributed(answer)).font(.body)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
@@ -291,9 +291,10 @@ struct CoachView: View {
             .accessibilityElement(children: .contain).accessibilityIdentifier("coachExchange-" + turn.id.uuidString)
             .accessibilityValue(row.isHighlighted ? "Selected source message" : "")
         } else if let date = row.date {
-            HStack { Rectangle().frame(height: 0.5); Text(date).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
+            let label = CoachReplyLines.dayLabel(date, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)).capitalized(with: .current)
+            HStack { Rectangle().frame(height: 0.5); Text(label).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
                 .foregroundStyle(Color.diarySecondary).padding(.vertical, 8)
-                .accessibilityElement(children: .ignore).accessibilityLabel(date).accessibilityAddTraits(.isHeader)
+                .accessibilityElement(children: .ignore).accessibilityLabel(label).accessibilityAddTraits(.isHeader)
         }
     }
     private var companionRecovery: Bool { coach.companionNeedsRecovery }
@@ -302,38 +303,54 @@ struct CoachView: View {
         onCompanionContextChanged(CompanionContext(surface: .coach, isTyping: (editing || listening) && !coach.isSending,
             isProcessing: companionProcessing, needsRecovery: companionRecovery,
             playback: surfaceVisible && !showPhotos && !showingDetail ? .animated : .hidden,
-            draftLength: coach.attachmentDraft.text.count))
+            draftLength: caretSignal))
+    }
+    /// Pip's eyes follow the caret across the field, back to the left when the draft wraps.
+    private var caretSignal: Int {
+        CompanionContext.caretSignal(coach.attachmentDraft.text, width: textWidth, font: .preferredFont(forTextStyle: .body))
     }
     private var companionStrip: some View {
-        HStack(alignment: .center, spacing: 12) {
-            // Character sheet: the crop's bottom is the bar line his paws rest on, here the field's top edge.
+        HStack(alignment: .bottom, spacing: 12) {
+            // Pip peeks over the composer (character sheet): the crop's bottom is the bar line his paws rest on.
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
                           size: typeSize.isAccessibilitySize ? 76 : 112, runtime: companionRuntime, surface: .coach,
                           onTouch: onCompanionTouch)
             VStack(alignment: .leading, spacing: 4) {
-                if let day = coach.diary.activeDay {
-                    Text("Logging to " + day.localDate).font(.caption).foregroundStyle(Color.diarySecondary)
-                        .accessibilityIdentifier("coachDate")
+                let caption = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))
+                caption {
+                    if let day = coach.diary.activeDay {
+                        Text("Logging to " + CoachReplyLines.dayLabel(day.localDate, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier))).accessibilityIdentifier("coachDate")
+                    }
+                    if let target = coach.diary.readModel?.activeGoal?.targets.kcal {
+                        if coach.diary.activeDay != nil, !typeSize.isAccessibilitySize { Text("·").accessibilityHidden(true) }
+                        Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal").accessibilityIdentifier("coachGoalSummary")
+                    }
                 }
-                if let target = coach.diary.readModel?.activeGoal?.targets.kcal {
-                    Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal").font(.caption)
-                        .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachGoalSummary")
-                }
+                .font(.caption).foregroundStyle(Color.diarySecondary)
                 if let error = coach.errorMessage, companionRecovery {
                     Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
-                } else if companionRecovery || companionProcessing {
-                    Text(companionRecovery ? "Your input is safe here" : "Working on your request…")
-                        .foregroundStyle(Color.diaryText)
+                } else if companionRecovery {
+                    // While working, the timeline's activity card already says what is happening.
+                    Text("Your message is safe here").foregroundStyle(Color.diaryText)
                 }
             }
             .font(.subheadline).fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 6)
             .transaction { $0.animation = nil }
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("coachCompanionStrip")
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let timeline = coach.timeline, timeline.error != nil {
+                HStack {
+                    Text(navigationError(timeline.queryError)).font(.caption).foregroundStyle(Color.diaryError)
+                        .accessibilityIdentifier("coachTimelineError")
+                    if timeline.queryError == nil {
+                        Button("Try again") { Task { await timeline.jumpToLatest() } }.frame(minWidth: 44, minHeight: 44)
+                    }
+                }
+            }
             if !editing, let day = coach.diary.activeDay, let recap = coach.diary.morningRecap, coach.diary.todaysMeals.isEmpty,
                dismissedMorningDay != day.id.uuidString {
                 MorningCheckInCard(model: coach.diary, day: day, previous: recap.previous, previousTarget: recap.target,
@@ -346,34 +363,53 @@ struct CoachView: View {
             if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
             HStack(alignment: .bottom, spacing: 8) {
-                // Pip stands on the left of the field's flat top edge, never on the round camera.
+                // Pip stands on the left of the field's flat top edge, never on the round button.
                 VStack(alignment: .leading, spacing: 0) {
                     companionStrip
                     composerInput
                 }
-                photoAction
+                // One round action: the mic while the draft is empty, Send once there is something to send.
+                Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
             }
+            .animation(reduceMotion ? nil : .snappy, value: showsSend)
             if let note = voice.note {
                 Text(note).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachVoiceNote")
             }
-            if !coach.connection.planAuthorized && !DiaryLaunch.isCoachInferenceFixture {
+            if !coach.connection.canInfer && !DiaryLaunch.isCoachInferenceFixture {
                 HStack(spacing: 4) {
-                    Text("Input saves on this iPhone.").foregroundStyle(Color.diarySecondary)
-                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for analysis")
+                    Text("Messages save on this iPhone.").foregroundStyle(Color.diarySecondary)
+                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for replies")
                         .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
                 }
                 .font(.caption)
+            } else if coach.connection.provider == .apple {
+                Text("Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.")
+                    .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachAppleLimits")
+            } else if coach.connection.planAuthorized {
+                HStack(spacing: 4) {
+                    Text("Using ChatGPT plan").foregroundStyle(Color.diarySecondary)
+                    Link("Manage usage", destination: MivuLinks.chatGPTUsage)
+                        .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
+                }
+                .font(.caption).accessibilityIdentifier("coachPlanUsage")
             }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)
         .animation(reduceMotion ? nil : .snappy, value: coach.attachmentDraft.reply)
         .sensoryFeedback(.selection, trigger: coach.attachmentDraft.reply) { $1 != nil }
+        .background {
+            // Messages fade out behind Pip's head instead of meeting a hard band edge.
+            VStack(spacing: 0) {
+                LinearGradient(colors: [Color.diaryCanvas.opacity(0), Color.diaryCanvas], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 56)
+                Color.diaryCanvas
+            }.allowsHitTesting(false)
+        }
         .disabled(coach.isSending || coach.diary.isChangingProfile)
         .animation(reduceMotion ? nil : .snappy, value: showsStarters)
     }
     private var composerInput: some View {
-        // A reply quote sits inside the field's top, as in Messages. Below it, one trailing slot:
-        // mic while empty, Send once there is something to send.
+        // A reply quote sits inside the field's top, as in Messages; the camera sits at its trailing edge.
         VStack(alignment: .leading, spacing: 0) {
             if let reply = coach.attachmentDraft.reply { replyBar(reply) }
             HStack(alignment: .bottom, spacing: 0) {
@@ -384,26 +420,24 @@ struct CoachView: View {
                         // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
                         .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
                         .accessibilityIdentifier("coachInput")
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { textWidth = $0 }
                         .padding(.leading, 16).padding(.vertical, 10)
                         // Hide only the text while listening; a transparent field would stop receiving the tap that switches to typing.
                         .foregroundStyle(listening ? Color.clear : Color.primary)
                     if listening { listeningText }
                 }
                 .frame(minHeight: 48)
-                Group { if showsSend { send } else { voiceAction } }
-                    .transition(.opacity).padding(.trailing, 2)
+                camera.padding(.trailing, 2).padding(.bottom, 2)
             }
-            .animation(reduceMotion ? nil : .snappy, value: showsSend)
         }
         .background(Color.diarySurface, in: RoundedRectangle(cornerRadius: 24))
         .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
     }
-    private var photoAction: some View {
+    private var camera: some View {
         Button { openCamera() } label: {
-            Image(systemName: "camera.fill").font(.system(size: 19, weight: .medium))
-                .frame(minWidth: 44, minHeight: 44)
-        }.accessibilityLabel("Add photos").accessibilityIdentifier("coachPhotos")
-            .buttonStyle(.glass).buttonBorderShape(.circle)
+            Image(systemName: "camera.fill").font(.system(size: 17, weight: .medium)).foregroundStyle(Color.diarySecondary)
+                .frame(width: 44, height: 44).contentShape(.circle)
+        }.buttonStyle(.plain).accessibilityLabel("Add photos").accessibilityIdentifier("coachPhotos")
             .disabled(coach.attachmentDraft.attachments.count + coach.attachmentDraft.reservedAttachmentCount >= 8)
     }
     private var listening: Bool { voice.phase == .listening }
@@ -468,7 +502,10 @@ struct CoachView: View {
                     Image(systemName: listening ? "stop.fill" : "mic.fill").font(.system(size: 19, weight: .medium))
                         .symbolEffect(.pulse, isActive: listening && !reduceMotion)
                 }
-            }.frame(minWidth: 44, minHeight: 48).contentShape(Rectangle())
+            }
+            .frame(width: 48, height: 48)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .contentShape(.circle)
         }
         .accessibilityLabel(voice.phase == .idle ? "Speak your meal" : "Stop listening").accessibilityIdentifier("coachVoice")
         .buttonStyle(.plain).foregroundStyle(listening ? Color.diaryError : Color.diaryAccent)
@@ -477,13 +514,12 @@ struct CoachView: View {
     private var send: some View {
         Button { editing = false; Task { await voice.stop(); _ = await coach.send() } } label: {
             Group {
-                if coach.isSending { ProgressView() }
-                else {
-                    Image(systemName: "arrow.up").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 34, height: 34).background(Color.diaryAccent, in: Circle())
-                }
+                if coach.isSending { ProgressView().tint(.white) }
+                else { Image(systemName: "arrow.up").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white) }
             }
-            .frame(minWidth: 44, minHeight: 48).contentShape(Rectangle())
+            .frame(width: 48, height: 48)
+            .glassEffect(.regular.tint(Color.diaryAccent).interactive(), in: .circle)
+            .contentShape(.circle)
         }
         .buttonStyle(.plain).opacity(coach.canSend || coach.isSending ? 1 : 0.4)
         .disabled(!coach.canSend)
@@ -511,7 +547,7 @@ struct CoachView: View {
     }
     @ViewBuilder private func messageActions(_ turn: CoachExchangeSummary, fromPip: Bool) -> some View {
         Button("Reply", systemImage: "arrowshape.turn.up.left") { reply(to: turn, fromPip: fromPip) }
-        let text = fromPip ? turn.assistantText ?? "" : turn.text
+        let text = fromPip ? CoachReplyLines.plain(turn.assistantText ?? "") : turn.text
         if !text.isEmpty { Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text } }
     }
     private func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
@@ -539,6 +575,8 @@ struct CoachView: View {
         case .meal(let id), .item(let id, _): selectedRecord = .meal(id); return
         case .message(let id, _): target = .turn(id)
         case .day(let id): target = .day(id)
+        case .workout(let id): selectedRecord = .workout(id); return
+        case .weight: return // shortcut: weight quotes render non-interactive (no record route yet), seek the record's day once Progress has one
         }
         guard let identity = coach.diary.selection?.identity else { return }
         Task { _ = await coach.seek(CoachNavigationRequest(identity: identity, target: target, requestID: UUID())) }
@@ -554,18 +592,20 @@ struct CoachView: View {
         VStack(alignment: .trailing, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
                 if let reply = turn.reply {
-                    Button { openQuote(reply) } label: {
-                        CoachReplyQuote(reply: reply, title: reply.author, inMessage: true)
-                            .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 44)
-                            .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    let quote = CoachReplyQuote(reply: reply, title: reply.author, inMessage: true)
+                        .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 44)
+                        .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    if case .weight = reply.target { quote.accessibilityIdentifier("coachQuote-" + turn.id.uuidString) }
+                    else {
+                        Button { openQuote(reply) } label: { quote }
+                            .buttonStyle(.plain).accessibilityHint("Shows the original")
+                            .accessibilityIdentifier("coachQuote-" + turn.id.uuidString)
                     }
-                    .buttonStyle(.plain).accessibilityHint("Shows the original")
-                    .accessibilityIdentifier("coachQuote-" + turn.id.uuidString)
                 }
                 if !turn.text.isEmpty { Text(turn.text).font(.body).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
                 if !turn.photos.isEmpty {
-                    Label("\(turn.photos.count) attached photos", systemImage: "photo").font(.caption)
+                    Label(turn.photos.count == 1 ? "1 photo" : "\(turn.photos.count) photos", systemImage: "photo").font(.caption)
                     ForEach(turn.photos) { photo in DiaryPhotoPreview(model: coach.diary, reference: photo, height: 140) }
                 }
             }
@@ -574,8 +614,11 @@ struct CoachView: View {
             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 20))
             .contextMenu { messageActions(turn, fromPip: false) }
             .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: false) }
-            Label("Input saved on this iPhone", systemImage: "internaldrive")
-                .font(.caption).foregroundStyle(Color.diarySecondary)
+            // A reply or card already shows the message landed; the save note matters only until then.
+            if turn.state != .completed {
+                Label("Saved on this iPhone", systemImage: "checkmark.circle")
+                    .font(.caption).foregroundStyle(Color.diarySecondary)
+            }
         }.frame(maxWidth: .infinity, alignment: .trailing)
     }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
@@ -593,11 +636,11 @@ struct CoachView: View {
                 }
                 if turn.needsDayChoice {
                     if let date = coach.previousDayDate(turn) {
-                        Button("Use previous waking day: " + date) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
+                        Button("Log to " + CoachReplyLines.shortDate(date)) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
                     }
-                    Button("Use capture date: " + coach.captureDate(turn)) { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
+                    Button("Log to " + CoachReplyLines.shortDate(coach.captureDate(turn))) { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
                 } else if [.waitingForConnection, .waitingForNetwork, .needsRetry, .needsClarification].contains(turn.state) {
-                    Button("Retry analysis") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
+                    Button("Try again") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
                 }
             }
             ForEach(turn.receipts.filter { $0.mealID != nil || $0.workoutID != nil }, id: \.operationKey) { receipt in
@@ -605,6 +648,29 @@ struct CoachView: View {
                                  undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
+                }
+            }
+            ForEach(turn.receipts.filter { $0.weightID != nil }, id: \.operationKey) { receipt in
+                if let label = CoachReceiptPresentation(receipt: receipt, target: .loading).weightLabel {
+                    Label(label, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryWeight)
+                        .padding(.horizontal, 14).frame(minHeight: 44)
+                        .background(Color.diaryWeight.opacity(0.12), in: Capsule())
+                        .accessibilityIdentifier("coachWeightChip")
+                }
+            }
+            if coach.timeline?.window.isLatest(turn.id) == true {
+                let followUps = CoachReplyLines.followUps(for: turn)
+                if !followUps.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(followUps, id: \.self) { followUp in
+                            Button(action: followUp == .today ? openToday : openProgress) {
+                                Text(followUp == .today ? "See today" : "See progress").frame(minHeight: 36)
+                            }
+                            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
+                                .accessibilityIdentifier(followUp == .today ? "coachFollowUp-today" : "coachFollowUp-progress")
+                        }
+                    }
                 }
             }
             if turn.incomplete == true {
@@ -627,12 +693,12 @@ struct CoachView: View {
     }
     private func status(_ state: CoachTurnState) -> String {
         switch state {
-        case .captured: "Waiting for analysis"
-        case .analyzing: "Analyzing saved input"
-        case .waitingForConnection: "Waiting for an authorized connection"
-        case .waitingForNetwork: "Waiting for the network. Your input is saved."
-        case .needsRetry: "Analysis paused. Your input is saved."
-        case .needsClarification: "More details are needed. Review the saved record or send a follow-up."
+        case .captured: "Waiting to start"
+        case .analyzing: "Thinking…"
+        case .waitingForConnection: "Connect ChatGPT in Settings to continue"
+        case .waitingForNetwork: "Offline. I'll reply when you're back online."
+        case .needsRetry: "Couldn't finish. Your message is saved."
+        case .needsClarification: "I need a little more detail. Reply with it, or edit the record."
         case .completed: "Completed"
         }
     }

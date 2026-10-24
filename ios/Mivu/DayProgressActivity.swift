@@ -4,14 +4,18 @@ import OSLog
 
 extension DayProgressAttributes.ContentState {
     /// Built from the same daily report Today and the widget use, so no totals are computed twice.
-    init(report: DailyProgress, hideWhenLocked: Bool) {
+    init(readModel: DiaryReadModel, hideWhenLocked: Bool) {
+        let report = ProgressAnalytics.daily(readModel: readModel)
         let eaten = report.foodTotals, target = report.goal?.targets
+        // The same saved items the report adds; a nutrient any of them lacks is shown as a bound.
+        let items = readModel.meals.filter(\.isSaved).flatMap(\.items)
+        let fields: [(String, KeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("protein", \.protein), ("carbs", \.carbs), ("fat", \.fat)]
+        let partial = fields.filter { _, field in items.contains { $0.nutrition[keyPath: field] == nil } }.map(\.0)
         self.init(kcalEaten: eaten?.kcal, kcalTarget: target?.kcal,
                   protein: eaten?.protein, proteinTarget: target?.protein,
                   carbs: eaten?.carbs, carbsTarget: target?.carbs,
                   fat: eaten?.fat, fatTarget: target?.fat,
-                  hasPending: report.hasPending || (eaten?.unknownItemCount ?? 0) > 0,
-                  hideWhenLocked: hideWhenLocked)
+                  hideWhenLocked: hideWhenLocked, partial: partial)
     }
 }
 
@@ -41,7 +45,7 @@ private let liveActivityLog = Logger(subsystem: "com.yakov103.mivu", category: "
     var content = readModel.flatMap { model in
         model.activeDay.map { day in
             // Past the cutoff the numbers belong to yesterday, so the island asks to open Mivu instead.
-            ActivityContent(state: DayProgressAttributes.ContentState(report: ProgressAnalytics.daily(readModel: model), hideWhenLocked: hide),
+            ActivityContent(state: DayProgressAttributes.ContentState(readModel: model, hideWhenLocked: hide),
                             staleDate: WidgetSnapshot.nextRollover(after: Date(), timeZoneID: day.timeZoneID, cutoffHour: DayCutoff.hour))
         }
     }
@@ -52,7 +56,7 @@ private let liveActivityLog = Logger(subsystem: "com.yakov103.mivu", category: "
        let eaten = Double(arguments[index + 1]) {
         content = ActivityContent(state: .init(kcalEaten: eaten, kcalTarget: 2000, protein: eaten * 0.06, proteinTarget: 120,
                                                carbs: eaten * 0.11, carbsTarget: 200, fat: eaten * 0.03, fatTarget: 60,
-                                               hasPending: false, hideWhenLocked: hide), staleDate: nil)
+                                               hideWhenLocked: hide), staleDate: nil)
     }
     #endif
     let authorized = ActivityAuthorizationInfo().areActivitiesEnabled

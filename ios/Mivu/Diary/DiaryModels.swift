@@ -78,6 +78,12 @@ struct FoodItem: Codable, Equatable, Sendable, Identifiable {
     var uncertain = true
     var nutrientSources: [String: NutritionProvenance] = [:]
     var nutritionBasis: NutritionValues? = nil
+    /// The Coach model that estimated this food; nil for manual and older foods.
+    var estimatedBy: String? = nil
+
+    var estimatedByLabel: String? {
+        estimatedBy.map { $0 == "apple-intelligence" ? "Apple Intelligence" : "ChatGPT" }
+    }
 }
 
 struct MealPhoto: Codable, Equatable, Sendable, Identifiable {
@@ -351,10 +357,11 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     }
 }
 
+/// Each nutrient adds the items that know it and is nil only when none do; unknownItemCount discloses the gap.
 func nutritionTotals(_ items: [FoodItem]) -> NutritionTotals {
     func sum(_ field: KeyPath<NutritionValues, Double?>) -> Double? {
-        guard !items.isEmpty, items.allSatisfy({ $0.nutrition[keyPath: field] != nil }) else { return nil }
-        return items.reduce(0) { $0 + $1.nutrition[keyPath: field]! }
+        let known = items.compactMap { $0.nutrition[keyPath: field] }
+        return known.isEmpty ? nil : known.reduce(0, +)
     }
     return NutritionTotals(kcal: sum(\.kcal), carbs: sum(\.carbs), protein: sum(\.protein), fat: sum(\.fat),
         unknownItemCount: items.filter { [$0.nutrition.kcal, $0.nutrition.carbs, $0.nutrition.protein, $0.nutrition.fat].contains(nil) }.count)

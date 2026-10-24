@@ -339,7 +339,7 @@ private actor RevisionCoachReplies {
         #expect(updated.items[0].nutrition.protein == original.nutrition.protein)
         #expect(updated.items[0].nutrition.fat == original.nutrition.fat)
         #expect(updated.items[1] == meal.items[1])
-        #expect(updated.totals.kcal == nil)
+        #expect(updated.totals.kcal == meal.items[1].nutrition.kcal && updated.totals.unknownItemCount == 1)
     }
 
     @Test func startDayThenHistoricalCoverageLeavesActiveDayOpen() async throws {
@@ -350,14 +350,18 @@ private actor RevisionCoachReplies {
             .run(turnID: starting.id, expectedProfileID: profile.id)
         let started = try await store.snapshotForExport()
         let active = try #require(started.activeDayID)
-        let coverageTurn = try await capturedTurn(store, text: "Mark January 13 partial", photos: [], at: now, expectedProfileID: profile.id)
-        let coverage = try call("set_day_coverage", ["local_date": "2027-01-13", "completeness": "partial"])
+        let coverageTurn = try await capturedTurn(store, text: "Skip January 13", photos: [], at: now, expectedProfileID: profile.id)
+        let coverage = try call("set_day_coverage", ["local_date": "2027-01-13", "skipped": true])
         _ = try await run(store, profile, coverageTurn, [coverage])
         let snapshot = try await store.snapshotForExport()
         let historical = try #require(snapshot.days.first { $0.localDate == "2027-01-13" })
         #expect(snapshot.activeDayID == active)
-        #expect(historical.completeness == .partial && historical.closedAt == nil)
+        #expect(historical.completeness == .untracked && historical.closedAt == nil)
         #expect(snapshot.days.first { $0.id == active }?.closedAt == nil)
+        // Counting the day again stores unknown, never complete.
+        let countTurn = try await capturedTurn(store, text: "Count January 13 again", photos: [], at: now, expectedProfileID: profile.id)
+        _ = try await run(store, profile, countTurn, [try call("set_day_coverage", ["local_date": "2027-01-13", "skipped": false])])
+        #expect(try await store.snapshotForExport().days.first { $0.localDate == "2027-01-13" }?.completeness == .unknown)
     }
 }
 

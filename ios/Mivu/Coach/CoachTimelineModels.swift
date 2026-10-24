@@ -36,6 +36,10 @@ struct CoachCommittedReceipt: Codable, Equatable, Sendable {
     var targetLocalDate: String? = nil
     var items: [CoachCommittedItem] = []
     var submissionState: SubmissionState? = nil
+    var weightValue: Double? = nil
+    var weightUnit: String? = nil
+    var workoutKind: String? = nil
+    var workoutMinutes: Int? = nil
 }
 
 /// Companion status reads index metadata without decoding an exchange or its receipts.

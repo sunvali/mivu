@@ -174,7 +174,7 @@ private actor CoachFeedbackReplies {
         let moved = try #require(snapshot.meals.first)
         #expect(snapshot.days.first { $0.id == moved.dayID }?.localDate == destination)
         #expect(moved.eatenAt == eatenAt && moved.timePrecision == .exact)
-        #expect(done.assistantText?.contains(destination) == true)
+        #expect(done.assistantText == "Moved to \(CoachReplyLines.shortDate(destination)).")
         #expect(done.assistantText?.contains("Logged") == false)
     }
 

@@ -76,10 +76,12 @@ not claim exactly-once remote inference.
 
 ## Receipts, history and corrections
 
-Show one compact, immutable receipt for a committed food operation: its
-original status, date, items and quantities, with Review / Edit opening current
-record details. Secondary macros sit behind a native disclosure; unknown
-nutrient completeness and estimation labels remain visible. Do not repeat the
+Show one compact, immutable receipt for a committed food operation, styled
+like Today's cards: its original status, date, each dish with its amount and
+calories, the meal total, and a visible carbs/protein/fat split with gram
+totals, with Review / Edit opening current record details. Per-dish grams sit
+behind a native disclosure; unknown nutrient completeness and estimation labels
+remain visible. A saved weigh-in shows a compact chip with its committed value. Do not repeat the
 current saved meal, date or nutrition as a second block. A short notice appears
 only when known receipt facts differ from the current record; unrelated revision
 or capture timestamps do not count as changes. Current meal status, totals,
@@ -101,8 +103,13 @@ and does not change the earlier receipt.
 
 An unaccepted proposal is not consumed food. Current explicit amounts, labels
 and visible evidence of a different item or serving take precedence over an
-earlier committed portion. Read-only summaries come from current diary reads;
-assistant prose alone cannot claim a saved record. A clarification is an
+earlier committed portion. Coach shows the model's short reply only when every
+number in it appears in this turn's context, tool results, saved receipts or a
+fresh read of the saved day, and it never claims a save without a matching
+receipt or calls a review-first estimate saved. Otherwise the app writes one
+short line from receipts or current diary reads. Edits that have no card (undo,
+move, scale, retry, photo changes, goals and preferences) keep their app-written
+sentence. Saved facts are always displayed by receipts and cards. A clarification is an
 app-owned response for a typed missing detail and commits no food mutation.
 
 Existing meal/photo estimation guidance remains in force: consider the current

@@ -45,7 +45,7 @@ struct CaloriesWidget: Widget {
                 .widgetURL(URL(string: "mivu://today"))
         }
         .configurationDisplayName("Calories")
-        .description("Today's calories, with Log Food and Coach one tap away.")
+        .description("Today's calories, with Snap It and Coach one tap away.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
         // Pip stands in the corner, so the system families pad their own content instead.
         .contentMarginsDisabled()
@@ -56,6 +56,8 @@ struct CaloriesWidget: Widget {
 struct CaloriesWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let snapshot: WidgetSnapshot?
+    /// The goal bar and the action row share one width so a full bar reads as full.
+    private let actionRowWidth: CGFloat = 220
 
     var body: some View {
         switch family {
@@ -92,11 +94,11 @@ struct CaloriesWidgetView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if let snapshot, snapshot.hasDiary {
                     figure(snapshot, size: 38, eyebrow: true)
-                    goalBar(snapshot).frame(width: 150, alignment: .leading).padding(.top, 10)
+                    goalBar(snapshot).frame(maxWidth: actionRowWidth, alignment: .leading).padding(.top, 10)
                     Spacer(minLength: 8)
                     HStack(spacing: 8) {
                         Button(intent: LogFoodIntent()) {
-                            capsule("Log Food", systemImage: "camera.fill", fill: .diaryAccent, text: .diaryActionText)
+                            capsule("Snap It", systemImage: "camera.fill", fill: .diaryAccent, text: .diaryActionText)
                         }
                         Button(intent: OpenCoachIntent()) {
                             capsule("Coach", systemImage: "bubble.left.fill", fill: .diarySummarySurface, text: .diaryAccent)
@@ -104,7 +106,7 @@ struct CaloriesWidgetView: View {
                     }
                     .buttonStyle(.plain)
                     // Stops short of Pip; larger text shrinks the labels instead of sliding under him.
-                    .frame(maxWidth: 220, alignment: .leading)
+                    .frame(maxWidth: actionRowWidth, alignment: .leading)
                 } else {
                     setUpText
                 }

@@ -105,3 +105,12 @@ methods. Use the owner's compact down-arrow treatment: a 48-point circular
 control with the spoken “Jump to latest” label. Keep focus away from the
 underlying exchange and a 44-point minimum target, and verify an actual button
 drag and tap, row/focus routing, icon fit, and viewport restoration within 2 points.
+
+## Knowledge graph
+
+When a local `graphify-out/graph.json` exists (built with graphify; not tracked),
+answer codebase questions with `graphify query "<question>"` first. Use
+`graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"`
+for one concept. Read `graphify-out/GRAPH_REPORT.md` only for broad architecture
+review or when those miss context. After code changes, run `graphify update .`
+(AST-only, no API cost) to keep the graph current.

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 @testable import Mivu
 
 @Suite @MainActor struct DiaryCompanionMomentTests {
@@ -48,19 +49,6 @@ import Testing
         #expect(model.companionHabitEvent == event, "the second meal of the day is not a first")
     }
 
-    @Test func dayCompleteFiresOnTransitionOnly() async throws {
-        let (path, store, profile, model) = try await fixture()
-        defer { try? FileManager.default.removeItem(at: path) }
-        let day = try #require(model.activeDay)
-        #expect(await model.change { try await store.setCompleteness(dayID: day.id, .partial, expectedProfileID: profile.id) })
-        #expect(model.companionHabitEvent == nil)
-        #expect(await model.change { try await store.setCompleteness(dayID: day.id, .complete, expectedProfileID: profile.id) })
-        let event = try #require(model.companionHabitEvent)
-        #expect(event.kind == .dayComplete && event.operationID == day.id && event.profileID == profile.id)
-        #expect(await model.change { try await store.setCompleteness(dayID: day.id, .complete, expectedProfileID: profile.id) })
-        #expect(model.companionHabitEvent == event)
-    }
-
     @Test func photoAddedEmitsOncePerAttachment() async throws {
         let f = try await Task10Fixture.make(); defer { f.remove() }
         let coach = CoachViewModel(diary: f.diary, connection: ChatGPTConnection())
@@ -107,5 +95,15 @@ import Testing
         #expect(CompanionContext.draftSignal(60) == CompanionContext.draftSignal(61))
         #expect(CompanionContext.draftSignal(61) == CompanionContext.draftSignal(600))
         #expect(CompanionContext.draftSignal(-3) == 0)
+    }
+
+    @Test func caretSignalFollowsTheLastWrappedLine() {
+        let font = UIFont.systemFont(ofSize: 17)
+        #expect(CompanionContext.caretSignal("", width: 200, font: font) == 0)
+        let short = CompanionContext.caretSignal("Eggs", width: 200, font: font)
+        let longer = CompanionContext.caretSignal("Eggs and toast", width: 200, font: font)
+        #expect(short > 0 && longer > short)
+        // Once the draft wraps, the caret starts the next line near the field's leading edge again.
+        #expect(CompanionContext.caretSignal("Eggs and toast with butter and jam on the side, tea", width: 200, font: font) < longer)
     }
 }

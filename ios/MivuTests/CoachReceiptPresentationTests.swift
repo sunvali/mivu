@@ -40,7 +40,7 @@ import UIKit
         #expect(value.currentStatus == "Could not load current record")
     }
 
-    @Test func committedMacrosKeepKnownZeroAndRequireEveryItemForEachNutrient() {
+    @Test func committedMacrosKeepKnownZeroAndAddOnlyKnownValues() {
         var receipt = receipt()
         receipt.items[0].nutrition = NutritionValues(kcal: 100, carbs: 0, protein: 10.5, fat: 2)
         var other = receipt.items[0]; other.itemID = UUID(); other.nutrition = NutritionValues(kcal: 50, carbs: 0, protein: 4.5, fat: 3)
@@ -55,9 +55,13 @@ import UIKit
         receipt.items[1].nutrition?.protein = nil
         value = CoachReceiptPresentation(receipt: receipt, target: .unavailable)
         #expect(value.committedNutrition == "150 kcal")
-        #expect(value.committedMacros == "Carbs 0 g · Protein unknown · Fat 5 g")
+        #expect(value.committedMacros == "Carbs 0 g · Protein 10.5 g · Fat 5 g")
         #expect(value.nutritionCompleteness == "Some nutrients unknown")
         receipt.items[0].nutrition = nil
+        value = CoachReceiptPresentation(receipt: receipt, target: .loading)
+        #expect(value.committedNutrition == "50 kcal")
+        #expect(value.committedMacros == "Carbs 0 g · Protein unknown · Fat 3 g")
+        receipt.items[1].nutrition = nil
         value = CoachReceiptPresentation(receipt: receipt, target: .loading)
         #expect(value.committedNutrition == "Energy unknown")
         #expect(value.committedMacros == "Carbs unknown · Protein unknown · Fat unknown")
@@ -98,7 +102,7 @@ import UIKit
         meal.items[0].quantity = 5
         meal.items[0].nutrition.kcal = 250
         let value = CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-18"))
-        #expect(value.changeNotice == "Edited · moved to 2026-10-18")
+        #expect(value.changeNotice == "Edited · moved to " + CoachReplyLines.shortDate("2026-10-18"))
         #expect(value.committedItems == ["Chicken · 3 piece"])
         #expect(value.committedDate == "2026-10-17")
         #expect(value.committedNutrition == "Energy unknown")
@@ -112,7 +116,7 @@ import UIKit
         meal.items.append(FoodItem(name: "Rice", nutrition: NutritionValues(kcal: 200)))
         #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == nil)
         meal.items[0].nutrition.carbs = 1
-        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == "Edited since this receipt")
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == "Edited later")
         receipt.items = []; receipt.targetLocalDate = nil; receipt.submissionState = nil
         #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).changeNotice == nil)
     }
@@ -131,6 +135,60 @@ import UIKit
         #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).targetNotice == nil)
         meal.submissions[0].state = .needsRetry
         #expect(CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-17")).targetNotice == "Analysis needs retry")
+    }
+
+    @Test func itemRowsShowEveryDishWithItsCalories() {
+        let names = ["Chicken", "Rice", "Hummus", "Salad", "Pita", "Tahini", "Pickles"]
+        var items = names.map { CoachCommittedItem(itemID: UUID(), name: $0, quantity: 1, unit: "serving", nutrition: NutritionValues(kcal: 100)) }
+        items[6].nutrition = NutritionValues(kcal: nil)
+        let receipt = CoachCommittedReceipt(operationKey: "meal", turnID: UUID(), mealID: UUID(), committedRevision: 1, items: items, submissionState: .saved)
+        let rows = CoachReceiptPresentation(receipt: receipt, target: .loading).itemRows
+        #expect(rows.count == 7)
+        #expect(rows[0].name == "Chicken" && rows[0].amount == "1 serving" && rows[0].kcal == "100")
+        #expect(rows[6].kcal == "—")
+    }
+
+    @Test func macroShareSplitsEnergyAndNeedsEveryMacro() throws {
+        let item = CoachCommittedItem(itemID: UUID(), name: "Meal", quantity: 1, unit: "plate", nutrition: NutritionValues(kcal: 500, carbs: 50, protein: 25, fat: 20))
+        let receipt = CoachCommittedReceipt(operationKey: "meal", turnID: UUID(), mealID: UUID(), committedRevision: 1, items: [item], submissionState: .saved)
+        let share = try #require(CoachReceiptPresentation(receipt: receipt, target: .loading).macroShare)
+        let total: Double = share.carbs + share.protein + share.fat
+        #expect(abs(total - 1) < 0.0001)
+        #expect(abs(share.fat - 180.0 / 480.0) < 0.0001)
+        var unknown = receipt; unknown.items[0].nutrition?.fat = nil
+        #expect(CoachReceiptPresentation(receipt: unknown, target: .loading).macroShare == nil)
+    }
+
+    @Test func deletedWeighInShowsNoSavedChip() {
+        let deleted = CoachCommittedReceipt(operationKey: "\(UUID())/delete_weight/\(UUID())", turnID: UUID(), weightID: UUID(), committedRevision: 1)
+        #expect(CoachReceiptPresentation(receipt: deleted, target: .loading).weightLabel == nil)
+    }
+
+    @Test func movedNoticeUsesAFriendlyDate() {
+        var receipt = receipt()
+        receipt.items = []
+        let meal = MealReadModel(id: receipt.mealID!, dayID: UUID(), capturedAt: Date(), eatenAt: Date(), revision: 1, items: [], submissions: [], photos: [])
+        let notice = CoachReceiptPresentation(receipt: receipt, target: .meal(meal, localDate: "2026-10-18")).changeNotice
+        #expect(notice?.contains("2026-10-18") == false)
+    }
+
+    @Test func weightLabelUsesCommittedValue() {
+        var receipt = CoachCommittedReceipt(operationKey: "weight", turnID: UUID(), weightID: UUID(), committedRevision: 1)
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .loading).weightLabel == "Weight saved")
+        receipt.weightValue = 73.6; receipt.weightUnit = "kg"
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .loading).weightLabel == "Weight saved · 73.6 kg")
+    }
+
+    @Test func disclosureListsEachDishWhileLegendHoldsTotals() throws {
+        let eggs = CoachCommittedItem(itemID: UUID(), name: "Eggs", quantity: 2, unit: "egg", nutrition: NutritionValues(kcal: 140, carbs: 1, protein: 12, fat: 10))
+        let toast = CoachCommittedItem(itemID: UUID(), name: "Toast", quantity: 1, unit: "slice", nutrition: NutritionValues(kcal: 80, carbs: 15, protein: 3, fat: 1))
+        let receipt = CoachCommittedReceipt(operationKey: "meal", turnID: UUID(), mealID: UUID(), committedRevision: 1, items: [eggs, toast], submissionState: .saved)
+        let presentation = CoachReceiptPresentation(receipt: receipt, target: .loading)
+        #expect(presentation.itemMacros == "Eggs: Carbs 1 g · Protein 12 g · Fat 10 g\nToast: Carbs 15 g · Protein 3 g · Fat 1 g")
+        let totals = try #require(presentation.macroTotals)
+        #expect(totals.carbs == "16 g" && totals.protein == "15 g" && totals.fat == "11 g")
+        var single = receipt; single.items = [eggs]
+        #expect(CoachReceiptPresentation(receipt: single, target: .loading).itemMacros == nil)
     }
 }
 
