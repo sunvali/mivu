@@ -266,8 +266,10 @@ private fun rememberProgressPip(celebrates: Boolean?): ProgressPipState {
     var entered by remember { mutableStateOf(false) }
     var taps by remember { mutableIntStateOf(0) }
     var output by remember { mutableStateOf<CompanionOutput?>(null) }
-    LaunchedEffect(celebrates, playback, reaction) {
+    // Waits for the rig too, so the entrance is never spent before Pip can show it.
+    LaunchedEffect(celebrates, playback, reaction, runtime) {
         val cheer = celebrates ?: return@LaunchedEffect
+        if (runtime == null) return@LaunchedEffect
         val presenting = if (cheer) CompanionPose.PresentingCheer else CompanionPose.PresentingCalm
         if (playback == Playback.Hidden) { output = CompanionOutput(presenting, playback, null); return@LaunchedEffect }
         // A one-shot first (entrance, range switch, tap), then back to holding the chart.
