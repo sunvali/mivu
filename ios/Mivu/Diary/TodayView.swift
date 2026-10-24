@@ -95,7 +95,6 @@ struct DiaryRootView: View {
     private var observeCompanionOutput: ((CompanionOutput) -> Void)?
     private var observeCompanionApplication: ((CompanionOutput) -> Void)?
     #endif
-    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
     @State private var thermalState = ProcessInfo.processInfo.thermalState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
@@ -223,6 +222,8 @@ struct DiaryRootView: View {
             if value == .inactive { coach.pauseForInactiveScene() }
             if value == .background { continueInBackground() }
             if value == .active {
+                // A suspended app misses thermal notifications, so a cooled phone would keep Pip still.
+                thermalState = ProcessInfo.processInfo.thermalState
                 attachCompanion()
                 refreshCompanion()
             }
@@ -236,7 +237,7 @@ struct DiaryRootView: View {
             if !DiaryLaunch.isUITest { restoredTab = value }
             refreshCompanion()
         }
-        .onChange(of: [routes.route != nil, coachHistory != nil, showOnboarding, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion, lowPower]) { _, _ in refreshCompanion() }
+        .onChange(of: [routes.route != nil, coachHistory != nil, showOnboarding, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion]) { _, _ in refreshCompanion() }
         .onChange(of: model.selection, initial: true) { _, selection in
             coachRoutes.synchronize(selection: selection, isChangingProfile: model.isChangingProfile)
             coachHistory = nil
@@ -256,10 +257,7 @@ struct DiaryRootView: View {
         .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionPhotoEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: [coach.isSending, coach.companionNeedsRecovery, coach.companionIsProcessing]) { _, _ in refreshCompanion() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
-            lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        }
-        .onReceive(NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification).receive(on: RunLoop.main)) { _ in
             thermalState = ProcessInfo.processInfo.thermalState
         }
         .task(id: runtimeUpdate) {
@@ -520,7 +518,7 @@ struct DiaryRootView: View {
             if coach.isSending { context.isTyping = false }
         }
         context.playback = MotionPolicy.playback(
-            reduceMotion: reduceMotion, lowPower: lowPower, thermalState: thermalState,
+            reduceMotion: reduceMotion, thermalState: thermalState,
             sceneActive: phase == .active && hasLoaded && model.readModel != nil && !model.isChangingProfile,
             selected: context.surface != nil && context.surface == selectedCompanionSurface,
             visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || showOnboarding || model.errorMessage != nil)
