@@ -109,7 +109,7 @@ fun CoachScreen(
             Viewport(info.mapNotNull { it.key as? UUID }.toSet(), listState.firstVisibleItemIndex, info.lastOrNull()?.index ?: -1, listState.atLatest())
         }.collect { v ->
             model.viewport(v.visible, v.atLatest)
-            if (rows.isEmpty()) return@collect
+            if (rows.isEmpty() || model.awaitingHighlight) return@collect // a seek scrolls to its row before paging
             if (state.earlier == EdgeState.Available && v.last >= rows.lastIndex - 3) model.loadEarlier(v.visible)
             if (state.later == EdgeState.Available && v.first <= 3) model.loadLater(v.visible)
         }

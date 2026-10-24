@@ -92,8 +92,11 @@ internal fun DiaryDatabase.Tx.rebuildCoachSegments() {
     var newest: CoachSegmentSummary? = null
     query("SELECT ordinal, payload FROM coach_turn ORDER BY ordinal LIMIT 10000", emptyList()) { c ->
         while (c.moveToNext()) {
+            // A damaged row is left out of history rather than failing the rebuild (and the diary's open).
+            // shortcut: when it is the newest turn the index keeps lagging, so every open rebuilds; record skipped rows
+            // (or mark the index current) if that cost shows up.
             val turn = try { SwiftJson.decodeFromString(CoachTurn.serializer(), c.getBlob(1).decodeToString()) }
-            catch (_: IllegalArgumentException) { throw DiaryError.InvalidData("coach turn") }
+            catch (_: IllegalArgumentException) { continue }
             val segment = segmentFor(turn, c.getLong(0), turn.activeDayID?.let { id -> days.getOrPut(id) { day(id) } }, newest, built::get)
             built[segment.segmentID] = segment
             newest = segment

@@ -16,6 +16,7 @@ import java.io.Closeable
 import java.io.File
 import java.time.Instant
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -104,7 +105,11 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                 db.execSQL("CREATE INDEX IF NOT EXISTS coach_segment_date_last ON coach_segment(displayLocalDate, lastOrdinal, segmentID)")
                 val lagging = db.rawQuery("SELECT (SELECT MAX(ordinal) FROM coach_turn) IS NOT (SELECT MAX(lastOrdinal) FROM coach_segment)", null)
                     .use { it.moveToFirst() && it.getInt(0) == 1 }
-                return DiaryDatabase(db, profileID, file).also { if (lagging) it.immediate { it.Tx(it.head()).rebuildCoachSegments() } }
+                return DiaryDatabase(db, profileID, file).also { diary ->
+                    // A failed rebuild only leaves history incomplete; the diary itself still opens.
+                    if (lagging) runCatching { diary.immediate { diary.Tx(diary.head()).rebuildCoachSegments() } }
+                        .onFailure { if (it is CancellationException) throw it }
+                }
             } catch (e: Throwable) { db.close(); throw e }
         }
 

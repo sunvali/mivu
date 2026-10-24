@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -190,7 +191,7 @@ fun CoachHistoryScreen(model: CoachViewModel, zone: ZoneId, onOpen: (CoachSeekTa
 @Composable
 private fun Row(row: CoachSegmentSummary, onClick: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clickable(onClickLabel = "Open conversation", role = Role.Button, onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(row.displayLocalDate, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

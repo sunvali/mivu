@@ -382,6 +382,9 @@ class CoachViewModel(
     suspend fun historyPage(date: String?, before: CoachDayCursor?): CoachDayPage =
         read { if (date == null) coachDays(before) else coachSegments(date, before) }
 
+    /** A seek's highlighted row has not reached the screen yet: edge paging waits for it. */
+    val awaitingHighlight: Boolean get() = highlighted != null && !highlightShown
+
     private fun clearHighlight() {
         if (highlighted == null) return
         highlighted = null
@@ -583,7 +586,7 @@ class CoachViewModel(
         window.retireAll()
         if (!window.reserveReplacement(visible)) return false
         val page = try {
-            read { coachPage(request) }
+            read { coachPage(request) }.let { readPageForTest?.invoke(request, it) ?: it }
         } catch (e: Exception) {
             window.releaseReplacement() // the read has exited
             if (e is CancellationException) throw e
@@ -594,6 +597,12 @@ class CoachViewModel(
             } else {
                 _message.value = "This conversation is unavailable for the current diary."
             }
+            return false
+        }
+        if (!CoachHistoryWindow.valid(page, request)) { // iOS window.reset(page, request:)
+            window.releaseReplacement()
+            val invalid = "The conversation page was invalid. Try again."
+            if (request == CoachPageRequest.Latest) { error = invalid; loaded = true; publish() } else _message.value = invalid
             return false
         }
         window.reset(page)
@@ -659,5 +668,7 @@ class CoachViewModel(
         @VisibleForTesting internal var afterCaptureForTest: (() -> Unit)? = null
         /** Runs before the capture writes, so a test can fail a send that never committed. */
         @VisibleForTesting internal var beforeCaptureForTest: (() -> Unit)? = null
+        /** Replaces a replacement read's page, so a test can return an invalid one. */
+        @VisibleForTesting internal var readPageForTest: ((CoachPageRequest, com.yakov103.mivu.diary.CoachPage) -> com.yakov103.mivu.diary.CoachPage)? = null
     }
 }

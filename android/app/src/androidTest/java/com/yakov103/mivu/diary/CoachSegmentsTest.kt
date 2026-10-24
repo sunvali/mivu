@@ -179,6 +179,19 @@ class CoachSegmentsTest {
         assertEquals(before, db.coachDays())
     }
 
+    @Test fun damagedTurnRowStillOpensWithOtherHistory() {
+        capture("Synthetic first")
+        capture("Synthetic damaged", day(1))
+        capture("Synthetic third", day(2))
+        db.close()
+        SQLiteDatabase.openDatabase(db.file.path, null, SQLiteDatabase.OPEN_READWRITE).use {
+            it.execSQL("UPDATE coach_turn SET payload = CAST('{' AS BLOB) WHERE ordinal = (SELECT ordinal FROM coach_turn ORDER BY ordinal LIMIT 1 OFFSET 1)")
+            it.execSQL("DELETE FROM coach_segment")
+        }
+        db = DiaryDatabase.open(context, profile.id)
+        assertEquals(listOf("Synthetic third", "Synthetic first"), db.coachDays().segments.map { it.preview })
+    }
+
     @Test fun sourceTurnIsEarliestTurnNamingMeal() {
         db.startDay(at, db.head().revision)
         capture("Synthetic hello")

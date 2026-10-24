@@ -69,6 +69,7 @@ class CoachHistoryScreenTest {
     }
 
     @After fun close() {
+        CoachViewModel.readPageForTest = null
         (repository.bootstrapState.value as? Bootstrap.Ready)?.let { repository.database(it.profileID).close() }
         TodayFixture.wipe(context)
     }
@@ -262,6 +263,20 @@ class CoachHistoryScreenTest {
             assertTrue(model.timeline.value.exchanges.size <= CoachHistoryWindow.maximumExchanges)
         }
         assertTrue(model.timeline.value.exchanges.map { it.ordinal }.zipWithNext().all { (a, b) -> a < b })
+    }
+
+    @Test fun invalidSeekPageKeepsWindow() {
+        val turns = chat(40)
+        launchApp()
+        val before = model().timeline.value.exchanges.map { it.turn.id }
+        // Out of order: the window must refuse it.
+        CoachViewModel.readPageForTest = { request, page ->
+            if (request is com.yakov103.mivu.diary.CoachPageRequest.AroundTurn) page.copy(exchanges = page.exchanges.reversed()) else page
+        }
+        compose.runOnUiThread { model().seek(CoachSeekTarget.Turn(turns[3].id)) }
+        compose.waitUntil(10_000) { model().message.value == "The conversation page was invalid. Try again." }
+        assertEquals(before, model().timeline.value.exchanges.map { it.turn.id })
+        assertEquals(null, model().timeline.value.highlighted)
     }
 
     @Test fun historyButtonHasPagingActions() {
