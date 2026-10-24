@@ -58,6 +58,14 @@ import com.yakov103.mivu.ui.manual.ManualNutritionScreen
 import com.yakov103.mivu.ui.meal.MealDetailScreen
 import com.yakov103.mivu.ui.meal.MealDetailViewModel
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import com.yakov103.mivu.ui.coach.AskPip
+import com.yakov103.mivu.ui.composer.preparePhoto
+import java.io.File
 import com.yakov103.mivu.ui.manual.ManualNutritionViewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -163,12 +171,25 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks) {
     val navController = rememberNavController()
     // Coach keeps its window across tab switches: its view model belongs to the activity, not the Coach entry.
     val activityOwner = checkNotNull(LocalViewModelStoreOwner.current)
+    val context = LocalContext.current.applicationContext
+    val coach = viewModel(viewModelStoreOwner = activityOwner, key = "coach-$profileID") {
+        val photos = File(context.cacheDir, "coach/$profileID")
+        CoachViewModel(repository, profileID, hooks.drain, hooks.isConnected, hooks.activity, createSavedStateHandle(),
+            prepare = { preparePhoto(context.contentResolver, it, photos) })
+    }
+    var focusCoach by rememberSaveable { mutableStateOf(false) }
+    // Ask Pip: the quote goes first (it never replaces a started message), then the unsent draft, then Coach with the field focused.
+    val askPip = { ask: AskPip ->
+        val (reply, draft) = ask.handoff()
+        coach.startReply(reply, draft)
+        focusCoach = true
+    }
     val entry by navController.currentBackStackEntryAsState()
     val root = Tab.entries.firstOrNull { tab -> entry?.destination?.hasRoute(tab.route::class) == true }
     val current = root ?: Tab.Today
@@ -199,7 +220,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             )
         },
         bottomBar = {
-            if (root != null) ShortNavigationBar {
+            // The keyboard covers the bar's place: the composer rides on the keyboard instead.
+            if (root != null && !WindowInsets.isImeVisible) ShortNavigationBar {
                 Tab.entries.forEach { tab ->
                     val selected = tab == current
                     ShortNavigationBarItem(
@@ -229,7 +251,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 TodayScreen(
                     today,
                     onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
-                    onLogWithPip = { selectTab(Route.Coach) },
+                    onLogWithPip = { focusCoach = true; selectTab(Route.Coach) },
                     // As iOS Today: the current day (a new one when it has turned over), not a recorded-day target.
                     onAddManually = { navController.navigate(Route.ManualEntry(null, null)) },
                     onLogMeal = { navController.navigate(Route.Composer) },
@@ -240,8 +262,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 DiaryScreen(
                     diary,
                     onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
-                    // shortcut: Ask Pip opens Coach without a day draft until Coach arrives in milestone 4.
-                    onAskPip = { selectTab(Route.Coach) },
+                    onAskPip = { askPip(it); selectTab(Route.Coach) },
                     onEnterNutrition = { navController.navigate(Route.ManualEntry(it.toString(), null)) },
                     // shortcut: the profile button does nothing until the Profile and settings screen is ported; wire it then.
                     onProfile = {},
@@ -253,22 +274,20 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 MealDetailScreen(
                     model,
                     onBack = { navController.popBackStack() },
-                    // shortcut: Ask Pip opens Coach without a meal reply until Coach arrives in milestone 4.
-                    onAskPip = { selectTab(Route.Coach) },
+                    onAskPip = { askPip(it); selectTab(Route.Coach) },
                     onAddFoodManually = { navController.navigate(Route.ManualEntry(null, mealID.toString())) },
                     onRetryAnalysis = { onMealCaptured(profileID) },
                 )
             }
             composable<Route.Progress> { LaterUpdate() }
             composable<Route.Coach> {
-                val coach = viewModel(viewModelStoreOwner = activityOwner, key = "coach-$profileID") {
-                    CoachViewModel(repository, profileID, hooks.drain, hooks.isConnected, hooks.activity, createSavedStateHandle())
-                }
                 CoachScreen(
                     coach,
                     onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
                     onSeeToday = { selectTab(Route.Today) },
                     onSeeProgress = { selectTab(Route.Progress) },
+                    focusRequested = focusCoach,
+                    onFocusConsumed = { focusCoach = false },
                 )
             }
             // The screen owns back (and Escape), so an edited draft always asks before it is discarded.

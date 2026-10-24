@@ -1,6 +1,19 @@
 package com.yakov103.mivu.ui.coach
 
 import android.animation.ValueAnimator
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import com.yakov103.mivu.pip.MotionPolicy.Playback
+import com.yakov103.mivu.pip.rememberMotionPlayback
+import com.yakov103.mivu.ui.composer.MealComposerViewModel.Companion.MAX_PHOTOS
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.scrollable
@@ -56,15 +69,22 @@ import java.util.UUID
 import kotlinx.coroutines.launch
 
 // Port of the iOS Coach tab's timeline (ios/Mivu/Coach/CoachView.swift and CoachTimelineView.swift) as a reversed
-// LazyColumn: index 0 is the newest exchange, at the bottom. The composer and Pip (Task 6) dock below the timeline box.
+// LazyColumn: index 0 is the newest exchange, at the bottom. The composer and Pip dock below the timeline box.
 
 private data class Viewport(val visible: Set<UUID>, val first: Int, val last: Int, val atLatest: Boolean)
 
 @Composable
-fun CoachScreen(model: CoachViewModel, onOpenMeal: (UUID) -> Unit, onSeeToday: () -> Unit, onSeeProgress: () -> Unit) {
+fun CoachScreen(
+    model: CoachViewModel,
+    onOpenMeal: (UUID) -> Unit,
+    onSeeToday: () -> Unit,
+    onSeeProgress: () -> Unit,
+    /** Focus the field once, as after "Log with Pip" or an Ask Pip quote; [onFocusConsumed] clears the request. */
+    focusRequested: Boolean = false,
+    onFocusConsumed: () -> Unit = {},
+) {
     val state by model.timeline.collectAsStateWithLifecycle()
     val activity by model.activity.collectAsStateWithLifecycle()
-    val message by model.message.collectAsStateWithLifecycle()
     val undoing by model.undoing.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val twoDp = with(LocalDensity.current) { 2.dp.toPx() }
@@ -95,6 +115,17 @@ fun CoachScreen(model: CoachViewModel, onOpenMeal: (UUID) -> Unit, onSeeToday: (
     }
     val visible = { listState.layoutInfo.visibleItemsInfo.mapNotNull { it.key as? UUID }.toSet() }
 
+    // Pip goes still off screen and hides while the screen's own picker covers it (iOS `covered`).
+    var picking by rememberSaveable { mutableStateOf(false) }
+    val picker = rememberLauncherForActivityResult(PickMultipleVisualMedia(MAX_PHOTOS)) { picking = false; model.importPhotos(it) }
+    val playback = rememberMotionPlayback(covered = picking)
+    LaunchedEffect(playback) { model.reportPlayback(playback) }
+    DisposableEffect(model) { onDispose { model.reportPlayback(Playback.Hidden) } } // the model outlives the tab
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(focusRequested) {
+        if (focusRequested) { focusRequester.requestFocus(); onFocusConsumed() }
+    }
+
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth().semantics { isTraversalGroup = true }) {
             LazyColumn(
@@ -121,8 +152,10 @@ fun CoachScreen(model: CoachViewModel, onOpenMeal: (UUID) -> Unit, onSeeToday: (
                 if (ValueAnimator.areAnimatorsEnabled()) listState.animateScrollToItem(0) else listState.scrollToItem(0)
             }
         }
-        // shortcut: action failures show here until Task 6 moves them into the composer caption.
-        message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
+        // Failures show in the composer caption beside Pip.
+        CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
+            onAddPhotos = { picking = true; picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
+            Modifier.imePadding())
     }
 }
 

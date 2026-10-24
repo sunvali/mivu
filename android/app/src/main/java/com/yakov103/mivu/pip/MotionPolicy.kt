@@ -26,16 +26,17 @@ import androidx.lifecycle.compose.currentStateAsState
 object MotionPolicy {
     enum class Playback { Hidden, StaticPose, Animated }
 
-    fun playback(removeAnimations: Boolean, powerSave: Boolean, thermalStatus: Int, resumed: Boolean): Playback = when {
-        !resumed -> Playback.Hidden
+    /** [covered]: the screen's own sheet, picker or camera is over the surface (iOS `covered`). */
+    fun playback(removeAnimations: Boolean, powerSave: Boolean, thermalStatus: Int, resumed: Boolean, covered: Boolean = false): Playback = when {
+        !resumed || covered -> Playback.Hidden
         removeAnimations || powerSave || thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE -> Playback.StaticPose
         else -> Playback.Animated
     }
 }
 
-/** The live [MotionPolicy] for this screen: "Remove animations", Power Saver, thermal status and the lifecycle. */
+/** The live [MotionPolicy] for this screen: "Remove animations", Power Saver, thermal status, the lifecycle and [covered]. */
 @Composable
-fun rememberMotionPlayback(): MotionPolicy.Playback {
+fun rememberMotionPlayback(covered: Boolean = false): MotionPolicy.Playback {
     val context = LocalContext.current
     val power = remember(context) { context.getSystemService(PowerManager::class.java) }
     var removeAnimations by remember { mutableStateOf(!android.animation.ValueAnimator.areAnimatorsEnabled()) }
@@ -64,5 +65,5 @@ fun rememberMotionPlayback(): MotionPolicy.Playback {
             power.removeThermalStatusListener(heat)
         }
     }
-    return MotionPolicy.playback(removeAnimations, powerSave, thermal, resumed)
+    return MotionPolicy.playback(removeAnimations, powerSave, thermal, resumed, covered)
 }

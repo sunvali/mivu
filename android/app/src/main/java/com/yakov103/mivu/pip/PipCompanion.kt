@@ -24,9 +24,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yakov103.mivu.pip.MotionPolicy.Playback
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlin.math.roundToInt
 
 /**
@@ -77,24 +77,29 @@ fun PipCompanion(
     )
 }
 
-/** Pip's rig and gestures, read once per process off the main thread. */
+/**
+ * Pip's rig and gestures, read once per process off the main thread. The read outlives the screen that started it, so
+ * leaving a tab mid-read does not throw the work away; a failed read is tried again next time.
+ */
 object PipAssets {
-    private val lock = Mutex()
-    private var loaded: Pair<PipRigScene, PipGestureLibrary>? = null
+    private var loading: Deferred<Pair<PipRigScene, PipGestureLibrary>>? = null
 
-    suspend fun load(context: Context): Pair<PipRigScene, PipGestureLibrary> = lock.withLock {
-        loaded ?: withContext(Dispatchers.IO) {
-            val assets = context.applicationContext.assets
-            val asset = PipRigAsset.load(assets.open("pip/pip-rig.json").use { it.readBytes() })
-            val library = PipGestureLibrary.load(assets.open("gestures.json").use { it.readBytes().decodeToString() })
-            val rect = RectF()
-            val byID = asset.parts.associateBy { it.id }
-            val scene = PipRigScene(asset) { id ->
-                @Suppress("DEPRECATION") // computeBounds(RectF) is API 34; minSdk is 31
-                path(parsePath(byID.getValue(id).path)).computeBounds(rect, true)
-                floatArrayOf(rect.left, rect.top, rect.right, rect.bottom)
-            }
-            scene to library
-        }.also { loaded = it }
+    suspend fun load(context: Context): Pair<PipRigScene, PipGestureLibrary> = synchronized(this) {
+        loading?.takeUnless { it.isCompleted && it.getCompletionExceptionOrNull() != null }
+            ?: CoroutineScope(Dispatchers.IO).async { read(context.applicationContext) }.also { loading = it }
+    }.await()
+
+    private fun read(context: Context): Pair<PipRigScene, PipGestureLibrary> {
+        val assets = context.assets
+        val asset = PipRigAsset.load(assets.open("pip/pip-rig.json").use { it.readBytes() })
+        val library = PipGestureLibrary.load(assets.open("gestures.json").use { it.readBytes().decodeToString() })
+        val rect = RectF()
+        val byID = asset.parts.associateBy { it.id }
+        val scene = PipRigScene(asset) { id ->
+            @Suppress("DEPRECATION") // computeBounds(RectF) is API 34; minSdk is 31
+            path(parsePath(byID.getValue(id).path)).computeBounds(rect, true)
+            floatArrayOf(rect.left, rect.top, rect.right, rect.bottom)
+        }
+        return scene to library
     }
 }

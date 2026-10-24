@@ -104,6 +104,7 @@ import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.WhiteCard
 import com.yakov103.mivu.ui.today.color
 import com.yakov103.mivu.ui.today.mealTitle
+import com.yakov103.mivu.ui.coach.AskPip
 import com.yakov103.mivu.ui.today.state
 import com.yakov103.mivu.ui.today.tabular
 import com.yakov103.mivu.ui.today.title
@@ -156,7 +157,7 @@ private val DiaryMeal.pendingReview: MealSubmission?
 fun MealDetailScreen(
     viewModel: MealDetailViewModel,
     onBack: () -> Unit,
-    onAskPip: () -> Unit,
+    onAskPip: (AskPip) -> Unit,
     onAddFoodManually: () -> Unit,
     onRetryAnalysis: () -> Unit = {},
 ) {
@@ -207,7 +208,7 @@ fun MealDetailScreen(
             )
         },
         bottomBar = {
-            if (meal != null) BottomActions(meal, state.day?.takeIf { it.id == movedDayID }?.localDate, busy, onAskPip) {
+            if (meal != null) BottomActions(meal, state.day?.takeIf { it.id == movedDayID }?.localDate, busy, { onAskPip(AskPip.Meal(meal.id, mealTitle(meal))) }) {
                 viewModel.acceptReview(it.id, meal.revision)
             }
         },
@@ -244,7 +245,7 @@ fun MealDetailScreen(
                 }
                 item(key = "foodsHeader") { SectionHeader("Foods") }
                 item(key = "foods") {
-                    FoodsCard(meal, busy, onEdit = { viewModel.edit(it, meal.revision, null) }, onAskPip = onAskPip, onDelete = { deletion = Deletion.Food(it, meal.revision) })
+                    FoodsCard(meal, busy, onEdit = { viewModel.edit(it, meal.revision, null) }, onAskPip = { onAskPip(askFood(meal, it, state.day)) }, onDelete = { deletion = Deletion.Food(it, meal.revision) })
                 }
                 if (meal.revision > 0 && !meal.hasUnresolvedInput) item(key = "add") {
                     FilledTonalButton(onAddFoodManually, Modifier.padding(horizontal = Gutter).heightIn(min = 48.dp).testTag("addFoodManually")) {
@@ -269,7 +270,7 @@ fun MealDetailScreen(
         FoodItemEditor(
             editing, viewModel.busy, snackbar, canDeleteFood = saved && several, canDeleteMeal = saved && !several,
             onChange = viewModel::updateEdit, onClose = { viewModel.updateEdit(null) }, onSave = viewModel::saveEdit,
-            onAskPip = { viewModel.updateEdit(null); onAskPip() },
+            onAskPip = { viewModel.updateEdit(null); onAskPip(askFood(meal, editing.item, state.day)) },
             onDelete = {
                 viewModel.updateEdit(null)
                 if (several) viewModel.deleteItem(editing.item.id, editing.revision) else viewModel.deleteMeal(editing.revision)
@@ -486,7 +487,7 @@ private fun AttachedPhoto(photo: MealPhoto, busy: Boolean, load: suspend (UUID) 
 
 /** The saved foods in one card; each row swipes left to delete (saved meals with more than one food) and right to Ask Pip. */
 @Composable
-private fun FoodsCard(meal: DiaryMeal, busy: Boolean, onEdit: (FoodItem) -> Unit, onAskPip: () -> Unit, onDelete: (FoodItem) -> Unit) {
+private fun FoodsCard(meal: DiaryMeal, busy: Boolean, onEdit: (FoodItem) -> Unit, onAskPip: (FoodItem) -> Unit, onDelete: (FoodItem) -> Unit) {
     WhiteCard(Modifier.padding(horizontal = Gutter)) {
         Column {
             if (meal.items.isEmpty()) Text("No saved items yet", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge,
@@ -495,7 +496,7 @@ private fun FoodsCard(meal: DiaryMeal, busy: Boolean, onEdit: (FoodItem) -> Unit
             meal.items.forEachIndexed { index, item ->
                 key(item.id) {
                     if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                    FoodRow(item, canDelete, { onEdit(item) }, onAskPip, { onDelete(item) })
+                    FoodRow(item, canDelete, { onEdit(item) }, { onAskPip(item) }, { onDelete(item) })
                 }
             }
         }
@@ -614,3 +615,7 @@ private fun Message(title: String, body: String, modifier: Modifier, action: (@C
         action?.invoke()
     }
 }
+
+/** iOS askPip(about:in:): the food is quoted with an unsent message naming it and its day ("Sat 24 Oct"). */
+private fun askFood(meal: DiaryMeal, item: FoodItem, day: TrackingDay?) =
+    AskPip.Food(meal.id, item.id, item.name, day?.takeIf { it.id == meal.dayID }?.localDate)

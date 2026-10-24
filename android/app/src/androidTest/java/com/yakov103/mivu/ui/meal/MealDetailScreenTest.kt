@@ -14,6 +14,7 @@ import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -39,6 +40,7 @@ import com.yakov103.mivu.diary.captureProjection
 import com.yakov103.mivu.diary.deleteMeal
 import com.yakov103.mivu.diary.startDay
 import com.yakov103.mivu.ui.MivuApp
+import com.yakov103.mivu.ui.coach.AskPip
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.TodayFixture
 import java.time.Instant
@@ -59,6 +61,7 @@ class MealDetailScreenTest {
     private lateinit var repository: DiaryRepository
     private lateinit var profileID: UUID
     private var wentBack = false
+    private var asked: AskPip? = null
 
     @Before fun wipe() {
         TodayFixture.wipe(context)
@@ -94,7 +97,7 @@ class MealDetailScreenTest {
 
     private fun open(mealID: UUID) {
         val model = MealDetailViewModel(repository, profileID, mealID, sampleMode = false, SavedStateHandle())
-        compose.setContent { MivuTheme { MealDetailScreen(model, onBack = { wentBack = true }, onAskPip = {}, onAddFoodManually = {}) } }
+        compose.setContent { MivuTheme { MealDetailScreen(model, onBack = { wentBack = true }, onAskPip = { asked = it }, onAddFoodManually = {}) } }
     }
 
     private fun waitFor(matcher: SemanticsMatcher) =
@@ -122,6 +125,19 @@ class MealDetailScreenTest {
         compose.onNodeWithText("74 kcal").assertIsDisplayed()
         compose.onNodeWithTag("addFoodManually").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("mealAskPip").assertIsDisplayed()
+    }
+
+    @Test fun askPipQuotesMealAndFood() {
+        val honey = food("Honey", 74.0, 0.4, 13.0, 3.8)
+        val meal = savedMeal(food("Greek yogurt", 190.0, 17.0, 8.0, 5.0), honey)
+        open(meal.id)
+        waitFor(hasTestTag("mealAskPip"))
+        compose.onNodeWithTag("mealAskPip").performClick()
+        assertEquals(meal.id, (asked as AskPip.Meal).mealID)
+        compose.onNodeWithContentDescription("Ask Pip about Honey").performScrollTo().performClick()
+        val food = asked as AskPip.Food
+        assertEquals(listOf(meal.id, honey.id, "Honey"), listOf(food.mealID, food.itemID, food.name))
+        assertEquals(db().read { it.day(meal.dayID) }!!.localDate, food.dayLocalDate)
     }
 
     @Test fun deleteFoodConfirmsAndRemoves() {

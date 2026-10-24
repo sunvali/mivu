@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
+import com.yakov103.mivu.ui.coach.AskPip
 import com.yakov103.mivu.diary.WorkoutSession
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.MealRow
@@ -73,7 +74,7 @@ private val Gutter = 16.dp
 fun DiaryScreen(
     viewModel: DiaryViewModel,
     onOpenMeal: (UUID) -> Unit,
-    onAskPip: () -> Unit,
+    onAskPip: (AskPip) -> Unit,
     onEnterNutrition: (dayID: UUID) -> Unit,
     onProfile: () -> Unit,
 ) {
@@ -90,7 +91,9 @@ fun DiaryScreen(
             },
             actions = {
                 ToolbarButton("Choose date", R.drawable.ic_calendar, "chooseDiaryDate", enabled = state?.week != null) { choosingDate = true }
-                ToolbarButton("Ask Pip", R.drawable.ic_auto_awesome, "diaryAskPip", onClick = onAskPip)
+                ToolbarButton("Ask Pip", R.drawable.ic_auto_awesome, "diaryAskPip", enabled = state != null) {
+                    state?.let { onAskPip(AskPip.Day(it.recordedDayID, it.selected.toString())) }
+                }
                 Box {
                     ToolbarButton("Add to this day", R.drawable.ic_add, "diaryAddMenu", enabled = state?.recordedDayID != null) { addMenu = true }
                     DropdownMenu(addMenu, onDismissRequest = { addMenu = false }, shape = RoundedCornerShape(16.dp)) {

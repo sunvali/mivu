@@ -6,8 +6,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class MotionPolicyTest {
-    private fun playback(remove: Boolean = false, saver: Boolean = false, thermal: Int = PowerManager.THERMAL_STATUS_NONE, resumed: Boolean = true) =
-        MotionPolicy.playback(remove, saver, thermal, resumed)
+    private fun playback(remove: Boolean = false, saver: Boolean = false, thermal: Int = PowerManager.THERMAL_STATUS_NONE, resumed: Boolean = true,
+                         covered: Boolean = false) =
+        MotionPolicy.playback(remove, saver, thermal, resumed, covered)
 
     @Test fun notResumedIsHidden() {
         assertEquals(Playback.Hidden, playback(resumed = false))
@@ -22,6 +23,12 @@ class MotionPolicyTest {
         assertEquals(Playback.Animated, playback(thermal = PowerManager.THERMAL_STATUS_MODERATE))
         assertEquals(Playback.StaticPose, playback(thermal = PowerManager.THERMAL_STATUS_SEVERE))
         assertEquals(Playback.StaticPose, playback(thermal = PowerManager.THERMAL_STATUS_SHUTDOWN))
+    }
+
+    /** iOS: a sheet, picker or camera over the surface hides Pip, whatever the motion settings. */
+    @Test fun coveredIsHidden() {
+        assertEquals(Playback.Hidden, playback(covered = true))
+        assertEquals(Playback.Hidden, playback(remove = true, covered = true))
     }
 
     @Test fun otherwiseAnimated() = assertEquals(Playback.Animated, playback())

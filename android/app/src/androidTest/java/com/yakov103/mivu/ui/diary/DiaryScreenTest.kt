@@ -39,6 +39,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.ui.MivuApp
+import com.yakov103.mivu.ui.coach.AskPip
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.TodayFixture
 import java.time.DayOfWeek
@@ -63,6 +64,7 @@ class DiaryScreenTest {
     private var repository: DiaryRepository? = null
     private var profileID: UUID? = null
     private var openedMeal: UUID? = null
+    private var asked: AskPip? = null
 
     @Before fun wipe() = TodayFixture.wipe(context)
 
@@ -81,7 +83,7 @@ class DiaryScreenTest {
         compose.setContent {
             MivuTheme {
                 Box(if (width != null) Modifier.width(width) else Modifier) {
-                    DiaryScreen(model, onOpenMeal = { openedMeal = it }, onAskPip = {}, onEnterNutrition = {}, onProfile = {})
+                    DiaryScreen(model, onOpenMeal = { openedMeal = it }, onAskPip = { asked = it }, onEnterNutrition = {}, onProfile = {})
                 }
             }
         }
@@ -142,6 +144,14 @@ class DiaryScreenTest {
         // A skipped day with no meals.
         pill(seeded.today.minusDays(2)).performClick()
         waitForText("No meals recorded for this day.")
+    }
+
+    @Test fun askPipQuotesTheRecordedDay() {
+        val seeded = launchDiary()
+        compose.onNodeWithTag("diaryAskPip").performClick()
+        val day = asked as AskPip.Day
+        assertNotNull(day.dayID)
+        assertEquals(seeded.today.toString(), day.localDate)
     }
 
     @Test fun futurePillDisabled() {
