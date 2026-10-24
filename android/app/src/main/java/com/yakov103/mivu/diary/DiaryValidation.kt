@@ -8,8 +8,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
 import java.util.TimeZone
 import java.util.UUID
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 
 // One-to-one port of ios/Mivu/Diary/DiaryModels.swift (DiarySnapshot.validate and the validate* helpers) and the
 // manifest checks in DiaryArchive.validate, with the same numeric limits.
@@ -37,7 +35,11 @@ private fun String.graphemes(): Int {
 }
 
 private fun String.atMost(limit: Int) = length <= limit || graphemes() <= limit
-private fun String.blankLikeSwift() = all { it.isWhitespace() || Character.isSpaceChar(it) }
+// Swift .whitespacesAndNewlines: Unicode Z* separators, U+0009-U+000D and U+0085 (not U+001C-U+001F).
+private fun Char.swiftSpace() = code in 9..13 || code == 0x85 || Character.getType(this).toByte().let {
+    it == Character.SPACE_SEPARATOR || it == Character.LINE_SEPARATOR || it == Character.PARAGRAPH_SEPARATOR
+}
+private fun String.blankLikeSwift() = all { it.swiftSpace() }
 private fun String.utf8Size() = toByteArray(Charsets.UTF_8).size
 private fun <T> List<T>.unique() = toSet().size == size
 private fun Double.finite() = !isNaN() && !isInfinite()
@@ -52,7 +54,10 @@ private fun validZone(id: String) =
 private val localDateFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT)
 
 internal fun validLocalDate(value: String) = value.length == 10 &&
-    runCatching { LocalDate.parse(value, localDateFormat).format(localDateFormat) == value }.getOrDefault(false)
+    runCatching {
+        val date = LocalDate.parse(value, localDateFormat)
+        date.year >= 1 && date.format(localDateFormat) == value // Swift's era-based yyyy rejects year 0
+    }.getOrDefault(false)
 
 private val hex64 = Regex("[0-9a-f]{64}")
 private fun fingerprint(text: String) =
@@ -146,8 +151,7 @@ private fun validateReceipt(r: CoachReceipt, turnId: UUID, revision: Int, dayIds
             r.committedRevision > 0 && r.committedRevision <= revision && r.resultJSON.utf8Size() <= 65_536 &&
             (r.dayID != null || r.goalID != null || r.destination != null ||
                 r.operationKey == key || r.operationKey.startsWith("$key/")) &&
-            // Foundation's default JSONSerialization needs an object or array at the top level.
-            runCatching { SwiftJson.parseToJsonElement(r.resultJSON) }.getOrNull().let { it is JsonObject || it is JsonArray },
+            strictJsonContainer(r.resultJSON),
         "receipt",
     )
     ok(r.dayID == null || r.dayID in dayIds, "receipt day")
@@ -180,6 +184,71 @@ private fun validateTurn(turn: CoachTurn, s: DiarySnapshot, dayIds: Set<UUID>): 
     }
     for (r in turn.receipts) validateReceipt(r, turn.id, s.revision, dayIds)
     return turn.photos.sumOf { it.data.size }
+}
+
+// Foundation's JSONSerialization: strict RFC 8259 with an object or array at the top level.
+// kotlinx parseToJsonElement is lenient (unquoted tokens, NaN), so check the grammar here.
+internal fun strictJsonContainer(text: String): Boolean {
+    var i = 0
+    fun ws() { while (i < text.length && text[i] in " \t\n\r") i++ }
+    fun lit(w: String) = text.startsWith(w, i).also { if (it) i += w.length }
+    fun str(): Boolean {
+        if (text.getOrNull(i) != '"') return false
+        i++
+        while (i < text.length) {
+            val c = text[i++]
+            when {
+                c == '"' -> return true
+                c < ' ' -> return false
+                c == '\\' -> {
+                    val e = text.getOrNull(i++) ?: return false
+                    if (e == 'u') { if (i + 4 > text.length || !text.substring(i, i + 4).all { it in "0123456789abcdefABCDEF" }) return false; i += 4 }
+                    else if (e !in "\"\\/bfnrt") return false
+                }
+            }
+        }
+        return false
+    }
+    fun value(): Boolean {
+        ws()
+        val c = text.getOrNull(i) ?: return false
+        val ok = when {
+            c == '"' -> str()
+            c == '{' -> {
+                i++; ws()
+                if (text.getOrNull(i) == '}') { i++; true } else {
+                    var good = true
+                    while (good) {
+                        ws(); good = str(); if (!good) break
+                        ws(); good = text.getOrNull(i++) == ':' && value(); if (!good) break
+                        ws(); val d = text.getOrNull(i++)
+                        if (d == '}') break
+                        good = d == ','
+                    }
+                    good
+                }
+            }
+            c == '[' -> {
+                i++; ws()
+                if (text.getOrNull(i) == ']') { i++; true } else {
+                    var good = true
+                    while (good) {
+                        good = value(); if (!good) break
+                        ws(); val d = text.getOrNull(i++)
+                        if (d == ']') break
+                        good = d == ','
+                    }
+                    good
+                }
+            }
+            lit("true") || lit("false") || lit("null") -> true
+            else -> Regex("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?").matchAt(text, i)?.also { i = it.range.last + 1 } != null
+        }
+        return ok
+    }
+    ws()
+    if (text.getOrNull(i) != '{' && text.getOrNull(i) != '[') return false
+    return value().also { ws() } && i == text.length
 }
 
 private fun validateWeight(w: WeightEntry) = ok(
@@ -247,8 +316,9 @@ fun DiarySnapshot.validate() {
     }
 }
 
-/** The manifest checks of DiaryArchive.validate; call after [validate]. */
+/** The manifest checks of DiaryArchive.validate; validates the snapshot first, like DiaryArchive.validate. */
 fun validateArchiveManifests(snapshot: DiarySnapshot) {
+    snapshot.validate()
     for (turn in snapshot.coachTurns) {
         val m = turn.submissionManifest ?: continue
         ok(
