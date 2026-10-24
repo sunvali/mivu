@@ -10,6 +10,8 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import kotlinx.serialization.SerializationException
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class SwiftJsonTest {
@@ -55,5 +57,18 @@ class SwiftJsonTest {
 
     @Test fun nilOmitted() {
         assertFalse(SwiftJson.encodeToString(Box(Instant.EPOCH, UUID.randomUUID(), byteArrayOf())).contains("note"))
+    }
+
+    @Test fun unknownKeyIgnored() {
+        val b = SwiftJson.decodeFromString<Box>("""{"at":0,"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","data":"","extra":{"x":1}}""")
+        assertEquals(Instant.parse("2001-01-01T00:00:00Z"), b.at)
+    }
+
+    @Test fun badValuesThrowSerializationException() {
+        listOf("\"nope\"", "\"1-1-1-1-1\"").forEach { id ->
+            assertThrows(SerializationException::class.java) { decode("0", id = id) }
+        }
+        assertThrows(SerializationException::class.java) { decode("1e300") }
+        assertThrows(SerializationException::class.java) { decode("0", data = "\"!!!\"") }
     }
 }

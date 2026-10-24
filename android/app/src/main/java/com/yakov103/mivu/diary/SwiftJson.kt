@@ -6,6 +6,7 @@ import java.util.UUID
 import kotlin.math.floor
 import kotlin.math.roundToLong
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
@@ -16,7 +17,7 @@ import kotlinx.serialization.json.Json
 val SwiftJson: Json = Json {
     explicitNulls = false
     encodeDefaults = true
-    ignoreUnknownKeys = false
+    ignoreUnknownKeys = true // mirrors JSONDecoder so archives from a newer iOS app still import
 }
 
 private const val REFERENCE_OFFSET = 978_307_200L // seconds from 1970 to 2001-01-01
@@ -30,16 +31,22 @@ object SwiftDate : KSerializer<Instant> {
 
     override fun deserialize(decoder: Decoder): Instant {
         val seconds = decoder.decodeDouble()
+        if (!seconds.isFinite() || kotlin.math.abs(seconds) > 1e15) throw SerializationException("Date out of range")
         val whole = floor(seconds)
         return Instant.ofEpochSecond(whole.toLong() + REFERENCE_OFFSET, ((seconds - whole) * 1e9).roundToLong())
     }
 }
 
+private val CANONICAL_UUID = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
 /** Swift UUID: uppercase string; read case-insensitively. */
 object SwiftUUID : KSerializer<UUID> {
     override val descriptor = PrimitiveSerialDescriptor("SwiftUUID", PrimitiveKind.STRING)
     override fun serialize(encoder: Encoder, value: UUID) = encoder.encodeString(value.toString().uppercase())
-    override fun deserialize(decoder: Decoder): UUID = UUID.fromString(decoder.decodeString())
+    override fun deserialize(decoder: Decoder): UUID = decoder.decodeString().let {
+        if (!CANONICAL_UUID.matches(it)) throw SerializationException("Malformed UUID")
+        UUID.fromString(it)
+    }
 }
 
 /** Swift Data: padded standard base64 string. */
@@ -47,5 +54,10 @@ object SwiftData : KSerializer<ByteArray> {
     override val descriptor = PrimitiveSerialDescriptor("SwiftData", PrimitiveKind.STRING)
     override fun serialize(encoder: Encoder, value: ByteArray) =
         encoder.encodeString(Base64.getEncoder().encodeToString(value))
-    override fun deserialize(decoder: Decoder): ByteArray = Base64.getDecoder().decode(decoder.decodeString())
+    override fun deserialize(decoder: Decoder): ByteArray =
+        try {
+            Base64.getDecoder().decode(decoder.decodeString())
+        } catch (_: IllegalArgumentException) {
+            throw SerializationException("Malformed base64 data")
+        }
 }
