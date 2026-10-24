@@ -8,17 +8,19 @@ import java.io.File
 import java.io.IOException
 import java.security.KeyStore
 import java.util.UUID
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 
 class CredentialStoreException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /** Keystore-encrypted records under noBackupFilesDir; error messages never include record contents. */
-class CredentialStore(context: Context) : CredentialStoring {
+class CredentialStore(context: Context, private val key: () -> SecretKey = ::keystoreKey) : CredentialStoring {
     private val dir = File(context.noBackupFilesDir, "accounts")
 
     // An unreadable or malformed host record is replaced: a new host ID for OpenAI is acceptable recovery.
@@ -30,13 +32,14 @@ class CredentialStore(context: Context) : CredentialStoring {
     @Synchronized override fun registrations(): List<AccountRegistration> =
         (dir.listFiles { f -> f.name.startsWith("registration-") && f.name.endsWith(".bin") } ?: emptyArray())
             .mapNotNull { f ->
-                val registration = read(f.name.removeSuffix(".bin"))?.let { runCatching { decodeRegistration(JSONObject(String(it))) }.getOrNull() }
+                val registration = read(f.name.removeSuffix(".bin"))?.let { try { decodeRegistration(JSONObject(String(it))) } catch (e: JSONException) { null } }
                     ?.takeIf { f.name == "registration-${it.id}.bin" }
                 registration.also { if (it == null) f.delete() } // unreadable: drop; sign-in recreates it
             }.sortedBy { it.id }
 
     @Synchronized override fun load(registrationID: String): Credentials? {
-        val c = runCatching { decodeCredentials(JSONObject(String(read("credentials-$registrationID") ?: return null))) }.getOrNull() ?: return null
+        val bytes = read("credentials-$registrationID") ?: return null
+        val c = try { decodeCredentials(JSONObject(String(bytes))) } catch (e: JSONException) { return null }
         val r = c.registration
         return c.takeIf {
             r.id == registrationID && r.identity.issuer == "https://auth.openai.com" && r.identity.subject.isNotEmpty() &&
@@ -77,9 +80,10 @@ class CredentialStore(context: Context) : CredentialStoring {
 
     private fun write(name: String, plain: ByteArray) {
         dir.mkdirs()
+        val bytes = encrypt(plain)
         val file = AtomicFile(File(dir, "$name.bin")) // fsyncs, then renames
         val out = file.startWrite()
-        try { out.write(encrypt(plain)); file.finishWrite(out) } catch (e: IOException) { file.failWrite(out); throw e }
+        try { out.write(bytes); file.finishWrite(out) } catch (e: Throwable) { file.failWrite(out); throw e }
     }
 
     private fun encrypt(plain: ByteArray): ByteArray {
@@ -87,24 +91,25 @@ class CredentialStore(context: Context) : CredentialStoring {
         return cipher.iv + cipher.doFinal(plain)
     }
 
-    private fun decrypt(data: ByteArray): ByteArray = try {
-        Cipher.getInstance("AES/GCM/NoPadding").run {
-            init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, data, 0, 12))
-            doFinal(data, 12, data.size - 12)
-        }
-    } catch (e: Exception) {
-        throw CredentialStoreException("record cannot be decrypted") // no cause: keep record bytes out of traces
-    }
-
-    private fun key(): SecretKey = synchronized(ALIAS) {
-        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (store.getKey(ALIAS, null) as? SecretKey) ?: KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
-            init(KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256).build())
-            generateKey()
+    // Only corrupt data (bad tag, e.g. a regenerated key, or a short payload) counts as unreadable; Keystore failures propagate.
+    private fun decrypt(data: ByteArray): ByteArray {
+        if (data.size < 12 + 16) throw CredentialStoreException("record cannot be decrypted")
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, data, 0, 12)) }
+        try { return cipher.doFinal(data, 12, data.size - 12) } catch (e: AEADBadTagException) {
+            throw CredentialStoreException("record cannot be decrypted") // no cause: keep record bytes out of traces
         }
     }
 
-    private companion object { const val ALIAS = "mivu.account-sessions" }
+}
+
+private const val KEY_ALIAS = "mivu.account-sessions"
+
+private fun keystoreKey(): SecretKey = synchronized(KEY_ALIAS) {
+    val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+    (store.getKey(KEY_ALIAS, null) as? SecretKey) ?: KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
+        init(KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256).build())
+        generateKey()
+    }
 }

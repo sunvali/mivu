@@ -80,4 +80,22 @@ class CredentialStoreTest {
         store.replace(bad)
         assertEquals(bad, store.load(bad.registration.id))
     }
+
+    @Test fun keystoreFailureDeletesAndRotatesNothing() {
+        val c = credentials()
+        store.replace(c)
+        val host = store.hostID()
+        val broken = CredentialStore(context) { throw java.security.ProviderException("keystore busy") }
+        assertFails { broken.hostID() }
+        assertFails { broken.registrations() }
+        assertFails { broken.load(c.registration.id) }
+        assertEquals(host, store.hostID())
+        assertEquals(listOf(c.registration), store.registrations())
+        assertEquals(c, store.load(c.registration.id))
+    }
+
+    private fun assertFails(block: () -> Unit) {
+        try { block() } catch (e: RuntimeException) { return }
+        org.junit.Assert.fail("expected failure")
+    }
 }
