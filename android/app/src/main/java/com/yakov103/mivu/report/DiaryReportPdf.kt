@@ -50,7 +50,8 @@ private fun DiaryReport.render(total: Int): Pair<ByteArray, Int> {
         val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = size; this.color = color; typeface = Typeface.create(Typeface.DEFAULT, weight, false)
         }
-        val shown = TextUtils.ellipsize(text, paint, width, TextUtils.TruncateAt.END).toString()
+        // drawText has no line breaks; a pasted multi-line meal name reads as one line.
+        val shown = TextUtils.ellipsize(text.lines().joinToString(" "), paint, width, TextUtils.TruncateAt.END).toString()
         val left = if (alignRight) x + width - paint.measureText(shown) else x
         canvas().drawText(shown, left, top - paint.ascent(), paint)
     }

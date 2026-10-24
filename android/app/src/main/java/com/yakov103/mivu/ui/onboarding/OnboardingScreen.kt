@@ -132,6 +132,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -315,6 +316,8 @@ class OnboardingViewModel(
 
     private fun showEstimate() {
         val answers = answers ?: return
+        // iOS sends a fresh request each time: a reply for earlier answers must not win.
+        ask?.cancel(); asking = false
         show(answers.estimate(thisYear)); explanation = null; askFailed = false
         if (connection.value.canInfer) askChatGPT() else react(CompanionPose.Saved)
     }
@@ -338,7 +341,7 @@ class OnboardingViewModel(
                 askFailed = true
                 react(CompanionPose.Recovery)
             } finally {
-                asking = false
+                if (isActive) asking = false // a cancelled request leaves `asking` to its replacement
             }
         }
     }

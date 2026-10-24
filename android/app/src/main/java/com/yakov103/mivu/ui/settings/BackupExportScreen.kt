@@ -4,8 +4,6 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,7 +36,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,7 +68,7 @@ import kotlinx.coroutines.withContext
 
 private enum class ReportRange(val label: String) { Week("Last 7 days"), Month("Last 30 days"), All("All time"), Custom("Custom") }
 
-/** Where prepared reports wait for the share sheet; cleared when it returns, or on the next open. */
+/** Where the last prepared report waits for the target app; cleared when the next report is made. */
 internal fun reportsDirectory(context: Context) = File(context.cacheDir, "reports")
 
 /**
@@ -95,13 +92,6 @@ fun BackupExportScreen(
     var preparing by remember { mutableStateOf(false) }
     var failed by rememberSaveable { mutableStateOf(false) }
     val folder = remember { reportsDirectory(context) }
-    var shared by remember { mutableStateOf<File?>(null) }
-    val chooser = rememberLauncherForActivityResult(StartActivityForResult()) {
-        shared?.let { scope.launch(Dispatchers.IO) { it.deleteRecursively() } }
-        shared = null
-    }
-    // A report left behind when the process died with the share sheet open goes on the next open.
-    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { folder.deleteRecursively() } }
 
     fun share() {
         preparing = true
@@ -121,6 +111,8 @@ fun BackupExportScreen(
                         // The picker returns UTC midnights of calendar days, already date labels.
                         ReportRange.Custom -> picked?.let { (start, end) -> utcDate(start) to utcDate(end) } ?: (null to null)
                     }
+                    // The target app reads the last report after Mivu resumes (iOS deletes on share completion), so it goes only now.
+                    folder.deleteRecursively()
                     DiaryReport(diary, from, through).write(chosenFormat, File(folder, UUID.randomUUID().toString()))
                 }
                 val directory = files.first().parentFile!!
@@ -128,8 +120,7 @@ fun BackupExportScreen(
                     withContext(Dispatchers.IO) { directory.deleteRecursively() }
                     return@launch
                 }
-                shared = directory
-                chooser.launch(shareIntent(context, files, chosenFormat))
+                context.startActivity(shareIntent(context, files, chosenFormat))
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 failed = true

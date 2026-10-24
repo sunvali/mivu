@@ -5,6 +5,7 @@ import android.app.Instrumentation.ActivityResult
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -53,8 +54,24 @@ class BackupExportScreenTest {
         val uris = target.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)!!
         assertEquals(3, uris.size)
         uris.forEach { assertEquals("${compose.activity.packageName}.reports", it.authority) }
-        // The stubbed chooser returns at once, and its files go with it.
-        compose.waitUntil(5_000) { reportFiles().isEmpty() }
+    }
+
+    @Test fun reportStaysReadableUntilTheNextOne() {
+        compose.setContent { MivuTheme { BackupExportScreen(profile.id, { diary }, { profile.id }, onBack = {}) } }
+        compose.onNodeWithText("CSV").performClick()
+        compose.onNodeWithText("Share report").performClick()
+        compose.waitUntil(10_000) { Intents.getIntents().size == 1 }
+        // The stubbed chooser has returned; the target app may still read the files after Mivu resumes.
+        compose.activityRule.scenario.recreate()
+        compose.activityRule.scenario.onActivity { it.setContent { MivuTheme { BackupExportScreen(profile.id, { diary }, { profile.id }, onBack = {}) } } }
+        compose.waitForIdle()
+        val first = reportFiles()
+        assertEquals(3, first.size)
+        compose.onNodeWithText("CSV").performClick()
+        compose.onNodeWithText("Share report").performClick()
+        compose.waitUntil(10_000) { Intents.getIntents().size == 2 }
+        assertEquals(3, reportFiles().size)
+        assertTrue(first.none { it.exists() })
     }
 
     @Test fun profileChangeDuringPreparationDropsTheFiles() {

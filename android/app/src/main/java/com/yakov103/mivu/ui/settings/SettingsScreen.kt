@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -231,6 +232,7 @@ internal fun SettingsRow(
     title: String, @DrawableRes icon: Int, bold: Boolean = false, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val large = LocalDensity.current.fontScale >= 1.5f
     ListItem(
         headlineContent = { Text(title, fontWeight = if (bold) FontWeight.SemiBold else null) },
         modifier = modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).heightIn(min = 56.dp),
@@ -239,7 +241,9 @@ internal fun SettingsRow(
                 Icon(painterResource(icon), contentDescription = null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
             }
         },
-        trailingContent = trailing,
+        // ListItem measures trailing content first, so at large text the title would wrap letter by letter beside it.
+        supportingContent = trailing.takeIf { large },
+        trailingContent = trailing.takeUnless { large },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }

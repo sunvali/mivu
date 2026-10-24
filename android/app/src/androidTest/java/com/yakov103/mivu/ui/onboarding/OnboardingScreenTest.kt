@@ -215,6 +215,32 @@ class OnboardingScreenTest {
         assertNull(tools)
     }
 
+    @Test fun changedAnswersSendAFreshRequest() {
+        val stale = CompletableDeferred<Unit>()
+        val sent = mutableListOf<List<CoachInferenceInput>>()
+        host(connected) { input, _ ->
+            sent += input
+            if (sent.size == 1) { stale.await(); reply(good) }
+            else reply("""{"kcal":1900,"protein":130,"carbs":210,"fat":62,"explanation":"Fresh."}""")
+        }
+        toResults(viaConnect = false)
+        waitForText("ChatGPT is tuning your targets…")
+        compose.onNodeWithTag("onboardingBack").performClick()
+        waitFor(heading("How do you eat?"))
+        compose.onNodeWithTag("onboardingBack").performClick()
+        waitFor(heading("Your goal"))
+        compose.onNodeWithTag("onboardingTarget").performTextReplacement("70")
+        next()
+        waitFor(heading("How do you eat?"))
+        next()
+        waitForText("Fresh.")
+        stale.complete(Unit)
+        compose.waitForIdle()
+        assertEquals(2, sent.size)
+        assertTrue(sent[1].toString().contains("\"target_weight_kg\":70"))
+        compose.onNodeWithTag("onboardingKcal").assertTextContains("1900")
+    }
+
     @Test fun badReplyKeepsTheEstimate() {
         host(connected) { _, _ -> reply("""{"kcal":900,"protein":60,"carbs":90,"fat":30,"explanation":"Low."}""") }
         toResults(viaConnect = false)
