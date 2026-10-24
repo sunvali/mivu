@@ -18,6 +18,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
@@ -61,15 +67,19 @@ fun ManualNutritionScreen(model: ManualNutritionViewModel, onClose: () -> Unit, 
             if (isLargeText()) { first(Modifier.fillMaxWidth()); second(Modifier.fillMaxWidth()) }
             else Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { first(Modifier.weight(1f)); second(Modifier.weight(1f)) }
         }
+        // iOS only disables Save; Android also names a blank field, once the person has left it.
+        var nameLeft by rememberSaveable { mutableStateOf(false) }
+        var unitLeft by rememberSaveable { mutableStateOf(false) }
         SectionTitle("Food")
         Field(draft.name, { model.update(draft.copy(name = it)) }, "Food name", "manualFoodName", Modifier.fillMaxWidth(),
-            fieldsEnabled, error = "Enter a food name.".takeIf { draft.isDirty && draft.name.isBlank() },
-            keyboard = KeyboardOptions(KeyboardCapitalization.Sentences, imeAction = ImeAction.Next))
+            fieldsEnabled, error = "Enter a food name.".takeIf { nameLeft && draft.name.isBlank() },
+            keyboard = KeyboardOptions(KeyboardCapitalization.Sentences, imeAction = ImeAction.Next), onLeave = { nameLeft = true })
         pair(
             { Field(draft.quantity, { v -> model.update(draft.copy(quantity = v)) }, "Amount", "manualAmount", it, fieldsEnabled,
                 error = draft.amountError, keyboard = Decimal) },
             { Field(draft.unit, { v -> model.update(draft.copy(unit = v)) }, "Unit", "manualUnit", it, fieldsEnabled,
-                error = "Enter a unit.".takeIf { draft.unit.isBlank() }, keyboard = KeyboardOptions(imeAction = ImeAction.Next)) },
+                error = "Enter a unit.".takeIf { unitLeft && draft.unit.isBlank() }, keyboard = KeyboardOptions(imeAction = ImeAction.Next),
+                onLeave = { unitLeft = true }) },
         )
         SectionTitle("Nutrition for this amount", Modifier.padding(top = 16.dp))
         NutrientField(draft.kcal, { model.update(draft.copy(kcal = it)) }, "Energy (kcal)", "manualCalories", Modifier.fillMaxWidth(), draft, fieldsEnabled)
@@ -112,19 +122,22 @@ internal fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 private fun NutrientField(
     value: String, onChange: (String) -> Unit, label: String, tag: String, modifier: Modifier, draft: ManualNutritionDraft, enabled: Boolean,
     keyboard: KeyboardOptions = Decimal, onDone: () -> Unit = {},
-) = Field(value, onChange, label, tag, modifier, enabled, "Unknown", draft.nutrientError(value), keyboard, onDone)
+) = Field(value, onChange, label, tag, modifier, enabled, draft.nutrientError(value), keyboard, onDone,
+    // iOS shows "Unknown" in a blank row; an outlined field hides its placeholder under the label until focused.
+    hint = "Unknown".takeIf { value.isEmpty() })
 
 @Composable
 private fun Field(
     value: String, onChange: (String) -> Unit, label: String, tag: String, modifier: Modifier, enabled: Boolean,
-    placeholder: String? = null, error: String? = null, keyboard: KeyboardOptions = KeyboardOptions.Default, onDone: () -> Unit = {},
+    error: String? = null, keyboard: KeyboardOptions = KeyboardOptions.Default, onDone: () -> Unit = {}, hint: String? = null,
+    onLeave: () -> Unit = {},
 ) {
+    var focused by remember { mutableStateOf(false) }
     OutlinedTextField(
-        value, onChange, modifier.testTag(tag), enabled = enabled, singleLine = true,
+        value, onChange, modifier.testTag(tag).onFocusChanged { if (focused && !it.isFocused) onLeave(); focused = it.isFocused }, enabled = enabled, singleLine = true,
         label = { Text(label) },
-        placeholder = placeholder?.let { { Text(it) } },
         isError = error != null,
-        supportingText = error?.let { { Text(it) } },
+        supportingText = (error ?: hint)?.let { { Text(it) } },
         keyboardOptions = keyboard,
         keyboardActions = KeyboardActions(onDone = { onDone() }),
     )

@@ -3,8 +3,11 @@ package com.yakov103.mivu.ui.composer
 import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.net.Uri
+import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -12,6 +15,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yakov103.mivu.diary.DayAssignment
+import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.MealPhoto
 import com.yakov103.mivu.diary.PhotoRole
@@ -55,6 +59,8 @@ class MealComposerViewModel(
         private set
     /** 1-based positions in the last selection that could not be imported, for the alert. */
     var importFailures by mutableStateOf<List<Int>>(emptyList())
+    /** 1-based positions in the last selection left out because the meal already had [MAX_PHOTOS]. */
+    var importSkipped by mutableStateOf<List<Int>>(emptyList())
     var saving by mutableStateOf(false)
         private set
     var message by mutableStateOf<String?>(null)
@@ -80,7 +86,8 @@ class MealComposerViewModel(
         }
     }
 
-    fun updateText(value: String) { text = value; state[TEXT] = value }
+    /** Keeps at most [MAX_TEXT] characters, the store's limit, so a long paste is cut rather than refused at Save. */
+    fun updateText(value: String) { text = value.take(MAX_TEXT); state[TEXT] = text }
 
     fun updateReviewFirst(value: Boolean) { reviewFirst = value; state[REVIEW_FIRST] = value }
 
@@ -95,9 +102,10 @@ class MealComposerViewModel(
         importing = true
         viewModelScope.launch {
             val failed = mutableListOf<Int>()
+            val skipped = mutableListOf<Int>()
             try {
                 uris.forEachIndexed { index, uri ->
-                    if (photos.size >= MAX_PHOTOS) { failed += index + 1; return@forEachIndexed }
+                    if (photos.size >= MAX_PHOTOS) { skipped += index + 1; return@forEachIndexed }
                     try {
                         val file = withContext(Dispatchers.IO) { preparePhoto(resolver, uri, folder) }
                         storePhotos(photos + file.path)
@@ -110,6 +118,7 @@ class MealComposerViewModel(
             } finally {
                 importing = false
                 importFailures = failed
+                importSkipped = skipped
             }
         }
     }
@@ -118,18 +127,34 @@ class MealComposerViewModel(
         if (!canSave || savedMealID != null) return
         saving = true
         message = null
+        val draft = ArrayList(listOf(text, reviewFirst.toString()) + photos)
         viewModelScope.launch {
             try {
-                savedMealID = withContext(Dispatchers.IO) {
-                    val db = repository.database(profileID)
-                    val at = Instant.now()
-                    val dayID = when (val day = db.dayAssignment(at)) {
-                        is DayAssignment.Existing -> day.id
-                        DayAssignment.NewDay -> db.startDay(at, db.head().revision).id
+                val db = withContext(Dispatchers.IO) { repository.database(profileID) }
+                // The draft changed after a save that may have committed: show that meal rather than return it as this one.
+                state.get<ArrayList<String>>(ATTEMPTED)?.takeIf { it != draft }?.let {
+                    val earlier = withContext(Dispatchers.IO) { db.read { tx -> tx.submissionParent(id(SUBMISSION)) } }
+                    state[SUBMISSION] = UUID.randomUUID() // the next save is a new meal
+                    state[ATTEMPTED] = null
+                    if (earlier != null) {
+                        message = "Your earlier meal was saved. These changes have not been saved."
+                        return@launch
                     }
-                    val meal = photos.map { MealPhoto(UUID.randomUUID(), File(it).readBytes(), at, PhotoRole.unspecified) }
-                    db.captureProjection(text, meal, reviewFirst, dayID, at, submissionID = id(SUBMISSION),
-                        expectedRevision = db.head().revision).id
+                }
+                state[ATTEMPTED] = draft
+                savedMealID = withContext(Dispatchers.IO) {
+                    val capture = {
+                        val at = Instant.now()
+                        val dayID = when (val day = db.dayAssignment(at)) {
+                            is DayAssignment.Existing -> day.id
+                            DayAssignment.NewDay -> db.startDay(at, db.head().revision).id
+                        }
+                        val meal = photos.map { MealPhoto(UUID.randomUUID(), File(it).readBytes(), at, PhotoRole.unspecified) }
+                        db.captureProjection(text, meal, reviewFirst, dayID, at, submissionID = id(SUBMISSION),
+                            expectedRevision = db.head().revision).id
+                    }
+                    // Another write raced this one (as Today's startNewDay): try once more against the new head.
+                    (try { capture() } catch (_: DiaryError.StaleRevision) { capture() }).also { afterSaveForTest?.invoke() }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -151,6 +176,12 @@ class MealComposerViewModel(
     companion object {
         /** iOS `PhotoInput`'s per-meal limit, which `captureProjection` enforces. */
         const val MAX_PHOTOS = 8
+        /** iOS's submission text limit, which the store enforces. */
+        const val MAX_TEXT = 20_000
+        private const val ATTEMPTED = "attemptedDraft"
+
+        /** Runs after the store commits, so a test can lose the acknowledgement of a committed save. */
+        @VisibleForTesting internal var afterSaveForTest: (() -> Unit)? = null
         private const val TEXT = "mealText"
         private const val REVIEW_FIRST = "reviewFirst"
         private const val PHOTOS = "photoPaths"
@@ -170,8 +201,13 @@ internal fun preparePhoto(resolver: ContentResolver, uri: Uri, folder: File): Fi
         val scale = MAX_SIDE.toDouble() / maxOf(w, h)
         if (scale < 1) decoder.setTargetSize((w * scale).roundToInt().coerceAtLeast(1), (h * scale).roundToInt().coerceAtLeast(1))
     }
-    val bytes = ByteArrayOutputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out); out.toByteArray() }
-    bitmap.recycle()
+    // JPEG has no alpha: a transparent PNG or WebP would turn black, so flatten it onto white first.
+    val opaque = if (!bitmap.hasAlpha()) bitmap else Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888).also {
+        Canvas(it).apply { drawColor(Color.WHITE); drawBitmap(bitmap, 0f, 0f, null) }
+        bitmap.recycle()
+    }
+    val bytes = ByteArrayOutputStream().use { out -> opaque.compress(Bitmap.CompressFormat.JPEG, 85, out); out.toByteArray() }
+    opaque.recycle()
     if (bytes.size > MAX_BYTES) throw IOException("prepared photo exceeds $MAX_BYTES bytes")
     folder.mkdirs()
     return File(folder, "${UUID.randomUUID()}.jpg").apply { writeBytes(bytes) }

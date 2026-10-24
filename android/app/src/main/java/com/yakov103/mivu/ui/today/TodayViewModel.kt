@@ -22,14 +22,16 @@ import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -64,15 +66,25 @@ private class TodayData(val day: TrackingDay?, val meals: List<DiaryMeal>, val g
 
 class TodayViewModel(private val repository: DiaryRepository, private val profileID: UUID, sampleMode: Boolean) : ViewModel() {
     private val receipt = MutableStateFlow<UUID?>(null)
+    private val retries = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val _loadFailed = MutableStateFlow(false)
+
+    /** The last read failed. [state] keeps the last good read, or stays null when there was none. */
+    val loadFailed: StateFlow<Boolean> = _loadFailed
 
     val state: StateFlow<TodayUiState?> = combine(
-        repository.changes.onStart { emit(Unit) }.map { load() }.flowOn(Dispatchers.IO),
+        merge(repository.changes, retries).onStart { emit(Unit) }.mapNotNull {
+            try { load().also { _loadFailed.value = false } } catch (_: Exception) { _loadFailed.value = true; null }
+        }.flowOn(Dispatchers.IO),
         receipt,
     ) { data, saved ->
         // Coach and Diary own other days' receipts; Today shows one only while its meal is on this day.
         todayUiState(data.day, data.meals, data.goals, data.workouts, sampleMode, saved?.takeIf { id -> data.meals.any { it.id == id } },
             Locale.getDefault(), DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd"))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Reads the day again after a failed read. */
+    fun retry() { retries.tryEmit(Unit) }
 
     /** The "Saved on this phone" receipt after a capture screen saves [mealID]. */
     fun showReceipt(mealID: UUID) { receipt.value = mealID }

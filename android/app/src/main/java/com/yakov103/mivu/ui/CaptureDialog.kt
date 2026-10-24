@@ -2,6 +2,7 @@ package com.yakov103.mivu.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -29,12 +30,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -85,8 +89,11 @@ fun CaptureDialog(
                 },
                 actions = {
                     Button({ focus.clearFocus(); onSave() }, Modifier.padding(end = 8.dp).testTag(saveTag), enabled = canSave && !saving) {
-                        if (saving) CircularProgressIndicator(Modifier.size(18.dp).semantics { contentDescription = "Saving" }, strokeWidth = 2.dp)
-                        else Text("Save")
+                        // The label keeps its space under the spinner, so the button does not change size.
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("Save", if (saving) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)
+                            if (saving) CircularProgressIndicator(Modifier.size(18.dp).semantics { contentDescription = "Saving" }, strokeWidth = 2.dp)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),

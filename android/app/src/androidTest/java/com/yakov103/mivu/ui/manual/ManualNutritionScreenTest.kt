@@ -3,11 +3,16 @@ package com.yakov103.mivu.ui.manual
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -76,10 +81,27 @@ class ManualNutritionScreenTest {
         compose.onNodeWithTag("saveManualNutrition").performClick()
         waitGone("manualFoodName")
         waitForText("Oat porridge")
+        // A status line until meal detail exists, not a button that does nothing.
+        compose.onNodeWithTag("savedMealReceipt").assertIsDisplayed().assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick))
         val meal = todayMeals(repository, id).single { it.items.single().name == "Oat porridge" }
         assertEquals(8.5, meal.items.single().nutrition.protein!!, 0.0)
         assertEquals(null, meal.items.single().nutrition.carbs)
         assertEquals(MealTimePrecision.exact, meal.timePrecision ?: MealTimePrecision.exact)
+    }
+
+    @Test fun blankNutrientsReadUnknownAndNameErrorWaitsForLeaving() {
+        TodayFixture.seed(context, photo = false)
+        launch()
+        openEntry()
+        // iOS's "Unknown" placeholder stays visible on every blank nutrient, focused or not.
+        compose.onAllNodesWithText("Unknown").assertCountEquals(4)
+        compose.onAllNodesWithText("Enter a food name.").assertCountEquals(0)
+        compose.onNodeWithTag("manualFoodName").performClick()
+        compose.onAllNodesWithText("Enter a food name.").assertCountEquals(0) // not while typing
+        compose.onNodeWithTag("manualCalories").performClick()
+        compose.onNodeWithText("Enter a food name.").assertIsDisplayed()
+        enter("manualCalories", "95")
+        compose.onAllNodesWithText("Unknown").assertCountEquals(3)
     }
 
     @Test fun discardDialogOnBackWhenDirty() {

@@ -1,6 +1,13 @@
 package com.yakov103.mivu.ui.today
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -45,7 +53,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -75,16 +89,23 @@ fun TodayScreen(
 ) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
-    val state = viewModel.state.collectAsStateWithLifecycle().value ?: return Box(Modifier.fillMaxSize())
+    val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
+    val state = viewModel.state.collectAsStateWithLifecycle().value
+        ?: return Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { if (loadFailed) LoadFailure(viewModel::retry) }
+    val list = rememberLazyListState()
+    // The receipt and a read failure are inserted above the summary: bring them into view.
+    LaunchedEffect(state.savedReceipt != null, loadFailed) { if (state.savedReceipt != null || loadFailed) list.animateScrollToItem(0) }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
                 Modifier.fillMaxSize(),
+                state = list,
                 contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 4.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (loadFailed) item(key = "loadFailed") { LoadFailure(viewModel::retry) }
                 if (state.sampleMode) item(key = "sample") { SampleBanner() }
-                state.savedReceipt?.let { id -> item(key = "receipt") { SavedReceipt { onOpenMeal?.invoke(id) } } }
+                state.savedReceipt?.let { id -> item(key = "receipt") { SavedReceipt(onOpenMeal?.let { { it(id) } }) } }
                 item(key = "summary") { SummaryCard(state, viewModel::startNewDay) }
                 item(key = "mealsHeader") {
                     Text("Meals", Modifier.padding(top = 12.dp).semantics { heading() },
@@ -142,7 +163,12 @@ private fun DayActions(date: String, onStartNewDay: () -> Unit) {
     Box {
         Surface(
             onClick = { open = true },
-            modifier = Modifier.testTag("todayDayActions").semantics { contentDescription = "Day actions, $date" },
+            // One spoken element: the date is read once, inside the action's name.
+            modifier = Modifier.testTag("todayDayActions").clearAndSetSemantics {
+                contentDescription = "Day actions, $date"
+                role = Role.Button
+                onClick { open = true; true }
+            },
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surface,
         ) {
@@ -174,14 +200,25 @@ private fun Pip(size: Dp) {
 @Composable
 private fun Intake(state: TodayUiState, modifier: Modifier = Modifier) {
     Column(modifier) {
-        Text(
+        // The new total rolls in; Compose skips it when the system's animator scale is 0 ("Remove animations").
+        AnimatedContent(
             state.kcal ?: "—",
-            style = MaterialTheme.typography.displayMedium.tabular().copy(fontSize = 52.sp, lineHeight = 58.sp, letterSpacing = (-2).sp),
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            softWrap = false,
-            autoSize = TextAutoSize.StepBased(minFontSize = 39.sp, maxFontSize = 52.sp),
-        )
+            transitionSpec = {
+                (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut()) using
+                    SizeTransform(clip = false)
+            },
+            contentAlignment = Alignment.CenterStart,
+            label = "kcal",
+        ) { kcal ->
+            Text(
+                kcal,
+                style = MaterialTheme.typography.displayMedium.tabular().copy(fontSize = 52.sp, lineHeight = 58.sp, letterSpacing = (-2).sp),
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(minFontSize = 39.sp, maxFontSize = 52.sp),
+            )
+        }
         Text("kcal recorded", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (!state.hasDay) {
             Text("No meals recorded", Modifier.padding(top = 2.dp), style = MaterialTheme.typography.bodyMedium,
@@ -277,15 +314,32 @@ internal fun SampleBanner() {
     }
 }
 
+/** Opens the saved meal once meal detail exists; until then it is a plain status line, not a button. */
 @Composable
-private fun SavedReceipt(onOpen: () -> Unit) {
+private fun SavedReceipt(onOpen: (() -> Unit)?) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onOpen).testTag("savedMealReceipt"),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .then(if (onOpen != null) Modifier.clickable(role = Role.Button, onClick = onOpen) else Modifier)
+            .testTag("savedMealReceipt"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(painterResource(R.drawable.ic_check_circle), contentDescription = null, tint = MivuTheme.colors.success)
         Text("Saved on this phone", style = MaterialTheme.typography.bodyMedium, color = MivuTheme.colors.success)
+    }
+}
+
+/** A failed read, worded as iOS's load failures; the diary itself is untouched. */
+@Composable
+private fun LoadFailure(onRetry: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("todayLoadFailed"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Could not load today. Your diary is preserved.", Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+        FilledTonalButton(onRetry, Modifier.heightIn(min = 48.dp)) { Text("Try again") }
     }
 }
 

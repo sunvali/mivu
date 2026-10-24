@@ -21,9 +21,11 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
+import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.Intents.intending
@@ -32,6 +34,7 @@ import com.yakov103.mivu.SampleMode
 import com.yakov103.mivu.analysis.MealAnalysisWorker
 import com.yakov103.mivu.analysis.SampleAnalyzer
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.SubmissionState
@@ -39,6 +42,7 @@ import com.yakov103.mivu.ui.MivuApp
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.TodayFixture
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,10 +69,13 @@ class MealComposerScreenTest {
 
     @After fun tearDown() {
         scope.cancel()
+        MealComposerViewModel.afterSaveForTest = null
         SampleMode.reset()
-        (repository?.bootstrapState?.value as? Bootstrap.Ready)?.let { repository!!.database(it.profileID).close() }
+        ((repository?.bootstrapState?.value as? Bootstrap.Ready)?.profileID ?: modelProfile)?.let { repository!!.database(it).close() }
         TodayFixture.wipe(context)
     }
+
+    private var modelProfile: UUID? = null // a diary opened by a model test, without the app
 
     /** Launches the app as MainActivity does, draining sample analysis after each save on a scope outside the screen. */
     private fun launch(): DiaryRepository {
@@ -165,5 +172,92 @@ class MealComposerScreenTest {
         assertEquals(2048, bounds.outWidth)
         assertEquals(1024, bounds.outHeight)
         assertTrue(File(context.cacheDir, "composer").listFiles().isNullOrEmpty()) // the draft's copies are gone
+    }
+
+    /** A small synthetic PNG in the app cache; [alpha] 0 makes it fully transparent. */
+    private fun png(name: String, alpha: Int = 255) = File(context.cacheDir, name).apply {
+        val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        Canvas(bitmap).drawColor(Color.argb(alpha, 196, 48, 43))
+        outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private fun composer(id: UUID, repository: DiaryRepository, handle: SavedStateHandle = SavedStateHandle()) =
+        MealComposerViewModel(repository, id, context, handle).also { modelProfile = id }
+
+    @Test fun moreThanEightPhotosSaysTheLimit() {
+        TodayFixture.diary(context)
+        launch()
+        val picked = (1..9).map { png("synthetic-$it.png") }
+        Intents.init()
+        try {
+            val clip = ClipData.newRawUri(null, Uri.fromFile(picked[0])).apply { picked.drop(1).forEach { addItem(ClipData.Item(Uri.fromFile(it))) } }
+            intending(hasAction(MediaStore.ACTION_PICK_IMAGES))
+                .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().apply { clipData = clip }))
+            openComposer()
+            compose.onNodeWithTag("pickPhotos").performScrollTo().performClick()
+            waitForText("Up to 8 photos per meal")
+        } finally {
+            Intents.release()
+            picked.forEach { it.delete() }
+        }
+        compose.onNodeWithText("Photo 9 was not added: a meal holds up to 8 photos. Your other photos and note are preserved.")
+            .assertIsDisplayed()
+        compose.onNodeWithText("OK").performClick()
+        compose.onNodeWithText("8 of 8 photos").assertIsDisplayed()
+    }
+
+    @Test fun transparentPhotoIsFlattenedOntoWhite() {
+        val source = png("synthetic-clear.png", alpha = 0)
+        val folder = File(context.cacheDir, "composer-test")
+        try {
+            val jpeg = preparePhoto(context.contentResolver, Uri.fromFile(source), folder)
+            val pixel = BitmapFactory.decodeFile(jpeg.path).getPixel(32, 32)
+            assertTrue("near white: ${Integer.toHexString(pixel)}", Color.red(pixel) > 245 && Color.green(pixel) > 245 && Color.blue(pixel) > 245)
+        } finally {
+            source.delete()
+            folder.deleteRecursively()
+        }
+    }
+
+    @Test fun noteIsCappedAtTheStoreLimit() {
+        val id = TodayFixture.diary(context)
+        val model = composer(id, DiaryRepository(context).also { repository = it })
+        compose.runOnUiThread { model.updateText("a".repeat(20_001)) }
+        assertEquals(20_000, model.text.length)
+    }
+
+    @Test fun racedSaveIsRetriedOnce() {
+        val id = TodayFixture.diary(context)
+        val repository = DiaryRepository(context).also { this.repository = it }
+        val model = composer(id, repository)
+        var raced = 0
+        repository.database(id).beforeCommit = { if (raced++ == 0) throw DiaryError.StaleRevision }
+        try {
+            compose.runOnUiThread { model.updateText("Synthetic raced tea"); model.save() }
+            compose.waitUntil(10_000) { model.savedMealID != null || model.message != null }
+        } finally {
+            repository.database(id).beforeCommit = null
+        }
+        assertEquals(null, model.message)
+        assertEquals("Synthetic raced tea", meals(repository, id).single().submissions.single().text)
+    }
+
+    @Test fun changedDraftAfterAnUnconfirmedSaveIsNotReturnedAsTheOldMeal() {
+        val id = TodayFixture.diary(context)
+        val repository = DiaryRepository(context).also { this.repository = it }
+        // The capture commits, then its acknowledgement is lost.
+        MealComposerViewModel.afterSaveForTest = { throw IOException("synthetic lost acknowledgement") }
+        val model = composer(id, repository)
+        compose.runOnUiThread { model.updateText("Synthetic first note"); model.save() }
+        compose.waitUntil(10_000) { model.message != null }
+        MealComposerViewModel.afterSaveForTest = null
+        compose.runOnUiThread { model.updateText("Synthetic edited note"); model.save() }
+        compose.waitUntil(10_000) { model.message?.startsWith("Your earlier meal") == true }
+        assertEquals(null, model.savedMealID)
+        assertEquals(listOf("Synthetic first note"), meals(repository, id).map { it.submissions.single().text })
+        // Saving again records the edited note as a new meal.
+        compose.runOnUiThread { model.save() }
+        compose.waitUntil(10_000) { model.savedMealID != null }
+        assertEquals(setOf("Synthetic first note", "Synthetic edited note"), meals(repository, id).map { it.submissions.single().text }.toSet())
     }
 }

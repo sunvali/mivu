@@ -5,6 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import android.database.sqlite.SQLiteDatabase
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
@@ -69,8 +75,46 @@ class TodayScreenTest {
         waitFor("mealRow")
         listOf("todayDayActions", "todayGoalSummary", "logMeal", "addManually").forEach { compose.onNodeWithTag(it).assertExists() }
         assertTrue(compose.onAllNodesWithTag("mealRow").fetchSemanticsNodes().size == 2)
+        // One spoken button: the date is not read again from a child node.
+        compose.onNodeWithTag("todayDayActions")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Text))
+            .assert(hasContentDescription("Day actions, ", substring = true))
         compose.onNodeWithTag("todayDayActions").performClick()
         compose.onNodeWithTag("startNewDay").assertIsDisplayed()
+    }
+
+    @Test fun failedReadOffersTryAgainAndKeepsTheLastGoodDay() {
+        val id = TodayFixture.seed(context, photo = false)
+        val repository = DiaryRepository(context)
+        val db = repository.database(id)
+        // Synthetic failure: a second connection swaps the diary head for bytes that do not decode, then puts it back.
+        val head = SQLiteDatabase.openDatabase(db.file.path, null, SQLiteDatabase.OPEN_READONLY)
+            .use { it.rawQuery("SELECT payload FROM head", null).use { c -> c.moveToFirst(); c.getBlob(0) } }
+        fun setHead(payload: ByteArray) = SQLiteDatabase.openDatabase(db.file.path, null, SQLiteDatabase.OPEN_READWRITE)
+            .use { it.execSQL("UPDATE head SET payload = ?", arrayOf(payload)) }
+        fun breakHead() = setHead(byteArrayOf(0))
+        fun restoreHead() = setHead(head)
+        val failure = "Could not load today. Your diary is preserved."
+        try {
+            breakHead()
+            val model = TodayViewModel(repository, id, sampleMode = false)
+            compose.setContent { MivuTheme { TodayScreen(model, null, {}, {}, {}) } }
+            waitForText(failure)
+            restoreHead()
+            compose.onNodeWithText("Try again").performClick()
+            waitFor("mealRow")
+            compose.onAllNodes(hasText(failure)).assertCountEquals(0)
+
+            breakHead()
+            model.retry()
+            waitForText(failure)
+            compose.onAllNodesWithTag("mealRow").assertCountEquals(2) // the last good day stays on screen
+            compose.onNodeWithText("1,020").assertIsDisplayed()
+        } finally {
+            restoreHead()
+            db.close()
+        }
     }
 
     @Test fun unknownProteinShowsDashAndNote() {

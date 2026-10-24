@@ -175,15 +175,23 @@ fun MealComposerScreen(
         }
     }
 
-    if (model.importFailures.isNotEmpty()) {
+    val failed = model.importFailures
+    val skipped = model.importSkipped
+    if (failed.isNotEmpty() || skipped.isNotEmpty()) {
+        val dismiss = { model.importFailures = emptyList(); model.importSkipped = emptyList() }
+        fun photos(positions: List<Int>) = positions.joinToString { "Photo $it" }
         AlertDialog(
-            onDismissRequest = { model.importFailures = emptyList() },
-            title = { Text("Could not import selected photos") },
+            onDismissRequest = dismiss,
+            title = { Text(if (failed.isEmpty()) "Up to 8 photos per meal" else "Could not import selected photos") },
             text = {
-                Text("${model.importFailures.joinToString { "Photo $it" }} from this selection could not be imported. " +
-                    "Your other photos and note are preserved. Choose a smaller image or another photo.")
+                Text(listOfNotNull(
+                    failed.takeIf { it.isNotEmpty() }?.let { "${photos(it)} from this selection could not be imported." },
+                    skipped.takeIf { it.isNotEmpty() }?.let { "${photos(it)} ${if (it.size == 1) "was" else "were"} not added: a meal holds up to 8 photos." },
+                    "Your other photos and note are preserved.",
+                    "Choose a smaller image or another photo.".takeIf { failed.isNotEmpty() },
+                ).joinToString(" "))
             },
-            confirmButton = { TextButton({ model.importFailures = emptyList() }) { Text("OK") } },
+            confirmButton = { TextButton(dismiss) { Text("OK") } },
         )
     }
 }
