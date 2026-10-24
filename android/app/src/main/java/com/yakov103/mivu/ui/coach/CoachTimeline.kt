@@ -1,0 +1,240 @@
+package com.yakov103.mivu.ui.coach
+
+import android.animation.ValueAnimator
+import android.util.LruCache
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.yakov103.mivu.R
+import com.yakov103.mivu.coach.CoachActivity
+import com.yakov103.mivu.coach.CoachReplyLines
+import com.yakov103.mivu.diary.CoachExchange
+import com.yakov103.mivu.diary.CoachReceiptTarget
+import com.yakov103.mivu.diary.CoachTurn
+import com.yakov103.mivu.diary.CoachTurnState
+import com.yakov103.mivu.diary.diaryDateLabel
+import com.yakov103.mivu.ui.theme.MivuTheme
+import com.yakov103.mivu.ui.today.decode
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+
+// Port of the iOS Coach exchange row: CoachView.inputBubble and turnActions (ios/Mivu/Coach/CoachView.swift:596-704) and
+// CoachActivityView. Every string is the iOS one, with "iPhone" as "phone".
+
+/** What an exchange row can do; the screen binds these to the view model and navigation. */
+class CoachRowActions(
+    val undo: (String) -> Unit,
+    val openMeal: (UUID) -> Unit,
+    val retry: (UUID) -> Unit,
+    val chooseDay: (UUID, Boolean) -> Unit,
+    val answer: (com.yakov103.mivu.diary.CoachReply.Target, String, String) -> Unit,
+    val finishRest: (UUID) -> Unit,
+    val seeToday: () -> Unit,
+    val seeProgress: () -> Unit,
+    val turnPhoto: suspend (UUID, UUID) -> ByteArray?,
+    val mealPhoto: suspend (UUID, UUID) -> ByteArray?,
+)
+
+/** One exchange: the person's message on the right, then Pip's reply, status, receipts and the latest exchange's choices. */
+@Composable
+fun CoachExchangeRow(
+    exchange: CoachExchange,
+    isLatest: Boolean,
+    activity: CoachActivity?,
+    days: Map<UUID, String>,
+    actions: CoachRowActions,
+    modifier: Modifier = Modifier,
+) {
+    val turn = exchange.turn
+    Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        InputBubble(turn, actions.turnPhoto)
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            turn.assistantText?.let { Text(coachReplyText(it), style = MaterialTheme.typography.bodyLarge) }
+            val question = turn.question
+            if (isLatest && question != null && question.candidates.isNotEmpty()) {
+                CoachQuestionChips(question, exchange.questionMeals, enabled = true, loadPhoto = actions.mealPhoto, onPick = actions.answer)
+            }
+            if (turn.state != CoachTurnState.completed) {
+                if (activity != null && turn.receipts.isEmpty()) ActivityRow(activity) else Status(turn.state)
+                TurnChoices(turn, days, actions)
+            }
+            exchange.receipts.filter { it.mealID != null || it.workoutID != null }.forEach { receipt ->
+                CoachReceiptCard(receipt, exchange.targets[receipt.operationKey] ?: CoachReceiptTarget.Loading, exchange.undo[receipt.operationKey],
+                    onUndo = { actions.undo(receipt.operationKey) }, onOpen = { receipt.mealID?.let(actions.openMeal) })
+            }
+            exchange.receipts.filter { it.weightID != null }.forEach { receipt ->
+                CoachReceiptPresentation(receipt, CoachReceiptTarget.Loading).weightLabel?.let { WeightChip(it) }
+            }
+            if (isLatest) {
+                val followUps = CoachReplyLines.followUps(turn)
+                if (followUps.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    followUps.forEach { followUp ->
+                        val today = followUp == CoachReplyLines.FollowUp.today
+                        AssistChip(onClick = if (today) actions.seeToday else actions.seeProgress,
+                            label = { Text(if (today) "See today" else "See progress") },
+                            leadingIcon = { Icon(painterResource(if (today) R.drawable.ic_today else R.drawable.ic_progress), null,
+                                Modifier.size(AssistChipDefaults.IconSize)) })
+                    }
+                }
+            }
+            if (turn.incomplete == true) {
+                Text("Couldn't finish the rest", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton({ actions.finishRest(turn.id) }, Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InputBubble(turn: CoachTurn, loadPhoto: suspend (UUID, UUID) -> ByteArray?) {
+    Column(Modifier.fillMaxWidth().padding(start = 48.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primary) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (turn.photoIDs.isNotEmpty()) {
+                    Text(if (turn.photoIDs.size == 1) "1 photo" else "${turn.photoIDs.size} photos", style = MaterialTheme.typography.labelMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        turn.photoIDs.forEach { id -> CoachPhoto(id, 120.dp) { loadPhoto(turn.id, id) } }
+                    }
+                }
+                if (turn.text.isNotEmpty()) Text(turn.text, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        // A reply or card already shows the message landed; the save note matters only until then.
+        if (turn.state != CoachTurnState.completed) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(painterResource(R.drawable.ic_check_circle), null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Saved on this phone", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun Status(state: CoachTurnState) {
+    val color = when (state) {
+        CoachTurnState.needsRetry -> MaterialTheme.colorScheme.error
+        CoachTurnState.analyzing -> MaterialTheme.colorScheme.primary
+        else -> MivuTheme.colors.warning
+    }
+    Text(status(state), style = MaterialTheme.typography.bodyMedium, color = color)
+}
+
+/** "Log to <date>" while the turn needs its day; otherwise Try again for a turn that stopped. */
+@Composable
+private fun TurnChoices(turn: CoachTurn, days: Map<UUID, String>, actions: CoachRowActions) {
+    @Composable fun chip(label: String, icon: Int, onClick: () -> Unit) = AssistChip(onClick = onClick, label = { Text(label) },
+        leadingIcon = { Icon(painterResource(icon), null, Modifier.size(AssistChipDefaults.IconSize)) })
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (turn.needsDayChoice == true) {
+            turn.activeDayID?.let(days::get)?.let { previous ->
+                chip("Log to " + CoachReplyLines.shortDate(previous), R.drawable.ic_event) { actions.chooseDay(turn.id, true) }
+            }
+            chip("Log to " + CoachReplyLines.shortDate(diaryDateLabel(turn.capturedAt, turn.captureTimeZoneID)), R.drawable.ic_event) {
+                actions.chooseDay(turn.id, false)
+            }
+        } else if (turn.state in RETRYABLE) {
+            chip("Try again", R.drawable.ic_refresh) { actions.retry(turn.id) }
+        }
+    }
+}
+
+private val RETRYABLE = setOf(CoachTurnState.waitingForConnection, CoachTurnState.waitingForNetwork, CoachTurnState.needsRetry,
+    CoachTurnState.needsClarification)
+
+private fun status(state: CoachTurnState) = when (state) {
+    CoachTurnState.captured -> "Waiting to start"
+    CoachTurnState.analyzing -> "Thinking…"
+    CoachTurnState.waitingForConnection -> "Connect ChatGPT in Settings to continue"
+    CoachTurnState.waitingForNetwork -> "Offline. I'll reply when you're back online."
+    CoachTurnState.needsRetry -> "Couldn't finish. Your message is saved."
+    CoachTurnState.needsClarification -> "I need a little more detail. Reply with it, or edit the record."
+    CoachTurnState.completed -> "Completed"
+}
+
+/** iOS CoachActivityView: what the running turn is doing, read as one element. */
+@Composable
+private fun ActivityRow(activity: CoachActivity) {
+    val title = when (activity) {
+        CoachActivity.preparingPhotos -> "Looking at your photos…"
+        CoachActivity.thinking -> "Thinking…"
+        CoachActivity.reading -> "Checking your diary…"
+        CoachActivity.saving -> "Saving…"
+    }
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clearAndSetSemantics { contentDescription = "$title, Your message is saved." },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // shortcut: material3 1.4.0 keeps the Expressive LoadingIndicator internal; swap it in when the BOM ships it stable.
+        // "Remove animations" gets a still mark instead of a spinner.
+        if (ValueAnimator.areAnimatorsEnabled()) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+        else Icon(painterResource(R.drawable.ic_auto_awesome), null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun WeightChip(label: String) {
+    Row(
+        Modifier.heightIn(min = 48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(painterResource(R.drawable.ic_check_circle), null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+    }
+}
+
+// Decoded Coach photos by photo ID, at most 16 MiB of bitmap bytes; at most two decodes run at once.
+private val photos = object : LruCache<UUID, ImageBitmap>(16 * 1024 * 1024) {
+    override fun sizeOf(key: UUID, value: ImageBitmap) = value.asAndroidBitmap().byteCount
+}
+private val decoding = Semaphore(2)
+
+/** A square photo loaded by ID, never held in screen state; a placeholder while it loads or when it is gone. */
+@Composable
+fun CoachPhoto(id: UUID?, size: Dp, load: suspend () -> ByteArray?) {
+    val px = with(LocalDensity.current) { size.roundToPx() }
+    val bitmap by produceState(id?.let { photos.get(it) }, id) {
+        if (id != null && value == null) {
+            val bytes = load() ?: return@produceState
+            value = decoding.withPermit { withContext(Dispatchers.Default) { decode(bytes, px) } }?.also { photos.put(id, it) }
+        }
+    }
+    val shape = RoundedCornerShape(12.dp)
+    bitmap?.let { Image(it, null, Modifier.size(size).clip(shape), contentScale = ContentScale.Crop) }
+        ?: Box(Modifier.size(size).background(MivuTheme.colors.summarySurface, shape))
+}

@@ -66,6 +66,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yakov103.mivu.R
 import com.yakov103.mivu.SampleMode
 import com.yakov103.mivu.ui.today.TodayScreen
+import com.yakov103.mivu.ui.coach.CoachScreen
+import com.yakov103.mivu.ui.coach.CoachViewModel
+import com.yakov103.mivu.coach.CoachActivity
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import com.yakov103.mivu.ui.diary.DiaryScreen
 import com.yakov103.mivu.ui.diary.DiaryViewModel
 import com.yakov103.mivu.ui.today.TodayViewModel
@@ -75,6 +81,13 @@ import com.yakov103.mivu.diary.DiaryRepository
 import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+
+/** The app's Coach worker as the Coach tab uses it: run saved turns, whether ChatGPT is connected, and the running turn. */
+class CoachHooks(
+    val drain: () -> Unit = {},
+    val isConnected: () -> Boolean = { false },
+    val activity: StateFlow<Pair<UUID, CoachActivity>?> = MutableStateFlow(null),
+)
 
 /** The savedStateHandle key a capture screen sets on the Today entry when it saves a meal. */
 const val SAVED_MEAL_ID = "savedMealID"
@@ -99,17 +112,18 @@ private enum class Tab(val route: Route, val label: String, @DrawableRes val ico
 
 /**
  * The app root, as iOS `DiaryRootView`: diary setup until a diary is open, then the four tabs. [onMealCaptured] runs
- * after a capture is saved, with its profile, to start analysis outside the screen.
+ * after a capture is saved, with its profile, to start analysis outside the screen. [coach] connects the Coach tab to the
+ * app's Coach worker.
  */
 @Composable
-fun MivuApp(repository: DiaryRepository, onMealCaptured: (UUID) -> Unit = {}) {
+fun MivuApp(repository: DiaryRepository, onMealCaptured: (UUID) -> Unit = {}, coach: CoachHooks = CoachHooks()) {
     val state by repository.bootstrapState.collectAsState()
     val scope = rememberCoroutineScope()
     // A finished result survives activity recreation in the repository, so only the first composition starts one.
     LaunchedEffect(repository) { if (repository.bootstrapState.value == null) repository.bootstrap() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
-            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured)
+            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach)
             Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
@@ -151,8 +165,10 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit) {
+private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks) {
     val navController = rememberNavController()
+    // Coach keeps its window across tab switches: its view model belongs to the activity, not the Coach entry.
+    val activityOwner = checkNotNull(LocalViewModelStoreOwner.current)
     val entry by navController.currentBackStackEntryAsState()
     val root = Tab.entries.firstOrNull { tab -> entry?.destination?.hasRoute(tab.route::class) == true }
     val current = root ?: Tab.Today
@@ -244,7 +260,17 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 )
             }
             composable<Route.Progress> { LaterUpdate() }
-            composable<Route.Coach> { LaterUpdate() }
+            composable<Route.Coach> {
+                val coach = viewModel(viewModelStoreOwner = activityOwner, key = "coach-$profileID") {
+                    CoachViewModel(repository, profileID, hooks.drain, hooks.isConnected, hooks.activity, createSavedStateHandle())
+                }
+                CoachScreen(
+                    coach,
+                    onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
+                    onSeeToday = { selectTab(Route.Today) },
+                    onSeeProgress = { selectTab(Route.Progress) },
+                )
+            }
             // The screen owns back (and Escape), so an edited draft always asks before it is discarded.
             dialog<Route.ManualEntry>(
                 dialogProperties = DialogProperties(dismissOnBackPress = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),

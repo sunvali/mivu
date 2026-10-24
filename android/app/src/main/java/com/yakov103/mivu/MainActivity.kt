@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.yakov103.mivu.ui.CoachHooks
 import com.yakov103.mivu.ui.MivuApp
 import com.yakov103.mivu.ui.theme.MivuTheme
 
@@ -15,6 +16,11 @@ class MainActivity : ComponentActivity() {
         app.drainSampleAnalysis()
         app.watchNetworkForCoach()
         enableEdgeToEdge()
-        setContent { MivuTheme { MivuApp(app.repository, onMealCaptured = { app.drainSampleAnalysis() }) } }
+        val coach = CoachHooks(
+            drain = { app.drainCoach() },
+            isConnected = { runCatching { app.credentials.registrations().isNotEmpty() }.getOrDefault(false) },
+            activity = app.coachWorker.activity,
+        )
+        setContent { MivuTheme { MivuApp(app.repository, onMealCaptured = { app.drainSampleAnalysis() }, coach = coach) } }
     }
 }

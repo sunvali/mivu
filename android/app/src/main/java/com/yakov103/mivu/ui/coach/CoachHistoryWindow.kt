@@ -116,6 +116,37 @@ class CoachHistoryWindow {
     /** The read for [id] has actually finished, whatever its outcome; a retired read releases its slot here. */
     fun exited(id: UUID) { retired -= id }
 
+    /** Ordinal spans of the resident non-empty pages, for re-reading them with [CoachPageRequest.Range] after a change. */
+    val spans: List<LongRange> get() = pages.mapNotNull { span(it) }
+
+    /** The ordinal new rows follow while the window holds the conversation's latest page; null while later pages are missing. */
+    val newerCursor: Long? get() = pages.lastOrNull()?.takeIf { !it.hasLater }?.let { exchanges.lastOrNull()?.ordinal ?: Long.MIN_VALUE }
+
+    /**
+     * Applies a change refresh. [reread] rows replace each resident page whose span they were read for. [newer] rows (read
+     * after [newerCursor]; [newerContinues] when more follow) join the last page only while the reader is [following] the
+     * latest, evicting the earliest pages past capacity; while browsing, the last page only learns it has later rows.
+     */
+    fun refresh(reread: Map<LongRange, List<CoachExchange>>, newer: List<CoachExchange>, newerContinues: Boolean, following: Boolean) {
+        for (i in pages.indices) span(pages[i])?.let { reread[it] }?.let { pages[i] = pages[i].copy(exchanges = it) }
+        val last = pages.lastOrNull()?.takeIf { !it.hasLater } ?: return
+        val cursor = exchanges.lastOrNull()?.ordinal ?: Long.MIN_VALUE
+        val resident = exchanges.map { it.turn.id }.toSet()
+        val fresh = newer.filter { it.ordinal > cursor && it.turn.id !in resident }
+        if (fresh.isEmpty()) return
+        if (!following) {
+            pages[pages.lastIndex] = last.copy(hasLater = true)
+            return
+        }
+        pages[pages.lastIndex] = last.copy(exchanges = last.exchanges + fresh, hasLater = newerContinues)
+        while (pages.size > 1 && reservations.isEmpty() && exchanges.size + reservedCapacity > maximumExchanges) {
+            pages.removeAt(0); pages[0] = pages[0].copy(hasEarlier = true)
+            failures -= Direction.earlier
+        }
+    }
+
+    private fun span(page: CoachPage) = page.exchanges.takeIf { it.isNotEmpty() }?.let { it.first().ordinal..it.last().ordinal }
+
     private fun edge(direction: Direction) = if (direction == Direction.earlier) pages.firstOrNull() else pages.lastOrNull()
 
     private fun CoachPage.continues(direction: Direction) = if (direction == Direction.earlier) hasEarlier else hasLater

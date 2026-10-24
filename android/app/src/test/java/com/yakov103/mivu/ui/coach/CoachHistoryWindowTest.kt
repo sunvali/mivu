@@ -110,4 +110,24 @@ class CoachHistoryWindowTest {
         assertTrue(window.isLatest(window.exchanges.last().turn.id))
         assertFalse(window.isLatest(window.exchanges.first().turn.id))
     }
+
+    @Test fun refreshJoinsLatestOnlyWhileFollowing() {
+        val browsing = filled(earlier = 4)
+        browsing.refresh(emptyMap(), listOf(exchange(1_000)), newerContinues = false, following = false)
+        assertEquals(100, browsing.exchanges.size)
+        assertEquals(EdgeState.Available, browsing.edgeState(Direction.later))
+
+        val following = filled(earlier = 4)
+        val newest = exchange(1_000)
+        following.refresh(emptyMap(), listOf(newest), newerContinues = false, following = true)
+        assertEquals(newest.turn.id, following.exchanges.last().turn.id)
+        assertTrue(following.isLatest(newest.turn.id))
+        assertEquals(81, following.exchanges.size) // the earliest page left to keep 100
+        assertEquals(EdgeState.Available, following.edgeState(Direction.earlier))
+
+        val renamed = following.exchanges.first().let { it.copy(turn = it.turn.copy(text = "Synthetic edited")) }
+        val span = following.spans.first()
+        following.refresh(mapOf(span to listOf(renamed) + following.exchanges.drop(1).take(19)), emptyList(), false, true)
+        assertEquals("Synthetic edited", following.exchanges.first().turn.text)
+    }
 }
