@@ -65,7 +65,7 @@ internal fun fingerprint(text: String) = fingerprint(text.toByteArray(Charsets.U
 internal fun fingerprint(bytes: ByteArray) =
     MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
-private fun validateItems(items: List<FoodItem>) {
+internal fun validateItems(items: List<FoodItem>) {
     ok(items.size <= 200 && items.map { it.id }.unique(), "items")
     for (item in items) {
         val values = listOfNotNull(item.nutrition, item.nutritionBasis)

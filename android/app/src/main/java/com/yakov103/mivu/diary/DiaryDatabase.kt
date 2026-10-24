@@ -107,6 +107,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         fun day(id: UUID): TrackingDay? = days(id).firstOrNull()
         fun meal(id: UUID): DiaryMeal? = meals(id).firstOrNull()
         fun coachTurn(id: UUID): CoachTurn? = turns(id).firstOrNull()
+        fun isLive(kind: Tombstone, id: UUID): Boolean = exists(kind.name, id)
 
         /** Import-style rewrite: every record row and the head's non-revision fields come from [snapshot]. */
         fun write(snapshot: DiarySnapshot) {
@@ -127,7 +128,15 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         /** Upserts the meal row and replaces its items, photos and submissions. */
         fun putMeal(meal: DiaryMeal) {
             alive(Tombstone.meal, meal.id)
-            verify(pending, meals = listOf(meal))
+            // Coach turns may resolve photo IDs through this meal: dropping one they use must not strand them.
+            val kept = meal.photos.map { it.id }.toSet()
+            val dropped = records("photo", MealPhoto.serializer(), "parent = ?", meal.id).map { it.second.id }.filter { it !in kept }
+            val users = if (dropped.isEmpty()) emptyList() else coachTurnsWithoutPhotos().filter { t ->
+                t.photoIDs.any { it in dropped } && (t.pendingMealID == meal.id || t.receipts.any { it.mealID == meal.id })
+            }.mapNotNull { coachTurn(it.id) }
+            val others = users.flatMap { t -> listOfNotNull(t.pendingMealID) + t.receipts.mapNotNull { it.mealID } }
+                .toSet().minus(meal.id).mapNotNull { meal(it) }
+            verify(pending, meals = listOf(meal) + others, turns = users)
             put("meal", meal.id.key, meal.copy(items = emptyList(), photos = emptyList(), submissions = emptyList()),
                 DiaryMeal.serializer(), meal.dayID)
             for (table in listOf("submission", "item", "photo")) db.delete(table, "parent = ?", arrayOf(meal.id.key))
@@ -184,6 +193,17 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
 
     /** Every Coach turn row in order, without loading photo bytes. */
     fun coachTurnsWithoutPhotos(): List<CoachTurn> = records("coach_turn", CoachTurn.serializer()).map { it.second }
+
+    /** Port of iOS `nextPendingMealSubmission`: the first submission still waiting for analysis, as (mealID, submissionID). */
+    fun nextPendingMealSubmission(): Pair<UUID, UUID>? = immediate {
+        head() // owner check, as iOS domainRead
+        db.rawQuery("SELECT parent, id FROM submission WHERE json_extract(CAST(payload AS TEXT), '$.state') IN " +
+            "('captured','waitingForConnection','analyzing','needsRetry') ORDER BY ordinal, id LIMIT 1", null).use {
+            if (!it.moveToFirst()) null
+            else runCatching { UUID.fromString(it.getString(0)) to UUID.fromString(it.getString(1)) }
+                .getOrElse { throw DiaryError.InvalidData("submission") }
+        }
+    }
 
     fun head(): Head = readHead() ?: throw DiaryError.InvalidData("no diary")
 
