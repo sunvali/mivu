@@ -57,7 +57,7 @@ class DiaryCaptureTest {
         throws<DiaryError.InvalidData> { db.captureCoachSubmission(payload(), before.revision) }
         assertEquals(before, db.head())
         assertEquals(10_000, rows("coach_turn"))
-        db.transaction(before.revision) { it.putCoachTurn(turns[0].copy(text = "synthetic edit")) } // updates still allowed
+        db.transaction(before.revision) { it.putCoachTurn(turns[0].copy(state = CoachTurnState.needsRetry)) } // updates still allowed
     }
 
     @Test fun captureIsAcknowledgedOnlyAfterCommit() {
@@ -188,6 +188,66 @@ class DiaryCaptureTest {
         db.close()
         db = DiaryDatabase.open(context, profile.id)
         assertEquals(undo, db.read { it.coachUndo(key) })
+    }
+
+    @Test fun acceptedTurnIdentityIsImmutable() {
+        val turn = db.captureCoachSubmission(payload(), db.head().revision)
+        val stored = db.coachTurn(turn.id)!!
+        val changes = listOf<(CoachTurn) -> CoachTurn>(
+            { it.copy(submissionManifest = it.submissionManifest!!.copy(textFingerprint = fingerprint("other"))) },
+            { it.copy(capturedAt = it.capturedAt.plusSeconds(1)) },
+            { it.copy(captureTimeZoneID = "Asia/Jerusalem") },
+            { it.copy(activeDayID = UUID.randomUUID()) },
+            { it.copy(text = "synthetic edit") },
+            { it.copy(captureSegmentID = UUID.randomUUID()) },
+        )
+        for (change in changes) {
+            val head = db.head()
+            throws<DiaryError.StaleRevision> { db.transaction(head.revision) { it.putCoachTurn(change(stored)) } }
+            assertEquals(head, db.head())
+            assertEquals(stored, db.coachTurn(turn.id))
+        }
+        val receipt = CoachReceipt("${turn.id.toString().uppercase()}/open_settings", turn.id, destination = CoachDestination.settings,
+            committedRevision = db.head().revision.toInt(), resultJSON = "{}")
+        val progressed = stored.copy(state = CoachTurnState.completed, assistantText = "Done.", receipts = listOf(receipt))
+        db.transaction(db.head().revision) { it.putCoachTurn(progressed) }
+        assertEquals(progressed, db.coachTurn(turn.id))
+    }
+
+    @Test fun progressUpdateKeepsPhotoRows() {
+        val turn = db.captureCoachSubmission(payload(photos = listOf(photo(), photo())), db.head().revision)
+        // Any rewrite of the photo rows deletes them first; this trigger makes that fail the update.
+        SQLiteDatabase.openDatabase(db.file, SQLiteDatabase.OpenParams.Builder().setJournalMode("DELETE").build()).use {
+            it.execSQL("CREATE TRIGGER keep_photos BEFORE DELETE ON coach_photo BEGIN SELECT RAISE(ABORT, 'photo rewritten'); END")
+        }
+        db.transaction(db.head().revision) { it.updateCoachTurn(turn.id, CoachTurnState.analyzing, null) }
+        db.transaction(db.head().revision) { it.failCoachTurn(turn.id, CoachTurnState.needsRetry) }
+        db.transaction(db.head().revision) { it.finishCoachTurn(turn.id, "Logged.") }
+        val stored = db.coachTurn(turn.id)!!
+        assertEquals(turn.photos, stored.photos)
+        assertEquals(CoachTurnState.completed, stored.state)
+    }
+
+    @Test fun finishRoundTripsQuestionAndDayChoice() {
+        val turn = db.captureCoachSubmission(payload(), db.head().revision)
+        val question = CoachQuestion(CoachClarification.meal, listOf(CoachReply.Target.Message(turn.id, false)), "synthetic lunch")
+        db.transaction(db.head().revision) {
+            it.updateCoachTurn(turn.id, CoachTurnState.needsClarification, "Which meal?", question, needsDayChoice = true)
+        }
+        db.close()
+        db = DiaryDatabase.open(context, profile.id)
+        var stored = db.coachTurn(turn.id)!!
+        assertEquals(question, stored.question)
+        assertEquals(true, stored.needsDayChoice)
+        db.transaction(db.head().revision) { it.finishCoachTurn(turn.id, "Which one did you mean?", question, incomplete = true) }
+        stored = db.coachTurn(turn.id)!!
+        assertEquals(CoachTurnState.completed, stored.state)
+        assertEquals(question, stored.question)
+        assertNull(stored.needsDayChoice) // a day choice only belongs to a clarification
+        db.transaction(db.head().revision) { it.finishCoachTurn(turn.id, "Logged.") }
+        stored = db.coachTurn(turn.id)!!
+        assertNull(stored.question)
+        assertNull(stored.incomplete)
     }
 
     @Test fun emptyCaptureRejected() {

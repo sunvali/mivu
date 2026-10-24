@@ -88,7 +88,8 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                     } finally { db.endTransaction() }
                 }
                 if (db.version != 1) throw DiaryError.InvalidData("database version")
-                // Outside the version gate, as iOS: existing diaries gain it too. Derived Coach state, never archived.
+                // Outside the version gate, as iOS: existing diaries gain it too. Derived Coach state, never archived; a
+                // replace (import/restore) deletes its turns and so drops every undo row on purpose.
                 db.execSQL("CREATE TABLE IF NOT EXISTS coach_undo (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL " +
                     "REFERENCES coach_turn(id) ON DELETE CASCADE, mealID TEXT NOT NULL, afterRevision INTEGER NOT NULL, " +
                     "afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
@@ -120,6 +121,8 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         fun day(id: UUID): TrackingDay? = days(id).firstOrNull()
         fun meal(id: UUID): DiaryMeal? = meals(id).firstOrNull()
         fun coachTurn(id: UUID): CoachTurn? = turns(id).firstOrNull()
+        /** The turn row alone: photo metadata and bytes are not read. */
+        fun coachTurnWithoutPhotos(id: UUID): CoachTurn? = records("coach_turn", CoachTurn.serializer(), "id = ?", id).firstOrNull()?.second
         fun isLive(kind: Tombstone, id: UUID): Boolean = exists(kind.name, id)
         fun isTombstoned(kind: Tombstone, id: UUID): Boolean = exists("tombstone_${kind.name}", id)
         fun days(): List<TrackingDay> = this@DiaryDatabase.days()
@@ -226,14 +229,36 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
 
         /** Upserts the turn row and replaces its photos. Meals it points at are read for validation. */
         fun putCoachTurn(turn: CoachTurn) {
-            if (!exists("coach_turn", turn.id) && DatabaseUtils.queryNumEntries(db, "coach_turn") >= MAX_COACH_TURNS) {
+            val original = coachTurnWithoutPhotos(turn.id)
+            if (original == null && DatabaseUtils.queryNumEntries(db, "coach_turn") >= MAX_COACH_TURNS) {
                 throw DiaryError.InvalidData("coach turns")
             }
+            // iOS `saveTurn`: an accepted capture's identity and context never change.
+            if (original != null && (original.submissionManifest != turn.submissionManifest || original.capturedAt != turn.capturedAt ||
+                    original.captureTimeZoneID != turn.captureTimeZoneID || original.activeDayID != turn.activeDayID ||
+                    original.text != turn.text || original.captureSegmentID != turn.captureSegmentID)
+            ) throw DiaryError.StaleRevision
             val mealIDs = (listOfNotNull(turn.pendingMealID) + turn.receipts.mapNotNull { it.mealID }).toSet()
             verify(pending, meals = mealIDs.mapNotNull { meal(it) }, turns = listOf(turn))
             put("coach_turn", turn.id.key, turn.copy(photos = emptyList()), CoachTurn.serializer())
             db.delete("coach_photo", "parent = ?", arrayOf(turn.id.key))
             putPhotos("coach_photo", turn.id, turn.photos)
+            changed = true
+        }
+
+        /**
+         * iOS `updateCoachTurn`: sets the turn's progress; a day choice only belongs to a clarification. Only the turn row is
+         * rewritten: its photo rows and photo links are unchanged, so their checks (which need the bytes) still hold.
+         */
+        fun updateCoachTurn(
+            turnID: UUID, state: CoachTurnState, assistantText: String?, question: CoachQuestion? = null,
+            incomplete: Boolean? = null, needsDayChoice: Boolean = false,
+        ) {
+            val turn = (coachTurnWithoutPhotos(turnID) ?: throw DiaryError.NotFound).copy(state = state, assistantText = assistantText,
+                question = question, incomplete = incomplete,
+                needsDayChoice = if (state == CoachTurnState.needsClarification && needsDayChoice) true else null)
+            verify(pending, turns = listOf(turn.copy(photoIDs = emptyList())))
+            put("coach_turn", turn.id.key, turn, CoachTurn.serializer())
             changed = true
         }
 

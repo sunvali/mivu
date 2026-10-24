@@ -83,19 +83,9 @@ fun DiaryDatabase.pendingCoachTurns(): List<UUID> = coachTurnsWithoutPhotos()
     .sortedWith(compareBy<CoachTurn> { it.capturedAt }.thenBy { it.id.toString().uppercase() })
     .map { it.id }
 
-/** iOS `updateCoachTurn`: sets the turn's progress; a day choice only belongs to a clarification. */
-fun DiaryDatabase.Tx.updateCoachTurn(
-    turnID: UUID, state: CoachTurnState, assistantText: String?, question: CoachQuestion? = null,
-    incomplete: Boolean? = null, needsDayChoice: Boolean = false,
-) {
-    val turn = coachTurn(turnID) ?: throw DiaryError.NotFound
-    putCoachTurn(turn.copy(state = state, assistantText = assistantText, question = question, incomplete = incomplete,
-        needsDayChoice = if (state == CoachTurnState.needsClarification && needsDayChoice) true else null))
-}
-
 /** iOS `failCoachTurn` (`setCoachTurnState`): a completed turn keeps its reply; any other state clears it. */
 fun DiaryDatabase.Tx.failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Boolean = false) {
-    val kept = if (state == CoachTurnState.completed) coachTurn(turnID) else null
+    val kept = if (state == CoachTurnState.completed) coachTurnWithoutPhotos(turnID) else null
     updateCoachTurn(turnID, state, kept?.assistantText, kept?.question, kept?.incomplete, needsDayChoice)
 }
 
