@@ -30,7 +30,7 @@ fun nutritionTotals(items: List<FoodItem>) = NutritionTotals(
 )
 
 private val DiaryMeal.isSaved get() = revision > 0
-private val DiaryMeal.hasUnresolvedInput
+internal val DiaryMeal.hasUnresolvedInput
     get() = (!isSaved && submissions.isEmpty()) ||
         submissions.any { it.state != SubmissionState.saved && it.state != SubmissionState.cancelled }
 

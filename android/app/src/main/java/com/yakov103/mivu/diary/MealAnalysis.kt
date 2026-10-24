@@ -24,7 +24,7 @@ private fun DiaryMeal.with(sub: MealSubmission) = copy(submissions = submissions
 private fun DiaryDatabase.Tx.save(meal: DiaryMeal) = putMeal(meal)
 
 /** iOS `commitSavedItems`: replaces the items and bumps the meal revision, only at [expectedRevision]. */
-private fun DiaryDatabase.Tx.commitSavedItems(meal: DiaryMeal, items: List<FoodItem>, expectedRevision: Int): DiaryMeal {
+internal fun DiaryDatabase.Tx.commitSavedItems(meal: DiaryMeal, items: List<FoodItem>, expectedRevision: Int): DiaryMeal {
     if (meal.revision != expectedRevision) throw DiaryError.StaleRevision
     return meal.copy(items = items, revision = meal.revision + 1, changedRevision = (head.revision + 1).toInt())
 }

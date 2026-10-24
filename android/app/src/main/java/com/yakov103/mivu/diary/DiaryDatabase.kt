@@ -112,6 +112,11 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         fun meal(id: UUID): DiaryMeal? = meals(id).firstOrNull()
         fun coachTurn(id: UUID): CoachTurn? = turns(id).firstOrNull()
         fun isLive(kind: Tombstone, id: UUID): Boolean = exists(kind.name, id)
+        fun isTombstoned(kind: Tombstone, id: UUID): Boolean = exists("tombstone_${kind.name}", id)
+        fun days(): List<TrackingDay> = this@DiaryDatabase.days()
+        fun coachTurnsWithoutPhotos(): List<CoachTurn> = this@DiaryDatabase.coachTurnsWithoutPhotos()
+        fun submissionParent(id: UUID): UUID? =
+            records("submission", MealSubmission.serializer(), "id = ?", id).firstOrNull()?.first?.parent?.let(UUID::fromString)
 
         /** Import-style rewrite: every record row and the head's non-revision fields come from [snapshot]. */
         internal fun write(snapshot: DiarySnapshot) {

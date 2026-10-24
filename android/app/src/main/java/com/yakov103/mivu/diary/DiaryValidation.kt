@@ -19,6 +19,7 @@ sealed class DiaryError(message: String? = null) : Exception(message) {
     object StaleArchive : DiaryError("stale archive")
     object NotFound : DiaryError("not found")
     object EmptyCapture : DiaryError("empty capture")
+    object AmbiguousDay : DiaryError("ambiguous day") // the day changed since the target was prepared
     object QuotaExceeded : DiaryError("quota exceeded")
     object Busy : DiaryError("database busy") // another connection holds the write lock
 }
