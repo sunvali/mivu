@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.1](https://github.com/yakov103/mivu/compare/v1.1.0...v1.1.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **coach:** give Pip's bubble and day chip the composer's full width ([#70](https://github.com/yakov103/mivu/issues/70)) ([5279293](https://github.com/yakov103/mivu/commit/5279293c1926819f87d0ba3230661204f7b2f34e))
+* **coach:** never leave a failed turn stuck on Thinking ([#71](https://github.com/yakov103/mivu/issues/71)) ([f0c78a4](https://github.com/yakov103/mivu/commit/f0c78a4cde6ec998265f14f712bdc22cf58e3a5b))
+* **companion:** keep Pip moving in Low Power Mode on every tab ([#69](https://github.com/yakov103/mivu/issues/69)) ([30b76a3](https://github.com/yakov103/mivu/commit/30b76a3eeb3daf5bebba995c948eb876e73e856d))
+* **notifications:** say a meal's calories are a floor when some foods lack them ([#72](https://github.com/yakov103/mivu/issues/72)) ([1533d77](https://github.com/yakov103/mivu/commit/1533d779239d46c4df065b5144402387aeea47f1))
+
 ## [1.1.0](https://github.com/yakov103/mivu/compare/v1.0.0...v1.1.0) (2026-10-24)
 
 
