@@ -20,7 +20,7 @@ import Testing
     @Test func severalFoodsAreShortenedAndUnknownCaloriesSaySo() {
         let text = MealNotification.text(for: meal([food("Rice", kcal: nil), food("Chicken", kcal: 200), food("Salad", kcal: 40)]))
         #expect(text?.title == "Rice, Chicken and 1 more logged")
-        #expect(text?.body == "Calories not known yet")
+        #expect(text?.body == "At least 240 kcal")
     }
 
     @Test func estimateAwaitingReviewAsksForReview() {
