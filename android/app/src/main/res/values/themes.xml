@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window colours match the Compose canvas token, so launch and recreation never flash white in dark mode. -->
+    <style name="Theme.Mivu" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/canvas</item>
+    </style>
+    <color name="canvas">#F5F8F8</color>
+</resources>

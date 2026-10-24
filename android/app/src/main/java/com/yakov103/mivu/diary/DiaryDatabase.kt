@@ -222,6 +222,9 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         }
     }
 
+    /** Runs after every committed write (a changed transaction or a replace), outside the database transaction. */
+    var onCommit: (() -> Unit)? = null
+
     /** Test seam: runs after a transaction's row writes, before its head write and commit. */
     @VisibleForTesting internal var beforeCommit: (() -> Unit)? = null
 
@@ -250,20 +253,24 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     fun snapshot(): DiarySnapshot = immediate { readSnapshot(head()) }
 
     /** Throws StaleRevision unless the head is still at [expectedRevision]; a body that writes nothing commits nothing. */
-    fun <T> transaction(expectedRevision: Long, body: (Tx) -> T): T = immediate {
-        val original = head()
-        if (original.revision != expectedRevision) throw DiaryError.StaleRevision
-        val tx = Tx(original)
-        val value = body(tx)
-        if (tx.changed) {
-            beforeCommit?.invoke()
-            if (tx.head.profile.id != profileID) throw DiaryError.WrongOwner
-            val next = tx.head.copy(revision = original.revision + 1,
-                lineage = (original.lineage ?: emptyList()).takeLast(255) + UUID.randomUUID())
-            verify(next)
-            writeHead(next)
-        }
-        value
+    fun <T> transaction(expectedRevision: Long, body: (Tx) -> T): T {
+        var committed = false
+        return immediate {
+            val original = head()
+            if (original.revision != expectedRevision) throw DiaryError.StaleRevision
+            val tx = Tx(original)
+            val value = body(tx)
+            if (tx.changed) {
+                beforeCommit?.invoke()
+                if (tx.head.profile.id != profileID) throw DiaryError.WrongOwner
+                val next = tx.head.copy(revision = original.revision + 1,
+                    lineage = (original.lineage ?: emptyList()).takeLast(255) + UUID.randomUUID())
+                verify(next)
+                writeHead(next)
+                committed = true
+            }
+            value
+        }.also { if (committed) onCommit?.invoke() }
     }
 
     /** Import: validates, then replaces every row and the head with [snapshot] as given (no revision bump). */
@@ -283,7 +290,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         writeRows(snapshot)
         writeHead(Head(snapshot.revision.toLong(), snapshot.lineage, snapshot.profile, snapshot.activeDayID,
             snapshot.previousDayConfirmedAt, snapshot.activeConversationSegmentID))
-    }
+    }.also { onCommit?.invoke() }
 
     // beginTransactionNonExclusive issues `BEGIN IMMEDIATE` (SQLiteSession.TRANSACTION_MODE_IMMEDIATE).
     private fun <T> immediate(body: () -> T): T {

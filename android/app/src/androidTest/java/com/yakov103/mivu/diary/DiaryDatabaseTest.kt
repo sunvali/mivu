@@ -84,6 +84,17 @@ class DiaryDatabaseTest {
         assertEquals(long.drop(1), lineage.dropLast(1))
     }
 
+    @Test fun onCommitRunsOnlyAfterAWriteCommits() {
+        var commits = 0
+        db.onCommit = { commits++ }
+        db.transaction(db.head().revision) { it.snapshot() }
+        throws<IllegalStateException> { db.transaction(db.head().revision) { it.putWeight(weight()); error("synthetic") } }
+        assertEquals(0, commits)
+        db.transaction(db.head().revision) { it.putWeight(weight()) }
+        db.replaceAll(fixture)
+        assertEquals(2, commits)
+    }
+
     @Test fun staleExpectedRevisionThrowsAndChangesNothing() {
         val before = db.head()
         try {
