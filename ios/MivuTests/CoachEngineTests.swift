@@ -468,6 +468,26 @@ private actor CoachInputFixture {
         #expect(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).failureReason == nil)
     }
 
+    @Test func longForeignErrorDomainStillFitsTheStoredReason() {
+        let reason = CoachEngine.failureReason(NSError(domain: String(repeating: "x", count: 500), code: 7))
+        #expect(reason.utf8.count <= 200 && reason.hasSuffix("(7)"))
+    }
+
+    @Test func retryAfterASavedWriteKeepsOneReceipt() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result([call("log_food", logArgs)]), result(text: "Done")])
+        let requests = CoachFixture([])
+        let engine = CoachEngine(store: store, infer: { input, tools in
+            _ = try? await requests.infer(input, tools)
+            if await requests.calls == 2 { throw ResponsesClient.Failure.malformedResponse }
+            return try await replies.infer(input, tools)
+        })
+        let completed = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.state == .completed && completed.receipts.count == 1)
+        #expect(try await store.snapshotForExport().meals.count == 1)
+        #expect(await requests.calls == 3)
+    }
+
     @Test func rejectedCallIsReturnedToModelToCorrect() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let invalid = logArgs.replacingOccurrences(of: "\"kcal\":140", with: "\"verified\":true,\"kcal\":140")

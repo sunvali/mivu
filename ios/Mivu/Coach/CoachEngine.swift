@@ -261,7 +261,8 @@ struct CoachEngine: Sendable {
     static func failureReason(_ error: any Error) -> String {
         switch error {
         case is ResponsesClient.Failure, is CoachError, is DiaryError, is SessionError: String(reflecting: error)
-        default: "\((error as NSError).domain)(\((error as NSError).code))"
+        // The domain is capped so the reason always fits the stored turn's 200-byte limit.
+        default: "\((error as NSError).domain.prefix(40))(\((error as NSError).code))"
         }
     }
     /// Rejected tool calls the model can fix from feedback; day ambiguity stays a user question.
