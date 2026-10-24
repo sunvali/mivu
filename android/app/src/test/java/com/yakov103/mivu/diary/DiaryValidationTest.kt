@@ -45,6 +45,13 @@ class DiaryValidationTest {
             withJson(good).validate()
     }
 
+    @Test fun receiptResultJsonNestingIsBounded() {
+        fun withJson(j: String) = valid.firstTurn { t -> t.copy(receipts = listOf(t.receipts[0].copy(resultJSON = j)) + t.receipts.drop(1)) }
+        rejects(withJson("[".repeat(100_000)), "receipt")
+        rejects(withJson("[".repeat(513) + "]".repeat(513)), "receipt")
+        withJson("[".repeat(512) + "]".repeat(512)).validate()
+    }
+
     @Test fun localDateYearZeroRejected() = rejects(valid.copy(days = listOf(valid.days[0].copy(localDate = "0000-01-01")) + valid.days.drop(1)), "day")
 
     @Test fun nameBlankUsesSwiftWhitespace() {

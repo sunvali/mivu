@@ -188,6 +188,8 @@ private fun validateTurn(turn: CoachTurn, s: DiarySnapshot, dayIds: Set<UUID>): 
 
 // Foundation's JSONSerialization: strict RFC 8259 with an object or array at the top level.
 // kotlinx parseToJsonElement is lenient (unquoted tokens, NaN), so check the grammar here.
+private val jsonNumber = Regex("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?")
+
 internal fun strictJsonContainer(text: String): Boolean {
     var i = 0
     fun ws() { while (i < text.length && text[i] in " \t\n\r") i++ }
@@ -209,7 +211,8 @@ internal fun strictJsonContainer(text: String): Boolean {
         }
         return false
     }
-    fun value(): Boolean {
+    fun value(depth: Int): Boolean {
+        if (depth > 512) return false // JSONSerialization's nesting cap; also bounds recursion
         ws()
         val c = text.getOrNull(i) ?: return false
         val ok = when {
@@ -220,7 +223,7 @@ internal fun strictJsonContainer(text: String): Boolean {
                     var good = true
                     while (good) {
                         ws(); good = str(); if (!good) break
-                        ws(); good = text.getOrNull(i++) == ':' && value(); if (!good) break
+                        ws(); good = text.getOrNull(i++) == ':' && value(depth + 1); if (!good) break
                         ws(); val d = text.getOrNull(i++)
                         if (d == '}') break
                         good = d == ','
@@ -233,7 +236,7 @@ internal fun strictJsonContainer(text: String): Boolean {
                 if (text.getOrNull(i) == ']') { i++; true } else {
                     var good = true
                     while (good) {
-                        good = value(); if (!good) break
+                        good = value(depth + 1); if (!good) break
                         ws(); val d = text.getOrNull(i++)
                         if (d == ']') break
                         good = d == ','
@@ -242,13 +245,13 @@ internal fun strictJsonContainer(text: String): Boolean {
                 }
             }
             lit("true") || lit("false") || lit("null") -> true
-            else -> Regex("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?").matchAt(text, i)?.also { i = it.range.last + 1 } != null
+            else -> jsonNumber.matchAt(text, i)?.also { i = it.range.last + 1 } != null
         }
         return ok
     }
     ws()
     if (text.getOrNull(i) != '{' && text.getOrNull(i) != '[') return false
-    return value().also { ws() } && i == text.length
+    return value(1).also { ws() } && i == text.length
 }
 
 private fun validateWeight(w: WeightEntry) = ok(
