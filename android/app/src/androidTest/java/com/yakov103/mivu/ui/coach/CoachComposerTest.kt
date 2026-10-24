@@ -80,12 +80,16 @@ class CoachComposerTest {
         isConnected = { false }, activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = saved,
         prepare = { preparePhoto(context.contentResolver, it, folder) })
 
-    private fun launch(fontScale: Float? = null, saved: SavedStateHandle = SavedStateHandle()) {
+    private var retaking: String? = null
+
+    private fun launch(fontScale: Float? = null, saved: SavedStateHandle = SavedStateHandle(), hasCamera: Boolean = true) {
         model = model(saved)
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
-                MivuTheme { CoachScreen(model, onOpenMeal = {}, onSeeToday = {}, onSeeProgress = {}) }
+                MivuTheme {
+                    CoachScreen(model, onOpenMeal = {}, onSeeToday = {}, onSeeProgress = {}, onOpenCamera = { retaking = it }, hasCamera = hasCamera)
+                }
             }
         }
         compose.waitUntil(10_000) { model.timeline.value.loaded }
@@ -150,6 +154,52 @@ class CoachComposerTest {
         compose.onNodeWithContentDescription("Remove photo 1").performClick()
         waitForText("7 of 8 photos")
         assertEquals(7, model.draft.value.photos.size)
+    }
+
+    private fun importTwo(): List<String> {
+        val picked = (1..2).map { png("synthetic-retake-$it.png") }
+        try {
+            compose.runOnUiThread { model.importPhotos(picked.map(Uri::fromFile)) }
+            waitForText("2 of 8 photos")
+        } finally {
+            picked.forEach { it.delete() }
+        }
+        return model.draft.value.photos
+    }
+
+    @Test fun retakeReplacesPhotoInPlace() {
+        launch()
+        val (first, second) = importTwo()
+        compose.onNodeWithContentDescription("Retake photo 1").performClick()
+        assertEquals(first, retaking)
+        val shot = png("synthetic-retake-shot.png")
+        compose.runOnUiThread { model.retakePhoto(first, shot) }
+        compose.waitUntil(10_000) { model.draft.value.photos.first() != first }
+        assertEquals(2, model.draft.value.photos.size)
+        assertEquals(second, model.draft.value.photos[1])
+        assertFalse(File(first).exists())
+        assertFalse(shot.exists()) // the raw shot is prepared, then deleted
+        assertNull(model.message.value)
+    }
+
+    @Test fun failedRetakeKeepsOldPhoto() {
+        launch()
+        val photos = importTwo()
+        val broken = File(context.cacheDir, "synthetic-broken.jpg").apply { writeText("not an image") }
+        compose.runOnUiThread { model.retakePhoto(photos[0], broken) }
+        compose.waitUntil(10_000) { model.message.value == PHOTO_NOT_TAKEN }
+        assertEquals(photos, model.draft.value.photos)
+        assertTrue(File(photos[0]).exists())
+        assertFalse(broken.exists())
+    }
+
+    @Test fun noCameraHidesCameraAndRetake() {
+        launch(hasCamera = false)
+        importTwo()
+        compose.onNodeWithContentDescription("Add photos").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Retake photo 1").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Choose photos").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Remove photo 1").assertIsDisplayed()
     }
 
     @Test fun failedSendThenRemovedPhotoStillSendsOnce() {

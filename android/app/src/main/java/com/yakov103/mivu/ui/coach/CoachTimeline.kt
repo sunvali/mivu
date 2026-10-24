@@ -2,6 +2,44 @@ package com.yakov103.mivu.ui.coach
 
 import android.animation.ValueAnimator
 import android.util.LruCache
+import android.content.ClipData
+import android.os.Build
+import android.widget.Toast
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,6 +111,8 @@ class CoachRowActions(
     val seeProgress: () -> Unit,
     val turnPhoto: suspend (UUID, UUID) -> ByteArray?,
     val mealPhoto: suspend (UUID, UUID) -> ByteArray?,
+    /** Quotes the person's message, or Pip's reply when true, in the composer. */
+    val reply: (CoachTurn, Boolean) -> Unit = { _, _ -> },
     /** A sent quote's target: the original message, day or record. */
     val openQuote: (com.yakov103.mivu.diary.CoachReply) -> Unit = {},
 )
@@ -94,61 +134,150 @@ fun CoachExchangeRow(
     val ring = if (highlighted) Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
         .semantics { stateDescription = "Selected source message" } else Modifier
-    Column(modifier.fillMaxWidth().then(ring).padding(horizontal = if (highlighted) 8.dp else 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        InputBubble(turn, actions.turnPhoto, actions.openQuote)
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            turn.assistantText?.let { Text(coachReplyText(it), style = MaterialTheme.typography.bodyLarge) }
-            val question = turn.question
-            if (isLatest && question != null && question.candidates.isNotEmpty()) {
-                CoachQuestionChips(question, exchange.questionMeals, enabled = true, loadPhoto = actions.mealPhoto, onPick = actions.answer)
-            }
-            if (turn.state != CoachTurnState.completed) {
-                if (activity != null && turn.receipts.isEmpty()) ActivityRow(activity) else Status(turn.state)
-                TurnChoices(turn, days, actions)
-            }
-            exchange.receipts.filter { it.mealID != null || it.workoutID != null }.forEach { receipt ->
-                CoachReceiptCard(receipt, exchange.targets[receipt.operationKey] ?: CoachReceiptTarget.Loading, exchange.undo[receipt.operationKey],
-                    undoing = receipt.operationKey in undoing, onUndo = { actions.undo(receipt.operationKey) }, onOpen = { receipt.mealID?.let(actions.openMeal) })
-            }
-            exchange.receipts.filter { it.weightID != null }.forEach { receipt ->
-                CoachReceiptPresentation(receipt, CoachReceiptTarget.Loading).weightLabel?.let { WeightChip(it) }
-            }
-            if (isLatest) {
-                val followUps = CoachReplyLines.followUps(turn)
-                if (followUps.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    followUps.forEach { followUp ->
-                        val today = followUp == CoachReplyLines.FollowUp.today
-                        AssistChip(onClick = if (today) actions.seeToday else actions.seeProgress,
-                            label = { Text(if (today) "See today" else "See progress") },
-                            leadingIcon = { Icon(painterResource(if (today) R.drawable.ic_today else R.drawable.ic_progress), null,
-                                Modifier.size(AssistChipDefaults.IconSize)) })
+    SwipeToReply({ actions.reply(turn, !turn.assistantText.isNullOrBlank()) }, modifier) { swipe ->
+        Column(swipe.fillMaxWidth().then(ring).padding(horizontal = if (highlighted) 8.dp else 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            InputBubble(turn, actions.turnPhoto, actions.openQuote) { actions.reply(turn, false) }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                turn.assistantText?.let { reply ->
+                    val text = coachReplyText(reply)
+                    MessageActions(text.text, { actions.reply(turn, true) }) { Text(text, it, style = MaterialTheme.typography.bodyLarge) }
+                }
+                val question = turn.question
+                if (isLatest && question != null && question.candidates.isNotEmpty()) {
+                    CoachQuestionChips(question, exchange.questionMeals, enabled = true, loadPhoto = actions.mealPhoto, onPick = actions.answer)
+                }
+                if (turn.state != CoachTurnState.completed) {
+                    if (activity != null && turn.receipts.isEmpty()) ActivityRow(activity) else Status(turn.state)
+                    TurnChoices(turn, days, actions)
+                }
+                exchange.receipts.filter { it.mealID != null || it.workoutID != null }.forEach { receipt ->
+                    CoachReceiptCard(receipt, exchange.targets[receipt.operationKey] ?: CoachReceiptTarget.Loading, exchange.undo[receipt.operationKey],
+                        undoing = receipt.operationKey in undoing, onUndo = { actions.undo(receipt.operationKey) }, onOpen = { receipt.mealID?.let(actions.openMeal) })
+                }
+                exchange.receipts.filter { it.weightID != null }.forEach { receipt ->
+                    CoachReceiptPresentation(receipt, CoachReceiptTarget.Loading).weightLabel?.let { WeightChip(it) }
+                }
+                if (isLatest) {
+                    val followUps = CoachReplyLines.followUps(turn)
+                    if (followUps.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        followUps.forEach { followUp ->
+                            val today = followUp == CoachReplyLines.FollowUp.today
+                            AssistChip(onClick = if (today) actions.seeToday else actions.seeProgress,
+                                label = { Text(if (today) "See today" else "See progress") },
+                                leadingIcon = { Icon(painterResource(if (today) R.drawable.ic_today else R.drawable.ic_progress), null,
+                                    Modifier.size(AssistChipDefaults.IconSize)) })
+                        }
                     }
                 }
-            }
-            if (turn.incomplete == true) {
-                Text("Couldn't finish the rest", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton({ actions.finishRest(turn.id) }, Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+                if (turn.incomplete == true) {
+                    Text("Couldn't finish the rest", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton({ actions.finishRest(turn.id) }, Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+                }
             }
         }
     }
 }
 
+private val REPLY_THRESHOLD = 64.dp
+
+/**
+ * iOS replyPan: a rightward drag on the row follows the finger up to 64 dp, then at 0.15× past it; the reply arrow fades in,
+ * crossing the threshold ticks once, and a release past it replies. Only a mostly horizontal drag (x > 2|y|) is claimed, so
+ * the list keeps vertical scrolling, and a drag from the system back-gesture edge is left to the system.
+ */
 @Composable
-private fun InputBubble(turn: CoachTurn, loadPhoto: suspend (UUID, UUID) -> ByteArray?, openQuote: (com.yakov103.mivu.diary.CoachReply) -> Unit) {
+private fun SwipeToReply(onReply: () -> Unit, modifier: Modifier, content: @Composable (Modifier) -> Unit) {
+    val offset = remember { Animatable(0f) }
+    var arrowY by remember { mutableFloatStateOf(0f) }
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val reply by rememberUpdatedState(onReply)
+    val edge = WindowInsets.systemGestures.getLeft(LocalDensity.current, LocalLayoutDirection.current)
+    Box(modifier.fillMaxWidth().pointerInput(edge) {
+        val threshold = REPLY_THRESHOLD.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            if (down.position.x < edge) return@awaitEachGesture
+            var total = Offset.Zero
+            while (total.getDistance() <= viewConfiguration.touchSlop) {
+                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                if (change == null || !change.pressed || change.isConsumed) return@awaitEachGesture
+                total += change.positionChange()
+            }
+            if (total.x <= 0 || total.x <= abs(total.y) * 2) return@awaitEachGesture
+            arrowY = down.position.y
+            var x = total.x
+            var armed = false
+            val ended = drag(down.id) { change ->
+                x = max(0f, x + change.positionChange().x)
+                change.consume()
+                scope.launch { offset.snapTo(min(x, threshold) + max(0f, x - threshold) * 0.15f) }
+                if ((x >= threshold) != armed) {
+                    armed = !armed
+                    if (armed) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            }
+            if (ended && armed) reply()
+            scope.launch { if (ValueAnimator.areAnimatorsEnabled()) offset.animateTo(0f, spring(dampingRatio = 0.6f)) else offset.snapTo(0f) }
+        }
+    }) {
+        Icon(painterResource(R.drawable.ic_reply), null, Modifier
+            .offset { IntOffset(16.dp.roundToPx(), (arrowY - 12.dp.toPx()).roundToInt()) }
+            .graphicsLayer { alpha = (offset.value / REPLY_THRESHOLD.toPx()).coerceIn(0f, 1f) },
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        content(Modifier.offset { IntOffset(offset.value.roundToInt(), 0) })
+    }
+}
+
+/**
+ * iOS messageActions: a long press opens Reply and Copy (Copy only when there is text); TalkBack gets both as custom
+ * actions. Copy goes to the clipboard; Android 13+ confirms it itself, so only older versions show a toast.
+ */
+@Composable
+private fun MessageActions(text: String, onReply: () -> Unit, content: @Composable (Modifier) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val copy = {
+        scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Coach message", text))) }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+    }
+    Box {
+        content(Modifier
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); open = true }) }
+            .semantics {
+                customActions = listOfNotNull(CustomAccessibilityAction("Reply") { onReply(); true },
+                    text.takeIf { it.isNotEmpty() }?.let { CustomAccessibilityAction("Copy") { copy(); true } })
+            })
+        DropdownMenu(open, { open = false }) {
+            DropdownMenuItem({ Text("Reply") }, { open = false; onReply() }, leadingIcon = { Icon(painterResource(R.drawable.ic_reply), null) })
+            if (text.isNotEmpty()) DropdownMenuItem({ Text("Copy") }, { open = false; copy() },
+                leadingIcon = { Icon(painterResource(R.drawable.ic_copy), null) })
+        }
+    }
+}
+
+@Composable
+private fun InputBubble(turn: CoachTurn, loadPhoto: suspend (UUID, UUID) -> ByteArray?, openQuote: (com.yakov103.mivu.diary.CoachReply) -> Unit,
+    onReply: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = 48.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primary) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                turn.submissionManifest?.reply?.let { reply ->
-                    CoachSentQuote(reply, if (reply.target is com.yakov103.mivu.diary.CoachReply.Target.Weight) null else ({ openQuote(reply) }))
-                }
-                if (turn.photoIDs.isNotEmpty()) {
-                    Text(if (turn.photoIDs.size == 1) "1 photo" else "${turn.photoIDs.size} photos", style = MaterialTheme.typography.labelMedium)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        turn.photoIDs.forEach { id -> CoachPhoto(id, 120.dp) { loadPhoto(turn.id, id) } }
+        MessageActions(turn.text, onReply) { actions ->
+            Surface(actions, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primary) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    turn.submissionManifest?.reply?.let { reply ->
+                        CoachSentQuote(reply, if (reply.target is com.yakov103.mivu.diary.CoachReply.Target.Weight) null else ({ openQuote(reply) }))
                     }
+                    if (turn.photoIDs.isNotEmpty()) {
+                        Text(if (turn.photoIDs.size == 1) "1 photo" else "${turn.photoIDs.size} photos", style = MaterialTheme.typography.labelMedium)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            turn.photoIDs.forEach { id -> CoachPhoto(id, 120.dp) { loadPhoto(turn.id, id) } }
+                        }
+                    }
+                    if (turn.text.isNotEmpty()) Text(turn.text, style = MaterialTheme.typography.bodyLarge)
                 }
-                if (turn.text.isNotEmpty()) Text(turn.text, style = MaterialTheme.typography.bodyLarge)
             }
         }
         // A reply or card already shows the message landed; the save note matters only until then.

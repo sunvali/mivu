@@ -143,6 +143,27 @@ class CoachCameraTest {
         assertEquals(1, coachModel().draft.value.photos.size)
     }
 
+    @Test fun retakeModeLabelsShutterAndReturnsAfterOneShot() {
+        launchApp()
+        val picked = png("synthetic-retake.png")
+        try {
+            compose.runOnUiThread { coachModel().importPhotos(listOf(Uri.fromFile(picked))) }
+            waitForText("1 of 8 photos")
+        } finally {
+            picked.delete()
+        }
+        val old = coachModel().draft.value.photos.single()
+        compose.onNodeWithContentDescription("Retake photo 1").performClick()
+        compose.waitUntil(15_000) { exists(hasContentDescription("Retake photo")) }
+        compose.onNodeWithContentDescription("Take photo").assertDoesNotExist()
+        compose.waitUntil(15_000) { runCatching { compose.onNodeWithContentDescription("Retake photo").assertIsEnabled() }.isSuccess }
+        compose.onNodeWithContentDescription("Retake photo").performClick()
+        // One shot replaces the photo and returns to the composer.
+        compose.waitUntil(15_000) { coachModel().draft.value.photos.singleOrNull()?.let { it != old } == true }
+        compose.waitUntil(10_000) { !exists(hasContentDescription("Retake photo")) && exists(hasTestTag("coachInput")) }
+        assert(!File(old).exists())
+    }
+
     private fun png(name: String) = File(context.cacheDir, name).apply {
         val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
         Canvas(bitmap).drawColor(Color.rgb(60, 140, 70))
@@ -180,7 +201,7 @@ class CoachCameraTest {
             prepare = { preparePhoto(context.contentResolver, it, folder) })
         compose.runOnUiThread { model.updateText("Synthetic salad") }
         var closed = false
-        compose.setContent { MivuTheme { CoachCameraScreen(model, CameraPermission.PermanentlyDenied, onClose = { closed = true }) } }
+        compose.setContent { MivuTheme { CoachCameraScreen(model, permission = CameraPermission.PermanentlyDenied, onClose = { closed = true }) } }
         compose.onNodeWithText("Allow camera access in Settings, or choose photos.").assertIsDisplayed()
         compose.onNodeWithContentDescription("Take photo").assertDoesNotExist()
         Intents.init()

@@ -105,18 +105,27 @@ fun rememberCameraPermission(): CameraPermission {
 /**
  * Full-screen CameraX for Coach: ✕, "n of 8 photos", the shutter and Choose photos. Each shot joins the draft and the
  * camera stays open until ✕; it never sends. Denied offers Settings and the Photo Picker; the draft is never touched.
+ * With [retaking] (a draft photo path), one shot or one chosen photo replaces it and the camera closes (iOS `retaking`).
  */
 @Composable
-fun CoachCameraScreen(model: CoachViewModel, permission: CameraPermission = rememberCameraPermission(), onClose: () -> Unit) {
+fun CoachCameraScreen(
+    model: CoachViewModel,
+    retaking: String? = null,
+    permission: CameraPermission = rememberCameraPermission(),
+    onClose: () -> Unit,
+) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val draft by model.draft.collectAsStateWithLifecycle()
     val importing by model.importing.collectAsStateWithLifecycle()
     val message by model.message.collectAsStateWithLifecycle()
     val earlier = remember { model.message.value } // a failure from before the camera opened stays in the composer
-    val full = draft.photos.size >= MAX_PHOTOS
+    val full = retaking == null && draft.photos.size >= MAX_PHOTOS
     // The picker needs at least two slots; the model keeps the cap and names any photo past it.
     val picker = rememberLauncherForActivityResult(PickMultipleVisualMedia(maxOf(2, MAX_PHOTOS - draft.photos.size))) { model.importPhotos(it) }
+    val replacement = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
+        if (uri != null && retaking != null) { model.retakePhoto(retaking, uri); onClose() }
+    }
     val capture = remember { ImageCapture.Builder().build() }
     var request by remember { mutableStateOf<SurfaceRequest?>(null) }
     var unavailable by remember { mutableStateOf(false) }
@@ -152,7 +161,10 @@ fun CoachCameraScreen(model: CoachViewModel, permission: CameraPermission = reme
         val file = File(context.cacheDir, "coach-capture").apply { mkdirs() }.resolve("${UUID.randomUUID()}.jpg")
         capture.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageSavedCallback {
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) { capturing = false; model.addCapturedPhoto(file) }
+                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    capturing = false
+                    if (retaking == null) model.addCapturedPhoto(file) else { model.retakePhoto(retaking, file); onClose() }
+                }
                 override fun onError(exception: ImageCaptureException) { capturing = false; failed = true; file.delete() }
             })
     }
@@ -191,7 +203,7 @@ fun CoachCameraScreen(model: CoachViewModel, permission: CameraPermission = reme
             }
             Box(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp)) {
                 val choose = !importing && !capturing && !full
-                TextButton({ picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) }, Modifier.align(Alignment.CenterStart).heightIn(min = 48.dp),
+                TextButton({ (if (retaking == null) picker else replacement).launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) }, Modifier.align(Alignment.CenterStart).heightIn(min = 48.dp),
                     enabled = choose) {
                     Column(Modifier.alpha(if (choose) 1f else 0.4f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null,
@@ -201,7 +213,7 @@ fun CoachCameraScreen(model: CoachViewModel, permission: CameraPermission = reme
                 }
                 if (status == null) {
                     val ready = !capturing && !importing && !full
-                    IconButton(shutter, Modifier.align(Alignment.Center).size(72.dp).semantics { contentDescription = "Take photo" }, enabled = ready) {
+                    IconButton(shutter, Modifier.align(Alignment.Center).size(72.dp).semantics { contentDescription = if (retaking == null) "Take photo" else "Retake photo" }, enabled = ready) {
                         Box(Modifier.size(72.dp).alpha(if (ready) 1f else 0.4f).border(4.dp, Color.White, CircleShape).padding(8.dp)
                             .background(Color.White, CircleShape))
                     }

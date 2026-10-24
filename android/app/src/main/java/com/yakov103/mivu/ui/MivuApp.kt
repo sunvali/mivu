@@ -118,7 +118,8 @@ sealed interface Route {
     @Serializable data class ManualEntry(val dayID: String?, val mealID: String?) : Route
     @Serializable data object Composer : Route
     @Serializable data class MealDetail(val mealID: String) : Route
-    @Serializable data object CoachCamera : Route
+    /** [retaking] is the draft photo path a shot replaces. */
+    @Serializable data class CoachCamera(val retaking: String? = null) : Route
     @Serializable data object CoachHistory : Route
 }
 
@@ -306,7 +307,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onSeeProgress = { selectTab(Route.Progress) },
                     focusRequested = focusCoach,
                     onFocusConsumed = { focusCoach = false },
-                    onOpenCamera = { navController.navigate(Route.CoachCamera) },
+                    onOpenCamera = { navController.navigate(Route.CoachCamera(it)) },
                 )
             }
             composable<Route.CoachHistory> {
@@ -321,8 +322,9 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             // Full screen over Coach: Coach is no longer resumed, so Pip hides; the draft lives in the activity's model.
             dialog<Route.CoachCamera>(
                 dialogProperties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-            ) {
-                CoachCameraScreen(coach, onClose = { navController.popBackStack<Route.CoachCamera>(inclusive = true) })
+            ) { entry ->
+                CoachCameraScreen(coach, entry.toRoute<Route.CoachCamera>().retaking,
+                    onClose = { navController.popBackStack<Route.CoachCamera>(inclusive = true) })
             }
             // The screen owns back (and Escape), so an edited draft always asks before it is discarded.
             dialog<Route.ManualEntry>(

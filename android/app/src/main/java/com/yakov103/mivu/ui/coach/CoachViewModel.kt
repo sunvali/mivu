@@ -241,11 +241,51 @@ class CoachViewModel(
 
     fun cancelReply() { if (!_sending.value) store(_draft.value.copy(reply = null)) }
 
+    /** iOS `reply(to:fromPip:)`: quotes an earlier message, replacing any quote already in the composer. */
+    fun replyTo(turn: CoachTurn, fromPip: Boolean) {
+        // A quote changed mid-send would keep the sent text in the composer for a second send.
+        if (_sending.value) return
+        val text = (if (fromPip) coachReplyText(turn.assistantText.orEmpty()).text else turn.text).trim()
+        store(_draft.value.copy(reply = CoachReply(CoachReply.Target.Message(turn.id, fromPip), text.ifEmpty { "Photo" }.take(280))))
+    }
+
     fun removePhoto(path: String) {
         if (_sending.value) return
         store(_draft.value.copy(photos = _draft.value.photos - path))
-        // A send that may have committed still needs these bytes to reconcile; storeAttempt deletes them once it resolves.
-        if (attempt?.draft?.photos?.contains(path) != true) File(path).delete()
+        release(path)
+    }
+
+    /** A send that may have committed still needs these bytes to reconcile; storeAttempt deletes them once it resolves. */
+    private fun release(path: String) { if (attempt?.draft?.photos?.contains(path) != true) File(path).delete() }
+
+    /**
+     * iOS `retake`: the camera's [file] is prepared like any capture and takes [path]'s place; the raw file is deleted
+     * either way. A failure keeps the old photo and says so.
+     */
+    fun retakePhoto(path: String, file: File) = retake(path, Uri.fromFile(file)) { file.delete() }
+
+    /** A Photo Picker choice in retake mode. */
+    fun retakePhoto(path: String, uri: Uri) = retake(path, uri) {}
+
+    private fun retake(path: String, uri: Uri, done: () -> Unit) {
+        if (_importing.value || _sending.value || path !in _draft.value.photos) { done(); return }
+        _importing.value = true
+        viewModelScope.launch {
+            try {
+                val next = withContext(Dispatchers.IO) { prepare(uri) }.path
+                val photos = _draft.value.photos
+                if (path !in photos) { File(next).delete(); return@launch } // removed meanwhile
+                store(_draft.value.copy(photos = photos.map { if (it == path) next else it }))
+                release(path)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _message.value = PHOTO_NOT_TAKEN
+            } finally {
+                done()
+                _importing.value = false
+            }
+        }
     }
 
     /** iOS `importSelections`: each picked image is prepared off the main thread, up to [MAX_PHOTOS]; the rest are reported. */

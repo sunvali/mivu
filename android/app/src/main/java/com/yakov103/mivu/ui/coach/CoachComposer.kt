@@ -4,6 +4,9 @@ import android.Manifest
 import android.animation.ValueAnimator
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -64,6 +67,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -112,7 +116,10 @@ fun CoachComposer(
     model: CoachViewModel,
     showStarters: Boolean,
     focusRequester: FocusRequester,
-    onAddPhotos: () -> Unit,
+    /** Opens the camera, or retakes the draft photo at the given path. */
+    onOpenCamera: (String?) -> Unit,
+    /** Without a camera the field offers the Photo Picker and photos have no Retake. */
+    hasCamera: Boolean,
     modifier: Modifier = Modifier,
     voice: CoachVoiceInput = rememberCoachVoice(),
 ) {
@@ -134,6 +141,8 @@ fun CoachComposer(
     val listen = { voice.start(model.draft.value.text, model::updateText) }
     // start() re-checks the grant, so a refusal shows the Settings note.
     val microphone = rememberLauncherForActivityResult(RequestPermission()) { listen() }
+    // The picker needs at least two slots; the model keeps the cap and names any photo past it.
+    val picker = rememberLauncherForActivityResult(PickMultipleVisualMedia(maxOf(2, MAX_PHOTOS - draft.photos.size))) { model.importPhotos(it) }
     // Leaving, backgrounding or covering Coach (the camera, a picker) pauses it: the microphone is released, the text stays.
     LifecycleResumeEffect(voice, model) { onPauseOrDispose { voice.stop() } }
     val view = LocalView.current
@@ -156,7 +165,8 @@ fun CoachComposer(
                     Modifier.heightIn(min = 48.dp).testTag("coachStarter"), shape = RoundedCornerShape(12.dp))
             }
         }
-        if (draft.photos.isNotEmpty()) DraftPhotos(draft.photos, enabled = !sending, onRemove = model::removePhoto, inset)
+        if (draft.photos.isNotEmpty()) DraftPhotos(draft.photos, enabled = !sending, onRemove = model::removePhoto,
+            onRetake = onOpenCamera.takeIf { hasCamera }, inset)
         if (importing) Text("Preparing photos", inset, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(inset, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f)) {
@@ -168,7 +178,8 @@ fun CoachComposer(
                 }
                 // Typing stops listening, so later speech never overwrites typed words.
                 Field(model, draft, sending, focusRequester, phase == CoachVoiceInput.Phase.Listening, levels,
-                    onFocus = { focused = it; if (it) voice.stop() }, onAddPhotos = onAddPhotos)
+                    onFocus = { focused = it; if (it) voice.stop() }, hasCamera = hasCamera,
+                    onAddPhotos = { if (hasCamera) onOpenCamera(null) else picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) })
             }
             // One round action: Stop while voice runs, the mic while the draft is empty, Send once there is something to send.
             if (phase != CoachVoiceInput.Phase.Idle) FilledIconButton(voice::stop, Modifier.size(48.dp).semantics { contentDescription = "Stop listening" },
@@ -234,6 +245,7 @@ private fun Field(
     listening: Boolean,
     levels: List<Float>,
     onFocus: (Boolean) -> Unit,
+    hasCamera: Boolean,
     onAddPhotos: () -> Unit,
 ) {
     // Local field state keeps the cursor; outside changes (a chip, a handoff, a send) put the caret at the end.
@@ -280,7 +292,8 @@ private fun Field(
             )
             if (listening) Wave(levels, Modifier.padding(start = 4.dp, bottom = 16.dp))
             IconButton(onAddPhotos, Modifier.size(48.dp), enabled = !sending && draft.photos.size < MAX_PHOTOS) {
-                Icon(painterResource(R.drawable.ic_photo_camera), contentDescription = "Add photos", Modifier.size(22.dp),
+                Icon(painterResource(if (hasCamera) R.drawable.ic_photo_camera else R.drawable.ic_photo_library),
+                    contentDescription = if (hasCamera) "Add photos" else "Choose photos", Modifier.size(22.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -309,25 +322,36 @@ private fun Wave(levels: List<Float>, modifier: Modifier) {
 
 private val THUMB = 64.dp
 
-/** The draft's photos, each with a 48 dp remove control on its corner, and how many of the eight are used. */
+/**
+ * The draft's photos, each with a 48 dp remove control on its corner and Retake under it (iOS draftPhotos; none without a
+ * camera), and how many of the eight are used.
+ */
 @Composable
-private fun DraftPhotos(photos: List<String>, enabled: Boolean, onRemove: (String) -> Unit, modifier: Modifier) {
+private fun DraftPhotos(photos: List<String>, enabled: Boolean, onRemove: (String) -> Unit, onRetake: ((String) -> Unit)?, modifier: Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()).padding(top = 8.dp, end = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             photos.forEachIndexed { index, path ->
-                Box(Modifier.size(THUMB)) {
-                    val px = with(LocalDensity.current) { THUMB.roundToPx() }
-                    val bitmap by produceState<ImageBitmap?>(null, path) {
-                        value = withContext(Dispatchers.IO) { runCatching { decode(File(path).readBytes(), px) }.getOrNull() }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(THUMB)) {
+                        val px = with(LocalDensity.current) { THUMB.roundToPx() }
+                        val bitmap by produceState<ImageBitmap?>(null, path) {
+                            value = withContext(Dispatchers.IO) { runCatching { decode(File(path).readBytes(), px) }.getOrNull() }
+                        }
+                        val shape = RoundedCornerShape(12.dp)
+                        bitmap?.let { Image(it, contentDescription = "Attached photo ${index + 1}", Modifier.size(THUMB).clip(shape), contentScale = ContentScale.Crop) }
+                            ?: Box(Modifier.size(THUMB).background(MivuTheme.colors.summarySurface, shape))
+                        IconButton({ onRemove(path) }, Modifier.align(Alignment.TopEnd).offset(16.dp, (-16).dp).size(48.dp), enabled = enabled) {
+                            Box(Modifier.size(24.dp).background(MaterialTheme.colorScheme.inverseSurface, CircleShape), contentAlignment = Alignment.Center) {
+                                Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove photo ${index + 1}", Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.inverseOnSurface)
+                            }
+                        }
                     }
-                    val shape = RoundedCornerShape(12.dp)
-                    bitmap?.let { Image(it, contentDescription = "Attached photo ${index + 1}", Modifier.size(THUMB).clip(shape), contentScale = ContentScale.Crop) }
-                        ?: Box(Modifier.size(THUMB).background(MivuTheme.colors.summarySurface, shape))
-                    IconButton({ onRemove(path) }, Modifier.align(Alignment.TopEnd).offset(16.dp, (-16).dp).size(48.dp), enabled = enabled) {
-                        Box(Modifier.size(24.dp).background(MaterialTheme.colorScheme.inverseSurface, CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove photo ${index + 1}", Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.inverseOnSurface)
+                    onRetake?.let { retake ->
+                        TextButton({ retake(path) }, Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Retake photo ${index + 1}" },
+                            enabled = enabled, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                            Text("Retake", Modifier.clearAndSetSemantics {}, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }

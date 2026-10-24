@@ -1,6 +1,7 @@
 package com.yakov103.mivu.ui.coach
 
 import android.animation.ValueAnimator
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.focus.FocusRequester
@@ -42,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -75,8 +77,9 @@ fun CoachScreen(
     /** Focus the field once, as after "Log with Pip" or an Ask Pip quote; [onFocusConsumed] clears the request. */
     focusRequested: Boolean = false,
     onFocusConsumed: () -> Unit = {},
-    /** The field's camera: opens the in-app camera, which also offers the Photo Picker. */
-    onOpenCamera: () -> Unit = {},
+    /** The field's camera: opens the in-app camera, which also offers the Photo Picker; a path retakes that draft photo. */
+    onOpenCamera: (String?) -> Unit = {},
+    hasCamera: Boolean = LocalContext.current.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY),
 ) {
     val state by model.timeline.collectAsStateWithLifecycle()
     val activity by model.activity.collectAsStateWithLifecycle()
@@ -86,9 +89,12 @@ fun CoachScreen(
     fun LazyListState.atLatest() = firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset < twoDp
     val atLatest by remember { derivedStateOf { listState.atLatest() } }
     val rows = state.exchanges.asReversed()
+    val focusRequester = remember { FocusRequester() }
     val actions = remember(model, onOpenMeal, onSeeToday, onSeeProgress) {
         CoachRowActions(model::undo, onOpenMeal, { model.retry(it) }, { id, previous -> model.chooseDay(id, previous) }, model::answer,
-            model::finishRest, onSeeToday, onSeeProgress, model::turnPhoto, model::mealPhoto) { reply -> openQuote(reply, model, onOpenMeal) }
+            model::finishRest, onSeeToday, onSeeProgress, model::turnPhoto, model::mealPhoto,
+            // As iOS reply(to:), typing follows the quote.
+            reply = { turn, fromPip -> model.replyTo(turn, fromPip); focusRequester.requestFocus() }) { reply -> openQuote(reply, model, onOpenMeal) }
     }
 
     // A new newest row is followed only when the reader sat at the newest one before it arrived (read before layout).
@@ -120,7 +126,6 @@ fun CoachScreen(
     val playback = rememberMotionPlayback()
     LaunchedEffect(playback) { model.reportPlayback(playback) }
     DisposableEffect(model) { onDispose { model.reportPlayback(Playback.Hidden) } } // the model outlives the tab
-    val focusRequester = remember { FocusRequester() }
     LaunchedEffect(focusRequested) {
         if (focusRequested) { focusRequester.requestFocus(); onFocusConsumed() }
     }
@@ -154,8 +159,7 @@ fun CoachScreen(
         }
         // Failures show in the composer caption beside Pip.
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
-            onAddPhotos = onOpenCamera,
-            Modifier.imePadding())
+            onOpenCamera = onOpenCamera, hasCamera = hasCamera, modifier = Modifier.imePadding())
     }
 }
 
