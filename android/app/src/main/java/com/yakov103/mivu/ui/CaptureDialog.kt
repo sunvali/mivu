@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -62,10 +63,13 @@ fun CaptureDialog(
     canSave: Boolean,
     saving: Boolean,
     dirty: Boolean,
-    discardMessage: String,
+    discardMessage: String?,
     onClose: () -> Unit,
     onSave: () -> Unit,
     snackbar: SnackbarHostState? = null,
+    discardTitle: String = "Discard changes?",
+    /** A text Save, as the Progress editors; capture screens keep the filled button. */
+    textSave: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var showDiscard by rememberSaveable { mutableStateOf(false) }
@@ -91,13 +95,16 @@ fun CaptureDialog(
                     }
                 },
                 actions = {
-                    Button({ focus.clearFocus(); onSave() }, Modifier.padding(end = 8.dp).testTag(saveTag), enabled = canSave && !saving) {
+                    val label = @Composable {
                         // The label keeps its space under the spinner, so the button does not change size.
                         Box(contentAlignment = Alignment.Center) {
                             Text("Save", if (saving) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)
                             if (saving) CircularProgressIndicator(Modifier.size(18.dp).semantics { contentDescription = "Saving" }, strokeWidth = 2.dp)
                         }
                     }
+                    val save = { focus.clearFocus(); onSave() }
+                    if (textSave) TextButton(save, Modifier.padding(end = 4.dp).heightIn(min = 48.dp).testTag(saveTag), enabled = canSave && !saving) { label() }
+                    else Button(save, Modifier.padding(end = 8.dp).testTag(saveTag), enabled = canSave && !saving) { label() }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
@@ -116,8 +123,8 @@ fun CaptureDialog(
     if (showDiscard) {
         AlertDialog(
             onDismissRequest = { showDiscard = false },
-            title = { Text("Discard changes?") },
-            text = { Text(discardMessage) },
+            title = { Text(discardTitle) },
+            text = discardMessage?.let { { Text(it) } },
             confirmButton = {
                 TextButton({ showDiscard = false; onClose() }) { Text("Discard changes", color = MaterialTheme.colorScheme.error) }
             },

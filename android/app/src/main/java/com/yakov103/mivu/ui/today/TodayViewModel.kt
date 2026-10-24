@@ -8,6 +8,7 @@ import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.GoalRecord
 import com.yakov103.mivu.diary.TrackingDay
+import com.yakov103.mivu.diary.WeightEntry
 import com.yakov103.mivu.diary.WorkoutSession
 import com.yakov103.mivu.diary.dailyProgress
 import com.yakov103.mivu.diary.diaryDateLabel
@@ -62,6 +63,10 @@ data class TodayUiState(
     val sampleMode: Boolean,
     val savedReceipt: UUID?,
     val lateReceipt: LateReceipt? = null,
+    /** The day's morning weight, as "72.5 kg"; null when none is logged. */
+    val weight: String? = null,
+    /** A goal is in effect, even one without a kcal target: Today offers "Edit goals" instead of "Set a goal". */
+    val hasGoal: Boolean = false,
 ) {
     val hasDay get() = activeDayID != null
 }
@@ -69,7 +74,9 @@ data class TodayUiState(
 /** iOS Today's late-meal receipt: "Added to Yesterday", and "Move to Sat, Oct 24" while that date is still today. */
 data class LateReceipt(val added: String, val moveTo: String?)
 
-private class TodayData(val day: TrackingDay?, val meals: List<DiaryMeal>, val goals: List<GoalRecord>, val workouts: List<WorkoutSession>)
+private class TodayData(
+    val day: TrackingDay?, val meals: List<DiaryMeal>, val goals: List<GoalRecord>, val workouts: List<WorkoutSession>, val weight: WeightEntry?,
+)
 
 class TodayViewModel(private val repository: DiaryRepository, val profileID: UUID, sampleMode: Boolean) : ViewModel() {
     private val receipt = MutableStateFlow<UUID?>(null)
@@ -87,7 +94,7 @@ class TodayViewModel(private val repository: DiaryRepository, val profileID: UUI
     ) { data, saved ->
         // Coach and Diary own other days' receipts; Today shows one only while its meal is on this day.
         todayUiState(data.day, data.meals, data.goals, data.workouts, sampleMode, saved?.takeIf { id -> data.meals.any { it.id == id } },
-            Locale.getDefault(), DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd"), Instant.now())
+            Locale.getDefault(), DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd"), Instant.now(), data.weight)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Reads the day again after a failed read. */
@@ -137,8 +144,8 @@ class TodayViewModel(private val repository: DiaryRepository, val profileID: UUI
 
     private fun load(): TodayData = repository.database(profileID).read { tx ->
         val day = tx.head.activeDayID?.let(tx::day)
-        if (day == null) TodayData(null, emptyList(), emptyList(), emptyList())
-        else TodayData(day, tx.dayMeals(day.id), tx.goals(), tx.dayWorkouts(day.id))
+        if (day == null) TodayData(null, emptyList(), emptyList(), emptyList(), null)
+        else TodayData(day, tx.dayMeals(day.id), tx.goals(), tx.dayWorkouts(day.id), tx.dayWeight(day.id))
     }
 }
 
@@ -160,6 +167,7 @@ internal fun todayUiState(
     locale: Locale,
     datePattern: String,
     now: Instant = Instant.now(),
+    weight: WeightEntry? = null,
 ): TodayUiState {
     // Swift `.number.precision(.fractionLength(0))`: grouped, rounded half-even.
     val number = NumberFormat.getIntegerInstance(locale)
@@ -194,6 +202,9 @@ internal fun todayUiState(
         meals = meals.sortedByDescending { it.capturedAt },
         sampleMode = sampleMode,
         savedReceipt = savedReceipt,
+        // iOS `.number.precision(.fractionLength(1))`.
+        weight = weight?.let { w -> "${NumberFormat.getNumberInstance(locale).apply { minimumFractionDigits = 1; maximumFractionDigits = 1 }.format(w.value)} ${w.unit}" },
+        hasGoal = progress?.goal != null,
         lateReceipt = meals.firstOrNull { it.id == savedReceipt }?.takeIf { day != null }?.let { meal ->
             val date = diaryDateLabel(meal.capturedAt, day!!.timeZoneID)
             if (day.localDate >= date) null

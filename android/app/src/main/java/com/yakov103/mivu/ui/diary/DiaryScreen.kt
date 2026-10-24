@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.ui.coach.AskPip
+import com.yakov103.mivu.ui.progress.title
 import com.yakov103.mivu.diary.WorkoutSession
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.MealRow
@@ -67,7 +68,7 @@ private val Gutter = 16.dp
 
 /**
  * Port of iOS HistoryView in Material 3 Expressive direction B: a week strip over the selected day's summary, meals and
- * workouts. Weight and workout entry arrive in milestone 6; "Log meal" for a past day waits for a day-targeted composer.
+ * workouts, with weight and workout entry for that day. "Log meal" for a past day waits for a day-targeted composer.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +78,9 @@ fun DiaryScreen(
     onAskPip: (AskPip) -> Unit,
     onEnterNutrition: (dayID: UUID) -> Unit,
     onProfile: () -> Unit,
+    onAddWeight: (dayID: UUID) -> Unit = {},
+    onAddWorkout: (localDate: String, dayID: UUID) -> Unit = { _, _ -> },
+    onOpenWorkout: (UUID) -> Unit = {},
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val snackbar = remember { SnackbarHostState() }
@@ -103,6 +107,18 @@ fun DiaryScreen(
                             leadingIcon = { Icon(painterResource(R.drawable.ic_numbers), contentDescription = null) },
                             modifier = Modifier.testTag("enterNutritionForDay"),
                         )
+                        DropdownMenuItem(
+                            text = { Text("Add weight manually") },
+                            onClick = { addMenu = false; state?.recordedDayID?.let(onAddWeight) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_monitor_weight), contentDescription = null) },
+                            modifier = Modifier.testTag("logWeightForDay"),
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Add workout manually") },
+                            onClick = { addMenu = false; state?.let { s -> s.recordedDayID?.let { onAddWorkout(s.selected.toString(), it) } } },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_fitness_center), contentDescription = null) },
+                            modifier = Modifier.testTag("logWorkoutForDay"),
+                        )
                     }
                 }
                 ToolbarButton("Profile and settings", R.drawable.ic_profile, "profileSettings", onClick = onProfile)
@@ -110,7 +126,7 @@ fun DiaryScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (state != null) DiaryContent(state, viewModel, onOpenMeal)
+            if (state != null) DiaryContent(state, viewModel, onOpenMeal, onOpenWorkout)
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = Gutter))
         }
     }
@@ -123,7 +139,7 @@ fun DiaryScreen(
 }
 
 @Composable
-private fun DiaryContent(state: DiaryUiState, viewModel: DiaryViewModel, onOpenMeal: (UUID) -> Unit) {
+private fun DiaryContent(state: DiaryUiState, viewModel: DiaryViewModel, onOpenMeal: (UUID) -> Unit, onOpenWorkout: (UUID) -> Unit) {
     val detail = state.detail
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -159,7 +175,7 @@ private fun DiaryContent(state: DiaryUiState, viewModel: DiaryViewModel, onOpenM
                 }
                 if (detail.workouts.isNotEmpty()) {
                     item(key = "workoutsHeader") { SectionHeader("Workouts", padded) }
-                    items(detail.workouts.sortedBy { it.performedAt }, key = { it.id }) { WorkoutRow(it, padded) }
+                    items(detail.workouts.sortedBy { it.performedAt }, key = { it.id }) { WorkoutRow(it, padded) { onOpenWorkout(it.id) } }
                 }
             }
         }
@@ -179,17 +195,17 @@ private fun SectionHeader(text: String, modifier: Modifier) {
     Text(text, modifier.padding(top = 12.dp).semantics { heading() }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 }
 
-/** Read-only until workout detail arrives in milestone 6. */
+/** A workout; it opens workout detail. */
 @Composable
-private fun WorkoutRow(workout: WorkoutSession, modifier: Modifier) {
-    WhiteCard(modifier) {
+private fun WorkoutRow(workout: WorkoutSession, modifier: Modifier, onClick: () -> Unit) {
+    WhiteCard(modifier.testTag("historyWorkout"), onClick = onClick) {
         Row(
             Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp, vertical = 12.dp).semantics(mergeDescendants = true) {},
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Icon(painterResource(R.drawable.ic_fitness_center), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Text("Workout", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            Text(workout.kind.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
             Text("${workout.durationMinutes} minutes", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

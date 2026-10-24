@@ -99,7 +99,7 @@ import kotlin.random.Random
 private val Gutter = 16.dp
 private val CardShape = RoundedCornerShape(24.dp)
 
-/** Port of iOS TodayView in Material 3 Expressive direction B. The morning check-in and weight row arrive in milestone 6. */
+/** Port of iOS TodayView in Material 3 Expressive direction B. The morning check-in arrives later in milestone 6. */
 @Composable
 fun TodayScreen(
     viewModel: TodayViewModel,
@@ -107,6 +107,8 @@ fun TodayScreen(
     onLogWithPip: () -> Unit,
     onAddManually: (dayID: UUID?) -> Unit,
     onLogMeal: () -> Unit,
+    onAddWeight: () -> Unit = {},
+    onEditGoals: () -> Unit = {},
 ) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
@@ -130,13 +132,14 @@ fun TodayScreen(
                 state.savedReceipt?.let { id ->
                     item(key = "receipt") { SavedReceipt(state.lateReceipt, onOpenMeal?.let { { it(id) } }) { viewModel.moveToCalendarDay(id) } }
                 }
-                item(key = "summary") { SummaryCard(state, viewModel::startNewDay, pip) }
+                item(key = "summary") { SummaryCard(state, viewModel::startNewDay, pip, onEditGoals) }
                 item(key = "mealsHeader") {
                     Text("Meals", Modifier.padding(top = 12.dp).semantics { heading() },
                         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
                 if (state.meals.isEmpty()) item(key = "empty") { FirstMealCard() }
                 items(state.meals, key = { it.id }) { meal -> MealCard(meal, viewModel::photoBytes, onOpenMeal) }
+                item(key = "weight") { WeightRow(state.weight, onAddWeight) }
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = Gutter))
         }
@@ -158,7 +161,7 @@ internal fun PlanWelcome(onDone: () -> Unit) {
 }
 
 @Composable
-private fun SummaryCard(state: TodayUiState, onStartNewDay: () -> Unit, pip: TodayPip) {
+private fun SummaryCard(state: TodayUiState, onStartNewDay: () -> Unit, pip: TodayPip, onEditGoals: () -> Unit) {
     val large = isLargeText()
     Surface(Modifier.fillMaxWidth().testTag("todaySummary"), shape = RoundedCornerShape(28.dp), color = MivuTheme.colors.summarySurface) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -188,8 +191,31 @@ private fun SummaryCard(state: TodayUiState, onStartNewDay: () -> Unit, pip: Tod
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            // shortcut: iOS offers "Set a goal" / "Edit goals" here when there is no kcal target; add it with the goal editor.
-            state.goal?.let { Goal(it, large) }
+            when {
+                state.goal != null -> Goal(state.goal, large)
+                // As iOS `todayGoal`: without a kcal target, the way to set one.
+                state.hasDay -> TextButton(onEditGoals, Modifier.heightIn(min = 48.dp).testTag("todayGoalSummary")) {
+                    Icon(painterResource(R.drawable.ic_target), contentDescription = null, Modifier.size(18.dp))
+                    Text(if (state.hasGoal) "Edit goals" else "Set a goal", Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+/** iOS Today's "Morning weight" row: the day's weight, or "Log weight"; opens "Add weight manually". */
+@Composable
+private fun WeightRow(weight: String?, onClick: () -> Unit) {
+    WhiteCard(Modifier.testTag("logWeight"), onClick = onClick) {
+        Row(
+            Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Icon(painterResource(R.drawable.ic_monitor_weight), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text("Morning weight", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            Text(weight ?: "Log weight", style = MaterialTheme.typography.bodyLarge.tabular(),
+                color = if (weight == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
         }
     }
 }

@@ -94,6 +94,14 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import com.yakov103.mivu.ui.diary.DiaryScreen
+import com.yakov103.mivu.ui.progress.GoalEditorScreen
+import com.yakov103.mivu.ui.progress.GoalEditorViewModel
+import com.yakov103.mivu.ui.progress.WeightEditorScreen
+import com.yakov103.mivu.ui.progress.WeightEditorViewModel
+import com.yakov103.mivu.ui.progress.WorkoutDetailScreen
+import com.yakov103.mivu.ui.progress.WorkoutDetailViewModel
+import com.yakov103.mivu.ui.progress.WorkoutEditorScreen
+import com.yakov103.mivu.ui.progress.WorkoutEditorViewModel
 import com.yakov103.mivu.ui.diary.DiaryViewModel
 import com.yakov103.mivu.ui.today.TodayViewModel
 import com.yakov103.mivu.diary.Bootstrap
@@ -133,6 +141,11 @@ sealed interface Route {
     @Serializable data object CoachHistory : Route
     @Serializable data object Settings : Route
     @Serializable data object Connection : Route
+    /** "Add weight manually" (today, or [dayID]) or, with [weightID], "Edit weight". */
+    @Serializable data class WeightEditor(val dayID: String? = null, val weightID: String? = null) : Route
+    @Serializable data class WorkoutEditor(val localDate: String, val dayID: String? = null, val sessionID: String? = null) : Route
+    @Serializable data class WorkoutDetail(val sessionID: String) : Route
+    @Serializable data object Goals : Route
 }
 
 private enum class Tab(val route: Route, val label: String, @DrawableRes val icon: Int, @DrawableRes val selectedIcon: Int) {
@@ -290,6 +303,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     // As iOS Today: the current day (a new one when it has turned over), not a recorded-day target.
                     onAddManually = { navController.navigate(Route.ManualEntry(null, null)) },
                     onLogMeal = { navController.navigate(Route.Composer) },
+                    onAddWeight = { navController.navigate(Route.WeightEditor()) },
+                    onEditGoals = { navController.navigate(Route.Goals) },
                 )
             }
             composable<Route.Diary> {
@@ -300,6 +315,9 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onAskPip = { askPip(it); selectTab(Route.Coach) },
                     onEnterNutrition = { navController.navigate(Route.ManualEntry(it.toString(), null)) },
                     onProfile = { navController.navigate(Route.Settings) },
+                    onAddWeight = { navController.navigate(Route.WeightEditor(dayID = it.toString())) },
+                    onAddWorkout = { date, day -> navController.navigate(Route.WorkoutEditor(date, day.toString())) },
+                    onOpenWorkout = { navController.navigate(Route.WorkoutDetail(it.toString())) },
                 )
             }
             composable<Route.MealDetail> { entry ->
@@ -318,6 +336,15 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onAddFoodManually = { navController.navigate(Route.ManualEntry(null, mealID.toString())) },
                     // Live analysis runs through Coach, as on iOS: the meal's own saved turn runs again.
                     onRetryAnalysis = { if (SampleMode.enabled) onMealCaptured(profileID) else coach.retryMeal(mealID) },
+                )
+            }
+            composable<Route.WorkoutDetail> { entry ->
+                val id = UUID.fromString(entry.toRoute<Route.WorkoutDetail>().sessionID)
+                WorkoutDetailScreen(
+                    viewModel { WorkoutDetailViewModel(repository, profileID, id) },
+                    onBack = { navController.popBackStack() },
+                    onEdit = { date, session -> navController.navigate(Route.WorkoutEditor(date, sessionID = session.toString())) },
+                    onAskPip = { askPip(it); navController.popBackStack(); selectTab(Route.Coach) },
                 )
             }
             composable<Route.Progress> { LaterUpdate() }
@@ -383,6 +410,26 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     navController.previousBackStackEntry?.savedStateHandle?.set(SAVED_MEAL_ID, id.toString())
                     leave()
                 })
+            }
+            // The Progress editors, full screen as manual entry: the screen owns back so an edit asks before it is discarded.
+            val editor = DialogProperties(dismissOnBackPress = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+            dialog<Route.WeightEditor>(dialogProperties = editor) { entry ->
+                val route = entry.toRoute<Route.WeightEditor>()
+                val model = viewModel {
+                    WeightEditorViewModel(repository, profileID, route.dayID?.let(UUID::fromString), route.weightID?.let(UUID::fromString))
+                }
+                WeightEditorScreen(model, onClose = { navController.popBackStack<Route.WeightEditor>(inclusive = true) })
+            }
+            dialog<Route.WorkoutEditor>(dialogProperties = editor) { entry ->
+                val route = entry.toRoute<Route.WorkoutEditor>()
+                val model = viewModel {
+                    WorkoutEditorViewModel(repository, profileID, route.localDate, route.dayID?.let(UUID::fromString), route.sessionID?.let(UUID::fromString))
+                }
+                WorkoutEditorScreen(model, onClose = { navController.popBackStack<Route.WorkoutEditor>(inclusive = true) })
+            }
+            dialog<Route.Goals>(dialogProperties = editor) {
+                GoalEditorScreen(viewModel { GoalEditorViewModel(repository, profileID) },
+                    onClose = { navController.popBackStack<Route.Goals>(inclusive = true) })
             }
             // Sample mode only: Today offers "Log meal" there. Analysis runs outside the screen, after it closes.
             dialog<Route.Composer>(
