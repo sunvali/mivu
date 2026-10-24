@@ -179,6 +179,8 @@ class DiaryDatabaseTest {
         rejected<DiaryError.InvalidData> { it.putMeal(fixture.meals[1].copy(dayID = UUID.randomUUID())) }
         rejected<DiaryError.InvalidData> { it.putWorkout(fixture.workouts[0].copy(durationMinutes = 0)) }
         rejected<DiaryError.InvalidData> { it.putGoal(goal.copy(id = UUID.randomUUID())) } // duplicate effective date
+        // A manual acceptance targets fixture.days[0] by date and zone.
+        rejected<DiaryError.InvalidData> { it.putDay(fixture.days[0].copy(localDate = "2026-10-09")) }
     }
 
     @Test fun deleteMealWritesTombstoneAndBlocksReinsert() {

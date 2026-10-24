@@ -52,6 +52,39 @@ class ArchiveRoundTripTest {
         }
     }
 
+    @Test fun fullFlowKeepsOneDiaryValidThroughDeleteExportAndImport() {
+        val at = java.time.Instant.parse("2026-10-24T12:00:00Z")
+        val profile = DiaryProfile(java.util.UUID.randomUUID(), "Synthetic", "en", "UTC", "")
+        val day = TrackingDay(java.util.UUID.randomUUID(), "2026-10-24", "UTC", at, DayCompleteness.unknown)
+        val photo = MealPhoto(java.util.UUID.randomUUID(), byteArrayOf(1, 2, 3), at, PhotoRole.unspecified)
+        val sub = MealSubmission(java.util.UUID.randomUUID(), 0, "synthetic soup", emptyList(), false, SubmissionState.captured)
+        val meal = DiaryMeal(java.util.UUID.randomUUID(), day.id, at, at, 0, items = emptyList(), photos = listOf(photo), submissions = listOf(sub))
+        val exported = ByteArrayOutputStream()
+        val final = DiaryDatabase.create(context, profile).use { db ->
+            db.captureCoachSubmission(CoachSubmissionPayload(java.util.UUID.randomUUID(), "synthetic lunch",
+                listOf(photo.copy(id = java.util.UUID.randomUUID())), CoachCaptureContext(at, "UTC")), db.head().revision)
+            db.snapshot().validate()
+            val linked = CoachTurn(java.util.UUID.randomUUID(), at, "synthetic", emptyList(), CoachTurnState.captured,
+                receipts = emptyList(), captureTimeZoneID = "UTC", photoIDs = listOf(photo.id), pendingMealID = meal.id, pendingMealRevision = 0)
+            db.transaction(db.head().revision) { it.putDay(day); it.putMeal(meal); it.putCoachTurn(linked) }
+            db.applyAnalysis(AnalysisOutput(1, profile.id, meal.id, sub.id, 0, listOf(FoodItem(java.util.UUID.randomUUID(),
+                "synthetic soup", 1.0, "serving", NutritionValues(kcal = 100.0), NutritionProvenance.estimate, "", true, emptyMap()))))
+            db.snapshot().validate()
+            db.deleteMeal(meal.id, db.head().revision)
+            db.snapshot().validate()
+            db.exportArchive(exported)
+            db.importArchive(exported.toByteArray().inputStream()) // over the existing diary
+            db.snapshot().also { it.validate() }
+        }
+        clean()
+        val fresh = DiaryDatabase.open(context, profile.id).use { db ->
+            db.importArchive(exported.toByteArray().inputStream())
+            db.snapshot().also { it.validate() }
+        }
+        assertEquals(listOf(meal.id), fresh.deletedMealIDs)
+        assertEquals(final.coachTurns, fresh.coachTurns)
+    }
+
     /** Copies Android's encoding of the iOS golden snapshot out for iOS to read; run with `writeFixtures=true`. */
     @Test fun writeAndroidFixture() {
         if (args.getString("writeFixtures") != "true") return // connected runs report a JUnit assumption as a failure

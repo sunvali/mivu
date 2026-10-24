@@ -4,6 +4,7 @@
 package com.yakov103.mivu.diary
 
 import android.content.Context
+import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteDatabaseLockedException
@@ -41,6 +42,7 @@ private val PARENTS = mapOf(
     "coach_photo" to "coach_turn(id) ON DELETE CASCADE",
 )
 private const val MAX_REVISION = 10_000_000L
+private const val MAX_COACH_TURNS = 10_000L // iOS appendCapture
 
 private class Row(val id: String, val parent: String?, val payload: ByteArray)
 
@@ -112,7 +114,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         fun isLive(kind: Tombstone, id: UUID): Boolean = exists(kind.name, id)
 
         /** Import-style rewrite: every record row and the head's non-revision fields come from [snapshot]. */
-        fun write(snapshot: DiarySnapshot) {
+        internal fun write(snapshot: DiarySnapshot) {
             snapshot.validate()
             writeRows(snapshot)
             head = head.copy(profile = snapshot.profile, activeDayID = snapshot.activeDayID,
@@ -122,7 +124,11 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         }
 
         fun putDay(day: TrackingDay) {
-            verify(pending, days = days().filter { it.id != day.id } + day)
+            // Manual acceptances name their day's date and zone: re-check the meals that target this day.
+            val targeting = records("submission", MealSubmission.serializer())
+                .filter { (_, sub) -> sub.manualAcceptance?.let { targetDay(it.target).first == day.id } == true }
+                .mapNotNull { it.first.parent }.distinct().mapNotNull { meal(UUID.fromString(it)) }
+            verify(pending, days = days().filter { it.id != day.id } + day, meals = targeting)
             put("day", day.id.key, day, TrackingDay.serializer())
             changed = true
         }
@@ -168,6 +174,9 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
 
         /** Upserts the turn row and replaces its photos. Meals it points at are read for validation. */
         fun putCoachTurn(turn: CoachTurn) {
+            if (!exists("coach_turn", turn.id) && DatabaseUtils.queryNumEntries(db, "coach_turn") >= MAX_COACH_TURNS) {
+                throw DiaryError.InvalidData("coach turns")
+            }
             val mealIDs = (listOfNotNull(turn.pendingMealID) + turn.receipts.mapNotNull { it.mealID }).toSet()
             verify(pending, meals = mealIDs.mapNotNull { meal(it) }, turns = listOf(turn))
             put("coach_turn", turn.id.key, turn.copy(photos = emptyList()), CoachTurn.serializer())
@@ -176,11 +185,40 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             changed = true
         }
 
-        /** Deletes the live record (a meal with its children) and records its tombstone. */
+        /** Deletes the live record (a meal with its children), records its tombstone and repairs turns using a meal. */
         fun delete(kind: Tombstone, id: UUID) {
+            val deleted = if (kind == Tombstone.meal) meal(id) else null
             db.delete(kind.name, "id = ?", arrayOf(id.key))
             if (!exists("tombstone_${kind.name}", id)) put("tombstone_${kind.name}", id.key, id, SwiftUUID)
             changed = true
+            if (deleted != null) repairTurns(deleted)
+        }
+
+        /**
+         * iOS `deleteMeal`: each Coach turn using one of the meal's photos gets its own copy if it has surviving progress
+         * (a logged weight or workout), otherwise the photo ID is stripped; pending turns for the meal need clarification.
+         */
+        private fun repairTurns(deleted: DiaryMeal) {
+            val linked = coachTurnsWithoutPhotos().filter { it.pendingMealID == deleted.id || it.receipts.any { r -> r.mealID == deleted.id } }
+            for (row in linked) {
+                val original = coachTurn(row.id) ?: throw DiaryError.InvalidData("coach turn")
+                var turn = original
+                // shortcut: iOS also counts weights/workouts in record_source; Android has no record_source table yet, so only
+                // receipts count. Add it with the Coach record-source port.
+                val progress = original.receipts.any { r ->
+                    r.weightID?.let { isLive(Tombstone.weight, it) } == true || r.workoutID?.let { isLive(Tombstone.workout, it) } == true
+                }
+                for (photo in deleted.photos) {
+                    if (photo.id !in turn.photoIDs || turn.photos.any { it.id == photo.id }) continue // not a consumer of this copy
+                    if (progress) { turn = turn.copy(photos = turn.photos + photo); continue }
+                    // iOS stripUnusedPhotoID: keep the ID only while another linked meal still holds the photo.
+                    val elsewhere = (listOfNotNull(turn.pendingMealID) + turn.receipts.mapNotNull { it.mealID })
+                        .filter { it != deleted.id }.toSet().any { id -> meal(id)?.photos?.any { it.id == photo.id } == true }
+                    if (!elsewhere) turn = turn.copy(photoIDs = turn.photoIDs - photo.id)
+                }
+                if (turn.pendingMealID == deleted.id) turn = turn.copy(state = CoachTurnState.needsClarification)
+                if (turn != original) putCoachTurn(turn)
+            }
         }
     }
 

@@ -42,6 +42,20 @@ class DiaryCaptureTest {
             other.rawQuery("SELECT COUNT(*) FROM $table", null).use { it.moveToFirst(); it.getInt(0) }
         }
 
+    @Test fun newTurnPastTheTenThousandCapIsRejected() {
+        // Bulk insert through import, then capture one more (iOS appendCapture: ordinal < 10_000).
+        val turns = List(10_000) {
+            CoachTurn(UUID.randomUUID(), at, "synthetic", emptyList(), CoachTurnState.completed, receipts = emptyList(), captureTimeZoneID = "UTC",
+                photoIDs = emptyList())
+        }
+        db.replaceAll(db.snapshot().copy(coachTurns = turns))
+        val before = db.head()
+        throws<DiaryError.InvalidData> { db.captureCoachSubmission(payload(), before.revision) }
+        assertEquals(before, db.head())
+        assertEquals(10_000, rows("coach_turn"))
+        db.transaction(before.revision) { it.putCoachTurn(turns[0].copy(text = "synthetic edit")) } // updates still allowed
+    }
+
     @Test fun captureIsAcknowledgedOnlyAfterCommit() {
         val before = db.head()
         db.beforeCommit = { throw IllegalStateException("injected") }

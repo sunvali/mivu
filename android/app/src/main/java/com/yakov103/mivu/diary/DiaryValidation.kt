@@ -139,7 +139,7 @@ private fun validateSubmission(sub: MealSubmission, meal: DiaryMeal, profileId: 
 
 internal fun validatePhoto(photo: MealPhoto) = ok(photo.data.size in 1..10_000_000, "photo bytes")
 
-private fun targetDay(t: ManualNutritionTarget) = when (t) {
+internal fun targetDay(t: ManualNutritionTarget) = when (t) {
     is ManualNutritionTarget.Recorded -> Triple(t.dayID, t.localDate, t.timeZoneID)
     is ManualNutritionTarget.Active -> Triple(t.dayID, t.localDate, t.timeZoneID)
     is ManualNutritionTarget.NewCurrent -> Triple(t.dayID, t.localDate, t.timeZoneID)

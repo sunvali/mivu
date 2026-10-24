@@ -67,6 +67,8 @@ fun DiaryDatabase.acceptReview(mealID: UUID, submissionID: UUID, expectedMealRev
 fun DiaryDatabase.editMealItems(mealID: UUID, items: List<FoodItem>, expectedMealRevision: Int) = atHead { tx ->
     val meal = tx.mealRecord(mealID)
     if (meal.revision != expectedMealRevision) throw DiaryError.StaleRevision
+    // iOS deleteItem/scaleMeal: a pending submission is based on this revision; editing would strand it.
+    if ((meal.submissions.lastOrNull()?.state ?: SubmissionState.saved) != SubmissionState.saved) throw DiaryError.InvalidData("meal not saved")
     val id = UUID.randomUUID()
     val output = AnalysisOutput(1, tx.head.profile.id, mealID, id, meal.revision, items)
     val saved = MealSubmission(id, meal.revision, "Direct item edit", emptyList(), false, SubmissionState.saved, output)
@@ -74,32 +76,8 @@ fun DiaryDatabase.editMealItems(mealID: UUID, items: List<FoodItem>, expectedMea
     tx.save(committed.copy(submissions = committed.submissions + saved))
 }
 
-/**
- * iOS `deleteMeal`: each Coach turn using one of the meal's photos gets its own copy if it has surviving progress
- * (a logged weight or workout), otherwise the photo ID is stripped; pending turns for the meal need clarification.
- */
+/** iOS `deleteMeal`; the store's meal delete repairs the Coach turns that use its photos. */
 fun DiaryDatabase.deleteMeal(mealID: UUID, expectedRevision: Long) = transaction(expectedRevision) { tx ->
-    val meal = tx.mealRecord(mealID)
-    val linked = coachTurnsWithoutPhotos().filter { it.pendingMealID == mealID || it.receipts.any { r -> r.mealID == mealID } }
+    tx.mealRecord(mealID)
     tx.delete(DiaryDatabase.Tombstone.meal, mealID)
-    for (row in linked) {
-        val original = tx.coachTurn(row.id) ?: throw DiaryError.InvalidData("coach turn")
-        var turn = original
-        // shortcut: iOS also counts weights/workouts in record_source; Android has no record_source table yet, so only
-        // receipts count. Add it with the Coach record-source port.
-        val progress = original.receipts.any { r ->
-            r.weightID?.let { tx.isLive(DiaryDatabase.Tombstone.weight, it) } == true ||
-                r.workoutID?.let { tx.isLive(DiaryDatabase.Tombstone.workout, it) } == true
-        }
-        for (photo in meal.photos) {
-            if (photo.id !in turn.photoIDs || turn.photos.any { it.id == photo.id }) continue // not a consumer of this copy
-            if (progress) { turn = turn.copy(photos = turn.photos + photo); continue }
-            // iOS stripUnusedPhotoID: keep the ID only while another linked meal still holds the photo.
-            val elsewhere = (listOfNotNull(turn.pendingMealID) + turn.receipts.mapNotNull { it.mealID })
-                .filter { it != mealID }.toSet().any { id -> tx.meal(id)?.photos?.any { it.id == photo.id } == true }
-            if (!elsewhere) turn = turn.copy(photoIDs = turn.photoIDs - photo.id)
-        }
-        if (turn.pendingMealID == mealID) turn = turn.copy(state = CoachTurnState.needsClarification)
-        if (turn != original) tx.putCoachTurn(turn)
-    }
 }

@@ -73,16 +73,27 @@ class MealAnalysisTest {
         assertEquals(0, meal(meal.id)!!.revision)
     }
 
-    @Test fun staleBaseRevisionAfterEditIsRejectedAndEditKept() {
+    @Test fun editOfSavedMealBumpsRevisionAndStaleOutputIsRejected() {
         val (meal, sub) = seed()
+        throws<DiaryError.StaleRevision> { db.applyAnalysis(output(meal, sub, base = 1)) }
+        db.applyAnalysis(output(meal, sub))
         val edit = listOf(item("synthetic edited soup"))
-        db.editMealItems(meal.id, edit, 0)
+        db.editMealItems(meal.id, edit, 1)
         val edited = meal(meal.id)!!
-        assertEquals(1, edited.revision)
+        assertEquals(2, edited.revision)
         assertEquals(edit, edited.items)
-        throws<DiaryError.StaleRevision> { db.applyAnalysis(output(meal, sub)) }
+        throws<DiaryError.StaleRevision> { db.editMealItems(meal.id, listOf(item("late")), 1) }
         assertEquals(edited, meal(meal.id))
-        throws<DiaryError.StaleRevision> { db.editMealItems(meal.id, listOf(item("late")), 0) }
+    }
+
+    @Test fun editIsRejectedWhileASubmissionAwaitsReview() {
+        val (meal, sub) = seed(reviewFirst = true)
+        db.applyAnalysis(output(meal, sub))
+        val pending = meal(meal.id)!!
+        throws<DiaryError.InvalidData> { db.editMealItems(meal.id, listOf(item("synthetic edit")), 0) }
+        assertEquals(pending, meal(meal.id))
+        db.acceptReview(meal.id, sub.id, 0) // the proposal is still acceptable
+        assertEquals(SubmissionState.saved, meal(meal.id)!!.submissions.single().state)
     }
 
     @Test fun deletedMealStaysDeletedWhenLateResultArrives() {
@@ -129,7 +140,7 @@ class MealAnalysisTest {
     @Test fun nextPendingSubmissionIsPreparedAgainstTheCurrentRevision() {
         val (meal, sub) = seed()
         assertEquals(meal.id to sub.id, db.nextPendingMealSubmission())
-        db.editMealItems(meal.id, listOf(item("synthetic edit")), 0)
+        db.transaction(db.head().revision) { it.putMeal(meal.copy(revision = 1, items = listOf(item("synthetic edit")))) }
         db.prepareAnalysis(meal.id, sub.id)
         assertEquals(1, meal(meal.id)!!.submissions.first { it.id == sub.id }.baseRevision)
         db.applyAnalysis(output(meal, sub, base = 1))
@@ -165,6 +176,19 @@ class MealAnalysisTest {
         assertEquals(listOf(receiptPhoto), after.getValue(receiptTurn.id).photos)
         assertEquals(listOf(receiptPhoto.id), after.getValue(receiptTurn.id).photoIDs)
         assertEquals(CoachTurnState.completed, after.getValue(receiptTurn.id).state)
+    }
+
+    @Test fun rawMealDeleteAlsoRepairsTurnsUsingItsPhotos() {
+        val shared = photo()
+        val (meal, _) = seed(photos = listOf(shared))
+        val turn = CoachTurn(UUID.randomUUID(), at, "synthetic", emptyList(), CoachTurnState.captured, receipts = emptyList(),
+            captureTimeZoneID = "UTC", photoIDs = listOf(shared.id), pendingMealID = meal.id, pendingMealRevision = 0)
+        db.transaction(db.head().revision) { it.putCoachTurn(turn) }
+        db.transaction(db.head().revision) { it.delete(DiaryDatabase.Tombstone.meal, meal.id) }
+        val snapshot = db.snapshot()
+        snapshot.validate()
+        assertEquals(emptyList<UUID>(), snapshot.coachTurns.single().photoIDs)
+        assertEquals(CoachTurnState.needsClarification, snapshot.coachTurns.single().state)
     }
 
     @Test fun putMealDroppingATurnPhotoIsRejected() {
