@@ -19,7 +19,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 @Composable
 fun PipRig(scene: PipRigScene, state: () -> PipResolved, dark: Boolean, frame: String?, modifier: Modifier = Modifier) {
     val paths = remember(scene) { scene.pathOps.mapValues { composePath(it.value) } }
-    val colors = remember(scene) { HashMap<String, Color>() }
     val matrix = remember { Matrix() }
     val inverse = remember { Matrix() }
     val rect = scene.asset.frames[frame] ?: listOf(0f, 0f, scene.asset.artboard, scene.asset.artboard)
@@ -30,8 +29,7 @@ fun PipRig(scene: PipRigScene, state: () -> PipResolved, dark: Boolean, frame: S
         clipRect(-size.width, -size.height, size.width * 2, size.height) {
             withTransform({ translate(tx, ty); scale(s, s, pivot = androidx.compose.ui.geometry.Offset.Zero) }) {
                 for (d in scene.draw(state())) {
-                    val hex = if (dark) d.fillDark ?: d.fill else d.fill
-                    val color = colors.getOrPut(hex) { Color(android.graphics.Color.parseColor(hex)) }
+                    val color = Color(scene.fill(d.partID, dark))
                     val clip = d.clip
                     drawContext.canvas.save()
                     if (clip != null) {

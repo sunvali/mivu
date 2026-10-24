@@ -73,6 +73,13 @@ class PipRigSceneTest {
         assertFalse("heart-3" in ids)
     }
 
+    @Test fun fillsParseOnceAndBadHexIsBlack() {
+        assertEquals(0xFFF5F8F8.toInt(), PipRigScene.argb("#F5F8F8"))
+        assertEquals(0xFF000000.toInt(), PipRigScene.argb("#nothex"))
+        val body = part("body")
+        assertEquals(PipRigScene.argb(body.fill), scene.fill(body.id, dark = false))
+    }
+
     @Test fun headMountFollowsActiveBody() {
         fun head(pose: PipPose) = scene.draw(scene.resolve(pose)).first { it.partID == "head@right" }.matrix
         assertArrayEquals(floatArrayOf(.97f, 0f, 0f, .97f, 138.8f, 3.6f), head(PipPose()), 1e-3f)

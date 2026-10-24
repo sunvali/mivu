@@ -35,6 +35,10 @@ class PipRigScene(
     /** Each part's parsed path, shared by bounds and every renderer of this scene. */
     val pathOps: Map<String, List<PathOp>> = asset.parts.associate { it.id to parsePath(it.path) }
     private val bounds = bounds ?: { id -> pathBounds(pathOps.getValue(id)) }
+    /** Light and dark fills as ARGB, parsed once here so drawing never parses or throws. */
+    private val fills = asset.parts.associate { it.id to (argb(it.fill) to argb(it.fillDark ?: it.fill)) }
+
+    fun fill(partID: String, dark: Boolean): Int = fills.getValue(partID).let { if (dark) it.second else it.first }
 
     private sealed interface Item { val z: Int }
     private class Shape(val part: PipRigAsset.Part) : Item { override val z = part.z }
@@ -182,6 +186,9 @@ class PipRigScene(
     }
 
     companion object {
+        /** `#RRGGBB` as opaque ARGB; anything unparsable is black, as on iOS. */
+        fun argb(hex: String): Int = ((hex.drop(1).toLongOrNull(16) ?: 0L).toInt() and 0xFFFFFF) or (0xFF shl 24)
+
         private const val ROOT = "@root"
         private const val MOUNT = "@mount"
         private val REST = PipPose.Joint()

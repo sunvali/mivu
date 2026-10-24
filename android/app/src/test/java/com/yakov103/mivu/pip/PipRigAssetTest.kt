@@ -48,6 +48,21 @@ class PipRigAssetTest {
         assertEquals("mouth.closedSmile@left", error.id)
     }
 
+    @Test fun unknownKeysIgnored() {
+        val bytes = edited { it["futureKey"] = JsonPrimitive("ignored") }
+        assertEquals(2, PipRigAsset.load(bytes).version)
+    }
+
+    @Test fun malformedJsonRejectedAsRigError() {
+        assertThrows(PipRigError.Malformed::class.java) { PipRigAsset.load("{\"version\": 2,".encodeToByteArray()) }
+        val noPivot = edited { root ->
+            root["parts"] = JsonArray(root["parts"]!!.jsonArray.mapIndexed { i, part ->
+                if (i > 0) part else JsonObject(part.jsonObject + ("pivot" to JsonArray(listOf(JsonPrimitive(1)))))
+            })
+        }
+        assertThrows(PipRigError.Malformed::class.java) { PipRigAsset.load(noPivot) }
+    }
+
     @Test fun relativePathRejected() {
         assertThrows(PipRigError.BadPath::class.java) { parsePath("M 0 0 l 1 1") }
     }

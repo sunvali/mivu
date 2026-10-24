@@ -34,15 +34,21 @@ data class PipRigAsset(
 
     companion object {
         const val MAX_BYTES = 1_048_576
+        /** Like iOS `Decodable`, keys the app does not know are ignored. */
+        private val json = Json { ignoreUnknownKeys = true }
         private val requiredPerView = listOf("head", "eye-l.open", "eye-r.open", "mouth.closedSmile")
 
         fun load(bytes: ByteArray): PipRigAsset {
             if (bytes.size > MAX_BYTES) throw PipRigError.TooLarge
-            val asset = Json.decodeFromString<PipRigAsset>(bytes.decodeToString())
+            val asset = try {
+                json.decodeFromString<PipRigAsset>(bytes.decodeToString())
+            } catch (e: IllegalArgumentException) { // includes SerializationException
+                throw PipRigError.Malformed(e.message ?: "malformed rig")
+            }
             if (asset.version != 2) throw PipRigError.Version
-            require(asset.frames.values.all { it.size == 4 }) { "frame needs x y w h" }
+            if (!asset.frames.values.all { it.size == 4 }) throw PipRigError.Malformed("frame needs x y w h")
             for (part in asset.parts) {
-                require(part.pivot.size == 2 && (part.mount?.size ?: 3) == 3) { "bad pivot or mount on ${part.id}" }
+                if (part.pivot.size != 2 || (part.mount?.size ?: 3) != 3) throw PipRigError.Malformed("bad pivot or mount on ${part.id}")
                 parsePath(part.path)
             }
             val ids = asset.parts.mapTo(HashSet()) { it.id }
@@ -62,6 +68,7 @@ sealed class PipRigError(message: String) : Exception(message) {
     data object Version : PipRigError("unsupported rig version")
     data class MissingPart(val id: String) : PipRigError("missing part $id")
     data class BadPath(val path: String) : PipRigError("bad path")
+    class Malformed(message: String) : PipRigError(message)
 }
 
 sealed interface PathOp {
