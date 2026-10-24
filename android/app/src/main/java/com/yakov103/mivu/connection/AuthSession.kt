@@ -95,13 +95,14 @@ class AuthSession(private val store: CredentialStoring, private val http: Endpoi
         }
     }
 
-    suspend fun accessToken(nowSec: Long = epochNow(), expectedRegistrationID: String? = null): String {
+    /** [forceRefresh] exists for the debug proof screen to exercise a refresh before expiry. */
+    suspend fun accessToken(nowSec: Long = epochNow(), expectedRegistrationID: String? = null, forceRefresh: Boolean = false): String {
         val current = usable(expectedRegistrationID)
-        if (current.expiresAtEpochSec > nowSec + 30) return current.accessToken
+        if (!forceRefresh && current.expiresAtEpochSec > nowSec + 30) return current.accessToken
         val pending = synchronized(lock) {
             // Another caller may have refreshed since the check above.
             val credentials = usable(current.registration.id)
-            if (credentials.expiresAtEpochSec > nowSec + 30) return credentials.accessToken
+            if (!forceRefresh && credentials.expiresAtEpochSec > nowSec + 30) return credentials.accessToken
             refreshing ?: refresh(credentials, nowSec).also { refreshing = it }
         }
         val replacement = pending.await()

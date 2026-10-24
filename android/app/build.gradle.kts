@@ -59,4 +59,10 @@ dependencies {
     testImplementation(libs.org.json)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
+    // Custom Tabs: the platform-recommended system-browser sign-in; the debug proof screen is its only user.
+    debugImplementation(libs.androidx.browser)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.espresso.intents)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
