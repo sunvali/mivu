@@ -1,6 +1,7 @@
 package com.yakov103.mivu.connection
 
 import android.content.Context
+import android.util.AtomicFile
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.io.File
@@ -20,26 +21,22 @@ class CredentialStoreException(message: String, cause: Throwable? = null) : IOEx
 class CredentialStore(context: Context) : CredentialStoring {
     private val dir = File(context.noBackupFilesDir, "accounts")
 
+    // An unreadable or malformed host record is replaced: a new host ID for OpenAI is acceptable recovery.
     @Synchronized override fun hostID(): String {
-        read("host")?.let { bytes ->
-            val value = String(bytes)
-            val uuid = value.removePrefix("urn:uuid:")
-            if (!value.startsWith("urn:uuid:") || runCatching { UUID.fromString(uuid) }.isFailure) throw CredentialStoreException("invalid host record")
-            return value
-        }
+        read("host")?.let { String(it) }?.takeIf { v -> v.startsWith("urn:uuid:") && runCatching { UUID.fromString(v.drop(9)) }.isSuccess }?.let { return it }
         return "urn:uuid:${UUID.randomUUID().toString().lowercase()}".also { write("host", it.toByteArray()) }
     }
 
     @Synchronized override fun registrations(): List<AccountRegistration> =
         (dir.listFiles { f -> f.name.startsWith("registration-") && f.name.endsWith(".bin") } ?: emptyArray())
-            .map { f ->
-                val registration = decodeRegistration(JSONObject(String(decrypt(f.readBytes()))))
-                if (f.name != "registration-${registration.id}.bin") throw CredentialStoreException("invalid registration record")
-                registration
+            .mapNotNull { f ->
+                val registration = read(f.name.removeSuffix(".bin"))?.let { runCatching { decodeRegistration(JSONObject(String(it))) }.getOrNull() }
+                    ?.takeIf { f.name == "registration-${it.id}.bin" }
+                registration.also { if (it == null) f.delete() } // unreadable: drop; sign-in recreates it
             }.sortedBy { it.id }
 
     @Synchronized override fun load(registrationID: String): Credentials? {
-        val c = decodeCredentials(JSONObject(String(read("credentials-$registrationID") ?: return null)))
+        val c = runCatching { decodeCredentials(JSONObject(String(read("credentials-$registrationID") ?: return null))) }.getOrNull() ?: return null
         val r = c.registration
         return c.takeIf {
             r.id == registrationID && r.identity.issuer == "https://auth.openai.com" && r.identity.subject.isNotEmpty() &&
@@ -73,14 +70,16 @@ class CredentialStore(context: Context) : CredentialStoring {
         o.getJSONArray("scopes").let { a -> (0 until a.length()).map(a::getString).toSet() }, o.getLong("expiresAt"),
     )
 
-    private fun read(name: String): ByteArray? =
-        File(dir, "$name.bin").takeIf { it.exists() }?.let { decrypt(it.readBytes()) }
+    // Null when absent or undecryptable (lost key, truncated file): callers treat both as signed out.
+    private fun read(name: String): ByteArray? = try {
+        AtomicFile(File(dir, "$name.bin")).takeIf { it.baseFile.exists() }?.let { decrypt(it.readFully()) }
+    } catch (e: CredentialStoreException) { null }
 
     private fun write(name: String, plain: ByteArray) {
         dir.mkdirs()
-        val tmp = File(dir, "$name.tmp")
-        tmp.writeBytes(encrypt(plain))
-        if (!tmp.renameTo(File(dir, "$name.bin"))) throw CredentialStoreException("write failed")
+        val file = AtomicFile(File(dir, "$name.bin")) // fsyncs, then renames
+        val out = file.startWrite()
+        try { out.write(encrypt(plain)); file.finishWrite(out) } catch (e: IOException) { file.failWrite(out); throw e }
     }
 
     private fun encrypt(plain: ByteArray): ByteArray {
@@ -97,10 +96,9 @@ class CredentialStore(context: Context) : CredentialStoring {
         throw CredentialStoreException("record cannot be decrypted") // no cause: keep record bytes out of traces
     }
 
-    private fun key(): SecretKey {
+    private fun key(): SecretKey = synchronized(ALIAS) {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (store.getKey(ALIAS, null) as? SecretKey)?.let { return it }
-        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
+        (store.getKey(ALIAS, null) as? SecretKey) ?: KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
             init(KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256).build())

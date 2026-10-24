@@ -61,4 +61,23 @@ class CredentialStoreTest {
         }
         assertNotNull(files.firstOrNull { it.name.startsWith("credentials-") })
     }
+
+    @Test fun unreadableRecordsRecover() {
+        val good = credentials()
+        val bad = credentials(client = "client_2")
+        store.replace(good); store.replace(bad)
+        val dir = File(context.noBackupFilesDir, "accounts")
+        val oldHost = store.hostID()
+        File(dir, "host.bin").writeBytes(ByteArray(40) { 7 })
+        File(dir, "registration-${bad.registration.id}.bin").writeBytes(ByteArray(5))
+        File(dir, "credentials-${bad.registration.id}.bin").writeBytes(ByteArray(40) { 9 })
+        val host = store.hostID()
+        assertTrue(Regex("^urn:uuid:[0-9a-f-]{36}$").matches(host))
+        assertTrue(host != oldHost)
+        assertEquals(host, store.hostID())
+        assertEquals(listOf(good.registration), store.registrations())
+        assertNull(store.load(bad.registration.id))
+        store.replace(bad)
+        assertEquals(bad, store.load(bad.registration.id))
+    }
 }
