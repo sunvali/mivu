@@ -88,8 +88,10 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         /** A new, empty diary at revision 0 with a one-entry lineage, as iOS `DiaryStore.createProfile`. */
         fun create(context: Context, profile: DiaryProfile): DiaryDatabase = open(context, profile.id).also {
             try {
-                it.replace(DiarySnapshot(1, 0, profile, emptyList(), emptyList(), emptyList(), deletedMealIDs = emptyList(),
-                    lineage = listOf(UUID.randomUUID())), requireEmpty = true)
+                it.replace(requireEmpty = true) {
+                    DiarySnapshot(1, 0, profile, emptyList(), emptyList(), emptyList(), deletedMealIDs = emptyList(),
+                        lineage = listOf(UUID.randomUUID()))
+                }
             } catch (e: Throwable) { it.close(); throw e }
         }
     }
@@ -227,21 +229,22 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     }
 
     /** Import: validates, then replaces every row and the head with [snapshot] as given (no revision bump). */
-    fun replaceAll(snapshot: DiarySnapshot) = replace(snapshot, requireEmpty = false)
+    fun replaceAll(snapshot: DiarySnapshot) = replace(requireEmpty = false) { snapshot }
 
     override fun close() = db.close()
 
     internal fun pragma(name: String): String = db.rawQuery("PRAGMA $name", null).use { it.moveToFirst(); it.getString(0) }
 
-    private fun replace(snapshot: DiarySnapshot, requireEmpty: Boolean) {
+    /** One write transaction from the current diary (null when there is none) to the snapshot [next] returns. */
+    internal fun replace(requireEmpty: Boolean, next: (DiarySnapshot?) -> DiarySnapshot) = immediate {
+        val current = readHead()
+        if (requireEmpty && current != null) throw DiaryError.InvalidData("diary exists")
+        val snapshot = next(current?.let(::readSnapshot))
         if (snapshot.profile.id != profileID) throw DiaryError.WrongOwner
         validateArchiveManifests(snapshot)
-        immediate {
-            if (requireEmpty && readHead() != null) throw DiaryError.InvalidData("diary exists")
-            writeRows(snapshot)
-            writeHead(Head(snapshot.revision.toLong(), snapshot.lineage, snapshot.profile, snapshot.activeDayID,
-                snapshot.previousDayConfirmedAt, snapshot.activeConversationSegmentID))
-        }
+        writeRows(snapshot)
+        writeHead(Head(snapshot.revision.toLong(), snapshot.lineage, snapshot.profile, snapshot.activeDayID,
+            snapshot.previousDayConfirmedAt, snapshot.activeConversationSegmentID))
     }
 
     // beginTransactionNonExclusive issues `BEGIN IMMEDIATE` (SQLiteSession.TRANSACTION_MODE_IMMEDIATE).

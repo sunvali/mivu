@@ -170,4 +170,10 @@ struct ArchiveFixtureTests {
             #expect(decoded == (version == 4 ? snapshot : Self.projection(snapshot, version: version)))
         }
     }
+
+    /// Written by Android's `ArchiveRoundTripTest.writeAndroidFixture` from `ios-v4-full.json`.
+    @Test func androidFixtureDecodesToSyntheticSnapshot() throws {
+        let decoded = try DiaryArchive.decode(Data(contentsOf: Self.directory.appendingPathComponent("android-v4-full.json")))
+        #expect(decoded == (try Self.syntheticFullSnapshot()))
+    }
 }
