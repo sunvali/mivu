@@ -37,4 +37,9 @@ extension Color {
     static let diaryWorkout = diaryFat
     static let diaryLeaf = diaryAccent
     static let diaryRule = adaptive(0xD5DFE1, 0x374346, highContrastLight: 0x9BAEB2, highContrastDark: 0x68777B)
+
+    /// One appearance's variant, for colors the system resolves outside the view's own traits (a Live Activity tint).
+    func fixed(for scheme: ColorScheme) -> Color {
+        Color(uiColor: UIColor(self).resolvedColor(with: UITraitCollection(userInterfaceStyle: scheme == .dark ? .dark : .light)))
+    }
 }
