@@ -1,3 +1,5 @@
+@file:UseSerializers(SwiftDate::class, SwiftUUID::class)
+
 package com.yakov103.mivu.diary
 
 import java.time.Instant
@@ -7,6 +9,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 // Ports of ios/Mivu/Diary/ManualNutrition.swift (payload, validation, fingerprint, acceptance) and
 // DiaryDatabaseManualNutrition.swift (saveManualNutrition, prepareManualNutritionTarget, manualNutritionResult,
@@ -19,6 +23,8 @@ sealed interface ManualNutritionDayChoice {
     data class Recorded(val dayID: UUID) : ManualNutritionDayChoice
 }
 
+/** Serializable so a screen can keep its frozen payload through process death. */
+@Serializable
 data class ManualNutritionPayload(
     val profileID: UUID,
     val mealID: UUID,

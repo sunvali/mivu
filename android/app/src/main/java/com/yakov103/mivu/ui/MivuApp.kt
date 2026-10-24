@@ -45,6 +45,12 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.dialog
+import androidx.navigation.toRoute
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.createSavedStateHandle
+import com.yakov103.mivu.ui.manual.ManualNutritionScreen
+import com.yakov103.mivu.ui.manual.ManualNutritionViewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -190,15 +196,30 @@ private fun Shell(repository: DiaryRepository, profileID: UUID) {
                     today,
                     onOpenMeal = null, // shortcut: meal detail arrives with the Diary milestone; rows open it then.
                     onLogWithPip = { selectTab(Route.Coach) },
-                    onAddManually = { day -> navController.navigate(Route.ManualEntry(day?.toString(), null)) },
+                    // As iOS Today: the current day (a new one when it has turned over), not a recorded-day target.
+                    onAddManually = { navController.navigate(Route.ManualEntry(null, null)) },
                     onLogMeal = { navController.navigate(Route.Composer) },
                 )
             }
             composable<Route.Diary> { LaterUpdate() }
             composable<Route.Progress> { LaterUpdate() }
             composable<Route.Coach> { LaterUpdate() }
-            // shortcut: placeholders until the manual entry and composer screens replace them.
-            composable<Route.ManualEntry> { LaterUpdate(Modifier.testTag("manualEntryRoute")) }
+            // The screen owns back (and Escape), so an edited draft always asks before it is discarded.
+            dialog<Route.ManualEntry>(
+                dialogProperties = DialogProperties(dismissOnBackPress = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+            ) { entry ->
+                val route = entry.toRoute<Route.ManualEntry>()
+                val model = viewModel {
+                    ManualNutritionViewModel(repository, profileID, route.dayID?.let(UUID::fromString), route.mealID?.let(UUID::fromString),
+                        createSavedStateHandle())
+                }
+                val leave = { navController.popBackStack<Route.ManualEntry>(inclusive = true) }
+                ManualNutritionScreen(model, onClose = { leave() }, onSaved = { id ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set(SAVED_MEAL_ID, id.toString())
+                    leave()
+                })
+            }
+            // shortcut: placeholder until the composer screen replaces it.
             composable<Route.Composer> { LaterUpdate() }
         }
     }

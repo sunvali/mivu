@@ -133,7 +133,7 @@ class TodayScreenTest {
         launch()
         waitFor("addManually")
         compose.onNodeWithTag("addManually").performClick()
-        waitFor("manualEntryRoute")
+        waitFor("manualFoodName")
     }
 
     @Test fun logWithPipSelectsCoach() {
