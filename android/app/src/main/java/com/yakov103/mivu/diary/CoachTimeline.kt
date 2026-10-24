@@ -73,11 +73,12 @@ private fun DiaryDatabase.Tx.coachExchange(id: UUID, ordinal: Long): CoachExchan
     for (receipt in turn.receipts) {
         val key = receipt.operationKey
         when {
-            receipt.mealID != null -> targets[key] = meal(receipt.mealID)?.let { CoachReceiptTarget.Meal(it, trackingDay(it.dayID).localDate) }
+            // A record whose day cannot be read shows as unavailable rather than failing the page.
+            receipt.mealID != null -> targets[key] = meal(receipt.mealID)?.let { m -> day(m.dayID)?.let { CoachReceiptTarget.Meal(m, it.localDate) } }
                 ?: CoachReceiptTarget.Unavailable
             receipt.workoutID != null -> targets[key] = try {
-                workout(receipt.workoutID).let { CoachReceiptTarget.Workout(it, trackingDay(it.dayID).localDate) }
-            } catch (_: DiaryError.NotFound) { CoachReceiptTarget.Unavailable }
+                workout(receipt.workoutID).let { w -> day(w.dayID)?.let { CoachReceiptTarget.Workout(w, it.localDate) } }
+            } catch (_: DiaryError.NotFound) { null } ?: CoachReceiptTarget.Unavailable
         }
         val snapshot = coachUndo(key) ?: continue
         when {

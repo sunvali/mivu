@@ -1,6 +1,7 @@
 package com.yakov103.mivu.diary
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.coach.CoachManualEdit
 import com.yakov103.mivu.coach.CoachWrite
@@ -139,5 +140,19 @@ class CoachTimelineTest {
         assertEquals(listOf(photo.id), listed.photoIDs)
         assertArrayEquals(photo.data, db.coachPhotoBytes(t.id, photo.id))
         assertNull(db.coachPhotoBytes(t.id, UUID.randomUUID()))
+    }
+
+    @Test fun receiptWithUnreadableDayIsUnavailable() {
+        val receipt = logged()
+        val day = db.read { it.meal(receipt.mealID!!) }!!.dayID.toString().uppercase()
+        db.close()
+        // Synthetic corruption: the meal payload names a day that does not exist (its parent row still does).
+        SQLiteDatabase.openDatabase(File(context.filesDir, "profiles/${profile.id.toString().uppercase()}/diary.sqlite").path, null,
+            SQLiteDatabase.OPEN_READWRITE).use {
+            it.execSQL("UPDATE meal SET payload = CAST(replace(CAST(payload AS TEXT), ?, ?) AS BLOB)",
+                arrayOf(day, UUID.randomUUID().toString().uppercase()))
+        }
+        db = DiaryDatabase.open(context, profile.id)
+        assertEquals(CoachReceiptTarget.Unavailable, exchange(receipt).targets[receipt.operationKey])
     }
 }

@@ -172,4 +172,23 @@ class CoachWorkerTest {
         assertEquals(listOf(t.id to CoachActivity.thinking), seen)
         assertNull(w.activity.value)
     }
+
+    @Test fun stuckTurnDoesNotHoldBackLaterWorker() = runBlocking {
+        val stuck = turn("Synthetic offline")
+        val offlineCalls = AtomicInteger()
+        val w = worker { input, _ ->
+            if ((input.last() as CoachInferenceInput.Message).text != "Synthetic offline") return@worker answer()
+            offlineCalls.incrementAndGet(); throw SocketTimeoutException()
+        }
+        w.drain(profile.id, true)!!.join()
+        assertEquals(CoachTurnState.waitingForNetwork, state(stuck.id))
+        // The worker has exited; a new message starts a new worker, which must not retry the stuck turn first.
+        val newer = turn("Synthetic newer")
+        w.drain(profile.id, true)!!.join()
+        assertEquals(CoachTurnState.completed, state(newer.id))
+        assertEquals(4, offlineCalls.get())
+        // A network change lets the stuck turn run again.
+        w.drain(profile.id, true, retryWaiting = true)!!.join()
+        assertEquals(8, offlineCalls.get())
+    }
 }

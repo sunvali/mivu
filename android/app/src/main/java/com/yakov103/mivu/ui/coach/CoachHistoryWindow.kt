@@ -46,7 +46,10 @@ class CoachHistoryWindow {
         return if (edge.continues(direction)) EdgeState.Available else EdgeState.Exhausted
     }
 
-    /** Replaces the window with [page]; in-flight reads are retired, so they keep their slots until they exit. */
+    /**
+     * Replaces the window with [page] and releases the replacement slot. Call it only with the result of the replacement read
+     * reserved by [reserveReplacement] (or the first read); in-flight page reads are retired and keep their slots until they exit.
+     */
     fun reset(page: CoachPage) {
         retireAll()
         pages.clear(); pages += page
@@ -71,6 +74,10 @@ class CoachHistoryWindow {
         return true
     }
 
+    /**
+     * Frees the replacement slot of a read that ended without a result. Call it only after that read has actually exited, not
+     * when its cancellation is requested: until then its work still occupies the window.
+     */
     fun releaseReplacement() { replacementReserved = false }
 
     fun complete(reservation: Reservation, page: CoachPage): Boolean {

@@ -40,6 +40,12 @@ class CoachWorker(
     private val requested = AtomicBoolean(false)
     @Volatile private var profileID: UUID? = null
     @Volatile private var includeWaitingForConnection = false
+    /**
+     * iOS `capturedOnly`, kept across workers: once a pass ends on a turn the engine left pending, later passes run only new
+     * captures, so a turn stuck on the network cannot hold back newer messages. A network or connection change, or a pass
+     * that finds nothing pending at all, clears it.
+     */
+    @Volatile private var capturedOnly = false
     private val _activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null)
 
     /** The running turn and its phase, or null between turns. */
@@ -47,21 +53,19 @@ class CoachWorker(
 
     /**
      * Starts a worker, or returns null when one is running; that worker then makes one more pass. Turns waiting for a
-     * connection run only when [includeWaitingForConnection] (the app can infer).
+     * connection run only when [includeWaitingForConnection] (the app can infer). [retryWaiting] marks a network or
+     * connection change, which lets stuck turns run first again.
      */
-    fun drain(profileID: UUID, includeWaitingForConnection: Boolean): Job? {
+    fun drain(profileID: UUID, includeWaitingForConnection: Boolean, retryWaiting: Boolean = false): Job? {
         this.profileID = profileID
         this.includeWaitingForConnection = includeWaitingForConnection
+        if (retryWaiting) capturedOnly = false
         requested.set(true)
         if (!running.compareAndSet(false, true)) return null
         return scope.launch(Dispatchers.IO) {
-            // iOS resume: after a pass whose turn stayed pending, later passes of this worker run only new captures.
-            var capturedOnly = false
             while (true) {
                 try {
-                    while (requested.getAndSet(false)) {
-                        if (pass(this@CoachWorker.profileID ?: break, capturedOnly)) capturedOnly = true
-                    }
+                    while (requested.getAndSet(false)) pass(this@CoachWorker.profileID ?: break)
                 } catch (e: Throwable) {
                     running.set(false); throw e
                 }
@@ -73,20 +77,29 @@ class CoachWorker(
     }
 
     /**
-     * Runs pending turns oldest first; returns true when one stayed pending. Any failure ends the pass: a turn's state is
-     * saved by the engine, and a diary error waits for the next request. Nothing is logged, so no prompt, context or reply
-     * leaves the diary; an escaped error would end the process.
+     * Runs pending turns oldest first and updates [capturedOnly]. Any failure ends the pass: a turn's state is saved by the
+     * engine, and a diary error waits for the next request. Nothing is logged, so no prompt, context or reply leaves the
+     * diary; an escaped error would end the process.
      */
-    private suspend fun pass(profileID: UUID, capturedOnly: Boolean): Boolean {
+    private suspend fun pass(profileID: UUID) {
         try {
             val db = repository.database(profileID)
             var previous: UUID? = null
             while (true) {
-                val turnID = db.nextPendingCoachTurn(includeWaitingForConnection, capturedOnly) ?: return false
-                if (turnID == previous) return true // the engine left it pending; wait for the next request
+                val turnID = db.nextPendingCoachTurn(includeWaitingForConnection, capturedOnly)
+                if (turnID == null) {
+                    if (db.nextPendingCoachTurn(includeWaitingForConnection) == null) capturedOnly = false
+                    return
+                }
+                if (turnID == previous) { capturedOnly = true; return } // the engine left it pending; wait for the next request
                 previous = turnID
                 try {
                     CoachEngine(db, ::resilient, prepareImages) { _activity.value = turnID to it }.run(turnID)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    capturedOnly = true // the engine saved its failed state; newer captures go first until the network changes
+                    return
                 } finally {
                     _activity.value = null
                 }
@@ -94,7 +107,6 @@ class CoachWorker(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            return true
         }
     }
 
