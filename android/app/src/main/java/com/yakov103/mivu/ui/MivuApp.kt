@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -85,6 +86,7 @@ import androidx.compose.ui.semantics.customActions
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
 import com.yakov103.mivu.coach.CoachActivity
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,6 +100,11 @@ import com.yakov103.mivu.diary.DiaryRepository
 import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import com.yakov103.mivu.connection.ChatGPTConnection
+import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.ui.settings.ConnectionScreen
+import com.yakov103.mivu.ui.settings.SettingsScreen
+import com.yakov103.mivu.ui.settings.openCustomTab
 
 /** The app's Coach worker as the Coach tab uses it: run saved turns, whether ChatGPT is connected, and the running turn. */
 class CoachHooks(
@@ -121,6 +128,8 @@ sealed interface Route {
     /** [retaking] is the draft photo path a shot replaces. */
     @Serializable data class CoachCamera(val retaking: String? = null) : Route
     @Serializable data object CoachHistory : Route
+    @Serializable data object Settings : Route
+    @Serializable data object Connection : Route
 }
 
 private enum class Tab(val route: Route, val label: String, @DrawableRes val icon: Int, @DrawableRes val selectedIcon: Int) {
@@ -133,17 +142,22 @@ private enum class Tab(val route: Route, val label: String, @DrawableRes val ico
 /**
  * The app root, as iOS `DiaryRootView`: diary setup until a diary is open, then the four tabs. [onMealCaptured] runs
  * after a capture is saved, with its profile, to start analysis outside the screen. [coach] connects the Coach tab to the
- * app's Coach worker.
+ * app's Coach worker. [connection] backs Settings' Coach AI screen; without it (tests) the screen shows a disconnected state.
  */
 @Composable
-fun MivuApp(repository: DiaryRepository, onMealCaptured: (UUID) -> Unit = {}, coach: CoachHooks = CoachHooks()) {
+fun MivuApp(
+    repository: DiaryRepository,
+    onMealCaptured: (UUID) -> Unit = {},
+    coach: CoachHooks = CoachHooks(),
+    connection: ChatGPTConnection? = null,
+) {
     val state by repository.bootstrapState.collectAsState()
     val scope = rememberCoroutineScope()
     // A finished result survives activity recreation in the repository, so only the first composition starts one.
     LaunchedEffect(repository) { if (repository.bootstrapState.value == null) repository.bootstrap() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
-            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach)
+            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection)
             Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
@@ -185,7 +199,7 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks) {
+private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks, connection: ChatGPTConnection?) {
     val navController = rememberNavController()
     // Coach keeps its window across tab switches: its view model belongs to the activity, not the Coach entry.
     val activityOwner = checkNotNull(LocalViewModelStoreOwner.current)
@@ -224,8 +238,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 },
                 actions = {
                     if (root == Tab.Coach) CoachHistoryButton(coach) { navController.navigate(Route.CoachHistory) }
-                    // shortcut: Settings arrives with its own milestone; the control is in place so every root has it.
-                    IconButton(onClick = {}, Modifier.testTag("profileSettings")) {
+                    IconButton(onClick = { navController.navigate(Route.Settings) }, Modifier.testTag("profileSettings")) {
                         Icon(painterResource(R.drawable.ic_profile), contentDescription = "Profile and settings")
                     }
                 },
@@ -277,8 +290,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
                     onAskPip = { askPip(it); selectTab(Route.Coach) },
                     onEnterNutrition = { navController.navigate(Route.ManualEntry(it.toString(), null)) },
-                    // shortcut: the profile button does nothing until the Profile and settings screen is ported; wire it then.
-                    onProfile = {},
+                    onProfile = { navController.navigate(Route.Settings) },
                 )
             }
             composable<Route.MealDetail> { entry ->
@@ -318,6 +330,27 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 }
                 CoachHistoryScreen(coach, zone, onOpen = { coach.seek(it); navController.popBackStack() },
                     onClose = { navController.popBackStack() })
+            }
+            composable<Route.Settings> {
+                val connectionState by connectionState(connection)
+                SettingsScreen(connectionState, onOpenConnection = { navController.navigate(Route.Connection) },
+                    onBack = { navController.popBackStack() })
+            }
+            composable<Route.Connection> {
+                val connectionState by connectionState(connection)
+                val activity = LocalContext.current
+                val scope = rememberCoroutineScope()
+                ConnectionScreen(
+                    connectionState,
+                    onAgree = { connection?.recordConsent() },
+                    // The owner calls back off the main thread; the Custom Tab starts on it.
+                    onConnect = { connection?.connect { url -> activity.mainExecutor.execute { activity.openCustomTab(url) } } },
+                    onCancel = { connection?.cancelConnection() },
+                    onSelectModel = { connection?.selectModel(it) },
+                    // Leaving the screen must not stop a disconnect halfway through deleting the session.
+                    onDisconnect = { scope.launch { withContext(NonCancellable) { connection?.disconnect() } } },
+                    onBack = { navController.popBackStack() },
+                )
             }
             // Full screen over Coach: Coach is no longer resumed, so Pip hides; the draft lives in the activity's model.
             dialog<Route.CoachCamera>(
@@ -384,6 +417,10 @@ private fun CoachHistoryButton(coach: CoachViewModel, onOpen: () -> Unit) {
         Icon(painterResource(R.drawable.ic_history), contentDescription = "Chat history")
     }
 }
+
+@Composable
+private fun connectionState(connection: ChatGPTConnection?) =
+    connection?.state?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(ConnectionState()) }
 
 @Composable
 private fun LaterUpdate(modifier: Modifier = Modifier) {

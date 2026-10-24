@@ -25,6 +25,6 @@ class MainActivity : ComponentActivity() {
             connected = app.chatGPT.state.map { it.canInfer }.stateIn(lifecycleScope, SharingStarted.Eagerly, app.chatGPT.state.value.canInfer),
             activity = app.coachWorker.activity,
         )
-        setContent { MivuTheme { MivuApp(app.repository, onMealCaptured = { app.drainSampleAnalysis() }, coach = coach) } }
+        setContent { MivuTheme { MivuApp(app.repository, onMealCaptured = { app.drainSampleAnalysis() }, coach = coach, connection = app.chatGPT) } }
     }
 }
