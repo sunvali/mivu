@@ -26,11 +26,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.diary.Bootstrap
-import com.yakov103.mivu.diary.DayCutoff
+import com.yakov103.mivu.diary.CalendarDayRule
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.GoalRecord
 import com.yakov103.mivu.diary.NutritionValues
@@ -60,21 +62,15 @@ import org.junit.Test
 /** The weight, workout and goal editors on synthetic diaries: their entry points, saves, validation and stale protection. */
 class EditorsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val calendarDay = CalendarDayRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var repository: DiaryRepository? = null
     private var profileID: UUID? = null
     private var closed = false
 
-    private val cutoff = DayCutoff.hour
-
-    // The waking day equals the calendar date at any hour, so Today's day and the goal editor's date agree after midnight.
-    @Before fun wipe() {
-        DayCutoff.hour = 0
-        TodayFixture.wipe(context)
-    }
+    @Before fun wipe() = TodayFixture.wipe(context)
 
     @After fun close() {
-        DayCutoff.hour = cutoff
         profileID?.let { repository?.database(it)?.close() }
         (repository?.bootstrapState?.value as? Bootstrap.Ready)?.let { repository!!.database(it.profileID).close() }
         TodayFixture.wipe(context)
@@ -114,6 +110,16 @@ class EditorsTest {
     private fun type(tag: String, text: String) = compose.onNodeWithTag(tag).performScrollTo().performTextReplacement(text)
     private fun enabled(tag: String) = SemanticsMatcher.keyNotDefined(SemanticsProperties.Disabled) and hasTestTag(tag)
 
+    /** The Diary tab on [date]; on the first day of a week, yesterday is on the previous page. */
+    private fun openDiaryDay(date: LocalDate) {
+        compose.onNode(hasText("Diary") and isSelectable()).performClick()
+        waitFor(hasTestTag("diaryDayPill"))
+        val pill = hasTestTag("diaryDayPill") and SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, date.toString())
+        if (compose.onAllNodes(pill).fetchSemanticsNodes().isEmpty()) compose.onNodeWithTag("diaryWeekStrip").performTouchInput { swipeRight() }
+        waitFor(pill)
+        compose.onNode(pill).performClick()
+    }
+
     private fun seedDiary(): DiaryFixture.Seeded = DiaryFixture.seed(context).also { profileID = it.profileID }
     private fun dayID(date: LocalDate) = db().read { tx -> tx.days().first { it.localDate == date.toString() }.id }
 
@@ -143,10 +149,7 @@ class EditorsTest {
         db().close()
         launchApp()
         waitFor(hasText("Today") and isHeading())
-        compose.onNode(hasText("Diary") and isSelectable()).performClick()
-        waitFor(hasTestTag("diaryDayPill"))
-        compose.onNode(hasTestTag("diaryDayPill") and SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,
-            seeded.today.minusDays(1).toString())).performClick()
+        openDiaryDay(seeded.today.minusDays(1))
         waitForText("Oat porridge")
         compose.onNodeWithTag("diaryAddMenu").performClick()
         compose.onNodeWithTag("logWeightForDay").performClick()
@@ -218,10 +221,7 @@ class EditorsTest {
         db().close()
         launchApp()
         waitFor(hasText("Today") and isHeading())
-        compose.onNode(hasText("Diary") and isSelectable()).performClick()
-        waitFor(hasTestTag("diaryDayPill"))
-        compose.onNode(hasTestTag("diaryDayPill") and SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, date.toString()))
-            .performClick()
+        openDiaryDay(date)
         waitFor(hasTestTag("historyWorkout"))
         compose.onNodeWithTag("historyWorkout").performScrollTo().performClick()
         waitForText("45 minutes")

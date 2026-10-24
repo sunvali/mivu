@@ -33,6 +33,7 @@ import com.yakov103.mivu.coach.CoachActivity
 import com.yakov103.mivu.coach.CoachReplyLines
 import com.yakov103.mivu.coach.CoachManualEdit
 import com.yakov103.mivu.coach.CoachWrite
+import com.yakov103.mivu.diary.CalendarDayRule
 import com.yakov103.mivu.diary.CoachDestination
 import com.yakov103.mivu.diary.CoachCaptureContext
 import com.yakov103.mivu.diary.CoachClarification
@@ -74,6 +75,7 @@ import org.junit.Test
 /** Synthetic diaries only, seeded through the 4a store calls; drain is a counter, so no inference runs. */
 class CoachScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val calendarDay = CalendarDayRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
     private lateinit var repository: DiaryRepository
     private lateinit var profileID: UUID

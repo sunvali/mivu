@@ -34,6 +34,7 @@ import com.yakov103.mivu.SampleMode
 import com.yakov103.mivu.analysis.MealAnalysisWorker
 import com.yakov103.mivu.analysis.SampleAnalyzer
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.CalendarDayRule
 import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.DiaryRepository
@@ -58,6 +59,7 @@ import org.junit.Test
 
 class MealComposerScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val calendarDay = CalendarDayRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var repository: DiaryRepository? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

@@ -23,8 +23,8 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.CalendarDayRule
 import com.yakov103.mivu.diary.DayCompleteness
-import com.yakov103.mivu.diary.DayCutoff
 import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.FoodItem
@@ -61,18 +61,14 @@ import org.junit.Test
 /** The Progress tab on a synthetic 90-day diary: ranges, cards, detail screens, the weight ledger and spoken charts. */
 class ProgressScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val calendarDay = CalendarDayRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var repository: DiaryRepository? = null
-    private val cutoff = DayCutoff.hour
     private lateinit var today: LocalDate
 
-    @Before fun wipe() {
-        DayCutoff.hour = 0 // the waking day is the calendar date at any hour
-        TodayFixture.wipe(context)
-    }
+    @Before fun wipe() = TodayFixture.wipe(context)
 
     @After fun close() {
-        DayCutoff.hour = cutoff
         (repository?.bootstrapState?.value as? Bootstrap.Ready)?.let { repository!!.database(it.profileID).close() }
         TodayFixture.wipe(context)
     }

@@ -37,6 +37,7 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.CalendarDayRule
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.ui.MivuApp
 import com.yakov103.mivu.ui.coach.AskPip
@@ -60,6 +61,7 @@ import org.junit.Test
 
 class DiaryScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val calendarDay = CalendarDayRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var repository: DiaryRepository? = null
     private var profileID: UUID? = null
