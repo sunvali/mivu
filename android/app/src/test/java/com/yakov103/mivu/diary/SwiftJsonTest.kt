@@ -37,7 +37,15 @@ class SwiftJsonTest {
         val back = SwiftJson.decodeFromString<Box>(SwiftJson.encodeToString(Box(t, UUID.randomUUID(), byteArrayOf())))
         assertTrue(abs(back.at.until(t, java.time.temporal.ChronoUnit.NANOS)) < 1_000)
         assertTrue(SwiftJson.encodeToString(Box(Instant.parse("2001-01-01T00:00:00Z"), UUID.randomUUID(), byteArrayOf()))
-            .contains("\"at\":0.0"))
+            .contains("\"at\":0,"))
+    }
+
+    @Test fun dateWritesPlainDecimalsLikeFoundation() {
+        fun encoded(seconds: Long, nanos: Long) =
+            SwiftJson.encodeToString(Box(Instant.ofEpochSecond(seconds + 978307200L, nanos), UUID.randomUUID(), byteArrayOf()))
+        assertTrue(encoded(783_000_000, 0).contains("\"at\":783000000,"))
+        assertTrue(encoded(800_000_060, 500_000_000).contains("\"at\":800000060.5,"))
+        assertEquals(Instant.ofEpochSecond(783_000_000L + 978307200L), decode("783000000").at)
     }
 
     @Test fun uuidReadsLowerWritesUpper() {

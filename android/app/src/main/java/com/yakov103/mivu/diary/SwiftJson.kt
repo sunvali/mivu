@@ -1,10 +1,12 @@
 package com.yakov103.mivu.diary
 
+import java.math.BigDecimal
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
 import kotlin.math.floor
 import kotlin.math.roundToLong
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -12,6 +14,8 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonEncoder
+import kotlinx.serialization.json.JsonUnquotedLiteral
 
 /** Reads and writes the default Foundation JSONEncoder/JSONDecoder wire format. */
 val SwiftJson: Json = Json {
@@ -26,8 +30,13 @@ private const val REFERENCE_OFFSET = 978_307_200L // seconds from 1970 to 2001-0
 object SwiftDate : KSerializer<Instant> {
     override val descriptor = PrimitiveSerialDescriptor("SwiftDate", PrimitiveKind.DOUBLE)
 
-    override fun serialize(encoder: Encoder, value: Instant) =
-        encoder.encodeDouble((value.epochSecond - REFERENCE_OFFSET) + value.nano / 1e9)
+    // Foundation writes shortest plain decimals (783000000, not 7.83E8).
+    @OptIn(ExperimentalSerializationApi::class)
+    override fun serialize(encoder: Encoder, value: Instant) {
+        val seconds = (value.epochSecond - REFERENCE_OFFSET) + value.nano / 1e9
+        val plain = BigDecimal(seconds.toString()).stripTrailingZeros().toPlainString()
+        if (encoder is JsonEncoder) encoder.encodeJsonElement(JsonUnquotedLiteral(plain)) else encoder.encodeDouble(seconds)
+    }
 
     override fun deserialize(decoder: Decoder): Instant {
         val seconds = decoder.decodeDouble()
