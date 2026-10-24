@@ -32,11 +32,15 @@ enum PipLine: Equatable {
     }
 }
 
-/// The logging day and its intake, e.g. "Today · 1,240 / 2,000 kcal"; unknown intake reads "—", never zero.
-func coachDayChip(localDate: String, today: String, kcal: Double?, mealsLogged: Bool, goal: Double?) -> String {
-    let day = CoachReplyLines.dayLabel(localDate, today: today).capitalized(with: .current)
+/// The logging day and its intake, e.g. "Today · 1,240 / 2,000 kcal". A saved food without calories makes the
+/// figure a lower bound ("1,240+"), as on Today; unknown intake reads "—", never zero.
+func coachDayChip(localDate: String, today: String, kcal: Double?, kcalPartial: Bool, mealsLogged: Bool,
+                  goal: Double?) -> (text: String, spoken: String) {
+    let day = CoachReplyLines.dayLabel(localDate, today: today)
     let whole = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
-    let eaten = kcal.map { $0.formatted(whole) } ?? (mealsLogged ? "—" : "0")
-    guard let goal else { return "\(day) · \(eaten) kcal" }
-    return "\(day) · \(eaten) / \(goal.formatted(whole)) kcal"
+    let eaten = kcal.map { $0.formatted(whole) + (kcalPartial ? "+" : "") } ?? (mealsLogged ? "—" : "0")
+    let spokenEaten = kcal.map { (kcalPartial ? "at least " : "") + $0.formatted(whole) } ?? (mealsLogged ? "unknown" : "0")
+    let target = goal.map { $0.formatted(whole) }
+    return ("\(day.capitalized(with: .current)) · \(eaten)" + (target.map { " / " + $0 } ?? "") + " kcal",
+            "Logging to \(day), \(spokenEaten)" + (target.map { " of " + $0 } ?? "") + " kcal")
 }

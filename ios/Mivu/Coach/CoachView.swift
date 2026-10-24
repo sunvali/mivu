@@ -292,7 +292,7 @@ struct CoachView: View {
             .accessibilityElement(children: .contain).accessibilityIdentifier("coachExchange-" + turn.id.uuidString)
             .accessibilityValue(row.isHighlighted ? "Selected source message" : "")
         } else if let date = row.date {
-            let label = CoachReplyLines.dayLabel(date, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)).capitalized(with: .current)
+            let label = CoachReplyLines.dayTitle(date, zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
             HStack { Rectangle().frame(height: 0.5); Text(label).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
                 .foregroundStyle(Color.diarySecondary).padding(.vertical, 8)
                 .accessibilityElement(children: .ignore).accessibilityLabel(label).accessibilityAddTraits(.isHeader)
@@ -321,15 +321,16 @@ struct CoachView: View {
                 if let line = pipLine { pipBubble(line).transition(.opacity) }
                 if let model = coach.diary.readModel, let day = model.activeDay {
                     let chip = coachDayChip(localDate: day.localDate, today: ProgressAnalytics.dateLabel(Date(), zone: model.profile.timeZoneID),
-                                            kcal: model.totals.kcal, mealsLogged: !model.meals.isEmpty, goal: model.activeGoal?.targets.kcal)
+                                            kcal: model.totals.kcal, kcalPartial: model.meals.filter(\.isSaved).flatMap(\.items).contains { $0.nutrition.kcal == nil },
+                                            mealsLogged: !model.meals.isEmpty, goal: model.activeGoal?.targets.kcal)
                     Button(action: openToday) {
-                        Text(chip).font(.footnote.weight(.medium)).monospacedDigit().foregroundStyle(Color.diaryAccent)
+                        Text(chip.text).font(.footnote.weight(.medium)).monospacedDigit().foregroundStyle(Color.diaryAccent)
                             .padding(.horizontal, 12).padding(.vertical, 6)
                             .background(Color.diarySummarySurface, in: .capsule)
                             .frame(minHeight: 44).contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(chip.replacingOccurrences(of: " / ", with: " of ").replacingOccurrences(of: " · ", with: ", "))
+                    .accessibilityLabel(chip.spoken)
                     .accessibilityHint("Opens Today").accessibilityIdentifier("coachDate")
                 }
             }
@@ -337,6 +338,8 @@ struct CoachView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: pipLine)
         }
+        // shortcut: the photo wording only knows this view's last send; a retried or relaunched turn reads "Counting that up…".
+        .onChange(of: companionProcessing) { _, working in if !working { sentWithPhotos = false } }
         .accessibilityElement(children: .contain).accessibilityIdentifier("coachCompanionStrip")
     }
     private var pipLine: PipLine? {
@@ -356,7 +359,7 @@ struct CoachView: View {
             case .say(let text): Text(text)
             case .working(let text):
                 HStack(spacing: 8) {
-                    if reduceMotion { Image(systemName: "circle.dotted").foregroundStyle(Color.diaryAccent) }
+                    if reduceMotion { Image(systemName: "circle.dotted").foregroundStyle(Color.diaryAccent).accessibilityHidden(true) }
                     else { ProgressView().controlSize(.small).tint(Color.diaryAccent) }
                     Text(text)
                 }
@@ -364,7 +367,7 @@ struct CoachView: View {
                 Text(text).accessibilityIdentifier("coachError")
                 if let detail { Text(detail).font(.footnote).foregroundStyle(Color.diarySecondary) }
                 if canRetry, let turn = coach.companionTurn {
-                    Button("Try again") { Task { await coach.retry(turn.id) } }.modifier(BubbleAction())
+                    Button("Try again") { Task { await coach.retry(turn.id) } }.modifier(BubbleAction()).disabled(coach.isWorking)
                 }
             case .connect:
                 Text("Connect ChatGPT so I can count for you")
