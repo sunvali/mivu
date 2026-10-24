@@ -11,8 +11,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SampleMode.configure(intent)
-        (application as MivuApplication).drainSampleAnalysis()
+        val app = application as MivuApplication
+        app.drainSampleAnalysis()
         enableEdgeToEdge()
-        setContent { MivuTheme { MivuApp((application as MivuApplication).repository) } }
+        setContent { MivuTheme { MivuApp(app.repository, onMealCaptured = { app.drainSampleAnalysis() }) } }
     }
 }

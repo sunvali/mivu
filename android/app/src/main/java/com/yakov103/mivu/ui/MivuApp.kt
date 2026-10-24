@@ -49,7 +49,10 @@ import androidx.navigation.compose.dialog
 import androidx.navigation.toRoute
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.createSavedStateHandle
+import com.yakov103.mivu.ui.composer.MealComposerScreen
+import com.yakov103.mivu.ui.composer.MealComposerViewModel
 import com.yakov103.mivu.ui.manual.ManualNutritionScreen
+import androidx.compose.ui.platform.LocalContext
 import com.yakov103.mivu.ui.manual.ManualNutritionViewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -86,16 +89,19 @@ private enum class Tab(val route: Route, val label: String, @DrawableRes val ico
     Coach(Route.Coach, "Coach", R.drawable.ic_coach, R.drawable.ic_coach_filled),
 }
 
-/** The app root, as iOS `DiaryRootView`: diary setup until a diary is open, then the four tabs. */
+/**
+ * The app root, as iOS `DiaryRootView`: diary setup until a diary is open, then the four tabs. [onMealCaptured] runs
+ * after a capture is saved, with its profile, to start analysis outside the screen.
+ */
 @Composable
-fun MivuApp(repository: DiaryRepository) {
+fun MivuApp(repository: DiaryRepository, onMealCaptured: (UUID) -> Unit = {}) {
     val state by repository.bootstrapState.collectAsState()
     val scope = rememberCoroutineScope()
     // A finished result survives activity recreation in the repository, so only the first composition starts one.
     LaunchedEffect(repository) { if (repository.bootstrapState.value == null) repository.bootstrap() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
-            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID)
+            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured)
             Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
@@ -137,7 +143,7 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Shell(repository: DiaryRepository, profileID: UUID) {
+private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val current = Tab.entries.firstOrNull { tab -> entry?.destination?.hasRoute(tab.route::class) == true } ?: Tab.Today
@@ -219,8 +225,21 @@ private fun Shell(repository: DiaryRepository, profileID: UUID) {
                     leave()
                 })
             }
-            // shortcut: placeholder until the composer screen replaces it.
-            composable<Route.Composer> { LaterUpdate() }
+            // Sample mode only: Today offers "Log meal" there. Analysis runs outside the screen, after it closes.
+            dialog<Route.Composer>(
+                dialogProperties = DialogProperties(dismissOnBackPress = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+            ) { entry ->
+                val context = LocalContext.current.applicationContext
+                val model = viewModel { MealComposerViewModel(repository, profileID, context, createSavedStateHandle()) }
+                // "Enter nutrition manually" hands its saved meal back through this entry.
+                val manualSaved by entry.savedStateHandle.getStateFlow<String?>(SAVED_MEAL_ID, null).collectAsStateWithLifecycle()
+                val leave = { navController.popBackStack<Route.Composer>(inclusive = true) }
+                MealComposerScreen(model, manualSaved?.let(UUID::fromString), onClose = { leave() }, onSaved = { id ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set(SAVED_MEAL_ID, id.toString())
+                    leave()
+                    onMealCaptured(profileID)
+                }, onEnterManually = { navController.navigate(Route.ManualEntry(null, null)) })
+            }
         }
     }
 }

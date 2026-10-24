@@ -158,7 +158,7 @@ private fun MealThumbnail(mealID: UUID, photo: MealPhoto?, loadPhoto: suspend (U
 }
 
 /** Decodes at the smallest power-of-two sample that still covers [size] px, so a camera photo never loads full size. */
-private fun decode(bytes: ByteArray, size: Int): ImageBitmap? {
+internal fun decode(bytes: ByteArray, size: Int): ImageBitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null

@@ -252,7 +252,7 @@ private fun WhiteCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = nu
 }
 
 @Composable
-private fun SampleBanner() {
+internal fun SampleBanner() {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.padding(horizontal = 12.dp)) {
