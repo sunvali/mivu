@@ -58,7 +58,7 @@ class CoachVoiceTest {
     }
 
     private fun launch(available: Boolean = true) {
-        model = CoachViewModel(repository, profileID, drain = {}, isConnected = { false },
+        model = CoachViewModel(repository, profileID, drain = {}, connected = MutableStateFlow(false),
             activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = SavedStateHandle(), prepare = { error("no photos") })
         voice = CoachVoiceInput(context, available) { _, _ -> { released++ } }
         compose.setContent { MivuTheme { CoachComposer(model, showStarters = false, remember { FocusRequester() }, onOpenCamera = {}, hasCamera = true, voice = voice) } }

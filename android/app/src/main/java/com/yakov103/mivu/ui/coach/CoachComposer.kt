@@ -133,7 +133,7 @@ fun CoachComposer(
     val levels by voice.levels.collectAsStateWithLifecycle()
     val note by voice.note.collectAsStateWithLifecycle()
     var focused by remember { mutableStateOf(false) }
-    val connected = remember(model) { model.isConnected() }
+    val connected by model.connected.collectAsStateWithLifecycle()
     val large = isLargeText()
 
     val focus = LocalFocusManager.current

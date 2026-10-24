@@ -97,7 +97,7 @@ class CoachScreenTest {
     private fun start(at: Instant = now) = db().startDay(at, db().head().revision)
 
     private fun launch(fontScale: Float? = null) {
-        model = CoachViewModel(repository, profileID, drain = { drains++ }, isConnected = { false }, activity = activity, saved = SavedStateHandle())
+        model = CoachViewModel(repository, profileID, drain = { drains++ }, connected = MutableStateFlow(false), activity = activity, saved = SavedStateHandle())
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {

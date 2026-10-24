@@ -102,7 +102,7 @@ import kotlinx.serialization.Serializable
 /** The app's Coach worker as the Coach tab uses it: run saved turns, whether ChatGPT is connected, and the running turn. */
 class CoachHooks(
     val drain: () -> Unit = {},
-    val isConnected: () -> Boolean = { false },
+    val connected: StateFlow<Boolean> = MutableStateFlow(false),
     val activity: StateFlow<Pair<UUID, CoachActivity>?> = MutableStateFlow(null),
 )
 
@@ -192,7 +192,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
     val context = LocalContext.current.applicationContext
     val coach = viewModel(viewModelStoreOwner = activityOwner, key = "coach-$profileID") {
         val photos = File(context.cacheDir, "coach/$profileID")
-        CoachViewModel(repository, profileID, hooks.drain, hooks.isConnected, hooks.activity, createSavedStateHandle(),
+        CoachViewModel(repository, profileID, hooks.drain, hooks.connected, hooks.activity, createSavedStateHandle(),
             prepare = { preparePhoto(context.contentResolver, it, photos) })
     }
     var focusCoach by rememberSaveable { mutableStateOf(false) }

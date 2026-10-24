@@ -33,7 +33,17 @@ class ConnectionProofScreenTest {
         }
     }
 
-    @Test fun signInOpensTheBrowserWithALoopbackRedirect() {
+    private val consented get() = (compose.activity.application as MivuApplication).chatGPT.state.value.consented
+
+    // Consent is only ever the person's tap, so the test checks whichever state the device is in.
+    @Test fun signInOpensTheBrowserWithALoopbackRedirectOnlyAfterConsent() {
+        if (!consented) {
+            compose.onNodeWithContentDescription("Sign in").performClick()
+            compose.waitUntil(10_000) { ProofSession.results["Sign in"]?.ok == false }
+            assertEquals("OpenAI sharing consent needed", ProofSession.results["Sign in"]?.text)
+            assertTrue(Intents.getIntents().none { it.action == Intent.ACTION_VIEW })
+            return
+        }
         Intents.intending(hasAction(Intent.ACTION_VIEW)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null))
         compose.onNodeWithContentDescription("Sign in").performClick()
         compose.waitUntil(10_000) { Intents.getIntents().any { it.action == Intent.ACTION_VIEW } }

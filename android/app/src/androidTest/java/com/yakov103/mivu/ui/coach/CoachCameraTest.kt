@@ -196,7 +196,7 @@ class CoachCameraTest {
 
     @Test fun deniedKeepsDraftAndOffersChoosePhotos() {
         val repository = DiaryRepository(context).also { repository = it }
-        val model = CoachViewModel(repository, profileID, drain = {}, isConnected = { false },
+        val model = CoachViewModel(repository, profileID, drain = {}, connected = MutableStateFlow(false),
             activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = SavedStateHandle(),
             prepare = { preparePhoto(context.contentResolver, it, folder) })
         compose.runOnUiThread { model.updateText("Synthetic salad") }

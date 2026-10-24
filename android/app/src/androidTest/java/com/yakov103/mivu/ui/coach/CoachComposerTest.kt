@@ -77,7 +77,7 @@ class CoachComposerTest {
     private fun db() = repository.database(profileID)
 
     private fun model(saved: SavedStateHandle = SavedStateHandle()) = CoachViewModel(repository, profileID, drain = { drains++ },
-        isConnected = { false }, activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = saved,
+        connected = MutableStateFlow(false), activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = saved,
         prepare = { preparePhoto(context.contentResolver, it, folder) })
 
     private var retaking: String? = null

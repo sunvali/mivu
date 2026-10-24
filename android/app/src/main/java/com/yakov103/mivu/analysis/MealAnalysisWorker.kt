@@ -15,7 +15,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** Port of iOS `processPending`: drains pending meal submissions through prepare, analyze and apply. */
+/**
+ * Port of iOS `processPending`: drains pending meal submissions through prepare, analyze and apply.
+ * Sample mode only, as iOS `processPending`; live meals are analyzed by the Coach.
+ */
 class MealAnalysisWorker(
     private val repository: DiaryRepository,
     private val analyzer: (AnalysisInput) -> AnalysisOutput,

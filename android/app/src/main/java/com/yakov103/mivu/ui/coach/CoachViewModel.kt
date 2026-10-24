@@ -151,7 +151,7 @@ class CoachViewModel(
     private val repository: DiaryRepository,
     private val profileID: UUID,
     private val drain: () -> Unit,
-    val isConnected: () -> Boolean,
+    val connected: StateFlow<Boolean>,
     val activity: StateFlow<Pair<UUID, CoachActivity>?>,
     private val saved: SavedStateHandle,
     /** Prepares a picked photo as a JPEG file in the draft's folder (`preparePhoto`); off the main thread. */

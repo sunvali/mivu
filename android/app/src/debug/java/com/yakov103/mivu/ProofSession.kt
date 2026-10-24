@@ -4,9 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.mutableStateMapOf
 import com.yakov103.mivu.analysis.ResponsesClient
-import com.yakov103.mivu.connection.AuthSession
-import com.yakov103.mivu.connection.LoopbackCallback
-import com.yakov103.mivu.connection.OAuthAttempt
+import com.yakov103.mivu.connection.AccountState
 import com.yakov103.mivu.coach.CoachEngine
 import com.yakov103.mivu.diary.CoachCaptureContext
 import com.yakov103.mivu.diary.CoachSubmissionPayload
@@ -25,7 +23,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 
 /** One outcome line per button. Text is fixed wording or an error class name, never a token, code or callback URL. */
 data class ProofResult(val ok: Boolean?, val text: String)
@@ -58,31 +55,32 @@ object ProofSession {
         signInJob = run(SIGN_IN, signInJob) { signInAttempt(context, open) }
     }
 
+    // Goes through the app's connection, so it needs the person's OpenAI sharing consent like any other sign-in.
     private suspend fun signInAttempt(context: Context, open: (Uri) -> Unit): String {
-        val store = app(context).credentials
-        val auth = restored(context) // restore first, so a later restore cannot replace this sign-in
-        val loop = LoopbackCallback()
+        val chatGPT = app(context).chatGPT
+        check(chatGPT.state.value.consented) { "OpenAI sharing consent needed" }
         live = true
         try {
-            val callback = loop.start()
-            val returning = store.registrations().firstOrNull()
-            val attempt = OAuthAttempt.make(store.hostID(), returning?.issuedClientID, callback)
             prefs(context).edit().putBoolean(IN_FLIGHT, true).commit()
-            open(Uri.parse(attempt.authorizationUrl))
-            val received = withTimeout(5 * 60_000L) { loop.await() }
-            val code = attempt.consumeCallback(received)
-            auth.establish(code, attempt.verifier, attempt.nonce, returning?.id)
+            try {
+                chatGPT.connect { open(Uri.parse(it)) }.join()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                chatGPT.cancelConnection()
+                throw e
+            }
+            val state = chatGPT.state.value
+            check(state.notice == null && state.account != AccountState.disconnected) { state.notice?.text ?: "Not signed in" }
             return "Signed in"
         } finally {
-            loop.close()
             live = false
             prefs(context).edit().putBoolean(IN_FLIGHT, false).apply()
         }
     }
 
     fun listModels(context: Context) = run(LIST_MODELS) {
-        val models = client.models(token(context))
-        "${models.size} models; first: ${models.first().slug}"
+        val models = app(context).chatGPT.state.value.models
+        check(models.isNotEmpty()) { "No models loaded" }
+        "${models.size} models; selected: ${app(context).chatGPT.state.value.selectedModel}"
     }
 
     fun analyzeText(context: Context) = run(ANALYZE_TEXT) {
@@ -94,7 +92,7 @@ object ProofSession {
     }
 
     fun forceRefresh(context: Context) = run(FORCE_REFRESH) {
-        val auth = restored(context)
+        val auth = app(context).chatGPT.auth
         val before = auth.accessToken()
         val after = auth.accessToken(forceRefresh = true)
         check(before != after) { "token unchanged" }
@@ -102,13 +100,14 @@ object ProofSession {
     }
 
     fun disconnect(context: Context) = run(DISCONNECT) {
-        val outcome = restored(context).disconnect()
-        "Disconnected; revocation $outcome"
+        val chatGPT = app(context).chatGPT
+        chatGPT.disconnect()
+        chatGPT.state.value.notice?.text ?: "Disconnected"
     }
 
     private suspend fun analyze(context: Context, jpeg: ByteArray?): String {
         val token = token(context)
-        val model = client.models(token).first().slug
+        val model = app(context).chatGPT.state.value.selectedModel
         val prompt = if (jpeg == null) "Estimate calories for: two boiled eggs and a slice of toast."
         else "Estimate calories for the meal in this photo."
         val text = client.run(model, prompt, jpeg, jpeg?.let { "image/jpeg" }, token).text
@@ -128,18 +127,14 @@ object ProofSession {
             val h = db.head()
             val turn = db.captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), COACH_TEXT, emptyList(),
                 CoachCaptureContext(now, zone, h.activeDayID, h.previousDayConfirmedAt, h.activeConversationSegmentID)), h.revision)
-            val token = token(context)
-            val model = client.models(token).first().slug
-            val done = CoachEngine(db, { input, tools -> client.respond(model, input, tools, token) }).run(turn.id)
+            val done = CoachEngine(db, app(context).chatGPT::respond).run(turn.id)
             // State and receipt count only; the reply text stays in the scratch diary.
             check(done.state == CoachTurnState.completed) { "turn ${done.state.name}" }
             "Turn completed; ${done.receipts.size} saved records"
         }
     }
 
-    private suspend fun restored(context: Context): AuthSession = app(context).connection()
-
-    private suspend fun token(context: Context) = restored(context).accessToken()
+    private suspend fun token(context: Context) = app(context).chatGPT.auth.accessToken()
 
     // A previous job is cancelled and joined first, so its finally cannot clear the new attempt's state.
     private fun run(label: String, previous: Job? = null, block: suspend () -> String): Job {
@@ -157,8 +152,9 @@ object ProofSession {
         }
     }
 
-    // Failure messages are fixed strings ("http 401"); everything else is reduced to its class name.
-    private fun describe(e: Exception) = if (e is ResponsesClient.Failure) e.message.orEmpty() else e::class.simpleName.orEmpty()
+    // Failure and check() messages are fixed strings ("http 401"); everything else is reduced to its class name.
+    private fun describe(e: Exception) =
+        if (e is ResponsesClient.Failure || e is IllegalStateException) e.message.orEmpty() else e::class.simpleName.orEmpty()
 
     const val SIGN_IN = "Sign in"
     const val LIST_MODELS = "List models"

@@ -80,7 +80,7 @@ class CoachReplyActionsTest {
     }
 
     private fun launch() {
-        model = CoachViewModel(repository, profileID, drain = {}, isConnected = { false },
+        model = CoachViewModel(repository, profileID, drain = {}, connected = MutableStateFlow(false),
             activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = SavedStateHandle())
         compose.setContent { MivuTheme { CoachScreen(model, onOpenMeal = {}, onSeeToday = {}, onSeeProgress = {}) } }
         compose.waitUntil(10_000) { model.timeline.value.loaded }

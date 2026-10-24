@@ -27,6 +27,9 @@ sealed class SessionError : Exception() {
 
 enum class RevocationOutcome { Confirmed, Unconfirmed }
 
+/** iOS `SessionSnapshot`: which registration is active and whether its plan scopes are granted; never a token. */
+data class SessionSnapshot(val registrationID: String, val planPermissionGranted: Boolean)
+
 /** Auth host URLs; tests pass a loopback base, production uses the default. */
 class Endpoints(base: String = "https://auth.openai.com", val timeoutMs: Int = 30_000) {
     val token = "$base/api/accounts/oauth/token"
@@ -110,6 +113,8 @@ class AuthSession(private val store: CredentialStoring, private val http: Endpoi
         if (!replacement.planPermissionGranted) throw SessionError.PlanPermissionMissing
         return replacement.accessToken
     }
+
+    fun snapshot(): SessionSnapshot? = active?.let { SessionSnapshot(it.registration.id, it.planPermissionGranted) }
 
     suspend fun disconnect(): RevocationOutcome {
         // Delete before suspending so a later sign-in cannot be erased by this logout.
