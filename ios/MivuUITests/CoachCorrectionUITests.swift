@@ -96,12 +96,13 @@ import XCTest
         XCTAssertEqual(number(held, "receiptCount"), 0)
         try editChickenToFive(app)
         app.buttons["correctionRelease"].tap()
-        let after = try wait(app, "stale correction rejected") { $0["turnState"] as? String == "needsRetry" }
+        // Since #66 the rejection goes back to the model, which answers instead of failing the turn.
+        let after = try wait(app, "stale correction rejected") { $0["turnState"] as? String == "completed" }
         try assertSaved(after, original: before, quantity: 5, applications: 0, receiptExpected: false)
         XCTAssertEqual(number(after, "manualApplications"), 1)
         XCTAssertEqual((after["audit"] as? [[String]])?.count, 1)
-        XCTAssertEqual(after["assistantText"] as? String, "")
-        XCTAssertTrue(app.staticTexts["coachError"].waitForExistence(timeout: 5))
+        XCTAssertEqual(after["assistantText"] as? String, "That meal changed before I could update it, so nothing was changed.")
+        XCTAssertFalse(app.staticTexts["coachError"].exists)
         evidence(app, "Actual editor wins over stale grounded correction", after)
     }
 

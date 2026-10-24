@@ -116,11 +116,11 @@ enum CoachUITestInference {
         return nil
     }
     private static func correction(_ input: [CoachInferenceInput], context: CoachContext) throws -> CoachInferenceResult {
-        func reply(_ name: String? = nil, _ args: [String: Any] = [:]) throws -> CoachInferenceResult {
+        func reply(_ name: String? = nil, _ args: [String: Any] = [:], text: String = "All set.") throws -> CoachInferenceResult {
             let id = UUID().uuidString
             let calls = try name.map { [CoachToolCall(id: id, callID: id, name: $0, namespace: "mivu",
                 arguments: String(decoding: try JSONSerialization.data(withJSONObject: args, options: .sortedKeys), as: UTF8.self))] } ?? []
-            return CoachInferenceResult(model: "native-test-fixture", text: "All set.", calls: calls, outputItems: [])
+            return CoachInferenceResult(model: "native-test-fixture", text: text, calls: calls, outputItems: [])
         }
         // A prior committed increment is a result, never a new serving calculation.
         if !(context.committedReceipts ?? []).isEmpty || (context.omittedReceiptCount ?? 0) > 0 { return try reply() }
@@ -145,6 +145,10 @@ enum CoachUITestInference {
             guard chicken[0].unit == "piece", chicken[0].quantity > 0 else { return try reply("ask_clarification", ["kind": "portion"]) }
             return try reply("correct_item", ["meal_id": meal.id.uuidString, "item_id": chicken[0].id.uuidString,
                 "expected_revision": meal.revision, "quantity": chicken[0].quantity + 1])
+        }
+        // Like a real model, answer a rejected batch honestly instead of claiming the change.
+        if outputs.last?.contains("\"saved\":false") == true {
+            return try reply(text: "That meal changed before I could update it, so nothing was changed.")
         }
         return try reply()
     }
