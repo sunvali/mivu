@@ -74,4 +74,29 @@ object CoachFixture {
         db.replaceAll(db.snapshot().copy(revision = db.head().revision.toInt() + 1, coachTurns = turns))
         db.close()
     }
+
+    /** Five earlier conversations on separate days, then today's chat ending in a quoted reply to Pip. */
+    fun conversations(context: Context) {
+        val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
+        val id = TodayFixture.diary(context)
+        val db = DiaryRepository(context).database(id)
+        db.startDay(now.minus(2, ChronoUnit.HOURS), db.head().revision)
+        val past = listOf("Lentil soup with a slice of sourdough", "Two eggs on rye toast and a coffee", "Salmon, rice and broccoli",
+            "Grilled chicken salad with feta", "Oatmeal with banana and a coffee with oat milk")
+        val earlier = past.mapIndexed { i, text ->
+            CoachTurn(UUID.randomUUID(), now.minus((past.size - i).toLong(), ChronoUnit.DAYS), text, emptyList(), CoachTurnState.completed,
+                "Saved — about **${380 + 40 * i}** kcal.", emptyList(), ZoneId.systemDefault().id, null, emptyList(),
+                captureSegmentID = UUID.randomUUID())
+        }
+        db.replaceAll(db.snapshot().copy(revision = db.head().revision.toInt() + 1, coachTurns = earlier))
+        val asked = turn(db, "How much protein have I had today?", now.minus(30, ChronoUnit.MINUTES))
+        db.transaction(null) { it.finishCoachTurn(asked.id, "About **42 g** so far.") }
+        val h = db.head()
+        val follow = db.captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), "What could I add at dinner?", emptyList(),
+            CoachCaptureContext(now.minus(25, ChronoUnit.MINUTES), h.profile.timeZoneID, h.activeDayID, h.previousDayConfirmedAt,
+                h.activeConversationSegmentID),
+            reply = CoachReply(CoachReply.Target.Message(asked.id, fromPip = true), "About 42 g so far.")), h.revision)
+        db.transaction(null) { it.finishCoachTurn(follow.id, "A palm-sized piece of chicken or tofu adds about **30 g**.") }
+        db.close()
+    }
 }

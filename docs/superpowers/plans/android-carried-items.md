@@ -4,19 +4,13 @@ These items came out of reviews and must be picked up by the milestone named
 on each one. Each milestone's plan reads this file and removes items once they
 are done.
 
-## Milestone 4c (Coach history and reply)
-- Compare the Coach reply summary lines with iOS for undo, scale, move, photos, weight, workout, goals and day
-  coverage. Only the food "Saved" line is tested.
-- Add a model picker; the engine uses the first entry of the model catalog.
-- Add `record_source`, then make `delete_workout` strip photo copies from turns whose only progress was that
-  workout, and make `find_meals` use the real origin instead of the earliest turn naming the meal.
-- Run the live Coach turn against ChatGPT once the owner has signed in on the emulator (Phase 0 evidence).
-- Port legacy-capture recovery and the pendingMealID prepare step in the Coach worker.
-- Add the "Connect ChatGPT for replies" link under the composer.
-- Add photo Retake to the Coach camera.
-- Render markdown beyond emphasis in Coach replies, if replies need it.
-
 ## Milestone 5 (live analysis)
+- Add a model picker; the engine uses the first entry of the model catalog. iOS shows "Account model" only in the
+  Settings ChatGPT connection section when connected, which is the Milestone 5 connection UI.
+- Add the "Connect ChatGPT for replies" link under the composer. On iOS it starts sign-in, and release Android has no
+  sign-in screen yet; until then the footnote stays "Messages save on this phone."
+- Run the live Coach turn against ChatGPT once the owner has signed in on the emulator (Phase 0 evidence). It needs
+  the sign-in UI.
 - Sign-in showed only `NetworkUnavailable` when DNS failed. Show a clearer connection error, and note in the dev docs that the emulator may need `-dns-server 8.8.8.8`.
 - `MealAnalysisWorker` must not hold its mutex across network calls. Remove
   duplicate drain requests with a flag instead.
@@ -26,6 +20,10 @@ are done.
 
 ## Milestone 7 (Pip moments)
 - Today Pip moments: saved, first meal today, day complete, welcome back, reviewed.
+
+## Milestone 8 (outside-app capture)
+- Coach reply notifications. iOS posts them only for Siri-started turns, and Android has no outside-app turn source
+  until quick capture, share or Assistant arrive. Firing for every background turn would be new behaviour, not parity.
 
 ## Settings and day rollover
 - Port the per-device day-cutoff setting. It is currently fixed at 04:00.
@@ -37,3 +35,11 @@ are done.
 - Re-check `MaterialExpressiveTheme`. It did not compile with material3 1.4.0.
 - Stream photo decoding for large archives, and add the export/import UI.
 - Wire the profile button, or hide it.
+- Check Pip's frame rate on an idle host or a real phone. On the loaded emulator the GPU took about 4950 ms per frame,
+  so smooth playback could not be judged there; this is not a regression.
+- Coach meal chip: the question's meal chip has an empty leading area where the mockup has an icon.
+- Coach camera at font scale 2.0: "Choose photos" runs under the shutter.
+
+## Later
+- `record_source`: only fixes two invisible shortcuts, leftover photo copies after `delete_workout` and the
+  `find_meals` origin fallback (meal seek uses the same fallback). The `shortcut:` comments stay until then.
