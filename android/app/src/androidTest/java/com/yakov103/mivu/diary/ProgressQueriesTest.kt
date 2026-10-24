@@ -47,12 +47,12 @@ class ProgressQueriesTest {
     private fun food(name: String, kcal: Double?) = FoodItem(UUID.randomUUID(), name, 1.0, "serving",
         NutritionValues(kcal, 1.0, 1.0, 1.0), NutritionProvenance.user, "", false, emptyMap())
 
-    /** One day per date with one meal of [items] each, plus [weights]. */
-    private fun seed(dates: List<String>, revision: (String) -> Int = { 1 }, weights: List<WeightEntry> = emptyList(),
+    /** One day per date with [mealsPerDay] meals of [items] each, plus [weights]. */
+    private fun seed(dates: List<String>, revision: (String) -> Int = { 1 }, weights: List<WeightEntry> = emptyList(), mealsPerDay: Int = 1,
                      items: (String) -> List<FoodItem> = { listOf(food("Synthetic oats", 300.0)) }) {
         val days = dates.map { TrackingDay(UUID.randomUUID(), it, "UTC", noon(it), DayCompleteness.unknown) }
-        val meals = days.map { DiaryMeal(UUID.randomUUID(), it.id, noon(it.localDate), noon(it.localDate), revision(it.localDate),
-            items = items(it.localDate), photos = emptyList(), submissions = emptyList()) }
+        val meals = days.flatMap { day -> List(mealsPerDay) { DiaryMeal(UUID.randomUUID(), day.id, noon(day.localDate), noon(day.localDate),
+            revision(day.localDate), items = items(day.localDate), photos = emptyList(), submissions = emptyList()) } }
         db.replaceAll(db.snapshot().copy(revision = db.head().revision.toInt() + 1, days = days, meals = meals, weights = weights))
     }
 
@@ -71,7 +71,8 @@ class ProgressQueriesTest {
 
     @Test fun yearLoadIsBounded() {
         val dates = (364 downTo 0).map(::back)
-        seed(dates, weights = dates.filterIndexed { i, _ -> i % 2 == 0 }.mapIndexed { i, d ->
+        // Several meals a day, so a scan of every meal per day would show in the time.
+        seed(dates, mealsPerDay = 4, weights = dates.filterIndexed { i, _ -> i % 2 == 0 }.mapIndexed { i, d ->
             WeightEntry(UUID.randomUUID(), measuredAt = noon(d), value = 80.0 - i * 0.01, unit = "kg")
         })
         val started = SystemClock.elapsedRealtime()
@@ -84,6 +85,11 @@ class ProgressQueriesTest {
         assertEquals(end, year.latestWeight!!.localDate)
         assertEquals(0, year.workoutTotal)
         assertTrue("365-day progress took $elapsed ms", elapsed < 2_000)
+        // The child and date lookups have their iOS indexes.
+        val indexes = android.database.sqlite.SQLiteDatabase.openDatabase(db.file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+            .use { it.rawQuery("SELECT name FROM sqlite_master WHERE type = 'index'", null).use { c -> buildSet { while (c.moveToNext()) add(c.getString(0)) } } }
+        assertTrue(indexes.toString(), indexes.containsAll(listOf("meal_parent_ordinal", "item_parent_ordinal", "weight_parent_ordinal",
+            "workout_parent_ordinal", "day_ordinal", "goal_date")))
     }
 
     @Test fun topFoodsGroupsByNormalisedNameAndSkipsUnknownAndPending() {

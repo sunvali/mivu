@@ -97,6 +97,16 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                     "afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
                 // Coach timeline pages seek by ordinal, so a 10,000-turn diary reads only the page's rows.
                 db.execSQL("CREATE INDEX IF NOT EXISTS coach_turn_ordinal ON coach_turn(ordinal)")
+                // iOS DiaryDatabaseMigration.swift:73-79: child and ordinal lookups read only their rows, so a day's or a
+                // year's reads scale with what they return, not with the whole diary.
+                for (table in listOf("meal", "submission", "item", "photo", "weight", "workout", "coach_photo")) {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS ${table}_parent_ordinal ON $table(parent, ordinal, id)")
+                }
+                for (table in listOf("day", "meal", "weight", "workout", "tombstone_meal", "tombstone_weight", "tombstone_workout")) {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS ${table}_ordinal ON $table(ordinal, id)")
+                }
+                // The payload JSON holds the date (iOS has a column); the expression matches the goal queries' text exactly.
+                db.execSQL("CREATE INDEX IF NOT EXISTS goal_date ON goal(json_extract(CAST(payload AS TEXT), '$.effectiveLocalDate'))")
                 // Derived Coach conversations for history and seek (CoachSegments.kt), rebuilt from coach_turn, never archived.
                 db.execSQL("CREATE TABLE IF NOT EXISTS coach_segment (segmentID TEXT PRIMARY KEY, trackingDayID TEXT, " +
                     "displayLocalDate TEXT NOT NULL, displayTimeZoneID TEXT NOT NULL, firstTurnID TEXT NOT NULL, firstCapturedAt TEXT NOT NULL, " +

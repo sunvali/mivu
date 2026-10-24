@@ -71,7 +71,7 @@ data class TodayUiState(
     val hasDay get() = activeDayID != null
 }
 
-/** iOS Today's late-meal receipt: "Added to Yesterday", and "Move to Sat, Oct 24" while that date is still today. */
+/** iOS Today's late-meal receipt: "Added to Fri, Oct 23", and "Move to Sat, Oct 24" while that date is still today. */
 data class LateReceipt(val added: String, val moveTo: String?)
 
 private class TodayData(
@@ -208,8 +208,9 @@ internal fun todayUiState(
         lateReceipt = meals.firstOrNull { it.id == savedReceipt }?.takeIf { day != null }?.let { meal ->
             val date = diaryDateLabel(meal.capturedAt, day!!.timeZoneID)
             if (day.localDate >= date) null
-            // Moving opens today's calendar date, so offer it only while that is still the meal's date.
-            else LateReceipt("Added to ${wakingDayTitle(day.localDate, relativeTo = date)}",
+            // "Added to" names the day's date, never "Yesterday", as iOS TodayView.swift:606. Moving opens today's calendar
+            // date, so it is offered only while that is still the meal's date.
+            else LateReceipt("Added to ${wakingDayTitle(day.localDate)}",
                 wakingDayTitle(date).takeIf { date == diaryDateLabel(now, day.timeZoneID) }?.let { "Move to $it" })
         },
     )

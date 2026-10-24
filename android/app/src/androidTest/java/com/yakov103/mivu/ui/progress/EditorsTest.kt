@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.DayCutoff
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.GoalRecord
 import com.yakov103.mivu.diary.NutritionValues
@@ -63,9 +64,16 @@ class EditorsTest {
     private var profileID: UUID? = null
     private var closed = false
 
-    @Before fun wipe() = TodayFixture.wipe(context)
+    private val cutoff = DayCutoff.hour
+
+    // The waking day equals the calendar date at any hour, so Today's day and the goal editor's date agree after midnight.
+    @Before fun wipe() {
+        DayCutoff.hour = 0
+        TodayFixture.wipe(context)
+    }
 
     @After fun close() {
+        DayCutoff.hour = cutoff
         profileID?.let { repository?.database(it)?.close() }
         (repository?.bootstrapState?.value as? Bootstrap.Ready)?.let { repository!!.database(it.profileID).close() }
         TodayFixture.wipe(context)

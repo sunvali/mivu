@@ -242,7 +242,7 @@ class TodayScreenTest {
             val model = TodayViewModel(repo, id, sampleMode = false)
             model.showReceipt(mealID)
             compose.setContent { MivuTheme { TodayScreen(model, null, {}, {}, {}) } }
-            waitForText("Added to Yesterday")
+            waitForText("Added to ${wakingDayTitle(today.minusDays(1).toString())}")
             compose.onNodeWithTag("moveLateMeal").assertIsDisplayed()
                 .assert(hasText("Move to ${wakingDayTitle(today.toString())}"))
                 .performClick()
