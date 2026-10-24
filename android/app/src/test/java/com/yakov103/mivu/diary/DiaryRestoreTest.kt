@@ -30,6 +30,9 @@ class DiaryRestoreTest {
         val weight = fixture.weights.first { it.dayID == null }
         val original = fixture.copy(weights = fixture.weights - weight, deletedWeightIDs = fixture.deletedWeightIDs + weight.id)
         throws<DiaryError.StaleArchive> { replacement(successor(), original) }
+        // Only incoming is validated, so a tombstone beside the live record stands for "deleted here, still in the archive".
+        throws<DiaryError.StaleArchive> { replacement(successor(), fixture.copy(deletedMealIDs = fixture.deletedMealIDs + fixture.meals[0].id)) }
+        throws<DiaryError.StaleArchive> { replacement(successor(), fixture.copy(deletedWorkoutIDs = fixture.deletedWorkoutIDs + fixture.workouts[0].id)) }
     }
 
     @Test fun verifiedSuccessorMerges() {

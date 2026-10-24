@@ -26,6 +26,7 @@ Recorded 2026-10-24. Plan: Android storage, durable capture and archive compatib
 Environment for all Android runs: macOS 27.0.1, Android Studio JBR, Gradle; emulator
 `Medium_Phone_API_37.0` (emulator-5554, API 37) for instrumented tests. Counts are summed from the
 JUnit result XML. Each task showed RED (compile failure or a failing test) before GREEN.
+These counts come from the earlier task reports at the listed SHAs and were not re-run for this record.
 
 | Task | Source SHA tested | Result |
 |---|---|---|
@@ -72,7 +73,9 @@ JUnit result XML. Each task showed RED (compile failure or a failing test) befor
   with 5 photos of 10,000,000 random bytes (50 MB photos, 66,684,421-byte archive) imported in
   1.7 s. Java heap: 52 MB before, peak about 161 MB sampled, of a 192 MB limit
   (`Runtime.maxMemory`). The practical ceiling on this emulator is therefore roughly 60 MB of
-  photos per archive; larger archives are likely to fail with OutOfMemoryError until photo decoding
-  is streamed.
+  photos per archive for an import into a fresh profile; larger archives are likely to fail with
+  OutOfMemoryError until photo decoding is streamed. Restoring over an existing diary holds both
+  snapshots in memory, so its ceiling is roughly half (about 30 MB of photos). The 5 ms sampler can
+  miss short allocation spikes, so the true peak may be higher than measured.
 - Not covered: the system file picker / Drive journey for export and import (no UI yet), and
   real-device heap limits.
