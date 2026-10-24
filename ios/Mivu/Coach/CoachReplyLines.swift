@@ -60,6 +60,11 @@ enum CoachReplyLines {
         return day.formatted(style)
     }
 
+    /// A heading such as "Today" or "Oct 17", relative to today in the profile's `zone`.
+    static func dayTitle(_ localDate: String, zone: String) -> String {
+        dayLabel(localDate, today: ProgressAnalytics.dateLabel(Date(), zone: zone)).capitalized(with: .current)
+    }
+
     static func shortDate(_ localDate: String, locale: Locale = .current) -> String {
         date(localDate)?.formatted(Date.FormatStyle(locale: locale, timeZone: .gmt).month(.abbreviated).day()) ?? localDate
     }

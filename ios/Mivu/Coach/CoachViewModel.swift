@@ -297,7 +297,7 @@ private final class CoachNavigationReadFence: Sendable {
     private(set) var activeOperationTurn: CoachOperationMetadata?
     private var activeOperationOwnership: DiarySelectionOwnership?
     private var activeOperationRead = UUID()
-    private var companionTurn: CoachOperationMetadata? {
+    var companionTurn: CoachOperationMetadata? {
         guard activeOperationOwnership == diary.selection else { return nil }
         return activeOperationTurn
     }

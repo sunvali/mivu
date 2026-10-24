@@ -190,7 +190,7 @@ import XCTest
                     let heading = app.staticTexts["What would you like to record?"]
                     XCTAssertTrue(heading.waitForExistence(timeout: 5))
                     XCTAssertGreaterThanOrEqual(heading.frame.minX, app.frame.minX + 16)
-                    XCTAssertGreaterThanOrEqual(app.staticTexts["coachDate"].frame.minY, app.navigationBars["Coach"].frame.maxY)
+                    XCTAssertGreaterThanOrEqual(app.buttons["coachDate"].frame.minY, app.navigationBars["Coach"].frame.maxY)
                 }
                 let screen = XCTAttachment(screenshot: app.screenshot())
                 screen.name = "Precision Glass " + tab + " " + mode; screen.lifetime = .keepAlways; add(screen)
