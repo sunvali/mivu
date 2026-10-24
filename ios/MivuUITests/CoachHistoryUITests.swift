@@ -61,7 +61,12 @@ import XCTest
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
     func reveal(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<14 where !element.isHittable {
+        // The floating composer overlays the chat's bottom; a control under it reports hittable but taps the composer.
+        func clear() -> Bool {
+            let composer = app.textFields["coachInput"]
+            return element.isHittable && (!composer.exists || element.frame.maxY <= composer.frame.minY - 8)
+        }
+        for _ in 0..<14 where !clear() {
             let surface = viewport(app), frame = surface.frame
             // The navigation bar overlaps the viewport's top, so an element under it is still above.
             let top = max(frame.minY, app.navigationBars.firstMatch.frame.maxY)
@@ -72,7 +77,7 @@ import XCTest
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: step)),
                 withVelocity: .slow, thenHoldForDuration: 0.2)
         }
-        if !element.isHittable { printRouteDiagnostics(app, target: element) }
+        if !clear() { printRouteDiagnostics(app, target: element) }
         XCTAssertTrue(element.isHittable)
     }
     func printRouteDiagnostics(_ app: XCUIApplication, target: XCUIElement? = nil) {
