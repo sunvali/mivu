@@ -26,6 +26,13 @@ data class MivuColors(
     val warning: Color,
     val success: Color,
     val summarySurface: Color,
+    /** Progress off-target bands (near uses the accent); coral stays clear of error so a far-off day never reads as a failure. */
+    val bandBitOff: Color,
+    val bandOff: Color,
+    val bandFarOff: Color,
+    /** Progress card tints: estimated burn and top foods. */
+    val tintBurn: Color,
+    val tintFoods: Color,
 )
 
 val LocalMivuColors = staticCompositionLocalOf { mivuColors(dark = false, highContrast = false) }
@@ -54,6 +61,12 @@ private val carbs = warning
 private val fat = Token(0xFF7740AD, 0xFFCCA5F8, 0xFF5E2E8E, 0xFFE2CAFF)
 private val success = Token(0xFF237448, 0xFF80D5A4, 0xFF175A34, 0xFFB0EBC6)
 private val summarySurface = Token(0xFFEAF5F3, 0xFF142D2D)
+// ios/Shared/MivuColors.swift 30–34.
+private val bandBitOff = Token(0xFFF4BC62, 0xFFF4BC62, 0xFFB57A10, 0xFFFFD58A)
+private val bandOff = Token(0xFFE8893A, 0xFFF0A060, 0xFFB45F12, 0xFFFFBE8A)
+private val bandFarOff = Token(0xFFD9604C, 0xFFF08A78, 0xFFA8402F, 0xFFFFB2A4)
+private val tintBurn = Token(0xFFE8F4EC, 0xFF15291E)
+private val tintFoods = Token(0xFFFBF3E6, 0xFF2A2216)
 
 // Dark #264544 is the dark accent (#63D5CD) at 25% over the dark canvas (#111516): the tonal pair of light #CCE8E7.
 private val accentContainer = Token(0xFFCCE8E7, 0xFF264544)
@@ -93,6 +106,8 @@ internal fun mivuColorScheme(dark: Boolean, highContrast: Boolean): ColorScheme 
 internal fun mivuColors(dark: Boolean, highContrast: Boolean) = MivuColors(
     protein.pick(dark, highContrast), carbs.pick(dark, highContrast), fat.pick(dark, highContrast),
     warning.pick(dark, highContrast), success.pick(dark, highContrast), summarySurface.pick(dark, highContrast),
+    bandBitOff.pick(dark, highContrast), bandOff.pick(dark, highContrast), bandFarOff.pick(dark, highContrast),
+    tintBurn.pick(dark, highContrast), tintFoods.pick(dark, highContrast),
 )
 
 /** Mivu's fixed brand palette (dynamic colour is off), light or dark with the system, high contrast from API 34. */

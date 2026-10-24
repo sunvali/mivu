@@ -119,7 +119,11 @@ class PipRigScene(
     /** Irises, pupils and glints follow the gaze; they saccade instead of springing like the body. */
     fun followsGaze(partID: String): Boolean = partID in irisReach || partID in pupilReach || partID in glintIris
 
-    fun resolve(pose: PipPose): PipResolved {
+    /**
+     * [progressProps]: Progress dresses Pip with the chart card and reading glasses, and holds the card arm
+     * ([PipGestureLibrary.progressHeldArm]) wherever the pose leaves that arm alone, as iOS `showsProgressProps`.
+     */
+    fun resolve(pose: PipPose, progressProps: Boolean = false): PipResolved {
         val (view, slide) = viewFor(pose.headTurn)
         val wanted = setOf("eye-l.${pose.eyes}", "eye-r.${pose.eyes}", "mouth.${pose.mouth}")
         val length = hypot(pose.gazeX, pose.gazeY)
@@ -129,11 +133,12 @@ class PipRigScene(
         val visible = HashSet<String>()
         val alpha = HashMap<String, Float>()
         for (part in asset.parts) {
-            val fade = alphaOf(part, pose)
+            val fade = alphaOf(part, pose, progressProps)
             if (fade != null) alpha[part.id] = fade
             if (isShown(part, view, wanted, pose, fade)) visible += part.id
             // A joint keyed by the full id (`arm-r@seated`) moves only that set's part; a plain name moves every set's.
-            val joint = pose.joints[part.id] ?: pose.joints[part.name] ?: REST
+            val joint = pose.joints[part.id] ?: pose.joints[part.name]
+                ?: (if (progressProps) PipGestureLibrary.progressHeldArm[part.id] else null) ?: REST
             var x = joint.offsetX
             var y = joint.offsetY
             pupilReach[part.id]?.let { r ->
@@ -230,11 +235,12 @@ class PipRigScene(
         }
     }
 
-    /** Blush and hearts fade instead of popping; null means the part has no fade. Progress props are out of scope. */
-    private fun alphaOf(part: PipRigAsset.Part, pose: PipPose): Float? {
+    /** Blush and hearts fade instead of popping; null means the part has no fade. Progress props follow [props]. */
+    private fun alphaOf(part: PipRigAsset.Part, pose: PipPose, props: Boolean): Float? {
         if (part.name.startsWith("cheek-blush")) return if (pose.blush) 1f else 0f
         if (part.name.startsWith("heart-")) part.name.drop(6).toIntOrNull()?.let { return if (it <= pose.hearts) 1f else 0f }
-        return null
+        // null hides the card and glasses like any hidden part; their own sub-parts start hidden too, so all follow the flag.
+        return if (props && (part.name.startsWith("prop-chart") || part.name.startsWith("glasses"))) 1f else null
     }
 
     private fun isShown(part: PipRigAsset.Part, view: String, wanted: Set<String>, pose: PipPose, fade: Float?): Boolean {

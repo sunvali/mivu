@@ -86,4 +86,33 @@ class PipRigSceneTest {
         val seated = PipPose(set = PipPose.BodySet.seated, joints = mapOf("body" to PipPose.Joint(offsetX = 10f)))
         assertArrayEquals(floatArrayOf(.97f, 0f, 0f, .97f, 26.5f, 5.8f), head(seated), 1e-3f)
     }
+
+    @Test fun progressPropsShowOnlyWhenEnabled() {
+        fun props(ids: List<String>) = ids.filter { it.startsWith("prop-chart") || it.startsWith("glasses") }
+        assertTrue(props(drawn(PipPose()).map { it.partID }).isEmpty())
+        val on = scene.draw(scene.resolve(PipPose(), progressProps = true)).map { it.partID }
+        // The card rides the standing arm; the glasses follow the head view in use only.
+        assertTrue("prop-chart.card" in on && "prop-chart.bar-1" in on && "glasses@right" in on)
+        assertFalse("glasses@front" in on || "glasses@left" in on)
+        assertEquals(1f, scene.resolve(PipPose(), progressProps = true).alpha.getValue("glasses@right"))
+        val seated = scene.draw(scene.resolve(PipPose(set = PipPose.BodySet.seated), progressProps = true)).map { it.partID }
+        assertFalse(seated.any { it.startsWith("prop-chart") })
+    }
+
+    @Test fun heldArmPersistsThroughRest() {
+        val held = PipGestureLibrary.progressHeldArm
+        // The same arm iOS exports for the presenting loop's first key (atChart on rest).
+        val library = PipGestureLibrary.load(javaClass.classLoader!!.getResource("pip/gestures.json")!!.readText())
+        val presenting = library.named("presenting-calm").keys.first().second.joints
+        for (name in listOf("arm-r", "forearm-r", "paw-r")) assertEquals(name, presenting.getValue(name).rotation, held.getValue(name).rotation, 1e-4f)
+
+        val rest = scene.resolve(PipPose(), progressProps = true)
+        assertEquals(held.getValue("arm-r").rotation, rest.joints.getValue("arm-r").rotation, 1e-6f)
+        assertEquals(0f, rest.joints.getValue("arm-r@seated").rotation) // only the standing card arm is held
+        // A pose that moves the arm itself wins; the parts it leaves alone stay held.
+        val waving = scene.resolve(PipPose(joints = mapOf("arm-r" to PipPose.Joint(rotation = 0.5f))), progressProps = true)
+        assertEquals(0.5f, waving.joints.getValue("arm-r").rotation)
+        assertEquals(held.getValue("forearm-r").rotation, waving.joints.getValue("forearm-r").rotation, 1e-6f)
+        assertEquals(0f, scene.resolve(PipPose()).joints.getValue("arm-r").rotation)
+    }
 }

@@ -52,6 +52,15 @@ class CompanionRuntime(
     private var lastInput = nowMs()
     private var idleJob: Job? = null
 
+    /** Progress dresses Pip with the chart card and glasses; changing it re-applies the current pose without animation (iOS `didSet`). */
+    var showsProgressProps: Boolean
+        get() = motion.progressProps
+        set(value) {
+            if (value == motion.progressProps) return
+            motion.progressProps = value
+            motion.apply(motion.pose)
+        }
+
     fun apply(output: CompanionOutput, surface: CompanionSurface) {
         latestOutput = output
         latestSurface = surface
@@ -115,6 +124,12 @@ class CompanionRuntime(
         CompanionPose.Curious -> PipMoment.Curious
         CompanionPose.Tapped -> PipMoment.Tapped(tapLevel)
         CompanionPose.Patted -> PipMoment.Patted
+        CompanionPose.PresentingCheer -> PipMoment.Presenting(cheer = true)
+        CompanionPose.PresentingCalm -> PipMoment.Presenting(cheer = false)
+        CompanionPose.ProgressEntrance -> PipMoment.ProgressEntrance(cheer = false)
+        CompanionPose.ProgressEntranceCheer -> PipMoment.ProgressEntrance(cheer = true)
+        CompanionPose.ProgressRange -> PipMoment.ProgressRange
+        CompanionPose.ProgressTap -> PipMoment.ProgressTap(tapLevel)
     }
 
     private fun restPose(surface: CompanionSurface) =
@@ -207,7 +222,8 @@ class CompanionRuntime(
 
     private companion object {
         val REST = PipGesture("rest", listOf(0.3 to PipPose()), loops = false, endSet = null)
-        val LASTING = setOf(CompanionPose.Resting, CompanionPose.Attentive, CompanionPose.Thinking, CompanionPose.Recovery)
+        val LASTING = setOf(CompanionPose.Resting, CompanionPose.Attentive, CompanionPose.Thinking, CompanionPose.Recovery,
+            CompanionPose.PresentingCheer, CompanionPose.PresentingCalm)
 
         /** Looks down at the field below Pip's paws and follows the caret left to right as the draft grows. */
         fun typingGaze(progress: Double) = (-0.3f + 1.3f * progress.coerceIn(0.0, 1.0).toFloat()) to 0.8f

@@ -24,6 +24,9 @@ class PipMotion(val scene: PipRigScene) {
     private val n = parts.size
     private val frame = PipFrame(scene)
 
+    /** Progress's chart card, glasses and held arm (iOS `showsProgressProps`); takes effect on the next apply or transition. */
+    var progressProps = false
+
     /** The pose being moved to (the CALayer model values on iOS). */
     var pose = PipPose()
         private set
@@ -57,7 +60,7 @@ class PipMotion(val scene: PipRigScene) {
 
     /** Snaps to [pose] with no animation. */
     fun apply(pose: PipPose) {
-        val r = scene.resolve(pose)
+        val r = scene.resolve(pose, progressProps)
         for ((i, part) in parts.withIndex()) {
             write(i, r.joints[part.id] ?: PipRigScene.REST)
             for (c in 0 until 5) springs[i * 5 + c] = null
@@ -70,7 +73,7 @@ class PipMotion(val scene: PipRigScene) {
 
     /** Moves to [target] over a key of [periodSeconds]. A part that was or becomes hidden snaps; fades take 180 ms. */
     fun transition(target: PipPose, periodSeconds: Double, nowNanos: Long) {
-        val r = scene.resolve(target)
+        val r = scene.resolve(target, progressProps)
         for ((i, part) in parts.withIndex()) {
             val shown = part.id in r.visible
             val joint = r.joints[part.id] ?: PipRigScene.REST

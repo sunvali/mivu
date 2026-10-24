@@ -103,6 +103,12 @@ import com.yakov103.mivu.ui.progress.WorkoutDetailViewModel
 import com.yakov103.mivu.ui.progress.WorkoutEditorScreen
 import com.yakov103.mivu.ui.progress.WorkoutEditorViewModel
 import com.yakov103.mivu.ui.diary.DiaryViewModel
+import com.yakov103.mivu.progress.ProgressRange
+import com.yakov103.mivu.ui.progress.ProgressDetailKind
+import com.yakov103.mivu.ui.progress.ProgressDetailScreen
+import com.yakov103.mivu.ui.progress.ProgressDetailViewModel
+import com.yakov103.mivu.ui.progress.ProgressScreen
+import com.yakov103.mivu.ui.progress.ProgressViewModel
 import com.yakov103.mivu.ui.today.TodayViewModel
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.DiaryProfile
@@ -146,6 +152,8 @@ sealed interface Route {
     @Serializable data class WorkoutEditor(val localDate: String, val dayID: String? = null, val sessionID: String? = null) : Route
     @Serializable data class WorkoutDetail(val sessionID: String) : Route
     @Serializable data object Goals : Route
+    /** A Progress card's full screen: [kind] is a [ProgressDetailKind] and [range] the [ProgressRange] it opened on. */
+    @Serializable data class ProgressDetail(val kind: String, val range: String = ProgressRange.Week.name) : Route
 }
 
 private enum class Tab(val route: Route, val label: String, @DrawableRes val icon: Int, @DrawableRes val selectedIcon: Int) {
@@ -347,7 +355,30 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onAskPip = { askPip(it); navController.popBackStack(); selectTab(Route.Coach) },
                 )
             }
-            composable<Route.Progress> { LaterUpdate() }
+            composable<Route.Progress> {
+                val model = viewModel(key = "progress-$profileID") { ProgressViewModel(repository, profileID) }
+                ProgressScreen(
+                    model,
+                    onOpenDetail = { navController.navigate(Route.ProgressDetail(it.name, model.range.value.name)) },
+                    onOpenGoals = { navController.navigate(Route.Goals) },
+                    onOpenDiary = { selectTab(Route.Diary) },
+                )
+            }
+            composable<Route.ProgressDetail> { entry ->
+                val route = entry.toRoute<Route.ProgressDetail>()
+                val model = viewModel {
+                    ProgressDetailViewModel(repository, profileID, ProgressDetailKind.valueOf(route.kind), ProgressRange.valueOf(route.range))
+                }
+                ProgressDetailScreen(
+                    model,
+                    onBack = { navController.popBackStack() },
+                    onEditWeight = { navController.navigate(Route.WeightEditor(weightID = it.toString())) },
+                    onAddWeight = { navController.navigate(Route.WeightEditor()) },
+                    onAddWorkout = { navController.navigate(Route.WorkoutEditor(it)) },
+                    onOpenWorkout = { navController.navigate(Route.WorkoutDetail(it.toString())) },
+                    onAskPip = { askPip(it); navController.popBackStack(); selectTab(Route.Coach) },
+                )
+            }
             composable<Route.Coach> {
                 CoachScreen(
                     coach,
@@ -480,11 +511,3 @@ private fun CoachHistoryButton(coach: CoachViewModel, onOpen: () -> Unit) {
 @Composable
 private fun connectionState(connection: ChatGPTConnection?) =
     connection?.state?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(ConnectionState()) }
-
-@Composable
-private fun LaterUpdate(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Text("Arrives in a later update", style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-    }
-}

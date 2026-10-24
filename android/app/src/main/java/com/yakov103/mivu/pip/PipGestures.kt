@@ -99,6 +99,16 @@ class PipGestureLibrary(val gestures: List<PipGesture>) {
         )
         private val json = Json { ignoreUnknownKeys = true }
 
+        /**
+         * The card arm of the Progress hold, iOS `atChart(.rest)` (`pawUp(.right, -45, elbow: -60)`) on the standing arm
+         * only: kept whenever a pose leaves that arm alone ([PipRigScene.resolve] `progressProps`).
+         */
+        val progressHeldArm: Map<String, PipPose.Joint> = mapOf(
+            "arm-r" to PipPose.Joint(rotation = Math.toRadians(-45.0).toFloat()),
+            "forearm-r" to PipPose.Joint(rotation = Math.toRadians(60 * 0.85).toFloat()),
+            "paw-r" to PipPose.Joint(rotation = Math.toRadians(60 * 0.25).toFloat()),
+        )
+
         fun load(text: String): PipGestureLibrary = PipGestureLibrary(
             json.decodeFromString<FileDto>(text).gestures.map { g ->
                 PipGesture(g.name, g.keys.map { it.at to it.pose.toPose() }, g.loops, g.endSet)

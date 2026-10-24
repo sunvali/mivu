@@ -3,8 +3,14 @@ package com.yakov103.mivu.pip
 import com.yakov103.mivu.pip.MotionPolicy.Playback
 import java.util.UUID
 
-/** The Coach and Today poses. Reviewed, welcome back, first meal, day complete and the Progress poses come in milestone 7. */
-enum class CompanionPose { Resting, Attentive, Thinking, Saved, Recovery, Greeting, Submitted, Curious, Tapped, Patted }
+/** The Coach, Today and Progress poses. Reviewed, welcome back, first meal and day complete come in milestone 7. */
+enum class CompanionPose {
+    Resting, Attentive, Thinking, Saved, Recovery, Greeting, Submitted, Curious, Tapped, Patted,
+    /** Progress: holding the chart card, a cheer on a good period and a calm smile otherwise; both loop. */
+    PresentingCalm, PresentingCheer,
+    /** Progress one-shots: the entrance once a visit, a range switch, and each tap's next trick (`tapLevel`). */
+    ProgressEntrance, ProgressEntranceCheer, ProgressRange, ProgressTap,
+}
 
 /** A durable commit Pip may acknowledge. It carries no food amounts, so feedback can never celebrate them. */
 data class CompanionEvent(val profileID: UUID, val operationID: UUID, val kind: Kind, val committedAt: Long) {

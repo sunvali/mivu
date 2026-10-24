@@ -54,6 +54,8 @@ sealed interface AskPip {
     data class Food(val mealID: UUID, val itemID: UUID, val name: String, val dayLocalDate: String?) : AskPip
     /** A workout, quoted as iOS `workoutPrompt` ("Strength · 45 min · Fri 23 Oct"). */
     data class Workout(val workoutID: UUID, val excerpt: String) : AskPip
+    /** A weigh-in, quoted as iOS `weightPrompt` ("Weight · 72.5 kg · Fri 23 Oct"). */
+    data class Weight(val weightID: UUID, val excerpt: String) : AskPip
 
     /** The quote (null for a date without a day) and the unsent message the composer starts with. */
     fun handoff(locale: Locale = Locale.getDefault()): Pair<CoachReply?, String?> {
@@ -65,6 +67,7 @@ sealed interface AskPip {
             is Food -> CoachReply(CoachReply.Target.Item(mealID, itemID), name.take(280)) to
                 "About the $name${dayLocalDate?.let { " from ${format(it, "EEE d MMM")}" }.orEmpty()}: "
             is Workout -> CoachReply(CoachReply.Target.Workout(workoutID), excerpt.take(280)) to null
+            is Weight -> CoachReply(CoachReply.Target.Weight(weightID), excerpt.take(280)) to null
         }
     }
 }

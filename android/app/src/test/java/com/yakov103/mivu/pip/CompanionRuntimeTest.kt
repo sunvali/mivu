@@ -102,4 +102,17 @@ class CompanionRuntimeTest {
         advanceTimeBy(30_000)
         assertTrue(rt.idleBeats > 0)
     }
+
+    @Test fun progressPropsReapplyStillAndPresentingHolds() = runTest {
+        val rt = runtime()
+        rt.apply(output(CompanionPose.PresentingCalm, Playback.StaticPose), CompanionSurface.Today)
+        rt.showsProgressProps = true
+        // Re-applied without animation: the card and glasses are on the very next frame, with no job started.
+        val frame = rt.motion.sample(0)
+        assertTrue(frame.isVisible("prop-chart.card") && frame.isVisible("glasses@right"))
+        assertEquals(0, rt.activeJobs)
+        assertEquals(library.stillPose(PipMoment.Presenting(false)).copy(set = PipPose.BodySet.standing), rt.motion.pose)
+        rt.showsProgressProps = false
+        assertTrue(!rt.motion.sample(0).isVisible("prop-chart.card"))
+    }
 }
