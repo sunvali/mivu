@@ -74,6 +74,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yakov103.mivu.R
 import com.yakov103.mivu.SampleMode
 import com.yakov103.mivu.ui.today.TodayScreen
+import com.yakov103.mivu.ui.coach.CoachCameraScreen
 import com.yakov103.mivu.ui.coach.CoachScreen
 import com.yakov103.mivu.ui.coach.CoachViewModel
 import com.yakov103.mivu.coach.CoachActivity
@@ -109,6 +110,7 @@ sealed interface Route {
     @Serializable data class ManualEntry(val dayID: String?, val mealID: String?) : Route
     @Serializable data object Composer : Route
     @Serializable data class MealDetail(val mealID: String) : Route
+    @Serializable data object CoachCamera : Route
 }
 
 private enum class Tab(val route: Route, val label: String, @DrawableRes val icon: Int, @DrawableRes val selectedIcon: Int) {
@@ -288,7 +290,14 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onSeeProgress = { selectTab(Route.Progress) },
                     focusRequested = focusCoach,
                     onFocusConsumed = { focusCoach = false },
+                    onOpenCamera = { navController.navigate(Route.CoachCamera) },
                 )
+            }
+            // Full screen over Coach: Coach is no longer resumed, so Pip hides; the draft lives in the activity's model.
+            dialog<Route.CoachCamera>(
+                dialogProperties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+            ) {
+                CoachCameraScreen(coach, onClose = { navController.popBackStack<Route.CoachCamera>(inclusive = true) })
             }
             // The screen owns back (and Escape), so an edited draft always asks before it is discarded.
             dialog<Route.ManualEntry>(

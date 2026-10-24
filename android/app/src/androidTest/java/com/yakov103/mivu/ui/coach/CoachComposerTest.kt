@@ -1,15 +1,10 @@
 package com.yakov103.mivu.ui.coach
 
-import android.app.Activity
-import android.app.Instrumentation
-import android.content.ClipData
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.net.Uri
-import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
@@ -30,9 +25,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.espresso.intent.Intents
-import androidx.test.espresso.intent.Intents.intending
-import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import com.yakov103.mivu.coach.CoachActivity
 import com.yakov103.mivu.diary.CoachReply
 import com.yakov103.mivu.diary.CoachTurn
@@ -141,18 +133,14 @@ class CoachComposerTest {
         outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    @Test fun photoPickerAddsUpToEightAndRemoves() {
+    @Test fun importAddsUpToEightAndRemoves() {
         launch()
         val picked = (1..9).map { png("synthetic-coach-$it.png") }
-        Intents.init()
         try {
-            val clip = ClipData.newRawUri(null, Uri.fromFile(picked[0])).apply { picked.drop(1).forEach { addItem(ClipData.Item(Uri.fromFile(it))) } }
-            intending(hasAction(MediaStore.ACTION_PICK_IMAGES))
-                .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().apply { clipData = clip }))
-            compose.onNodeWithContentDescription("Add photos").performClick()
+            // The field's camera opens the camera, which hosts the Photo Picker (CoachCameraTest); here the model imports directly.
+            compose.runOnUiThread { model.importPhotos(picked.map(Uri::fromFile)) }
             waitForText("8 of 8 photos")
         } finally {
-            Intents.release()
             picked.forEach { it.delete() }
         }
         waitForText("Photo 9 was not added: a meal holds up to 8 photos.")

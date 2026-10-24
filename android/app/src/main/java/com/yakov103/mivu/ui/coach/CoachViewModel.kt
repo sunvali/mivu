@@ -236,11 +236,7 @@ class CoachViewModel(
                 uris.forEachIndexed { index, uri ->
                     if (_draft.value.photos.size >= MAX_PHOTOS) { skipped += index + 1; return@forEachIndexed }
                     try {
-                        val file = withContext(Dispatchers.IO) { prepare(uri) }
-                        store(_draft.value.copy(photos = _draft.value.photos + file.path))
-                        // One curious look per draft: the event is keyed by the draft's submission.
-                        presentation.receive(CompanionEvent(profileID, _draft.value.submissionID, CompanionEvent.Kind.PhotoAdded, System.currentTimeMillis()))
-                        resolveCompanion()
+                        addPrepared(uri)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -257,6 +253,35 @@ class CoachViewModel(
                 ).joinToString(" ")
             }
         }
+    }
+
+    /**
+     * A camera capture, prepared on the same path as a picked photo; the raw [file] is deleted either way. A failure keeps
+     * the note and the other photos and says so in iOS words.
+     */
+    fun addCapturedPhoto(file: File) {
+        if (_importing.value || _sending.value || _draft.value.photos.size >= MAX_PHOTOS) { file.delete(); return }
+        _importing.value = true
+        viewModelScope.launch {
+            try {
+                addPrepared(Uri.fromFile(file))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _message.value = PHOTO_NOT_TAKEN
+            } finally {
+                file.delete()
+                _importing.value = false
+            }
+        }
+    }
+
+    private suspend fun addPrepared(uri: Uri) {
+        val file = withContext(Dispatchers.IO) { prepare(uri) }
+        store(_draft.value.copy(photos = _draft.value.photos + file.path))
+        // One curious look per draft: the event is keyed by the draft's submission.
+        presentation.receive(CompanionEvent(profileID, _draft.value.submissionID, CompanionEvent.Kind.PhotoAdded, System.currentTimeMillis()))
+        resolveCompanion()
     }
 
     /** Saves the draft as a Coach turn; false when there is nothing to send or a send or import is running. */

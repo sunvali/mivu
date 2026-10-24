@@ -1,19 +1,11 @@
 package com.yakov103.mivu.ui.coach
 
 import android.animation.ValueAnimator
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import com.yakov103.mivu.pip.MotionPolicy.Playback
 import com.yakov103.mivu.pip.rememberMotionPlayback
-import com.yakov103.mivu.ui.composer.MealComposerViewModel.Companion.MAX_PHOTOS
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.scrollable
@@ -82,6 +74,8 @@ fun CoachScreen(
     /** Focus the field once, as after "Log with Pip" or an Ask Pip quote; [onFocusConsumed] clears the request. */
     focusRequested: Boolean = false,
     onFocusConsumed: () -> Unit = {},
+    /** The field's camera: opens the in-app camera, which also offers the Photo Picker. */
+    onOpenCamera: () -> Unit = {},
 ) {
     val state by model.timeline.collectAsStateWithLifecycle()
     val activity by model.activity.collectAsStateWithLifecycle()
@@ -115,10 +109,8 @@ fun CoachScreen(
     }
     val visible = { listState.layoutInfo.visibleItemsInfo.mapNotNull { it.key as? UUID }.toSet() }
 
-    // Pip goes still off screen and hides while the screen's own picker covers it (iOS `covered`).
-    var picking by rememberSaveable { mutableStateOf(false) }
-    val picker = rememberLauncherForActivityResult(PickMultipleVisualMedia(MAX_PHOTOS)) { picking = false; model.importPhotos(it) }
-    val playback = rememberMotionPlayback(covered = picking)
+    // Pip goes still off screen; the camera is a dialog destination, so Coach is no longer resumed and Pip hides.
+    val playback = rememberMotionPlayback()
     LaunchedEffect(playback) { model.reportPlayback(playback) }
     DisposableEffect(model) { onDispose { model.reportPlayback(Playback.Hidden) } } // the model outlives the tab
     val focusRequester = remember { FocusRequester() }
@@ -154,7 +146,7 @@ fun CoachScreen(
         }
         // Failures show in the composer caption beside Pip.
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
-            onAddPhotos = { picking = true; picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
+            onAddPhotos = onOpenCamera,
             Modifier.imePadding())
     }
 }
