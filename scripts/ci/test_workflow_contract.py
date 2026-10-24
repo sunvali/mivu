@@ -9,7 +9,10 @@ from pathlib import Path
 
 
 def load_workflow(name):
-    workflow = Path(__file__).resolve().parents[2] / '.github/workflows' / name
+    return load_yaml(Path(__file__).resolve().parents[2] / '.github/workflows' / name)
+
+
+def load_yaml(workflow):
     if shutil.which('yq'):
         return json.loads(subprocess.check_output(['yq', '-o=json', '.', str(workflow)], text=True))
     return json.loads(subprocess.check_output([
@@ -19,6 +22,15 @@ def load_workflow(name):
 
 
 class ReleaseAutomation(unittest.TestCase):
+    def test_dependabot_updates_pinned_actions_with_valid_titles(self):
+        config = load_yaml(Path(__file__).resolve().parents[2] / '.github/dependabot.yml')
+        updates = config['updates']
+        self.assertEqual([u['package-ecosystem'] for u in updates], ['github-actions'])
+        title = updates[0]['commit-message']['prefix'] + '(deps): bump actions/checkout from 7.0.1 to 7.0.2'
+        result = subprocess.run(['python3', str(Path(__file__).with_name('check_commit_title.py'))],
+                                input=title, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, 'Dependabot PR titles must pass the squash-title check')
+
     def test_all_hosted_jobs_are_slim_only_with_two_minute_limits(self):
         directory = Path(__file__).resolve().parents[2] / '.github/workflows'
         workflows = sorted(path for path in directory.iterdir() if path.suffix in ('.yml', '.yaml'))

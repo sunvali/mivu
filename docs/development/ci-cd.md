@@ -195,6 +195,9 @@ For local delivery, check out the immutable version tag already merged into
 the intended device/archive destination and signing team, then archive and export
 through Organizer. Record the exact source SHA, build number, local test evidence
 and exported product. An unsigned archive cannot be installed on a phone.
+`CURRENT_PROJECT_VERSION` stays `1` in source; every App Store Connect upload needs
+a higher build number, so keep Organizer's "Automatically manage version and build
+number" on and record the number it assigns.
 
 Apple membership, signing identity, provisioning and any required agreements
 remain owner prerequisites. Keep signing credentials in the local Apple tooling;
