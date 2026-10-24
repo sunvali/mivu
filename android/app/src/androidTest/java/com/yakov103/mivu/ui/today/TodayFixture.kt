@@ -132,6 +132,10 @@ class TodayFixtureSeed {
                 timePrecision = MealTimePrecision.exact, items = items, photos = listOf(photo),
                 submissions = listOf(com.yakov103.mivu.diary.MealSubmission(UUID.randomUUID(), 0, "", listOf(photo.id), false,
                     com.yakov103.mivu.diary.SubmissionState.saved))))
+            // Earlier waking days for the Move meal sheet.
+            val today = java.time.LocalDate.parse(it.day(db.head().activeDayID!!)!!.localDate)
+            for (back in 1L..3L) it.putDay(com.yakov103.mivu.diary.TrackingDay(UUID.randomUUID(), today.minusDays(back).toString(),
+                java.time.ZoneId.systemDefault().id, at.minus(back, ChronoUnit.DAYS), com.yakov103.mivu.diary.DayCompleteness.unknown))
         }
         db.close()
     }

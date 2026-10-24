@@ -21,6 +21,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.analysis.MealAnalysisWorker
 import com.yakov103.mivu.analysis.SampleAnalyzer
@@ -92,7 +93,7 @@ class MealDetailScreenTest {
     private fun meal(id: UUID) = db().read { it.meal(id) }
 
     private fun open(mealID: UUID) {
-        val model = MealDetailViewModel(repository, profileID, mealID, sampleMode = false)
+        val model = MealDetailViewModel(repository, profileID, mealID, sampleMode = false, SavedStateHandle())
         compose.setContent { MivuTheme { MealDetailScreen(model, onBack = { wentBack = true }, onAskPip = {}, onAddFoodManually = {}) } }
     }
 

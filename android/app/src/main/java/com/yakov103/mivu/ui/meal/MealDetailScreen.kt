@@ -68,6 +68,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -129,7 +130,7 @@ private fun FoodItem.portion() = "${quantity.amount()} $unit"
 private fun FoodItem.kcalText() = nutrition.kcal?.let { "${it.fixed(0)} kcal" } ?: "— kcal"
 
 /** iOS `FoodItem.sourceCaption`: the provenance, and the model that estimated it unless the person edited it. */
-private val FoodItem.sourceCaption: String
+internal val FoodItem.sourceCaption: String
     get() = listOfNotNull(
         when (provenance) {
             NutritionProvenance.sample -> "Synthetic apple estimate"
@@ -146,8 +147,8 @@ private val DiaryMeal.pendingReview: MealSubmission?
 
 /**
  * Port of iOS MealDetailView in direction B: an edge-to-edge photo hero, the meal summary, a pending review, attached
- * photos and the foods, with Ask Pip pinned at the bottom. The food editor and the adjust and move sheets come with
- * their own task; "Add note or photo" waits for a composer that can correct a meal.
+ * photos and the foods, with Ask Pip pinned at the bottom. Foods open the editor; the summary adjusts the total and the
+ * menu moves the meal. "Add note or photo" waits for a composer that can correct a meal.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,8 +166,11 @@ fun MealDetailScreen(
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
     var deletion by remember { mutableStateOf<Deletion?>(null) }
     var viewing by rememberSaveable { mutableStateOf<String?>(null) }
-    // shortcut: the food editor, adjust-total and move sheets are no-ops until their task lands.
-    val later: () -> Unit = {}
+    // The revision (and for a move, the day) each sheet opened with; null while it is closed.
+    var scaleRevision by rememberSaveable { mutableStateOf<Int?>(null) }
+    var moveFrom by rememberSaveable { mutableStateOf<List<String>?>(null) }
+    val movedDayID by viewModel.movedDayID.collectAsStateWithLifecycle()
+    val editing = viewModel.editing
 
     val meal = state?.meal?.takeUnless { deleted }
     val hero = meal?.photos?.firstOrNull()
@@ -185,20 +189,26 @@ fun MealDetailScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+        // While the editor is open its own window shows the snackbar.
+        snackbarHost = { if (editing == null) SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { if (collapsed) Text("Meal", Modifier.semantics { heading() }) },
                 navigationIcon = { FloatingIcon(R.drawable.ic_arrow_back, "Back", "mealBack", collapsed, onBack) },
                 actions = {
-                    if (meal != null) MealActions(meal, viewModel.sampleMode, collapsed, onMove = later, onRetry = onRetryAnalysis) {
+                    if (meal != null) MealActions(meal, viewModel.sampleMode, collapsed,
+                        onMove = { moveFrom = listOf(meal.revision.toString(), meal.dayID.toString()) }, onRetry = onRetryAnalysis) {
                         deletion = Deletion.Meal(meal.revision, mealTitle(meal), state.day?.localDate.orEmpty())
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = barColor, scrolledContainerColor = barColor),
             )
         },
-        bottomBar = { if (meal != null) BottomActions(meal, onAskPip) { viewModel.acceptReview(it.id, meal.revision) } },
+        bottomBar = {
+            if (meal != null) BottomActions(meal, state.day?.takeIf { it.id == movedDayID }?.localDate, onAskPip) {
+                viewModel.acceptReview(it.id, meal.revision)
+            }
+        },
     ) { padding -> Box {
         val bottom = padding.calculateBottomPadding()
         when {
@@ -215,14 +225,14 @@ fun MealDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item(key = "summary") {
-                    val summary = @Composable { m: Modifier -> Summary(meal, state.day, viewModel.sampleMode, later, m) }
+                    val summary = @Composable { m: Modifier -> Summary(meal, state.day, viewModel.sampleMode, { scaleRevision = meal.revision }, m) }
                     if (hero != null) Box {
                         Hero(hero, HeroHeight + statusBar, viewModel::photoBytes) { viewing = hero.id.toString() }
                         summary(Modifier.padding(start = Gutter, end = Gutter, top = HeroHeight + statusBar - CardOverlap))
                     } else summary(Modifier.padding(horizontal = Gutter, vertical = 4.dp))
                 }
                 meal.pendingReview?.let { review ->
-                    item(key = "review") { ReviewSection(review.proposal!!.items, { later() }, Modifier.padding(horizontal = Gutter)) }
+                    item(key = "review") { ReviewSection(review.proposal!!.items, { viewModel.edit(it, meal.revision, review.id) }, Modifier.padding(horizontal = Gutter)) }
                 }
                 if (meal.photos.size > 1) {
                     item(key = "photosHeader") { SectionHeader("Attached photos") }
@@ -232,7 +242,7 @@ fun MealDetailScreen(
                 }
                 item(key = "foodsHeader") { SectionHeader("Foods") }
                 item(key = "foods") {
-                    FoodsCard(meal, onEdit = { later() }, onAskPip = onAskPip, onDelete = { deletion = Deletion.Food(it, meal.revision) })
+                    FoodsCard(meal, onEdit = { viewModel.edit(it, meal.revision, null) }, onAskPip = onAskPip, onDelete = { deletion = Deletion.Food(it, meal.revision) })
                 }
                 if (meal.revision > 0 && !meal.hasUnresolvedInput) item(key = "add") {
                     FilledTonalButton(onAddFoodManually, Modifier.padding(horizontal = Gutter).heightIn(min = 48.dp).testTag("addFoodManually")) {
@@ -250,6 +260,32 @@ fun MealDetailScreen(
 
     meal?.photos?.firstOrNull { it.id.toString() == viewing }?.let { photo ->
         MealPhotoViewer(photo, viewModel::photoBytes, onDelete = { viewModel.deletePhoto(photo.id) { viewing = null } }, onClose = { viewing = null })
+    }
+    if (meal != null && editing != null) {
+        val saved = editing.submissionID == null && meal.state == SubmissionState.saved
+        val several = meal.items.size > 1
+        FoodItemEditor(
+            editing, viewModel.busy, snackbar, canDeleteFood = saved && several, canDeleteMeal = saved && !several,
+            onChange = viewModel::updateEdit, onClose = { viewModel.updateEdit(null) }, onSave = viewModel::saveEdit,
+            onAskPip = { viewModel.updateEdit(null); onAskPip() },
+            onDelete = {
+                viewModel.updateEdit(null)
+                if (several) viewModel.deleteItem(editing.item.id, editing.revision) else viewModel.deleteMeal(editing.revision)
+            },
+        )
+    }
+    if (meal != null) scaleRevision?.let { revision ->
+        ScaleMealSheet(nutritionTotals(meal.items).kcal ?: 0.0, onDismiss = { scaleRevision = null }) {
+            scaleRevision = null
+            viewModel.scaleMeal(it, revision)
+        }
+    }
+    if (meal != null) moveFrom?.let { (revision, dayID) ->
+        val from = UUID.fromString(dayID)
+        MoveMealSheet(from, { viewModel.destinations(it, from) }, onDismiss = { moveFrom = null }) {
+            moveFrom = null
+            viewModel.moveMeal(it, revision.toInt(), from)
+        }
     }
     when (val target = deletion) {
         is Deletion.Meal -> ConfirmDelete("Delete “${target.title}” on ${target.date}?", "This removes the meal and its attached photos from this diary.",
@@ -512,10 +548,19 @@ private fun FoodRow(item: FoodItem, canDelete: Boolean, onEdit: () -> Unit, onAs
 
 /** iOS bottom inset: "Mark reviewed" leads while a review is pending, and Ask Pip shrinks to an icon beside it. */
 @Composable
-private fun BottomActions(meal: DiaryMeal, onAskPip: () -> Unit, onAccept: (MealSubmission) -> Unit) {
+private fun BottomActions(meal: DiaryMeal, movedTo: String?, onAskPip: () -> Unit, onAccept: (MealSubmission) -> Unit) {
     val review = meal.pendingReview
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Gutter, vertical = 12.dp),
+    Surface(color = MaterialTheme.colorScheme.background) { Column(Modifier.navigationBarsPadding().padding(horizontal = Gutter, vertical = 12.dp)) {
+        // The Diary tab shows the destination day; this only confirms the move.
+        if (movedTo != null) Row(
+            Modifier.heightIn(min = 48.dp).testTag("movedMealDayReceipt").semantics(mergeDescendants = true) {},
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(painterResource(R.drawable.ic_check_circle), contentDescription = null, Modifier.size(20.dp), tint = MivuTheme.colors.success)
+            Text("Moved to ${LocalDate.parse(movedTo).format(DateTimeFormatter.ofPattern("EEEE, d MMM", LocalConfiguration.current.locales[0]))}",
+                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MivuTheme.colors.success)
+        }
+        Row(Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (review != null) {
                 Button({ onAccept(review) }, Modifier.weight(1f).heightIn(min = 56.dp).testTag("acceptReview")) {
@@ -534,7 +579,7 @@ private fun BottomActions(meal: DiaryMeal, onAskPip: () -> Unit, onAccept: (Meal
                 }
             }
         }
-    }
+    } }
 }
 
 @Composable

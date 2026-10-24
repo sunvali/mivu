@@ -20,6 +20,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -49,7 +51,7 @@ import com.yakov103.mivu.R
 
 /**
  * An M3 full-screen dialog for a capture draft: Close and Save in the top bar, a scrolling column, and "Discard changes?"
- * on Close or back while [dirty]. Nothing can leave while [saving].
+ * on Close or back while [dirty]. Nothing can leave while [saving]. Failures show in [snackbar] when given.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +65,7 @@ fun CaptureDialog(
     discardMessage: String,
     onClose: () -> Unit,
     onSave: () -> Unit,
+    snackbar: SnackbarHostState? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var showDiscard by rememberSaveable { mutableStateOf(false) }
@@ -99,6 +102,7 @@ fun CaptureDialog(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
+        snackbarHost = { snackbar?.let { SnackbarHost(it) } },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Column(

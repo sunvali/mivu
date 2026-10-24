@@ -42,9 +42,9 @@ data class ManualNutritionDraft(
         return item
     }
 
-    private companion object {
+    internal companion object {
         // Swift `Double(String)` grammar; Kotlin's own parser also takes "1d", "1f" and hex.
-        val decimal = Regex("[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?")
+        private val decimal = Regex("[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?")
 
         fun number(text: String): Double? = text.trim().replace(',', '.').takeIf(decimal::matches)?.toDouble()
     }

@@ -232,7 +232,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             }
             composable<Route.MealDetail> { entry ->
                 val mealID = UUID.fromString(entry.toRoute<Route.MealDetail>().mealID)
-                val model = viewModel { MealDetailViewModel(repository, profileID, mealID, SampleMode.enabled) }
+                val model = viewModel { MealDetailViewModel(repository, profileID, mealID, SampleMode.enabled, createSavedStateHandle()) }
                 MealDetailScreen(
                     model,
                     onBack = { navController.popBackStack() },
