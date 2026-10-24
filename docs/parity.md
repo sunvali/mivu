@@ -15,7 +15,7 @@ and `equivalent` need a verification record that names the passing tests and a
 | ID | Feature | Scope | Spec | iOS | Android | Evidence | Notes |
 |---|---|---|---|---|---|---|---|
 | onboarding | Onboarding hosted by Pip | baseline | [spec](superpowers/specs/2026-10-20-onboarding-design.md) | partial | pending | - | No verification record at the baseline. |
-| today | Today summary, meals, Log meal | baseline | [spec](superpowers/specs/2026-10-17-experience-redesign.md) | partial | pending | iOS: docs/verification/2026-10-19-summary-cards-navigation.md | Record gives seven UI methods cumulatively, not named; no full-suite pass. |
+| today | Today summary, meals, Log meal | baseline | [spec](superpowers/specs/2026-10-17-experience-redesign.md) | partial | pending | iOS: docs/verification/2026-10-19-summary-cards-navigation.md | Record gives seven UI methods cumulatively, not named; no full-suite pass. Android: skeleton only. |
 | day-rollover | Day rollover and morning check-in | baseline | [spec](superpowers/specs/2026-10-20-day-rollover-design.md) | partial | pending | - | No verification record at the baseline. |
 | diary | Diary week strip and meal detail | baseline | [spec](superpowers/specs/2026-10-20-diary-redesign-design.md) | partial | pending | iOS: docs/verification/2026-10-21-diary-redesign.md | Record has no source SHA. |
 | meal-edit | Meal composer, manual nutrition, correction | baseline | [spec](superpowers/specs/2026-10-19-reliable-entry-design.md) | partial | pending | iOS: docs/verification/2026-10-19-reliable-entry.md | Record is in progress with failing runs. |

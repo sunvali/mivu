@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Credentials live in noBackupFilesDir, which is always excluded. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" />
+        <exclude domain="file" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" />
+        <include domain="file" />
+    </device-transfer>
+    <cross-platform-transfer platform="ios">
+        <exclude domain="database" />
+        <exclude domain="file" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" path="." />
+    </cross-platform-transfer>
+</data-extraction-rules>
