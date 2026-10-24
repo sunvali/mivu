@@ -14,5 +14,9 @@
         <activity
             android:name=".CaptureProbeActivity"
             android:exported="true" />
+        <!-- Pip rig review: rest pose at shipping sizes; debug builds only. -->
+        <activity
+            android:name=".PipRigPreviewActivity"
+            android:exported="true" />
     </application>
 </manifest>

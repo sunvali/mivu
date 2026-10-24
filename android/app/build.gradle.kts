@@ -43,6 +43,9 @@ android {
     // Synthetic SSE and archive fixtures live at the repo root, shared with other platforms.
     sourceSets.getByName("test").resources.srcDir("../../fixtures")
     sourceSets.getByName("androidTest").resources.srcDir("../../fixtures")
+    // Pip's rig is generated for iOS; Android reads the same file in place (never a copy).
+    sourceSets.getByName("main").assets.srcDir("../../ios/Mivu/Resources/Characters")
+    sourceSets.getByName("test").resources.srcDir("../../ios/Mivu/Resources/Characters")
 }
 
 // Release variants take the ledger-derived code; debug keeps 1.
