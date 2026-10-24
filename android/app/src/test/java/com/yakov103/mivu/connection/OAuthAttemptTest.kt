@@ -71,6 +71,17 @@ class OAuthAttemptTest {
         assertThrows(OAuthError.InvalidCallback::class.java) { make().consumeCallback("$callback?state=x&code=c&client_id=oaiapp_x") }
     }
 
+    @Test fun encodedDuplicateParametersAreInvalid() {
+        val a = make()
+        assertThrows(OAuthError.InvalidCallback::class.java) { a.consumeCallback("$callback?state=x&%73tate=${a.state}&code=c&client_id=oaiapp_x") }
+        assertThrows(OAuthError.InvalidCallback::class.java) { a.consumeCallback("$callback?state=${a.state}&code=a&%63ode=b&client_id=oaiapp_x") }
+    }
+
+    @Test fun literalPlusInCodeIsPreserved() {
+        val a = make()
+        assertEquals("a+b", a.consumeCallback("$callback?state=${a.state}&code=a+b&client_id=oaiapp_x").code)
+    }
+
     @Test fun deniedAndProviderErrors() {
         val a = make()
         assertThrows(OAuthError.Denied::class.java) { a.consumeCallback("$callback?state=${a.state}&error=access_denied") }

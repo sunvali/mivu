@@ -78,7 +78,8 @@ results never prove camera, sign-in or notifications; keep those `blocked`
 until tested on a physical phone. Verify the release build on a physical phone
 from the exact AAB uploaded, and commit its `android/play-uploads.txt` line
 right after each upload. The opt-in pre-push hook runs
-`./gradlew :app:testDebugUnitTest` only when `android/` changed.
+`./gradlew :app:testDebugUnitTest` only when `android/` changed, so export
+`JAVA_HOME` (e.g. Android Studio's bundled JBR) and `ANDROID_HOME` first.
 
 ## Companion animation work
 

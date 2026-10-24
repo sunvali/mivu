@@ -12,8 +12,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 
 /** One outcome line per button. Text is fixed wording or an error class name, never a token, code or callback URL. */
@@ -27,6 +29,7 @@ object ProofSession {
     private var store: CredentialStore? = null
     private var auth: AuthSession? = null
     private var restored = false
+    private val restoreLock = Mutex()
     private var signInJob: Job? = null
     @Volatile private var live = false
 
@@ -48,10 +51,14 @@ object ProofSession {
 
     fun cancelSignIn() { signInJob?.cancel() }
 
-    fun signIn(context: Context, open: (Uri) -> Unit) = run(SIGN_IN) {
+    @Synchronized
+    fun signIn(context: Context, open: (Uri) -> Unit) {
+        signInJob = run(SIGN_IN, signInJob) { signInAttempt(context, open) }
+    }
+
+    private suspend fun signInAttempt(context: Context, open: (Uri) -> Unit): String {
         val (store, auth) = init(context)
         val loop = LoopbackCallback()
-        signInJob = coroutineContext[Job]
         live = true
         try {
             val callback = loop.start()
@@ -62,8 +69,8 @@ object ProofSession {
             val received = withTimeout(5 * 60_000L) { loop.await() }
             val code = attempt.consumeCallback(received)
             auth.establish(code, attempt.verifier, attempt.nonce, returning?.id)
-            restored = true
-            "Signed in"
+            restoreLock.withLock { restored = true }
+            return "Signed in"
         } finally {
             loop.close()
             live = false
@@ -80,8 +87,8 @@ object ProofSession {
         analyze(context, null)
     }
 
-    fun analyzePhoto(context: Context, jpeg: ByteArray) = run(ANALYZE_PHOTO) {
-        analyze(context, jpeg)
+    fun analyzePhoto(context: Context, jpeg: () -> ByteArray) = run(ANALYZE_PHOTO) {
+        analyze(context, jpeg())
     }
 
     fun forceRefresh(context: Context) = run(FORCE_REFRESH) {
@@ -108,18 +115,23 @@ object ProofSession {
 
     private suspend fun restored(context: Context): AuthSession {
         val (store, auth) = init(context)
-        if (!restored) {
-            store.registrations().firstOrNull()?.let { auth.restore(it.id) }
-            restored = true
+        restoreLock.withLock {
+            if (!restored) {
+                store.registrations().firstOrNull()?.let { auth.restore(it.id) }
+                restored = true
+            }
         }
         return auth
     }
 
     private suspend fun token(context: Context) = restored(context).accessToken()
 
-    private fun run(label: String, block: suspend () -> String) {
+    // A previous job is cancelled and joined first, so its finally cannot clear the new attempt's state.
+    private fun run(label: String, previous: Job? = null, block: suspend () -> String): Job {
         results[label] = ProofResult(null, "Running")
-        scope.launch {
+        return scope.launch {
+            previous?.cancelAndJoin()
+            results[label] = ProofResult(null, "Running")
             results[label] = try {
                 ProofResult(true, block())
             } catch (e: kotlinx.coroutines.CancellationException) {

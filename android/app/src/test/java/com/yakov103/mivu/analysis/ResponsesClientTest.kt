@@ -15,6 +15,7 @@ class ResponsesClientTest {
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
     private var status = 200
     private var reply = ""
+    private var location: String? = null
     private var seenBody = ""
     private val seenHeaders = mutableMapOf<String, String?>()
     private val client: ResponsesClient
@@ -23,6 +24,7 @@ class ResponsesClientTest {
         server.createContext("/") { ex ->
             seenBody = ex.requestBody.readBytes().decodeToString()
             listOf("Authorization", "Accept", "Content-Type").forEach { seenHeaders[it] = ex.requestHeaders.getFirst(it) }
+            location?.let { ex.responseHeaders.add("Location", it) }
             val bytes = reply.toByteArray()
             ex.sendResponseHeaders(status, bytes.size.toLong())
             ex.responseBody.use { it.write(bytes) }
@@ -84,6 +86,12 @@ class ResponsesClientTest {
         assertEquals(ResponsesClient.Failure.Unauthorized, failure { run() })
         status = 500
         assertEquals(ResponsesClient.Failure.Http(500), failure { run() })
+    }
+
+    @Test fun redirectsAreNotFollowed() {
+        status = 302
+        location = "http://127.0.0.1:${server.address.port}/elsewhere"
+        assertEquals(ResponsesClient.Failure.Http(302), failure { run() })
     }
 
     @Test fun invalidInputNeverSends() {

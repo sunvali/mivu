@@ -74,10 +74,10 @@ class LoopbackCallback : AutoCloseable {
             val b = input.read()
             if (b < 0) return null
             head.write(b)
-            if (head.size() >= 4 && head.toString(Charsets.ISO_8859_1).endsWith("\r\n\r\n")) break
+            if (head.size() >= 4 && head.toByteArray().toString(Charsets.ISO_8859_1).endsWith("\r\n\r\n")) break
         }
         if (head.size() > MAX_HEAD) return null
-        val parts = head.toString(Charsets.ISO_8859_1).substringBefore("\r\n").split(" ")
+        val parts = head.toByteArray().toString(Charsets.ISO_8859_1).substringBefore("\r\n").split(" ")
         if (parts.size != 3 || parts[0] != "GET" || parts[2] != "HTTP/1.1") return null
         val target = parts[1]
         if ('#' in target || target.substringBefore('?') != PATH) return null

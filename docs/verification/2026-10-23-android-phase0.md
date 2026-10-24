@@ -25,7 +25,7 @@ live-provider evidence.
 
 - Environment: emulator Medium_Phone_API_37.0, then physical phone (model and Android version to record).
 - Source SHA: f019413e95d0ee24950f642a44b9baa7a941cf5b
-- Steps: tap Sign in; complete sign-in in the Custom Tab with the app backgrounded; confirm PASS; kill the process and sign in again. Contract: [sign-in docs](https://developers.openai.com/siwc/token-sharing-open-source/sign-in).
+- Steps: tap Sign in; complete sign-in in the Custom Tab with the app backgrounded. After the "You can return to Mivu." page, press Back to return to the app, then read the Sign in line; confirm PASS; kill the process and sign in again. Contract: [sign-in docs](https://developers.openai.com/siwc/token-sharing-open-source/sign-in).
 - Result: **not run**
 - Notes: to prove: loopback redirect `http://127.0.0.1:<port>/auth/callback` reaches the listener from a Custom Tab on a real phone, including while backgrounded; listener starts before the browser opens; PKCE S256, `state`, `nonce`; `dynamic_agent_client` plus `agent_name_hint=Mivu` only on first registration; `ext_agent_host_id` persisted before sign-in.
 

@@ -42,9 +42,10 @@ class OAuthAttempt private constructor(
         ) throw OAuthError.InvalidCallback
         val params = mutableMapOf<String, String>()
         received.rawQuery?.split("&")?.forEach { item ->
-            val (name, value) = item.split("=", limit = 2).let { it[0] to it.getOrNull(1) }
+            val (rawName, value) = item.split("=", limit = 2).let { it[0] to it.getOrNull(1) }
+            val name = decode(rawName)
             if (name in params || value == null) throw OAuthError.InvalidCallback
-            params[decode(name)] = decode(value)
+            params[name] = decode(value)
         }
         if (params["state"] != state) throw OAuthError.InvalidCallback
         params["error"]?.let {
@@ -98,7 +99,7 @@ class OAuthAttempt private constructor(
 
         private fun parse(url: String): URI? = try { URI(url) } catch (_: URISyntaxException) { null }
         private fun encode(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
-        private fun decode(s: String) = try { URLDecoder.decode(s, "UTF-8") } catch (_: IllegalArgumentException) { throw OAuthError.InvalidCallback }
+        private fun decode(s: String) = try { URLDecoder.decode(s.replace("+", "%2B"), "UTF-8") } catch (_: IllegalArgumentException) { throw OAuthError.InvalidCallback }
         private fun base64Url(b: ByteArray) = Base64.getUrlEncoder().withoutPadding().encodeToString(b)
         private fun randomValue() = base64Url(ByteArray(32).also { SecureRandom().nextBytes(it) })
     }

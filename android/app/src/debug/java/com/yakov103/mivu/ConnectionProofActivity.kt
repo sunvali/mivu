@@ -27,10 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
 import java.io.ByteArrayOutputStream
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 /** Debug-only Phase 0 screen: each button runs one ChatGPT proof step and shows a redacted pass/fail line. */
 class ConnectionProofActivity : ComponentActivity() {
@@ -44,10 +41,8 @@ class ConnectionProofActivity : ComponentActivity() {
     @Composable
     private fun Screen() {
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            if (uri != null) lifecycleScope.launch(Dispatchers.IO) {
-                // shortcut: no EXIF rotation; the model still reads the meal. Upgrade if photos arrive sideways.
-                ProofSession.analyzePhoto(applicationContext, jpeg(uri))
-            }
+            // shortcut: no EXIF rotation; the model still reads the meal. Upgrade if photos arrive sideways.
+            if (uri != null) ProofSession.analyzePhoto(applicationContext) { jpeg(uri) }
         }
         Scaffold { padding ->
             Column(
@@ -83,7 +78,7 @@ class ConnectionProofActivity : ComponentActivity() {
 
     private fun openBrowser(uri: Uri) = CustomTabsIntent.Builder().build().launchUrl(this, uri)
 
-    // Longest side 1600 px, JPEG 85: keeps the request under the 5 MB image limit.
+    // Decodes at a power-of-two sample size (longest side roughly 1600-3200 px), JPEG 85; keeps the request under the 5 MB image limit.
     private fun jpeg(uri: Uri): ByteArray {
         val bytes = contentResolver.openInputStream(uri)!!.use { it.readBytes() }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

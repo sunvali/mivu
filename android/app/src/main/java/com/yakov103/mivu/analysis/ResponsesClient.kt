@@ -75,6 +75,7 @@ class ResponsesClient(private val base: String = "https://api.openai.com/v1/") {
         if (token.isEmpty() || token.any { it.isWhitespace() }) throw Failure.InvalidInput
         val conn = URL(base + path).openConnection() as HttpURLConnection
         try {
+            conn.instanceFollowRedirects = false
             conn.connectTimeout = 60_000
             conn.readTimeout = 60_000
             conn.setRequestProperty("Authorization", "Bearer $token")
@@ -107,7 +108,7 @@ class ResponsesClient(private val base: String = "https://api.openai.com/v1/") {
             if (out.size() + n > ITEM_LIMIT) throw Failure.LimitExceeded
             out.write(buf, 0, n)
         }
-        return out.toString(Charsets.UTF_8)
+        return out.toByteArray().toString(Charsets.UTF_8)
     }
 
     private inline fun <T> HttpURLConnection.use(block: (HttpURLConnection) -> T): T =
