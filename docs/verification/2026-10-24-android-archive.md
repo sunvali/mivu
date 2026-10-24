@@ -79,3 +79,6 @@ These counts come from the earlier task reports at the listed SHAs and were not 
   miss short allocation spikes, so the true peak may be higher than measured.
 - Not covered: the system file picker / Drive journey for export and import (no UI yet), and
   real-device heap limits.
+- Exit conditions for Android `done` on the archive row: the export/import UI (system file picker /
+  Drive journey) and streaming photo decode, so large archives import without exhausting memory
+  (per spec). Neither is met by this record.
