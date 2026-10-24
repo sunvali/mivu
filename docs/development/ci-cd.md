@@ -206,6 +206,19 @@ locally through Organizer. An upload acknowledgement does not prove processing,
 tester availability or device installation; inspect those outcomes separately.
 Nothing in version automation submits to App Review or distributes a build.
 
+### Public source mirror
+
+This repository stays private. The App Store app's source is published separately
+under AGPL-3.0 so Mivu qualifies for OpenAI's open-source ChatGPT plan usage.
+After a version tag exists, export it locally into a checkout of the public repo,
+review the diff, then commit and push there:
+
+    python3 scripts/ci/export_public.py v1.1.0 ../mivu-public
+
+Only `ios/` and the files in `public/` (license, notice, README) are exported;
+the export refuses secret-looking content. Creating the public repository and
+every push to it are owner decisions.
+
 ```mermaid
 flowchart LR
   PR[Pull request] --> Linux[Linux script and title checks]
