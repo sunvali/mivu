@@ -1,0 +1,51 @@
+package com.yakov103.mivu.diary
+
+import java.time.Instant
+import java.util.Base64
+import java.util.UUID
+import kotlin.math.floor
+import kotlin.math.roundToLong
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
+
+/** Reads and writes the default Foundation JSONEncoder/JSONDecoder wire format. */
+val SwiftJson: Json = Json {
+    explicitNulls = false
+    encodeDefaults = true
+    ignoreUnknownKeys = false
+}
+
+private const val REFERENCE_OFFSET = 978_307_200L // seconds from 1970 to 2001-01-01
+
+/** Swift Date: JSON number of seconds since 2001-01-01 UTC. */
+object SwiftDate : KSerializer<Instant> {
+    override val descriptor = PrimitiveSerialDescriptor("SwiftDate", PrimitiveKind.DOUBLE)
+
+    override fun serialize(encoder: Encoder, value: Instant) =
+        encoder.encodeDouble((value.epochSecond - REFERENCE_OFFSET) + value.nano / 1e9)
+
+    override fun deserialize(decoder: Decoder): Instant {
+        val seconds = decoder.decodeDouble()
+        val whole = floor(seconds)
+        return Instant.ofEpochSecond(whole.toLong() + REFERENCE_OFFSET, ((seconds - whole) * 1e9).roundToLong())
+    }
+}
+
+/** Swift UUID: uppercase string; read case-insensitively. */
+object SwiftUUID : KSerializer<UUID> {
+    override val descriptor = PrimitiveSerialDescriptor("SwiftUUID", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: UUID) = encoder.encodeString(value.toString().uppercase())
+    override fun deserialize(decoder: Decoder): UUID = UUID.fromString(decoder.decodeString())
+}
+
+/** Swift Data: padded standard base64 string. */
+object SwiftData : KSerializer<ByteArray> {
+    override val descriptor = PrimitiveSerialDescriptor("SwiftData", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: ByteArray) =
+        encoder.encodeString(Base64.getEncoder().encodeToString(value))
+    override fun deserialize(decoder: Decoder): ByteArray = Base64.getDecoder().decode(decoder.decodeString())
+}
