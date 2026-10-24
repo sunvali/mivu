@@ -118,6 +118,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import com.yakov103.mivu.connection.ChatGPTConnection
 import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.ui.settings.BackupExportScreen
 import com.yakov103.mivu.ui.settings.ConnectionScreen
 import com.yakov103.mivu.ui.settings.SettingsScreen
 import com.yakov103.mivu.ui.settings.openCustomTab
@@ -150,6 +151,7 @@ sealed interface Route {
     @Serializable data object CoachHistory : Route
     @Serializable data object Settings : Route
     @Serializable data object Connection : Route
+    @Serializable data object BackupExport : Route
     /** "Add weight manually" (today, or [dayID]) or, with [weightID], "Edit weight". */
     @Serializable data class WeightEditor(val dayID: String? = null, val weightID: String? = null) : Route
     @Serializable data class WorkoutEditor(val localDate: String, val dayID: String? = null, val sessionID: String? = null) : Route
@@ -416,10 +418,16 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onClose = { navController.popBackStack() })
             }
             composable<Route.Settings> {
-                // shortcut: "Backup & export" does nothing until Task 7 adds its screen.
                 SettingsScreen(connectionState, onOpenConnection = { navController.navigate(Route.Connection) },
                     onOpenGoals = { navController.navigate(Route.Goals) },
                     onRedoSetup = { navController.navigate(Route.Onboarding) },
+                    onOpenBackup = { navController.navigate(Route.BackupExport) },
+                    onBack = { navController.popBackStack() })
+            }
+            composable<Route.BackupExport> {
+                // As iOS snapshotForExport: export is the one path that reads a whole snapshot.
+                BackupExportScreen(profileID, snapshot = { repository.database(profileID).snapshot() },
+                    currentProfile = { (repository.bootstrapState.value as? Bootstrap.Ready)?.profileID },
                     onBack = { navController.popBackStack() })
             }
             composable<Route.Connection> {
