@@ -23,6 +23,7 @@ import java.time.temporal.TemporalAdjusters
 import java.time.temporal.WeekFields
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -122,8 +123,10 @@ class DiaryViewModel(
                 }
                 val loaded = try {
                     withContext(Dispatchers.IO) { load(date) }
+                } catch (e: CancellationException) {
+                    throw e // a newer selection or change superseded this load; it is not a failure
                 } catch (e: Exception) {
-                    _state.value?.copy(error = "Could not load this week. ${failureMessage(e)}") ?: run {
+                    _state.value?.copy(error = "Could not load this week. ${failureMessage(e)}") ?: withContext(Dispatchers.IO) {
                         val zone = runCatching { ZoneId.of(repository.database(profileID).head().profile.timeZoneID) }.getOrDefault(ZoneId.systemDefault())
                         val today = calendarToday(zone)
                         DiaryUiState(date ?: today, today, null, null, null, null, failureMessage(e))

@@ -47,7 +47,12 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -189,6 +194,25 @@ class DiaryScreenTest {
         waitForText("Recorded day")
         val pattern = android.text.format.DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEMMMd")
         compose.onNodeWithText(target.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))).assertIsDisplayed()
+    }
+
+    @Test fun rapidReloadsForTheSameDateNeverReportAnError() {
+        val seeded = DiaryFixture.seed(context)
+        val repository = DiaryRepository(context).also { repository = it; profileID = seeded.profileID }
+        lateinit var model: DiaryViewModel
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { model = DiaryViewModel(repository, seeded.profileID, sampleMode = false) }
+        val errors = mutableListOf<String>()
+        // Unconfined: every state written is seen, including one replaced at once.
+        val watcher = CoroutineScope(Dispatchers.Unconfined).launch { model.state.collect { s -> s?.error?.let { synchronized(errors) { errors += it } } } }
+        try {
+            compose.waitUntil(10_000) { model.state.value?.week != null }
+            repeat(30) { InstrumentationRegistry.getInstrumentation().runOnMainSync { model.select(seeded.today); model.retry() } }
+            compose.waitUntil(10_000) { model.state.value?.week != null && model.state.value?.detail != null }
+            Thread.sleep(500)
+            assertEquals(emptyList<String>(), synchronized(errors) { errors.toList() })
+        } finally {
+            watcher.cancel()
+        }
     }
 
     @Test fun todayRowOpensMealDetail() {

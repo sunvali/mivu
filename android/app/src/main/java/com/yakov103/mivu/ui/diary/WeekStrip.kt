@@ -98,7 +98,7 @@ internal fun WeekStrip(
     }
 
     HorizontalPager(pager, Modifier.fillMaxWidth().testTag("diaryWeekStrip"), key = { weeks[it] }, verticalAlignment = Alignment.Top) { page ->
-                // No gap between slots: each seventh is the touch target (48 dp at 360 dp wide); the capsule is inset inside it.
+        // No gap between slots: each seventh is the touch target (48 dp at 360 dp wide); the capsule is inset inside it.
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
             weekDates(weeks[page], firstDay).forEach { date ->
                 // Only the loaded week's summaries count: another week's dates show no dot until it loads.
