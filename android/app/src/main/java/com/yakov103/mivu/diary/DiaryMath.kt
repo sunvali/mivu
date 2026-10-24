@@ -62,12 +62,16 @@ fun dailyProgress(
     }
     val dayWorkouts = workouts.filter { it.dayID in dayIDs }
     val burn = if (dayWorkouts.all { it.estimatedBurnKcal != null }) dayWorkouts.sumOf { it.estimatedBurnKcal!! } else null
+    return dailyProgress(subtotals, goalOn(localDate, goals), burn)
+}
+
+/** The one sum behind Today, the Coach and Progress: a date's tracking-day [subtotals] against its [goal]. */
+fun dailyProgress(subtotals: List<NutritionTotals>, goal: GoalRecord?, burn: Double?): DailyProgress {
     val totals = if (subtotals.isEmpty()) null else NutritionTotals(
         sumOrNull(subtotals.map { it.kcal }), sumOrNull(subtotals.map { it.carbs }),
         sumOrNull(subtotals.map { it.protein }), sumOrNull(subtotals.map { it.fat }),
         subtotals.sumOf { it.unknownItemCount },
     )
-    val goal = goalOn(localDate, goals)
     val left = NutritionValues(
         remaining(goal?.targets?.kcal, totals?.kcal), remaining(goal?.targets?.carbs, totals?.carbs),
         remaining(goal?.targets?.protein, totals?.protein), remaining(goal?.targets?.fat, totals?.fat),

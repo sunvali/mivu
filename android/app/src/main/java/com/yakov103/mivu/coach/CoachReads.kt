@@ -18,6 +18,7 @@ import com.yakov103.mivu.diary.SwiftUUID
 import com.yakov103.mivu.diary.TrackingDay
 import com.yakov103.mivu.diary.WeightEntry
 import com.yakov103.mivu.diary.WorkoutSession
+import com.yakov103.mivu.diary.dailyProgress
 import com.yakov103.mivu.diary.dayNutritionTotals
 import com.yakov103.mivu.diary.dayStatus
 import com.yakov103.mivu.diary.diaryDateLabel
@@ -42,7 +43,7 @@ import kotlinx.serialization.json.JsonElement
 
 // Ports of the Coach read handlers (ios/Mivu/Coach/CoachEngine.swift:136-165) and what they call: DiaryStore coachGoals,
 // coachPreferences, coachWorkout (DiaryStore.swift:505-549), coachMeals/coachFindMeals/coachCandidate
-// (DiaryDatabaseCoachContext.swift:70-125), progressRange (DiaryDatabaseProgressQueries.swift:35, Coach spans only) and
+// (DiaryDatabaseCoachContext.swift:70-125), progressRange (DiaryDatabaseProgressQueries.swift:35) and
 // ProgressAnalytics daily/period/weight/window (ProgressAnalytics.swift). Every read is bounded.
 
 /** The tool output for a read [command] of [turnID], shaped like iOS. */
@@ -79,6 +80,9 @@ const val COACH_LOOKUP_UNAVAILABLE = "{\"available\":false,\"reason\":\"Nutritio
     val startLocalDate: String, val endLocalDate: String, val daily: CoachDailyProgress, val period: PeriodProgress? = null,
     val weight: WeightProgress, val weights: List<CoachWeightReference>, val workouts: List<WorkoutReference>,
     val omittedWeightCount: Int, val omittedWorkoutCount: Int, val truncated: Boolean,
+    // Progress screen only (includeDailyReports); null, so omitted, in the Coach JSON.
+    val dailyReports: List<CoachDailyProgress>? = null, val displayWeights: List<CoachWeightReference>? = null,
+    val latestWeight: CoachWeightReference? = null, val workoutTotal: Int? = null, val savedFoodDates: List<String>? = null,
 )
 @Serializable private data class Goals(val exact: GoalRecord? = null, val effective: GoalRecord? = null, val diaryRevision: Int)
 @Serializable private data class Preferences(val profile: DiaryProfile, val diaryRevision: Int)
@@ -142,9 +146,14 @@ private fun DiaryDatabase.Tx.coachCandidate(id: UUID): CoachMealCandidate {
         itemCount - items.size, coachBoundedText(description, 512), description.toByteArray().size > 512)
 }
 
-/** iOS `progressRange` for the Coach spans (1, 7 or 30 days): reports over a 37-day horizon for the weight trend. */
-internal fun DiaryDatabase.Tx.coachProgress(endingOn: String, days: Int): CoachProgress {
-    if (!validLocalDate(endingOn) || days !in setOf(1, 7, 30)) throw CoachError.InvalidArguments
+/**
+ * iOS `progressRange`: reports over a horizon of at least 37 days for the weight trend. The Coach asks for 1, 7 or 30
+ * days; only the Progress screen ([includeDailyReports]) adds a quarter or a year and the display fields.
+ */
+internal fun DiaryDatabase.Tx.coachProgress(endingOn: String, days: Int, includeDailyReports: Boolean = false): CoachProgress {
+    if (!validLocalDate(endingOn) || days !in (if (includeDailyReports) setOf(1, 7, 30, 91, 365) else setOf(1, 7, 30))) {
+        throw CoachError.InvalidArguments
+    }
     val zone = head.profile.timeZoneID
     val horizon = window(endingOn, maxOf(37, days), 0)
     val reports = mutableMapOf<String, CoachDailyProgress>()
@@ -193,11 +202,26 @@ internal fun DiaryDatabase.Tx.coachProgress(endingOn: String, days: Int): CoachP
     val labels = horizon.takeLast(days)
     val references = weights.map { it.second }.filter { it.localDate >= labels[0] }
     val complete = horizon.takeLast(28).mapNotNull { reports[it] }.count { it.status == DayStatus.Closed && it.foodTotals?.kcal != null }
-    return CoachProgress(labels[0], endingOn, reports.getValue(endingOn),
+    val progress = CoachProgress(labels[0], endingOn, reports.getValue(endingOn),
         if (days == 1) null else period(endingOn, days, labels.mapNotNull { reports[it] }),
         weightProgress(endingOn, latest, complete), references.takeLast(40), workouts.map { it.second },
         maxOf(0, references.size - 40), maxOf(0, workoutCount - 100), references.size > 40 || workoutCount > 100)
+    if (!includeDailyReports) return progress
+    return progress.copy(dailyReports = labels.mapNotNull { reports[it] },
+        displayWeights = labels.mapNotNull { label -> latest[label]?.let { CoachWeightReference(label, it) } },
+        latestWeight = newestWeight(zone), workoutTotal = count("SELECT COUNT(*) FROM workout", emptyList()),
+        savedFoodDates = labels.filter { it in savedFoodDates })
 }
+
+/** The newest weigh-in ever, dated by its day or, when it has none, by its measured date in [zone]. */
+private fun DiaryDatabase.Tx.newestWeight(zone: String): CoachWeightReference? =
+    query("SELECT w.payload, json_extract(CAST(d.payload AS TEXT), '$.localDate') FROM weight w LEFT JOIN day d ON d.id = w.parent " +
+        "ORDER BY json_extract(CAST(w.payload AS TEXT), '$.measuredAt') DESC, json_extract(CAST(w.payload AS TEXT), '$.revision') DESC, w.ordinal LIMIT 1",
+        emptyList()) { c ->
+        if (!c.moveToFirst()) return@query null
+        val weight = SwiftJson.decodeFromString(WeightEntry.serializer(), c.getBlob(0).decodeToString())
+        CoachWeightReference(c.getString(1) ?: diaryDateLabel(weight.measuredAt, zone), weight)
+    }
 
 private fun <T> DiaryDatabase.Tx.ordered(table: String, dayID: UUID, serializer: KSerializer<T>): List<Pair<Long, T>> =
     query("SELECT ordinal, payload FROM $table WHERE parent = ? ORDER BY ordinal LIMIT 10000", listOf(dayID.swift)) { c ->
@@ -213,18 +237,12 @@ private fun window(endingOn: String, days: Int, offset: Int): List<String> {
     return (days - 1 downTo 0).map { end.minusDays(it.toLong()).toString() }
 }
 
-private fun sum(values: List<Double?>): Double? = if (values.isEmpty() || values.any { it == null }) null else values.sumOf { it!! }
-private fun remaining(target: Double?, recorded: Double?) = if (target == null || recorded == null) null else target - recorded
-
 private fun DiaryDatabase.Tx.daily(
     date: String, days: List<TrackingDay>, subtotals: List<NutritionTotals>, hasFood: Boolean, goal: GoalRecord?, workouts: Int, burn: Double?,
 ): CoachDailyProgress {
-    val totals = if (subtotals.isEmpty()) null else NutritionTotals(sum(subtotals.map { it.kcal }), sum(subtotals.map { it.carbs }),
-        sum(subtotals.map { it.protein }), sum(subtotals.map { it.fat }), subtotals.sumOf { it.unknownItemCount })
-    val left = NutritionValues(remaining(goal?.targets?.kcal, totals?.kcal), remaining(goal?.targets?.carbs, totals?.carbs),
-        remaining(goal?.targets?.protein, totals?.protein), remaining(goal?.targets?.fat, totals?.fat))
-    val adjusted = if (goal?.exerciseCreditEnabled == true) left.kcal?.let { k -> burn?.let { k + it } } else null
-    return CoachDailyProgress(date, dayStatus(days, head.activeDayID, hasFood), totals, goal, left, workouts, burn, adjusted)
+    val sum = dailyProgress(subtotals, goal, burn)
+    return CoachDailyProgress(date, dayStatus(days, head.activeDayID, hasFood), sum.foodTotals, goal, sum.remainingFromRecorded, workouts, burn,
+        sum.exerciseAdjustedKcalRemaining)
 }
 
 private fun period(endingOn: String, days: Int, reports: List<CoachDailyProgress>): PeriodProgress {
