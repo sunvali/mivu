@@ -6,6 +6,13 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -61,13 +68,17 @@ class DiaryScreenTest {
     }
 
     /** The Diary alone, with a week that puts three past and three future days around today. */
-    private fun launchDiary(): DiaryFixture.Seeded {
+    private fun launchDiary(width: Dp? = null): DiaryFixture.Seeded {
         val seeded = DiaryFixture.seed(context)
         val repository = DiaryRepository(context).also { repository = it; profileID = seeded.profileID }
         val firstDay: DayOfWeek = seeded.today.dayOfWeek.minus(3)
         val model = DiaryViewModel(repository, seeded.profileID, sampleMode = false, firstDay = firstDay)
         compose.setContent {
-            MivuTheme { DiaryScreen(model, onOpenMeal = { openedMeal = it }, onAskPip = {}, onEnterNutrition = {}, onProfile = {}) }
+            MivuTheme {
+                Box(if (width != null) Modifier.width(width) else Modifier) {
+                    DiaryScreen(model, onOpenMeal = { openedMeal = it }, onAskPip = {}, onEnterNutrition = {}, onProfile = {})
+                }
+            }
         }
         waitFor(pillMatcher(seeded.today))
         return seeded
@@ -96,9 +107,21 @@ class DiaryScreenTest {
         compose.onNodeWithContentDescription("Switch to text input mode").performClick()
         val field = compose.onNode(hasSetTextAction() and hasAnyAncestor(isDialog()))
         field.performTextClearance()
-        field.performTextInput(date.format(DateTimeFormatter.ofPattern("MMddyyyy")))
+        field.performTextInput(date.format(DateTimeFormatter.ofPattern(inputDigits())))
         compose.onNodeWithTag("applyDiaryDate").performClick()
         waitForText(title(date))
+    }
+
+    /** The digits M3's date input expects: the locale's short date pattern as dd, MM and yyyy, delimiters dropped. */
+    private fun inputDigits(): String {
+        val pattern = (java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT, Locale.getDefault()) as java.text.SimpleDateFormat).toPattern()
+        return pattern.filter { it in "dMy" }.replace(Regex("d+"), "dd").replace(Regex("M+"), "MM").replace(Regex("y+"), "yyyy")
+    }
+
+    @Test fun everyPillHasFullTouchTargetOnNarrowPhone() {
+        val seeded = launchDiary(width = 360.dp)
+        // The pill node is the whole slot, so its bounds are its touch target.
+        (-3L..3L).forEach { pill(seeded.today.plusDays(it)).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp) }
     }
 
     @Test fun selectingPillShowsDay() {

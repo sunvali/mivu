@@ -1,6 +1,11 @@
 package com.yakov103.mivu.ui.diary
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ripple
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +19,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,10 +84,13 @@ internal fun WeekStrip(
         val page = weeks.indexOf(selectedWeek)
         if (page >= 0 && page != pager.currentPage) pager.animateScrollToPage(page)
     }
-    // A swipe settled on another week: move the selection by whole weeks.
+    // A swipe settled on another week: move the selection by whole weeks. When the week list itself changes, the
+    // settled index may still point into the old list until the pager re-keys it, so that emission is skipped.
     LaunchedEffect(pager) {
-        snapshotFlow { pager.settledPage }.collect { page ->
-            val (weeks, selected, today) = current
+        var seen = current.first
+        snapshotFlow { current.first to pager.settledPage }.collect { (weeks, page) ->
+            if (weeks != seen) { seen = weeks; return@collect }
+            val (_, selected, today) = current
             val from = weekDates(selected, firstDay).first()
             val to = weeks.getOrNull(page) ?: return@collect
             if (to != from) onSelect(shiftedSelection(selected, from, to, today))
@@ -91,7 +98,8 @@ internal fun WeekStrip(
     }
 
     HorizontalPager(pager, Modifier.fillMaxWidth().testTag("diaryWeekStrip"), key = { weeks[it] }, verticalAlignment = Alignment.Top) { page ->
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                // No gap between slots: each seventh is the touch target (48 dp at 360 dp wide); the capsule is inset inside it.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
             weekDates(weeks[page], firstDay).forEach { date ->
                 // Only the loaded week's summaries count: another week's dates show no dot until it loads.
                 val summary = week?.takeIf { weeks[page] == selectedWeek }?.get(date)
@@ -101,6 +109,7 @@ internal fun WeekStrip(
     }
 }
 
+private val Capsule = RoundedCornerShape(percent = 50)
 private val Letter = DateTimeFormatter.ofPattern("EEEEE", Locale.US)
 
 @Composable
@@ -117,21 +126,25 @@ private fun DayPill(
     val status = summary?.status(activeDayID)
     val label = pillLabel(date, summary, activeDayID)
     val content = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    Surface(
-        onClick = onClick,
-        enabled = !isFuture,
-        modifier = modifier.alpha(if (isFuture) 0.35f else 1f).testTag("diaryDayPill").clearAndSetSemantics {
-            contentDescription = label
-            stateDescription = date.toString()
-            selected = isSelected
-            role = Role.Tab
-            if (isFuture) disabled() else onClick { onClick(); true }
-        },
-        shape = RoundedCornerShape(percent = 50),
-        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier.alpha(if (isFuture) 0.35f else 1f)
+            .clickable(interaction, indication = null, enabled = !isFuture, onClick = onClick)
+            .testTag("diaryDayPill")
+            .clearAndSetSemantics {
+                contentDescription = label
+                stateDescription = date.toString()
+                selected = isSelected
+                role = Role.Tab
+                if (isFuture) disabled() else onClick { onClick(); true }
+            }
+            .padding(horizontal = 2.dp),
     ) {
         Column(
-            Modifier.heightIn(min = 64.dp).padding(vertical = 10.dp),
+            Modifier.fillMaxWidth().clip(Capsule)
+                .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                .indication(interaction, ripple())
+                .heightIn(min = 64.dp).padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
         ) {

@@ -68,7 +68,7 @@ private fun Double.fixed(digits: Int): String =
 @Composable
 internal fun DaySummaryCard(title: String, detail: DayDetail, totals: NutritionTotals, activeDayID: UUID?, onSetSkipped: (Boolean) -> Unit,
                             modifier: Modifier = Modifier) {
-    val status = dayStatus(listOf(detail.day), activeDayID, detail.meals.any { it.revision > 0 }) ?: DayStatus.Open
+    val status = dayStatus(listOf(detail.day), activeDayID, detail.meals.any { it.revision > 0 })!!
     Surface(modifier.fillMaxWidth().testTag("diaryDaySummary"), shape = RoundedCornerShape(28.dp), color = MivuTheme.colors.summarySurface) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // Side by side when they fit, as iOS ViewThatFits; stacked otherwise.

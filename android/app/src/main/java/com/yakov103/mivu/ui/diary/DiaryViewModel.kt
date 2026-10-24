@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
@@ -110,7 +111,7 @@ class DiaryViewModel(
 
     init {
         viewModelScope.launch {
-            combine(selection, merge(repository.changes, retries).onStart { emit(Unit) }) { date, _ -> date }.collect { date ->
+            combine(selection, merge(repository.changes, retries).onStart { emit(Unit) }) { date, _ -> date }.collectLatest { date ->
                 // Show the new selection at once; an older week's summaries must not read as this week's.
                 if (date != null) _state.update { current ->
                     current?.copy(
@@ -122,8 +123,11 @@ class DiaryViewModel(
                 val loaded = try {
                     withContext(Dispatchers.IO) { load(date) }
                 } catch (e: Exception) {
-                    _state.value?.copy(error = "Could not load this week. ${failureMessage(e)}")
-                        ?: DiaryUiState(date ?: LocalDate.now(), LocalDate.now(), null, null, null, null, failureMessage(e))
+                    _state.value?.copy(error = "Could not load this week. ${failureMessage(e)}") ?: run {
+                        val zone = runCatching { ZoneId.of(repository.database(profileID).head().profile.timeZoneID) }.getOrDefault(ZoneId.systemDefault())
+                        val today = calendarToday(zone)
+                        DiaryUiState(date ?: today, today, null, null, null, null, failureMessage(e))
+                    }
                 }
                 if (selection.value == date) _state.value = loaded
             }
