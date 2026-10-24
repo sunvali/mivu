@@ -108,6 +108,22 @@ data class FoodEdit(
         else -> copy(fat = text)
     }.copy(explicitNutrients = explicitNutrients + key)
 
+    /**
+     * This draft moved onto [latest] at [revision] after the meal changed: fields the person changed keep their text and
+     * typed nutrients stay explicit; the rest follow the reloaded food, as the store requires for unchanged nutrients.
+     */
+    fun rebased(latest: FoodItem, revision: Int): FoodEdit {
+        val was = start(item, this.revision, submissionID)
+        val now = start(latest, revision, submissionID)
+        fun field(mine: String, before: String, after: String) = if (mine != before) mine else after
+        fun nutrient(key: String, mine: String, after: String) = if (key in explicitNutrients) mine else after
+        return now.copy(
+            name = field(name, was.name, now.name), quantity = field(quantity, was.quantity, now.quantity), unit = field(unit, was.unit, now.unit),
+            kcal = nutrient("kcal", kcal, now.kcal), carbs = nutrient("carbs", carbs, now.carbs),
+            protein = nutrient("protein", protein, now.protein), fat = nutrient("fat", fat, now.fat), explicitNutrients = explicitNutrients,
+        )
+    }
+
     companion object {
         fun start(item: FoodItem, revision: Int, submissionID: UUID?) = FoodEdit(
             SwiftJson.encodeToString(FoodItem.serializer(), item), revision, submissionID, item.name, item.quantity.plain(), item.unit,
@@ -147,7 +163,7 @@ internal fun FoodItemEditor(
     Dialog(onClose, DialogProperties(dismissOnBackPress = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         CaptureDialog(
             title = "Edit food", closeTag = "cancelEditItem", saveTag = "saveItem",
-            canSave = edit.edited() != null, saving = saving, dirty = edit.dirty,
+            canSave = edit.preview() != null, saving = saving, dirty = edit.dirty,
             discardMessage = "The saved ingredient will keep its original values.",
             onClose = onClose, onSave = { edit.edited()?.let(onSave) }, snackbar = snackbar,
         ) {
@@ -188,7 +204,7 @@ internal fun FoodItemEditor(
                 }
             }
             Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                FilledTonalButton(onAskPip, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("askPipAboutFood")) {
+                FilledTonalButton(onAskPip, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("askPipAboutFood"), enabled = enabled) {
                     Icon(painterResource(R.drawable.ic_auto_awesome), contentDescription = null, Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
                     Text("Ask Pip to fix this")
@@ -293,17 +309,17 @@ internal fun KcalFigure(kcal: Double?, tag: String, missing: String? = null) {
 }
 
 @Composable
-private fun MoreDetailsToggle(expanded: Boolean, onToggle: () -> Unit) {
+internal fun MoreDetailsToggle(expanded: Boolean, title: String = "More details", tag: String = "foodMoreDetails", onToggle: () -> Unit) {
     val angle by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
     Surface(
         onToggle,
-        Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp).testTag("foodMoreDetails")
+        Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp).testTag(tag)
             .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed"; role = Role.Button },
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface,
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("More details", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             Icon(painterResource(R.drawable.ic_arrow_drop_down), contentDescription = null, Modifier.rotate(angle))
         }
     }

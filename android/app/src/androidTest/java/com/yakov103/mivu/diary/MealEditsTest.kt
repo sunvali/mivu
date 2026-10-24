@@ -159,6 +159,22 @@ class MealEditsTest {
         throws<DiaryError.NotFound> { db.deletePhoto(UUID.randomUUID(), kept.id) }
     }
 
+    @Test fun deletePhotoKeepsOwnTurnCopyAndSavedSubmission() {
+        val photo = MealPhoto(UUID.randomUUID(), byteArrayOf(1, 2, 3), at, PhotoRole.unspecified)
+        val savedSub = MealSubmission(UUID.randomUUID(), 1, "synthetic", listOf(photo.id), false, SubmissionState.saved)
+        val meal = seed(listOf(item("synthetic rice", 100.0, "g", 200.0)), photos = listOf(photo), extra = listOf(savedSub))
+        // A turn holding its own copy of the photo still reaches it, so it keeps the ID.
+        val turn = CoachTurn(UUID.randomUUID(), at, "synthetic", listOf(photo), CoachTurnState.analyzing, receipts = emptyList(),
+            captureTimeZoneID = "UTC", photoIDs = listOf(photo.id), pendingMealID = meal.id, pendingMealRevision = 1)
+        db.transaction(db.head().revision) { it.putCoachTurn(turn) }
+
+        db.deletePhoto(meal.id, photo.id)
+        val sub = meal(meal.id)!!.submissions.single()
+        assertEquals(SubmissionState.saved, sub.state)
+        assertTrue(sub.photoIDs.isEmpty())
+        assertEquals(listOf(photo.id), db.read { it.coachTurn(turn.id) }!!.photoIDs)
+    }
+
     @Test fun moveMealToAnotherDayUpdatesBothTotals() {
         val meal = seed(listOf(item("synthetic rice", 100.0, "g", 200.0)))
         throws<DiaryError.StaleRevision> { db.moveMeal(meal.id, nextDay.id, expectedDayID = nextDay.id) }

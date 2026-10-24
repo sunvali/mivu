@@ -3,7 +3,9 @@ package com.yakov103.mivu.ui.meal
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasContentDescription
@@ -31,6 +33,7 @@ import com.yakov103.mivu.diary.NutritionValues
 import com.yakov103.mivu.diary.SubmissionState
 import com.yakov103.mivu.diary.TrackingDay
 import com.yakov103.mivu.diary.diaryWeek
+import com.yakov103.mivu.diary.deleteItem
 import com.yakov103.mivu.diary.scaleMeal
 import com.yakov103.mivu.diary.startDay
 import com.yakov103.mivu.ui.MivuApp
@@ -109,7 +112,7 @@ class MealEditorsTest {
         assertEquals(380.0, saved.nutrition.kcal!!, 0.001)
     }
 
-    @Test fun staleEditShowsMessageAndReloads() {
+    @Test fun staleEditKeepsTypedAmountOnTheReloadedFood() {
         val meal = savedMeal(food("Greek yogurt", 190.0, 200.0))
         open(meal.id)
         waitFor(hasTestTag("editItem"))
@@ -119,18 +122,55 @@ class MealEditorsTest {
         // Another writer halves the meal after the editor opened.
         db().scaleMeal(meal.id, 95.0, 1)
         compose.onNodeWithTag("saveItem").performClick()
-        waitFor(hasText("Could not complete action", substring = true))
+        waitFor(hasText("This meal changed", substring = true))
         assertEquals(100.0, meal(meal.id).items.single().quantity, 0.0)
-        compose.onNodeWithTag("cancelEditItem").performClick()
-        compose.onNodeWithText("Discard changes").performClick()
+        // The draft now sits on the reloaded food: the typed 400 g scales its 95 kcal per 100 g, and saving works.
+        compose.onNodeWithTag("itemQuantity").assertTextContains("400")
+        waitFor(hasTestTag("foodPreviewCalories") and hasContentDescription("380 kcal"))
+        compose.onNodeWithTag("saveItem").performClick()
         waitGone(hasTestTag("itemQuantity"))
-        waitFor(hasText("95 kcal"))
+        assertEquals(400.0, meal(meal.id).items.single().quantity, 0.0)
+        assertEquals(380.0, meal(meal.id).items.single().nutrition.kcal!!, 0.001)
+    }
+
+    @Test fun editingARemovedFoodClosesTheEditor() {
+        val meal = savedMeal(food("Greek yogurt", 190.0, 200.0), food("Blueberries", 46.0, 80.0))
+        open(meal.id)
+        waitFor(hasTestTag("editItem"))
+        compose.onAllNodesWithTag("editItem").onFirst().performScrollTo().performClick()
+        waitFor(hasTestTag("itemQuantity"))
+        compose.onNodeWithTag("itemQuantity").performTextReplacement("400")
+        db().deleteItem(meal.id, meal.items.first().id, 1)
+        compose.onNodeWithTag("saveItem").performClick()
+        waitGone(hasTestTag("itemQuantity"))
+        waitFor(hasText("This food is no longer in this meal", substring = true))
+        assertEquals(listOf("Blueberries"), meal(meal.id).items.map { it.name })
+    }
+
+    @Test fun failedScaleKeepsTheTypedTarget() {
+        val meal = savedMeal(food("Greek yogurt", 300.0, 200.0), food("Blueberries", 100.0, 80.0))
+        open(meal.id)
+        waitFor(hasTestTag("adjustMealTotal"))
+        compose.onNodeWithTag("adjustMealTotal").performClick()
+        waitFor(hasTestTag("mealTargetKcal"))
+        compose.onNodeWithTag("mealTargetKcal").performTextReplacement("200")
+        db().scaleMeal(meal.id, 300.0, 1) // another writer changes the meal under the open sheet
+        compose.onNodeWithTag("saveMealTotal").performClick()
+        waitFor(hasText("This meal changed", substring = true))
+        compose.onNodeWithTag("mealTargetKcal").assertTextContains("200")
+        // The sheet moved to the reloaded meal, so saving again reaches the typed total.
+        compose.onNodeWithTag("saveMealTotal").performClick()
+        waitGone(hasTestTag("mealTargetKcal"))
+        assertEquals(200.0, meal(meal.id).items.sumOf { it.nutrition.kcal!! }, 0.5)
     }
 
     @Test fun scaleToTargetUpdatesFoods() {
         val meal = savedMeal(food("Greek yogurt", 300.0, 200.0), food("Blueberries", 100.0, 80.0))
         open(meal.id)
         waitFor(hasTestTag("adjustMealTotal"))
+        compose.onNodeWithTag("adjustMealTotal").assert(SemanticsMatcher("hint") {
+            it.config[SemanticsActions.OnClick].label == "Resizes every food in this meal to reach a calorie total"
+        })
         compose.onNodeWithTag("adjustMealTotal").performClick()
         waitFor(hasTestTag("mealTargetKcal"))
         compose.onNode(hasText("Adjust total") and isHeading()).assertIsDisplayed()

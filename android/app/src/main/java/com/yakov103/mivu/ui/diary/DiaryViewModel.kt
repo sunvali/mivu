@@ -103,6 +103,7 @@ class DiaryViewModel(
     private val retries = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val _state = MutableStateFlow<DiaryUiState?>(null)
     private val _messages = Channel<String>(Channel.BUFFERED)
+    private var skipping = false // a second tap while a skip writes would race the first
 
     /** Null until the first read; a first read that fails is a state with only [DiaryUiState.error]. */
     val state: StateFlow<DiaryUiState?> = _state
@@ -145,13 +146,21 @@ class DiaryViewModel(
 
     /** iOS DayStatusChip: skipping stores `untracked`; counting again stores `unknown`, read as open or closed. */
     fun setSkipped(dayID: UUID, skip: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val db = repository.database(profileID)
-            val write = { db.setCompleteness(dayID, if (skip) DayCompleteness.untracked else DayCompleteness.unknown, db.head().revision) }
+        if (skipping) return
+        skipping = true
+        viewModelScope.launch {
             try {
-                try { write() } catch (_: DiaryError.StaleRevision) { write() }
+                withContext(Dispatchers.IO) {
+                    val db = repository.database(profileID)
+                    val write = { db.setCompleteness(dayID, if (skip) DayCompleteness.untracked else DayCompleteness.unknown, db.head().revision) }
+                    try { write() } catch (_: DiaryError.StaleRevision) { write() }
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _messages.send("Could not complete action. ${failureMessage(e)}")
+            } finally {
+                skipping = false
             }
         }
     }
@@ -160,21 +169,21 @@ class DiaryViewModel(
     suspend fun photoBytes(mealID: UUID, photoID: UUID): ByteArray? =
         withContext(Dispatchers.IO) { runCatching { repository.database(profileID).photoBytes(mealID, photoID) }.getOrNull() }
 
-    private fun load(requested: LocalDate?): DiaryUiState {
-        val db = repository.database(profileID)
-        val (head, activeDate, latest) = db.read { tx ->
-            Triple(tx.head, tx.head.activeDayID?.let(tx::day)?.localDate, tx.days().maxOfOrNull { it.localDate })
-        }
+    // One read, so the head, week, earliest date and detail all come from the same diary revision.
+    private fun load(requested: LocalDate?): DiaryUiState = repository.database(profileID).read { tx ->
+        val head = tx.head
+        val latest = tx.days().maxOfOrNull { it.localDate }
         val today = maxOf(calendarToday(ZoneId.of(head.profile.timeZoneID)), latest?.let(LocalDate::parse) ?: LocalDate.MIN)
+        val activeDate = head.activeDayID?.let(tx::day)?.localDate
         val selected = minOf(requested ?: activeDate?.let(LocalDate::parse) ?: today, today)
         val dates = weekDates(selected, firstDay)
-        val week = db.diaryWeek(dates.first().toString(), dates.last().toString()).associateBy { LocalDate.parse(it.localDate) }
-        return DiaryUiState(
+        val week = tx.diaryWeek(dates.first().toString(), dates.last().toString()).associateBy { LocalDate.parse(it.localDate) }
+        DiaryUiState(
             selected = selected,
             today = today,
-            earliest = db.earliestRecordDate()?.let(LocalDate::parse),
+            earliest = tx.earliestRecordDate()?.let(LocalDate::parse),
             week = week,
-            detail = week[selected]?.day?.let { db.dayDetail(it.id) },
+            detail = week[selected]?.day?.let { tx.dayDetail(it.id) },
             activeDayID = head.activeDayID,
             error = null,
         )

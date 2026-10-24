@@ -15,6 +15,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -37,10 +39,10 @@ import com.yakov103.mivu.ui.manual.ManualNutritionDraft
 import com.yakov103.mivu.ui.manual.SectionTitle
 import com.yakov103.mivu.ui.today.tabular
 
-/** iOS `ScaleMealSheet`: resizes every food by one ratio (10% to 300%) so the meal reaches a calorie total. */
+/** iOS `ScaleMealSheet`: resizes every food by one ratio (10% to 300%) so the meal reaches a calorie total. Failures show in [snackbar]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ScaleMealSheet(currentKcal: Double, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+internal fun ScaleMealSheet(currentKcal: Double, saving: Boolean, snackbar: SnackbarHostState, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
     var target by rememberSaveable { mutableStateOf(currentKcal.fixed(0).filter { it.isDigit() }) }
     val value = ManualNutritionDraft.number(target)?.takeIf { it.isFinite() && it / currentKcal in 0.1..3.0 }
     ModalBottomSheet(onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -60,8 +62,9 @@ internal fun ScaleMealSheet(currentKcal: Double, onDismiss: () -> Unit, onSave: 
             if (value != null) Text("${(value / currentKcal).fixed(2)}× of the current portions", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             SheetActions(onDismiss) {
-                Button({ value?.let(onSave) }, Modifier.heightIn(min = 48.dp).testTag("saveMealTotal"), enabled = value != null) { Text("Save") }
+                Button({ value?.let(onSave) }, Modifier.heightIn(min = 48.dp).testTag("saveMealTotal"), enabled = value != null && !saving) { Text("Save") }
             }
+            SnackbarHost(snackbar)
         }
     }
 }

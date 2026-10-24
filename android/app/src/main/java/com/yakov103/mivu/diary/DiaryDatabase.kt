@@ -283,12 +283,15 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
 
     fun snapshot(): DiarySnapshot = immediate { readSnapshot(head()) }
 
-    /** Throws StaleRevision unless the head is still at [expectedRevision]; a body that writes nothing commits nothing. */
-    fun <T> transaction(expectedRevision: Long, body: (Tx) -> T): T {
+    /**
+     * Throws StaleRevision unless the head is still at [expectedRevision] (null: whatever head the lock sees); a body that
+     * writes nothing commits nothing.
+     */
+    fun <T> transaction(expectedRevision: Long?, body: (Tx) -> T): T {
         var committed = false
         return immediate {
             val original = head()
-            if (original.revision != expectedRevision) throw DiaryError.StaleRevision
+            if (expectedRevision != null && original.revision != expectedRevision) throw DiaryError.StaleRevision
             val tx = Tx(original)
             val value = body(tx)
             if (tx.changed) {

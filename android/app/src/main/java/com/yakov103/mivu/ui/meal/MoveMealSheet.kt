@@ -13,6 +13,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,10 +40,13 @@ import java.util.UUID
 /** One page of waking days to move a meal to, newest first, and whether earlier ones exist. */
 data class DestinationPage(val days: List<TrackingDay>, val hasEarlier: Boolean)
 
-/** iOS `MoveMealSheet`: pick another waking day; nothing changes until Move. */
+/** iOS `MoveMealSheet`: pick another waking day; nothing changes until Move. Failures show in [snackbar] inside the sheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MoveMealSheet(currentDayID: UUID, load: suspend (Int) -> DestinationPage?, onDismiss: () -> Unit, onMove: (UUID) -> Unit) {
+internal fun MoveMealSheet(
+    currentDayID: UUID, saving: Boolean, snackbar: SnackbarHostState, load: suspend (Int) -> DestinationPage?, onDismiss: () -> Unit,
+    onMove: (UUID) -> Unit,
+) {
     var limit by rememberSaveable { mutableIntStateOf(30) }
     var destination by rememberSaveable { mutableStateOf(currentDayID.toString()) }
     var page by remember { mutableStateOf<DestinationPage?>(null) }
@@ -73,8 +78,9 @@ internal fun MoveMealSheet(currentDayID: UUID, load: suspend (Int) -> Destinatio
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             SheetActions(onDismiss) {
                 Button({ onMove(UUID.fromString(destination)) }, Modifier.heightIn(min = 48.dp).testTag("confirmMoveMeal"),
-                    enabled = destination != currentDayID.toString()) { Text("Move") }
+                    enabled = destination != currentDayID.toString() && !saving) { Text("Move") }
             }
+            SnackbarHost(snackbar)
         }
     }
 }

@@ -38,30 +38,34 @@ fun dayStatus(days: List<TrackingDay>, activeDayID: UUID?, hasSavedFood: Boolean
 }
 
 /** Every date from [from] through [through] (at most seven), as iOS rejects longer spans. */
-fun DiaryDatabase.diaryWeek(from: String, through: String): List<DiaryDaySummary> {
+fun DiaryDatabase.diaryWeek(from: String, through: String): List<DiaryDaySummary> = read { it.diaryWeek(from, through) }
+
+fun DiaryDatabase.Tx.diaryWeek(from: String, through: String): List<DiaryDaySummary> {
     val dates = try {
         val span = ChronoUnit.DAYS.between(LocalDate.parse(from), LocalDate.parse(through))
         if (span !in 0..6) throw DiaryError.InvalidData("week")
         (0..span).map { LocalDate.parse(from).plusDays(it).toString() }
     } catch (_: java.time.DateTimeException) { throw DiaryError.InvalidData("week") }
-    return read { tx ->
-        val all = tx.days()
-        dates.map { date ->
-            val days = all.filter { it.localDate == date }
-            val meals = days.flatMap { tx.dayMeals(it.id) }
-            val totals = dailyProgress(days, meals, emptyList(), emptyList(), date).foodTotals ?: nutritionTotals(emptyList())
-            DiaryDaySummary(days.firstOrNull(), date, meals.size, meals.count { it.revision > 0 },
-                meals.count { it.hasUnresolvedInput }, totals)
-        }
+    val all = days()
+    return dates.map { date ->
+        val days = all.filter { it.localDate == date }
+        val meals = days.flatMap { dayMeals(it.id) }
+        val totals = dailyProgress(days, meals, emptyList(), emptyList(), date).foodTotals ?: nutritionTotals(emptyList())
+        DiaryDaySummary(days.firstOrNull(), date, meals.size, meals.count { it.revision > 0 },
+            meals.count { it.hasUnresolvedInput }, totals)
     }
 }
 
-fun DiaryDatabase.dayDetail(dayID: UUID): DayDetail = read { tx ->
-    val day = tx.trackingDay(dayID)
-    DayDetail(day, tx.dayMeals(dayID).sortedBy { it.eatenAt }, tx.dayWorkouts(dayID), tx.dayWeight(dayID), goalOn(day.localDate, tx.goals()))
+fun DiaryDatabase.dayDetail(dayID: UUID): DayDetail = read { it.dayDetail(dayID) }
+
+fun DiaryDatabase.Tx.dayDetail(dayID: UUID): DayDetail {
+    val day = trackingDay(dayID)
+    return DayDetail(day, dayMeals(dayID).sortedBy { it.eatenAt }, dayWorkouts(dayID), dayWeight(dayID), goalOn(day.localDate, goals()))
 }
 
-fun DiaryDatabase.earliestRecordDate(): String? = read { tx -> tx.days().minOfOrNull { it.localDate } }
+fun DiaryDatabase.earliestRecordDate(): String? = read { it.earliestRecordDate() }
+
+fun DiaryDatabase.Tx.earliestRecordDate(): String? = days().minOfOrNull { it.localDate }
 
 fun DiaryDatabase.setCompleteness(dayID: UUID, completeness: DayCompleteness, expectedRevision: Long) {
     transaction(expectedRevision) { tx -> tx.putDay(tx.trackingDay(dayID).copy(completeness = completeness)) }

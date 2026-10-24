@@ -11,10 +11,12 @@ import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.FoodItem
+import com.yakov103.mivu.diary.SubmissionState
 import com.yakov103.mivu.diary.TrackingDay
+import com.yakov103.mivu.diary.atHead
+import com.yakov103.mivu.diary.mealRecord
 import com.yakov103.mivu.diary.acceptReview
 import com.yakov103.mivu.diary.deleteItem
-import com.yakov103.mivu.diary.deleteMeal
 import com.yakov103.mivu.diary.deletePhoto
 import com.yakov103.mivu.diary.editItem
 import com.yakov103.mivu.diary.moveMeal
@@ -104,11 +106,10 @@ class MealDetailViewModel(
     fun deletePhoto(photoID: UUID, onDone: () -> Unit = {}) = change(onDone) { it.deletePhoto(mealID, photoID) }
 
     fun deleteMeal(revision: Int) = change({ _deleted.value = true }) { db ->
-        // The store checks the diary head; any commit after this read makes it refuse, so the revision seen still holds.
-        val head = db.head().revision
-        val meal = db.read { it.mealWithoutPhotoBytes(mealID) } ?: throw DiaryError.NotFound
-        if (meal.revision != revision) throw DiaryError.StaleRevision
-        db.deleteMeal(mealID, head)
+        db.atHead { tx ->
+            if (tx.mealRecord(mealID).revision != revision) throw DiaryError.StaleRevision
+            tx.delete(DiaryDatabase.Tombstone.meal, mealID)
+        }
     }
 
     fun edit(item: FoodItem, revision: Int, reviewSubmissionID: UUID?) = updateEdit(FoodEdit.start(item, revision, reviewSubmissionID))
@@ -118,16 +119,38 @@ class MealDetailViewModel(
         saved[EDIT] = edit
     }
 
-    /** Saves the editor's food at the revision it opened with; a stale meal keeps the editor open and is reloaded. */
+    /**
+     * Saves the editor's food at the revision it opened with. When the meal changed meanwhile the draft moves onto the
+     * reloaded food, keeping what the person typed; when the food or meal is gone the editor closes.
+     */
     fun saveEdit(item: FoodItem) {
         val edit = editing ?: return
-        change({ updateEdit(null) }) { it.editItem(mealID, item, edit.explicitNutrients, edit.submissionID, edit.revision) }
+        change({ updateEdit(null) }, onStale = { meal ->
+            val latest = meal?.let { m ->
+                val items = if (edit.submissionID == null) m.items else m.submissions.firstOrNull {
+                    it.id == edit.submissionID && it.state == SubmissionState.awaitingReview && it.baseRevision == m.revision
+                }?.proposal?.items
+                items?.firstOrNull { it.id == edit.item.id }
+            }
+            if (meal == null || latest == null) {
+                updateEdit(null)
+                "Could not complete action. This food is no longer in this meal."
+            } else {
+                updateEdit(edit.rebased(latest, meal.revision))
+                null
+            }
+        }) { it.editItem(mealID, item, edit.explicitNutrients, edit.submissionID, edit.revision) }
     }
 
-    fun scaleMeal(targetKcal: Double, revision: Int) = change { it.scaleMeal(mealID, targetKcal, revision) }
+    /** [onStale] gets the reloaded meal revision so the open sheet can try again; [onDone] runs once it is saved. */
+    fun scaleMeal(targetKcal: Double, revision: Int, onStale: (Int) -> Unit = {}, onDone: () -> Unit = {}) =
+        change(onDone, onStale = { meal -> meal?.let { onStale(it.revision) }; null }) { it.scaleMeal(mealID, targetKcal, revision) }
 
-    fun moveMeal(toDayID: UUID, revision: Int, fromDayID: UUID) =
-        change({ saved[MOVED] = toDayID }) { it.moveMeal(mealID, toDayID, expectedRevision = revision, expectedDayID = fromDayID) }
+    /** As [scaleMeal]; [onStale] gets the reloaded revision and day. */
+    fun moveMeal(toDayID: UUID, revision: Int, fromDayID: UUID, onStale: (Int, UUID) -> Unit = { _, _ -> }, onDone: () -> Unit = {}) =
+        change({ saved[MOVED] = toDayID; onDone() }, onStale = { meal -> meal?.let { onStale(it.revision, it.dayID) }; null }) {
+            it.moveMeal(mealID, toDayID, expectedRevision = revision, expectedDayID = fromDayID)
+        }
 
     /** The newest [limit] waking days, plus [currentDayID] when it is older; null when the read failed. */
     suspend fun destinations(limit: Int, currentDayID: UUID): DestinationPage? = try {
@@ -150,7 +173,11 @@ class MealDetailViewModel(
     suspend fun photoBytes(photoID: UUID): ByteArray? =
         withContext(Dispatchers.IO) { runCatching { repository.database(profileID).photoBytes(mealID, photoID) }.getOrNull() }
 
-    private fun change(onDone: () -> Unit = {}, write: (DiaryDatabase) -> Unit) {
+    /**
+     * Runs one write; a second while it runs is refused, so the screen disables its actions on [busy]. On a stale or
+     * missing meal, [onStale] gets the reloaded meal (null when gone) and may return its own message.
+     */
+    private fun change(onDone: () -> Unit = {}, onStale: ((DiaryMeal?) -> String?)? = null, write: (DiaryDatabase) -> Unit) {
         if (busy) return
         busy = true
         viewModelScope.launch {
@@ -160,7 +187,12 @@ class MealDetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _messages.send(if (e is DiaryError.StaleRevision) "Could not complete action. This meal changed; check it and try again."
+                val stale = e is DiaryError.StaleRevision || e is DiaryError.NotFound
+                // A failed reload keeps the screen as it is and shows the stale message.
+                val custom = if (stale && onStale != null) runCatching {
+                    withContext(Dispatchers.IO) { repository.database(profileID).read { it.mealWithoutPhotoBytes(mealID) } }
+                }.fold(onStale) { null } else null
+                _messages.send(custom ?: if (stale) "Could not complete action. This meal changed; check it and try again."
                     else "Could not complete action. ${failureMessage(e)}")
                 retry()
             } finally {

@@ -227,6 +227,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     // shortcut: Ask Pip opens Coach without a day draft until Coach arrives in milestone 4.
                     onAskPip = { selectTab(Route.Coach) },
                     onEnterNutrition = { navController.navigate(Route.ManualEntry(it.toString(), null)) },
+                    // shortcut: the profile button does nothing until the Profile and settings screen is ported; wire it then.
                     onProfile = {},
                 )
             }

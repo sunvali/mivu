@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -71,18 +72,24 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Decoded large photos by "id/px" (bytes are loaded by ID, never held in screen state); a stored photo never changes.
-private val photos = LruCache<String, ImageBitmap>(4)
+// Decoded photos by ID, up to an eighth of the heap (bytes are loaded by ID, never held in screen state); a stored photo
+// never changes under its ID.
+private val photos = object : LruCache<UUID, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
+    override fun sizeOf(key: UUID, value: ImageBitmap) = value.asAndroidBitmap().byteCount
+}
 
-/** Loads [photo] decoded to at least [px] on its short side; null while loading or when it cannot be shown. */
+/**
+ * Loads [photo] decoded once at screen size, shared by the hero, the attached cards and the viewer; null while loading or
+ * when it cannot be shown.
+ */
 @Composable
-internal fun rememberPhoto(photo: MealPhoto, px: Int, load: suspend (UUID) -> ByteArray?): Pair<ImageBitmap?, Boolean> {
-    val key = "${photo.id}/$px"
-    var failed by remember(key) { mutableStateOf(false) }
-    val bitmap by produceState(photos.get(key), key) {
+internal fun rememberPhoto(photo: MealPhoto, load: suspend (UUID) -> ByteArray?): Pair<ImageBitmap?, Boolean> {
+    val screen = LocalWindowInfo.current.containerSize
+    var failed by remember(photo.id) { mutableStateOf(false) }
+    val bitmap by produceState(photos.get(photo.id), photo.id) {
         if (value == null) {
             val bytes = load(photo.id)
-            value = bytes?.let { withContext(Dispatchers.Default) { decode(it, px) } }?.also { photos.put(key, it) }
+            value = bytes?.let { withContext(Dispatchers.Default) { decode(it, maxOf(screen.width, screen.height)) } }?.also { photos.put(photo.id, it) }
             failed = value == null
         }
     }
@@ -93,13 +100,12 @@ private const val MAX_ZOOM = 5f
 
 /** iOS MealPhotoViewer: full screen, pinch or double-tap zoom, zoom buttons, and delete with a confirmation. */
 @Composable
-internal fun MealPhotoViewer(photo: MealPhoto, load: suspend (UUID) -> ByteArray?, onDelete: () -> Unit, onClose: () -> Unit) {
+internal fun MealPhotoViewer(photo: MealPhoto, busy: Boolean, load: suspend (UUID) -> ByteArray?, onDelete: () -> Unit, onClose: () -> Unit) {
     var zoom by rememberSaveable(photo.id) { mutableFloatStateOf(1f) }
     var offset by remember(photo.id) { mutableStateOf(Offset.Zero) }
     var size by remember { mutableStateOf(IntSize.Zero) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
-    val screen = LocalWindowInfo.current.containerSize
-    val (image, failed) = rememberPhoto(photo, maxOf(screen.width, screen.height), load)
+    val (image, failed) = rememberPhoto(photo, load)
 
     fun clamp(next: Offset, scale: Float): Offset {
         val maxX = size.width * (scale - 1) / 2
@@ -112,7 +118,7 @@ internal fun MealPhotoViewer(photo: MealPhoto, load: suspend (UUID) -> ByteArray
     }
     val transform = rememberTransformableState { change, pan, _ ->
         zoomTo(zoom * change)
-        offset = clamp(offset + pan * zoom, zoom)
+        offset = clamp(offset + pan, zoom)
     }
     val percent = "${(zoom * 100).toInt()}%"
     val timing = when (photo.role) {
@@ -132,7 +138,7 @@ internal fun MealPhotoViewer(photo: MealPhoto, load: suspend (UUID) -> ByteArray
                         Icon(painterResource(R.drawable.ic_close), contentDescription = "Close")
                     }
                     Text("Meal photo", Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleLarge)
-                    IconButton({ confirmDelete = true }, Modifier.testTag("deleteViewedPhoto"), colors = buttonColors) {
+                    IconButton({ confirmDelete = true }, Modifier.testTag("deleteViewedPhoto"), enabled = !busy, colors = buttonColors) {
                         Icon(painterResource(R.drawable.ic_delete), contentDescription = "Delete photo")
                     }
                 }

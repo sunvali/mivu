@@ -10,8 +10,9 @@ import java.util.UUID
 private val ANALYZABLE = setOf(SubmissionState.captured, SubmissionState.waitingForConnection, SubmissionState.analyzing,
     SubmissionState.needsRetry)
 
-// iOS DiaryStore wraps each of these in a transaction at the current head (pagedMutation).
-internal fun <T> DiaryDatabase.atHead(body: (DiaryDatabase.Tx) -> T): T = transaction(head().revision, body)
+// iOS DiaryStore wraps each of these in a transaction at the current head (pagedMutation); the head is read under the
+// write lock, so an unrelated commit just before never makes it stale.
+internal fun <T> DiaryDatabase.atHead(body: (DiaryDatabase.Tx) -> T): T = transaction(null, body)
 
 internal fun DiaryDatabase.Tx.mealRecord(id: UUID) = meal(id) ?: throw DiaryError.NotFound
 
