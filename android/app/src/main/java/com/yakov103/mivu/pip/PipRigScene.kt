@@ -35,21 +35,33 @@ class PipRigScene(
     /** Each part's parsed path, shared by bounds and every renderer of this scene. */
     val pathOps: Map<String, List<PathOp>> = asset.parts.associate { it.id to parsePath(it.path) }
     private val bounds = bounds ?: { id -> pathBounds(pathOps.getValue(id)) }
+    /** Part id -> its index in `asset.parts`, which every per-frame array ([PipFrame]) uses. */
+    val index: Map<String, Int> = asset.parts.withIndex().associate { it.value.id to it.index }
+    private val n = asset.parts.size
     /** Light and dark fills as ARGB, parsed once here so drawing never parses or throws. */
-    private val fills = asset.parts.associate { it.id to (argb(it.fill) to argb(it.fillDark ?: it.fill)) }
+    private val fills = IntArray(n) { argb(asset.parts[it].fill) }
+    private val darkFills = IntArray(n) { argb(asset.parts[it].fillDark ?: asset.parts[it].fill) }
 
-    fun fill(partID: String, dark: Boolean): Int = fills.getValue(partID).let { if (dark) it.second else it.first }
+    fun fill(partID: String, dark: Boolean): Int = fill(index.getValue(partID), dark)
+    fun fill(part: Int, dark: Boolean): Int = if (dark) darkFills[part] else fills[part]
 
     private sealed interface Item { val z: Int }
-    private class Shape(val part: PipRigAsset.Part) : Item { override val z = part.z }
-    private class Node(val part: PipRigAsset.Part) : Item { override val z = part.z }
+    private class Shape(val part: Int, override val z: Int) : Item
+    private class Node(val part: Int, override val z: Int) : Item
     private class Mount(override val z: Int) : Item
 
     private val byID = asset.parts.associateBy { it.id }
-    /** Back-to-front items per node id; [ROOT] and [MOUNT] are the root and the head mount. */
-    private val order = HashMap<String, List<Item>>()
+    /** Back-to-front items per node: part indices, then [root] and [mount]. Arrays, so a frame walks them without iterators. */
+    private val order: Array<Array<Item>>
+    private val root = n
+    private val mount = n + 1
+    /** Iris index -> its eye white's index (the clip), else -1. */
+    private val clipOf = IntArray(n) { -1 }
+    /** Per set ordinal: that set's `body` index, else -1 (the head then mounts on the root). */
+    private val bodyOf = IntArray(PipPose.BodySet.entries.size) { -1 }
+    /** Per body index: its head mount `[k, 0, 0, k, tx, ty]`. */
+    private val mountMatrix = arrayOfNulls<FloatArray>(n)
     private val slots = HashMap<String, String>()
-    private val irisWhite = HashMap<String, PipRigAsset.Part>()
     /** Iris id -> how far the whole iris may travel inside the eye white at full gaze (x, y). */
     private val irisReach = HashMap<String, FloatArray>()
     /** Glint id -> its iris; the glint counter-shifts so the light seems fixed. */
@@ -59,14 +71,14 @@ class PipRigScene(
 
     init {
         val children = LinkedHashMap<String, MutableList<Item>>()
-        for (part in asset.parts) children.getOrPut(part.id) { mutableListOf() }.add(Shape(part))
+        for ((i, part) in asset.parts.withIndex()) children.getOrPut(part.id) { mutableListOf() }.add(Shape(i, part.z))
         val mount = Mount(asset.parts.filter(::ridesHeadMount).minOfOrNull { it.z } ?: 0)
-        for (part in asset.parts) {
+        for ((i, part) in asset.parts.withIndex()) {
             // Shared parts on `body` ride the head mount; a missing parent means root.
             val host = if (ridesHeadMount(part)) MOUNT else part.parent?.takeIf { it in byID } ?: ROOT
-            children.getOrPut(host) { mutableListOf() }.add(Node(part))
+            children.getOrPut(host) { mutableListOf() }.add(Node(i, part.z))
             whiteOf(part)?.let { white ->
-                irisWhite[part.id] = white
+                clipOf[i] = index.getValue(white.id)
                 val box = bounds(white.id)
                 irisReach[part.id] = floatArrayOf(0.3f * (box[2] - box[0]), 0.4f * (box[3] - box[1]))
             }
@@ -87,11 +99,25 @@ class PipRigScene(
             }
         }
         // The head mount lands on whichever set's body is active, or on the root when that set has none.
-        for (part in asset.parts) if (part.name == "body" && part.set != null) children.getValue(part.id).add(mount)
+        for ((i, part) in asset.parts.withIndex()) if (part.name == "body" && part.set != null) {
+            children.getValue(part.id).add(mount)
+            PipPose.BodySet.entries.firstOrNull { it.name == part.set }?.let { bodyOf[it.ordinal] = i }
+            val m = part.mount ?: listOf(1f, 0f, 0f)
+            mountMatrix[i] = floatArrayOf(m[0], 0f, 0f, m[0], m[1], m[2])
+        }
         children.getOrPut(ROOT) { mutableListOf() }.add(mount)
         // Stable, so equal z keeps insertion order like sibling CALayers: own shape, children, then the mount.
-        for ((id, items) in children) order[id] = items.sortedBy { it.z }
+        order = Array(n + 2) { node ->
+            val key = when (node) { root -> ROOT; this.mount -> MOUNT; else -> asset.parts[node].id }
+            children[key].orEmpty().sortedBy { it.z }.toTypedArray()
+        }
     }
+
+    /** The shape slot (`eye-l.open`, `mouth.yawn`) a part belongs to, through its ancestors; null for always-on parts. */
+    fun slot(partID: String): String? = slots[partID]
+
+    /** Irises, pupils and glints follow the gaze; they saccade instead of springing like the body. */
+    fun followsGaze(partID: String): Boolean = partID in irisReach || partID in pupilReach || partID in glintIris
 
     fun resolve(pose: PipPose): PipResolved {
         val (view, slide) = viewFor(pose.headTurn)
@@ -128,37 +154,70 @@ class PipRigScene(
         return PipResolved(joints, visible, alpha, pose.set)
     }
 
-    /** Back-to-front fills. [scaleYAdd] adds to a part's y scale by id or name (the additive breath on head and chest). */
-    fun draw(state: PipResolved, scaleYAdd: Map<String, Float> = emptyMap()): List<PipDraw> {
-        val body = asset.parts.firstOrNull { it.name == "body" && it.set == state.set.name }
-        return Frame(state, scaleYAdd, body).apply { items(ROOT, IDENTITY, 1f, null, null) }.out
+    /** A fresh frame holding [state]: one array slot per part, rendered and ready to draw. */
+    fun frame(state: PipResolved, scaleYAdd: Map<String, Float> = emptyMap()): PipFrame {
+        val f = PipFrame(this)
+        for ((i, part) in asset.parts.withIndex()) {
+            val j = state.joints[part.id] ?: REST
+            f.joints[i * 5] = j.rotation; f.joints[i * 5 + 1] = j.offsetX; f.joints[i * 5 + 2] = j.offsetY
+            f.joints[i * 5 + 3] = j.scaleX; f.joints[i * 5 + 4] = j.scaleY
+            f.visible[i] = part.id in state.visible
+            f.alpha[i] = state.alpha[part.id] ?: 1f
+            f.scaleYAdd[i] = scaleYAdd[part.id] ?: scaleYAdd[part.name] ?: 0f
+        }
+        f.set = state.set
+        render(f)
+        return f
     }
 
-    private inner class Frame(val state: PipResolved, val scaleYAdd: Map<String, Float>, val body: PipRigAsset.Part?) {
-        val out = ArrayList<PipDraw>()
+    /** Back-to-front fills. [scaleYAdd] adds to a part's y scale by id or name (the additive breath on head and chest). */
+    fun draw(state: PipResolved, scaleYAdd: Map<String, Float> = emptyMap()): List<PipDraw> = frame(state, scaleYAdd).let { f ->
+        List(f.count) { k ->
+            val i = f.drawPart[k]
+            val part = asset.parts[i]
+            val clip = f.clipPart[k].takeIf { it >= 0 }?.let {
+                PipDraw(asset.parts[it].id, f.world.copyOfRange(f.clipSlot[k] * 6, f.clipSlot[k] * 6 + 6), asset.parts[it].fill, asset.parts[it].fillDark, 1f, null)
+            }
+            PipDraw(part.id, f.world.copyOfRange(i * 6, i * 6 + 6), part.fill, part.fillDark, f.drawAlpha[k], clip)
+        }
+    }
 
-        fun items(id: String, world: FloatArray, alpha: Float, clip: PipDraw?, owner: PipRigAsset.Part?) {
-            for (item in order[id].orEmpty()) when (item) {
-                is Shape -> out += PipDraw(item.part.id, world, item.part.fill, item.part.fillDark, alpha, clip)
-                is Node -> node(item.part, world, alpha, clip)
-                is Mount -> if (owner == body) {
-                    val m = owner?.mount ?: listOf(1f, 0f, 0f)
-                    items(MOUNT, concat(world, floatArrayOf(m[0], 0f, 0f, m[0], m[1], m[2])), alpha, clip, null)
-                }
+    /**
+     * Flattens [f]'s per-part state into its draw list without allocating: each node's world matrix lands in its own
+     * `world` slot, and each fill records its part, alpha and clip (the eye white in the iris's parent space).
+     */
+    fun render(f: PipFrame) {
+        f.count = 0
+        IDENTITY.copyInto(f.world, root * 6)
+        items(f, root, root, 1f, -1, -1, -1, bodyOf[f.set.ordinal])
+    }
+
+    private fun items(f: PipFrame, node: Int, slot: Int, alpha: Float, clip: Int, clipSlot: Int, owner: Int, body: Int) {
+        val list = order[node]
+        for (k in list.indices) when (val item = list[k]) {
+            is Shape -> {
+                val c = f.count++
+                f.drawPart[c] = item.part; f.drawAlpha[c] = alpha; f.clipPart[c] = clip; f.clipSlot[c] = clipSlot
+            }
+            is Node -> node(f, item.part, slot, alpha, clip, clipSlot, body)
+            is Mount -> if (owner == body) {
+                concatInto(f.world, slot * 6, if (owner < 0) IDENTITY else mountMatrix[owner]!!, 0, f.world, mount * 6)
+                items(f, mount, mount, alpha, clip, clipSlot, -1, body)
             }
         }
+    }
 
-        fun node(part: PipRigAsset.Part, parentWorld: FloatArray, parentAlpha: Float, parentClip: PipDraw?) {
-            if (part.id !in state.visible) return // a hidden container hides its whole subtree
-            val alpha = parentAlpha * (state.alpha[part.id] ?: 1f)
-            if (alpha <= 0f) return
-            var joint = state.joints[part.id] ?: REST
-            val add = scaleYAdd[part.id] ?: scaleYAdd[part.name]
-            if (add != null) joint = joint.copy(scaleY = joint.scaleY + add)
-            // The iris travels freely inside a fixed wrapper masked to the eye white, in the parent's space.
-            val clip = irisWhite[part.id]?.let { PipDraw(it.id, parentWorld, it.fill, it.fillDark, 1f, null) } ?: parentClip
-            items(part.id, concat(parentWorld, jointMatrix(part.pivot[0], part.pivot[1], joint)), alpha, clip, part)
-        }
+    private fun node(f: PipFrame, i: Int, parentSlot: Int, parentAlpha: Float, parentClip: Int, parentClipSlot: Int, body: Int) {
+        if (!f.visible[i]) return // a hidden container hides its whole subtree
+        val alpha = parentAlpha * f.alpha[i]
+        if (alpha <= 0f) return
+        val j = f.joints
+        val pivot = asset.parts[i].pivot
+        jointInto(pivot[0], pivot[1], j[i * 5], j[i * 5 + 1], j[i * 5 + 2], j[i * 5 + 3], j[i * 5 + 4] + f.scaleYAdd[i], f.scratch)
+        concatInto(f.world, parentSlot * 6, f.scratch, 0, f.world, i * 6)
+        // The iris travels freely inside a fixed wrapper masked to the eye white, in the parent's space.
+        val clip = clipOf[i]
+        if (clip >= 0) items(f, i, i, alpha, clip, parentSlot, i, body) else items(f, i, i, alpha, parentClip, parentClipSlot, i, body)
     }
 
     private fun ridesHeadMount(part: PipRigAsset.Part) = part.parent == "body" && part.set == null
@@ -191,7 +250,7 @@ class PipRigScene(
 
         private const val ROOT = "@root"
         private const val MOUNT = "@mount"
-        private val REST = PipPose.Joint()
+        internal val REST = PipPose.Joint()
         private val IDENTITY = floatArrayOf(1f, 0f, 0f, 1f, 0f, 0f)
 
         /** Which head view to show and how far (-1...1) to slide features inside it. */
@@ -207,21 +266,59 @@ class PipRigScene(
 }
 
 /** A part's local transform about its pivot: `p' = pivot + offset + S·R·(p − pivot)`, rotation clockwise in y-down. */
-fun jointMatrix(pivotX: Float, pivotY: Float, joint: PipPose.Joint): FloatArray {
-    val cos = cos(joint.rotation)
-    val sin = sin(joint.rotation)
-    val a = joint.scaleX * cos
-    val c = -joint.scaleX * sin
-    val b = joint.scaleY * sin
-    val d = joint.scaleY * cos
-    return floatArrayOf(a, b, c, d, pivotX + joint.offsetX - (a * pivotX + c * pivotY), pivotY + joint.offsetY - (b * pivotX + d * pivotY))
+fun jointMatrix(pivotX: Float, pivotY: Float, joint: PipPose.Joint): FloatArray = FloatArray(6).also {
+    jointInto(pivotX, pivotY, joint.rotation, joint.offsetX, joint.offsetY, joint.scaleX, joint.scaleY, it)
+}
+
+internal fun jointInto(pivotX: Float, pivotY: Float, rotation: Float, x: Float, y: Float, scaleX: Float, scaleY: Float, out: FloatArray) {
+    val cos = cos(rotation)
+    val sin = sin(rotation)
+    val a = scaleX * cos
+    val c = -scaleX * sin
+    val b = scaleY * sin
+    val d = scaleY * cos
+    out[0] = a; out[1] = b; out[2] = c; out[3] = d
+    out[4] = pivotX + x - (a * pivotX + c * pivotY); out[5] = pivotY + y - (b * pivotX + d * pivotY)
 }
 
 /** `m ∘ n`: applies [n], then [m]. */
-fun concat(m: FloatArray, n: FloatArray) = floatArrayOf(
-    m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1],
-    m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
-    m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5],
-)
+fun concat(m: FloatArray, n: FloatArray) = FloatArray(6).also { concatInto(m, 0, n, 0, it, 0) }
+
+/** `m ∘ n` written into [out] at [oo]; [out] may be [m] or [n] only at a different offset. */
+internal fun concatInto(m: FloatArray, mo: Int, n: FloatArray, no: Int, out: FloatArray, oo: Int) {
+    val m0 = m[mo]; val m1 = m[mo + 1]; val m2 = m[mo + 2]; val m3 = m[mo + 3]; val m4 = m[mo + 4]; val m5 = m[mo + 5]
+    val n0 = n[no]; val n1 = n[no + 1]; val n2 = n[no + 2]; val n3 = n[no + 3]; val n4 = n[no + 4]; val n5 = n[no + 5]
+    out[oo] = m0 * n0 + m2 * n1; out[oo + 1] = m1 * n0 + m3 * n1
+    out[oo + 2] = m0 * n2 + m2 * n3; out[oo + 3] = m1 * n2 + m3 * n3
+    out[oo + 4] = m0 * n4 + m2 * n5 + m4; out[oo + 5] = m1 * n4 + m3 * n5 + m5
+}
 
 fun mapPoint(m: FloatArray, x: Float, y: Float) = floatArrayOf(m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5])
+
+/**
+ * One frame's per-part state, indexed by [PipRigScene.index] and reused across frames: joints as
+ * `[rotation, offsetX, offsetY, scaleX, scaleY]` per part, what shows, fades and the additive breath. [PipRigScene.render]
+ * writes the draw list: `count` fills of `drawPart` (world matrix at `world[part * 6]`), alpha, and clip part and slot.
+ */
+class PipFrame(val scene: PipRigScene) {
+    private val n = scene.asset.parts.size
+    val joints = FloatArray(n * 5).also { for (i in 0 until n) { it[i * 5 + 3] = 1f; it[i * 5 + 4] = 1f } }
+    val visible = BooleanArray(n)
+    val alpha = FloatArray(n) { 1f }
+    val scaleYAdd = FloatArray(n)
+    var set = PipPose.BodySet.standing
+    /** World matrices `[a, b, c, d, tx, ty]`: one per part, then the root and the head mount. */
+    val world = FloatArray((n + 2) * 6)
+    var count = 0
+    val drawPart = IntArray(n)
+    val drawAlpha = FloatArray(n)
+    /** The clip's part index (-1 for none) and the world slot its path is drawn in. */
+    val clipPart = IntArray(n)
+    val clipSlot = IntArray(n)
+    internal val scratch = FloatArray(6)
+
+    private fun at(id: String) = scene.index.getValue(id)
+    fun joint(id: String) = at(id).let { PipPose.Joint(joints[it * 5], joints[it * 5 + 1], joints[it * 5 + 2], joints[it * 5 + 3], joints[it * 5 + 4]) }
+    fun isVisible(id: String) = visible[at(id)]
+    fun scaleYAdd(id: String) = scaleYAdd[at(id)]
+}

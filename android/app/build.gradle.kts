@@ -46,6 +46,8 @@ android {
     // Pip's rig is generated for iOS; Android reads the same file in place (never a copy).
     sourceSets.getByName("main").assets.srcDir("../../ios/Mivu/Resources/Characters")
     sourceSets.getByName("test").resources.srcDir("../../ios/Mivu/Resources/Characters")
+    // Pip's gestures are exported by iOS (`PipGestureFixtureTests`); the app reads asset `gestures.json` in place.
+    sourceSets.getByName("main").assets.srcDir("../../fixtures/pip")
 }
 
 // Release variants take the ledger-derived code; debug keeps 1.
@@ -68,6 +70,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     // Custom Tabs: the platform-recommended system-browser sign-in; the debug proof screen is its only user.
