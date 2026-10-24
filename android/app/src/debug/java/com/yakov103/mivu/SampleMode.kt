@@ -7,5 +7,7 @@ object SampleMode {
     @Volatile var enabled = false
         private set
 
+    internal fun reset() { enabled = false }
+
     fun configure(intent: Intent?) { if (intent?.getBooleanExtra("sampleMode", false) == true) enabled = true }
 }

@@ -49,4 +49,22 @@ class SampleAnalyzerTest {
     @Test fun invalidLanguageRejected() {
         try { SampleAnalyzer.analyze(input(language = "fr")); fail() } catch (_: DiaryError.InvalidData) {}
     }
+
+    @Test fun ratioPathWithoutBasis() {
+        val noBasis = item.copy(quantity = 2.0, nutrition = NutritionValues(200.0, 40.0, 4.0, 2.0), nutritionBasis = null)
+        val out = SampleAnalyzer.analyze(input("1", listOf(noBasis))).items.single()
+        assertEquals(1.0, out.quantity, 0.0)
+        assertEquals(100.0, out.nutrition.kcal!!, 1e-9)
+    }
+
+    @Test fun decimalNumber() {
+        val out = SampleAnalyzer.analyze(input("2.5 bowls", listOf(item))).items.single()
+        assertEquals(2.5, out.quantity, 0.0)
+        assertEquals(250.0, out.nutrition.kcal!!, 1e-9)
+    }
+
+    @Test fun halfBeatsNumber() {
+        val out = SampleAnalyzer.analyze(input("half of 3", listOf(item))).items.single()
+        assertEquals(0.5, out.quantity, 0.0)
+    }
 }
