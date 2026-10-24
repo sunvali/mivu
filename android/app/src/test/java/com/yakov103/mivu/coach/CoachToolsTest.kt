@@ -69,7 +69,7 @@ class CoachToolsTest {
 
     @Test fun fingerprintsMatchIosGolden() {
         val golden = SwiftJson.decodeFromString(Fingerprints.serializer(), resource("fingerprints.json"))
-        assertTrue(golden.cases.size >= 20)
+        assertEquals(26, golden.cases.size)
         for (case in golden.cases) {
             val command = CoachTools.parse(CoachToolCall(case.tool, case.tool, case.tool, "mivu", case.arguments),
                 golden.meals, emptyList(), golden.workouts)
@@ -86,6 +86,22 @@ class CoachToolsTest {
         assertThrows(CoachError.InvalidTool::class.java) { parse("get_context", "{}", namespace = "other") }
         assertThrows(CoachError.InvalidTool::class.java) { parse("drop_tables", "{}") }
         assertThrows(CoachError.InvalidTool::class.java) { parse("get_context", "[]") }
+    }
+
+    @Test fun nonJsonArgumentsRejected() {
+        val m = s(20)
+        val calls = listOf(
+            "set_day_coverage" to """{"local_date":"2026-10-22","skipped":True}""",
+            "get_progress" to """{"ending_on":"2026-10-24","days":7d}""",
+            "get_progress" to """{"ending_on":"2026-10-24","days":0x1p3}""",
+            "get_progress" to """{"ending_on":"2026-10-24","days":+7}""",
+            "move_meal" to """{"meal_id":"$m","expected_revision":3,"target_local_date":"\ud800"}""",
+            "set_goals" to """{"effective_local_date":"2026-10-24","targets":[],"exercise_credit_enabled":TRUE}""",
+        )
+        for ((name, arguments) in calls) {
+            val error = runCatching { parse(name, arguments) }.exceptionOrNull()
+            assertEquals(arguments, CoachError.InvalidTool, error)
+        }
     }
 
     @Test fun oversizedStringRejected() {

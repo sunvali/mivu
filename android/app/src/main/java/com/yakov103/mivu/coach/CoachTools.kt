@@ -17,6 +17,7 @@ import com.yakov103.mivu.diary.WorkoutSet
 import com.yakov103.mivu.diary.atMost
 import com.yakov103.mivu.diary.blankLikeSwift
 import com.yakov103.mivu.diary.swift
+import com.yakov103.mivu.diary.strictJsonContainer
 import com.yakov103.mivu.diary.swiftUUID
 import com.yakov103.mivu.diary.validLocalDate
 import com.yakov103.mivu.diary.validateItems
@@ -167,6 +168,22 @@ object CoachTools {
         (value as? JsonArray)?.map { Args(it as? JsonObject ?: return null) }
     private fun utf8(text: String) = text.toByteArray(Charsets.UTF_8).size
 
+    private fun wellFormedText(e: JsonElement): Boolean = when (e) {
+        is JsonObject -> e.all { (key, value) -> wellFormed(key) && wellFormedText(value) }
+        is JsonArray -> e.all(::wellFormedText)
+        is JsonPrimitive -> !e.isString || wellFormed(e.content)
+    }
+    private fun wellFormed(text: String): Boolean {
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (Character.isHighSurrogate(c) && i + 1 < text.length && Character.isLowSurrogate(text[i + 1])) i += 2
+            else if (Character.isSurrogate(c)) return false
+            else i++
+        }
+        return true
+    }
+
     private val isoInstant = Regex("""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})""")
 
     fun parse(
@@ -177,7 +194,9 @@ object CoachTools {
         found: List<CoachMealCandidate> = emptyList(),
     ): CoachCommand {
         if (call.namespace != NAMESPACE || utf8(call.arguments) > 65_536) throw CoachError.InvalidTool
-        val args = Args(runCatching { Json.parseToJsonElement(call.arguments) as JsonObject }.getOrElse { throw CoachError.InvalidTool })
+        // kotlinx parsing is lenient (True, 7d, +7); refuse what JSONSerialization refuses, including lone surrogates.
+        val parsed = if (strictJsonContainer(call.arguments)) runCatching { Json.parseToJsonElement(call.arguments) }.getOrNull() else null
+        val args = Args(parsed?.takeIf(::wellFormedText) as? JsonObject ?: throw CoachError.InvalidTool)
         fun string(name: String): String = args.text(name)?.takeIf { it.isNotEmpty() && utf8(it) <= 500 } ?: invalid()
         fun uuid(name: String): UUID = swiftUUID(string(name)) ?: invalid()
         fun date(name: String): String = string(name).takeIf(::validLocalDate) ?: invalid()

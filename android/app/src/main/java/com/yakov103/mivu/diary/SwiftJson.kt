@@ -31,6 +31,8 @@ object SwiftDate : KSerializer<Instant> {
     override val descriptor = PrimitiveSerialDescriptor("SwiftDate", PrimitiveKind.DOUBLE)
 
     // Foundation writes shortest plain decimals (783000000, not 7.83E8).
+    // shortcut: assumes Double.toString is shortest round-trip (JDK 19+); ART may print more digits for some
+    // fractions. Dates are not fingerprinted; revisit if byte-equal date text is ever required.
     @OptIn(ExperimentalSerializationApi::class)
     override fun serialize(encoder: Encoder, value: Instant) {
         val seconds = (value.epochSecond - REFERENCE_OFFSET) + value.nano / 1e9
