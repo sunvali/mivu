@@ -254,7 +254,7 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         self.assertIn('No available iPhone', result.stderr)
         self.assertEqual(len(self.calls()), 1)
 
-    def test_android_units_run_only_when_android_changes(self):
+    def test_android_check_runs_units_and_lint(self):
         log = self.root.parent / (self.root.name + '-gradle.log')
         gradlew = self.root / 'android/gradlew'
         gradlew.parent.mkdir()
@@ -262,7 +262,7 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         gradlew.chmod(0o755)
         self.commit()
         self.assertEqual(self.push(GRADLE_LOG=str(log)).returncode, 0)
-        self.assertEqual(log.read_text(), f'{self.root.resolve()}/android :app:testDebugUnitTest\n')
+        self.assertEqual(log.read_text(), f'{self.root.resolve()}/android :app:testDebugUnitTest :app:lintDebug\n')
         self.assertEqual(self.calls(), [])
         self.git('update-ref', 'refs/remotes/origin/main', self.git('rev-parse', 'HEAD').stdout.strip())
         (self.root / 'README.md').write_text('Docs only\n')

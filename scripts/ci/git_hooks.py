@@ -180,7 +180,7 @@ def native_check(head):
 def android_check(head):
     clean(ANDROID)
     # Gradle finds Java through JAVA_HOME or PATH and fails with its own message if missing.
-    subprocess.run(['./gradlew', ':app:testDebugUnitTest'], cwd='android', check=True)
+    subprocess.run(['./gradlew', ':app:testDebugUnitTest', ':app:lintDebug'], cwd='android', check=True)
     if git('rev-parse', 'HEAD').strip() != head:
         raise ValueError('HEAD changed during Android verification; push again.')
 

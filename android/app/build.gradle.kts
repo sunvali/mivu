@@ -18,6 +18,18 @@ fun nextVersionCode(ledger: File): Int {
     return last + 1
 }
 
+// Upload signing values come from Gradle properties or the environment, never the repository.
+fun uploadSetting(name: String): String? =
+    providers.gradleProperty(name).orElse(providers.environmentVariable(name)).orNull
+
+val uploadNames = listOf(
+    "MIVU_UPLOAD_STORE_FILE", "MIVU_UPLOAD_STORE_PASSWORD", "MIVU_UPLOAD_KEY_ALIAS", "MIVU_UPLOAD_KEY_PASSWORD",
+)
+val upload = uploadNames.associateWith(::uploadSetting)
+if (upload.values.any { it != null } && upload.values.any { it == null }) {
+    error("Upload signing needs all of ${uploadNames.joinToString()}; missing ${upload.filterValues { it == null }.keys.joinToString()}")
+}
+
 android {
     namespace = "com.yakov103.mivu"
     compileSdk = 37
@@ -34,8 +46,18 @@ android {
         versionName = file("../version.txt").readText().trim()
     }
 
+    if (upload.values.all { it != null }) {
+        signingConfigs.create("upload") {
+            storeFile = file(upload.getValue("MIVU_UPLOAD_STORE_FILE")!!)
+            storePassword = upload.getValue("MIVU_UPLOAD_STORE_PASSWORD")
+            keyAlias = upload.getValue("MIVU_UPLOAD_KEY_ALIAS")
+            keyPassword = upload.getValue("MIVU_UPLOAD_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("upload")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }

@@ -148,6 +148,7 @@ The committed check scripts must match the working copy. Deletions need no check
 Known remote commits are compared with each pushed commit; new branches use their
 merge base with `origin/main`. Documentation-only pushes skip native work when
 native inputs match that baseline. Missing baselines require native verification.
+Android pushes run unit tests and lint (`:app:testDebugUnitTest :app:lintDebug`).
 
 Native inputs include the entire `ios/` tree and the hook's test helper/recipe.
 A native push must check the current `HEAD`, with no dirty or untracked native
