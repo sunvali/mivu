@@ -149,6 +149,7 @@ Known remote commits are compared with each pushed commit; new branches use thei
 merge base with `origin/main`. Documentation-only pushes skip native work when
 native inputs match that baseline. Missing baselines require native verification.
 Android pushes run unit tests and lint (`:app:testDebugUnitTest :app:lintDebug`).
+The Google Play submission draft for the owner is [play-submission.md](play-submission.md).
 
 Native inputs include the entire `ios/` tree and the hook's test helper/recipe.
 A native push must check the current `HEAD`, with no dirty or untracked native
