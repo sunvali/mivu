@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.storage.StorageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
@@ -166,8 +167,9 @@ fun BackupExportScreen(
                 val file = withContext(Dispatchers.IO) {
                     val db = repository.database(profileID)
                     val dir = File(exports, UUID.randomUUID().toString()).apply { mkdirs() }
-                    // iOS checkCapacity: the diary file five times over, plus journal room.
-                    if (dir.usableSpace < db.file.length() * 5 + 65_536) throw DiaryError.QuotaExceeded
+                    // iOS checkCapacity (available for important usage): the diary file five times over, plus journal room.
+                    val storage = context.getSystemService(StorageManager::class.java)
+                    if (storage.getAllocatableBytes(storage.getUuidForPath(dir)) < db.file.length() * 5 + 65_536) throw DiaryError.QuotaExceeded
                     File(dir, "archive.json").also { f -> f.outputStream().buffered().use { db.exportArchive(it) } }
                 }
                 if (currentProfile() != profileID) {
