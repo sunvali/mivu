@@ -399,24 +399,30 @@ struct OnboardingView: View {
     private func save() async {
         guard let answers, let profile = model.readModel?.profile else { return }
         saving = true
-        let today = ProgressDate.label(Date(), zone: profile.timeZoneID), targets = targets
+        let targets = targets
         let savedWeight = model.readModel?.weight.map { $0.unit == "lb" ? $0.value * Self.kgPerLb : $0.value }
         let saved = await model.change {
-            // The stored profile, not the cached one: Coach may have edited it, or a failed save already wrote `about`.
-            let latest = try await model.store.diaryHead(expectedProfileID: profile.id).profile
-            var updated = latest
-            updated.about = answers.about
-            try await model.store.updateProfile(updated, expectedProfile: latest, expectedProfileID: profile.id)
-            if savedWeight.map({ abs($0 - answers.weightKg) >= 0.05 }) ?? true {
-                _ = try await model.store.recordWeight(value: (answers.weightKg * 10).rounded() / 10, expectedProfileID: profile.id)
-            }
-            let existing = try await model.store.goal(on: today, exact: true, expectedProfileID: profile.id)
-            let goal = GoalRecord(id: existing?.id ?? UUID(), effectiveLocalDate: today, timeZoneID: profile.timeZoneID, targets: targets,
-                                  goalWeightKg: (answers.targetKg * 10).rounded() / 10, exerciseCreditEnabled: existing?.exerciseCreditEnabled ?? false)
-            _ = try await model.store.setGoals(goal, expectedRevision: existing?.revision, expectedProfileID: profile.id)
+            try await Self.saveSetup(answers, targets: targets, savedWeightKg: savedWeight, profile: profile, store: model.store)
         }
         saving = false
         if saved { savedCount += 1; onFinish() }
+    }
+
+    static func saveSetup(_ answers: OnboardingAnswers, targets: NutritionValues, savedWeightKg savedWeight: Double?,
+                          profile: DiaryProfile, store: DiaryStore, at now: Date = Date()) async throws {
+        let today = wakingDateLabel(now, zone: profile.timeZoneID) // The waking day Today reads, not the calendar date.
+        // The stored profile, not the cached one: Coach may have edited it, or a failed save already wrote `about`.
+        let latest = try await store.diaryHead(expectedProfileID: profile.id).profile
+        var updated = latest
+        updated.about = answers.about
+        try await store.updateProfile(updated, expectedProfile: latest, expectedProfileID: profile.id)
+        if savedWeight.map({ abs($0 - answers.weightKg) >= 0.05 }) ?? true {
+            _ = try await store.recordWeight(value: (answers.weightKg * 10).rounded() / 10, at: now, expectedProfileID: profile.id)
+        }
+        let existing = try await store.goal(on: today, exact: true, expectedProfileID: profile.id)
+        let goal = GoalRecord(id: existing?.id ?? UUID(), effectiveLocalDate: today, timeZoneID: profile.timeZoneID, targets: targets,
+                              goalWeightKg: (answers.targetKg * 10).rounded() / 10, exerciseCreditEnabled: existing?.exerciseCreditEnabled ?? false)
+        _ = try await store.setGoals(goal, expectedRevision: existing?.revision, expectedProfileID: profile.id)
     }
 
     private func react(_ pose: CompanionPose) {
