@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -201,24 +202,47 @@ fun CoachCameraScreen(
                 Text(it, Modifier.align(Alignment.CenterHorizontally).background(Scrim, RoundedCornerShape(12.dp)).padding(12.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite }, color = Color.White, textAlign = TextAlign.Center)
             }
-            Box(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp)) {
+            ShutterBar(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp)) {
                 val choose = !importing && !capturing && !full
-                TextButton({ (if (retaking == null) picker else replacement).launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) }, Modifier.align(Alignment.CenterStart).heightIn(min = 48.dp),
+                TextButton({ (if (retaking == null) picker else replacement).launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) }, Modifier.heightIn(min = 48.dp),
                     enabled = choose) {
                     Column(Modifier.alpha(if (choose) 1f else 0.4f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null,
                             Modifier.size(44.dp).background(Scrim, RoundedCornerShape(12.dp)).padding(10.dp), tint = Color.White)
-                        Text("Choose photos", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        Text("Choose photos", color = Color.White, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
                     }
                 }
                 if (status == null) {
                     val ready = !capturing && !importing && !full
-                    IconButton(shutter, Modifier.align(Alignment.Center).size(72.dp).semantics { contentDescription = if (retaking == null) "Take photo" else "Retake photo" }, enabled = ready) {
+                    IconButton(shutter, Modifier.size(72.dp).semantics { contentDescription = if (retaking == null) "Take photo" else "Retake photo" }, enabled = ready) {
                         Box(Modifier.size(72.dp).alpha(if (ready) 1f else 0.4f).border(4.dp, Color.White, CircleShape).padding(8.dp)
                             .background(Color.White, CircleShape))
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Choose photos (first child) at the start, the shutter (optional second child) centred. When Choose photos is too wide
+ * for the space beside the shutter, as at large font scales, it moves to its own centred row below it.
+ */
+@Composable
+private fun ShutterBar(modifier: Modifier, content: @Composable () -> Unit) = Layout(content, modifier) { measurables, constraints ->
+    val loose = constraints.copy(minWidth = 0, minHeight = 0)
+    val choose = measurables[0].measure(loose)
+    val shutter = measurables.getOrNull(1)?.measure(loose)
+    val width = constraints.maxWidth
+    val beside = shutter == null || choose.width <= (width - shutter.width) / 2
+    val height = if (beside) maxOf(choose.height, shutter?.height ?: 0) else shutter!!.height + choose.height
+    layout(width, height) {
+        if (beside) {
+            choose.place(0, (height - choose.height) / 2)
+            shutter?.place((width - shutter.width) / 2, (height - shutter.height) / 2)
+        } else {
+            shutter!!.place((width - shutter.width) / 2, 0)
+            choose.place((width - choose.width) / 2, shutter.height)
         }
     }
 }

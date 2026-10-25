@@ -215,6 +215,13 @@ class CoachScreenTest {
         compose.waitUntil(5_000) { drains > 0 }
     }
 
+    @Test fun mealChipWithoutPhotoShowsTheMealIcon() {
+        start(); val receipt = logged()
+        asked(receipt.mealID!!)
+        launch()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("coachPhotoPlaceholder", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+    }
+
     @Test fun confirmShowsRemoveAndKeep() {
         start(); val receipt = logged()
         asked(receipt.mealID!!, CoachClarification.confirm)

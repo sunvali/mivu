@@ -17,7 +17,15 @@ import androidx.activity.compose.setContent
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -136,9 +144,9 @@ class CoachCameraTest {
         waitForText("1 of 8 photos")
         compose.activityRule.scenario.recreate()
         compose.activityRule.scenario.onActivity(content)
-        // The camera route and the draft both come back.
+        // The camera route and the draft both come back; the shutter shows once the new activity's camera binds.
         waitForText("1 of 8 photos")
-        compose.onNodeWithContentDescription("Take photo").assertIsDisplayed()
+        compose.waitUntil(15_000) { exists(hasContentDescription("Take photo")) }
         assertEquals("Synthetic supper", coachModel().draft.value.text)
         assertEquals(1, coachModel().draft.value.photos.size)
     }
@@ -192,6 +200,24 @@ class CoachCameraTest {
         pick(8) { compose.onNodeWithText("Choose photos").performClick() }
         compose.onNodeWithContentDescription("Take photo").assertIsNotEnabled()
         compose.onNodeWithText("Choose photos").assertIsNotEnabled()
+    }
+
+    @Test fun choosePhotosClearsTheShutterAtFontScale2() {
+        val repository = DiaryRepository(context).also { repository = it }
+        val model = CoachViewModel(repository, profileID, drain = {}, connected = MutableStateFlow(false),
+            activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = SavedStateHandle())
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                MivuTheme { CoachCameraScreen(model, permission = CameraPermission.Granted, onClose = {}) }
+            }
+        }
+        compose.waitUntil(15_000) { exists(hasContentDescription("Take photo")) }
+        val choose = compose.onNode(hasText("Choose photos") and hasClickAction()).getBoundsInRoot()
+        val shutter = compose.onNodeWithContentDescription("Take photo").getBoundsInRoot()
+        val apart = choose.right <= shutter.left || choose.left >= shutter.right || choose.bottom <= shutter.top || choose.top >= shutter.bottom
+        assert(apart) { "Choose photos $choose overlaps the shutter $shutter" }
+        listOf(choose, shutter).forEach { assert(it.width >= 48.dp && it.height >= 48.dp) { "$it is under 48 dp" } }
     }
 
     @Test fun deniedKeepsDraftAndOffersChoosePhotos() {

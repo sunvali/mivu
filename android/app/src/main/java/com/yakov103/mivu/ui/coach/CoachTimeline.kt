@@ -68,6 +68,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
@@ -378,7 +379,7 @@ private val photos = object : LruCache<UUID, ImageBitmap>(16 * 1024 * 1024) {
 }
 private val decoding = Semaphore(2)
 
-/** A square photo loaded by ID, never held in screen state; a placeholder while it loads or when it is gone. */
+/** A square photo loaded by ID, never held in screen state; a placeholder while it loads or when it is gone, the meal icon when there is none. */
 @Composable
 fun CoachPhoto(id: UUID?, size: Dp, load: suspend () -> ByteArray?) {
     val px = with(LocalDensity.current) { size.roundToPx() }
@@ -390,5 +391,8 @@ fun CoachPhoto(id: UUID?, size: Dp, load: suspend () -> ByteArray?) {
     }
     val shape = RoundedCornerShape(12.dp)
     bitmap?.let { Image(it, null, Modifier.size(size).clip(shape), contentScale = ContentScale.Crop) }
-        ?: Box(Modifier.size(size).background(MivuTheme.colors.summarySurface, shape))
+        ?: Box(Modifier.size(size).background(MivuTheme.colors.summarySurface, shape), contentAlignment = Alignment.Center) {
+            if (id == null) Icon(painterResource(R.drawable.ic_restaurant), null, Modifier.size(22.dp).testTag("coachPhotoPlaceholder"),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
 }
