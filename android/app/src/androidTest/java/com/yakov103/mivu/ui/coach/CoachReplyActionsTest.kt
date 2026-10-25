@@ -23,7 +23,7 @@ import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasData
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra
 import org.hamcrest.Matchers.allOf
-import org.json.JSONObject
+import org.hamcrest.Matchers.equalTo
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasAnyDescendant
@@ -203,7 +203,7 @@ class CoachReplyActionsTest {
 
     private val pipReply = "Saved — about 430 kcal."
 
-    private fun reports() = CoachReports.file(context).takeIf { it.exists() }?.readLines().orEmpty().map(::JSONObject)
+    private fun reports() = CoachReports.read(CoachReports.file(context))
 
     private fun openReport() {
         compose.onNodeWithText(pipReply).performTouchInput { longClick() }
@@ -280,6 +280,28 @@ class CoachReplyActionsTest {
         compose.onNodeWithText("Copy address").performClick()
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         compose.waitUntil(5_000) { compose.runOnUiThread<String?> { clipboard.primaryClip?.getItemAt(0)?.text?.toString() } == "support@mivuapp.com" }
+    }
+
+    @Test fun noEmailAppOffersAShareSheetWithTheSameReport() {
+        seed()
+        startEmailForTest = { throw ActivityNotFoundException() }
+        launch()
+        openReport()
+        compose.onNodeWithText("Harmful or unsafe").performClick()
+        compose.onNode(hasText("Report") and hasClickAction()).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Share")).fetchSemanticsNodes().isNotEmpty() }
+        Intents.init()
+        try {
+            intending(hasAction(Intent.ACTION_CHOOSER)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
+            compose.onNodeWithText("Share").performClick()
+            compose.waitUntil(5_000) { Intents.getIntents().isNotEmpty() }
+            intended(allOf(hasAction(Intent.ACTION_CHOOSER), hasExtra(equalTo(Intent.EXTRA_INTENT), allOf(hasAction(Intent.ACTION_SEND),
+                hasExtra(Intent.EXTRA_EMAIL, arrayOf("support@mivuapp.com")),
+                hasExtra(Intent.EXTRA_TEXT, "Reason: Harmful or unsafe\n\nCoach reply:\n$pipReply")))), times(1))
+        } finally {
+            Intents.release()
+        }
+        assertEquals(1, reports().size)
     }
 
     @Test fun reportIsATalkBackActionOnPipRepliesOnly() {

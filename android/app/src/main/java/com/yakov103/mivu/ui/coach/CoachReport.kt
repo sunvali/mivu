@@ -40,6 +40,9 @@ import com.yakov103.mivu.R
 import com.yakov103.mivu.ui.settings.MivuLinks
 import java.io.File
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -54,12 +57,30 @@ internal val REPORT_REASONS = listOf("Harmful or unsafe", "Wrong or misleading",
  * archive; filesDir moves with a device transfer and stays out of cloud backup (data_extraction_rules).
  */
 object CoachReports {
+    internal const val MAX_LINES = 200
+    internal const val MAX_BYTES = 256 * 1024L
+
     fun file(context: Context) = File(context.filesDir, "coach-reports.jsonl")
 
     /** Appends and syncs one report; throws when it could not be written. */
-    fun save(context: Context, turnID: UUID, reason: String, note: String, at: Instant = Instant.now()) {
-        val line = JSONObject().put("turnID", turnID.toString()).put("reason", reason).put("note", note).put("at", at.toString())
-        FileOutputStream(file(context), true).use { it.write("$line\n".toByteArray()); it.fd.sync() }
+    fun save(context: Context, turnID: UUID, reason: String, note: String, at: Instant = Instant.now()) =
+        append(file(context), JSONObject().put("turnID", turnID.toString()).put("reason", reason).put("note", note).put("at", at.toString()))
+
+    /** Saved reports, oldest first, skipping a line torn by a crash mid-write. */
+    fun read(file: File): List<JSONObject> =
+        if (file.exists()) file.readLines().mapNotNull { runCatching { JSONObject(it) }.getOrNull() } else emptyList()
+
+    /** Appends one line; past [MAX_LINES] or [MAX_BYTES] the file is rewritten to its newest lines through a temp file. */
+    internal fun append(file: File, line: JSONObject) {
+        val torn = file.length() > 0 && RandomAccessFile(file, "r").use { it.seek(it.length() - 1); it.read() != '\n'.code }
+        FileOutputStream(file, true).use { it.write("${if (torn) "\n" else ""}$line\n".toByteArray()); it.fd.sync() }
+        val lines = file.readLines().filter { it.isNotBlank() }
+        if (lines.size <= MAX_LINES && file.length() <= MAX_BYTES) return
+        var kept = read(file).takeLast(MAX_LINES).map { it.toString() }
+        while (kept.size > 1 && kept.sumOf { it.toByteArray().size + 1L } > MAX_BYTES) kept = kept.drop(1)
+        val temp = File(file.parentFile, "${file.name}.tmp")
+        FileOutputStream(temp).use { out -> out.write(kept.joinToString("") { "$it\n" }.toByteArray()); out.fd.sync() }
+        Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
     }
 }
 
@@ -69,11 +90,15 @@ fun reportIntent(reply: String, reason: String, note: String): Intent = Intent(I
     .putExtra(Intent.EXTRA_SUBJECT, "Mivu Coach reply report")
     .putExtra(Intent.EXTRA_TEXT, "Reason: $reason\n" + (if (note.isBlank()) "" else "Note: ${note.trim()}\n") + "\nCoach reply:\n$reply")
 
+/** The same report through any app that can send text, for phones without an email app. */
+fun reportShareIntent(reply: String, reason: String, note: String): Intent =
+    Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtras(reportIntent(reply, reason, note)), "Send report")
+
 @VisibleForTesting internal var startEmailForTest: ((Intent) -> Unit)? = null
 
 /**
  * Report reply: pick a reason, optionally add a note, then Report saves the report on this phone before opening an
- * email draft. Without an email app the saved report stays and the dialog shows the address to copy.
+ * email draft. Without an email app the saved report stays and the dialog offers the address to copy or a share sheet.
  */
 @Composable
 fun ReportReplyDialog(turnID: UUID, reply: String, onDismiss: () -> Unit) {
@@ -116,6 +141,8 @@ fun ReportReplyDialog(turnID: UUID, reply: String, onDismiss: () -> Unit) {
         dismissButton = {
             TextButton({ scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Mivu address", MivuLinks.REPORT_EMAIL))) } },
                 Modifier.heightIn(min = 48.dp)) { Text("Copy address") }
+            TextButton({ context.startActivity(reportShareIntent(reply, reason.orEmpty(), note)); onDismiss() },
+                Modifier.heightIn(min = 48.dp)) { Text("Share") }
         },
     ) else AlertDialog(
         onDismissRequest = onDismiss,
