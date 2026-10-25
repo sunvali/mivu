@@ -30,6 +30,8 @@ if (upload.values.any { it != null } && upload.values.any { it == null }) {
     error("Upload signing needs all of ${uploadNames.joinToString()}; missing ${upload.filterValues { it == null }.keys.joinToString()}")
 }
 
+val mivuTestBuildType = providers.gradleProperty("mivu.testBuildType").getOrElse("debug")
+
 android {
     namespace = "com.yakov103.mivu"
     compileSdk = 37
@@ -42,6 +44,8 @@ android {
         // Screenshot seeding wipes the app's diary: run it only by hand with `am instrument -e class`.
         // One annotation, as only the first entry of a comma-separated notClass reaches the runner.
         testInstrumentationRunnerArguments["notAnnotation"] = "com.yakov103.mivu.ui.today.FixtureSeed"
+        // ReleaseSmokeTest checks the shipped components only against the build type under test.
+        testInstrumentationRunnerArguments["mivuTestBuildType"] = mivuTestBuildType
         versionCode = 1
         versionName = file("../version.txt").readText().trim()
     }
@@ -58,9 +62,20 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("upload")
+                // For the on-device smoke only; Play rejects debug-signed uploads.
+                ?: signingConfigs.getByName("debug").takeIf { mivuTestBuildType == "release" }
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            if (mivuTestBuildType == "release") proguardFiles("release-smoke-rules.pro")
+            testProguardFiles("test-proguard-rules.pro")
         }
+    }
+    testBuildType = mivuTestBuildType
+    // R8 keeps only what the app itself uses, so the minified build runs just the smoke test, not debug-only suites.
+    if (mivuTestBuildType == "release") sourceSets.getByName("androidTest") {
+        val smoke = listOf("src/androidTest/java/com/yakov103/mivu/release")
+        java.setSrcDirs(smoke)
+        kotlin.setSrcDirs(smoke)
     }
     buildFeatures { compose = true }
     // Synthetic SSE and archive fixtures live at the repo root, shared with other platforms.
