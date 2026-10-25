@@ -303,6 +303,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             QuickAction.SnapIt -> { selectTab(Route.Coach); navController.navigate(Route.CoachCamera()) { launchSingleTop = true } }
             QuickAction.OpenCoach -> { focusCoach = true; selectTab(Route.Coach) }
             QuickAction.Today -> selectTab(Route.Today)
+            QuickAction.CoachReply -> selectTab(Route.Coach)
         }
     }
     Scaffold(

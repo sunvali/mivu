@@ -181,11 +181,13 @@ class MivuApplication : Application() {
         if (turns.isEmpty()) return
         scope.launch(Dispatchers.IO) {
             val db = existingProfile()?.let { repository.database(it) } ?: return@launch
+            fun running(id: UUID) = runCatching { db.coachTurn(id) }.getOrNull()
+                ?.takeIf { it.state == CoachTurnState.captured || it.state == CoachTurnState.analyzing }
             for (id in turns) {
-                val state = runCatching { db.coachTurn(id)?.state }.getOrNull()
-                if (!screenVisible && (state == CoachTurnState.captured || state == CoachTurnState.analyzing)) {
-                    CoachReplyNotification.postSaved(this@MivuApplication, id)
-                }
+                if (screenVisible || running(id) == null) continue
+                CoachReplyNotification.postSaved(this@MivuApplication, id)
+                // A reply that landed meanwhile may have been posted just before the note: put it back on top.
+                if (running(id) == null && !screenVisible) runCatching { db.coachTurn(id) }.getOrNull()?.let { CoachReplyNotification.post(this@MivuApplication, it) }
             }
         }
     }

@@ -10,6 +10,7 @@ import android.view.KeyEvent
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -26,6 +27,7 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import com.yakov103.mivu.MainActivity
 import com.yakov103.mivu.MivuApplication
+import com.yakov103.mivu.coach.CoachReplyNotification
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.DiaryDatabase
 import com.yakov103.mivu.diary.DiaryProfile
@@ -88,6 +90,17 @@ class QuickCaptureTest {
             waitFor(hasTestTag("coachInput"))
             coachShown().assertIsDisplayed()
             compose.waitUntil(10_000) { runCatching { compose.onNodeWithTag("coachInput").assertIsFocused() }.isSuccess }
+        }
+    }
+
+    // iOS QuickLog: a reply notification only selects the Coach tab; the keyboard stays down.
+    @Test fun replyNotificationSelectsCoachWithoutFocus() {
+        val reply = quickIntent(app, QuickAction.OpenCoach).putExtra(CoachReplyNotification.TURN, UUID.randomUUID().toString())
+        ActivityScenario.launch<MainActivity>(reply).use {
+            waitFor(hasTestTag("coachInput"))
+            coachShown().assertIsDisplayed()
+            compose.waitForIdle()
+            compose.onNodeWithTag("coachInput").assertIsNotFocused()
         }
     }
 

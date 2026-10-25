@@ -33,6 +33,18 @@ class CoachReplyNotificationTest {
         assertEquals("Coach" to exact, CoachReplyNotification.text(turn(CoachTurnState.completed, exact)))
     }
 
+    @Test fun cutCountsFlagsAndFamiliesAsOneCharacter() {
+        val flag = "🇮🇱" // a regional-indicator pair
+        val family = "👨‍👩‍👧" // man ZWJ woman ZWJ girl
+        // 181 characters: the cut keeps the flag whole and never splits the family.
+        assertEquals("Coach" to "a".repeat(178) + flag + "…",
+            CoachReplyNotification.text(turn(CoachTurnState.completed, "a".repeat(178) + flag + family + "b")))
+        // 180 characters (far more UTF-16 units) stay whole.
+        val exact = "a".repeat(178) + family + flag
+        assertEquals("Coach" to exact, CoachReplyNotification.text(turn(CoachTurnState.completed, exact)))
+        assertEquals("Coach" to family.repeat(179) + "…", CoachReplyNotification.text(turn(CoachTurnState.completed, family.repeat(181))))
+    }
+
     @Test fun emptyReplyPostsNothing() {
         assertNull(CoachReplyNotification.text(turn(CoachTurnState.completed, " \n ")))
         assertNull(CoachReplyNotification.text(turn(CoachTurnState.completed, null)))

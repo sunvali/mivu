@@ -14,6 +14,7 @@ import com.yakov103.mivu.diary.CoachTurnState
 import com.yakov103.mivu.quick.QuickAction
 import com.yakov103.mivu.quick.quickIntent
 import com.yakov103.mivu.ui.coach.coachReplyText
+import java.text.BreakIterator
 import java.util.UUID
 
 /**
@@ -30,11 +31,17 @@ object CoachReplyNotification {
         if (turn.pendingMealID != null) return null
         return when (turn.state) {
             CoachTurnState.captured, CoachTurnState.analyzing -> null
-            CoachTurnState.completed -> coachReplyText(turn.assistantText ?: "").text.trim().takeIf { it.isNotEmpty() }
-                ?.let { "Coach" to if (it.length <= 180) it else it.take(if (it[178].isHighSurrogate()) 178 else 179) + "…" } // never half an emoji
+            CoachTurnState.completed -> coachReplyText(turn.assistantText ?: "").text.trim().takeIf { it.isNotEmpty() }?.let { "Coach" to cut(it) }
             CoachTurnState.needsClarification -> "Coach" to "The Coach needs a quick answer."
             CoachTurnState.needsRetry, CoachTurnState.waitingForNetwork, CoachTurnState.waitingForConnection -> "Coach" to SAVED
         }
+    }
+
+    /** iOS `prefix(179) + "…"` beyond 180 characters, counted as user-perceived characters (a flag or ZWJ family is one). */
+    private fun cut(reply: String): String {
+        val breaks = BreakIterator.getCharacterInstance().apply { setText(reply) }
+        val end = breaks.next(179)
+        return if (end == BreakIterator.DONE || breaks.next(2) == BreakIterator.DONE) reply else reply.substring(0, end) + "…"
     }
 
     fun post(context: Context, turn: CoachTurn) {

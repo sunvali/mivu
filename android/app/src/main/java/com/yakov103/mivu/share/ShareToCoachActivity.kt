@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.IntentCompat
 import androidx.activity.viewModels
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.Image
@@ -107,11 +108,13 @@ fun SharedContent.Companion.from(intent: Intent): SharedContent? {
         .getOrDefault(emptyList()).map { it.toString().trim() }.filter { it.isNotEmpty() }.distinct().joinToString("\n")
         .let { if (it.length <= MAX_TEXT) it else it.take(MAX_TEXT).let { cut -> if (cut.last().isHighSurrogate()) cut.dropLast(1) else cut } }
     val streams = runCatching {
-        if (multiple) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
-        else listOfNotNull(intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
+        if (multiple) IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+        else listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
     }.getOrDefault(emptyList()).filter { uri ->
         val authority = uri.authority.orEmpty()
-        uri.scheme == ContentResolver.SCHEME_CONTENT && authority.isNotEmpty() && authority != PACKAGE && !authority.startsWith("$PACKAGE.")
+        // A user prefix ("0@com.yakov103.mivu.reports") still reaches Mivu's own provider, so any "@" is refused.
+        uri.scheme == ContentResolver.SCHEME_CONTENT && authority.isNotEmpty() && '@' !in authority &&
+            authority != PACKAGE && !authority.startsWith("$PACKAGE.")
     }
     if (text.isEmpty() && streams.isEmpty()) return null
     return SharedContent(text, streams.take(MAX_PHOTOS), (streams.size - MAX_PHOTOS).coerceAtLeast(0))
@@ -207,6 +210,14 @@ class ShareViewModel(private val app: MivuApplication, private val content: Shar
         }
     }
 
+    /** The saved line once per submission, so a rotation while the notification prompt is up neither toasts nor finishes again. */
+    fun takeSavedLine(): String? {
+        val line = _outcome.value?.takeIf { it == TellCoachOutcome.Sent || it == TellCoachOutcome.SavedNeedsConnection }?.line
+        if (line == null || saved.get<Boolean>(ANNOUNCED) == true) return null
+        saved[ANNOUNCED] = true
+        return line
+    }
+
     /** Cancel, dismiss or leaving: the copied photos go. A running send keeps them until it has read them. */
     fun discard() {
         if (!_sending.value) app.scope.launch(Dispatchers.IO) { folder.deleteRecursively() }
@@ -217,6 +228,7 @@ class ShareViewModel(private val app: MivuApplication, private val content: Shar
         const val TEXT = "text"
         const val PHOTOS = "photos"
         const val PHOTO_LINE = "photoLine"
+        const val ANNOUNCED = "announced"
     }
 }
 
@@ -285,9 +297,7 @@ internal fun ShareSheet(model: ShareViewModel, onClose: () -> Unit, onOpenMivu: 
     val sending by model.sending.collectAsState()
     val outcome by model.outcome.collectAsState()
     val logging by model.logging.collectAsState()
-    LaunchedEffect(outcome) {
-        outcome?.takeIf { it == TellCoachOutcome.Sent || it == TellCoachOutcome.SavedNeedsConnection }?.let { onSaved(it.line) }
-    }
+    LaunchedEffect(outcome) { model.takeSavedLine()?.let(onSaved) }
     // A running send cannot be swiped away; it finishes either way, in the process scope.
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !model.sending.value })
     ModalBottomSheet(onDismissRequest = onClose, sheetState = state) {

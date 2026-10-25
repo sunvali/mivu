@@ -36,6 +36,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yakov103.mivu.MivuApplication
 import com.yakov103.mivu.coach.CoachInferenceResult
 import com.yakov103.mivu.coach.TellCoach
+import com.yakov103.mivu.coach.TellCoachOutcome
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.CoachTurnState
 import com.yakov103.mivu.diary.DiaryDatabase
@@ -210,6 +211,25 @@ class ShareToCoachTest {
         until { turns(text).size == 1 }
         until { !exists(hasText("Tell Coach")) }
         assertEquals(1, turns(text).size)
+    }
+
+    @Test fun mivuProvidersAreRefusedEvenWithAUserPrefix() {
+        for (uri in listOf("content://com.yakov103.mivu.reports/r.pdf", "content://0@com.yakov103.mivu.reports/r.pdf",
+                "content://0@com.yakov103.mivu/x", "file:///sdcard/x.jpg")) {
+            val intent = Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, Uri.parse(uri))
+            assertEquals(uri, null, SharedContent.from(intent))
+        }
+        val other = Uri.parse("content://media/external/images/media/1")
+        assertEquals(listOf(other), SharedContent.from(Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, other))!!.photos)
+    }
+
+    // A rotation while the notification prompt is up re-runs the sheet's effect: it must not toast or finish again.
+    @Test fun savedLineIsAnnouncedOnce() {
+        val model = ShareViewModel(app, SharedContent("Synthetic plum ${UUID.randomUUID()}", emptyList()), SavedStateHandle())
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { model.send() }
+        until { model.outcome.value != null }
+        assertEquals(TellCoachOutcome.Sent.line, model.takeSavedLine())
+        assertEquals(null, model.takeSavedLine())
     }
 
     @Test fun buttonsAre48dpAtFontScale2() {
