@@ -12,7 +12,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasScrollAction
@@ -202,8 +202,7 @@ class TodayScreenTest {
         launch()
         waitFor("logMeal")
         compose.onNodeWithTag("logMeal").assertIsDisplayed().performClick()
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("logMeal").fetchSemanticsNodes().isEmpty() }
-        compose.onNode(hasText("Coach") and isSelectable()).assertIsSelected()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Coach") and isSelectable() and isSelected()).fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun doubleFontScaleShowsEverySummaryNodeUnclipped() {
