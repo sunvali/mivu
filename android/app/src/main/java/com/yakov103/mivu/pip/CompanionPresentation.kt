@@ -1,6 +1,7 @@
 package com.yakov103.mivu.pip
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import com.yakov103.mivu.pip.MotionPolicy.Playback
 import java.time.Instant
 import java.time.ZoneId
@@ -237,5 +238,5 @@ class CompanionPresentation(private val nowMs: () -> Long, private val zone: () 
 class CompanionLastActive(private val prefs: SharedPreferences) {
     private fun key(profileID: UUID) = "companion.lastActive.$profileID"
     fun at(profileID: UUID): Long? = key(profileID).let { if (prefs.contains(it)) prefs.getLong(it, 0) else null }
-    fun record(profileID: UUID, at: Long) = prefs.edit().putLong(key(profileID), at).apply()
+    fun record(profileID: UUID, at: Long) = prefs.edit { putLong(key(profileID), at) }
 }
