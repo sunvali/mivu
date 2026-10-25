@@ -18,13 +18,15 @@ meal today, welcome back and reviewed, and re-greets after the background. Day c
 no trigger (moved to Later).
 
 ## Milestone 8 (outside-app capture)
-- Coach reply notifications. iOS posts them only for Siri-started turns, and Android has no outside-app turn source
-  until quick capture, share or Assistant arrive. Firing for every background turn would be new behaviour, not parity.
+Milestone 8 closed in [its record](../../verification/2026-10-25-android-widgets-share-backup.md): Coach reply
+notifications are posted for messages shared into Mivu (the Android counterpart of Siri-started turns); widgets, quick
+capture, share and the archive export/restore are in.
+- Widget and reply notification on a physical phone: delivery, the tap into Coach and the widget's update after a
+  capture and after the 04:00 cutoff (emulator results do not prove notifications).
 
 ## Settings and day rollover
 Milestone 6 closed in [its record](../../verification/2026-10-24-android-progress.md): the per-device day cutoff, the
 morning check-in, the weight row and the goal editor are done.
-- Backup & export: the archive export/import UI joins the report screen (see Play readiness).
 - Morning reminder: deliver and tap on a physical phone.
 - Disconnect ChatGPT when the last profile is deleted.
 - The remaining Settings rows: profiles (forget `companion.lastActive` on profile delete), diary preferences and
@@ -40,8 +42,12 @@ morning check-in, the weight row and the goal editor are done.
 
 ## Play readiness
 - Run a release-minify smoke test that decodes an archive fixture.
+- Release-minify smoke: the widget and the share activity survive R8 (with the archive smoke above).
+- Launcher icon: the manifest has no `android:icon`. Add Pip's adaptive launcher icon, and a monochrome Pip small icon
+  for the Coach reply and morning notifications.
+- Archive export peak is about 100 MB of Java heap at 120 MB of photos (kotlinx encodes each photo as one base64
+  string). Write base64 in chunks, as iOS does, if low-memory phones matter.
 - Re-check `MaterialExpressiveTheme`. It did not compile with material3 1.4.0.
-- Stream photo decoding for large archives, and add the export/import UI to Backup & export.
 - Check Pip's frame rate on an idle host or a real phone. On the loaded emulator the GPU took about 4950 ms per frame,
   so smooth playback could not be judged there; this is not a regression.
 - `CoachHistoryScreenTest.mealAskPipSeeksSourceTurn` fails (it already failed at `9987338b`; cause not established), and
