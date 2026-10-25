@@ -331,6 +331,7 @@ internal fun seedMorning(context: Context, kcal: Double? = 1870.0, weights: Map<
 }
 
 /** Seeds the emulator app for the check-in screenshot; skipped unless run with `-e seedMorningFixture true`. */
+@FixtureSeed
 class MorningCheckInSeed {
     @Test fun seedMorningFixture() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("seedMorningFixture") == "true")

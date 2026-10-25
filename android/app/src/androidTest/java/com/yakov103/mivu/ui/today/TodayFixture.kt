@@ -94,7 +94,11 @@ object TodayFixture {
     }
 }
 
+/** Marks a screenshot seed: it wipes the app's diary, so `connectedDebugAndroidTest` skips it; run it with `am instrument -e class`. */
+annotation class FixtureSeed
+
 /** Seeds the emulator app for screenshots; skipped unless run with `-e seedTodayFixture true`. */
+@FixtureSeed
 class TodayFixtureSeed {
     @Test fun seedTodayFixture() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("seedTodayFixture") == "true")
