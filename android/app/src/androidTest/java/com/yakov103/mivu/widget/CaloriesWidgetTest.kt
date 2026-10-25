@@ -1,11 +1,15 @@
 package com.yakov103.mivu.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.res.Configuration
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.RemoteViews
 import android.widget.TextView
+import androidx.core.view.children
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.MivuApplication
 import com.yakov103.mivu.R
@@ -77,7 +81,10 @@ class CaloriesWidgetTest {
 
     private fun apply(views: RemoteViews, widthDp: Int, heightDp: Int): View {
         val parent = FrameLayout(app)
-        val view = views.apply(app, parent)
+        return measured(parent, views.apply(app, parent), widthDp, heightDp)
+    }
+
+    private fun measured(parent: FrameLayout, view: View, widthDp: Int, heightDp: Int): View {
         parent.addView(view, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         val w = View.MeasureSpec.makeMeasureSpec((widthDp * density).toInt(), View.MeasureSpec.EXACTLY)
         val h = View.MeasureSpec.makeMeasureSpec((heightDp * density).toInt(), View.MeasureSpec.EXACTLY)
@@ -88,6 +95,8 @@ class CaloriesWidgetTest {
 
     private fun small(snapshot: WidgetSnapshot?, at: Long = now) = apply(CaloriesWidget.small(app, snapshot, at), 110, 110)
     private fun medium(snapshot: WidgetSnapshot?) = apply(CaloriesWidget.medium(app, snapshot, now), 330, 180)
+    private fun View.visibleWords(): List<CharSequence> = if (visibility != View.VISIBLE) emptyList()
+        else listOfNotNull((this as? TextView)?.text, contentDescription) + (this as? ViewGroup)?.children?.flatMap { it.visibleWords() }.orEmpty()
     private fun View.text(id: Int) = findViewById<TextView>(id).text.toString()
     // isShown needs a window; this walks the same visibility chain up the detached frame.
     private fun View.shown(id: Int) = generateSequence(findViewById<View>(id)) { it.parent as? View }.all { it.visibility == View.VISIBLE }
@@ -99,6 +108,32 @@ class CaloriesWidgetTest {
         assertEquals("1,360 of 2,100 calories eaten", view.findViewById<View>(R.id.widget_figure).contentDescription)
         assertTrue(view.shown(R.id.widget_bar))
         assertFalse(view.findViewById<View>(R.id.widget_pip).isImportantForAccessibility)
+    }
+
+    @Test fun initialLayoutShowsNoNumbers() {
+        val info = AppWidgetManager.getInstance(app).getInstalledProvidersForPackage(app.packageName, null)
+            .single { it.provider.className == CaloriesWidgetProvider::class.java.name }
+        val root = LayoutInflater.from(app).inflate(info.initialLayout, FrameLayout(app), false)
+        val words = root.visibleWords().joinToString(" ")
+        assertFalse(words, words.any(Char::isDigit))
+        assertTrue(words, "Set up Mivu" in words)
+    }
+
+    @Test fun largeTextShrinksInsteadOfClipping() {
+        val large = app.createConfigurationContext(Configuration(app.resources.configuration).apply { fontScale = 2f })
+        fun TextView.assertFits() {
+            val room = width - totalPaddingLeft - totalPaddingRight
+            assertTrue("\"$text\" needs ${layout.getLineWidth(0)} of $room px", layout.lineCount == 1 && layout.getLineWidth(0) <= room)
+        }
+        // RemoteViews.apply inflates with the package's own context, dropping the override: inflate here, then reapply.
+        fun inflate(views: RemoteViews, widthDp: Int): View {
+            val parent = FrameLayout(large)
+            val view = LayoutInflater.from(large).inflate(views.layoutId, parent, false).also { views.reapply(large, it) }
+            return measured(parent, view, widthDp, 210)
+        }
+        inflate(CaloriesWidget.small(app, day, now), 179).findViewById<TextView>(R.id.widget_goal).assertFits()
+        val medium = inflate(CaloriesWidget.medium(app, day, now), 373)
+        for (id in listOf(R.id.widget_goal, R.id.widget_snap_it, R.id.widget_coach)) medium.findViewById<TextView>(id).assertFits()
     }
 
     @Test fun mediumHasSnapItAndCoach() {
