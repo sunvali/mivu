@@ -31,6 +31,9 @@ class MorningReminderReceiverTest {
     @Before @After fun reset() {
         MorningReminder.cancel(context)
         manager.cancelAll()
+        // cancelAll() is asynchronous too: wait until the previous test's notification is gone.
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        while (posted() != null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(20)
         prefs.edit(commit = true) { remove(MorningReminder.ENABLED); remove(MorningReminder.MINUTES) }
     }
 

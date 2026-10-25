@@ -135,8 +135,8 @@ class TodayCompanionTest {
         val recorded = lastActive.at(profileID)
         assertTrue("leaving records last-active now: $recorded", recorded != null && recorded >= before)
         assertEquals(Playback.Hidden, model.companion.value.playback)
-        // A day away: the stored time is yesterday's when the app comes back.
-        lastActive.record(profileID, recorded!! - 86_400_000)
+        // A day away: the stored time is yesterday's when the app comes back (a calendar day, so DST days still count).
+        lastActive.record(profileID, java.time.Instant.ofEpochMilli(recorded!!).atZone(java.time.ZoneId.systemDefault()).minusDays(1).toInstant().toEpochMilli())
         main { model.enterForeground() }
         assertEquals(CompanionPose.WelcomeBack, pose())
     }
