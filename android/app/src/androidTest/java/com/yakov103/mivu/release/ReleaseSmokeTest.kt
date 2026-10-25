@@ -13,6 +13,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yakov103.mivu.MainActivity
 import com.yakov103.mivu.R
 import com.yakov103.mivu.SampleMode
 import com.yakov103.mivu.diary.DiaryArchive
@@ -55,17 +56,23 @@ class ReleaseSmokeTest {
         }
     }
 
-    /** Reports the median of five decodes of the iOS fixture as `archiveReadMs`; the figure goes in the release record. */
+    /**
+     * Reports five decodes of the iOS fixture: the first as `archiveFirstReadMs` (cold when run alone) and the median as
+     * `archiveReadMs`. The figures go in the release record.
+     */
     @Test fun archiveReadTime() {
         val bytes = fixture("ios-v4-full.json").readBytes()
-        val ms = (1..5).map {
+        val ms = List(5) {
             spooled { spool ->
                 val started = System.nanoTime()
                 DiaryArchive.decode(bytes.inputStream(), spool)
                 (System.nanoTime() - started) / 1_000_000
             }
-        }.sorted()[2]
-        InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply { putLong("archiveReadMs", ms) })
+        }
+        InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply {
+            putLong("archiveFirstReadMs", ms[0])
+            putLong("archiveReadMs", ms.sorted()[2])
+        })
     }
 
     @Test fun widgetDrawsUnderR8() {
@@ -77,6 +84,11 @@ class ReleaseSmokeTest {
             assertEquals("1,360", parent.findViewById<TextView>(R.id.widget_eaten).text.toString())
             assertEquals(View.VISIBLE, parent.findViewById<View>(R.id.widget_figure).visibility)
         }
+    }
+
+    /** The real start-up path under R8: Compose, the diary open, Coach and the start-up work. */
+    @Test fun mainActivityStarts() {
+        ActivityScenario.launch(MainActivity::class.java).use { assertEquals(Lifecycle.State.RESUMED, it.state) }
     }
 
     @Test fun shareSheetOpens() {

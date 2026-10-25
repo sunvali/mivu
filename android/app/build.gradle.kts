@@ -52,7 +52,10 @@ android {
 
     if (upload.values.all { it != null }) {
         signingConfigs.create("upload") {
-            storeFile = file(upload.getValue("MIVU_UPLOAD_STORE_FILE")!!)
+            // Absolute only: Gradle would resolve a relative path against android/app, not where the command ran.
+            storeFile = File(upload.getValue("MIVU_UPLOAD_STORE_FILE")!!).also {
+                require(it.isAbsolute) { "MIVU_UPLOAD_STORE_FILE must be an absolute path: $it" }
+            }
             storePassword = upload.getValue("MIVU_UPLOAD_STORE_PASSWORD")
             keyAlias = upload.getValue("MIVU_UPLOAD_KEY_ALIAS")
             keyPassword = upload.getValue("MIVU_UPLOAD_KEY_PASSWORD")
@@ -61,9 +64,8 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.findByName("upload")
-                // For the on-device smoke only; Play rejects debug-signed uploads.
-                ?: signingConfigs.getByName("debug").takeIf { mivuTestBuildType == "release" }
+            // The smoke build is always debug-signed, even with upload keys set, so Play rejects it if uploaded.
+            signingConfig = if (mivuTestBuildType == "release") signingConfigs.getByName("debug") else signingConfigs.findByName("upload")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             if (mivuTestBuildType == "release") proguardFiles("release-smoke-rules.pro")
@@ -71,6 +73,9 @@ android {
         }
     }
     testBuildType = mivuTestBuildType
+    check(mivuTestBuildType != "release" || buildTypes.getByName("release").signingConfig?.name == "debug") {
+        "The release smoke build must never be upload-signed"
+    }
     // R8 keeps only what the app itself uses, so the minified build runs just the smoke test, not debug-only suites.
     if (mivuTestBuildType == "release") sourceSets.getByName("androidTest") {
         val smoke = listOf("src/androidTest/java/com/yakov103/mivu/release")
