@@ -26,12 +26,27 @@
         android:theme="@style/Theme.Mivu">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+        <!-- The Snap It Quick Settings tile; exported so System UI can bind it, guarded by the binding permission. -->
+        <service
+            android:name=".quick.SnapItTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_photo_camera"
+            android:label="@string/shortcut_snap_it"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <service
             android:name=".coach.CoachJobService"
             android:exported="false"

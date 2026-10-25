@@ -22,6 +22,7 @@ import com.yakov103.mivu.day.MorningReminder
 import com.yakov103.mivu.diary.DayCutoff
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.rollOverDay
+import com.yakov103.mivu.quick.QuickAction
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -41,6 +43,8 @@ class MivuApplication : Application() {
     val repository by lazy { DiaryRepository(this) }
     /** The process scope: work here outlives any screen, such as a disconnect deleting the session. */
     val scope = CoroutineScope(SupervisorJob())
+    /** A shortcut, tile or widget request the shell has not opened yet; it sets this back to null once it navigates. */
+    val quickRequest = MutableStateFlow<QuickAction?>(null)
     val analysisWorker by lazy { MealAnalysisWorker(repository, SampleAnalyzer::analyze) }
 
     /** Finishes captured meals once the diary is ready; live analysis (milestone 5) replaces this. A failure stays needsRetry. */

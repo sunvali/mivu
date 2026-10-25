@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shortcut labels must be resources; the copy is iOS's verbatim. -->
+<resources>
+    <string name="shortcut_snap_it">Snap It</string>
+    <string name="shortcut_snap_it_long">Photograph a meal and log it in Mivu.</string>
+    <string name="shortcut_coach">Coach</string>
+    <string name="shortcut_coach_long">Opens Mivu Coach, ready for a question.</string>
+</resources>

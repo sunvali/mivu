@@ -131,6 +131,7 @@ import com.yakov103.mivu.ui.settings.openCustomTab
 import com.yakov103.mivu.connection.SessionError
 import com.yakov103.mivu.ui.onboarding.OnboardingScreen
 import com.yakov103.mivu.ui.onboarding.OnboardingViewModel
+import com.yakov103.mivu.quick.QuickAction
 
 /** The app's Coach worker as the Coach tab uses it: run saved turns, whether ChatGPT is connected, and the running turn. */
 class CoachHooks(
@@ -184,6 +185,7 @@ private enum class Tab(val route: Route, val label: String, @DrawableRes val ico
  * after a capture is saved, with its profile, to start analysis outside the screen. [coach] connects the Coach tab to the
  * app's Coach worker. [connection] backs Settings' Coach AI screen; without it (tests) the screen shows a disconnected state.
  * [setupNewDiary] opens setup with Pip once over a diary this launch created (the activity passes true; tests opt in).
+ * [quickRequest] is a shortcut, tile or widget request: it waits for a ready diary, and the shell clears it once it navigates.
  */
 @Composable
 fun MivuApp(
@@ -194,6 +196,7 @@ fun MivuApp(
     /** Outlives screens and configuration changes; a disconnect runs here. */
     appScope: CoroutineScope = rememberCoroutineScope(),
     setupNewDiary: Boolean = false,
+    quickRequest: MutableStateFlow<QuickAction?> = remember { MutableStateFlow(null) },
 ) {
     val state by repository.bootstrapState.collectAsState()
     val scope = rememberCoroutineScope()
@@ -201,7 +204,8 @@ fun MivuApp(
     LaunchedEffect(repository) { if (repository.bootstrapState.value == null) repository.bootstrap() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
-            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection, appScope, setupNewDiary)
+            is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection, appScope, setupNewDiary,
+                quickRequest)
             Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
@@ -244,7 +248,7 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks, connection: ChatGPTConnection?,
-    appScope: CoroutineScope, setupNewDiary: Boolean) {
+    appScope: CoroutineScope, setupNewDiary: Boolean, quickRequest: MutableStateFlow<QuickAction?>) {
     val navController = rememberNavController()
     LaunchedEffect(profileID) { if (setupNewDiary && repository.takeCreated()) navController.navigate(Route.Onboarding) }
     // Coach keeps its window across tab switches: its view model belongs to the activity, not the Coach entry.
@@ -285,6 +289,16 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             launchSingleTop = true
             restoreState = true
         }
+    }
+    // iOS QuickLogRequest: Snap It opens the Coach camera over Coach, so back returns to Coach; nothing is captured here.
+    val quick by quickRequest.collectAsState()
+    LaunchedEffect(quick) {
+        when (quick ?: return@LaunchedEffect) {
+            QuickAction.SnapIt -> { selectTab(Route.Coach); navController.navigate(Route.CoachCamera()) { launchSingleTop = true } }
+            QuickAction.OpenCoach -> { focusCoach = true; selectTab(Route.Coach) }
+            QuickAction.Today -> selectTab(Route.Today)
+        }
+        quickRequest.value = null
     }
     Scaffold(
         // Pushed screens such as meal detail draw edge to edge and handle their own insets.

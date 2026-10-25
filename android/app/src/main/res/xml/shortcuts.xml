@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iOS quick action and App Shortcuts: Snap It and Coach. Package names are literal, as shortcut XML takes no placeholders. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="snap_it"
+        android:enabled="true"
+        android:icon="@drawable/ic_photo_camera"
+        android:shortcutShortLabel="@string/shortcut_snap_it"
+        android:shortcutLongLabel="@string/shortcut_snap_it_long">
+        <intent
+            android:action="com.yakov103.mivu.action.SNAP_IT"
+            android:targetPackage="com.yakov103.mivu"
+            android:targetClass="com.yakov103.mivu.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="coach"
+        android:enabled="true"
+        android:icon="@drawable/ic_coach"
+        android:shortcutShortLabel="@string/shortcut_coach"
+        android:shortcutLongLabel="@string/shortcut_coach_long">
+        <intent
+            android:action="com.yakov103.mivu.action.OPEN_COACH"
+            android:targetPackage="com.yakov103.mivu"
+            android:targetClass="com.yakov103.mivu.MainActivity" />
+    </shortcut>
+</shortcuts>
