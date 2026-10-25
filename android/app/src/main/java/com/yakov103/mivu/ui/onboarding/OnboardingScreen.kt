@@ -96,6 +96,7 @@ import com.yakov103.mivu.diary.goal
 import com.yakov103.mivu.diary.recordWeight
 import com.yakov103.mivu.diary.setGoals
 import com.yakov103.mivu.diary.updateProfile
+import com.yakov103.mivu.diary.wakingDateLabel
 import com.yakov103.mivu.onboarding.OnboardingAnswers
 import com.yakov103.mivu.onboarding.OnboardingTargets
 import com.yakov103.mivu.onboarding.kgPerWeek
@@ -116,6 +117,7 @@ import com.yakov103.mivu.ui.settings.ChatGPTConnectButton
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.KG_PER_LB
 import com.yakov103.mivu.ui.today.WhiteCard
+import java.time.Instant
 import java.time.LocalDate
 import java.time.Year
 import java.time.ZoneId
@@ -361,7 +363,8 @@ class OnboardingViewModel(
                     db.updateProfile(latest.copy(about = answers.about), latest)
                     val savedKg = db.read { tx -> tx.head.activeDayID?.let(tx::dayWeight) }?.let { if (it.unit == "lb") it.value * KG_PER_LB else it.value }
                     if (savedKg?.let { abs(it - answers.weightKg) >= 0.05 } != false) db.recordWeight(tenth(answers.weightKg))
-                    val today = LocalDate.now(ZoneId.of(latest.timeZoneID, ZoneId.SHORT_IDS)).toString()
+                    // The day Today shows, so targets saved between midnight and the cutoff appear at once.
+                    val today = db.read { tx -> tx.head.activeDayID?.let(tx::day)?.localDate } ?: wakingDateLabel(Instant.now(), latest.timeZoneID)
                     val existing = db.goal(today, exact = true)
                     db.setGoals(GoalRecord(existing?.id ?: UUID.randomUUID(), today, latest.timeZoneID, existing?.revision ?: 0, targets,
                         tenth(answers.targetKg), existing?.exerciseCreditEnabled ?: false), existing?.revision)

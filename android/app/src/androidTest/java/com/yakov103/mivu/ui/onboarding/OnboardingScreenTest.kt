@@ -16,6 +16,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -31,6 +32,8 @@ import com.yakov103.mivu.coach.CoachInferenceResult
 import com.yakov103.mivu.connection.AccountState
 import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.CalendarDayRule
+import com.yakov103.mivu.diary.DayCutoff
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.GoalRecord
 import com.yakov103.mivu.diary.NutritionValues
@@ -38,13 +41,17 @@ import com.yakov103.mivu.diary.ProfileAbout
 import com.yakov103.mivu.diary.goal
 import com.yakov103.mivu.diary.recordWeight
 import com.yakov103.mivu.diary.setGoals
+import com.yakov103.mivu.diary.startDay
 import com.yakov103.mivu.diary.updateProfile
 import com.yakov103.mivu.onboarding.OnboardingAnswers
 import com.yakov103.mivu.pip.CompanionPose
 import com.yakov103.mivu.ui.MivuApp
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.TodayFixture
+import java.text.NumberFormat
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
@@ -52,6 +59,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -61,6 +69,7 @@ import org.junit.Test
 /** Synthetic diaries and scripted inference only; no ChatGPT account is used. */
 class OnboardingScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val calendarDay = CalendarDayRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var repository: DiaryRepository? = null
     private lateinit var model: OnboardingViewModel
@@ -280,6 +289,29 @@ class OnboardingScreenTest {
         assertTrue(goal.exerciseCreditEnabled)
         assertEquals(68.0, goal.goalWeightKg)
         assertEquals(estimate().copy(fat = 61.0), goal.targets)
+    }
+
+    @Test fun setupBeforeTheCutoffSetsTodaysTargets() {
+        // Now is always before this cutoff (two hours of margin for a daylight-saving night), so the waking day is yesterday.
+        DayCutoff.hour = LocalTime.now().hour + 2
+        val id = TodayFixture.diary(context)
+        repository = DiaryRepository(context)
+        val db = repository!!.database(id)
+        val day = db.startDay(Instant.now(), db.head().revision)
+        db.recordWeight(74.0, startNewDay = false)
+        assertNotEquals(LocalDate.now().toString(), day.localDate)
+        compose.activityRule.scenario.onActivity(app)
+        waitFor(hasTestTag("profileSettings"))
+        compose.onNodeWithTag("profileSettings").performClick()
+        waitForText("Redo setup with Pip")
+        compose.onNodeWithText("Redo setup with Pip").performClick()
+        toResults(viaConnect = true)
+        next()
+        waitForText("Redo setup with Pip")
+        compose.onNodeWithContentDescription("Navigate up").performClick()
+        waitForText(NumberFormat.getIntegerInstance().format(estimate().kcal) + " kcal goal")
+        assertEquals(day.id, db.head().activeDayID)
+        assertEquals(day.localDate, db.goal(day.localDate, exact = true)?.effectiveLocalDate)
     }
 
     @Test fun redoFromSettingsIsPrefilled() {
