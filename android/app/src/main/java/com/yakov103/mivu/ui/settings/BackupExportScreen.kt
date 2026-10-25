@@ -78,6 +78,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.concurrent.thread
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
@@ -97,6 +98,8 @@ internal fun exportsDirectory(context: Context) = File(context.cacheDir, "export
 fun archiveFileName(): String = "Mivu-private-diary.json"
 
 private const val COULD_NOT_READ = "Could not read this diary archive. Your local diary is preserved."
+// iOS DiaryError.staleArchive (DiaryModels.swift).
+private const val STALE_ARCHIVE = "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover."
 
 /** A decoded archive waiting for "Restore diary"; [spool] holds its photo bytes until it is applied or cancelled. */
 private class PendingRestore(val incoming: DiarySnapshot, val spool: PhotoSpool, val currentName: String)
@@ -115,6 +118,8 @@ fun BackupExportScreen(
     currentProfile: () -> UUID?,
     onBack: () -> Unit,
     onImported: (UUID) -> Unit = {},
+    /** Runs a confirmed restore; the app passes a scope that outlives this screen so leaving never drops the result. */
+    workScope: CoroutineScope = rememberCoroutineScope(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -170,7 +175,14 @@ fun BackupExportScreen(
                     // iOS checkCapacity (available for important usage): the diary file five times over, plus journal room.
                     val storage = context.getSystemService(StorageManager::class.java)
                     if (storage.getAllocatableBytes(storage.getUuidForPath(dir)) < db.file.length() * 5 + 65_536) throw DiaryError.QuotaExceeded
-                    File(dir, "archive.json").also { f -> f.outputStream().buffered().use { db.exportArchive(it) } }
+                    val file = File(dir, "archive.json")
+                    // A photo that changed during the encode (StaleRevision) restarts the export once.
+                    try {
+                        file.outputStream().buffered().use { db.exportArchive(it) }
+                    } catch (_: DiaryError.StaleRevision) {
+                        file.outputStream().buffered().use { db.exportArchive(it) }
+                    }
+                    file
                 }
                 if (currentProfile() != profileID) {
                     withContext(Dispatchers.IO) { exports.deleteRecursively() }
@@ -220,7 +232,7 @@ fun BackupExportScreen(
     fun restore(chosen: PendingRestore) {
         pending = null
         working = "Restoring diary"
-        scope.launch {
+        workScope.launch {
             try {
                 // As iOS: a diary selected meanwhile is never the one replaced.
                 if (currentProfile() != profileID) return@launch
@@ -232,7 +244,8 @@ fun BackupExportScreen(
                 imported?.let(onImported)
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
-                archiveError = COULD_NOT_READ // a stale or resurrecting archive is refused and the diary is unchanged
+                // A stale or resurrecting archive is refused and the diary is unchanged.
+                archiveError = if (error is DiaryError.StaleArchive) STALE_ARCHIVE else COULD_NOT_READ
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) { chosen.spool.close() }
                 working = null

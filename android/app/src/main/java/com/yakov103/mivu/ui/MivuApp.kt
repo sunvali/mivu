@@ -470,7 +470,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     currentProfile = { (repository.bootstrapState.value as? Bootstrap.Ready)?.profileID },
                     onBack = { navController.popBackStack() },
                     // The app scope: switching diaries replaces this screen, which must not cancel the switch.
-                    onImported = { id -> appScope.launch { repository.choose(id) } })
+                    onImported = { id -> appScope.launch { repository.choose(id) } }, workScope = appScope)
             }
             composable<Route.Connection> {
                 ConnectionScreen(

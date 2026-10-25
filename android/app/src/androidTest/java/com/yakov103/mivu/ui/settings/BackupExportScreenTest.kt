@@ -7,6 +7,9 @@ import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -39,6 +42,11 @@ import java.io.File
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -236,7 +244,7 @@ class BackupExportScreenTest {
         restore()
         waitFor("Restore Sample?")
         compose.onNodeWithText("Restore diary").performClick()
-        waitFor("Could not read this diary archive. Your local diary is preserved.")
+        waitFor("This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover.")
         assertEquals(current, db.snapshot())
         compose.waitUntil(5_000) { leftovers().isEmpty() }
     }
@@ -253,7 +261,7 @@ class BackupExportScreenTest {
         restore()
         waitFor("Restore Sample?")
         compose.onNodeWithText("Restore diary").performClick()
-        waitFor("Could not read this diary archive. Your local diary is preserved.")
+        waitFor("This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover.")
         assertEquals(afterDelete, db.snapshot())
     }
 
@@ -279,6 +287,29 @@ class BackupExportScreenTest {
         compose.waitUntil(15_000) { repository.bootstrapState.value == Bootstrap.Ready(incoming.profile.id) }
         assertEquals(incoming, repository.database(incoming.profile.id).snapshot())
         compose.waitUntil(5_000) { leftovers().isEmpty() }
+    }
+
+    // The import and the switch run on a scope that outlives the screen, so leaving mid-restore still selects the diary.
+    @Test fun leavingDuringImportStillSwitches() {
+        val incoming = mealDiary(DiaryProfile(UUID.randomUUID(), "Trip diary", "en", "UTC", ""))
+        profiles += incoming.profile.id
+        saved(mealDiary())
+        val app = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        var shown by mutableStateOf(true)
+        compose.setContent {
+            if (shown) MivuTheme {
+                BackupExportScreen(profile.id, repository, { diary }, { profile.id }, onBack = {},
+                    onImported = { app.launch { repository.choose(it) } }, workScope = app)
+            }
+        }
+        picked(incoming)
+        restore()
+        waitFor("Restore Trip diary?")
+        compose.onNodeWithText("Restore diary").performClick()
+        shown = false
+        compose.waitUntil(15_000) { repository.bootstrapState.value == Bootstrap.Ready(incoming.profile.id) }
+        compose.waitUntil(5_000) { leftovers().isEmpty() }
+        app.cancel()
     }
 
     @Test fun garbageFileSaysCouldNotRead() {

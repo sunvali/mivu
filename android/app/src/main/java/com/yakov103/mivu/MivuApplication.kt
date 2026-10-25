@@ -114,6 +114,8 @@ class MivuApplication : Application() {
         MorningReminder.schedule(this)
         restored = scope.launch(Dispatchers.IO) { chatGPT.restore() }
         publishWidget()
+        // Restore spools (`cacheDir/archive-*`) left by a process that died mid-restore; none can be in use this early.
+        scope.launch(Dispatchers.IO) { cacheDir.listFiles().orEmpty().filter { it.name.startsWith("archive-") }.forEach { it.deleteRecursively() } }
         // As iOS, turns waiting for a connection run once the connection can infer.
         scope.launch { chatGPT.state.map { it.canInfer }.distinctUntilChanged().collect { if (it) drainCoach(retryWaiting = true) } }
     }
