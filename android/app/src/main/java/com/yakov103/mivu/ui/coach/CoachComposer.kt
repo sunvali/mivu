@@ -336,7 +336,8 @@ private val THUMB = 64.dp
  * camera), and how many of the eight are used.
  */
 @Composable
-private fun DraftPhotos(photos: List<String>, enabled: Boolean, onRemove: (String) -> Unit, onRetake: ((String) -> Unit)?, modifier: Modifier) {
+internal fun DraftPhotos(photos: List<String>, enabled: Boolean, onRemove: (String) -> Unit, onRetake: ((String) -> Unit)?, modifier: Modifier,
+    preparing: Int = 0) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()).padding(top = 8.dp, end = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -364,6 +365,11 @@ private fun DraftPhotos(photos: List<String>, enabled: Boolean, onRemove: (Strin
                         }
                     }
                 }
+            }
+            // Photos still being prepared off the main thread.
+            repeat(preparing) {
+                Box(Modifier.size(THUMB).background(MivuTheme.colors.summarySurface, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
             }
         }
         Text("${photos.size} of $MAX_PHOTOS photos", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodySmall,

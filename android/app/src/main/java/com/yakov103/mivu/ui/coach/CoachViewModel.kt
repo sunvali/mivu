@@ -132,6 +132,25 @@ private data class CoachAttempt(val draft: CoachDraft, val context: CoachCapture
     }, context, reply = draft.reply)
 }
 
+/** The meal composer's words (MealComposerScreen's limit alert) for 1-based photo positions; null when every photo was added. */
+internal fun photoImportLine(failed: List<Int>, skipped: List<Int>): String? {
+    fun photos(positions: List<Int>) = positions.joinToString { "Photo $it" }
+    return listOfNotNull(
+        failed.takeIf { it.isNotEmpty() }?.let { "${photos(it)} from this selection could not be imported." },
+        skipped.takeIf { it.isNotEmpty() }?.let { "${photos(it)} ${if (it.size == 1) "was" else "were"} not added: a meal holds up to 8 photos." },
+    ).joinToString(" ").ifEmpty { null }
+}
+
+/** "Logging to today · 2,100 kcal goal": the active day and its kcal goal, whichever exist. */
+internal fun DiaryDatabase.loggingLine(): String? = read { tx ->
+    val head = tx.head
+    val today = LocalDate.now(ZoneId.of(head.profile.timeZoneID)).toString()
+    val day = head.activeDayID?.let(tx::day)
+    val kcal = goalOn(day?.localDate ?: today, tx.goals())?.targets?.kcal
+    listOfNotNull(day?.let { "Logging to " + CoachReplyLines.dayLabel(it.localDate, today) },
+        kcal?.let { "${NumberFormat.getIntegerInstance().format(it)} kcal goal" }).joinToString(" · ").ifEmpty { null }
+}
+
 /** iOS `CoachViewModel.message(for:)`, each string verbatim ("iPhone" becomes "phone" where it appears). */
 fun coachMessage(error: Throwable): String = when {
     error == ResponsesClient.Failure.UsageUnavailable -> "ChatGPT is busy right now. Your message is saved; try again soon."
@@ -310,12 +329,7 @@ class CoachViewModel(
                 }
             } finally {
                 _importing.value = false
-                // The meal composer's words (MealComposerScreen's limit alert), shown in the caption.
-                fun photos(positions: List<Int>) = positions.joinToString { "Photo $it" }
-                if (failed.isNotEmpty() || skipped.isNotEmpty()) _message.value = listOfNotNull(
-                    failed.takeIf { it.isNotEmpty() }?.let { "${photos(it)} from this selection could not be imported." },
-                    skipped.takeIf { it.isNotEmpty() }?.let { "${photos(it)} ${if (it.size == 1) "was" else "were"} not added: a meal holds up to 8 photos." },
-                ).joinToString(" ")
+                photoImportLine(failed, skipped)?.let { _message.value = it }
             }
         }
     }
@@ -594,16 +608,7 @@ class CoachViewModel(
 
     private suspend fun readLogging() {
         _logging.value = try {
-            read {
-                read { tx ->
-                    val head = tx.head
-                    val today = LocalDate.now(ZoneId.of(head.profile.timeZoneID)).toString()
-                    val day = head.activeDayID?.let(tx::day)
-                    val kcal = goalOn(day?.localDate ?: today, tx.goals())?.targets?.kcal
-                    listOfNotNull(day?.let { "Logging to " + CoachReplyLines.dayLabel(it.localDate, today) },
-                        kcal?.let { "${NumberFormat.getIntegerInstance().format(it)} kcal goal" }).joinToString(" · ").ifEmpty { null }
-                }
-            }
+            read { loggingLine() }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

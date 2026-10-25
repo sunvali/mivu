@@ -4,5 +4,11 @@
     <style name="Theme.Mivu" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/canvas</item>
     </style>
+    <!-- The share sheet: only the bottom sheet draws, over the app that shared. -->
+    <style name="Theme.Mivu.Translucent">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
     <color name="canvas">#F5F8F8</color>
 </resources>

@@ -36,6 +36,21 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+        <!-- Share to Mivu: a sheet over the sharing app that saves the message to Coach (iOS Siri "Tell Coach"). -->
+        <activity
+            android:name=".share.ShareToCoachActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Mivu.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
         <!-- The Snap It Quick Settings tile; exported so System UI can bind it, guarded by the binding permission. -->
         <service
             android:name=".quick.SnapItTileService"

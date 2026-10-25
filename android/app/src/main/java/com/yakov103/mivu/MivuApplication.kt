@@ -134,6 +134,9 @@ class MivuApplication : Application() {
      */
     suspend fun readyProfile(): UUID? = ((repository.bootstrapState.value ?: repository.bootstrap()) as? Bootstrap.Ready)?.profileID
 
+    /** [readyProfile] that never creates the first diary (iOS `loadDiary(createDefaultProfile: false)`): setup belongs to the app. */
+    suspend fun existingProfile(): UUID? = if (withContext(Dispatchers.IO) { repository.hasDiary() }) readyProfile() else null
+
     /** iOS `hasPendingWork`: a turn the worker would run now. Waiting for a connection counts only when ChatGPT can infer. */
     suspend fun hasPendingWork(): Boolean {
         val profileID = readyProfile() ?: return false
@@ -149,6 +152,11 @@ class MivuApplication : Application() {
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
         // iOS continueInBackground; the saved-message notification is milestone 8.
         if (jobs.schedule(job.setExpedited(true).build()) == JobScheduler.RESULT_FAILURE) jobs.schedule(job.setExpedited(false).build())
+    }
+
+    /** iOS `CoachReplyNotification.follow` for a turn saved from outside the app: finishes it in [CoachJobService]. */
+    fun followReply(turnID: UUID) {
+        scheduleBackgroundDrain() // shortcut: the reply notification for turnID is Task 4 of milestone 8
     }
 
     /** Resumes Coach turns now and whenever a network becomes available (the callback also fires for the current one). */

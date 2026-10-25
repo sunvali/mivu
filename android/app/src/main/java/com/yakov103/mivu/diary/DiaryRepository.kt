@@ -66,6 +66,9 @@ class DiaryRepository(
         }
     }
 
+    /** Whether any diary file exists; an entry from outside the app checks this so it never creates the first diary. */
+    fun hasDiary(): Boolean = File(context.filesDir, "profiles").listFiles().orEmpty().any { File(it, DIARY_FILE).isFile }
+
     /** True once for a diary this launch created, so setup opens a single time even when the activity is recreated. */
     fun takeCreated(): Boolean {
         val ready = _bootstrapState.value as? Bootstrap.Ready ?: return false
