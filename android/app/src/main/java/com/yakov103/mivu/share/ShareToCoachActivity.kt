@@ -1,13 +1,17 @@
 package com.yakov103.mivu.share
 
+import android.Manifest
 import android.content.ContentResolver
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.Image
@@ -54,6 +58,7 @@ import com.yakov103.mivu.MivuApplication
 import com.yakov103.mivu.R
 import com.yakov103.mivu.coach.TellCoach
 import com.yakov103.mivu.coach.TellCoachOutcome
+import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.quick.QuickAction
 import com.yakov103.mivu.quick.quickIntent
 import com.yakov103.mivu.ui.coach.DraftPhotos
@@ -241,15 +246,32 @@ class ShareToCoachActivity : ComponentActivity() {
                     finish()
                 }, onSaved = { line ->
                     Toast.makeText(applicationContext, line, Toast.LENGTH_SHORT).show()
-                    finish()
+                    if (!askForNotifications()) finish()
                 })
             }
         }
     }
 
+    // The reply arrives as a notification: asked once, after the first saved share; a denial is never asked again.
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { finish() }
+
+    /** True when it launched the prompt, which finishes the sheet when answered. */
+    private fun askForNotifications(): Boolean {
+        val prefs = DiaryRepository.preferences(this)
+        if (Build.VERSION.SDK_INT < 33 || prefs.getBoolean(NOTIFICATIONS_ASKED, false) ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return false
+        prefs.edit().putBoolean(NOTIFICATIONS_ASKED, true).apply()
+        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        return true
+    }
+
     override fun onDestroy() {
         if (isFinishing && content != null) model.discard()
         super.onDestroy()
+    }
+
+    companion object {
+        const val NOTIFICATIONS_ASKED = "coachNotificationsAsked"
     }
 }
 

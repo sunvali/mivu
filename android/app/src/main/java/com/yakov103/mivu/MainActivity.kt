@@ -55,12 +55,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        (application as MivuApplication).rollOverDay()
+        val app = application as MivuApplication
+        app.screenVisible = true
+        app.rollOverDay()
     }
 
     override fun onStop() {
         super.onStop()
         val app = application as MivuApplication
+        app.screenVisible = false
         if (isChangingConfigurations) return // a rotation, not leaving the app
         // The process scope, so the check outlives an activity that is finishing.
         app.scope.launch { if (app.hasPendingWork()) app.scheduleBackgroundDrain() }

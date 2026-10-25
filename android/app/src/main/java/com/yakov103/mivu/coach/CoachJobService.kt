@@ -22,10 +22,14 @@ class CoachJobService : JobService() {
         return true
     }
 
-    /** Stops waiting, not the turn: the worker saves each state as it goes, and a rescheduled job or the next launch resumes it. */
+    /**
+     * Stops waiting, not the turn: the worker saves each state as it goes, and a rescheduled job or the next launch resumes it.
+     * Shared turns still running get the saved note (iOS `onExpire`).
+     */
     override fun onStopJob(params: JobParameters): Boolean {
         run?.cancel()
         run = null
+        (application as MivuApplication).expireFollowed()
         return true
     }
 }

@@ -1,9 +1,12 @@
 package com.yakov103.mivu.share
 
+import android.Manifest
+import android.app.NotificationManager
 import android.app.job.JobScheduler
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -34,7 +37,9 @@ import com.yakov103.mivu.MivuApplication
 import com.yakov103.mivu.coach.CoachInferenceResult
 import com.yakov103.mivu.coach.TellCoach
 import com.yakov103.mivu.diary.Bootstrap
+import com.yakov103.mivu.diary.CoachTurnState
 import com.yakov103.mivu.diary.DiaryDatabase
+import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.startDay
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.TodayFixture
@@ -45,6 +50,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Rule
@@ -65,14 +71,17 @@ class ShareToCoachTest {
         }
     }
 
-    @Before fun open() = runBlocking {
+    @Before fun open() = runBlocking<Unit> {
         val ready = (app.repository.bootstrapState.value ?: app.repository.bootstrap()) as Bootstrap.Ready
         db = app.repository.database(ready.profileID)
         if (db.head().activeDayID == null) db.startDay(Instant.now(), db.head().revision)
         app.coachInferenceForTest = { { _, _ -> CoachInferenceResult("fixture-model", "Noted.", emptyList(), emptyList()) } }
         TellCoach.canInferForTest = true
         withTimeout(10_000) { app.drainCoach(retryWaiting = true).join() } // an earlier test's turn finishes before this one reads
+        asked(true) // the other tests finish on send; firstSendAsksForNotificationsOnce clears it
     }
+
+    private fun asked(value: Boolean) = DiaryRepository.preferences(app).edit().putBoolean(ShareToCoachActivity.NOTIFICATIONS_ASKED, value).commit()
 
     @After fun close() {
         inserted.forEach { app.contentResolver.delete(it, null, null) }
@@ -126,6 +135,29 @@ class ShareToCoachTest {
             until { scenario.state == Lifecycle.State.DESTROYED }
             assertEquals(1, turns(text).size)
         }
+    }
+
+    // A real denial: the prompt is dismissed. Revoking a granted permission would kill this process, so nothing here grants it.
+    @Test fun deniedPermissionPostsNothingAndSaves() {
+        assertNotEquals(PackageManager.PERMISSION_GRANTED, app.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS))
+        asked(false)
+        ActivityScenario.launch<ShareToCoachActivity>(textShare("Synthetic tea ${UUID.randomUUID()}")).use { scenario ->
+            waitFor(hasText("Tell Coach"))
+            send()
+            until { DiaryRepository.preferences(app).getBoolean(ShareToCoachActivity.NOTIFICATIONS_ASKED, false) }
+            assertNotEquals(Lifecycle.State.DESTROYED, scenario.state) // the prompt is up; answering it finishes the sheet
+            InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
+            until { scenario.state == Lifecycle.State.DESTROYED }
+        }
+        // Not asked again: the next send finishes at once, saves, and its reply posts nothing.
+        val text = "Synthetic juice ${UUID.randomUUID()}"
+        ActivityScenario.launch<ShareToCoachActivity>(textShare(text)).use { scenario ->
+            waitFor(hasText("Tell Coach"))
+            send()
+            until { scenario.state == Lifecycle.State.DESTROYED }
+        }
+        until { app.followed.isEmpty() && turns(text).singleOrNull()?.state == CoachTurnState.completed }
+        assertEquals(emptyList<String>(), app.getSystemService(NotificationManager::class.java).activeNotifications.mapNotNull { it.tag })
     }
 
     @Test fun nineImagesKeepEightAndSaySo() {

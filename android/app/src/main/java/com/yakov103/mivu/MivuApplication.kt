@@ -13,6 +13,7 @@ import com.yakov103.mivu.analysis.SampleAnalyzer
 import com.yakov103.mivu.coach.CoachInferenceInput
 import com.yakov103.mivu.coach.CoachInferenceResult
 import com.yakov103.mivu.coach.CoachJobService
+import com.yakov103.mivu.coach.CoachReplyNotification
 import com.yakov103.mivu.coach.CoachWorker
 import com.yakov103.mivu.connection.AuthSession
 import com.yakov103.mivu.connection.ChatGPTConnection
@@ -20,6 +21,7 @@ import com.yakov103.mivu.connection.CredentialStore
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.day.MorningReminder
 import com.yakov103.mivu.diary.DayCutoff
+import com.yakov103.mivu.diary.CoachTurnState
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.rollOverDay
 import com.yakov103.mivu.quick.QuickAction
@@ -29,6 +31,7 @@ import com.yakov103.mivu.widget.widgetSnapshot
 import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -150,13 +153,41 @@ class MivuApplication : Application() {
         val jobs = getSystemService(JobScheduler::class.java)
         val job = JobInfo.Builder(COACH_JOB, ComponentName(this, CoachJobService::class.java))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-        // iOS continueInBackground; the saved-message notification is milestone 8.
+        // iOS continueInBackground; a stopped job posts the saved note for shared turns (expireFollowed).
         if (jobs.schedule(job.setExpedited(true).build()) == JobScheduler.RESULT_FAILURE) jobs.schedule(job.setExpedited(false).build())
     }
 
-    /** iOS `CoachReplyNotification.follow` for a turn saved from outside the app: finishes it in [CoachJobService]. */
+    /** Set by [MainActivity] while it is started: replies to shared messages are not posted while Mivu is on screen. */
+    @Volatile var screenVisible = false
+    /** Shared turns whose reply is not posted yet; [expireFollowed] posts the saved note for them if the job is stopped. */
+    @VisibleForTesting internal val followed: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+
+    /** iOS `CoachReplyNotification.follow` for a turn saved from outside the app: finishes it in [CoachJobService], then posts. */
     fun followReply(turnID: UUID) {
-        scheduleBackgroundDrain() // shortcut: the reply notification for turnID is Task 4 of milestone 8
+        followed += turnID
+        scheduleBackgroundDrain()
+        scope.launch {
+            drainCoach().join()
+            val turn = existingProfile()?.let { id -> withContext(Dispatchers.IO) { runCatching { repository.database(id).coachTurn(turnID) }.getOrNull() } }
+            if (turn != null && !screenVisible) CoachReplyNotification.post(this@MivuApplication, turn)
+            followed -= turnID
+        }
+    }
+
+    /** iOS `onExpire`: the job was stopped, so each followed turn still running gets the saved note; its reply replaces it. */
+    fun expireFollowed() {
+        val turns = followed.toList()
+        followed.clear()
+        if (turns.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            val db = existingProfile()?.let { repository.database(it) } ?: return@launch
+            for (id in turns) {
+                val state = runCatching { db.coachTurn(id)?.state }.getOrNull()
+                if (!screenVisible && (state == CoachTurnState.captured || state == CoachTurnState.analyzing)) {
+                    CoachReplyNotification.postSaved(this@MivuApplication, id)
+                }
+            }
+        }
     }
 
     /** Resumes Coach turns now and whenever a network becomes available (the callback also fires for the current one). */
