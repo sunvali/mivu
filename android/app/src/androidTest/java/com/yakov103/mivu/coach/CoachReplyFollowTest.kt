@@ -58,7 +58,8 @@ class CoachReplyFollowTest {
 
     @Before fun open() = runBlocking<Unit> {
         automation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
-        val ready = (app.repository.bootstrapState.value ?: app.repository.bootstrap()) as Bootstrap.Ready
+        // The class's fresh diary, not a diary an earlier class left open in the process-wide repository and then deleted.
+        val ready = app.repository.bootstrap() as Bootstrap.Ready
         db = app.repository.database(ready.profileID)
         if (db.head().activeDayID == null) db.startDay(Instant.now(), db.head().revision)
         app.coachInferenceForTest = { { _, _ -> gate.await(); CoachInferenceResult("fixture-model", reply, emptyList(), emptyList()) } }
