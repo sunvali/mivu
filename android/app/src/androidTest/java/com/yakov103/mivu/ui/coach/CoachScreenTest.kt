@@ -252,7 +252,8 @@ class CoachScreenTest {
     }
 
     @Test fun dayChoiceLogsToChosenDay() {
-        val yesterday = now.minus(1, ChronoUnit.DAYS)
+        // A calendar day back: on a DST day, 24 hours ago can still be today.
+        val yesterday = now.atZone(ZoneId.systemDefault()).minusDays(1).toInstant()
         start(yesterday)
         val t = turn()
         db().transaction(null) { it.failCoachTurn(t.id, CoachTurnState.needsClarification, needsDayChoice = true) }
