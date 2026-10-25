@@ -73,21 +73,26 @@ class DiaryRepository(
     fun hasDiary(profileID: UUID): Boolean = File(folder(profileID), DIARY_FILE).isFile
 
     /**
-     * Makes [incoming] (decoded into [spool]) a new local diary, as iOS `importProfile`: never over an existing one, and
-     * on any failure its folder is removed. The caller selects it with [choose].
+     * Makes [incoming] (decoded into [spool]) a new local diary, as iOS `importProfile`: never over an existing one. As
+     * iOS `createDatabase`, it is built in `profiles/import-<uuid>` and moved into place whole, so a crash never leaves a
+     * half-made diary under the profile's ID. Folders from earlier interrupted imports are removed. The caller selects
+     * it with [choose].
      */
     fun importProfile(incoming: DiarySnapshot, spool: PhotoSpool): UUID {
         val id = incoming.profile.id
         if (hasDiary(id)) throw DiaryError.InvalidData("diary exists")
-        val db = DiaryDatabase.open(context, id)
+        val profiles = File(context.filesDir, "profiles")
+        profiles.listFiles().orEmpty().filter { it.name.startsWith("import-") }.forEach { it.deleteRecursively() }
+        val temporary = File(profiles, "import-${UUID.randomUUID()}")
         try {
-            db.replace(requireEmpty = true, photoBytes = spool::bytes) { incoming }
-        } catch (e: Exception) {
-            db.close()
-            folder(id).deleteRecursively()
-            throw e
+            DiaryDatabase.open(File(temporary, DIARY_FILE), id).use { db ->
+                db.replace(requireEmpty = true, photoBytes = spool::bytes) { incoming }
+            }
+            if (folder(id).exists() && !folder(id).delete() || !temporary.renameTo(folder(id))) throw DiaryError.InvalidData("diary exists")
+        } finally {
+            temporary.deleteRecursively()
         }
-        synchronized(databases) { databases[id] = watched(db) }
+        database(id).head() // owner and schema check, as `open` does before selecting
         return id
     }
 

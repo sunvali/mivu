@@ -56,6 +56,25 @@ class DiaryArchiveTest {
         throws<DiaryError.InvalidData> { DiaryArchive.decode(full.byteInputStream(), null, maxBytes = 1000) }
     }
 
+    // A crafted 30 MB string (photo data or text) is refused at the base64 size of the 10,000,000-byte photo cap, before
+    // the decoder holds it as one String.
+    @Test fun oversizedStringIsNotReadPastTheTokenCap() {
+        val (head, tail) = full.split("\"AQID\"", limit = 2)
+        var served = 0L
+        val huge = object : InputStream() {
+            var left = 30_000_000
+            override fun read() = if (left-- > 0) 'A'.code.also { served++ } else -1
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (left <= 0) return -1
+                val n = minOf(len, left); b.fill('A'.code.toByte(), off, off + n); left -= n; served += n; return n
+            }
+        }
+        val input = java.io.SequenceInputStream(java.util.Collections.enumeration(listOf(
+            (head + "\"").byteInputStream(), huge, ("\"" + tail).byteInputStream())))
+        throws<DiaryError.InvalidData> { DiaryArchive.decode(input) }
+        assertTrue("served $served", served <= 13_333_336 + 65_536)
+    }
+
     @Test fun encodeWritesVersion4AndRoundTrips() {
         val snap = decode(full)
         val out = ByteArrayOutputStream().also { DiaryArchive.encode(snap, it) }

@@ -95,6 +95,47 @@ class ArchiveRoundTripTest {
         }
     }
 
+    // A crash mid-import leaves only an `import-*` folder (simulated here), and a failed import nothing at all: neither
+    // blocks importing the same archive again.
+    @Test fun interruptedProfileImportDoesNotBlockTheArchive() {
+        val repository = DiaryRepository(context)
+        val crashed = File(context.filesDir, "profiles/import-${java.util.UUID.randomUUID()}").apply { mkdirs() }
+        File(crashed, "diary.sqlite").writeBytes(byteArrayOf(1, 2, 3))
+        PhotoSpool(File(context.cacheDir, "archive-${java.util.UUID.randomUUID()}")).use { spool ->
+            val incoming = DiaryArchive.decode(iosFixture(), spool)
+            val broken = incoming.copy(meals = incoming.meals.map { m -> m.copy(photos = m.photos.map { it.copy(data = ByteArray(32)) }) })
+            try { repository.importProfile(broken, spool); error("expected a failure") } catch (_: Exception) {}
+            assertEquals(false, repository.hasDiary(fixture.profile.id))
+            assertEquals(fixture.profile.id, repository.importProfile(incoming, spool))
+        }
+        assertEquals(fixture, repository.database(fixture.profile.id).snapshot())
+        assertEquals(listOf(fixture.profile.id.toString().uppercase()), File(context.filesDir, "profiles").list()!!.toList())
+    }
+
+    @Test fun oversizedArchiveIsRefusedWithoutASpool() {
+        val cache = File(context.cacheDir, "oversized").apply { deleteRecursively(); mkdirs() }
+        val text = iosFixture().readBytes().decodeToString()
+        val (head, tail) = text.split("\"AQID\"", limit = 2)
+        DiaryDatabase.open(context, fixture.profile.id).use { db ->
+            db.importArchive(iosFixture(), cache)
+            val before = db.snapshot()
+            val huge = object : java.io.InputStream() {
+                var left = 20_000_000
+                override fun read() = if (left-- > 0) 'A'.code else -1
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    if (left <= 0) return -1
+                    val n = minOf(len, left); b.fill('A'.code.toByte(), off, off + n); left -= n; return n
+                }
+            }
+            val input = java.io.SequenceInputStream(java.util.Collections.enumeration(listOf(
+                (head + "\"").byteInputStream(), huge, ("\"" + tail).byteInputStream())))
+            try { db.importArchive(input, cache); error("expected InvalidData") } catch (_: DiaryError.InvalidData) {}
+            assertEquals(before, db.snapshot())
+        }
+        assertEquals(emptyList<String>(), cache.list()!!.toList())
+        cache.deleteRecursively()
+    }
+
     @Test fun failedImportRemovesTheSpool() {
         val cache = File(context.cacheDir, "truncated").apply { deleteRecursively(); mkdirs() }
         val bytes = iosFixture().readBytes()

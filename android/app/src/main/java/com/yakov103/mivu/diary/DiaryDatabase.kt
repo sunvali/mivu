@@ -65,8 +65,11 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     enum class Tombstone { meal, weight, workout }
 
     companion object {
-        fun open(context: Context, profileID: UUID): DiaryDatabase {
-            val file = File(context.filesDir, "profiles/${profileID.key}/diary.sqlite")
+        fun open(context: Context, profileID: UUID): DiaryDatabase =
+            open(File(context.filesDir, "profiles/${profileID.key}/diary.sqlite"), profileID)
+
+        /** Opens (or creates) [profileID]'s diary at [file], e.g. a temporary folder that is moved into place later. */
+        internal fun open(file: File, profileID: UUID): DiaryDatabase {
             file.parentFile!!.mkdirs()
             // DELETE journal, as iOS: a commit leaves the whole diary in this one file, so a device-transfer copy
             // never depends on an un-checkpointed -wal sidecar.

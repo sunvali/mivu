@@ -29,12 +29,36 @@ private const val MAX_ARCHIVE_BYTES = 350_000_000L
 @Serializable
 private data class Envelope(val format: String, val version: Int, val profileID: UUID, val snapshot: DiarySnapshot)
 
+// The base64 length of the 10,000,000-byte photo cap; no text field comes near it.
+private const val MAX_STRING_BYTES = 13_333_336
+
+/**
+ * Caps the archive's size and each JSON string's length as bytes arrive, so a crafted value is refused before the
+ * decoder holds it as one String. UTF-8 continuation bytes never equal `"` or `\`, so bytes can be scanned alone.
+ */
 private class CappedInput(input: InputStream, private var left: Long) : FilterInputStream(input) {
-    private fun take(n: Int) {
-        if (n > 0) { left -= n; if (left < 0) throw DiaryError.InvalidData("archive size") }
+    private var inString = false
+    private var escaped = false
+    private var run = 0
+
+    private fun scan(byte: Int) {
+        if (!inString) { if (byte == '"'.code) { inString = true; run = 0 }; return }
+        when {
+            escaped -> escaped = false
+            byte == '\\'.code -> escaped = true
+            byte == '"'.code -> { inString = false; return }
+        }
+        if (++run > MAX_STRING_BYTES) throw DiaryError.InvalidData("archive value size")
     }
-    override fun read(): Int = super.read().also { if (it >= 0) take(1) }
-    override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { take(it) }
+
+    private fun take(b: ByteArray, off: Int, n: Int) {
+        if (n <= 0) return
+        left -= n
+        if (left < 0) throw DiaryError.InvalidData("archive size")
+        for (i in off until off + n) scan(b[i].toInt() and 0xFF)
+    }
+    override fun read(): Int = super.read().also { if (it >= 0) { left -= 1; if (left < 0) throw DiaryError.InvalidData("archive size"); scan(it) } }
+    override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { take(b, off, it) }
 }
 
 private class CappedOutput(out: OutputStream, private var left: Long) : FilterOutputStream(out) {
