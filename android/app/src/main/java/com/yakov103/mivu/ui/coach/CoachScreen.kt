@@ -4,6 +4,9 @@ import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.diary.CoachDestination
 import android.animation.ValueAnimator
 import android.content.pm.PackageManager
+import android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+import android.view.WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.focus.FocusRequester
@@ -147,6 +150,13 @@ fun CoachScreen(
     val playback = rememberMotionPlayback()
     LaunchedEffect(playback) { model.reportPlayback(playback) }
     DisposableEffect(model) { onDispose { model.reportPlayback(Playback.Hidden) } } // the model outlives the tab
+    // The composer lifts itself with imePadding; the window's default pan would shift Coach again and hide the timeline's top.
+    val window = LocalActivity.current?.window
+    DisposableEffect(window) {
+        val previous = window?.attributes?.softInputMode ?: return@DisposableEffect onDispose {}
+        window.setSoftInputMode(previous and SOFT_INPUT_MASK_ADJUST.inv() or SOFT_INPUT_ADJUST_RESIZE)
+        onDispose { window.setSoftInputMode(previous) }
+    }
     LaunchedEffect(focusRequested) {
         if (focusRequested) { focusRequester.requestFocus(); onFocusConsumed() }
     }
