@@ -59,6 +59,10 @@ fun rememberMotionPlayback(covered: Boolean = false): MotionPolicy.Playback {
         context.contentResolver.registerContentObserver(scale, false, observer)
         ContextCompat.registerReceiver(context, saver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
         power.addThermalStatusListener(context.mainExecutor, heat)
+        // Read again now that the listeners are live, so a change between the first read and registration is not lost.
+        removeAnimations = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        powerSave = power.isPowerSaveMode
+        thermal = power.currentThermalStatus
         onDispose {
             context.contentResolver.unregisterContentObserver(observer)
             context.unregisterReceiver(saver)

@@ -18,6 +18,7 @@ import kotlin.math.sqrt
  * Pip's springs, blink and breath, ported from the iOS `PipRigView` motion extension. Every changed joint component
  * (rotation, x, y, scaleX, scaleY) gets its own Compose spring, started from the sampled value and velocity, so any
  * pose interrupts any other without a jump. [sample] fills one reused [PipFrame] per call, so frames do not allocate.
+ * Main thread only: the frame loop, springs and player jobs share unsynchronized state.
  */
 class PipMotion(val scene: PipRigScene) {
     private val parts = scene.asset.parts
@@ -236,6 +237,7 @@ class PipMotion(val scene: PipRigScene) {
 /**
  * Plays gestures on a [PipMotion], ported from iOS `play`, `schedule`, `step` and `look(at:)`: a key's spring launches at
  * the previous key's time, eyes lead a head turn by 80 ms, a view swap lands inside a blink, and loops repeat.
+ * Main thread only: the frame loop, springs and player jobs share unsynchronized state.
  */
 class PipPlayer(private val scope: CoroutineScope, private val motion: PipMotion, private val nanos: () -> Long) {
     private class Playback(val onDone: (Boolean) -> Unit) { val jobs = ArrayList<Job>() }
