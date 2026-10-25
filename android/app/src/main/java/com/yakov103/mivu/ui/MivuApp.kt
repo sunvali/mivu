@@ -185,7 +185,8 @@ private enum class Tab(val route: Route, val label: String, @DrawableRes val ico
  * after a capture is saved, with its profile, to start analysis outside the screen. [coach] connects the Coach tab to the
  * app's Coach worker. [connection] backs Settings' Coach AI screen; without it (tests) the screen shows a disconnected state.
  * [setupNewDiary] opens setup with Pip once over a diary this launch created (the activity passes true; tests opt in).
- * [quickRequest] is a shortcut, tile or widget request: it waits for a ready diary, and the shell clears it once it navigates.
+ * [quickRequest] is a shortcut, tile or widget request: it waits while the diary opens, and is dropped (iOS) when the person must
+ * choose a diary, opening failed or setup is showing.
  */
 @Composable
 fun MivuApp(
@@ -202,6 +203,8 @@ fun MivuApp(
     val scope = rememberCoroutineScope()
     // A finished result survives activity recreation in the repository, so only the first composition starts one.
     LaunchedEffect(repository) { if (repository.bootstrapState.value == null) repository.bootstrap() }
+    // iOS TodayView drops a quick request when there is no diary to open it on; it is never deferred past a choice.
+    LaunchedEffect(state) { if (state is Bootstrap.Choose || state == Bootstrap.Failed) quickRequest.value = null }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
             is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection, appScope, setupNewDiary,
@@ -293,12 +296,14 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
     // iOS QuickLogRequest: Snap It opens the Coach camera over Coach, so back returns to Coach; nothing is captured here.
     val quick by quickRequest.collectAsState()
     LaunchedEffect(quick) {
-        when (quick ?: return@LaunchedEffect) {
+        val action = quick ?: return@LaunchedEffect
+        quickRequest.value = null // iOS clears it first, then drops it while setup with Pip shows
+        if (navController.currentBackStackEntry?.destination?.hasRoute(Route.Onboarding::class) == true) return@LaunchedEffect
+        when (action) {
             QuickAction.SnapIt -> { selectTab(Route.Coach); navController.navigate(Route.CoachCamera()) { launchSingleTop = true } }
             QuickAction.OpenCoach -> { focusCoach = true; selectTab(Route.Coach) }
             QuickAction.Today -> selectTab(Route.Today)
         }
-        quickRequest.value = null
     }
     Scaffold(
         // Pushed screens such as meal detail draw edge to edge and handle their own insets.
