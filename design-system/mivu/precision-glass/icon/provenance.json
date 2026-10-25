@@ -26,14 +26,16 @@
   ],
   "android": {
     "generator": "design-system/mivu/precision-glass/icon/render-android.py",
-    "launcherArt": "ios/Mivu/Assets.xcassets/AppIcon.appiconset/AppIcon.png resized to 432 x 432 with sips -Z 432 into android/app/src/main/res/drawable-nodpi/ic_launcher_art.png",
-    "launcherBackground": "AppIcon.png corner pixel, written to android/app/src/main/res/values/ic_launcher_background.xml",
+    "launcherBackground": "Corner pixel of the scaled art, written to android/app/src/main/res/values/ic_launcher_background.xml",
     "monochromeAndNotification": "Filled outlines of ear-l@front, ear-r@front and head@front from design-system/mivu/characters/pip/rig/pip.svg, written white to android/app/src/main/res/drawable/ic_stat_pip.xml",
     "playListingIcon": "AppIcon.png resized with sips -Z 512 into design-system/mivu/precision-glass/icon/android/play-icon-512.png for the owner to upload; not uploaded",
     "sha256": {
       "AppIcon.png": "e2fdd00c0c5dfad95bbac9bc7b26702a7ad784f671ebc9c19862b6330f2f9b7d",
-      "ic_launcher_art.png": "a22894f7d2722268d5c343bf975bad208d7a2934a0863bbddae3356be8184fd1",
+      "pip.svg": "384d86fb8557ac145ce982d117a1601a559a3d5930eaf72e586229fe88d5b020",
+      "ic_launcher_foreground.png": "c7cd33a06eb95a7fcfdbc0ddb18ba1dc560498dd8d3bc466e8bf51ba90aabb27",
+      "ic_stat_pip.xml": "bbfc6f9d0eacf4167ffa5eed44255f0c742279c7920c6a371fe57a3ff65d8fd9",
       "play-icon-512.png": "0e2c533e062e1032317b014938e2d42ddaf4010824a2b66d1f19b56eb60088df"
-    }
+    },
+    "launcherForeground": "AppIcon.png scaled with sips to 62 dp (248 px) and placed on a 108 dp (432 px) transparent canvas, bottom at 92 dp, its last row repeated to the canvas edge; written to android/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png"
   }
 }
