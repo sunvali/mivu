@@ -118,6 +118,10 @@ class CompanionRuntime(
         CompanionPose.Attentive -> PipMoment.Attentive
         CompanionPose.Thinking -> PipMoment.Thinking
         CompanionPose.Saved -> PipMoment.Saved
+        CompanionPose.Reviewed -> PipMoment.Reviewed
+        CompanionPose.FirstMealToday -> PipMoment.FirstMealToday
+        CompanionPose.DayComplete -> PipMoment.DayComplete
+        CompanionPose.WelcomeBack -> PipMoment.WelcomeBack
         CompanionPose.Recovery -> PipMoment.Recovery
         CompanionPose.Greeting -> PipMoment.Greeting(LocalTime.now().hour)
         CompanionPose.Submitted -> PipMoment.Submitted

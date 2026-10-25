@@ -8,6 +8,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.ZoneOffset
 import java.util.UUID
 
 /** Ported from iOS `CompanionPresentationTests` for the Coach and Today poses. */
@@ -21,10 +22,11 @@ class CompanionPresentationTest {
         recovery: Boolean = false, playback: Playback = Playback.Animated,
     ) = CompanionContext(surface, typing, processing, recovery, playback)
 
-    private fun event(at: Long = t, operation: UUID = UUID.randomUUID()) =
-        CompanionEvent(owner, operation, CompanionEvent.Kind.Saved, at)
+    private fun event(at: Long = t, operation: UUID = UUID.randomUUID(), kind: CompanionEvent.Kind = CompanionEvent.Kind.Saved) =
+        CompanionEvent(owner, operation, kind, at)
 
-    private fun attached() = CompanionPresentation { now }.also { it.attach(owner) }
+    private fun presentation() = CompanionPresentation({ now }, { ZoneOffset.UTC })
+    private fun attached() = presentation().also { it.attach(owner) }
 
     private fun resolve(p: CompanionPresentation, at: Long, context: CompanionContext = context()): CompanionOutput {
         now = at
@@ -158,12 +160,84 @@ class CompanionPresentationTest {
         p.attach(owner)
         assertEquals(CompanionPose.Resting, resolve(p, t + 1_000).pose)
         // No profile hides Pip.
-        assertEquals(Playback.Hidden, CompanionPresentation { now }.resolve(context()).playback)
+        assertEquals(Playback.Hidden, presentation().resolve(context()).playback)
     }
 
     @Test fun savedEventCarriesNoAmount() {
         val fields = CompanionEvent::class.java.declaredFields.filterNot { it.isSynthetic || java.lang.reflect.Modifier.isStatic(it.modifiers) }
         assertEquals(setOf("profileID", "operationID", "kind", "committedAt"), fields.map { it.name }.toSet())
-        assertEquals(listOf("Saved", "PhotoAdded"), CompanionEvent.Kind.entries.map { it.name })
+        assertEquals(listOf("Saved", "Reviewed", "FirstMealToday", "DayComplete", "PhotoAdded"), CompanionEvent.Kind.entries.map { it.name })
+    }
+    @Test fun welcomeBackOnceAfterADayAway() {
+        val p = presentation().also { it.attach(owner, lastActiveAt = t - 86_400_000) }
+        val welcome = resolve(p, t)
+        assertEquals(CompanionPose.WelcomeBack, welcome.pose)
+        assertEquals(t + 1_600, welcome.nextDeadline)
+        assertEquals(CompanionPose.Resting, resolve(p, t + 1_600).pose)
+        p.enterBackground()
+        p.attach(owner, lastActiveAt = t)
+        assertEquals(CompanionPose.Greeting, resolve(p, t + 2_000).pose)
+    }
+
+    @Test fun sameDayReturnGreets() {
+        val p = presentation().also { it.attach(owner, lastActiveAt = t - 60_000) }
+        assertEquals(CompanionPose.Greeting, resolve(p, t).pose)
+    }
+
+    @Test fun enterBackgroundGreetsAgain() {
+        val p = attached()
+        assertEquals(CompanionPose.Greeting, resolve(p, t).pose)
+        assertEquals(CompanionPose.Resting, resolve(p, t + 900).pose)
+        p.enterBackground()
+        assertEquals(Playback.Hidden, resolve(p, t + 1_000).playback)
+        p.attach(owner)
+        assertEquals(CompanionPose.Greeting, resolve(p, t + 1_000).pose)
+    }
+
+    @Test fun habitAndReviewKindsPlayTheirPoses() {
+        val p = attached()
+        resolve(p, t + 900) // the greeting is spent
+        now = t + 1_000
+        p.receive(event(at = now, kind = CompanionEvent.Kind.Reviewed))
+        val reviewed = resolve(p, now)
+        assertEquals(CompanionPose.Reviewed, reviewed.pose)
+        assertEquals(now + 650, reviewed.nextDeadline)
+        now = t + 2_000
+        p.receive(event(at = now, kind = CompanionEvent.Kind.FirstMealToday))
+        val first = resolve(p, now)
+        assertEquals(CompanionPose.FirstMealToday, first.pose)
+        assertEquals(now + 1_000, first.nextDeadline)
+    }
+
+    @Test fun firstMealReplacesAPlayingSaved() {
+        val p = attached()
+        p.receive(event())
+        assertEquals(CompanionPose.Saved, resolve(p, t).pose)
+        now = t + 100
+        p.receive(event(at = now, kind = CompanionEvent.Kind.FirstMealToday))
+        assertEquals(CompanionPose.FirstMealToday, resolve(p, now).pose)
+    }
+
+    @Test fun staticPlaybackDropsAPendingMoment() {
+        val p = attached()
+        p.receive(event(kind = CompanionEvent.Kind.Reviewed))
+        assertEquals(Playback.StaticPose, resolve(p, t, context(playback = Playback.StaticPose)).playback)
+        assertEquals(CompanionPose.Resting, resolve(p, t + 100).pose)
+    }
+
+    @Test fun pendingMomentExpiresAfterTheLifetime() {
+        val p = attached()
+        resolve(p, t)
+        resolve(p, t + 900) // the greeting is spent
+        now = t + 1_000
+        p.receive(event(at = now, kind = CompanionEvent.Kind.Reviewed))
+        assertEquals(Playback.Hidden, resolve(p, now, context(playback = Playback.Hidden)).playback)
+        assertEquals(CompanionPose.Resting, resolve(p, t + 1_000 + 10_001).pose)
+    }
+
+    @Test fun processingInterruptsWelcomeBack() {
+        val p = presentation().also { it.attach(owner, lastActiveAt = t - 86_400_000) }
+        assertEquals(CompanionPose.WelcomeBack, resolve(p, t).pose)
+        assertEquals(CompanionPose.Thinking, resolve(p, t + 100, context(processing = true)).pose)
     }
 }

@@ -128,4 +128,10 @@ class PipGestureLibraryTest {
             assertTrue("$m: $lifetime vs $duration", lifetime >= duration - 1e-9 && lifetime - duration <= 0.3 + 1e-9)
         }
     }
+
+    @Test fun heartsAlwaysPopToScaleOne() {
+        for (gesture in all) for ((_, pose) in gesture.keys) for ((name, joint) in pose.joints) {
+            if (name.startsWith("heart-")) assertTrue("${gesture.name} $name", joint.scaleX == 1f && joint.scaleY == 1f)
+        }
+    }
 }
