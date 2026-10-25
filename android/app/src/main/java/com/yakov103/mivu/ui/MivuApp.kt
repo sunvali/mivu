@@ -466,9 +466,11 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             }
             composable<Route.BackupExport> {
                 // As iOS snapshotForExport: export is the one path that reads a whole snapshot.
-                BackupExportScreen(profileID, snapshot = { repository.database(profileID).snapshot() },
+                BackupExportScreen(profileID, repository, snapshot = { repository.database(profileID).snapshot() },
                     currentProfile = { (repository.bootstrapState.value as? Bootstrap.Ready)?.profileID },
-                    onBack = { navController.popBackStack() })
+                    onBack = { navController.popBackStack() },
+                    // The app scope: switching diaries replaces this screen, which must not cancel the switch.
+                    onImported = { id -> appScope.launch { repository.choose(id) } })
             }
             composable<Route.Connection> {
                 ConnectionScreen(

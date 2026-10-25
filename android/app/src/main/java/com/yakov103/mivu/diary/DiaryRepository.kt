@@ -69,6 +69,30 @@ class DiaryRepository(
     /** Whether any diary file exists; an entry from outside the app checks this so it never creates the first diary. */
     fun hasDiary(): Boolean = File(context.filesDir, "profiles").listFiles().orEmpty().any { File(it, DIARY_FILE).isFile }
 
+    /** Whether [profileID] has a diary on this device. */
+    fun hasDiary(profileID: UUID): Boolean = File(folder(profileID), DIARY_FILE).isFile
+
+    /**
+     * Makes [incoming] (decoded into [spool]) a new local diary, as iOS `importProfile`: never over an existing one, and
+     * on any failure its folder is removed. The caller selects it with [choose].
+     */
+    fun importProfile(incoming: DiarySnapshot, spool: PhotoSpool): UUID {
+        val id = incoming.profile.id
+        if (hasDiary(id)) throw DiaryError.InvalidData("diary exists")
+        val db = DiaryDatabase.open(context, id)
+        try {
+            db.replace(requireEmpty = true, photoBytes = spool::bytes) { incoming }
+        } catch (e: Exception) {
+            db.close()
+            folder(id).deleteRecursively()
+            throw e
+        }
+        synchronized(databases) { databases[id] = watched(db) }
+        return id
+    }
+
+    private fun folder(id: UUID) = File(context.filesDir, "profiles/${id.toString().uppercase()}")
+
     /** True once for a diary this launch created, so setup opens a single time even when the activity is recreated. */
     fun takeCreated(): Boolean {
         val ready = _bootstrapState.value as? Bootstrap.Ready ?: return false
@@ -105,7 +129,7 @@ class DiaryRepository(
             create(context, profile)
         } catch (e: Exception) {
             // Only this attempt's empty file is there; leaving it would look like a broken diary on the next launch.
-            File(context.filesDir, "profiles/${profile.id.toString().uppercase()}").deleteRecursively()
+            folder(profile.id).deleteRecursively()
             throw e
         }
         synchronized(databases) { databases[profile.id] = watched(db) }

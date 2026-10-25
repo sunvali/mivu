@@ -46,10 +46,11 @@ fun DiaryDatabase.exportArchive(out: OutputStream) = withPhotoDigests { snapshot
  * to `cacheDir/archive-<uuid>` while decoding and written one at a time; the spool is deleted either way.
  */
 fun DiaryDatabase.importArchive(input: InputStream, cacheDir: File) =
-    PhotoSpool(File(cacheDir, "archive-${UUID.randomUUID()}")).use { spool ->
-        val incoming = DiaryArchive.decode(input, spool)
-        replace(requireEmpty = false, photoBytes = spool::bytes) { current -> current?.let { replacement(incoming, it) } ?: incoming }
-    }
+    PhotoSpool(File(cacheDir, "archive-${UUID.randomUUID()}")).use { spool -> restore(DiaryArchive.decode(input, spool), spool) }
+
+/** As [importArchive] for an archive already decoded into [spool]; the caller closes the spool. */
+fun DiaryDatabase.restore(incoming: DiarySnapshot, spool: PhotoSpool) =
+    replace(requireEmpty = false, photoBytes = spool::bytes) { current -> current?.let { replacement(incoming, it) } ?: incoming }
 
 /** In-memory restore for small archives in tests. */
 fun DiaryDatabase.importArchive(input: InputStream) {
