@@ -60,7 +60,8 @@ parts swapped for their Android counterparts. Recount after edits.
 - **Contact email:** support@mivuapp.com (**Owner:** create the mailbox).
 - **Privacy policy URL:** https://mivuapp.com/privacy (**Owner:** publish it).
 - **App icon (512 × 512):** `design-system/mivu/precision-glass/icon/android/play-icon-512.png`.
-- **Feature graphic (1024 × 500):** not made yet (**Owner**, or ask for one).
+- **Feature graphic (1024 × 500):** `docs/verification/android-play/listing/feature-graphic.png` (Pip, the name and
+  the App Store subtitle; rendered from HTML with headless Chrome).
 
 **Full description (4000):**
 
@@ -104,19 +105,30 @@ parts swapped for their Android counterparts. Recount after edits.
 
 ## Screenshots
 
-Phone screenshots, 9:16 at 1080 × 1920 (Play: 2 to 8 images, each side 320 to
-3840 px, the long side at most twice the short one). Taken on the emulator with
-synthetic data; files in [`docs/verification/android-play/`](../verification/android-play/).
+Phone screenshots at 1080 × 2160 (Play: 2 to 8 images, each side 320 to 3840 px,
+the long side at most twice the short one, so the emulator's native 1080 × 2400 is
+too tall). Taken on the emulator (`wm size 1080x2160`, demo-mode status bar at
+9:41) with synthetic data: two weeks of meals and weights under a 2,000 kcal goal,
+seeded by `ListingFixtureSeed` (`-e seedListing true`; the Coach shot adds
+`-e holdCoachSeconds N`, which shows the app with a connected-looking Coach and
+no sign-in). Files in
+[`docs/verification/android-play/listing/`](../verification/android-play/listing/):
 
-1. `play-01-today.png` — Your day at a glance (Today with Pip)
-2. `play-02-coach.png` — Log a meal in your own words (Coach timeline)
-3. `play-03-progress.png` — See how close you land (Progress)
-4. `play-04-diary.png` — Your diary stays on your phone (Diary)
-5. `play-05-widget.png` — Calories left on your home screen (widgets)
+1. `play-01-today.png` — Your day at a glance (Today with Pip and meals)
+2. `play-02-coach.png` — Log a meal in your own words (Saved food receipt and Pip's reply)
+3. `play-03-progress.png` — See how close you land (Progress week with Pip)
+4. `play-04-diary.png` — Every day, kept on your phone (Diary week)
+5. `play-05-widgets.png` — Calories left on your home screen (both widget sizes)
+6. `play-06-setup.png` — Pip sets your targets in about a minute (Setup)
 
-They are raw captures. Framing with brand teal and captions, as on iOS, is the
-owner's choice. A photo-capture shot is not included: it needs a real meal photo
-the owner has rights to.
+They are raw captures; framing with brand teal and captions is the owner's
+choice. A photo-capture shot is not included: it needs a real meal photo the
+owner has rights to. The earlier 1080 × 1920 captures in `android-play/` are
+superseded.
+
+Known issue: in `play-06-setup.png` the status-bar icons are light on the light
+background, because the full-screen Setup dialog window does not ask for dark
+icons as `CaptureDialog` does. Retake it after that fix.
 
 ## Data safety (draft answers)
 
