@@ -76,14 +76,7 @@ fun CaptureDialog(
     val focus = LocalFocusManager.current
     val close = { focus.clearFocus(); if (dirty) showDiscard = true else onClose() }
     BackHandler { if (!saving) close() }
-    // The dialog's own window draws behind the system bars: give them the app's light or dark icons.
-    val view = LocalView.current
-    val lightBars = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    SideEffect {
-        (view.parent as? DialogWindowProvider)?.window?.let {
-            WindowCompat.getInsetsController(it, view).run { isAppearanceLightStatusBars = lightBars; isAppearanceLightNavigationBars = lightBars }
-        }
-    }
+    DialogSystemBarIcons()
 
     Scaffold(
         topBar = {
@@ -130,5 +123,17 @@ fun CaptureDialog(
             },
             dismissButton = { TextButton({ showDiscard = false }) { Text("Keep editing") } },
         )
+    }
+}
+
+/** A full-screen dialog's own window draws behind the system bars: give them the app's light or dark icons. */
+@Composable
+fun DialogSystemBarIcons() {
+    val view = LocalView.current
+    val lightBars = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    SideEffect {
+        (view.parent as? DialogWindowProvider)?.window?.let {
+            WindowCompat.getInsetsController(it, view).run { isAppearanceLightStatusBars = lightBars; isAppearanceLightNavigationBars = lightBars }
+        }
     }
 }

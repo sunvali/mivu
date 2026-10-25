@@ -110,6 +110,7 @@ import com.yakov103.mivu.pip.PipCompanion
 import com.yakov103.mivu.pip.PipGestureLibrary
 import com.yakov103.mivu.pip.PipRigScene
 import com.yakov103.mivu.pip.rememberMotionPlayback
+import com.yakov103.mivu.ui.DialogSystemBarIcons
 import com.yakov103.mivu.ui.progress.editorFailure
 import com.yakov103.mivu.ui.progress.fieldText
 import com.yakov103.mivu.ui.progress.progressNumber
@@ -390,6 +391,7 @@ fun OnboardingScreen(model: OnboardingViewModel, onAgree: () -> Unit, onConnect:
     LaunchedEffect(model.saved) { if (model.saved) onFinish() }
     BackHandler(enabled = step != OnboardingViewModel.Step.hello) { model.back() }
     val pip = rememberSetupPip(model)
+    DialogSystemBarIcons()
     val imeVisible = WindowInsets.isImeVisible
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {

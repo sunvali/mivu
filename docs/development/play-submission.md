@@ -126,10 +126,6 @@ choice. A photo-capture shot is not included: it needs a real meal photo the
 owner has rights to. The earlier 1080 × 1920 captures in `android-play/` are
 superseded.
 
-Known issue: in `play-06-setup.png` the status-bar icons are light on the light
-background, because the full-screen Setup dialog window does not ask for dark
-icons as `CaptureDialog` does. Retake it after that fix.
-
 ## Data safety (draft answers)
 
 **Owner ruling (2026-10-25): declare the data sent to OpenAI as shared.** The

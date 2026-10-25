@@ -1,6 +1,8 @@
 package com.yakov103.mivu.ui.onboarding
 
 import android.content.Context
+import android.content.res.Configuration
+import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
@@ -26,6 +28,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso
+import androidx.test.espresso.matcher.RootMatchers
+import androidx.test.espresso.matcher.ViewMatchers
 import com.yakov103.mivu.analysis.AvailableModel
 import com.yakov103.mivu.coach.CoachInferenceInput
 import com.yakov103.mivu.coach.CoachInferenceResult
@@ -161,6 +166,17 @@ class OnboardingScreenTest {
         waitFor(heading("Today"))
         compose.waitForIdle()
         assertTrue(!exists(heading("Hi, I'm Pip")))
+    }
+
+    @Test fun setupStatusBarIconsFollowTheTheme() {
+        launchApp()
+        waitFor(heading("Hi, I'm Pip"))
+        compose.waitForIdle()
+        val dark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        Espresso.onView(ViewMatchers.isRoot()).inRoot(RootMatchers.isDialog()).check { view, _ ->
+            val appearance = view.rootView.windowInsetsController!!.systemBarsAppearance
+            assertEquals("dark icons over the light setup", !dark, appearance and WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS != 0)
+        }
     }
 
     @Test fun existingDiaryNeverOpensSetup() {
