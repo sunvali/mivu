@@ -113,4 +113,9 @@ import Testing
         #expect(DayProgressSync.isLive(.active) && DayProgressSync.isLive(.stale))
         #expect(!DayProgressSync.isLive(.ended) && !DayProgressSync.isLive(.dismissed))
     }
+
+    @Test func onlyEndedActivitiesLingerOnTheLockScreen() {
+        #expect(DayProgressSync.lingers(.ended))
+        #expect(!DayProgressSync.lingers(.active) && !DayProgressSync.lingers(.stale) && !DayProgressSync.lingers(.dismissed))
+    }
 }

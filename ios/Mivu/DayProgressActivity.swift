@@ -27,6 +27,9 @@ enum DayProgressSync: Equatable {
     /// iOS keeps an ended activity listed until its Lock Screen card goes; it can no longer be updated.
     static func isLive(_ state: ActivityState) -> Bool { state == .active || state == .stale }
 
+    /// iOS ends an activity by itself after eight hours but keeps its outdated card for up to four more.
+    static func lingers(_ state: ActivityState) -> Bool { state == .ended }
+
     static func decide(enabled: Bool, authorized: Bool, hasDiary: Bool, running: Int) -> DayProgressSync {
         guard enabled, authorized, hasDiary else { return .endAll }
         return running == 0 ? .start : .update(endingExtra: running - 1)
@@ -74,7 +77,12 @@ extension DayProgressSync {
 
 private func applyDayProgress(enabled: Bool, authorized: Bool,
                               content: ActivityContent<DayProgressAttributes.ContentState>?) async {
-    let running = Activity<DayProgressAttributes>.activities.filter { DayProgressSync.isLive($0.activityState) }
+    let activities = Activity<DayProgressAttributes>.activities
+    // Otherwise a fresh activity would sit beside the old card with yesterday's or this morning's numbers.
+    for activity in activities where DayProgressSync.lingers(activity.activityState) {
+        await activity.end(nil, dismissalPolicy: .immediate)
+    }
+    let running = activities.filter { DayProgressSync.isLive($0.activityState) }
     switch DayProgressSync.decide(enabled: enabled, authorized: authorized, hasDiary: content != nil, running: running.count) {
     case .endAll:
         for activity in running { await activity.end(nil, dismissalPolicy: .immediate) }
