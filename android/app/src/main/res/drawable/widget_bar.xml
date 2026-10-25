@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The goal bar: an accent capsule over a 16% accent track (iOS goalBar). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape>
+            <solid android:color="@color/widget_accent_track" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <scale android:scaleWidth="100%">
+            <shape>
+                <solid android:color="@color/widget_accent" />
+                <corners android:radius="3dp" />
+            </shape>
+        </scale>
+    </item>
+</layer-list>

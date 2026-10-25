@@ -5,4 +5,6 @@
     <string name="shortcut_snap_it_long">Photograph a meal and log it in Mivu.</string>
     <string name="shortcut_coach">Coach</string>
     <string name="shortcut_coach_long">Opens Mivu Coach, ready for a question.</string>
+    <string name="widget_calories_label">Calories</string>
+    <string name="widget_calories_description">Today\'s calories, with Snap It and Coach one tap away.</string>
 </resources>

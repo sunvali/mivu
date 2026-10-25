@@ -70,5 +70,17 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- The Calories home-screen widget; the system delivers its updates, and the rollover alarm targets it by class. -->
+        <receiver
+            android:name=".widget.CaloriesWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_calories_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_calories" />
+        </receiver>
     </application>
 </manifest>

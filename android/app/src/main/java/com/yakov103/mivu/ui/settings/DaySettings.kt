@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
+import com.yakov103.mivu.MivuApplication
 import com.yakov103.mivu.R
 import com.yakov103.mivu.day.MorningReminder
 import com.yakov103.mivu.diary.DayCutoff
@@ -101,6 +102,7 @@ internal fun DaySettings() {
                             choosingHour = false
                             cutoff = hour
                             DayCutoff.set(prefs, hour)
+                            (context.applicationContext as MivuApplication).refreshWidget()
                         }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
                     }
                 }

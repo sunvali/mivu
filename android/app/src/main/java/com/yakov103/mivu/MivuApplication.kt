@@ -23,14 +23,24 @@ import com.yakov103.mivu.diary.DayCutoff
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.rollOverDay
 import com.yakov103.mivu.quick.QuickAction
+import com.yakov103.mivu.widget.CaloriesWidget
+import com.yakov103.mivu.widget.WidgetSnapshot
+import com.yakov103.mivu.widget.widgetSnapshot
 import java.time.Instant
+import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -62,6 +72,29 @@ class MivuApplication : Application() {
         runCatching { repository.database(ready.profileID).rollOverDay(Instant.now()) } // the next activity starts the day instead
     }
 
+    private val widgetRefresh = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Republishes the Calories widget without a diary write, such as after the day cutoff changes. */
+    fun refreshWidget() { widgetRefresh.tryEmit(Unit) }
+
+    /** iOS `publishWidgetSnapshot` on every read-model change: after each write (a rollover is one) and diary switch. */
+    private fun publishWidget() = scope.launch(Dispatchers.IO) {
+        combine(repository.bootstrapState, merge(repository.changes, widgetRefresh).onStart { emit(Unit) }) { state, _ -> state }
+            .conflate()
+            .collect { state ->
+                val snapshot = when (state) {
+                    is Bootstrap.Ready -> runCatching { repository.database(state.profileID).widgetSnapshot(Instant.now()) }
+                        .getOrNull() ?: return@collect // a failed read keeps the last snapshot
+                    is Bootstrap.Choose -> Instant.now().let { now ->
+                        WidgetSnapshot("", 0.0, null, false, WidgetSnapshot.nextRollover(now.toEpochMilli(),
+                            ZoneId.systemDefault().id, DayCutoff.hour), now.toEpochMilli())
+                    }
+                    else -> return@collect // still opening, or failed: keep the last snapshot
+                }
+                CaloriesWidget.publish(this@MivuApplication, snapshot)
+            }
+    }
+
     // The one ChatGPT connection for the process; the debug proof screen shares it so refresh rotation has one owner.
     val chatGPT by lazy {
         val store = CredentialStore(this)
@@ -77,6 +110,7 @@ class MivuApplication : Application() {
         // A force-stop clears alarms with no broadcast: every launch rebooks the reminder (or cancels it when off).
         MorningReminder.schedule(this)
         restored = scope.launch(Dispatchers.IO) { chatGPT.restore() }
+        publishWidget()
         // As iOS, turns waiting for a connection run once the connection can infer.
         scope.launch { chatGPT.state.map { it.canInfer }.distinctUntilChanged().collect { if (it) drainCoach(retryWaiting = true) } }
     }
