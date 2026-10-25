@@ -14,6 +14,8 @@ import android.os.ParcelFileDescriptor
 import androidx.annotation.VisibleForTesting
 import java.io.Closeable
 import java.io.File
+import java.io.InputStream
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
@@ -157,9 +159,9 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
          * read the bytes one photo at a time with [photoBytes].
          */
         fun dayMeals(dayID: UUID): List<DiaryMeal> =
-            meals("parent = ?", "parent IN (SELECT id FROM meal WHERE parent = ?)", dayID, photoBytes = false)
+            meals("parent = ?", "parent IN (SELECT id FROM meal WHERE parent = ?)", dayID, photoData = null)
         /** One meal for a detail screen, with photo metadata only, as [dayMeals]. */
-        fun mealWithoutPhotoBytes(id: UUID): DiaryMeal? = meals("id = ?", "parent = ?", id, photoBytes = false).firstOrNull()
+        fun mealWithoutPhotoBytes(id: UUID): DiaryMeal? = meals("id = ?", "parent = ?", id, photoData = null).firstOrNull()
         fun goals(): List<GoalRecord> = records("goal", GoalRecord.serializer()).map { it.second }
         fun dayWorkouts(dayID: UUID): List<WorkoutSession> = records("workout", WorkoutSession.serializer(), "parent = ?", dayID).map { it.second }
         fun dayWeight(dayID: UUID): WeightEntry? = records("weight", WeightEntry.serializer(), "parent = ?", dayID).firstOrNull()?.second
@@ -445,18 +447,38 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     /** Import: validates, then replaces every row and the head with [snapshot] as given (no revision bump). */
     fun replaceAll(snapshot: DiarySnapshot) = replace(requireEmpty = false) { snapshot }
 
+    /**
+     * Gives [body] the diary with SHA-256 digests as photo data and a reader of each digest's bytes, one photo at a
+     * time, inside one transaction so the bytes match the snapshot. Photo sizes were checked when they were written.
+     */
+    internal fun <T> withPhotoDigests(body: (DiarySnapshot, (ByteArray) -> ByteArray) -> T): T = immediate {
+        val snapshot = readSnapshot(head(), ::digest)
+        val rows = HashMap<String, Pair<String, String>>()
+        for (m in snapshot.meals) for (p in m.photos) rows[p.data.hex()] = "photo" to "${m.id.key}/${p.id.key}"
+        for (t in snapshot.coachTurns) for (p in t.photos) rows[p.data.hex()] = "coach_photo" to "${t.id.key}/${p.id.key}"
+        body(snapshot) { digest -> rows.getValue(digest.hex()).let { (table, id) -> bytes(table, id) } }
+    }
+
     override fun close() = db.close()
 
     internal fun pragma(name: String): String = db.rawQuery("PRAGMA $name", null).use { it.moveToFirst(); it.getString(0) }
 
-    /** One write transaction from the current diary (null when there is none) to the snapshot [next] returns. */
-    internal fun replace(requireEmpty: Boolean, next: (DiarySnapshot?) -> DiarySnapshot) = immediate {
+    /**
+     * One write transaction from the current diary (null when there is none) to the snapshot [next] returns. With
+     * [photoBytes], photo data are placeholders: the current diary's are SHA-256 digests (as [PhotoSpool]'s) and each
+     * written photo's bytes come from [photoBytes], one at a time.
+     */
+    internal fun replace(
+        requireEmpty: Boolean,
+        photoBytes: ((ByteArray) -> ByteArray)? = null,
+        next: (DiarySnapshot?) -> DiarySnapshot,
+    ) = immediate {
         val current = readHead()
         if (requireEmpty && current != null) throw DiaryError.InvalidData("diary exists")
-        val snapshot = next(current?.let(::readSnapshot))
+        val snapshot = next(current?.let { readSnapshot(it, if (photoBytes == null) ::bytes else ::digest) })
         if (snapshot.profile.id != profileID) throw DiaryError.WrongOwner
         validateArchiveManifests(snapshot)
-        writeRows(snapshot)
+        writeRows(snapshot, photoBytes ?: { it })
         val head = Head(snapshot.revision.toLong(), snapshot.lineage, snapshot.profile, snapshot.activeDayID,
             snapshot.previousDayConfirmedAt, snapshot.activeConversationSegmentID)
         writeHead(head)
@@ -531,14 +553,16 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
     }
 
     // Plain inserts: a child ID already used by another meal fails the primary key instead of moving rows.
-    private fun putChildren(m: DiaryMeal) {
+    private fun putChildren(m: DiaryMeal, photoBytes: (ByteArray) -> ByteArray = { it }) {
         m.submissions.forEachIndexed { j, sub -> insert("submission", sub.id.key, j, SwiftJson.encodeToString(MealSubmission.serializer(), sub), m.id) }
         m.items.forEachIndexed { j, item -> insert("item", "${m.id.key}/${item.id.key}", j, SwiftJson.encodeToString(FoodItem.serializer(), item), m.id) }
-        putPhotos("photo", m.id, m.photos)
+        putPhotos("photo", m.id, m.photos, photoBytes)
     }
 
-    private fun putPhotos(table: String, parent: UUID, photos: List<MealPhoto>) = photos.forEachIndexed { i, p ->
-        insert(table, "${parent.key}/${p.id.key}", i, SwiftJson.encodeToString(MealPhoto.serializer(), p.copy(data = ByteArray(0))), parent, p.data)
+    private fun putPhotos(table: String, parent: UUID, photos: List<MealPhoto>, photoBytes: (ByteArray) -> ByteArray = { it }) =
+        photos.forEachIndexed { i, p ->
+            insert(table, "${parent.key}/${p.id.key}", i, SwiftJson.encodeToString(MealPhoto.serializer(), p.copy(data = ByteArray(0))),
+                parent, photoBytes(p.data))
     }
 
     private fun insert(table: String, id: String, ordinal: Int, payload: String, parent: UUID?, bytes: ByteArray? = null) {
@@ -547,7 +571,7 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             args.toTypedArray())
     }
 
-    private fun writeRows(s: DiarySnapshot) {
+    private fun writeRows(s: DiarySnapshot, photoBytes: (ByteArray) -> ByteArray = { it }) {
         for ((kind, ids) in listOf(Tombstone.meal to s.deletedMealIDs, Tombstone.weight to s.deletedWeightIDs, Tombstone.workout to s.deletedWorkoutIDs)) {
             val kept = ids.toSet()
             if (records("tombstone_${kind.name}", SwiftUUID).any { it.second !in kept }) throw DiaryError.InvalidData("dropped ${kind.name} tombstone")
@@ -556,14 +580,14 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         s.days.forEachIndexed { i, d -> put("day", d.id.key, d, TrackingDay.serializer(), ordinal = i) }
         s.meals.forEachIndexed { i, m ->
             put("meal", m.id.key, m.copy(items = emptyList(), photos = emptyList(), submissions = emptyList()), DiaryMeal.serializer(), m.dayID, ordinal = i)
-            putChildren(m)
+            putChildren(m, photoBytes)
         }
         s.weights.forEachIndexed { i, w -> put("weight", w.id.key, w, WeightEntry.serializer(), w.dayID, ordinal = i) }
         s.goals.forEachIndexed { i, g -> put("goal", g.id.key, g, GoalRecord.serializer(), ordinal = i) }
         s.workouts.forEachIndexed { i, w -> put("workout", w.id.key, w, WorkoutSession.serializer(), w.dayID, ordinal = i) }
         s.coachTurns.forEachIndexed { i, t ->
             put("coach_turn", t.id.key, t.copy(photos = emptyList()), CoachTurn.serializer(), ordinal = i)
-            putPhotos("coach_photo", t.id, t.photos)
+            putPhotos("coach_photo", t.id, t.photos, photoBytes)
         }
         for ((kind, ids) in listOf(Tombstone.meal to s.deletedMealIDs, Tombstone.weight to s.deletedWeightIDs, Tombstone.workout to s.deletedWorkoutIDs)) {
             ids.forEachIndexed { i, id -> put("tombstone_${kind.name}", id.key, id, SwiftUUID, ordinal = i) }
@@ -579,9 +603,19 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
         }
     }
 
-    private fun bytes(table: String, id: String): ByteArray = db.compileStatement("SELECT bytes FROM $table WHERE id = ?").use { st ->
+    private fun <T> blob(table: String, id: String, read: (InputStream) -> T): T = db.compileStatement("SELECT bytes FROM $table WHERE id = ?").use { st ->
         st.bindString(1, id)
-        ParcelFileDescriptor.AutoCloseInputStream(st.simpleQueryForBlobFileDescriptor() ?: throw DiaryError.InvalidData(table)).use { it.readBytes() }
+        ParcelFileDescriptor.AutoCloseInputStream(st.simpleQueryForBlobFileDescriptor() ?: throw DiaryError.InvalidData(table)).use(read)
+    }
+
+    private fun bytes(table: String, id: String): ByteArray = blob(table, id) { it.readBytes() }
+
+    /** SHA-256 of a photo's bytes, streamed rather than loaded. */
+    private fun digest(table: String, id: String): ByteArray = blob(table, id) { input ->
+        val sha = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(64 * 1024)
+        while (true) { val n = input.read(buffer); if (n < 0) break; sha.update(buffer, 0, n) }
+        sha.digest()
     }
 
     // Decodes each row and checks it is stored under its own key, as iOS `decode` does.
@@ -603,30 +637,32 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             row to value
         }
 
-    private fun photos(table: String, where: String? = null, arg: UUID? = null, withBytes: Boolean = true): Map<String?, List<MealPhoto>> =
+    /** Photos with [data] of each row as their data, or metadata only when it is null. */
+    private fun photos(table: String, where: String?, arg: UUID?, data: ((String, String) -> ByteArray)?): Map<String?, List<MealPhoto>> =
         records(table, MealPhoto.serializer(), where, arg)
-            .groupBy({ it.first.parent }, { (r, p) -> if (withBytes) p.copy(data = bytes(table, r.id)) else p })
+            .groupBy({ it.first.parent }, { (r, p) -> if (data != null) p.copy(data = data(table, r.id)) else p })
 
     private fun days(id: UUID? = null) = records("day", TrackingDay.serializer(), id?.let { "id = ?" }, id).map { it.second }
 
-    private fun meals(id: UUID? = null): List<DiaryMeal> = meals(id?.let { "id = ?" }, id?.let { "parent = ?" }, id)
+    private fun meals(id: UUID? = null, data: ((String, String) -> ByteArray)? = ::bytes): List<DiaryMeal> =
+        meals(id?.let { "id = ?" }, id?.let { "parent = ?" }, id, data)
 
     /** Meals matching [where] with their children matching [childWhere], both bound to [arg]. */
-    private fun meals(where: String?, childWhere: String?, arg: UUID?, photoBytes: Boolean = true): List<DiaryMeal> {
+    private fun meals(where: String?, childWhere: String?, arg: UUID?, photoData: ((String, String) -> ByteArray)? = ::bytes): List<DiaryMeal> {
         val submissions = records("submission", MealSubmission.serializer(), childWhere, arg).groupBy({ it.first.parent }, { it.second })
         val items = records("item", FoodItem.serializer(), childWhere, arg).groupBy({ it.first.parent }, { it.second })
-        val photos = photos("photo", childWhere, arg, photoBytes)
+        val photos = photos("photo", childWhere, arg, photoData)
         return records("meal", DiaryMeal.serializer(), where, arg).map { (_, m) ->
             m.copy(items = items[m.id.key].orEmpty(), photos = photos[m.id.key].orEmpty(), submissions = submissions[m.id.key].orEmpty())
         }
     }
 
-    private fun turns(id: UUID? = null): List<CoachTurn> {
-        val photos = photos("coach_photo", id?.let { "parent = ?" }, id)
+    private fun turns(id: UUID? = null, data: ((String, String) -> ByteArray)? = ::bytes): List<CoachTurn> {
+        val photos = photos("coach_photo", id?.let { "parent = ?" }, id, data)
         return records("coach_turn", CoachTurn.serializer(), id?.let { "id = ?" }, id).map { (_, t) -> t.copy(photos = photos[t.id.key].orEmpty()) }
     }
 
-    private fun readSnapshot(head: Head): DiarySnapshot {
+    private fun readSnapshot(head: Head, photoData: (String, String) -> ByteArray = ::bytes): DiarySnapshot {
         snapshotReads++
         fun ids(kind: Tombstone) = records("tombstone_${kind.name}", SwiftUUID).map { it.second }
         return DiarySnapshot(
@@ -634,11 +670,11 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             revision = head.revision.toInt(), // readHead and check bound it below MAX_REVISION
             profile = head.profile,
             days = days(),
-            meals = meals(),
+            meals = meals(data = photoData),
             weights = records("weight", WeightEntry.serializer()).map { it.second },
             goals = records("goal", GoalRecord.serializer()).map { it.second },
             workouts = records("workout", WorkoutSession.serializer()).map { it.second },
-            coachTurns = turns(),
+            coachTurns = turns(data = photoData),
             activeDayID = head.activeDayID,
             previousDayConfirmedAt = head.previousDayConfirmedAt,
             deletedMealIDs = ids(Tombstone.meal),

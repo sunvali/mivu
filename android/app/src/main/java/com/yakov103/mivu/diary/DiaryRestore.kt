@@ -1,5 +1,6 @@
 package com.yakov103.mivu.diary
 
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
@@ -33,13 +34,24 @@ fun replacement(incoming: DiarySnapshot, original: DiarySnapshot): DiarySnapshot
     )
 }
 
-/** Streams the whole diary as a version-4 archive. Over the size cap it throws mid-write: write to a temp file. */
-fun DiaryDatabase.exportArchive(out: OutputStream) = DiaryArchive.encode(snapshot(), out)
+/**
+ * Streams the whole diary as a version-4 archive, reading one photo's bytes at a time. Over the size cap it throws
+ * mid-write: write to a temp file.
+ */
+fun DiaryDatabase.exportArchive(out: OutputStream) = withPhotoDigests { snapshot, bytes -> DiaryArchive.encode(snapshot, out, bytes) }
 
 /**
  * Restores an archive. A profile with no diary yet takes it as it is, like iOS `importProfile`; an existing
- * diary is replaced only by [replacement], in the same write transaction that reads it.
+ * diary is replaced only by [replacement], in the same write transaction that reads it. Photo bytes are spooled
+ * to `cacheDir/archive-<uuid>` while decoding and written one at a time; the spool is deleted either way.
  */
+fun DiaryDatabase.importArchive(input: InputStream, cacheDir: File) =
+    PhotoSpool(File(cacheDir, "archive-${UUID.randomUUID()}")).use { spool ->
+        val incoming = DiaryArchive.decode(input, spool)
+        replace(requireEmpty = false, photoBytes = spool::bytes) { current -> current?.let { replacement(incoming, it) } ?: incoming }
+    }
+
+/** In-memory restore for small archives in tests. */
 fun DiaryDatabase.importArchive(input: InputStream) {
     val incoming = DiaryArchive.decode(input)
     replace(requireEmpty = false) { current -> current?.let { replacement(incoming, it) } ?: incoming }

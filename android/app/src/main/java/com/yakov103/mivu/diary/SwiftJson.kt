@@ -66,15 +66,37 @@ object SwiftUUID : KSerializer<UUID> {
     }
 }
 
-/** Swift Data: padded standard base64 string. */
+/**
+ * Swift Data: padded standard base64 string. An archive `Json` may bind a contextual ByteArray serializer
+ * ([PlaceholderData]); every Data field then goes through it, so models keep their schema.
+ */
 object SwiftData : KSerializer<ByteArray> {
     override val descriptor = PrimitiveSerialDescriptor("SwiftData", PrimitiveKind.STRING)
-    override fun serialize(encoder: Encoder, value: ByteArray) =
-        encoder.encodeString(Base64.getEncoder().encodeToString(value))
+    override fun serialize(encoder: Encoder, value: ByteArray) {
+        val bound = encoder.serializersModule.getContextual(ByteArray::class)
+        if (bound != null) bound.serialize(encoder, value) else encoder.encodeString(Base64.getEncoder().encodeToString(value))
+    }
     override fun deserialize(decoder: Decoder): ByteArray =
-        try {
-            Base64.getDecoder().decode(decoder.decodeString())
-        } catch (_: IllegalArgumentException) {
-            throw SerializationException("Malformed base64 data")
-        }
+        decoder.serializersModule.getContextual(ByteArray::class)?.deserialize(decoder) ?: base64Data(decoder.decodeString())
+}
+
+private fun base64Data(text: String): ByteArray =
+    try {
+        Base64.getDecoder().decode(text)
+    } catch (_: IllegalArgumentException) {
+        throw SerializationException("Malformed base64 data")
+    }
+
+/**
+ * Swift Data whose in-memory values are placeholders, so one photo's bytes are held at a time:
+ * encoding writes [resolve] of the placeholder, decoding returns [store] of the decoded bytes.
+ */
+internal class PlaceholderData(
+    private val resolve: (ByteArray) -> ByteArray,
+    private val store: (ByteArray) -> ByteArray = { throw UnsupportedOperationException("encode only") },
+) : KSerializer<ByteArray> {
+    override val descriptor = SwiftData.descriptor
+    override fun serialize(encoder: Encoder, value: ByteArray) =
+        encoder.encodeString(Base64.getEncoder().encodeToString(resolve(value)))
+    override fun deserialize(decoder: Decoder): ByteArray = store(base64Data(decoder.decodeString()))
 }
