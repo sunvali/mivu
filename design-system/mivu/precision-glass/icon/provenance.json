@@ -23,5 +23,17 @@
       "sourceFilename": "icon-tinted.png",
       "sha256": "c4c22e490dcb90060d652a619d7b28befde28f2355d6b7e3a3c094d358069354"
     }
-  ]
+  ],
+  "android": {
+    "generator": "design-system/mivu/precision-glass/icon/render-android.py",
+    "launcherArt": "ios/Mivu/Assets.xcassets/AppIcon.appiconset/AppIcon.png resized to 432 x 432 with sips -Z 432 into android/app/src/main/res/drawable-nodpi/ic_launcher_art.png",
+    "launcherBackground": "AppIcon.png corner pixel, written to android/app/src/main/res/values/ic_launcher_background.xml",
+    "monochromeAndNotification": "Filled outlines of ear-l@front, ear-r@front and head@front from design-system/mivu/characters/pip/rig/pip.svg, written white to android/app/src/main/res/drawable/ic_stat_pip.xml",
+    "playListingIcon": "AppIcon.png resized with sips -Z 512 into design-system/mivu/precision-glass/icon/android/play-icon-512.png for the owner to upload; not uploaded",
+    "sha256": {
+      "AppIcon.png": "e2fdd00c0c5dfad95bbac9bc7b26702a7ad784f671ebc9c19862b6330f2f9b7d",
+      "ic_launcher_art.png": "a22894f7d2722268d5c343bf975bad208d7a2934a0863bbddae3356be8184fd1",
+      "play-icon-512.png": "0e2c533e062e1032317b014938e2d42ddaf4010824a2b66d1f19b56eb60088df"
+    }
+  }
 }

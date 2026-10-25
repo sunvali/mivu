@@ -9,6 +9,7 @@ import android.app.Notification
 import androidx.core.content.edit
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.rule.GrantPermissionRule
+import com.yakov103.mivu.R
 import com.yakov103.mivu.diary.DiaryRepository
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -55,6 +56,7 @@ class MorningReminderReceiverTest {
         assertEquals("Good morning", notification.extras.getString(Notification.EXTRA_TITLE))
         assertEquals("Log your weight or breakfast.", notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
         assertEquals("morning", notification.channelId)
+        assertEquals(R.drawable.ic_stat_pip, notification.smallIcon.resId)
         assertTrue(notification.flags and Notification.FLAG_AUTO_CANCEL != 0)
         assertNotNull(notification.contentIntent)
         assertNotNull(scheduled()) // the next morning is booked

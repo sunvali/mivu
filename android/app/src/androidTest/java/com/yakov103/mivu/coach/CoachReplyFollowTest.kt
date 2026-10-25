@@ -15,6 +15,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
+import com.yakov103.mivu.R
 import com.yakov103.mivu.MainActivity
 import com.yakov103.mivu.MivuApplication
 import com.yakov103.mivu.diary.Bootstrap
@@ -100,6 +101,7 @@ class CoachReplyFollowTest {
         assertEquals("Coach", posted.notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
         assertEquals("Synthetic reply: noted your soup.", body(posted))
         assertTrue(posted.notification.flags and Notification.FLAG_AUTO_CANCEL != 0)
+        assertEquals(R.drawable.ic_stat_pip, posted.notification.smallIcon.resId)
         posted.notification.contentIntent.send()
         compose.waitUntil(15_000) { runCatching { compose.onAllNodes(hasText("Coach") and isHeading()).fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false) }
         assertTrue(app.screenVisible)

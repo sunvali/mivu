@@ -65,7 +65,7 @@ object MorningReminder {
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
         val open = PendingIntent.getActivity(context, REQUEST, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notifications)
+            .setSmallIcon(R.drawable.ic_stat_pip)
             .setContentTitle("Good morning")
             .setContentText("Log your weight or breakfast.")
             .setContentIntent(open)

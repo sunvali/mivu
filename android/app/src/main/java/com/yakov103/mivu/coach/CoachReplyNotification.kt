@@ -61,7 +61,7 @@ object CoachReplyNotification {
         val open = PendingIntent.getActivity(context, 0, quickIntent(context, QuickAction.OpenCoach).putExtra(TURN, turnID.toString()),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notifications)
+            .setSmallIcon(R.drawable.ic_stat_pip)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
