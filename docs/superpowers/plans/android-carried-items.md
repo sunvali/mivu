@@ -13,7 +13,9 @@ Milestone 5 closed in [its record](../../verification/2026-10-24-android-connect
 - Responses-host network errors still map to "unavailable"; map them to the offline notice as sign-in errors are.
 
 ## Milestone 7 (Pip moments)
-- Today Pip moments: saved, first meal today, day complete, welcome back, reviewed.
+Milestone 7 closed in [its record](../../verification/2026-10-25-android-pip-moments.md): Today plays saved, first
+meal today, welcome back and reviewed, and re-greets after the background. Day complete is not wired, since iOS has
+no trigger (moved to Later).
 
 ## Milestone 8 (outside-app capture)
 - Coach reply notifications. iOS posts them only for Siri-started turns, and Android has no outside-app turn source
@@ -25,7 +27,8 @@ morning check-in, the weight row and the goal editor are done.
 - Backup & export: the archive export/import UI joins the report screen (see Play readiness).
 - Morning reminder: deliver and tap on a physical phone.
 - Disconnect ChatGPT when the last profile is deleted.
-- The remaining Settings rows: profiles, diary preferences and nutrition source. The nutrition-source item adds the
+- The remaining Settings rows: profiles (forget `companion.lastActive` on profile delete), diary preferences and
+  nutrition source. The nutrition-source item adds the
   USDA consent sentence back to the OpenAI consent dialog. Add the receipt links for `profiles`, `nutritionSource` and
   `backup` when those screens exist.
 - Day tests depend on the clock: `MealComposerScreenTest`, `CoachScreenTest.dayChoiceLogsToChosenDay`,
@@ -41,9 +44,14 @@ morning check-in, the weight row and the goal editor are done.
 - Stream photo decoding for large archives, and add the export/import UI to Backup & export.
 - Check Pip's frame rate on an idle host or a real phone. On the loaded emulator the GPU took about 4950 ms per frame,
   so smooth playback could not be judged there; this is not a regression.
+- `CoachHistoryScreenTest.mealAskPipSeeksSourceTurn` fails (it already failed at `9987338b`; cause not established), and
+  `TodayScreenTest.logWithPipSelectsCoach` asserts the selected tab without waiting (flaked once). `MorningCheckInSeed`
+  still runs in the full suite despite `notClass`. See the [milestone 7 record](../../verification/2026-10-25-android-pip-moments.md).
 - Coach meal chip: the question's meal chip has an empty leading area where the mockup has an icon.
 - Coach camera at font scale 2.0: "Choose photos" runs under the shutter.
 
 ## Later
+- Pip `characterChanged` and character selection.
+- Day complete: iOS has no trigger yet.
 - `record_source`: only fixes two invisible shortcuts, leftover photo copies after `delete_workout` and the
   `find_meals` origin fallback (meal seek uses the same fallback). The `shortcut:` comments stay until then.
