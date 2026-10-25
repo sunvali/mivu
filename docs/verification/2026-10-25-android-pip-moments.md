@@ -72,4 +72,9 @@ Video: a 10 s `screenrecord` of Today saving a manual meal, with the saved momen
 
 ## Limits
 - Pip's frame rate still needs an idle host or a real phone (Play readiness, unchanged).
-- Coach re-greets only when the app was backgrounded while Coach was composed; its model is activity-scoped.
+- Follow-up after review: `Shell` now records last-active and resets Today's and Coach's presentations on every
+  activity stop (not a rotation), whichever tab shows; Today's model is activity-scoped and shared with Coach's
+  weigh-in bubble. `AppBackgroundTest` covers leaving from Coach (Today greets again) and the next start greeting
+  instead of welcoming back. The system photo picker (`com.google.android.photopicker`, `Theme.Photopicker` sets
+  `windowIsTranslucent`) only pauses the activity, and the camera is an in-app dialog route, so neither counts as a
+  background.

@@ -55,6 +55,10 @@ import androidx.navigation.compose.dialog
 import androidx.navigation.toRoute
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.createSavedStateHandle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.yakov103.mivu.ui.composer.MealComposerScreen
 import com.yakov103.mivu.ui.composer.MealComposerViewModel
 import com.yakov103.mivu.ui.manual.ManualNutritionScreen
@@ -251,6 +255,17 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
         CoachViewModel(repository, profileID, hooks.drain, hooks.connected, hooks.activity, createSavedStateHandle(),
             prepare = { preparePhoto(context.contentResolver, it, photos) })
     }
+    // Today, Coach's weigh-in bubble and meal detail share one Today model, so Pip has one Today presentation.
+    val today = viewModel(viewModelStoreOwner = activityOwner, key = "today-$profileID") {
+        TodayViewModel(repository, profileID, SampleMode.enabled)
+    }
+    // As iOS, every trip to the background records last-active and resets Pip on Today and Coach, whichever tab shows.
+    // A rotation is not the background.
+    val host = LocalActivity.current as ComponentActivity
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP, host) {
+        if (!host.isChangingConfigurations) { today.enterBackground(); coach.enterBackground() }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_START, host) { today.enterForeground(); coach.enterForeground() }
     var focusCoach by rememberSaveable { mutableStateOf(false) }
     // Ask Pip: the quote goes first (it never replaces a started message), then the unsent draft, then Coach with the field focused.
     val askPip = { ask: AskPip ->
@@ -313,7 +328,6 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
     ) { padding ->
         NavHost(navController, startDestination = Route.Today, Modifier.padding(padding).consumeWindowInsets(padding)) {
             composable<Route.Today> { entry ->
-                val today = viewModel(key = profileID.toString()) { TodayViewModel(repository, profileID, SampleMode.enabled) }
                 // Capture screens hand back the saved meal through this entry, for the "Saved on this phone" receipt.
                 val saved by entry.savedStateHandle.getStateFlow<String?>(SAVED_MEAL_ID, null).collectAsStateWithLifecycle()
                 LaunchedEffect(saved) {
@@ -346,11 +360,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             composable<Route.MealDetail> { entry ->
                 val mealID = UUID.fromString(entry.toRoute<Route.MealDetail>().mealID)
                 val model = viewModel { MealDetailViewModel(repository, profileID, mealID, SampleMode.enabled, createSavedStateHandle()) }
-                // Today's own model, with its destination's key and factory, only when Today opened this meal.
-                val origin = remember(entry) { navController.todayOrigin() }
-                val today = origin?.let { todayEntry ->
-                    viewModel(todayEntry, key = profileID.toString()) { TodayViewModel(repository, profileID, SampleMode.enabled) }
-                }
+                // Reviewed plays on Today only when Today opened this meal.
+                val fromToday = remember(entry) { navController.todayOrigin() != null }
                 MealDetailScreen(
                     model,
                     onBack = { navController.popBackStack() },
@@ -364,7 +375,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onAddFoodManually = { navController.navigate(Route.ManualEntry(null, mealID.toString())) },
                     // Live analysis runs through Coach, as on iOS: the meal's own saved turn runs again.
                     onRetryAnalysis = { if (SampleMode.enabled) onMealCaptured(profileID) else coach.retryMeal(mealID) },
-                    onReviewed = { today?.receiveReviewed(it) },
+                    onReviewed = { if (fromToday) today.receiveReviewed(it) },
                 )
             }
             composable<Route.WorkoutDetail> { entry ->
@@ -401,8 +412,6 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 )
             }
             composable<Route.Coach> {
-                // The weigh-in bubble reads the same day and preferences as Today's check-in.
-                val checkIn = viewModel(key = "checkIn-$profileID") { TodayViewModel(repository, profileID, SampleMode.enabled) }
                 CoachScreen(
                     coach,
                     onOpenMeal = { navController.navigate(Route.MealDetail(it.toString())) },
@@ -416,7 +425,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onConnect = connect,
                     onOpenConnection = { navController.navigate(Route.Connection) },
                     onOpenSettings = { navController.navigate(Route.Settings) },
-                    checkIn = checkIn,
+                    checkIn = today, // the weigh-in bubble is Today's check-in
                 )
             }
             composable<Route.CoachHistory> {

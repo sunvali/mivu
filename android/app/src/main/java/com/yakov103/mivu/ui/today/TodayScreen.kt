@@ -79,14 +79,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.diary.DiaryMeal
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.layout.LayoutBoundsHolder
 import androidx.compose.ui.layout.layoutBounds
 import androidx.compose.ui.layout.onVisibilityChanged
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import com.yakov103.mivu.pip.MotionPolicy.Playback
 import com.yakov103.mivu.pip.CompanionOutput
 import com.yakov103.mivu.pip.CompanionRuntime
@@ -295,10 +291,6 @@ private fun rememberTodayPip(viewModel: TodayViewModel, viewport: LayoutBoundsHo
     val playback = if (visible) motion else Playback.Hidden
     LaunchedEffect(playback) { viewModel.reportPlayback(playback) }
     DisposableEffect(viewModel) { onDispose { viewModel.reportPlayback(Playback.Hidden) } } // the model outlives the screen
-    // The activity's own stop and start, not this destination's: a covering screen is not the background. A rotation is neither.
-    val activity = LocalActivity.current as ComponentActivity
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP, activity) { if (!activity.isChangingConfigurations) viewModel.enterBackground() }
-    LifecycleEventEffect(Lifecycle.Event.ON_START, activity) { viewModel.enterForeground() }
     val output by viewModel.companion.collectAsStateWithLifecycle()
     return TodayPip(output, runtime, { if (!viewModel.touchPip(it)) runtime?.earTwitch() }, viewport, onVisible)
 }
