@@ -15,6 +15,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
+import com.yakov103.mivu.pip.MotionPolicy.Playback
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -269,6 +273,32 @@ class TodayScreenTest {
             waitForText("Saved on this phone")
             compose.onAllNodes(hasText("Added to", substring = true)).assertCountEquals(0)
             compose.onAllNodesWithTag("moveLateMeal").assertCountEquals(0)
+        } finally { db.close() }
+    }
+
+    @Test fun pipStopsWhenScrolledAwayAndResumes() {
+        val id = TodayFixture.diary(context)
+        val repo = DiaryRepository(context)
+        val db = repo.database(id)
+        try {
+            val start = Instant.now().minusSeconds(9 * 3600)
+            val day = db.startDay(start, db.head().revision)
+            repeat(8) { i ->
+                val at = start.plusSeconds(3600L * (i + 1))
+                val item = FoodItem(UUID.randomUUID(), "Snack $i", 1.0, "serving", NutritionValues(90.0, 15.0, 3.0, 1.0),
+                    NutritionProvenance.user, "Entered manually", false, emptyMap())
+                db.transaction(db.head().revision) {
+                    it.putMeal(DiaryMeal(UUID.randomUUID(), day.id, at, at, 1, timePrecision = MealTimePrecision.exact, items = listOf(item),
+                        photos = emptyList(), submissions = emptyList()))
+                }
+            }
+            val model = TodayViewModel(repo, id, sampleMode = false)
+            compose.setContent { MivuTheme { TodayScreen(model, null, {}, {}, {}) } }
+            compose.waitUntil(10_000) { model.companion.value.playback == Playback.Animated }
+            compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("logWeight"))
+            compose.waitUntil(5_000) { model.companion.value.playback == Playback.Hidden }
+            compose.onNode(hasScrollAction()).performScrollToIndex(0)
+            compose.waitUntil(5_000) { model.companion.value.playback == Playback.Animated }
         } finally { db.close() }
     }
 }

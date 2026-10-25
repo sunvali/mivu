@@ -341,6 +341,10 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             composable<Route.MealDetail> { entry ->
                 val mealID = UUID.fromString(entry.toRoute<Route.MealDetail>().mealID)
                 val model = viewModel { MealDetailViewModel(repository, profileID, mealID, SampleMode.enabled, createSavedStateHandle()) }
+                // Today's own model, with its destination's key and factory, while Today is in the back stack.
+                val today = runCatching { navController.getBackStackEntry<Route.Today>() }.getOrNull()?.let { todayEntry ->
+                    viewModel(todayEntry, key = profileID.toString()) { TodayViewModel(repository, profileID, SampleMode.enabled) }
+                }
                 MealDetailScreen(
                     model,
                     onBack = { navController.popBackStack() },
@@ -354,6 +358,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onAddFoodManually = { navController.navigate(Route.ManualEntry(null, mealID.toString())) },
                     // Live analysis runs through Coach, as on iOS: the meal's own saved turn runs again.
                     onRetryAnalysis = { if (SampleMode.enabled) onMealCaptured(profileID) else coach.retryMeal(mealID) },
+                    onReviewed = { today?.receiveReviewed(it) },
                 )
             }
             composable<Route.WorkoutDetail> { entry ->

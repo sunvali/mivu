@@ -368,6 +368,17 @@ class CoachViewModel(
         resolveCompanion()
     }
 
+    /** Leaving the app forgets every reaction, so Coach greets again on return. */
+    fun enterBackground() {
+        presentation.enterBackground()
+        resolveCompanion()
+    }
+
+    fun enterForeground() {
+        presentation.attach(profileID)
+        resolveCompanion()
+    }
+
     /** False when the touch cannot start a reaction: the caller only twitches an ear. */
     fun touchPip(kind: CompanionTouch): Boolean = presentation.touch(kind).also { if (it) resolveCompanion() }
 

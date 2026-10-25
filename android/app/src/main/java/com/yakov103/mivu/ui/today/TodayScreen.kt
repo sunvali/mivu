@@ -47,7 +47,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
@@ -80,11 +79,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.diary.DiaryMeal
-import com.yakov103.mivu.pip.CompanionContext
-import com.yakov103.mivu.pip.CompanionEvent
-import kotlinx.coroutines.flow.Flow
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.layout.LayoutBoundsHolder
+import androidx.compose.ui.layout.layoutBounds
+import androidx.compose.ui.layout.onVisibilityChanged
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.yakov103.mivu.pip.MotionPolicy.Playback
 import com.yakov103.mivu.pip.CompanionOutput
-import com.yakov103.mivu.pip.CompanionPresentation
 import com.yakov103.mivu.pip.CompanionRuntime
 import com.yakov103.mivu.pip.CompanionSurface
 import com.yakov103.mivu.pip.CompanionTouch
@@ -94,7 +98,6 @@ import com.yakov103.mivu.pip.PipGestureLibrary
 import com.yakov103.mivu.pip.PipRigScene
 import com.yakov103.mivu.pip.rememberMotionPlayback
 import com.yakov103.mivu.ui.theme.MivuTheme
-import kotlinx.coroutines.delay
 import java.util.UUID
 import kotlin.random.Random
 
@@ -117,15 +120,16 @@ fun TodayScreen(
     val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
     val state = viewModel.state.collectAsStateWithLifecycle().value
         ?: return Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { if (loadFailed) LoadFailure(viewModel::retry) }
-    val pip = rememberTodayPip(viewModel.profileID, viewModel.companionEvents)
     val unit by viewModel.weightUnit.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
+    val viewport = remember { LayoutBoundsHolder() }
+    val pip = rememberTodayPip(viewModel, viewport)
     // The receipt and a read failure are inserted above the summary: bring them into view.
     LaunchedEffect(state.savedReceipt != null, loadFailed) { if (state.savedReceipt != null || loadFailed) list.animateScrollToItem(0) }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
-                Modifier.fillMaxSize(),
+                Modifier.fillMaxSize().layoutBounds(viewport),
                 state = list,
                 contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 4.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -261,43 +265,50 @@ private fun DayActions(date: String, onStartNewDay: () -> Unit) {
     }
 }
 
-/** Today's one Pip: the presentation outlives the summary item scrolling away; the runtime waits for the rig. */
-private class TodayPip(val output: CompanionOutput, val runtime: CompanionRuntime?, val onTouch: (CompanionTouch) -> Unit)
+/** Today's one Pip: the view model owns the pose; the runtime waits for the rig; [onVisible] reports the half-visible test. */
+private class TodayPip(
+    val output: CompanionOutput,
+    val runtime: CompanionRuntime?,
+    val onTouch: (CompanionTouch) -> Unit,
+    val viewport: LayoutBoundsHolder,
+    val onVisible: (Boolean) -> Unit,
+)
 
 /**
- * Today shows resting, a greeting, idle beats and tap/pat; its context has nothing typing, processing or failing.
- * The morning weigh-in plays Saved; Today's first meal, day complete, welcome back and reviewed moments arrive in milestone 7.
+ * Today shows resting, a greeting (welcome back after a day away), idle beats and tap/pat; saved after a capture or the
+ * morning weigh-in, the day's first meal, and reviewed after accepting a review in meal detail opened from Today. Pip holds
+ * still while less than half of it is on screen, and greets again after the app returns from the background.
  */
 @Composable
-private fun rememberTodayPip(profileID: UUID, events: Flow<CompanionEvent>): TodayPip {
+private fun rememberTodayPip(viewModel: TodayViewModel, viewport: LayoutBoundsHolder): TodayPip {
     val context = LocalContext.current
     val assets = produceState<Pair<PipRigScene, PipGestureLibrary>?>(null) {
         value = runCatching { PipAssets.load(context) }.getOrNull() // a missing rig keeps the still image
     }.value
     val scope = rememberCoroutineScope()
-    val presentation = remember(profileID) { CompanionPresentation(System::currentTimeMillis).apply { attach(profileID) } }
     val runtime = assets?.let { (scene, library) ->
         remember(scene) { CompanionRuntime(library, scene, scope, { System.nanoTime() / 1_000_000 }, Random.Default) }
     }
-    val playback = rememberMotionPlayback()
-    var refresh by remember { mutableIntStateOf(0) }
-    // The morning weigh-in's saved nod.
-    LaunchedEffect(presentation, events) { events.collect { presentation.receive(it); refresh++ } }
-    val output = remember(presentation, playback, refresh) {
-        presentation.resolve(CompanionContext(CompanionSurface.Today, isTyping = false, isProcessing = false, needsRecovery = false, playback = playback))
-    }
-    LaunchedEffect(output.nextDeadline) {
-        val deadline = output.nextDeadline ?: return@LaunchedEffect
-        delay(deadline - System.currentTimeMillis())
-        refresh++
-    }
-    return TodayPip(output, runtime) { if (presentation.touch(it)) refresh++ else runtime?.earTwitch() }
+    var visible by remember { mutableStateOf(false) }
+    val onVisible = remember { { shown: Boolean -> visible = shown } }
+    val motion = rememberMotionPlayback()
+    val playback = if (visible) motion else Playback.Hidden
+    LaunchedEffect(playback) { viewModel.reportPlayback(playback) }
+    DisposableEffect(viewModel) { onDispose { viewModel.reportPlayback(Playback.Hidden) } } // the model outlives the screen
+    // The activity's own stop and start, not this destination's: a covering screen is not the background. A rotation is neither.
+    val activity = LocalActivity.current as ComponentActivity
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP, activity) { if (!activity.isChangingConfigurations) viewModel.enterBackground() }
+    LifecycleEventEffect(Lifecycle.Event.ON_START, activity) { viewModel.enterForeground() }
+    val output by viewModel.companion.collectAsStateWithLifecycle()
+    return TodayPip(output, runtime, { if (!viewModel.touchPip(it)) runtime?.earTwitch() }, viewport, onVisible)
 }
 
 /** Pip on the expressive cookie backdrop. Decorative, as iOS CompanionView. */
 @Composable
 private fun Pip(size: Dp, pip: TodayPip) {
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+    DisposableEffect(Unit) { onDispose { pip.onVisible(false) } }
+    Box(Modifier.size(size).onVisibilityChanged(minFractionVisible = 0.5f, viewportBounds = pip.viewport, callback = pip.onVisible),
+        contentAlignment = Alignment.Center) {
         Box(Modifier.matchParentSize().padding(size * 0.04f).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), CookieShape))
         if (pip.runtime != null) PipCompanion(pip.output, CompanionSurface.Today, size * 0.86f, pip.runtime, pip.onTouch)
         else Image(painterResource(R.drawable.pip_preview), contentDescription = null, Modifier.size(size * 0.86f))

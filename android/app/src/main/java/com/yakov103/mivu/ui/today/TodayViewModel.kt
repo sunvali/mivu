@@ -12,7 +12,15 @@ import com.yakov103.mivu.diary.DiaryError
 import com.yakov103.mivu.diary.MorningRecap
 import com.yakov103.mivu.diary.morningRecap
 import com.yakov103.mivu.diary.recordWeight
+import com.yakov103.mivu.pip.CompanionContext
 import com.yakov103.mivu.pip.CompanionEvent
+import com.yakov103.mivu.pip.CompanionLastActive
+import com.yakov103.mivu.pip.CompanionOutput
+import com.yakov103.mivu.pip.CompanionPose
+import com.yakov103.mivu.pip.CompanionPresentation
+import com.yakov103.mivu.pip.CompanionSurface
+import com.yakov103.mivu.pip.CompanionTouch
+import com.yakov103.mivu.pip.MotionPolicy.Playback
 import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.GoalRecord
@@ -35,7 +43,10 @@ import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.roundToLong
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.Dispatchers
@@ -145,11 +156,6 @@ class TodayViewModel(private val repository: DiaryRepository, val profileID: UUI
         awaitClose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
-    private val _companionEvents = MutableSharedFlow<CompanionEvent>(extraBufferCapacity = 1)
-
-    /** Pip's saved nod after the morning weigh-in. */
-    val companionEvents: SharedFlow<CompanionEvent> = _companionEvents
-
     val state: StateFlow<TodayUiState?> = combine(
         merge(repository.changes, retries, preferenceChanges).onStart { emit(Unit) }.mapNotNull {
             try { load().also { _loadFailed.value = false } } catch (_: Exception) { _loadFailed.value = true; null }
@@ -165,8 +171,70 @@ class TodayViewModel(private val repository: DiaryRepository, val profileID: UUI
     /** Reads the day again after a failed read. */
     fun retry() { retries.tryEmit(Unit) }
 
-    /** The "Saved on this phone" receipt after a capture screen saves [mealID]. */
-    fun showReceipt(mealID: UUID) { receipt.value = mealID }
+    /**
+     * The "Saved on this phone" receipt after a capture screen saves [mealID], with Pip's saved nod. As iOS
+     * `noteFirstMealOfDay`, the refreshed day decides the first-meal moment: the active day's only meal, with one submission.
+     */
+    fun showReceipt(mealID: UUID) {
+        receipt.value = mealID
+        receive(CompanionEvent.Kind.Saved, mealID)
+        viewModelScope.launch {
+            val day = withTimeoutOrNull(2_000) { state.first { s -> s?.meals?.any { it.id == mealID } == true } } ?: return@launch
+            val meal = day.meals.first { it.id == mealID }
+            if (day.meals.map { it.id } == listOf(mealID) && meal.dayID == day.activeDayID && meal.submissions.size == 1) {
+                receive(CompanionEvent.Kind.FirstMealToday, mealID)
+            }
+        }
+    }
+
+    // Today's Pip, a port of iOS TodayView's presentation: the view model outlives covering screens, so a capture's saved
+    // moment waits for Today's return and closing the composer does not greet again.
+    private val lastActive = CompanionLastActive(preferences)
+    private val presentation = CompanionPresentation(System::currentTimeMillis).apply { attach(profileID, lastActive.at(profileID)) }
+    private var playback = Playback.Hidden
+    private var deadline: Job? = null
+    private val _companion = MutableStateFlow(CompanionOutput(CompanionPose.Resting, Playback.Hidden, null))
+
+    /** Pip's pose on Today. Today has nothing typing, processing or failing. */
+    val companion: StateFlow<CompanionOutput> = _companion.asStateFlow()
+
+    /** Where Pip may move: the motion policy, and Hidden while less than half of Pip is on screen. */
+    fun reportPlayback(playback: Playback) {
+        if (this.playback == playback) return
+        this.playback = playback
+        resolveCompanion()
+    }
+
+    /** False when the touch cannot start a reaction: the caller only twitches an ear. */
+    fun touchPip(kind: CompanionTouch): Boolean = presentation.touch(kind).also { if (it) resolveCompanion() }
+
+    /** Leaving the app records when, for a later welcome back, and forgets every reaction so the return greets afresh. */
+    fun enterBackground() {
+        lastActive.record(profileID, System.currentTimeMillis())
+        presentation.enterBackground()
+        resolveCompanion()
+    }
+
+    fun enterForeground() {
+        presentation.attach(profileID, lastActive.at(profileID))
+        resolveCompanion()
+    }
+
+    /** Meal detail opened from Today accepted [submissionID]'s review. */
+    fun receiveReviewed(submissionID: UUID) = receive(CompanionEvent.Kind.Reviewed, submissionID)
+
+    private fun receive(kind: CompanionEvent.Kind, operationID: UUID) {
+        presentation.receive(CompanionEvent(profileID, operationID, kind, System.currentTimeMillis()))
+        resolveCompanion()
+    }
+
+    private fun resolveCompanion() {
+        val output = presentation.resolve(CompanionContext(CompanionSurface.Today, isTyping = false, isProcessing = false,
+            needsRecovery = false, playback = playback))
+        _companion.value = output
+        deadline?.cancel()
+        deadline = output.nextDeadline?.let { at -> viewModelScope.launch { delay(at - System.currentTimeMillis()); resolveCompanion() } }
+    }
 
     private val _messages = Channel<String>(Channel.BUFFERED)
 
@@ -209,16 +277,16 @@ class TodayViewModel(private val repository: DiaryRepository, val profileID: UUI
      */
     suspend fun saveMorningWeight(kg: Double): Boolean {
         if (kg !in 20.0..400.0) return false
-        return withContext(Dispatchers.IO) {
+        val entry = withContext(Dispatchers.IO) {
             try {
-                val entry = repository.database(profileID).recordWeight((kg * 10).roundToLong() / 10.0, startNewDay = false)
-                _companionEvents.tryEmit(CompanionEvent(profileID, entry.id, CompanionEvent.Kind.Saved, System.currentTimeMillis()))
-                true
+                repository.database(profileID).recordWeight((kg * 10).roundToLong() / 10.0, startNewDay = false)
             } catch (e: Exception) {
                 _messages.send("Could not complete action. ${failureMessage(e)}")
-                false
+                null
             }
-        }
+        } ?: return false
+        receive(CompanionEvent.Kind.Saved, entry.id)
+        return true
     }
 
     fun skipMorningWeight() { state.value?.morning?.let { m -> preferences.edit { putString(MorningKeys.SKIPPED, m.dayID.toString()) } } }

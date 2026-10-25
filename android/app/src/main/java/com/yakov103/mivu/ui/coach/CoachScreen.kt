@@ -5,6 +5,10 @@ import com.yakov103.mivu.diary.CoachDestination
 import android.animation.ValueAnimator
 import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.imePadding
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.focus.FocusRequester
 import com.yakov103.mivu.pip.MotionPolicy.Playback
@@ -147,6 +151,10 @@ fun CoachScreen(
     val playback = rememberMotionPlayback()
     LaunchedEffect(playback) { model.reportPlayback(playback) }
     DisposableEffect(model) { onDispose { model.reportPlayback(Playback.Hidden) } } // the model outlives the tab
+    // The activity's stop and start, as Today; a rotation is not the background.
+    val host = LocalActivity.current as ComponentActivity
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP, host) { if (!host.isChangingConfigurations) model.enterBackground() }
+    LifecycleEventEffect(Lifecycle.Event.ON_START, host) { model.enterForeground() }
     LaunchedEffect(focusRequested) {
         if (focusRequested) { focusRequester.requestFocus(); onFocusConsumed() }
     }

@@ -160,6 +160,8 @@ fun MealDetailScreen(
     onAskPip: (AskPip) -> Unit,
     onAddFoodManually: () -> Unit,
     onRetryAnalysis: () -> Unit = {},
+    /** An accepted review's submission, once it is saved. */
+    onReviewed: (UUID) -> Unit = {},
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
@@ -209,7 +211,7 @@ fun MealDetailScreen(
         },
         bottomBar = {
             if (meal != null) BottomActions(meal, state.day?.takeIf { it.id == movedDayID }?.localDate, busy, { onAskPip(AskPip.Meal(meal.id, mealTitle(meal))) }) {
-                viewModel.acceptReview(it.id, meal.revision)
+                viewModel.acceptReview(it.id, meal.revision) { onReviewed(it.id) }
             }
         },
     ) { padding -> Box {

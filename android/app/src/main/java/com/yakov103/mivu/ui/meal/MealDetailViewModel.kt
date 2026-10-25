@@ -100,7 +100,9 @@ class MealDetailViewModel(
 
     fun deleteItem(itemID: UUID, revision: Int) = change { it.deleteItem(mealID, itemID, revision) }
 
-    fun acceptReview(submissionID: UUID, revision: Int) = change { it.acceptReview(mealID, submissionID, revision) }
+    /** [onAccepted] runs once the review is saved, for Pip's reviewed moment. */
+    fun acceptReview(submissionID: UUID, revision: Int, onAccepted: () -> Unit = {}) =
+        change(onAccepted) { it.acceptReview(mealID, submissionID, revision) }
 
     /** Removes one photo and keeps the meal; [onDone] runs after it is gone. */
     fun deletePhoto(photoID: UUID, onDone: () -> Unit = {}) = change(onDone) { it.deletePhoto(mealID, photoID) }
