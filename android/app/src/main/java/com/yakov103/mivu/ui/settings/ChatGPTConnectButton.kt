@@ -31,6 +31,8 @@ import com.yakov103.mivu.connection.ConnectionState
 object MivuLinks {
     const val PRIVACY = "https://mivuapp.com/privacy"
     const val USAGE = "https://chatgpt.com/settings/usage"
+    // Coach reply reports; the owner creates this mailbox before release.
+    const val REPORT_EMAIL = "support@mivuapp.com"
 }
 
 /** Opens [url] in a Custom Tab: the system browser, as the sign-in requires. A new task, so any context (the app's) works. */

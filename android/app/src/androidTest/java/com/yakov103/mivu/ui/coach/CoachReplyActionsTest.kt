@@ -1,12 +1,29 @@
 package com.yakov103.mivu.ui.coach
 
+import android.app.Activity
+import android.app.Instrumentation
+import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.performTextReplacement
+import androidx.test.espresso.intent.Intents
+import androidx.test.espresso.intent.Intents.intended
+import androidx.test.espresso.intent.Intents.intending
+import androidx.test.espresso.intent.VerificationModes.times
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasData
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra
+import org.hamcrest.Matchers.allOf
+import org.json.JSONObject
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasAnyDescendant
@@ -43,7 +60,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-/** Synthetic diaries only: Reply and Copy from a long press, a swipe, or a TalkBack custom action. */
+/** Synthetic diaries only: Reply, Copy and Report reply from a long press, a swipe, or a TalkBack custom action. */
 class CoachReplyActionsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val context: Context = ApplicationProvider.getApplicationContext()
@@ -53,12 +70,15 @@ class CoachReplyActionsTest {
     private val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
 
     @Before fun open() {
+        CoachReports.file(context).delete()
         TodayFixture.wipe(context)
         profileID = TodayFixture.diary(context)
         repository = DiaryRepository(context)
     }
 
     @After fun close() {
+        startEmailForTest = null
+        CoachReports.file(context).delete()
         repository.database(profileID).close()
         TodayFixture.wipe(context)
     }
@@ -179,5 +199,99 @@ class CoachReplyActionsTest {
         assertEquals(quote(turn, false, "Synthetic breakfast"), model.draft.value.reply)
         reply(bubble and hasText("Saved — about 430 kcal."))
         compose.waitUntil(5_000) { model.draft.value.reply == quote(turn, true, "Saved — about 430 kcal.") }
+    }
+
+    private val pipReply = "Saved — about 430 kcal."
+
+    private fun reports() = CoachReports.file(context).takeIf { it.exists() }?.readLines().orEmpty().map(::JSONObject)
+
+    private fun openReport() {
+        compose.onNodeWithText(pipReply).performTouchInput { longClick() }
+        compose.onNodeWithText("Report reply").performClick()
+        compose.onNodeWithText("Report this reply?").assertIsDisplayed()
+    }
+
+    @Test fun replyMenuOffersReport() {
+        seed()
+        launch()
+        compose.onNodeWithText(pipReply).performTouchInput { longClick() }
+        compose.onNodeWithText("Report reply").assertIsDisplayed()
+        compose.onNodeWithText("Copy").performClick() // closes the menu
+        compose.onNodeWithText("Synthetic breakfast").performTouchInput { longClick() }
+        compose.onNodeWithText("Reply").assertIsDisplayed()
+        compose.onNodeWithText("Report reply").assertDoesNotExist()
+    }
+
+    @Test fun reportSavesThenOpensEmail() {
+        val turn = seed().last()
+        launch()
+        openReport()
+        compose.onNodeWithText("Mivu opens your email app with this reply so you can send it to us. " +
+            "Nothing else from your diary is included.").assertIsDisplayed()
+        compose.onNode(hasText("Report") and hasClickAction()).assertIsNotEnabled() // a reason comes first
+        compose.onNodeWithText("Wrong or misleading").performClick()
+        compose.onNodeWithTag("reportNote").performTextReplacement("Synthetic note")
+        Intents.init()
+        try {
+            intending(hasAction(Intent.ACTION_SENDTO)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
+            compose.onNode(hasText("Report") and hasClickAction()).performClick()
+            compose.waitUntil(5_000) { Intents.getIntents().isNotEmpty() }
+            intended(allOf(hasAction(Intent.ACTION_SENDTO), hasData(Uri.parse("mailto:")),
+                hasExtra(Intent.EXTRA_EMAIL, arrayOf("support@mivuapp.com")), hasExtra(Intent.EXTRA_SUBJECT, "Mivu Coach reply report"),
+                hasExtra(Intent.EXTRA_TEXT, "Reason: Wrong or misleading\nNote: Synthetic note\n\nCoach reply:\n$pipReply")), times(1))
+        } finally {
+            Intents.release()
+        }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Report this reply?")).fetchSemanticsNodes().isEmpty() }
+        val saved = reports().single()
+        assertEquals(turn.id.toString(), saved.getString("turnID"))
+        assertEquals("Wrong or misleading", saved.getString("reason"))
+        assertEquals("Synthetic note", saved.getString("note"))
+        assert(Instant.parse(saved.getString("at")) >= now)
+    }
+
+    @Test fun cancelSavesAndOpensNothing() {
+        seed()
+        launch()
+        openReport()
+        compose.onNodeWithText("Harmful or unsafe").performClick()
+        Intents.init()
+        try {
+            compose.onNodeWithText("Cancel").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodes(hasText("Report this reply?")).fetchSemanticsNodes().isEmpty() }
+            assertEquals(0, Intents.getIntents().size)
+        } finally {
+            Intents.release()
+        }
+        assertEquals(0, reports().size)
+    }
+
+    @Test fun noEmailAppKeepsTheReportAndShowsTheAddress() {
+        val turn = seed().last()
+        startEmailForTest = { throw ActivityNotFoundException() }
+        launch()
+        openReport()
+        compose.onNodeWithText("Something else").performClick()
+        compose.onNode(hasText("Report") and hasClickAction()).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Copy address")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Report saved on this phone. No email app was found, so send it to support@mivuapp.com.").assertIsDisplayed()
+        assertEquals(turn.id.toString(), reports().single().getString("turnID"))
+        assertEquals("", reports().single().getString("note"))
+        compose.onNodeWithText("Copy address").performClick()
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        compose.waitUntil(5_000) { compose.runOnUiThread<String?> { clipboard.primaryClip?.getItemAt(0)?.text?.toString() } == "support@mivuapp.com" }
+    }
+
+    @Test fun reportIsATalkBackActionOnPipRepliesOnly() {
+        seed()
+        launch()
+        fun labels(matcher: SemanticsMatcher) = compose.onNode(matcher).fetchSemanticsNode().config[SemanticsActions.CustomActions].map { it.label }
+        val actionable = SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions)
+        assertEquals(listOf("Reply", "Copy", "Report reply"), labels(actionable and hasText(pipReply)))
+        assertEquals(listOf("Reply", "Copy"), labels(actionable and hasAnyDescendant(hasText("Synthetic breakfast"))))
+        val report = compose.onNode(actionable and hasText(pipReply)).fetchSemanticsNode().config[SemanticsActions.CustomActions]
+            .single { it.label == "Report reply" }
+        compose.runOnUiThread { report.action() }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Report this reply?")).fetchSemanticsNodes().isNotEmpty() }
     }
 }

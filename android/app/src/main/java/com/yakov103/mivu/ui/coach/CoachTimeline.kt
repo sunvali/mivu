@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -145,7 +146,11 @@ fun CoachExchangeRow(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 turn.assistantText?.let { reply ->
                     val text = coachReplyText(reply)
-                    MessageActions(text.text, { actions.reply(turn, true) }) { Text(text, it, style = MaterialTheme.typography.bodyLarge) }
+                    var reporting by rememberSaveable { mutableStateOf(false) }
+                    MessageActions(text.text, { actions.reply(turn, true) }, onReport = { reporting = true }) {
+                        Text(text, it, style = MaterialTheme.typography.bodyLarge)
+                    }
+                    if (reporting) ReportReplyDialog(turn.id, text.text) { reporting = false }
                 }
                 val question = turn.question
                 if (isLatest && question != null && question.candidates.isNotEmpty()) {
@@ -239,11 +244,12 @@ private fun SwipeToReply(onReply: () -> Unit, modifier: Modifier, content: @Comp
 }
 
 /**
- * iOS messageActions: a long press opens Reply and Copy (Copy only when there is text); TalkBack gets both as custom
- * actions. Copy goes to the clipboard; Android 13+ confirms it itself, so only older versions show a toast.
+ * iOS messageActions: a long press opens Reply and Copy (Copy only when there is text), and Report reply when [onReport]
+ * is given (Pip's replies only); TalkBack gets the same custom actions. Copy goes to the clipboard; Android 13+ confirms
+ * it itself, so only older versions show a toast.
  */
 @Composable
-private fun MessageActions(text: String, onReply: () -> Unit, content: @Composable (Modifier) -> Unit) {
+private fun MessageActions(text: String, onReply: () -> Unit, onReport: (() -> Unit)? = null, content: @Composable (Modifier) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
@@ -258,12 +264,15 @@ private fun MessageActions(text: String, onReply: () -> Unit, content: @Composab
             .pointerInput(Unit) { detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); open = true }) }
             .semantics {
                 customActions = listOfNotNull(CustomAccessibilityAction("Reply") { onReply(); true },
-                    text.takeIf { it.isNotEmpty() }?.let { CustomAccessibilityAction("Copy") { copy(); true } })
+                    text.takeIf { it.isNotEmpty() }?.let { CustomAccessibilityAction("Copy") { copy(); true } },
+                    onReport?.let { CustomAccessibilityAction("Report reply") { it(); true } })
             })
         DropdownMenu(open, { open = false }) {
             DropdownMenuItem({ Text("Reply") }, { open = false; onReply() }, leadingIcon = { Icon(painterResource(R.drawable.ic_reply), null) })
             if (text.isNotEmpty()) DropdownMenuItem({ Text("Copy") }, { open = false; copy() },
                 leadingIcon = { Icon(painterResource(R.drawable.ic_copy), null) })
+            if (onReport != null) DropdownMenuItem({ Text("Report reply") }, { open = false; onReport() },
+                leadingIcon = { Icon(painterResource(R.drawable.ic_flag), null) })
         }
     }
 }
