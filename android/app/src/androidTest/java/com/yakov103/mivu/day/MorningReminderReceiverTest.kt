@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.app.Notification
+import android.os.SystemClock
+import android.service.notification.StatusBarNotification
 import androidx.core.content.edit
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.rule.GrantPermissionRule
@@ -38,6 +40,16 @@ class MorningReminderReceiverTest {
 
     private fun posted() = manager.activeNotifications.firstOrNull { it.id == 4 }
 
+    /** notify() returns before the system lists the notification, so poll for it. */
+    private fun awaitPosted(): StatusBarNotification {
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        while (true) {
+            posted()?.let { return it }
+            check(SystemClock.uptimeMillis() < deadline) { "No morning notification posted" }
+            SystemClock.sleep(20)
+        }
+    }
+
     private fun enable(on: Boolean) = prefs.edit(commit = true) { putBoolean(MorningReminder.ENABLED, on) }
 
     @Test fun turningOnSchedulesAndOffCancels() {
@@ -52,7 +64,7 @@ class MorningReminderReceiverTest {
     @Test fun alarmPostsTheMorningNotification() {
         enable(true)
         MorningReminderReceiver().onReceive(context, Intent(context, MorningReminderReceiver::class.java).setAction(MorningReminder.ACTION))
-        val notification = checkNotNull(posted()).notification
+        val notification = awaitPosted().notification
         assertEquals("Good morning", notification.extras.getString(Notification.EXTRA_TITLE))
         assertEquals("Log your weight or breakfast.", notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
         assertEquals("morning", notification.channelId)
