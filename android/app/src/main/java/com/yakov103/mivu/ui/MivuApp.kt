@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -136,6 +138,9 @@ class CoachHooks(
 
 /** The savedStateHandle key a capture screen sets on the Today entry when it saves a meal. */
 const val SAVED_MEAL_ID = "savedMealID"
+
+/** Today's entry when it opened the current screen; Today stays at the bottom of the back stack under every tab. */
+internal fun NavController.todayOrigin(): NavBackStackEntry? = previousBackStackEntry?.takeIf { it.destination.hasRoute<Route.Today>() }
 
 @Serializable
 sealed interface Route {
@@ -341,8 +346,9 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
             composable<Route.MealDetail> { entry ->
                 val mealID = UUID.fromString(entry.toRoute<Route.MealDetail>().mealID)
                 val model = viewModel { MealDetailViewModel(repository, profileID, mealID, SampleMode.enabled, createSavedStateHandle()) }
-                // Today's own model, with its destination's key and factory, while Today is in the back stack.
-                val today = runCatching { navController.getBackStackEntry<Route.Today>() }.getOrNull()?.let { todayEntry ->
+                // Today's own model, with its destination's key and factory, only when Today opened this meal.
+                val origin = remember(entry) { navController.todayOrigin() }
+                val today = origin?.let { todayEntry ->
                     viewModel(todayEntry, key = profileID.toString()) { TodayViewModel(repository, profileID, SampleMode.enabled) }
                 }
                 MealDetailScreen(

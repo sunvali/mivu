@@ -16,6 +16,8 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import com.yakov103.mivu.pip.MotionPolicy.Playback
@@ -298,6 +300,45 @@ class TodayScreenTest {
             compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("logWeight"))
             compose.waitUntil(5_000) { model.companion.value.playback == Playback.Hidden }
             compose.onNode(hasScrollAction()).performScrollToIndex(0)
+            compose.waitUntil(5_000) { model.companion.value.playback == Playback.Animated }
+        } finally { db.close() }
+    }
+
+    /** Less than half of Pip on screen holds it still, with the summary item still composed. */
+    @Test fun pipHoldsStillBelowHalfVisible() {
+        val id = TodayFixture.diary(context)
+        val repo = DiaryRepository(context)
+        val db = repo.database(id)
+        try {
+            val start = Instant.now().minusSeconds(9 * 3600)
+            val day = db.startDay(start, db.head().revision)
+            repeat(8) { i ->
+                val at = start.plusSeconds(3600L * (i + 1))
+                val item = FoodItem(UUID.randomUUID(), "Snack $i", 1.0, "serving", NutritionValues(90.0, 15.0, 3.0, 1.0),
+                    NutritionProvenance.user, "Entered manually", false, emptyMap())
+                db.transaction(db.head().revision) {
+                    it.putMeal(DiaryMeal(UUID.randomUUID(), day.id, at, at, 1, timePrecision = MealTimePrecision.exact, items = listOf(item),
+                        photos = emptyList(), submissions = emptyList()))
+                }
+            }
+            val model = TodayViewModel(repo, id, sampleMode = false)
+            compose.setContent { MivuTheme { TodayScreen(model, null, {}, {}, {}) } }
+            compose.waitUntil(10_000) { model.companion.value.playback == Playback.Animated }
+            val list = compose.onNode(hasScrollAction())
+            val top = list.fetchSemanticsNode().boundsInRoot.top
+            val pip = compose.onNodeWithTag("todayPip").fetchSemanticsNode().boundsInRoot
+            // Scroll so this fraction of Pip stays below the list's top edge.
+            fun showFraction(fraction: Float) {
+                val now = compose.onNodeWithTag("todayPip").fetchSemanticsNode().boundsInRoot
+                list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, now.bottom - top - fraction * pip.height) }
+                compose.waitForIdle()
+            }
+            showFraction(0.6f)
+            compose.waitUntil(5_000) { model.companion.value.playback == Playback.Animated }
+            showFraction(0.4f)
+            compose.waitUntil(5_000) { model.companion.value.playback == Playback.Hidden }
+            compose.onNodeWithTag("todayPip").assertExists() // still composed: the threshold, not removal, holds it
+            showFraction(0.6f)
             compose.waitUntil(5_000) { model.companion.value.playback == Playback.Animated }
         } finally { db.close() }
     }

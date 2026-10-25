@@ -307,7 +307,7 @@ private fun rememberTodayPip(viewModel: TodayViewModel, viewport: LayoutBoundsHo
 @Composable
 private fun Pip(size: Dp, pip: TodayPip) {
     DisposableEffect(Unit) { onDispose { pip.onVisible(false) } }
-    Box(Modifier.size(size).onVisibilityChanged(minFractionVisible = 0.5f, viewportBounds = pip.viewport, callback = pip.onVisible),
+    Box(Modifier.size(size).testTag("todayPip").onVisibilityChanged(minFractionVisible = 0.5f, viewportBounds = pip.viewport, callback = pip.onVisible),
         contentAlignment = Alignment.Center) {
         Box(Modifier.matchParentSize().padding(size * 0.04f).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), CookieShape))
         if (pip.runtime != null) PipCompanion(pip.output, CompanionSurface.Today, size * 0.86f, pip.runtime, pip.onTouch)
