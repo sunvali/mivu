@@ -13,6 +13,7 @@ import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -86,7 +87,11 @@ object DiaryArchive {
 
     internal fun encode(snapshot: DiarySnapshot, out: OutputStream, maxBytes: Long, json: Json = SwiftJson) {
         validateArchiveManifests(snapshot)
-        json.encodeToStream(Envelope(FORMAT, CURRENT_VERSION, snapshot.profile.id, snapshot), CappedOutput(out, maxBytes))
+        try {
+            json.encodeToStream(Envelope(FORMAT, CURRENT_VERSION, snapshot.profile.id, snapshot), CappedOutput(out, maxBytes))
+        } catch (e: SerializationException) { // the encoder wraps what a photo source throws
+            throw e.cause as? DiaryError ?: e
+        }
     }
 
     fun decode(input: InputStream, expectedProfileID: UUID? = null): DiarySnapshot =

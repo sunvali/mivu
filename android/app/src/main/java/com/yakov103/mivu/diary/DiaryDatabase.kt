@@ -449,14 +449,21 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
 
     /**
      * Gives [body] the diary with SHA-256 digests as photo data and a reader of each digest's bytes, one photo at a
-     * time, inside one transaction so the bytes match the snapshot. Photo sizes were checked when they were written.
+     * time. Each photo is read in its own short transaction, so writes wait for one photo rather than the whole encode;
+     * a photo that is gone or changed since the snapshot throws [DiaryError.StaleRevision]. Photo sizes were checked
+     * when they were written.
      */
-    internal fun <T> withPhotoDigests(body: (DiarySnapshot, (ByteArray) -> ByteArray) -> T): T = immediate {
-        val snapshot = readSnapshot(head(), ::digest)
+    internal fun <T> withPhotoDigests(body: (DiarySnapshot, (ByteArray) -> ByteArray) -> T): T {
         val rows = HashMap<String, Pair<String, String>>()
+        val snapshot = immediate { readSnapshot(head(), ::digest) }
         for (m in snapshot.meals) for (p in m.photos) rows[p.data.hex()] = "photo" to "${m.id.key}/${p.id.key}"
         for (t in snapshot.coachTurns) for (p in t.photos) rows[p.data.hex()] = "coach_photo" to "${t.id.key}/${p.id.key}"
-        body(snapshot) { digest -> rows.getValue(digest.hex()).let { (table, id) -> bytes(table, id) } }
+        return body(snapshot) { digest ->
+            val (table, id) = rows.getValue(digest.hex())
+            val bytes = try { immediate { bytes(table, id) } } catch (_: SQLiteDoneException) { throw DiaryError.StaleRevision }
+            if (!MessageDigest.getInstance("SHA-256").digest(bytes).contentEquals(digest)) throw DiaryError.StaleRevision
+            bytes
+        }
     }
 
     override fun close() = db.close()

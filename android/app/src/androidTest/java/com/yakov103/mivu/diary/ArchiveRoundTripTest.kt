@@ -50,10 +50,49 @@ class ArchiveRoundTripTest {
             db.importArchive(iosFixture(), context.cacheDir)
             db.exportArchive(exported)
         }
-        val inMemory = ByteArrayOutputStream().also { DiaryArchive.encode(fixture, it) }
-        assertEquals(inMemory.toByteArray().decodeToString(), exported.toByteArray().decodeToString())
-        // The committed golden predates the plain-decimal dates (8.0E8), so it is compared by content, not text.
-        assertEquals(fixture, DiaryArchive.decode(golden.inputStream()))
+        // writeAndroidFixture adds one newline after the archive.
+        assertEquals(golden.decodeToString(), exported.toByteArray().decodeToString() + "\n")
+    }
+
+    // The export reads each photo in its own short transaction, so a capture during the encode does not wait for it.
+    @Test fun exportLetsWritesInBetweenPhotos() {
+        val at = java.time.Instant.parse("2026-10-24T12:00:00Z")
+        DiaryDatabase.open(context, fixture.profile.id).use { db ->
+            db.importArchive(iosFixture(), context.cacheDir)
+            val out = ByteArrayOutputStream()
+            var captured = false
+            db.withPhotoDigests { snapshot, bytes ->
+                DiaryArchive.encode(snapshot, out) { digest ->
+                    if (!captured) {
+                        val h = db.head()
+                        db.captureCoachSubmission(CoachSubmissionPayload(java.util.UUID.randomUUID(), "synthetic note", emptyList(),
+                            CoachCaptureContext(at, h.profile.timeZoneID, h.activeDayID, h.previousDayConfirmedAt, h.activeConversationSegmentID)),
+                            h.revision)
+                        captured = true
+                    }
+                    bytes(digest)
+                }
+            }
+            assertEquals(fixture, DiaryArchive.decode(out.toByteArray().inputStream()))
+            assertEquals(fixture.revision + 1L, db.head().revision)
+        }
+    }
+
+    @Test fun photoGoneDuringExportFailsIt() {
+        DiaryDatabase.open(context, fixture.profile.id).use { db ->
+            db.importArchive(iosFixture(), context.cacheDir)
+            try {
+                db.withPhotoDigests { snapshot, bytes ->
+                    DiaryArchive.encode(snapshot, ByteArrayOutputStream()) { digest ->
+                        if (db.photoBytes(snapshot.meals[0].id, snapshot.meals[0].photos[0].id) != null) {
+                            db.deleteMeal(snapshot.meals[0].id, db.head().revision)
+                        }
+                        bytes(digest)
+                    }
+                }
+                error("expected StaleRevision")
+            } catch (_: DiaryError.StaleRevision) {}
+        }
     }
 
     @Test fun failedImportRemovesTheSpool() {
