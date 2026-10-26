@@ -1,5 +1,8 @@
 package com.yakov103.mivu.diary
 
+import android.util.Log
+import com.yakov103.mivu.coach.CoachEngine
+import com.yakov103.mivu.coach.coachCommittedSummary
 import java.util.UUID
 
 // Port of CoachSubmissionPayload (ios/Mivu/Coach/CoachModels.swift) and captureCoachSubmission /
@@ -92,3 +95,21 @@ fun DiaryDatabase.Tx.failCoachTurn(turnID: UUID, state: CoachTurnState, needsDay
 /** iOS `finishCoachTurn` (`completeCoachTurn`): the turn is completed with its reply; receipts are untouched. */
 fun DiaryDatabase.Tx.finishCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = null, incomplete: Boolean? = null) =
     updateCoachTurn(turnID, CoachTurnState.completed, assistantText, question, incomplete)
+
+/**
+ * iOS `settle`: a turn the engine left captured or analyzing after a failure ends with its saved-food summary or a Try
+ * again, never "Thinking" with no way out. Each write is its own transaction; a failed summary falls through to needsRetry.
+ */
+fun DiaryDatabase.settleCoachTurn(turnID: UUID, error: Throwable) {
+    val turn = read { it.coachTurnWithoutPhotos(turnID) } ?: return
+    if (turn.state != CoachTurnState.captured && turn.state != CoachTurnState.analyzing) return
+    // Saved food is never reported as a failure; the person can ask for the rest.
+    if (turn.receipts.isNotEmpty() && runCatching {
+            val text = coachCommittedSummary(turnID)
+            transaction(null) { it.finishCoachTurn(turnID, text, incomplete = true) }
+        }.isSuccess
+    ) return
+    val reason = CoachEngine.failureReason(error)
+    Log.w(CoachEngine.TAG, "Coach turn left unfinished: $reason")
+    transaction(null) { it.failCoachTurn(turnID, CoachTurnState.needsRetry, failureReason = reason) }
+}

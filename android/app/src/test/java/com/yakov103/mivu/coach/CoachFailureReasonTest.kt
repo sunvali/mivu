@@ -15,6 +15,9 @@ class CoachFailureReasonTest {
         assertEquals("ResponsesClient.Failure.Http(503)", CoachEngine.failureReason(ResponsesClient.Failure.Http(503)))
         assertEquals("DiaryError.InvalidData", CoachEngine.failureReason(DiaryError.InvalidData("coach json")))
         assertEquals("SocketTimeoutException", CoachEngine.failureReason(SocketTimeoutException("secret")))
+        // Spelled out, not read from class names that R8 renames in release builds.
+        assertEquals("SessionError.ProviderFailure(502)", CoachEngine.failureReason(SessionError.ProviderFailure(502)))
+        assertEquals("Other", CoachEngine.failureReason(object : Exception("secret") {}))
         val all = listOf(CoachError.LimitExceeded, ResponsesClient.Failure.Malformed("x".repeat(500)), SessionError.ProviderFailure(500),
             DiaryError.InvalidData("y".repeat(500)), object : Exception("z".repeat(500)) {}, IllegalStateException())
         all.forEach { assertTrue(CoachEngine.failureReason(it).toByteArray().size <= 200) }

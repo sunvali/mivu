@@ -13,10 +13,14 @@ import com.yakov103.mivu.diary.DiaryProfile
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.captureCoachSubmission
 import com.yakov103.mivu.diary.failCoachTurn
+import com.yakov103.mivu.diary.finishCoachTurn
+import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.diary.retryCoachTurn
+import com.yakov103.mivu.diary.settleCoachTurn
 import com.yakov103.mivu.diary.startDay
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Instant
 import java.util.UUID
@@ -241,5 +245,58 @@ class CoachWorkerTest {
         // A network change lets the stuck turn run again.
         w.drain(profile.id, true, retryWaiting = true)!!.join()
         assertEquals(8, offlineCalls.get())
+    }
+
+    private fun turnRow(id: UUID) = db.read { it.coachTurnWithoutPhotos(id) }!!
+
+    @Test fun unrecordedFailureAfterSavedFoodEndsWithItsSummary() = runBlocking {
+        val t = turn("Synthetic toast")
+        val log = CoachToolCall("fc_log", "call_log", "log_food", "mivu",
+            """{"target_local_date":"2026-10-24","items":[{"name":"Synthetic toast","quantity":1,"unit":"piece","kcal":530,"carbs":null,"protein":null,"fat":null}]}""")
+        val rounds = mutableListOf(CoachInferenceResult("fixture-model", "", listOf(log), emptyList()), answer())
+        CoachEngine(db, { _, _ -> rounds.removeAt(0) }).run(t.id)
+        // The engine's failure write was lost: the turn still reads as running.
+        db.transaction(null) { it.failCoachTurn(t.id, CoachTurnState.analyzing) }
+        db.settleCoachTurn(t.id, IOException())
+        val settled = turnRow(t.id)
+        assertEquals(CoachTurnState.completed, settled.state)
+        assertEquals(true, settled.incomplete)
+        assertTrue(settled.assistantText != null)
+        assertEquals(1, settled.receipts.size)
+    }
+
+    @Test fun unrecordedFailureWithoutSavedFoodOffersTryAgain() {
+        val t = turn("Synthetic first")
+        db.transaction(null) { it.failCoachTurn(t.id, CoachTurnState.analyzing) }
+        db.settleCoachTurn(t.id, IOException())
+        assertEquals(CoachTurnState.needsRetry, state(t.id))
+        assertEquals("IOException", turnRow(t.id).failureReason)
+    }
+
+    @Test fun settleLeavesAFinishedTurnAlone() {
+        val finished = turn("Synthetic first")
+        db.transaction(null) { it.finishCoachTurn(finished.id, "Synthetic answer.") }
+        val waiting = turn("Synthetic second")
+        db.transaction(null) { it.failCoachTurn(waiting.id, CoachTurnState.waitingForNetwork) }
+        val before = listOf(turnRow(finished.id), turnRow(waiting.id))
+        db.settleCoachTurn(finished.id, IOException())
+        db.settleCoachTurn(waiting.id, IOException())
+        assertEquals(before, listOf(turnRow(finished.id), turnRow(waiting.id)))
+    }
+
+    @Test fun workerSettlesATurnLeftAnalyzing() = runBlocking {
+        val t = turn("Synthetic first")
+        val settled = mutableListOf<Pair<UUID, CoachTurnState>>()
+        val spy: (DiaryDatabase, UUID, Throwable) -> Unit = { d, id, _ -> settled += id to d.read { it.coachTurnWithoutPhotos(id) }!!.state }
+        CoachWorker(repository, { { _, _ -> throw ResponsesClient.Failure.Http(500) } }, sleep = { }, scope = scope, settle = spy)
+            .drain(profile.id, true)!!.join()
+        // Called once, after the engine recorded its own failure.
+        assertEquals(listOf(t.id to CoachTurnState.waitingForNetwork), settled)
+        settled.clear()
+        val other = turn("Synthetic second")
+        CoachWorker(repository, { throw CoachError.ConnectionRequired }, sleep = { }, scope = scope, settle = spy)
+            .drain(profile.id, true)!!.join()
+        assertTrue(settled.isEmpty())
+        assertEquals(CoachTurnState.captured, state(other.id))
     }
 }

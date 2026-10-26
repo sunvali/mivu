@@ -3,7 +3,10 @@ package com.yakov103.mivu.coach
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import com.yakov103.mivu.analysis.ResponsesClient
+import android.util.Log
+import com.yakov103.mivu.diary.DiaryDatabase
 import com.yakov103.mivu.diary.DiaryRepository
+import com.yakov103.mivu.diary.settleCoachTurn
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.util.UUID
@@ -28,7 +31,8 @@ import kotlinx.serialization.json.JsonObject
 /**
  * Runs saved Coach turns oldest first, one worker at a time. No lock is held while a turn runs: a request during a
  * pass only sets a flag, and the running worker makes one more pass for it. A failed turn ends the pass with its
- * state saved by the engine; the next request (a capture, the app starting or the network returning) resumes it.
+ * state saved by the engine, or settled here when that write was lost, so it never stays on "Thinking"; the next
+ * request (a capture, the app starting or the network returning) resumes it.
  */
 class CoachWorker(
     private val repository: DiaryRepository,
@@ -37,6 +41,8 @@ class CoachWorker(
     private val prepareImages: suspend (List<ByteArray>) -> List<ByteArray> = ::visionCopies,
     private val sleep: suspend (Long) -> Unit = { delay(it) },
     private val scope: CoroutineScope,
+    /** Ends a turn the engine left running after a failure (iOS `settle`); a seam for tests. */
+    private val settle: (DiaryDatabase, UUID, Throwable) -> Unit = DiaryDatabase::settleCoachTurn,
 ) {
     private val running = MutableStateFlow(false)
     private val requested = AtomicBoolean(false)
@@ -92,8 +98,8 @@ class CoachWorker(
 
     /**
      * Runs pending turns oldest first and updates [capturedOnly]. Any failure ends the pass: a turn's state is saved by the
-     * engine, and a diary error waits for the next request. Nothing is logged, so no prompt, context or reply leaves the
-     * diary; an escaped error would end the process.
+     * engine (or settled here), and a diary error waits for the next request. Only failure codes are logged, so no prompt,
+     * context or reply leaves the diary; an escaped error would end the process.
      */
     private suspend fun pass(profileID: UUID) {
         try {
@@ -107,12 +113,15 @@ class CoachWorker(
                 }
                 if (turnID == previous) { capturedOnly = true; return } // the engine left it pending; wait for the next request
                 previous = turnID
+                var started = false
                 try {
                     val infer = bind()
+                    started = true
                     CoachEngine(db, { input, tools -> resilient(infer, input, tools) }, prepareImages) { _activity.value = turnID to it }.run(turnID)
                 } catch (e: CancellationException) {
                     throw e
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    if (started) runCatching { settle(db, turnID, e) }
                     capturedOnly = true // the engine saved its failed state; newer captures go first until the network changes
                     return
                 } finally {
@@ -121,7 +130,8 @@ class CoachWorker(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(CoachEngine.TAG, "Coach worker failed: ${CoachEngine.failureReason(e)}")
         }
     }
 

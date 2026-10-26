@@ -76,8 +76,8 @@ class CoachEngine(
         val turn = stored(turnID)
         if (turn.state == CoachTurnState.completed) return@withContext turn
         val mode = if (turn.receipts.isEmpty()) CoachWriteMode.uninterrupted else CoachWriteMode.replayOnly
-        db.transaction(null) { it.failCoachTurn(turnID, CoachTurnState.analyzing) }
         try {
+            db.transaction(null) { it.failCoachTurn(turnID, CoachTurnState.analyzing) }
             rounds(turn, mode)
         } catch (error: Throwable) {
             // Leave the turn analyzing while run retries, so the failure never flashes in the chat.
@@ -103,7 +103,12 @@ class CoachEngine(
                 isTransient(error) -> CoachTurnState.waitingForNetwork
                 else -> CoachTurnState.needsRetry
             }
-            runCatching { db.transaction(null) { it.failCoachTurn(turnID, state, needsDayChoice = error == DiaryError.AmbiguousDay, failureReason = reason) } }
+            // A lost state write is reported with the error; the worker then settles the turn.
+            try {
+                db.transaction(null) { it.failCoachTurn(turnID, state, needsDayChoice = error == DiaryError.AmbiguousDay, failureReason = reason) }
+            } catch (w: Exception) {
+                error.addSuppressed(w)
+            }
             throw error
         }
     }
@@ -293,14 +298,58 @@ class CoachEngine(
     }
 
     companion object {
-        private const val TAG = "Mivu"
+        internal const val TAG = "Mivu"
 
-        /** The error's case name (and HTTP status); never its message, which can carry model or user text. */
+        /**
+         * The error's case name (and status code); never its message, which can carry model or user text. Spelled out
+         * because R8 renames app classes in release builds; platform exception names are kept.
+         */
         fun failureReason(error: Throwable): String = when (error) {
-            is CoachError, is DiaryError, is SessionError, is ResponsesClient.Failure ->
-                error.javaClass.name.substringAfterLast('.').replace('$', '.') +
-                    (if (error is ResponsesClient.Failure.Http) "(${error.code})" else "")
-            else -> error.javaClass.simpleName.take(40)
+            is CoachError -> "CoachError." + when (error) {
+                CoachError.InvalidTool -> "InvalidTool"
+                CoachError.InvalidArguments -> "InvalidArguments"
+                CoachError.LimitExceeded -> "LimitExceeded"
+                CoachError.UngroundedConfirmation -> "UngroundedConfirmation"
+                CoachError.ConnectionRequired -> "ConnectionRequired"
+            }
+            is DiaryError -> "DiaryError." + when (error) {
+                is DiaryError.InvalidData -> "InvalidData"
+                DiaryError.WrongOwner -> "WrongOwner"
+                DiaryError.InvalidAmountUnitChange -> "InvalidAmountUnitChange"
+                DiaryError.StaleRevision -> "StaleRevision"
+                DiaryError.StaleArchive -> "StaleArchive"
+                DiaryError.NotFound -> "NotFound"
+                DiaryError.EmptyCapture -> "EmptyCapture"
+                DiaryError.AmbiguousDay -> "AmbiguousDay"
+                DiaryError.QuotaExceeded -> "QuotaExceeded"
+                DiaryError.Busy -> "Busy"
+            }
+            is SessionError -> "SessionError." + when (error) {
+                SessionError.NoActiveSession -> "NoActiveSession"
+                SessionError.PlanPermissionMissing -> "PlanPermissionMissing"
+                SessionError.InvalidRegistration -> "InvalidRegistration"
+                SessionError.IdentityMismatch -> "IdentityMismatch"
+                SessionError.InvalidResponse -> "InvalidResponse"
+                SessionError.NetworkUnavailable -> "NetworkUnavailable"
+                is SessionError.ProviderFailure -> "ProviderFailure(${error.code})"
+                SessionError.InvalidRefresh -> "InvalidRefresh"
+                SessionError.SessionChanged -> "SessionChanged"
+            }
+            is ResponsesClient.Failure -> "ResponsesClient.Failure." + when (error) {
+                ResponsesClient.Failure.InvalidInput -> "InvalidInput"
+                ResponsesClient.Failure.Unauthorized -> "Unauthorized"
+                ResponsesClient.Failure.Forbidden -> "Forbidden"
+                is ResponsesClient.Failure.Http -> "Http(${error.code})"
+                is ResponsesClient.Failure.Malformed -> "Malformed"
+                ResponsesClient.Failure.IncompleteResponse -> "IncompleteResponse"
+                ResponsesClient.Failure.ResponseFailed -> "ResponseFailed"
+                ResponsesClient.Failure.QuotaReached -> "QuotaReached"
+                ResponsesClient.Failure.UsageUnavailable -> "UsageUnavailable"
+                ResponsesClient.Failure.LimitExceeded -> "LimitExceeded"
+            }
+            else -> error.javaClass.name.let { name ->
+                if (listOf("java.", "javax.", "android.").any(name::startsWith)) error.javaClass.simpleName.take(40) else "Other"
+            }
         }
 
         /** Rejected tool calls the model can fix from feedback; day ambiguity stays a user question. */
