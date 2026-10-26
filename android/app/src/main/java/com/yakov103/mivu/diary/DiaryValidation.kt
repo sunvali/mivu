@@ -44,6 +44,18 @@ private fun Char.swiftSpace() = code in 9..13 || code == 0x85 || Character.getTy
 }
 internal fun String.blankLikeSwift() = all { it.swiftSpace() }
 private fun String.utf8Size() = toByteArray(Charsets.UTF_8).size
+/** The longest prefix of whole code points within [bytes] UTF-8 bytes. */
+internal fun String.utf8Prefix(bytes: Int): String {
+    var end = 0
+    var size = 0
+    while (end < length) {
+        val point = codePointAt(end)
+        size += when { point < 0x80 -> 1; point < 0x800 -> 2; point < 0x10000 -> 3; else -> 4 }
+        if (size > bytes) break
+        end += Character.charCount(point)
+    }
+    return substring(0, end)
+}
 private fun <T> List<T>.unique() = toSet().size == size
 private fun Double.finite() = !isNaN() && !isInfinite()
 private fun Double?.inRange(low: Double, high: Double, lowInclusive: Boolean) =
@@ -166,7 +178,7 @@ private fun validateTurn(turn: CoachTurn, s: DiarySnapshot, dayIds: Set<UUID>): 
         turn.text.atMost(20_000) && validZone(turn.captureTimeZoneID) && turn.photoIDs.unique() && turn.photoIDs.size <= 30 &&
             (turn.assistantText?.let { it.utf8Size() <= 65_536 } ?: true) &&
             turn.receipts.size <= 16 && turn.receipts.map { it.operationKey }.toSet().size == turn.receipts.size &&
-            (turn.pendingMealRevision?.let { it >= 0 } ?: true) &&
+            (turn.pendingMealRevision?.let { it >= 0 } ?: true) && (turn.failureReason?.let { it.utf8Size() <= 200 } ?: true) &&
             (turn.submissionManifest?.reply?.let { it.excerpt.atMost(280) && !it.excerpt.blankLikeSwift() } ?: true),
         "coach turn",
     )

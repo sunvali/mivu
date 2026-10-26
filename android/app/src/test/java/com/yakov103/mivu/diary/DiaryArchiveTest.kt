@@ -82,6 +82,24 @@ class DiaryArchiveTest {
         assertEquals(snap, DiaryArchive.decode(out.toByteArray().inputStream(), snap.profile.id))
     }
 
+    private fun withReason(reason: String) = decode(full).let { s ->
+        s.copy(coachTurns = listOf(s.coachTurns[0].copy(failureReason = reason)) + s.coachTurns.drop(1))
+    }
+
+    @Test fun failureReasonSurvivesReexport() {
+        val snap = withReason("CoachError.InvalidArguments")
+        val first = ByteArrayOutputStream().also { DiaryArchive.encode(snap, it) }.toByteArray()
+        val again = DiaryArchive.decode(first.inputStream(), snap.profile.id)
+        assertEquals("CoachError.InvalidArguments", again.coachTurns[0].failureReason)
+        val second = ByteArrayOutputStream().also { DiaryArchive.encode(again, it) }.toByteArray()
+        assertTrue(first.contentEquals(second))
+    }
+
+    @Test fun oversizedFailureReasonIsInvalid() {
+        withReason("x".repeat(200)).validate()
+        throws<DiaryError.InvalidData> { withReason("x".repeat(201)).validate() }
+    }
+
     @Test fun encodeOverCapFails() {
         throws<DiaryError.InvalidData> { DiaryArchive.encode(decode(full), ByteArrayOutputStream(), maxBytes = 1000) }
     }

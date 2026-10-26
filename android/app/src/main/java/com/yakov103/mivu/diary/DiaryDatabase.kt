@@ -295,10 +295,10 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
          */
         fun updateCoachTurn(
             turnID: UUID, state: CoachTurnState, assistantText: String?, question: CoachQuestion? = null,
-            incomplete: Boolean? = null, needsDayChoice: Boolean = false,
+            incomplete: Boolean? = null, needsDayChoice: Boolean = false, failureReason: String? = null,
         ) {
             val turn = (coachTurnWithoutPhotos(turnID) ?: throw DiaryError.NotFound).copy(state = state, assistantText = assistantText,
-                question = question, incomplete = incomplete,
+                question = question, incomplete = incomplete, failureReason = failureReason?.utf8Prefix(200),
                 needsDayChoice = if (state == CoachTurnState.needsClarification && needsDayChoice) true else null)
             verify(pending, turns = listOf(turn.copy(photoIDs = emptyList())))
             put("coach_turn", turn.id.key, turn, CoachTurn.serializer())

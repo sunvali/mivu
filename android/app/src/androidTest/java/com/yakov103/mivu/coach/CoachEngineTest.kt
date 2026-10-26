@@ -14,6 +14,7 @@ import com.yakov103.mivu.diary.MealPhoto
 import com.yakov103.mivu.diary.PhotoRole
 import com.yakov103.mivu.diary.applyCoachWrites
 import com.yakov103.mivu.diary.captureCoachSubmission
+import com.yakov103.mivu.diary.failCoachTurn
 import com.yakov103.mivu.diary.startDay
 import java.io.File
 import java.net.SocketTimeoutException
@@ -57,7 +58,8 @@ class CoachEngineTest {
             input.forEach { it.json() }
             assertEquals("namespace", tools["type"].toString().trim('"'))
             inputs += input
-            return (rounds.removeFirstOrNull() ?: throw AssertionError("unexpected round"))()
+            // As on iOS, a script that runs out fails like a model that never finishes.
+            return (rounds.removeFirstOrNull() ?: throw CoachError.LimitExceeded)()
         }
     }
 
@@ -131,7 +133,10 @@ class CoachEngineTest {
     @Test fun clarificationMustBeOnlyCall() {
         val t = turn()
         val ask = call("ask_clarification", """{"kind":"portion"}""")
-        assertEquals(CoachError.InvalidArguments, failure(Script(result(ask, call("log_food", logFood))), t.id))
+        // The model is told the batch was rejected; this script then runs out.
+        val rejected = Script(result(ask, call("log_food", logFood)))
+        assertEquals(CoachError.LimitExceeded, failure(rejected, t.id))
+        assertTrue((rejected.inputs[1].last() as CoachInferenceInput.FunctionOutput).output.startsWith("""{"saved":false,"error":""""))
         assertEquals(CoachTurnState.needsRetry, stored(t.id).state)
         assertTrue(db.snapshot().meals.isEmpty())
         val done = run(Script(result(ask)), t.id)
@@ -192,5 +197,76 @@ class CoachEngineTest {
         val phases = mutableListOf<CoachActivity>()
         runBlocking { CoachEngine(db, script::infer, onActivity = { phases += it }).run(t.id) }
         assertEquals(listOf(CoachActivity.preparingPhotos, CoachActivity.thinking, CoachActivity.saving, CoachActivity.thinking), phases)
+    }
+
+    @Test fun rejectedCallIsReturnedToModelToCorrect() {
+        val t = turn()
+        val fabricated = """{"meal_id":"${UUID.randomUUID()}","item_id":"${UUID.randomUUID()}","expected_revision":1,"quantity":0.5}"""
+        val toast = logFood.replace("Synthetic sandwich", "Synthetic toast")
+        var receiptsAfterFirst = -1
+        val script = Script(result(call("correct_item", fabricated), call("log_food", logFood)),
+            { receiptsAfterFirst = stored(t.id).receipts.size; result(call("log_food", toast, "fixed"))() }, result(text = "Logged."))
+        val done = run(script, t.id)
+        assertEquals(0, receiptsAfterFirst)
+        val feedback = script.inputs[1].filterIsInstance<CoachInferenceInput.FunctionOutput>()
+        assertEquals(listOf("call_correct_item", "call_log_food"), feedback.map { it.callID })
+        feedback.forEach { assertTrue(it.output, it.output.startsWith("""{"saved":false,"error":"""")) }
+        assertEquals(CoachTurnState.completed, done.state)
+        assertEquals(1, done.receipts.size)
+        assertEquals(listOf("Synthetic toast"), db.snapshot().meals.single().items.map { it.name })
+    }
+
+    @Test fun modelOutputFailureRetriesOnceWithoutShowingIt() {
+        val t = turn()
+        val states = mutableListOf<CoachTurnState>()
+        val script = Script(failing(ResponsesClient.Failure.Malformed("x")), result(text = "Nutrition remains uncertain."))
+        val done = runBlocking { CoachEngine(db, { input, tools -> states += stored(t.id).state; script.infer(input, tools) }).run(t.id) }
+        assertEquals(listOf(CoachTurnState.analyzing, CoachTurnState.analyzing), states)
+        assertEquals(CoachTurnState.completed, done.state)
+        assertEquals(null, done.failureReason)
+    }
+
+    @Test fun onlyModelOutputFailuresRetryAndOnlyOnce() {
+        val malformed = turn()
+        val twice = Script(failing(ResponsesClient.Failure.Malformed("x")), failing(ResponsesClient.Failure.Malformed("y")))
+        assertTrue(failure(twice, malformed.id) is ResponsesClient.Failure.Malformed)
+        assertEquals(2, twice.inputs.size)
+        assertEquals(CoachTurnState.needsRetry, stored(malformed.id).state)
+        assertEquals("ResponsesClient.Failure.Malformed", stored(malformed.id).failureReason)
+        val looping = turn("Synthetic loop")
+        val reads = Script(*Array(9) { result(call("get_context", "{}", "context$it")) })
+        assertEquals(CoachError.LimitExceeded, failure(reads, looping.id))
+        assertEquals(8, reads.inputs.size)
+        val unauthorized = turn("Synthetic auth")
+        val once = Script(failing(ResponsesClient.Failure.Unauthorized), result(text = "unused"))
+        assertEquals(ResponsesClient.Failure.Unauthorized, failure(once, unauthorized.id))
+        assertEquals(1, once.inputs.size)
+        assertEquals(CoachTurnState.waitingForConnection, stored(unauthorized.id).state)
+    }
+
+    @Test fun retryAfterASavedWriteKeepsOneReceipt() {
+        val t = turn()
+        val script = Script(result(call("log_food", logFood)), failing(ResponsesClient.Failure.Malformed("x")),
+            result(call("log_food", logFood)), result(text = "Logged **300** kcal."))
+        val done = run(script, t.id)
+        assertEquals(CoachTurnState.completed, done.state)
+        assertEquals(1, done.receipts.size)
+        assertEquals(1, db.snapshot().meals.size)
+        assertEquals(4, script.inputs.size)
+    }
+
+    @Test fun failedTurnKeepsOnlyItsFailureCode() {
+        val t = turn()
+        failure(Script(failing(ResponsesClient.Failure.Http(503))), t.id)
+        assertEquals("ResponsesClient.Failure.Http(503)", stored(t.id).failureReason)
+        run(Script(result(text = "Nutrition remains uncertain.")), t.id)
+        assertEquals(null, stored(t.id).failureReason)
+    }
+
+    @Test fun failureReasonIsCappedOnWholeCodePoints() {
+        val t = turn()
+        db.transaction(null) { it.failCoachTurn(t.id, CoachTurnState.needsRetry, failureReason = "a" + "😀".repeat(100)) }
+        val stored = stored(t.id).failureReason!!
+        assertEquals("a" + "😀".repeat(49), stored) // 197 bytes; one more emoji would be 201
     }
 }

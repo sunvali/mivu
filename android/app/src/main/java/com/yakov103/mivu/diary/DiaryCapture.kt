@@ -84,9 +84,9 @@ fun DiaryDatabase.pendingCoachTurns(): List<UUID> = coachTurnsWithoutPhotos()
     .map { it.id }
 
 /** iOS `failCoachTurn` (`setCoachTurnState`): a completed turn keeps its reply; any other state clears it. */
-fun DiaryDatabase.Tx.failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Boolean = false) {
+fun DiaryDatabase.Tx.failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Boolean = false, failureReason: String? = null) {
     val kept = if (state == CoachTurnState.completed) coachTurnWithoutPhotos(turnID) else null
-    updateCoachTurn(turnID, state, kept?.assistantText, kept?.question, kept?.incomplete, needsDayChoice)
+    updateCoachTurn(turnID, state, kept?.assistantText, kept?.question, kept?.incomplete, needsDayChoice, failureReason)
 }
 
 /** iOS `finishCoachTurn` (`completeCoachTurn`): the turn is completed with its reply; receipts are untouched. */

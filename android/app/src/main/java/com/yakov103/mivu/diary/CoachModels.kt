@@ -51,6 +51,8 @@ data class CoachTurn(
     val captureSegmentID: UUID? = null,
     val question: CoachQuestion? = null,
     val incomplete: Boolean? = null,
+    /** Error case from the last failed run; never user or model text. */
+    val failureReason: String? = null,
 )
 
 @Serializable
