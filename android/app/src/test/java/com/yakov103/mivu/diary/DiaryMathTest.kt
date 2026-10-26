@@ -34,9 +34,22 @@ class DiaryMathTest {
         assertEquals(NutritionTotals(350.0, 40.0, 20.0, 10.0, 0), t)
     }
 
-    @Test fun oneMissingMacroMakesThatTotalNull() {
-        val t = nutritionTotals(listOf(item(1, 100.0, 10.0, 5.0, 2.0), item(2, 250.0, 30.0, null, 8.0)))
-        assertEquals(NutritionTotals(350.0, 40.0, null, 10.0, 1), t)
+    @Test fun unknownComponentsAddNothingAndAreCounted() {
+        val a = item(1, 10.0, 1.0, null, 0.0)
+        val t = nutritionTotals(listOf(a, item(2, 20.0, 2.0, 3.0, 4.0)))
+        assertEquals(30.0, t.kcal!!, 0.0)
+        assertEquals(3.0, t.protein!!, 0.0)
+        assertEquals(1, t.unknownItemCount)
+        assertNull(nutritionTotals(listOf(a)).protein)
+        assertNull(nutritionTotals(emptyList()).kcal)
+    }
+
+    @Test fun dailyAddsKnownSubtotals() {
+        val p = dailyProgress(
+            listOf(NutritionTotals(100.0, 10.0, 5.0, 2.0, 1), NutritionTotals(50.0, 5.0, null, 1.0, 2)), null, null,
+        )
+        assertEquals(5.0, p.foodTotals!!.protein!!, 0.0)
+        assertEquals(3, p.foodTotals!!.unknownItemCount)
     }
 
     @Test fun unsavedMealsExcluded() {

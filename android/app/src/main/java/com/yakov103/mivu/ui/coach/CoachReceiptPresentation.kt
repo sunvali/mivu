@@ -106,11 +106,8 @@ data class CoachReceiptPresentation(val receipt: CoachCommittedReceipt, val targ
         return "Weight saved · ${plain(value)} $unit"
     }
 
-    private fun committedTotal(nutrient: (NutritionValues) -> Double?): Double? {
-        var total = 0.0
-        for (item in receipt.items) total += item.nutrition?.let(nutrient) ?: return null
-        return total
-    }
+    private fun committedTotal(nutrient: (NutritionValues) -> Double?): Double? =
+        receipt.items.mapNotNull { it.nutrition?.let(nutrient) }.takeIf { it.isNotEmpty() }?.sum()
 
     private companion object {
         val us = DecimalFormatSymbols(Locale.US)

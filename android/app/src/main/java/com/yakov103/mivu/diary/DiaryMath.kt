@@ -21,8 +21,8 @@ data class DailyProgress(
     val exerciseAdjustedKcalRemaining: Double?,
 )
 
-private fun sumOrNull(values: List<Double?>): Double? =
-    if (values.isEmpty() || values.any { it == null }) null else values.sumOf { it!! }
+/** Each nutrient adds the items that know it and is nil only when none do; unknownItemCount discloses the gap. */
+private fun sumOrNull(values: List<Double?>): Double? = values.filterNotNull().takeIf { it.isNotEmpty() }?.sum()
 
 fun nutritionTotals(items: List<FoodItem>) = NutritionTotals(
     sumOrNull(items.map { it.nutrition.kcal }),

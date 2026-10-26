@@ -52,6 +52,23 @@ class CoachReceiptPresentationTest {
             CoachReceiptTarget.Unavailable).committedNutrition)
     }
 
+    @Test fun committedMacrosAddOnlyKnownValues() {
+        val first = committed(item.copy(nutrition = NutritionValues(100.0, 0.0, 10.5, 2.0)))
+        val second = committed(item.copy(id = UUID.randomUUID(), nutrition = NutritionValues(50.0, 0.0, 4.5, 3.0)))
+        fun present(vararg items: CoachCommittedItem) = CoachReceiptPresentation(receipt(items.toList()), CoachReceiptTarget.Loading)
+        val noProtein = second.copy(nutrition = second.nutrition!!.copy(protein = null))
+        var p = present(first, noProtein)
+        assertEquals("150 kcal", p.committedNutrition)
+        assertEquals("Carbs 0 g · Protein 10.5 g · Fat 5 g", p.committedMacros)
+        assertEquals("Some nutrients unknown", p.nutritionCompleteness)
+        p = present(first.copy(nutrition = null), noProtein)
+        assertEquals("50 kcal", p.committedNutrition)
+        assertEquals("Carbs 0 g · Protein unknown · Fat 3 g", p.committedMacros)
+        p = present(first.copy(nutrition = null), second.copy(nutrition = null))
+        assertEquals("Energy unknown", p.committedNutrition)
+        assertEquals("Carbs unknown · Protein unknown · Fat unknown", p.committedMacros)
+    }
+
     @Test fun editedAndMovedNotice() {
         val moved = CoachReceiptPresentation(receipt(), CoachReceiptTarget.Meal(meal(listOf(item)), "2026-10-23"))
         assertEquals("Moved to Oct 23", moved.changeNotice)
