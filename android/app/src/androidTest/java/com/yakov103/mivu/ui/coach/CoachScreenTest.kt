@@ -27,6 +27,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
@@ -84,6 +87,7 @@ class CoachScreenTest {
     private val activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null)
     private var drains = 0
     private var opened: UUID? = null
+    private var workout: UUID? = null
     private val destinations = mutableListOf<String>()
     private lateinit var model: CoachViewModel
     private val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
@@ -109,7 +113,7 @@ class CoachScreenTest {
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
-                MivuTheme { CoachScreen(model, onOpenMeal = { opened = it }, onSeeToday = {}, onSeeProgress = {},
+                MivuTheme { CoachScreen(model, onOpenMeal = { opened = it }, onSeeToday = {}, onSeeProgress = {}, onOpenWorkout = { workout = it },
                     onOpenConnection = { destinations += "connection" }, onOpenSettings = { destinations += "settings" }) }
             }
         }
@@ -312,6 +316,37 @@ class CoachScreenTest {
         val after = compose.onNodeWithText("Synthetic 17").getBoundsInRoot().top
         assertTrue("the row moved with the finger: $before -> $after", after - before > 50.dp)
         compose.onNodeWithContentDescription("Jump to latest").assertExists()
+    }
+
+    @Test fun timelineScrollsBehindTheComposer() {
+        seed(30)
+        launch()
+        compose.waitForIdle()
+        val composer = compose.onNodeWithTag("coachComposer").getBoundsInRoot()
+        val newest = compose.onNodeWithText("Synthetic reply 29").getBoundsInRoot()
+        assertTrue("newest $newest clears the composer $composer", newest.bottom <= composer.top)
+        // A drag in the faded band above the field, left of Pip, reaches the list.
+        val field = compose.onNodeWithTag("coachField").getBoundsInRoot()
+        compose.onRoot().performTouchInput {
+            val start = Offset((field.left - 8.dp).toPx(), (field.top - 8.dp).toPx())
+            swipe(start, start + Offset(0f, 400f), durationMillis = 600)
+        }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Jump to latest").assertIsDisplayed()
+        val jump = compose.onNodeWithContentDescription("Jump to latest").getBoundsInRoot()
+        assertTrue("Jump to latest $jump sits above the composer $composer", jump.bottom <= composer.top)
+    }
+
+    @Test fun workoutQuoteOpensTheWorkout() {
+        start()
+        val id = UUID.randomUUID()
+        val h = db().head()
+        db().captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), "How was this?", emptyList(),
+            CoachCaptureContext(now, h.profile.timeZoneID, h.activeDayID, h.previousDayConfirmedAt, h.activeConversationSegmentID),
+            reply = CoachReply(CoachReply.Target.Workout(id), "Synthetic run")), h.revision)
+        launch()
+        compose.onNode(hasContentDescription("Synthetic run", substring = true)).performClick()
+        assertEquals(id, workout)
     }
 
     @Test fun replyWhileBrowsingKeepsPositionWithin2dp() {

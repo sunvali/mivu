@@ -446,6 +446,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onOpenConnection = { navController.navigate(Route.Connection) },
                     onOpenSettings = { navController.navigate(Route.Settings) },
                     checkIn = today, // the weigh-in bubble is Today's check-in
+                    onOpenWorkout = { navController.navigate(Route.WorkoutDetail(it.toString())) },
                 )
             }
             composable<Route.CoachHistory> {

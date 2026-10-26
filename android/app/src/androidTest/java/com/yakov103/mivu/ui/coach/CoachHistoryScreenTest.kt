@@ -40,7 +40,14 @@ import com.yakov103.mivu.diary.startDay
 import com.yakov103.mivu.ui.MivuApp
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.TodayFixture
+import com.yakov103.mivu.coach.CoachReplyLines
 import java.time.Instant
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.time.format.TextStyle
+import java.util.Locale
+import java.util.TimeZone
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -59,10 +66,16 @@ class CoachHistoryScreenTest {
     private lateinit var repository: DiaryRepository
     private lateinit var profileID: UUID
     private val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
-    private val zone = ZoneId.systemDefault()
-    private val today = LocalDate.now(zone).toString()
+    // Read after @Before sets the default zone.
+    private val zone get() = ZoneId.systemDefault()
+    private val today get() = LocalDate.now(zone).toString()
+    private val previousZone = TimeZone.getDefault()
+    private val previousLocale = Locale.getDefault()
 
     @Before fun open() {
+        // A zone other than London's, so a London row names its zone.
+        TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"))
+        Locale.setDefault(Locale.US)
         TodayFixture.wipe(context)
         profileID = TodayFixture.diary(context)
         repository = DiaryRepository(context)
@@ -72,6 +85,8 @@ class CoachHistoryScreenTest {
         CoachViewModel.readPageForTest = null
         (repository.bootstrapState.value as? Bootstrap.Ready)?.let { repository.database(it.profileID).close() }
         TodayFixture.wipe(context)
+        TimeZone.setDefault(previousZone)
+        Locale.setDefault(previousLocale)
     }
 
     private fun db() = repository.database(profileID)
@@ -135,16 +150,18 @@ class CoachHistoryScreenTest {
     @Test fun listsNewestFirstWithCaptureLabel() {
         val london = Instant.parse("2026-10-24T07:12:05Z")
         append(listOf(
-            synthetic("Greek yogurt with berries and honey", Instant.parse("2026-10-22T11:05:44Z"), "Europe/Paris"),
-            synthetic("Oatmeal with banana and a coffee with oat milk", london, "Europe/London"),
+            synthetic("Greek yogurt with berries and honey", Instant.parse("2026-10-22T12:12:05Z"), zone.id), // 8:12 AM here
+            synthetic("Oatmeal with banana and a coffee with oat milk", london, "Europe/London"), // 8:12 AM BST
         ))
         launchApp()
         openHistory()
         waitFor(hasText("Oatmeal with banana and a coffee with oat milk"))
-        compose.onNodeWithText("24 Oct 2026, 08:12:05 · Europe/London").assertIsDisplayed()
-        compose.onNodeWithText("22 Oct 2026, 13:05:44 · Europe/Paris").assertIsDisplayed()
-        val newest = compose.onNodeWithText("2026-10-24").fetchSemanticsNode().boundsInRoot.top
-        val older = compose.onNodeWithText("2026-10-22").fetchSemanticsNode().boundsInRoot.top
+        val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).format(LocalTime.of(8, 12))
+        assertTrue(time, Regex("8:12\\sAM").matches(time))
+        compose.onNodeWithText("$time · " + ZoneId.of("Europe/London").getDisplayName(TextStyle.SHORT, Locale.US)).assertIsDisplayed()
+        compose.onNodeWithText(time).assertIsDisplayed() // the row in the device zone names no zone
+        val newest = compose.onNodeWithText(CoachReplyLines.dayTitle("2026-10-24", zone.id)).fetchSemanticsNode().boundsInRoot.top
+        val older = compose.onNodeWithText(CoachReplyLines.dayTitle("2026-10-22", zone.id)).fetchSemanticsNode().boundsInRoot.top
         assertTrue("newest first: $newest < $older", newest < older)
     }
 
@@ -175,7 +192,7 @@ class CoachHistoryScreenTest {
         waitFor(hasText("Choose the date shown in your conversation. Separate visits remain separate choices."))
         compose.onNodeWithText("Show date").performClick()
         waitFor(hasText("Selected date"))
-        compose.onNode(hasText("Selected date") and hasText(today)).assertExists()
+        compose.onNode(hasText("Selected date") and hasText("Today")).assertExists()
         compose.onNodeWithText("Synthetic morning visit").assertExists()
         compose.onNodeWithText("Synthetic evening visit").assertExists()
         compose.onNodeWithText("Synthetic older visit").assertDoesNotExist()
@@ -192,7 +209,7 @@ class CoachHistoryScreenTest {
         compose.onNodeWithContentDescription("Choose date").performClick()
         compose.onNodeWithText("Show date").performClick()
         waitFor(hasText("No chat for this date"))
-        compose.onNodeWithText("No saved conversation is labeled $today.").assertIsDisplayed()
+        compose.onNodeWithText("No saved conversation is labeled Today.").assertIsDisplayed()
     }
 
     @Test fun rowSeeksAndHighlightsFirstMessage() {

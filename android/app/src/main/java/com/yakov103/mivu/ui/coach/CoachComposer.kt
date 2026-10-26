@@ -68,7 +68,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -172,7 +174,11 @@ fun CoachComposer(
         announced = phase == CoachVoiceInput.Phase.Listening
     }
     val inset = Modifier.padding(horizontal = 16.dp)
-    Column(modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val background = MaterialTheme.colorScheme.background
+    // As iOS: the chat fades out under a 56 dp band, then the screen's background; no pointer input, so drags reach the list.
+    Column(modifier.fillMaxWidth().testTag("coachComposer").drawBehind {
+        drawRect(Brush.verticalGradient(0f to background.copy(alpha = 0f), (56.dp.toPx() / size.height).coerceAtMost(1f) to background))
+    }.padding(top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (bubble != null && !focused && phase == CoachVoiceInput.Phase.Idle) Box(inset) { bubble() }
         // Each starter fills the draft for review; nothing is sent until Send.
         if (showStarters && !draft.canSend && !focused && phase == CoachVoiceInput.Phase.Idle) Row(

@@ -62,6 +62,10 @@ import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.ui.coach.CoachHistoryWindow.Direction
@@ -73,7 +77,7 @@ import java.util.UUID
 import kotlinx.coroutines.launch
 
 // Port of the iOS Coach tab's timeline (ios/Mivu/Coach/CoachView.swift and CoachTimelineView.swift) as a reversed
-// LazyColumn: index 0 is the newest exchange, at the bottom. The composer and Pip dock below the timeline box.
+// LazyColumn: index 0 is the newest exchange, at the bottom. The composer and Pip float over the timeline's foot (#46).
 
 private data class Viewport(val visible: Set<UUID>, val first: Int, val last: Int, val atLatest: Boolean)
 
@@ -98,6 +102,8 @@ fun CoachScreen(
     onOpenSettings: () -> Unit = {},
     /** Today's model, for the morning weigh-in bubble; dismissal and skip are shared with Today. */
     checkIn: TodayViewModel? = null,
+    /** A quoted workout opens its detail (#45). */
+    onOpenWorkout: (UUID) -> Unit = {},
 ) {
     val state by model.timeline.collectAsStateWithLifecycle()
     val activity by model.activity.collectAsStateWithLifecycle()
@@ -111,12 +117,12 @@ fun CoachScreen(
     // A failed weigh-in save from the bubble, as Today's snackbar.
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(checkIn) { checkIn?.messages?.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
-    val actions = remember(model, onOpenMeal, onSeeToday, onSeeProgress, onOpenConnection, onOpenSettings) {
+    val actions = remember(model, onOpenMeal, onSeeToday, onSeeProgress, onOpenConnection, onOpenSettings, onOpenWorkout) {
         CoachRowActions(model::undo, onOpenMeal, { model.retry(it) }, { id, previous -> model.chooseDay(id, previous) }, model::answer,
             model::finishRest, onSeeToday, onSeeProgress, model::turnPhoto, model::mealPhoto,
             // As iOS reply(to:), typing follows the quote.
             reply = { turn, fromPip -> model.replyTo(turn, fromPip); focusRequester.requestFocus() },
-            openQuote = { reply -> openQuote(reply, model, onOpenMeal) },
+            openQuote = { reply -> openQuote(reply, model, onOpenMeal, onOpenWorkout) },
             openDestination = { if (it == CoachDestination.connection) onOpenConnection() else onOpenSettings() },
         )
     }
@@ -161,11 +167,14 @@ fun CoachScreen(
         if (focusRequested) { focusRequester.requestFocus(); onFocusConsumed() }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxWidth().semantics { isTraversalGroup = true }) {
+    // The composer floats over the timeline's foot, so the chat scrolls behind its faded band (iOS #46).
+    var composerHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().semantics { isTraversalGroup = true }) {
             LazyColumn(
                 Modifier.fillMaxSize().testTag("coachTimeline").semantics { traversalIndex = 0f },
-                state = listState, reverseLayout = true, contentPadding = PaddingValues(vertical = 8.dp),
+                state = listState, reverseLayout = true, contentPadding = PaddingValues(top = 8.dp, bottom = composerHeight + 8.dp),
             ) {
                 items(rows, key = { it.turn.id }) { exchange ->
                     CoachExchangeRow(exchange, isLatest = exchange.turn.id == state.latestID,
@@ -173,25 +182,28 @@ fun CoachScreen(
                         highlighted = exchange.turn.id == state.highlighted)
                 }
             }
+            // Centred in the space above the composer.
+            val above = Modifier.align(Alignment.Center).padding(bottom = composerHeight)
             when {
-                !state.loaded -> Loading(Modifier.align(Alignment.Center))
-                state.error != null -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                !state.loaded -> Loading(above)
+                state.error != null -> Column(above.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(state.error!!, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
                     TextButton({ model.jumpToLatest() }, Modifier.heightIn(min = 48.dp)) { Text("Try again") }
                 }
-                rows.isEmpty() -> EmptyState(Modifier.align(Alignment.Center))
+                rows.isEmpty() -> EmptyState(above)
             }
             Edge(Direction.earlier, state.earlier, Modifier.align(Alignment.TopCenter)) { model.loadEarlier(visible()) }
-            Edge(Direction.later, state.later, Modifier.align(Alignment.BottomCenter)) { model.loadLater(visible()) }
-            if (rows.isNotEmpty() && (!atLatest || state.later != EdgeState.Exhausted)) JumpToLatest(listState) {
+            Edge(Direction.later, state.later, Modifier.align(Alignment.BottomCenter).padding(bottom = composerHeight)) { model.loadLater(visible()) }
+            if (rows.isNotEmpty() && (!atLatest || state.later != EdgeState.Exhausted)) JumpToLatest(listState, composerHeight) {
                 if (state.later != EdgeState.Exhausted) model.jumpToLatest().join()
                 if (ValueAnimator.areAnimatorsEnabled()) listState.animateScrollToItem(0) else listState.scrollToItem(0)
             }
-            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp))
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = composerHeight).padding(horizontal = 16.dp))
         }
-        // Failures show in Pip's bubble; his day chip opens Today.
+        // Failures show in Pip's bubble; his day chip opens Today. imePadding keeps the keyboard inside the reported height.
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
-            onOpenCamera = onOpenCamera, hasCamera = hasCamera, modifier = Modifier.imePadding(),
+            onOpenCamera = onOpenCamera, hasCamera = hasCamera,
+            modifier = Modifier.align(Alignment.BottomCenter).imePadding().onSizeChanged { composerHeight = with(density) { it.height.toDp() } },
             connection = connection, onAgree = onAgree, onConnect = onConnect, onSeeToday = onSeeToday,
             bubble = checkIn?.let { today -> { WeighInBubble(today) { model.updateText("My weight this morning is "); focusRequester.requestFocus() } } })
     }
@@ -207,14 +219,13 @@ private fun WeighInBubble(today: TodayViewModel, onTellCoach: () -> Unit) {
 }
 
 /** iOS openQuote: a message or day seeks the conversation; a meal or food opens the meal. */
-private fun openQuote(reply: CoachReply, model: CoachViewModel, onOpenMeal: (UUID) -> Unit) {
+private fun openQuote(reply: CoachReply, model: CoachViewModel, onOpenMeal: (UUID) -> Unit, onOpenWorkout: (UUID) -> Unit) {
     when (val target = reply.target) {
         is CoachReply.Target.Message -> model.seek(CoachSeekTarget.Turn(target.turnID))
         is CoachReply.Target.Day -> model.seek(CoachSeekTarget.Day(target.dayID))
         is CoachReply.Target.Meal -> onOpenMeal(target.mealID)
         is CoachReply.Target.Item -> onOpenMeal(target.mealID)
-        // shortcut: Android has no workout detail yet, so a workout quote does nothing; open it once that screen exists.
-        is CoachReply.Target.Workout -> Unit
+        is CoachReply.Target.Workout -> onOpenWorkout(target.workoutID)
         is CoachReply.Target.Weight -> Unit // rendered without an action
     }
 }
@@ -224,13 +235,13 @@ private fun openQuote(reply: CoachReply, model: CoachViewModel, onOpenMeal: (UUI
  * starts on it scrolls the timeline, in the list's own direction.
  */
 @Composable
-private fun BoxScope.JumpToLatest(listState: LazyListState, jump: suspend () -> Unit) {
+private fun BoxScope.JumpToLatest(listState: LazyListState, composerHeight: Dp, jump: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
     // The list's own gesture direction, so the content follows the finger as it does on the list.
     val reverse = ScrollableDefaults.reverseDirection(LocalLayoutDirection.current, Orientation.Vertical, reverseScrolling = true)
     FilledTonalIconButton(
         onClick = { scope.launch { jump() } },
-        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).size(48.dp)
+        modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = composerHeight).padding(16.dp).size(48.dp)
             .scrollable(listState, Orientation.Vertical, reverseDirection = reverse)
             .semantics { traversalIndex = 1f },
         shape = CircleShape,

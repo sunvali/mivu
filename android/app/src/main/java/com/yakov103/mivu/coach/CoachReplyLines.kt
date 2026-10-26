@@ -22,6 +22,7 @@ import java.text.DecimalFormatSymbols
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.time.ZoneId
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.abs
@@ -85,6 +86,10 @@ object CoachReplyLines {
         val pattern = if (localDate.take(4) == today.take(4)) "MMM d" else "MMM d, yyyy"
         return day.format(DateTimeFormatter.ofPattern(pattern, locale))
     }
+
+    /** iOS `dayTitle`: "Today", "Yesterday" or a short date, relative to today in the profile's [zone]. */
+    fun dayTitle(localDate: String, zone: String): String =
+        dayLabel(localDate, LocalDate.now(ZoneId.of(zone)).toString()).replaceFirstChar { it.titlecase(Locale.getDefault()) }
 
     fun shortDate(localDate: String, locale: Locale = Locale.getDefault()): String =
         date(localDate)?.format(DateTimeFormatter.ofPattern("MMM d", locale)) ?: localDate

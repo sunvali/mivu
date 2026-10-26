@@ -51,11 +51,14 @@ import com.yakov103.mivu.R
 import com.yakov103.mivu.diary.CoachDayCursor
 import com.yakov103.mivu.diary.CoachDayPage
 import com.yakov103.mivu.diary.CoachSegmentSummary
+import com.yakov103.mivu.coach.CoachReplyLines
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -145,7 +148,7 @@ fun CoachHistoryScreen(model: CoachViewModel, zone: ZoneId, onOpen: (CoachSeekTa
         LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("coachHistoryList")) {
             state.dateFilter?.let { date ->
                 item {
-                    ListItem(headlineContent = { Text("Selected date") }, trailingContent = { Text(date) })
+                    ListItem(headlineContent = { Text("Selected date") }, trailingContent = { Text(CoachReplyLines.dayTitle(date, zone.id)) })
                     TextButton({ scope.launch { history.show() } }, Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) {
                         Text("Show all chat history")
                     }
@@ -169,11 +172,11 @@ fun CoachHistoryScreen(model: CoachViewModel, zone: ZoneId, onOpen: (CoachSeekTa
                 page?.segments?.isEmpty() == true -> item {
                     val date = state.dateFilter
                     Message(if (date == null) "No saved chat" else "No chat for this date",
-                        date?.let { "No saved conversation is labeled $it." } ?: "Your saved conversations will appear here.")
+                        date?.let { "No saved conversation is labeled ${CoachReplyLines.dayTitle(it, zone.id)}." } ?: "Your saved conversations will appear here.")
                 }
             }
             items(page?.segments.orEmpty(), key = { it.segmentID }) { row ->
-                Row(row) { onOpen(CoachSeekTarget.Turn(row.firstTurnID)) }
+                Row(row, zone) { onOpen(CoachSeekTarget.Turn(row.firstTurnID)) }
                 HorizontalDivider()
             }
             if (page?.hasMore == true) item {
@@ -189,12 +192,12 @@ fun CoachHistoryScreen(model: CoachViewModel, zone: ZoneId, onOpen: (CoachSeekTa
 }
 
 @Composable
-private fun Row(row: CoachSegmentSummary, onClick: () -> Unit) {
+private fun Row(row: CoachSegmentSummary, zone: ZoneId, onClick: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().clickable(onClickLabel = "Open conversation", role = Role.Button, onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(row.displayLocalDate, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(CoachReplyLines.dayTitle(row.displayLocalDate, zone.id), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(captureLabel(row), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(row.preview, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
@@ -213,11 +216,12 @@ private fun Message(title: String, description: String, action: @Composable () -
     }
 }
 
-/** "24 Oct 2026, 08:12:05 · Europe/London": the first capture in the row's own zone. */
+/** "8:12 AM", or "8:12 AM · BST" when the first capture was in another zone than this device's (iOS captureLabel). */
 private fun captureLabel(row: CoachSegmentSummary): String {
     val zone = runCatching { ZoneId.of(row.displayTimeZoneID) }.getOrDefault(ZoneOffset.UTC)
-    return DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm:ss", Locale.US).withZone(zone).format(row.firstCapturedAt) + " · " +
-        row.displayTimeZoneID
+    val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone).format(row.firstCapturedAt)
+    // The zone only matters when the chat happened somewhere other than here.
+    return if (zone.normalized() == ZoneId.systemDefault().normalized()) time else time + " · " + zone.getDisplayName(TextStyle.SHORT, Locale.getDefault())
 }
 
 /** iOS date sheet: the picked calendar date is the label, as read in the profile zone. DatePicker dates are UTC midnights. */
