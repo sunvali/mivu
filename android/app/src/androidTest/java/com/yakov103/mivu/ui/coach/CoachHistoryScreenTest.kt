@@ -45,7 +45,6 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import java.time.format.TextStyle
 import java.util.Locale
 import java.util.TimeZone
 import java.time.LocalDate
@@ -158,7 +157,8 @@ class CoachHistoryScreenTest {
         waitFor(hasText("Oatmeal with banana and a coffee with oat milk"))
         val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).format(LocalTime.of(8, 12))
         assertTrue(time, Regex("8:12\\sAM").matches(time))
-        compose.onNodeWithText("$time · " + ZoneId.of("Europe/London").getDisplayName(TextStyle.SHORT, Locale.US)).assertIsDisplayed()
+        // ICU GENERIC_SHORT, as iOS .shortGeneric; Android's data names London by location, where iOS says "UK Time".
+        compose.onNodeWithText("$time · United Kingdom Time").assertIsDisplayed()
         compose.onNodeWithText(time).assertIsDisplayed() // the row in the device zone names no zone
         val newest = compose.onNodeWithText(CoachReplyLines.dayTitle("2026-10-24", zone.id)).fetchSemanticsNode().boundsInRoot.top
         val older = compose.onNodeWithText(CoachReplyLines.dayTitle("2026-10-22", zone.id)).fetchSemanticsNode().boundsInRoot.top

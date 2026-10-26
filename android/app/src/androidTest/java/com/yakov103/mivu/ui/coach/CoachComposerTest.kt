@@ -21,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -428,7 +429,8 @@ class CoachComposerTest {
         val said = greetings.filter { compose.onAllNodes(hasText(it) and hasAnyAncestor(hasTestTag("coachPipLine"))).fetchSemanticsNodes().isNotEmpty() }
         assertEquals(1, said.size)
         compose.onNodeWithTag("coachDate").assert(hasText("Today · 0 / 2,100 kcal"))
-            .assertContentDescriptionEquals("Logging to today, 0 of 2,100 kcal").assertHeightIsAtLeast(48.dp).performClick()
+            .assertContentDescriptionEquals("Logging to today, 0 of 2,100 kcal").assertHeightIsAtLeast(48.dp)
+            .performSemanticsAction(SemanticsActions.OnClick) // as TalkBack, Switch Access and Voice Access activate it
         assertEquals(1, seeToday)
         assertEquals("Opens Today", compose.onNodeWithTag("coachDate").fetchSemanticsNode().config[SemanticsActions.OnClick].label)
     }

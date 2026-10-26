@@ -296,7 +296,7 @@ private fun PipBubble(line: PipLine, connection: ConnectionState, onAgree: () ->
 /** "Today · 1,240 / 2,000 kcal": the logging day and its intake; opens Today. The tap area reaches 48 dp around the capsule. */
 @Composable
 private fun DayChip(chip: CoachDayChip, onSeeToday: () -> Unit) {
-    Surface(onSeeToday, Modifier.testTag("coachDate").semantics { contentDescription = chip.spoken; onClick("Opens Today", null) }
+    Surface(onSeeToday, Modifier.testTag("coachDate").semantics { contentDescription = chip.spoken; onClick("Opens Today") { onSeeToday(); true } }
         .heightIn(min = 48.dp), shape = CircleShape, color = Color.Transparent) {
         Box(contentAlignment = Alignment.CenterStart) {
             Text(chip.text, Modifier.background(MivuTheme.colors.summarySurface, CircleShape).padding(horizontal = 12.dp, vertical = 6.dp),

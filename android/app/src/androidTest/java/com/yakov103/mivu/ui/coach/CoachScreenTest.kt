@@ -337,6 +337,26 @@ class CoachScreenTest {
         assertTrue("Jump to latest $jump sits above the composer $composer", jump.bottom <= composer.top)
     }
 
+    @Test fun newestReplyStaysAboveTheKeyboard() {
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun shell(command: String) = automation.executeShellCommand(command).close()
+        // The emulator has a hardware keyboard; show the soft one for this test only.
+        shell("settings put secure show_ime_with_hard_keyboard 1")
+        try {
+            seed(30)
+            launch()
+            val closed = compose.onNodeWithTag("coachComposer").getBoundsInRoot().top
+            compose.onNodeWithTag("coachInput").performClick()
+            compose.waitUntil(10_000) { compose.onNodeWithTag("coachComposer").getBoundsInRoot().top < closed - 120.dp }
+            compose.waitForIdle()
+            val composer = compose.onNodeWithTag("coachComposer").getBoundsInRoot()
+            val newest = compose.onNodeWithText("Synthetic reply 29").getBoundsInRoot()
+            assertTrue("newest $newest clears the composer over the keyboard $composer", newest.bottom <= composer.top)
+        } finally {
+            shell("settings put secure show_ime_with_hard_keyboard 0")
+        }
+    }
+
     @Test fun workoutQuoteOpensTheWorkout() {
         start()
         val id = UUID.randomUUID()

@@ -52,13 +52,14 @@ import com.yakov103.mivu.diary.CoachDayCursor
 import com.yakov103.mivu.diary.CoachDayPage
 import com.yakov103.mivu.diary.CoachSegmentSummary
 import com.yakov103.mivu.coach.CoachReplyLines
+import android.icu.text.TimeZoneFormat
+import android.icu.util.TimeZone
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -216,12 +217,15 @@ private fun Message(title: String, description: String, action: @Composable () -
     }
 }
 
-/** "8:12 AM", or "8:12 AM · BST" when the first capture was in another zone than this device's (iOS captureLabel). */
+/** "8:12 AM", or "8:12 AM · United Kingdom Time" when the first capture was in another zone than this device's (iOS captureLabel). */
 private fun captureLabel(row: CoachSegmentSummary): String {
     val zone = runCatching { ZoneId.of(row.displayTimeZoneID) }.getOrDefault(ZoneOffset.UTC)
     val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone).format(row.firstCapturedAt)
     // The zone only matters when the chat happened somewhere other than here.
-    return if (zone.normalized() == ZoneId.systemDefault().normalized()) time else time + " · " + zone.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+    return if (zone.normalized() == ZoneId.systemDefault().normalized()) time else time + " · " +
+        // The generic short name, as iOS .shortGeneric (iOS says "UK Time").
+        TimeZoneFormat.getInstance(Locale.getDefault()).format(TimeZoneFormat.Style.GENERIC_SHORT, TimeZone.getTimeZone(zone.id),
+            row.firstCapturedAt.toEpochMilli())
 }
 
 /** iOS date sheet: the picked calendar date is the label, as read in the profile zone. DatePicker dates are UTC midnights. */

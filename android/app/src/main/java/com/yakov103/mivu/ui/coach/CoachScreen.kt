@@ -203,7 +203,8 @@ fun CoachScreen(
         // Failures show in Pip's bubble; his day chip opens Today. imePadding keeps the keyboard inside the reported height.
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
             onOpenCamera = onOpenCamera, hasCamera = hasCamera,
-            modifier = Modifier.align(Alignment.BottomCenter).imePadding().onSizeChanged { composerHeight = with(density) { it.height.toDp() } },
+            // Measured outside imePadding, so the reported height includes the keyboard.
+            modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { composerHeight = with(density) { it.height.toDp() } }.imePadding(),
             connection = connection, onAgree = onAgree, onConnect = onConnect, onSeeToday = onSeeToday,
             bubble = checkIn?.let { today -> { WeighInBubble(today) { model.updateText("My weight this morning is "); focusRequester.requestFocus() } } })
     }
