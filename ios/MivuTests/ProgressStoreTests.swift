@@ -8,7 +8,7 @@ import Testing
 
     private func fixture() async throws -> (DiaryStore, DiaryProfile, URL) {
         let root = URL.temporaryDirectory.appending(path: "ProgressStore-" + UUID().uuidString)
-        let profile = DiaryProfile(name: "Synthetic progress", timeZoneID: "Asia/Jerusalem")
+        let profile = adultProfile(name: "Synthetic progress", timeZoneID: "Asia/Jerusalem")
         let store = DiaryStore(directory: root)
         _ = try await store.createProfile(profile)
         return (store, profile, root)
@@ -121,11 +121,11 @@ import Testing
     @Test func legacyWeightIDCorrectionKeepsUnlinkedMeasurement() async throws {
         let root = URL.temporaryDirectory.appending(path: "LegacyWeightCorrection-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        var original = DiarySnapshot(profile: DiaryProfile(name: "Synthetic legacy weight"))
+        var original = DiarySnapshot(profile: adultProfile(name: "Synthetic legacy weight"))
         let weight = WeightEntry(dayID: nil, measuredAt: morning, value: 154, unit: "lb")
         original.weights = [weight]
         let store = DiaryStore(directory: root)
-        _ = try await store.importProfile(original)
+        _ = try await store.importAdultFixture(original)
         let corrected = try await store.updateWeight(id: weight.id, value: 153, expectedRevision: weight.revision, expectedProfileID: original.profile.id)
         var expected = weight; expected.value = 153; expected.revision += 1
         #expect(corrected == expected)

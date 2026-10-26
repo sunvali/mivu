@@ -203,7 +203,7 @@ struct OnboardingView: View {
                     unitMenu($metricWeight, metric: "kg", imperial: "lb")
                 }
                 Divider()
-                row("Birth year", invalid: birthYear.map { !(1900...Self.thisYear - 13).contains($0) } ?? false) {
+                row("Birth year", invalid: birthYear.map { !(1900...Self.thisYear - 18).contains($0) } ?? false) {
                     TextField("Add", value: $birthYear, format: .number.grouping(.never))
                         .keyboardType(.numberPad).multilineTextAlignment(.trailing).font(.title3.monospacedDigit())
                         .focused($focus, equals: .birthYear).frame(maxWidth: 90)
@@ -329,7 +329,7 @@ struct OnboardingView: View {
         switch step {
         case .about:
             heightCm.map { (50...272).contains($0) } == true && weightKg.map { (20...400).contains($0) } == true
-                && birthYear.map { (1900...Self.thisYear - 13).contains($0) } == true
+                && birthYear.map { (1900...Self.thisYear - 18).contains($0) } == true
         case .goal: targetKg.map { (20...400).contains($0) } == true && answers?.targetIsHealthy == true
         case .connect: !connection.isConnecting && !connection.isDisconnecting
         case .results: !asking && !saving && [targets.kcal, targets.protein, targets.carbs, targets.fat].allSatisfy { ($0 ?? -1) >= 0 }
@@ -380,10 +380,12 @@ struct OnboardingView: View {
     }
 
     private func askChatGPT() async {
-        guard let answers else { return }
+        guard let answers, AdultEligibility.canConfirm(birthYear: answers.about.birthYear) else { return }
         asking = true; askFailed = false
         react(.thinking)
         do {
+            guard let owner = model.selection?.identity.profileID else { throw DiaryError.noProfile }
+            try await model.store.requireAdultEligibility(expectedProfileID: owner)
             let respond = try connection.inference()
             let result = try await respond(OnboardingTargets.input(answers, estimate: answers.estimate()), nil)
             guard let parsed = OnboardingTargets.parse(result.text) else { throw ResponsesClient.Failure.malformedResponse }
@@ -410,6 +412,8 @@ struct OnboardingView: View {
 
     static func saveSetup(_ answers: OnboardingAnswers, targets: NutritionValues, savedWeightKg savedWeight: Double?,
                           profile: DiaryProfile, store: DiaryStore, at now: Date = Date()) async throws {
+        guard AdultEligibility.canConfirm(birthYear: answers.about.birthYear, at: now) else { throw DiaryError.adultConfirmationRequired }
+        try await store.requireAdultEligibility(expectedProfileID: profile.id)
         let today = wakingDateLabel(now, zone: profile.timeZoneID) // The waking day Today reads, not the calendar date.
         // The stored profile, not the cached one: Coach may have edited it, or a failed save already wrote `about`.
         let latest = try await store.diaryHead(expectedProfileID: profile.id).profile

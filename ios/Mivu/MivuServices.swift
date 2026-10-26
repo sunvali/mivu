@@ -52,6 +52,7 @@ import UIKit
     /// Loads the diary, restores the connection, starts the Coach worker and captures waiting Siri prompts, once.
     func start(createDefaultProfile: Bool) async {
         await loadDiary(createDefaultProfile: createDefaultProfile)
+        guard diary.isAdultEligible else { return }
         if starting == nil {
             starting = Task { [restore, coach, inbox] in
                 await restore()

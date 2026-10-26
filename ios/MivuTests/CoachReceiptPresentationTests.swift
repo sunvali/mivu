@@ -225,7 +225,7 @@ private actor ReturnedPhotoGate {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory)
         let original = try CoachUITestInference.historySnapshot()
-        _ = try await store.importProfile(original)
+        _ = try await store.importAdultFixture(original)
         let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
         let meal = try await store.meal(id: CoachUITestInference.historyID(910), expectedProfileID: original.profile.id)
         let reference = try #require(meal.photos.first)
@@ -254,7 +254,7 @@ private actor ReturnedPhotoGate {
         var nextReference = reference
         if replaceScope {
             var other = original; other.profile.id = UUID(); other.profile.name = "Second synthetic profile"
-            _ = try await store.importProfile(other)
+            _ = try await store.importAdultFixture(other)
             await diary.switchProfile(other.profile.id)
             let nextMeal = try await store.meal(id: meal.id, expectedProfileID: other.profile.id)
             nextReference = try #require(nextMeal.photos.first)
@@ -293,7 +293,7 @@ private actor ReturnedPhotoGate {
         let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: directory, diagnostics: metrics)
         var original = try CoachUITestInference.historySnapshot()
         original.coachTurns[original.coachTurns.count - 1].state = state
-        _ = try await store.importProfile(original)
+        _ = try await store.importAdultFixture(original)
         let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
         let owner = try #require(diary.selection), latest = try #require(original.coachTurns.last)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
@@ -312,7 +312,7 @@ private actor ReturnedPhotoGate {
         defer { try? FileManager.default.removeItem(at: directory) }
         let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: directory, diagnostics: metrics)
         let original = try CoachUITestInference.historySnapshot()
-        _ = try await store.importProfile(original)
+        _ = try await store.importAdultFixture(original)
         let owner = try await store.selectionOwnership(expectedProfileID: original.profile.id)
         metrics.reset()
         let id = CoachUITestInference.historyID(140)
@@ -335,7 +335,7 @@ private actor ReturnedPhotoGate {
         original.coachTurns[0].state = .needsClarification; original.coachTurns[0].needsDayChoice = true
         original.coachTurns[0].capturedAt = original.days[3].startAt
         let initial = DiaryStore(directory: directory)
-        _ = try await initial.importProfile(original)
+        _ = try await initial.importAdultFixture(original)
         // A genuinely reopened store/view model has no exact-day cache from the seed.
         let reopened = DiaryStore(directory: directory), diary = DiaryViewModel(store: reopened)
         await diary.load(createDefaultProfile: false)
@@ -374,7 +374,7 @@ private actor ReturnedPhotoGate {
         original.coachTurns[0].receipts = [CoachReceipt(operationKey: turnID.uuidString + "/workout/original", turnID: turnID,
             dayID: workout.dayID, workoutID: workout.id, committedRevision: 1, resultJSON: try coachJSON(workout))]
         let store = DiaryStore(directory: directory)
-        _ = try await store.importProfile(original)
+        _ = try await store.importAdultFixture(original)
         let gate = Task10Gate(), once = Task10Once()
         defer { Task { await gate.releaseAll() } }
         let diary = DiaryViewModel(store: store, subscriberReadModelLoading: { owner in
@@ -429,7 +429,7 @@ private actor ReturnedPhotoGate {
         defer { try? FileManager.default.removeItem(at: directory) }
         let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: directory, diagnostics: metrics)
         let original = try CoachUITestInference.historySnapshot()
-        _ = try await store.importProfile(original)
+        _ = try await store.importAdultFixture(original)
         let diary = DiaryViewModel(store: store)
         let persistentCoach = CoachViewModel(diary: diary, connection: ChatGPTConnection())
         metrics.reset()

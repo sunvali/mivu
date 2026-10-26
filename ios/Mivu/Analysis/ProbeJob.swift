@@ -97,7 +97,9 @@ final class ProbeJobStore: @unchecked Sendable {
         #endif
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: attributes)
         try FileManager.default.setAttributes(attributes, ofItemAtPath: directory.path)
+        try LocalDiaryFiles.excludeFromBackup(directory)
         try JSONEncoder().encode(job).write(to: file, options: options)
+        try LocalDiaryFiles.excludeFromBackup(file)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
 }

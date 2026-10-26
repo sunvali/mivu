@@ -8,7 +8,7 @@ struct DiaryReportSettings: View {
     @State private var start = Calendar.current.date(byAdding: .day, value: -6, to: .now) ?? .now
     @State private var end = Date.now
     @State private var preparing = false
-    @State private var shared: [URL]?
+    @State private var saved = false
 
     var body: some View {
         Picker("Range", selection: $range) { ForEach(Range.allCases) { Text($0.rawValue).tag($0) } }
@@ -22,18 +22,20 @@ struct DiaryReportSettings: View {
         Text(format == .pdf ? "A summary page with daily totals and weight, then every saved meal. Made for a doctor or dietitian."
                             : "Three spreadsheet files: meals, daily totals against targets, and weigh-ins.")
             .font(.subheadline).foregroundStyle(Color.diarySecondary)
-        Button { share() } label: {
-            if preparing { ProgressView("Preparing report") } else { Label("Share report", systemImage: "square.and.arrow.up") }
+        Button { save() } label: {
+            if preparing { ProgressView("Preparing report") } else { Label("Save report on this iPhone", systemImage: "square.and.arrow.down") }
         }
         .frame(minHeight: 44).disabled(preparing || model.selection == nil)
-        .sheet(isPresented: Binding(get: { shared != nil }, set: { if !$0 { cleanUp() } })) {
-            ActivitySheet(items: shared ?? []).ignoresSafeArea()
-        }
+        .onChange(of: model.selection) { saved = false }
+        if saved { Label("Saved locally in Mivu", systemImage: "checkmark.circle").font(.subheadline) }
+        Text("In Shortcuts, add Mivu’s Export Diary action and choose PDF or CSV. Transfer its output yourself to another device.")
+            .font(.subheadline).foregroundStyle(Color.diarySecondary)
+        Text("Copies you transfer elsewhere remain yours to manage.").font(.subheadline).foregroundStyle(Color.diarySecondary)
     }
 
-    private func share() {
+    private func save() {
         guard let token = model.selection else { return }
-        preparing = true
+        preparing = true; saved = false
         let range = range, format = format, start = start, end = end
         Task {
             defer { preparing = false }
@@ -49,21 +51,11 @@ struct DiaryReportSettings: View {
                     case .custom: (diaryDateLabel(start, zone: device), diaryDateLabel(end, zone: device))
                     }
                     let report = DiaryReport(snapshot, from: from, through: through)
-                    return try report.write(format, to: FileManager.default.temporaryDirectory.appendingPathComponent("Report-" + UUID().uuidString))
+                    return try report.write(format, to: LocalDiaryFiles.local.exports.appending(path: token.identity.profileID.uuidString).appending(path: "Report-" + UUID().uuidString))
                 }.value
-                guard model.selection == token else { try? FileManager.default.removeItem(at: urls[0].deletingLastPathComponent()); return }
-                shared = urls
+                guard model.selection == token, !model.isChangingProfile else { try? FileManager.default.removeItem(at: urls[0].deletingLastPathComponent()); return }
+                saved = true
             } catch { model.errorMessage = "Could not prepare this report. Your local diary is preserved." }
         }
     }
-    private func cleanUp() {
-        if let folder = shared?.first?.deletingLastPathComponent() { try? FileManager.default.removeItem(at: folder) }
-        shared = nil
-    }
-}
-
-private struct ActivitySheet: UIViewControllerRepresentable {
-    let items: [URL]
-    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: items, applicationActivities: nil) }
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

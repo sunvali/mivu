@@ -10,7 +10,7 @@ struct ArchiveTests {
     }
 
     private func fixture() -> DiarySnapshot {
-        let profile = DiaryProfile(name: "Synthetic backup profile")
+        let profile = adultProfile(name: "Synthetic backup profile")
         let day = TrackingDay(localDate: "2026-10-12", timeZoneID: "Asia/Jerusalem", startAt: Date(timeIntervalSince1970: 1_792_000_000))
         let photo = MealPhoto(data: Data([1, 2, 3, 4]))
         let meal = DiaryMeal(dayID: day.id, capturedAt: day.startAt, eatenAt: day.startAt,
@@ -117,7 +117,7 @@ struct ArchiveTests {
     @Test func restoreRejectsDeletedWeightAndWorkoutResurrection() async throws {
         let directory = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory), initial = fixture()
-        _ = try await store.importProfile(initial)
+        _ = try await store.importAdultFixture(initial)
         let weight = try await store.setWeight(dayLocalDate: initial.days[0].localDate, value: 70, unit: "kg",
                                                measuredAt: nil, expectedRevision: nil, expectedProfileID: initial.profile.id)
         let workout = try await store.createWorkout(localDate: initial.days[0].localDate,
@@ -131,7 +131,7 @@ struct ArchiveTests {
         forged.lineage = (current.lineage ?? []) + [UUID()]
         forged.weights = [weight]; forged.workouts = [workout]
         forged.deletedWeightIDs = []; forged.deletedWorkoutIDs = []
-        await #expect(throws: DiaryError.staleArchive) { try await store.restore(forged) }
+        await #expect(throws: DiaryError.staleArchive) { try await store.restoreAdultFixture(forged) }
         #expect(try await store.snapshotForExport() == current)
     }
 
@@ -203,7 +203,7 @@ struct ArchiveTests {
         let snapshot = fixture()
         let restored = try DiaryArchive.decode(DiaryArchive.encode(snapshot))
         let store = DiaryStore(directory: directory)
-        _ = try await store.importProfile(restored)
+        _ = try await store.importAdultFixture(restored)
         #expect(try await store.snapshotForExport() == restored)
         let reopened = DiaryStore(directory: directory)
         #expect(try await selectedSnapshot(reopened, snapshot.profile.id) == snapshot)
@@ -214,12 +214,12 @@ struct ArchiveTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory)
         let initial = fixture()
-        _ = try await store.importProfile(initial)
+        _ = try await store.importAdultFixture(initial)
         try await store.deleteMeal(initial.meals[0].id)
-        await #expect(throws: DiaryError.staleArchive) { try await store.restore(initial) }
+        await #expect(throws: DiaryError.staleArchive) { try await store.restoreAdultFixture(initial) }
         var newer = initial
         newer.revision = 100
-        await #expect(throws: DiaryError.staleArchive) { try await store.restore(newer) }
+        await #expect(throws: DiaryError.staleArchive) { try await store.restoreAdultFixture(newer) }
         #expect(try await store.snapshotForExport().meals.isEmpty)
     }
 
@@ -339,9 +339,9 @@ struct ArchiveTests {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory)
-        _ = try await store.importProfile(initial)
+        _ = try await store.importAdultFixture(initial)
         var malformed = initial; malformed.meals[0].dayID = UUID()
-        await #expect(throws: DiaryError.invalidData) { try await store.restore(malformed) }
+        await #expect(throws: DiaryError.invalidData) { try await store.restoreAdultFixture(malformed) }
         #expect(try await store.snapshotForExport() == initial)
     }
 
@@ -469,7 +469,7 @@ struct ArchiveTests {
         try await backup.save(initial, generation: generation)
         try await backup.removeProfile(initial.profile.id)
         let store = DiaryStore(directory: privateDirectory.appendingPathComponent("Diary"))
-        _ = try await store.importProfile(initial)
+        _ = try await store.importAdultFixture(initial)
         await backup.selectProfile(initial.profile.id)
         let restoredGeneration = try await backup.authorizeRestoredProfile(initial.profile.id)
         #expect(restoredGeneration != generation)
@@ -508,7 +508,7 @@ struct ArchiveTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let oldStore = DiaryStore(directory: root.appendingPathComponent("OldDiary"))
         let newStore = DiaryStore(directory: root.appendingPathComponent("NewDiary"))
-        let profile = DiaryProfile(name: "Synthetic shared owner")
+        let profile = adultProfile(name: "Synthetic shared owner")
         _ = try await oldStore.createProfile(profile)
         let day = try await oldStore.startDay()
         let baseline = try await oldStore.snapshotForExport()
@@ -521,15 +521,15 @@ struct ArchiveTests {
         let oldGeneration = try await oldBackup.generation(profileID: profile.id)
         let newGeneration = try await newBackup.generation(profileID: profile.id)
         try await oldBackup.save(baseline, generation: oldGeneration)
-        _ = try await newStore.importProfile(baseline)
+        _ = try await newStore.importAdultFixture(baseline)
         let newMeal = try await capturedMeal(newStore, text: "replacement phone meal", photos: [], reviewFirst: false, dayID: day.id)
         let newBranch = try await newStore.snapshotForExport()
         try await newBackup.save(newBranch, generation: newGeneration)
         let newFile = root.appendingPathComponent("NewDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
         let newBytes = try Data(contentsOf: newFile)
         let restingStore = DiaryStore(directory: root.appendingPathComponent("MatchingDiary"))
-        _ = try await restingStore.importProfile(baseline)
-        try await restingStore.restore(newBranch, expectedProfileID: profile.id)
+        _ = try await restingStore.importAdultFixture(baseline)
+        try await restingStore.restoreAdultFixture(newBranch, expectedProfileID: profile.id)
         #expect(try await restingStore.snapshotForExport().meals.map(\.id).contains(newMeal.id))
         let file = folder.appendingPathComponent(FolderBackup.filename(profileID: profile.id))
         let providerBytes = try Data(contentsOf: file)
@@ -542,7 +542,7 @@ struct ArchiveTests {
         #expect(try Data(contentsOf: file) == providerBytes)
         #expect(try Data(contentsOf: root.appendingPathComponent("OldDiary").appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")) == oldBytes)
         #expect(await oldBackup.status(profileID: profile.id).pendingError != nil)
-        await #expect(throws: DiaryError.staleArchive) { try await newStore.restore(oldBranch, expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.staleArchive) { try await newStore.restoreAdultFixture(oldBranch, expectedProfileID: profile.id) }
         #expect(try Data(contentsOf: newFile) == newBytes)
         #expect(try await newStore.snapshotForExport().meals.map(\.id).contains(newMeal.id))
         let descendant = try await capturedMeal(newStore, text: "follow-up on replacement phone", photos: [], reviewFirst: false, dayID: day.id)
@@ -623,13 +623,13 @@ struct ArchiveTests {
         let file = folder.appendingPathComponent(FolderBackup.filename(profileID: legacy.profile.id))
         let providerBytes = try Data(contentsOf: file)
         let store = DiaryStore(directory: root.appendingPathComponent("Diary"))
-        _ = try await store.importProfile(legacy)
-        try await store.updateProfile(DiaryProfile(id: legacy.profile.id, name: "Edited synthetic"))
+        _ = try await store.importAdultFixture(legacy)
+        try await store.updateProfile(adultProfile(id: legacy.profile.id, name: "Edited synthetic"))
         await #expect(throws: DiaryError.staleArchive) { try await backup.save(try await store.snapshotForExport(), generation: generation) }
         #expect(try Data(contentsOf: file) == providerBytes)
         var unproven = legacy
         unproven.revision += 2
-        await #expect(throws: DiaryError.staleArchive) { try await store.restore(unproven) }
+        await #expect(throws: DiaryError.staleArchive) { try await store.restoreAdultFixture(unproven) }
         await #expect(throws: DiaryError.staleArchive) { try await backup.removeProfile(legacy.profile.id) }
         #expect(try Data(contentsOf: file) == providerBytes)
     }
@@ -664,7 +664,7 @@ struct ArchiveTests {
         try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
         let oldStore = DiaryStore(directory: root.appendingPathComponent("OldDiary"))
         let newStore = DiaryStore(directory: root.appendingPathComponent("NewDiary"))
-        let profile = DiaryProfile(name: "Synthetic cleanup owner")
+        let profile = adultProfile(name: "Synthetic cleanup owner")
         _ = try await oldStore.createProfile(profile)
         let day = try await oldStore.startDay()
         let baseline = try await oldStore.snapshotForExport()
@@ -675,7 +675,7 @@ struct ArchiveTests {
         try await oldBackup.selectFolder(first, profileID: profile.id)
         let oldGeneration = try await oldBackup.generation(profileID: profile.id)
         try await oldBackup.save(baseline, generation: oldGeneration)
-        _ = try await newStore.importProfile(baseline)
+        _ = try await newStore.importAdultFixture(baseline)
         try await newBackup.selectFolder(first, profileID: profile.id)
         let newGeneration = try await newBackup.generation(profileID: profile.id)
         _ = try await capturedMeal(newStore, text: "new phone meal", photos: [], reviewFirst: false, dayID: day.id)
@@ -701,7 +701,7 @@ struct ArchiveTests {
         try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
         let oldStore = DiaryStore(directory: root.appendingPathComponent("OldDiary"))
         let newStore = DiaryStore(directory: root.appendingPathComponent("NewDiary"))
-        let profile = DiaryProfile(name: "Synthetic deletion owner")
+        let profile = adultProfile(name: "Synthetic deletion owner")
         _ = try await oldStore.createProfile(profile)
         let day = try await oldStore.startDay()
         let baseline = try await oldStore.snapshotForExport()
@@ -712,7 +712,7 @@ struct ArchiveTests {
         try await oldBackup.selectFolder(shared, profileID: profile.id)
         let oldGeneration = try await oldBackup.generation(profileID: profile.id)
         try await oldBackup.save(baseline, generation: oldGeneration)
-        _ = try await newStore.importProfile(baseline)
+        _ = try await newStore.importAdultFixture(baseline)
         try await newBackup.selectFolder(shared, profileID: profile.id)
         let newGeneration = try await newBackup.generation(profileID: profile.id)
         _ = try await capturedMeal(newStore, text: "retained on new phone", photos: [], reviewFirst: false, dayID: day.id)

@@ -25,12 +25,14 @@ enum TellCoachOutcome: Equatable {
             // The diary file is locked; the selected profile is remembered in defaults, which stay readable.
             guard !defaults.bool(forKey: "diarySignedOut"),
                   let profileID = defaults.string(forKey: "diarySelectedProfile").flatMap(UUID.init(uuidString:)) else { return .needsSetup }
+            guard defaults.bool(forKey: AdultEligibility.lockedKey(profileID)) else { return .needsSetup }
             do { try services.inbox.add(CoachInbox.Entry(id: UUID(), profileID: profileID, text: text, capturedAt: now)) } catch { return .failed }
             return .savedLocked
         }
         // Save first; restoring the connection can wait on the network.
         await services.loadDiary(createDefaultProfile: false)
         guard let profileID = services.diary.selection?.identity.profileID else { return .needsSetup }
+        guard services.diary.isAdultEligible else { return .needsSetup }
         await services.coach.drainInbox(services.inbox)
         let id = UUID()
         func capture() async throws { try await services.coach.captureExternal(profileID: profileID, text, submissionID: id, capturedAt: now) }

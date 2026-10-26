@@ -76,7 +76,7 @@ private actor ReceiptCaptureAckFailureOnce {
     private func fixture() async throws -> (URL, DiaryStore, DiaryProfile, TrackingDay) {
         let path = URL.temporaryDirectory.appending(path: "CompanionReceipt-" + UUID().uuidString)
         let store = DiaryStore(directory: path)
-        let profile = DiaryProfile(name: "Synthetic owner", timeZoneID: "UTC")
+        let profile = adultProfile(name: "Synthetic owner", timeZoneID: "UTC")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         return (path, store, profile, day)
@@ -332,7 +332,7 @@ private actor ReceiptCaptureAckFailureOnce {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let meal = try await proposal(store, profile, day)
-        let other = DiaryProfile(name: "Synthetic second owner")
+        let other = adultProfile(name: "Synthetic second owner")
         _ = try await store.createProfile(other); _ = try await store.selectProfile(profile.id)
         let gate = ReceiptRefreshGate()
         defer { Task { await gate.release() } }
@@ -389,7 +389,7 @@ private actor ReceiptCaptureAckFailureOnce {
     @Test func cancelledCaptureWaiterKeepsDurableAcknowledgement() async throws {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
-        let other = DiaryProfile(name: "Synthetic second owner")
+        let other = adultProfile(name: "Synthetic second owner")
         _ = try await store.createProfile(other); _ = try await store.selectProfile(profile.id)
         let gate = ReceiptRefreshGate()
         defer { Task { await gate.release() } }
@@ -477,7 +477,7 @@ private actor ReceiptCaptureAckFailureOnce {
         let (path, store, profile, day) = try await fixture()
         defer { try? FileManager.default.removeItem(at: path) }
         let meal = try await proposal(store, profile, day)
-        let other = DiaryProfile(name: "Synthetic second owner")
+        let other = adultProfile(name: "Synthetic second owner")
         _ = try await store.createProfile(other); _ = try await store.selectProfile(profile.id)
         let gate = ReceiptRefreshGate()
         defer { Task { await gate.release() } }

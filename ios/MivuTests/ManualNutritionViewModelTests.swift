@@ -72,7 +72,7 @@ import Testing
     }
     @Test func obsoleteManualSaveCannotPublishOrDismissAnotherProfile() async throws {
         let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
-        let other = DiaryProfile(name: "Synthetic other", timeZoneID: "UTC")
+        let other = adultProfile(name: "Synthetic other", timeZoneID: "UTC")
         _ = try await f.store.createProfile(other)
         let model = DiaryViewModel(store: f.store)
         await model.switchProfile(f.payload.profileID)
@@ -112,7 +112,7 @@ import Testing
     }
     @Test func externalSelectionChangeDuringManualSaveCannotEmitReaction() async throws {
         let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
-        let other = DiaryProfile(name: "Synthetic other")
+        let other = adultProfile(name: "Synthetic other")
         _ = try await f.store.createProfile(other)
         let gate = ManualNutritionSaveGate()
         let model = DiaryViewModel(store: f.store, manualNutritionSaving: { payload, selection in
@@ -184,7 +184,7 @@ import Testing
     private func fixture() async throws -> (path: URL, store: DiaryStore, payload: ManualNutritionPayload) {
         let path = URL.temporaryDirectory.appending(path: "ManualVM-" + UUID().uuidString)
         let store = DiaryStore(directory: path)
-        let profile = DiaryProfile(name: "Synthetic manual", timeZoneID: "UTC")
+        let profile = adultProfile(name: "Synthetic manual", timeZoneID: "UTC")
         _ = try await store.createProfile(profile)
         let at = Date(timeIntervalSince1970: 1_792_411_200)
         let day = try await store.startDay(at: at)

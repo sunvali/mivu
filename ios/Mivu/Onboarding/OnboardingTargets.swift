@@ -15,6 +15,7 @@ struct OnboardingAnswers: Equatable {
     /// Mifflin–St Jeor resting energy × light activity, moved by the pace, never under 1200 kcal.
     /// Protein 1.6 g per kg, fat 30% of energy, carbs the rest.
     func estimate(year: Int = Calendar.current.component(.year, from: Date())) -> NutritionValues {
+        guard year - about.birthYear >= 18 else { return NutritionValues() }
         let age = Double(year - about.birthYear)
         let base = 10 * weightKg + 6.25 * about.heightCm - 5 * age
         let sexOffset: Double = switch about.sex { case .female: -161; case .male: 5; case .unspecified: -78 }
@@ -29,6 +30,7 @@ enum OnboardingTargets {
     struct Reply: Equatable { var targets: NutritionValues; var explanation: String }
 
     static func input(_ answers: OnboardingAnswers, estimate: NutritionValues, year: Int = Calendar.current.component(.year, from: Date())) -> [CoachInferenceInput] {
+        guard year - answers.about.birthYear >= 18 else { return [] }
         let about = answers.about
         let facts: [String: Any] = [
             "height_cm": about.heightCm, "weight_kg": answers.weightKg, "target_weight_kg": answers.targetKg,

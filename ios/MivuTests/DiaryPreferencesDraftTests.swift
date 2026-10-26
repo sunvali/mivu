@@ -7,7 +7,7 @@ import Testing
         var draft = DiaryPreferencesDraft()
         draft.synchronize(nil, restoreGeneration: 0)
         #expect(draft.timezone == TimeZone.current.identifier)
-        let profile = DiaryProfile(name: "Synthetic", timeZoneID: "Asia/Jerusalem")
+        let profile = adultProfile(name: "Synthetic", timeZoneID: "Asia/Jerusalem")
         draft.synchronize(profile, restoreGeneration: 0)
         #expect(draft.timezone == "Asia/Jerusalem")
         draft.useSaved(nil)
@@ -16,7 +16,7 @@ import Testing
     }
 
     @Test func isDirtyTracksEditsSaveSynchronizationConflictAndRevert() {
-        var profile = DiaryProfile(name: "Synthetic profile")
+        var profile = adultProfile(name: "Synthetic profile")
         var draft = DiaryPreferencesDraft()
         draft.synchronize(profile, restoreGeneration: 0)
         #expect(!draft.isDirty)
@@ -41,7 +41,7 @@ import Testing
     }
 
     @Test func sameProfileRefreshMergesUntouchedFieldWithoutDiscardingUnsavedEdit() {
-        var profile = DiaryProfile(name: "Synthetic profile")
+        var profile = adultProfile(name: "Synthetic profile")
         var draft = DiaryPreferencesDraft()
         draft.synchronize(profile, restoreGeneration: 0)
         draft.preferences = "Unsaved synthetic restriction"
@@ -57,7 +57,7 @@ import Testing
     }
 
     @Test func overlappingExternalEditKeepsDraftVisibleWithoutOverwritingSavedValue() {
-        var profile = DiaryProfile(name: "Synthetic profile")
+        var profile = adultProfile(name: "Synthetic profile")
         var draft = DiaryPreferencesDraft()
         draft.synchronize(profile, restoreGeneration: 0)
         draft.preferences = "Unsaved synthetic restriction"

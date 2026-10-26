@@ -252,7 +252,7 @@ import Testing
     func expiredLeaseCannotPauseChangedSelection(change: String) async throws {
         let f = try await Task10Fixture.make(); defer { f.remove() }
         let original = f.diary.selection!.identity.profileID
-        let other = DiaryProfile(name: "Other synthetic lease owner")
+        let other = adultProfile(name: "Other synthetic lease owner")
         _ = try await f.diary.store.createProfile(other)
         await f.diary.switchProfile(original)
         let oldOwner = f.diary.selection
@@ -815,11 +815,11 @@ import Testing
 
     private func changeOwner(_ f: Task10Fixture, kind: String, original: DiarySelectionOwnership) async throws {
         if kind == "ABA" {
-            _ = try await f.diary.store.createProfile(DiaryProfile(name: "Other synthetic profile"))
+            _ = try await f.diary.store.createProfile(adultProfile(name: "Other synthetic profile"))
             _ = try await f.diary.store.selectProfile(original.identity.profileID)
         } else {
             let archive = try await f.diary.store.snapshotForExport()
-            try await f.diary.store.restore(archive, expectedProfileID: original.identity.profileID)
+            try await f.diary.store.restoreAdultFixture(archive, expectedProfileID: original.identity.profileID)
         }
         #expect(try await f.diary.store.selectionOwnership(expectedProfileID: original.identity.profileID) != original)
     }

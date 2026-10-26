@@ -46,13 +46,15 @@ reacts as you log. Pip respects Reduce Motion.
 PRIVATE BY DESIGN
 • No Mivu account. Your diary and photos are stored on your iPhone.
 • No ads, no tracking.
-• Back up to a folder you choose, or export your diary and photos at any time.
+• Local backups stay on this iPhone. Use Export Diary in Shortcuts to transfer portable copies to another device.
 
 AI THAT USES YOUR OWN PLAN
 Connect your ChatGPT account to estimate nutrition and chat with Coach. Requests
 use your ChatGPT plan, and you can manage usage or disconnect in Settings. Mivu
 asks before anything is shared with OpenAI. On supported iPhones, Apple
 Intelligence can log meals on-device without an account.
+
+Mivu is for adults aged 18 and older.
 
 Nutrition figures are estimates, not medical advice. Talk to a health
 professional before making medical or dietary decisions.

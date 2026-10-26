@@ -6,7 +6,7 @@ import Testing
 @Suite @MainActor struct DiaryDatabaseTests {
     @Test func newProfileCreationAndSelectionUseProjectionStorage() async throws {
         let root = directory(); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root), profile = DiaryProfile(name: "Synthetic staged storage")
+        let store = DiaryStore(directory: root), profile = adultProfile(name: "Synthetic staged storage")
         _ = try await store.createProfile(profile)
         _ = try await store.selectProfile(profile.id)
         #expect(try ChatHistoryFixture.strings(file(root, profile.id), "PRAGMA user_version") == [["1"]])
@@ -16,7 +16,7 @@ import Testing
     private func file(_ root: URL, _ id: UUID, _ ext: String = "sqlite") -> URL { ext == "sqlite" ? root.appendingPathComponent(id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite") : root.appendingPathComponent(id.uuidString + "." + ext) }
     private func legacy(_ root: URL) throws -> DiarySnapshot {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic legacy", language: "he"))
+        var snapshot = DiarySnapshot(profile: adultProfile(name: "Synthetic legacy", language: "he"))
         let date = Date(timeIntervalSince1970: 1_800_000_000)
         let day = TrackingDay(localDate: "2027-01-15", timeZoneID: "Asia/Jerusalem", startAt: date)
         let photo = MealPhoto(data: Data([0, 1, 255, 2]), createdAt: date, role: .after)
@@ -62,7 +62,7 @@ import Testing
     @Test func failedDatabaseCommitPreservesMemoryAndReceipt() async throws {
         let root = directory(); defer { try? FileManager.default.removeItem(at: root) }
         let store = DiaryStore(directory: root)
-        let profile = DiaryProfile(name: "Synthetic")
+        let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); let day = try await store.startDay()
         let before = try await store.snapshotForExport()
         var db: OpaquePointer?
@@ -78,7 +78,7 @@ import Testing
     }
     @Test func staleDatabaseWriterCannotOverwriteNewerHead() async throws {
         let root = directory(); defer { try? FileManager.default.removeItem(at: root) }
-        let first = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let first = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await first.createProfile(profile); let day = try await first.startDay()
         let stale = DiaryStore(directory: root); let old = try await stale.selectProfile(profile.id)
         _ = try await capturedMeal(first, text: "New head", photos: [], reviewFirst: false, dayID: day.id)
@@ -89,7 +89,7 @@ import Testing
     }
     @Test func removedDatabaseDoesNotAcknowledgeSave() async throws {
         let root = directory(); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); let day = try await store.startDay()
         let old = try await store.snapshotForExport()
         let db = file(root, profile.id), retained = root.appendingPathComponent("retained.sqlite")
@@ -105,7 +105,7 @@ import Testing
     }
     @Test func replacedDatabaseDoesNotAcknowledgeSave() async throws {
         let root = directory(); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); let day = try await store.startDay()
         let old = try await store.snapshotForExport()
         let db = file(root, profile.id), replacement = root.appendingPathComponent("replacement")

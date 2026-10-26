@@ -62,6 +62,8 @@ struct SettingsView: View {
                     #if DEBUG
                     Button { showDiagnostic = true } label: { settingsRow("Diagnostics", symbol: "stethoscope", color: .diarySuccess) }
                     #endif
+                    Link(destination: MivuLinks.supportEmail) { settingsRow("Contact support", symbol: "envelope", color: .diaryAccent) }
+                        .accessibilityIdentifier("contactSupport")
                     Link(destination: MivuLinks.privacyPolicy) { settingsRow("Privacy Policy", symbol: "hand.raised", color: .diaryAccent) }
                         .accessibilityIdentifier("privacyPolicy")
                     Text("Calorie and nutrition figures are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat.").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -152,7 +154,7 @@ struct SettingsView: View {
             case .profiles:
             Section("Private local profile") {
                 if let profile = model.readModel?.profile { Text(profile.name).font(.headline) }
-                Text("Profiles are separate private diaries on this iPhone. Keep a backup folder or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                Text("Profiles are separate private diaries on this iPhone. Save an export to another device before changing phones. Local backups stay on this iPhone.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 ForEach(model.profiles) { profile in
                     Button { Task { await model.switchProfile(profile.id) } } label: {
                         HStack { Text(profile.name); Spacer(); if model.readModel?.profile.id == profile.id { Image(systemName: "checkmark").accessibilityLabel("Selected profile") } }
@@ -352,6 +354,6 @@ private struct DeleteProfileDialog: ViewModifier {
                 }
             }
             Button("Cancel", role: .cancel) { pending = nil }
-        } message: { profile in Text("This removes \(profile.name)'s meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved. Deleting your last profile also disconnects ChatGPT.") }
+        } message: { profile in Text("This removes \(profile.name)'s meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved. Deleting your last profile also disconnects ChatGPT. External copies saved before local-only backups remain where you saved them; delete them yourself.") }
     }
 }

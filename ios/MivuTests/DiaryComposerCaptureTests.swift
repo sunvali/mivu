@@ -6,7 +6,7 @@ import Testing
     @Test func automaticTodayResolutionIsProtectedAndOwnedBeforeItsFirstAwait() async throws {
         let path = URL.temporaryDirectory.appending(path: "ComposerAutomatic-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }
-        let store = DiaryStore(directory: path), profile = DiaryProfile(name: "Synthetic automatic", timeZoneID: "UTC")
+        let store = DiaryStore(directory: path), profile = adultProfile(name: "Synthetic automatic", timeZoneID: "UTC")
         _ = try await store.createProfile(profile)
         let gate = ComposerCaptureGate(), protection = ComposerProtectionProbe()
         let model = DiaryViewModel(store: store, beginCaptureProtection: protection.begin, captureDayAssignment: { _, _ in
@@ -68,7 +68,7 @@ import Testing
     @Test func historicalCaptureKeepsItsSavedMealWhenTheDetailReadIsInvalidated() async throws {
         let path = URL.temporaryDirectory.appending(path: "ComposerHistorical-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }
-        let store = DiaryStore(directory: path), profile = DiaryProfile(name: "Synthetic historical", timeZoneID: "UTC")
+        let store = DiaryStore(directory: path), profile = adultProfile(name: "Synthetic historical", timeZoneID: "UTC")
         _ = try await store.createProfile(profile)
         let yesterday = try await store.startDay(at: Date().addingTimeInterval(-86_400))
         _ = try await store.startDay()
@@ -98,7 +98,7 @@ import Testing
         let afterMidnight = beforeMidnight.addingTimeInterval(120)
         let clock = ComposerCaptureClock(beforeMidnight)
         let store = DiaryStore(directory: path, currentTime: { clock.now() })
-        let profile = DiaryProfile(name: "Synthetic correction clock", timeZoneID: "UTC")
+        let profile = adultProfile(name: "Synthetic correction clock", timeZoneID: "UTC")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay(at: beforeMidnight)
         let owner = try await store.selectionOwnership(expectedProfileID: profile.id)
@@ -126,7 +126,7 @@ import Testing
 
     private func fixture() async throws -> (path: URL, store: DiaryStore, profile: DiaryProfile, meal: MealReadModel) {
         let path = URL.temporaryDirectory.appending(path: "ComposerExisting-" + UUID().uuidString)
-        let store = DiaryStore(directory: path), profile = DiaryProfile(name: "Synthetic existing meal", timeZoneID: "UTC")
+        let store = DiaryStore(directory: path), profile = adultProfile(name: "Synthetic existing meal", timeZoneID: "UTC")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay(), owner = try await store.selectionOwnership(expectedProfileID: profile.id)
         let captured = try await store.captureProjection(text: "Synthetic original", photos: [], reviewFirst: false, dayID: day.id,

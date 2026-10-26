@@ -18,7 +18,7 @@ private actor CoachFeedbackReplies {
         let root = URL.temporaryDirectory.appending(path: "CoachFeedback-" + UUID().uuidString)
         let clock = now
         let store = DiaryStore(directory: root, currentTime: { clock })
-        let profile = DiaryProfile(name: "Synthetic owner")
+        let profile = adultProfile(name: "Synthetic owner")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay(at: now)
         return (store, profile, day, root)

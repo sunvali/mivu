@@ -11,14 +11,16 @@ import Testing
         let paths: [URL]
         func clean() { paths.forEach { try? FileManager.default.removeItem(at: $0) } }
     }
-    private func fixture(dependencies: ((DiaryStore) -> CoachAttachmentDraft.Dependencies)? = nil,
+    private func fixture(adultConfirmed: Bool = true, dependencies: ((DiaryStore) -> CoachAttachmentDraft.Dependencies)? = nil,
                          restore: (@MainActor (DiaryStore) async -> Void)? = nil) async throws -> Fixture {
         let path = URL.temporaryDirectory.appending(path: "TellCoach-" + UUID().uuidString)
         let inbox = CoachInbox(directory: URL.temporaryDirectory.appending(path: "TellCoachInbox-" + UUID().uuidString))
         let suite = "TellCoachTests-" + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: suite))
         let store = DiaryStore(directory: path)
-        let profile = try await store.createProfile(DiaryProfile(name: "Synthetic Siri"))
+        var fixtureProfile = adultProfile(name: "Synthetic Siri"); fixtureProfile.adultConfirmed = adultConfirmed ? true : nil
+        let profile = try await store.createProfile(fixtureProfile)
+        defaults.set(adultConfirmed, forKey: AdultEligibility.lockedKey(profile.head.profile.id))
         let diary = DiaryViewModel(store: store), connection = ChatGPTConnection(appleModelAvailable: { false })
         let inference: () throws -> CoachViewModel.Inference = { { _, _ in CoachInferenceResult(model: "fixture", text: "Synthetic guidance", calls: [], outputItems: []) } }
         let attachmentDependencies: CoachAttachmentDraft.Dependencies? = dependencies?(store)
@@ -129,9 +131,23 @@ import Testing
         await f.services.coach.waitForWorker()
         #expect(try await turns(f).map(\.text) == ["Synthetic eggs"])
     }
+    @Test(arguments: [false, true]) func unconfirmedSiriPreservesPendingInboxAndDoesNotCapture(locked: Bool) async throws {
+        let f = try await fixture(adultConfirmed: false); defer { f.clean() }
+        f.defaults.set(f.profileID.uuidString, forKey: "diarySelectedProfile")
+        f.defaults.removeObject(forKey: AdultEligibility.lockedKey(f.profileID))
+        f.defaults.set(true, forKey: AdultEligibility.lockedKey(UUID()))
+        let pending = CoachInbox.Entry(id: UUID(), profileID: f.profileID, text: "Synthetic preserved pending prompt", capturedAt: Date())
+        try f.inbox.add(pending)
+        #expect(await run("Synthetic refused new prompt", f, locked: locked) == .needsSetup)
+        #expect(f.inbox.entries() == [pending])
+        #expect(try await turns(f).isEmpty)
+        #expect(!f.services.coach.isWorking)
+    }
 }
 
 private actor Counter {
     private var value = 0
     func next() -> Int { value += 1; return value }
+
+
 }

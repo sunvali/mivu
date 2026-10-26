@@ -126,7 +126,7 @@ private actor CoachInputFixture {
     private func fixture() async throws -> (DiaryStore, DiaryProfile, CoachTurn, URL) {
         let root = URL.temporaryDirectory.appending(path: "CoachEngine-" + UUID().uuidString)
         let clock = now
-        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         let turn = try await capturedTurn(store, text: "Two eggs, three bread slices and salad", photos: [], at: now, expectedProfileID: profile.id)
         return (store, profile, turn, root)
@@ -320,7 +320,7 @@ private actor CoachInputFixture {
         let task = Task { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
         for _ in 0..<1000 { if await suspension.started { break }; await Task.yield() }
         try #require(await suspension.started)
-        _ = try await store.createProfile(DiaryProfile(name: "Other synthetic")); _ = try await store.selectProfile(profile.id)
+        _ = try await store.createProfile(adultProfile(name: "Other synthetic")); _ = try await store.selectProfile(profile.id)
         await suspension.finish(result([progress ? call("log_weight", "{\"local_date\":\"2027-01-15\",\"value\":70,\"unit\":\"kg\"}") : call("log_food", logArgs)]))
         await #expect(throws: DiaryError.wrongOwner) { try await task.value }
         #expect(try await store.snapshotForExport().meals.isEmpty)
@@ -406,7 +406,7 @@ private actor CoachInputFixture {
     @Test func allLegacyPhotosUsePrivateInferenceCopiesWithoutChangingOriginals() async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachLegacyPhotos-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let profile = DiaryProfile(name: "Synthetic")
+        let profile = adultProfile(name: "Synthetic")
         let photos = (0..<30).map { MealPhoto(data: Data([255,216,255,UInt8($0)])) }
         let turn = CoachTurn(capturedAt: now, text: "Many photos", photos: photos,
             captureTimeZoneID: profile.timeZoneID, photoIDs: photos.map(\.id))

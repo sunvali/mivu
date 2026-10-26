@@ -1,6 +1,7 @@
 import Foundation
 
 struct FolderBackupStatus: Equatable, Sendable {
+    var externalFoldersStopped = false
     var configured = false
     var savedAt: Date? = nil
     var pendingError: String? = nil
@@ -52,12 +53,15 @@ actor FolderBackup {
         var version: UInt64
     }
     private let directory: URL
+    private let allowedRoot: URL
+    private let localFolder: URL?
     private let fence = FolderBackupFence()
     private var selectedProfileID: UUID?
     private var configurations: [UUID: Configuration] = [:]
     private let beforeAcknowledgementWrite: @Sendable (URL) throws -> Void
-    init(directory: URL, beforeAcknowledgementWrite: @escaping @Sendable (URL) throws -> Void = { _ in }) {
-        self.directory = directory; self.beforeAcknowledgementWrite = beforeAcknowledgementWrite
+    init(directory: URL, allowedRoot: URL? = nil, localFolder: URL? = nil, beforeAcknowledgementWrite: @escaping @Sendable (URL) throws -> Void = { _ in }) {
+        self.directory = directory; self.allowedRoot = allowedRoot ?? directory.deletingLastPathComponent()
+        self.localFolder = localFolder; self.beforeAcknowledgementWrite = beforeAcknowledgementWrite
     }
 
     private func metadata<Value>(_ operation: () throws -> Value) rethrows -> Value {
@@ -98,7 +102,7 @@ actor FolderBackup {
         if retired { try removeProfile(profileID) }
         return try metadata {
             var configuration = try self.configuration(profileID) ?? Configuration()
-            if retired { configuration = Configuration() }
+            if retired { configuration = Configuration(previousBookmarks: configuration.previousBookmarks) }
             configuration.generation = UUID()
             try persist(configuration, profileID: profileID)
             configurations[profileID] = configuration; fence.version &+= 1
@@ -110,16 +114,30 @@ actor FolderBackup {
         do {
             return try metadata {
                 guard let configuration = try configuration(profileID) else { return FolderBackupStatus() }
-                let acknowledged = !configuration.retired && configuration.bookmark.flatMap { try? resolve($0).standardizedFileURL }
+                let acknowledged = !configuration.retired && configuration.bookmark.map(isOwnedBookmark) == true && configuration.bookmark.flatMap { try? resolve($0).standardizedFileURL }
                     == configuration.acknowledgedBookmark.flatMap { try? resolve($0).standardizedFileURL }
                     && configuration.acknowledgedBookmark != nil
-                return FolderBackupStatus(configured: configuration.bookmark != nil && !configuration.retired,
+                return FolderBackupStatus(externalFoldersStopped: configuration.destinations.contains { !isOwnedBookmark($0) },
+                    configured: configuration.bookmark.map(isOwnedBookmark) == true && !configuration.retired,
                     savedAt: acknowledged ? configuration.savedAt : nil, pendingError: configuration.pendingError)
             }
         } catch { return FolderBackupStatus(pendingError: DiaryError.persistenceFailed.localizedDescription) }
     }
 
+    func configureLocal(profileID: UUID) throws {
+        guard let localFolder else { return }
+        try LocalDiaryFiles.requireOwned(localFolder, root: allowedRoot)
+        try LocalDiaryFiles.createDirectory(localFolder)
+        try selectFolder(localFolder, profileID: profileID)
+    }
+
+    private func isOwnedBookmark(_ bookmark: Data) -> Bool {
+        guard let folder = try? resolve(bookmark) else { return false }
+        return LocalDiaryFiles.contains(folder, in: allowedRoot)
+    }
+
     func selectFolder(_ url: URL, profileID: UUID) throws {
+        try LocalDiaryFiles.requireOwned(url, root: allowedRoot)
         let bookmark = try BackupFileAccess.withAccess(to: url) {
             guard try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { throw DiaryError.invalidData }
             #if os(macOS)
@@ -158,6 +176,7 @@ actor FolderBackup {
         try metadata {
             guard selectedProfileID == profileID, let configuration = try configuration(profileID),
                   !configuration.retired, configuration.generation == generation else { throw DiaryError.wrongOwner }
+            if let bookmark = configuration.bookmark { try LocalDiaryFiles.requireOwned(resolve(bookmark), root: allowedRoot) }
             return configuration
         }
     }
@@ -196,7 +215,7 @@ actor FolderBackup {
                 configuration.acknowledgedHeads = (configuration.acknowledgedHeads ?? [:]).merging([key: head]) { _, new in new }
             } else { configuration.acknowledgedHeads?.removeValue(forKey: key) }
             configuration.savedAt = Date(); configuration.acknowledgedBookmark = configuration.bookmark
-            configuration.pendingError = (configuration.previousBookmarks ?? []).isEmpty ? nil : "Previous folder cleanup is pending."
+            configuration.pendingError = (configuration.previousBookmarks ?? []).contains(where: isOwnedBookmark) ? "Previous local backup cleanup is pending." : nil
             return FolderBackupAcknowledgement(fence: fence, version: intent.version, profileID: intent.snapshot.profile.id,
                 configuration: configuration, directory: directory, beforeWrite: beforeAcknowledgementWrite)
         }
@@ -228,14 +247,15 @@ actor FolderBackup {
     private func cleanFormerDestinations(_ intent: Intent) throws {
         let profileID = intent.snapshot.profile.id
         let current = try acknowledgedConfiguration(intent)
-        for bookmark in current.previousBookmarks ?? [] {
+        for bookmark in current.previousBookmarks ?? [] where isOwnedBookmark(bookmark) {
             try delete(profileID: profileID, folder: resolve(bookmark), expectedHead: current.acknowledgedHeads?[bookmark.base64EncodedString()])
         }
         try metadata {
             var latest = try acknowledgedConfiguration(intent)
-            latest.previousBookmarks = nil
+            latest.previousBookmarks = latest.previousBookmarks?.filter { !isOwnedBookmark($0) }
             let key = latest.bookmark!.base64EncodedString()
-            latest.acknowledgedHeads = latest.acknowledgedHeads?.filter { $0.key == key }
+            let retained = Set((latest.previousBookmarks ?? []).map { $0.base64EncodedString() } + [key])
+            latest.acknowledgedHeads = latest.acknowledgedHeads?.filter { retained.contains($0.key) }
             latest.pendingError = nil
             try persist(latest, profileID: profileID); configurations[profileID] = latest
         }
@@ -299,14 +319,16 @@ actor FolderBackup {
         }
         do {
             var firstError: Error?
-            for bookmark in recoverable.destinations {
+            for bookmark in recoverable.destinations where isOwnedBookmark(bookmark) {
                 do { try delete(profileID: profileID, folder: resolve(bookmark), expectedHead: recoverable.acknowledgedHeads?[bookmark.base64EncodedString()]) }
                 catch { if firstError == nil { firstError = error } }
             }
             if let firstError { throw firstError }
             try metadata {
                 var configuration = recoverable
-                configuration.retired = true; configuration.bookmark = nil; configuration.previousBookmarks = nil
+                configuration.retired = true
+                configuration.previousBookmarks = recoverable.destinations.filter { !isOwnedBookmark($0) }
+                configuration.bookmark = nil
                 configuration.savedAt = nil; configuration.acknowledgedBookmark = nil; configuration.acknowledgedHeads = nil; configuration.pendingError = nil
                 try persist(configuration, profileID: profileID)
                 configurations[profileID] = configuration; fence.version &+= 1
@@ -318,11 +340,14 @@ actor FolderBackup {
     }
 
     private func write(_ data: Data, snapshot: DiarySnapshot, folder: URL) throws {
+        try LocalDiaryFiles.requireOwned(folder, root: allowedRoot)
+        try LocalDiaryFiles.excludeFromBackup(folder)
         try BackupFileAccess.withAccess(to: folder) {
             let target = folder.appendingPathComponent(Self.filename(profileID: snapshot.profile.id))
             var operationError: Error?, coordinationError: NSError?
             NSFileCoordinator().coordinate(writingItemAt: target, options: .forReplacing, error: &coordinationError) { coordinated in
                 do {
+                    try LocalDiaryFiles.requireOwned(coordinated, root: allowedRoot)
                     if FileManager.default.fileExists(atPath: coordinated.path) {
                         let prior = try DiaryArchive.readContents(coordinated, expectedProfileID: snapshot.profile.id)
                         guard snapshot.revision >= prior.revision,
@@ -337,6 +362,7 @@ actor FolderBackup {
                     try data.write(to: coordinated, options: .atomic)
                     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: coordinated.path)
                     #endif
+                    try LocalDiaryFiles.excludeFromBackup(coordinated)
                 } catch { operationError = error }
             }
             if let operationError { throw operationError }
@@ -345,11 +371,13 @@ actor FolderBackup {
     }
 
     private func delete(profileID: UUID, folder: URL, expectedHead: UUID?) throws {
+        try LocalDiaryFiles.requireOwned(folder, root: allowedRoot)
         try BackupFileAccess.withAccess(to: folder) {
             let target = folder.appendingPathComponent(Self.filename(profileID: profileID))
             var operationError: Error?, coordinationError: NSError?
             NSFileCoordinator().coordinate(writingItemAt: target, options: .forDeleting, error: &coordinationError) { coordinated in
                 do {
+                    try LocalDiaryFiles.requireOwned(coordinated, root: allowedRoot)
                     if FileManager.default.fileExists(atPath: coordinated.path) {
                         let prior = try DiaryArchive.readContents(coordinated, expectedProfileID: profileID)
                         guard let expectedHead, prior.lineage?.last == expectedHead else { throw DiaryError.staleArchive }
@@ -392,6 +420,7 @@ actor FolderBackup {
 
     fileprivate static func persistConfiguration(_ configuration: Configuration, profileID: UUID, directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try LocalDiaryFiles.excludeFromBackup(directory)
         let data = try JSONEncoder().encode(configuration)
         guard data.count <= 5_000_000 else { throw DiaryError.invalidData }
         let file = directory.appendingPathComponent(profileID.uuidString + ".backup.json")
@@ -401,6 +430,7 @@ actor FolderBackup {
         try data.write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         #endif
+        try LocalDiaryFiles.excludeFromBackup(file)
     }
 
     private func metadataFile(_ profileID: UUID) -> URL { directory.appendingPathComponent(profileID.uuidString + ".backup.json") }

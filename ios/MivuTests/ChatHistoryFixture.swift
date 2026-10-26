@@ -33,7 +33,7 @@ enum ChatHistoryFixture {
         let first = TrackingDay(id: generator.uuid(), localDate: "2027-01-15", timeZoneID: "Asia/Jerusalem", startAt: instant)
         let second = TrackingDay(id: generator.uuid(), localDate: "2027-01-14", timeZoneID: "America/New_York", startAt: instant.addingTimeInterval(-86400))
         let photoID = generator.uuid()
-        var snapshot = DiarySnapshot(revision: 9, profile: DiaryProfile(id: generator.uuid(), name: "Synthetic \"profile\" 🍎"),
+        var snapshot = DiarySnapshot(revision: 9, profile: adultProfile(id: generator.uuid(), name: "Synthetic \"profile\" 🍎"),
             days: [first, second], activeDayID: first.id, previousDayConfirmedAt: instant,
             deletedMealIDs: [generator.uuid()], deletedWeightIDs: [generator.uuid()], deletedWorkoutIDs: [generator.uuid()],
             lineage: [generator.uuid(), generator.uuid()])
@@ -110,7 +110,7 @@ enum ChatHistoryFixture {
                              revision: 1, timePrecision: .dateOnly, items: items, photos: [photo],
                              submissions: [MealSubmission(id: originID, baseRevision: 0, text: description,
                                                           photoIDs: [photo.id], reviewFirst: false, state: .saved)])
-        var source = DiarySnapshot(revision: 9, profile: DiaryProfile(id: generator.uuid(), name: "Synthetic correction", timeZoneID: zone),
+        var source = DiarySnapshot(revision: 9, profile: adultProfile(id: generator.uuid(), name: "Synthetic correction", timeZoneID: zone),
                                    days: [lunch], meals: [meal])
         source.coachTurns = [CoachTurn(id: originID, capturedAt: yesterday, text: description, state: .completed,
                                       assistantText: "Recorded synthetic lunch.",

@@ -7,12 +7,12 @@ import Testing
     func intakeChartDomainContainsWholeDaysAcrossDaylightSaving(endingOn: String) async throws {
         let zone = "America/Los_Angeles"
         let day = TrackingDay(localDate: endingOn, timeZoneID: zone, startAt: try #require(ProgressDate.date(endingOn, zone: zone)), completeness: .unknown)
-        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic chart range", timeZoneID: zone))
+        var snapshot = DiarySnapshot(profile: adultProfile(name: "Synthetic chart range", timeZoneID: zone))
         snapshot.days = [day]; snapshot.activeDayID = day.id
         let directory = URL.temporaryDirectory.appending(path: "ChartRange-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory)
-        _ = try await store.importProfile(snapshot)
+        _ = try await store.importAdultFixture(snapshot)
         let model = DiaryViewModel(store: store)
         await model.load(createDefaultProfile: false)
         let report = try await DiaryProgressView.loadProgress(model: model, endingOn: endingOn, days: ProgressRange.week.days)
@@ -49,7 +49,7 @@ import Testing
 
     private func tiedWeightSnapshot() -> DiarySnapshot {
         let measured = ISO8601DateFormatter().date(from: "2026-01-08T00:30:00Z")!
-        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic tied weights", timeZoneID: "America/Los_Angeles"))
+        var snapshot = DiarySnapshot(profile: adultProfile(name: "Synthetic tied weights", timeZoneID: "America/Los_Angeles"))
         // The linked travel date stays authoritative; legacy nil-day entries use the profile zone.
         snapshot.days = [
             TrackingDay(localDate: "2026-01-07", timeZoneID: "Asia/Jerusalem", startAt: measured, completeness: .unknown),
@@ -63,7 +63,7 @@ import Testing
         let directory = URL.temporaryDirectory.appending(path: "ProgressTie-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory)
-        _ = try await store.importProfile(snapshot)
+        _ = try await store.importAdultFixture(snapshot)
         let model = DiaryViewModel(store: store)
         await model.load(createDefaultProfile: false)
         let bounded = try await DiaryProgressView.loadProgress(model: model, endingOn: "2026-01-07", days: 30)
@@ -124,7 +124,7 @@ import Testing
     }
 
     @Test func editedGoalFieldsRequireConfirmationBeforeLoadingAnotherDate() {
-        var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic goal date draft"))
+        var snapshot = DiarySnapshot(profile: adultProfile(name: "Synthetic goal date draft"))
         snapshot.goals = [GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: snapshot.profile.timeZoneID, targets: NutritionValues(kcal: 1800), goalWeightKg: nil, exerciseCreditEnabled: false)]
         var saved = GoalEditorValues(snapshot: snapshot, localDate: "2026-01-01")
         #expect(!saved.hasEditedTargets)
@@ -144,7 +144,7 @@ import Testing
         let root = URL.temporaryDirectory.appending(path: "ProgressEditorClear-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let store = DiaryStore(directory: root)
-        let profile = DiaryProfile(name: "Synthetic clear goals")
+        let profile = adultProfile(name: "Synthetic clear goals")
         _ = try await store.createProfile(profile)
         for (date, target) in [("2026-01-01", 1800.0), ("2026-02-01", 2000.0)] {
             _ = try await store.setGoals(GoalRecord(effectiveLocalDate: date, timeZoneID: profile.timeZoneID,
@@ -177,7 +177,7 @@ import Testing
         let root = URL.temporaryDirectory.appending(path: "ProgressEditor-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let store = DiaryStore(directory: root)
-        let profile = DiaryProfile(name: "Synthetic goal editor")
+        let profile = adultProfile(name: "Synthetic goal editor")
         _ = try await store.createProfile(profile)
         let older = try await store.setGoals(GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: profile.timeZoneID,
                                                        targets: NutritionValues(kcal: 1_800), goalWeightKg: nil,

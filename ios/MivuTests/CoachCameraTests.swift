@@ -353,7 +353,7 @@ actor Task10Gate {
                      actionLoading: (@Sendable (UUID, DiaryStore) async throws -> DiaryReadModel)? = nil) async throws -> Self {
         let root = URL.temporaryDirectory.appending(path: "CoachDraft-" + UUID().uuidString)
         let store = DiaryStore(directory: root, maximumFileBytes: maximumBytes)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic camera draft", timeZoneID: "UTC"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic camera draft", timeZoneID: "UTC"))
         let diary = DiaryViewModel(store: store, actionReadModelLoading: { owner in
             if let actionLoading { return try await actionLoading(owner, store) }
             return try await store.diaryReadModel(expectedProfileID: owner)

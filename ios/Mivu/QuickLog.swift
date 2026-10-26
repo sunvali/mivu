@@ -25,6 +25,8 @@ struct MivuShortcuts: AppShortcutsProvider {
                     shortTitle: "Log Meal", systemImageName: "fork.knife")
         AppShortcut(intent: OpenCoachIntent(), phrases: ["Ask \(.applicationName) Coach", "Open \(.applicationName) Coach"],
                     shortTitle: "Coach", systemImageName: "bubble.left.fill")
+        AppShortcut(intent: ExportDiaryIntent(), phrases: ["Export my diary from \(.applicationName)"],
+                    shortTitle: "Export Diary", systemImageName: "square.and.arrow.up")
         AppShortcut(intent: TellCoachIntent(), phrases: ["Tell \(.applicationName)", "Tell \(.applicationName) Coach", "Message \(.applicationName) Coach"],
                     shortTitle: "Tell Coach", systemImageName: "bubble.left.and.text.bubble.right")
     }

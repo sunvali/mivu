@@ -49,7 +49,7 @@ struct AppleInferenceTests {
     @Test func localModelLogsANewMealThenCorrectsItsPortion() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let prompts = PromptLog()
 
@@ -84,7 +84,7 @@ struct AppleInferenceTests {
     @Test func localWeighedAmountsUsePerHundredGramValues() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let turn = try await capturedTurn(store, text: "200g grilled chicken breast", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
@@ -102,7 +102,7 @@ struct AppleInferenceTests {
     @Test func localNutritionComesFromTheTableForSlicesAndWeighedAmounts() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let picks = PromptLog()
         let turn = try await capturedTurn(store, text: "2 slices of pepperoni pizza and 200g grilled chicken breast", photos: [], expectedProfileID: profile.id)
@@ -132,7 +132,7 @@ struct AppleInferenceTests {
     @Test func localUnitWithoutAMatchingPortionKeepsTheModelEstimate() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let turn = try await capturedTurn(store, text: "a chocolate chip cookie", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
@@ -152,7 +152,7 @@ struct AppleInferenceTests {
     @Test func localCaloriesNeverFallBelowWhatTheMacrosImply() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let turn = try await capturedTurn(store, text: "a can of coca cola", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
@@ -169,7 +169,7 @@ struct AppleInferenceTests {
     @Test func localUnnamedEditChangesTheOnlyFoodInTheLatestMeal() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let log = try await capturedTurn(store, text: "coke zero", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in
@@ -211,7 +211,7 @@ struct AppleInferenceTests {
     @Test func localTurnsStillWorkWhenAFoodNameContainsTheContextMarker() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         @Sendable func food(_ name: String) -> AppleInference.LocalTurn.Food {
             .init(name: name, searchName: name, quantity: 1, unit: "bar", kcal: 200, carbs: 20, protein: 10, fat: 8, kcalPer100g: 400, carbsPer100g: 40, proteinPer100g: 20, fatPer100g: 16)
@@ -231,7 +231,7 @@ struct AppleInferenceTests {
     @Test func localEditOfAFoodNotInTheLatestMealChangesNothing() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let root = URL.temporaryDirectory.appending(path: "AppleLocal-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         let log = try await capturedTurn(store, text: "Two boiled eggs", photos: [], expectedProfileID: profile.id)
         _ = try await CoachEngine(store: store, infer: { input, tools in

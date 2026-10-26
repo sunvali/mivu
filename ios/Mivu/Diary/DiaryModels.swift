@@ -8,6 +8,8 @@ struct DiaryProfile: Codable, Equatable, Sendable, Identifiable {
     var preferences = ""
     /// Body, goal and diet answers from onboarding; nil for diaries that never ran it.
     var about: ProfileAbout? = nil
+    /// Local attestation; portable imports must ask again.
+    var adultConfirmed: Bool? = nil
 }
 
 struct ProfileAbout: Codable, Equatable, Sendable {
@@ -31,9 +33,11 @@ enum SubmissionState: String, Codable, Sendable { case captured, waitingForConne
 enum DayAssignment: Equatable, Sendable { case existing(UUID), newDay }
 
 enum DiaryError: Error, Equatable, LocalizedError {
+    case adultConfirmationRequired
     case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, notFound, emptyCapture, ambiguousDay, staleArchive
     var errorDescription: String? {
         switch self {
+        case .adultConfirmationRequired: "Mivu is for adults 18 and older. Open Mivu to confirm your age."
         case .noProfile: "Choose a local profile first."
         case .wrongOwner: "The profile changed. Please try again."
         case .invalidData: "This diary contains invalid or unsupported data."

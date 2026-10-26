@@ -212,6 +212,7 @@ import Testing
         #expect(restored.activeConversationSegmentID == portable.activeConversationSegmentID)
         #expect(restored.revision == portable.revision + 1)
         #expect(restored.coachTurns.first { $0.id == payload.submissionID }?.receipts == receipts)
+        try await store.confirmAdultEligibility(expectedProfileID: f.profileID)
         await #expect(throws: DiaryError.notFound) {
             try await store.applyCoachWrites([write], turnID: payload.submissionID,
                 epoch: store.selectionEpoch(expectedProfileID: f.profileID), expectedProfileID: f.profileID, mode: .replayOnly)

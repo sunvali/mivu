@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import SQLite3
 
 enum DiaryProfileMigrationStage: Sendable { case beforeCommit, beforeInstall }
 
@@ -87,6 +88,7 @@ actor DiaryStore {
     }
     private func pagedMutation<Value: Sendable>(_ owner: UUID?, _ body: (DiaryDatabase, DiaryHead) throws -> DiaryCommit<Value>) throws -> Value {
         let selected = try selectedOwner(owner)
+        try requireAdultEligibility(expectedProfileID: selected)
         let (database, head) = try pagedConnection(expectedProfileID: selected)
         let commit = try body(database, head)
         try publish(commit, database: database)
@@ -108,6 +110,7 @@ actor DiaryStore {
         pagedHead = current
     }
     func profiles() throws -> [DiaryProfile] {
+        try LocalDiaryFiles.prepareIfLive(directory)
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
         let ids = Set(try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .filter { ["sqlite", "json"].contains($0.pathExtension) }.compactMap { UUID(uuidString: $0.deletingPathExtension().lastPathComponent) })
@@ -135,12 +138,42 @@ actor DiaryStore {
     func selectPagedProfile(_ id: UUID) throws -> DiaryHead { try selectProfile(id).head }
     func createProfile(_ profile: DiaryProfile) throws -> DiaryReadModel {
         var snapshot = DiarySnapshot(profile: profile); snapshot.lineage = [UUID()]
-        return try importProfile(snapshot)
+        try snapshot.validate(); try createDatabase(snapshot)
+        return try selectProfile(profile.id)
     }
     func importProfile(_ incoming: DiarySnapshot) throws -> DiaryReadModel {
         guard !exists(incoming.profile.id) else { throw DiaryError.invalidData }
+        var incoming = incoming; incoming.profile.adultConfirmed = nil
         try incoming.validate(); try createDatabase(incoming)
         return try selectProfile(incoming.profile.id)
+    }
+    func requireAdultEligibility(expectedProfileID: UUID) throws {
+        guard AdultEligibility.isEligible(try diaryHead(expectedProfileID: expectedProfileID).profile, at: currentTime()) else {
+            throw DiaryError.adultConfirmationRequired
+        }
+    }
+    func confirmAdultEligibility(expectedProfileID: UUID, at date: Date = Date()) throws {
+        let (database, head) = try pagedConnection(expectedProfileID: expectedProfileID)
+        guard AdultEligibility.canConfirm(birthYear: head.profile.about?.birthYear, at: date) else { throw DiaryError.adultConfirmationRequired }
+        if head.profile.adultConfirmed == true { return }
+        var profile = head.profile; profile.adultConfirmed = true
+        // Attestation is local access metadata, not a new health-data revision.
+        try database.execute("BEGIN IMMEDIATE")
+        do {
+            guard try database.readHead(expectedProfileID: expectedProfileID) == head else { throw DiaryError.staleRevision }
+            let payload = try JSONEncoder().encode(profile)
+            let previousBytes = try database.mutationInteger("SELECT length(profilePayload) FROM storage_head WHERE id = 1")
+            let statement = try database.mutationStatement("UPDATE storage_head SET profilePayload = ? WHERE id = 1", [.blob(payload)])
+            defer { sqlite3_finalize(statement) }
+            _ = try database.mutationStep(statement)
+            let metadataBytes = try database.mutationInteger("SELECT encodedBytes FROM storage_contribution WHERE tableName = 'meta' AND rowID = ?", [.text(profile.id.uuidString)])
+            try DiaryTransaction(database: database, head: head).contribution(table: "meta", rowID: profile.id.uuidString,
+                encodedBytes: metadataBytes + payload.count - previousBytes)
+            guard try database.mutationInteger("SELECT portableBytes FROM storage_quota WHERE id = 1") <= maximumFileBytes else { throw DiaryError.invalidData }
+            try database.validateFileIdentity()
+            try database.execute("COMMIT")
+            pagedHead = try database.readHead(expectedProfileID: expectedProfileID)
+        } catch { try? database.execute("ROLLBACK"); throw error }
     }
     func signOut() { finishSubscribers(); pagedHead = nil; profileSelectionEpoch &+= 1 }
     func diaryHead(expectedProfileID: UUID) throws -> DiaryHead {
@@ -354,6 +387,7 @@ actor DiaryStore {
     }
 
     func analysisInput(mealID: UUID, submissionID: UUID, expectedProfileID: UUID? = nil) throws -> AnalysisInput {
+        try requireAdultEligibility(expectedProfileID: selectedOwner(expectedProfileID))
         guard let selected = pagedHead else { throw DiaryError.noProfile }
         let owner = expectedProfileID ?? selected.profile.id
         return try pagedConnection(expectedProfileID: owner).database.analysisInput(mealID: mealID, submissionID: submissionID, expectedProfileID: owner)
@@ -444,6 +478,9 @@ actor DiaryStore {
     }
 
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile? = nil, expectedProfileID: UUID? = nil) throws {
+        let existing = try diaryHead(expectedProfileID: selectedOwner(expectedProfileID)).profile
+        guard profile.adultConfirmed == existing.adultConfirmed,
+              AdultEligibility.canConfirm(birthYear: profile.about?.birthYear, at: currentTime()) else { throw DiaryError.adultConfirmationRequired }
         return try pagedMutation(expectedProfileID) { try $0.updateProfile(profile, expectedProfile: expectedProfile, expected: $1, maximumBytes: maximumFileBytes) }
     }
 
@@ -656,6 +693,7 @@ actor DiaryStore {
     }
 
     private func ensureDatabase(for id: UUID) throws {
+        try LocalDiaryFiles.prepareIfLive(directory)
         // A selected directory is authoritative even if damaged; never resurrect its old JSON source.
         if FileManager.default.fileExists(atPath: selectedFile(id).path) {
             _ = try fileIdentity(file(id)); return
@@ -679,11 +717,14 @@ actor DiaryStore {
     }
 
     private func createDatabase(_ snapshot: DiarySnapshot, beforeInstall: () throws -> Void = {}) throws {
+        try LocalDiaryFiles.prepareIfLive(directory)
         let temporary = directory.appendingPathComponent("migration-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: temporary) }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            try LocalDiaryFiles.excludeFromBackup(directory)
+            try LocalDiaryFiles.excludeFromBackup(temporary)
             #if os(iOS)
             for url in [directory, temporary] {
                 try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: url.path)

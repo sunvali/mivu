@@ -1,6 +1,8 @@
 import SwiftUI
 
 enum MivuLinks {
+    static let support = URL(string: "https://mivuapp.com/support")!
+    static let supportEmail = URL(string: "mailto:support@mivuapp.com")!
     static let privacyPolicy = URL(string: "https://mivuapp.com/privacy")!
     static let chatGPTUsage = URL(string: "https://chatgpt.com/settings/usage")!
 }

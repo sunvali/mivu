@@ -7,7 +7,7 @@ import Testing
     private func fixture() async throws -> (DiaryStore, DiaryProfile, URL) {
         let root = URL.temporaryDirectory.appending(path: "CoachFocus-" + UUID().uuidString)
         let clock = now
-        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         return (store, profile, root)
     }

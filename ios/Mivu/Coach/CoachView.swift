@@ -31,6 +31,8 @@ struct CoachView: View {
     @State private var requestAccessibilityPage: CoachTimelineView.AccessibilityPageRequest?
     @State private var diagnostics = CoachTimelineDiagnostics()
     @State private var selectedRecord: RecordDestination?
+    @State private var selectedReport: CoachReplyReport?
+    @State private var reportUnavailable = false
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @FocusState private var editing: Bool
     private enum RecordDestination: Hashable, Identifiable {
@@ -116,6 +118,14 @@ struct CoachView: View {
                     .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
             }
         }
+        .sheet(item: $selectedReport) { report in
+            CoachReplyReportView(report: report, diary: coach.diary)
+        }
+        .alert("Cannot report this reply", isPresented: $reportUnavailable) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("The reply is unavailable or exceeds the 32 KB report limit. Contact support@mivuapp.com for help.")
+        }
         .sensoryFeedback(.success, trigger: coach.captureReceipt)
         .onAppear {
             surfaceVisible = true; coach.synchronizeDraftOwnership(); reportCompanionContext()
@@ -168,7 +178,7 @@ struct CoachView: View {
         .sensoryFeedback(trigger: listening) { _, on in on ? .start : .stop }
         .onChange(of: caretSignal) { _, _ in reportCompanionContext() }
         .onChange(of: coach.diary.selection) { _, _ in
-            coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; selectedRecord = nil
+            coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; selectedRecord = nil; selectedReport = nil
             stopListening()
         }
     }
@@ -276,6 +286,7 @@ struct CoachView: View {
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
                             .contextMenu { messageActions(turn, fromPip: true) }
                             .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: true) }
+                            .accessibilityAction(named: "Report reply") { report(turn) }
                             .accessibilityIdentifier("coachReply")
                     }
                     turnActions(turn)
@@ -595,6 +606,17 @@ struct CoachView: View {
         Button("Reply", systemImage: "arrowshape.turn.up.left") { reply(to: turn, fromPip: fromPip) }
         let text = fromPip ? CoachReplyLines.plain(turn.assistantText ?? "") : turn.text
         if !text.isEmpty { Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text } }
+        if fromPip, turn.assistantText != nil {
+            Button("Report reply", systemImage: "flag") { report(turn) }
+        }
+    }
+    private func report(_ turn: CoachExchangeSummary) {
+        guard let owner = coach.diary.selection, !coach.diary.isChangingProfile else { return }
+        editing = false; stopListening()
+        selectedReport = CoachReplyReport(owner: owner, exchange: turn,
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown",
+            appBuild: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown")
+        reportUnavailable = selectedReport == nil
     }
     private func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
         coach.reply(to: turn, fromPip: fromPip); editing = true

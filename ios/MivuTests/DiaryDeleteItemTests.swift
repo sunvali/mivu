@@ -9,7 +9,7 @@ import Testing
         let root = URL.temporaryDirectory.appending(path: "DeleteItem-" + UUID().uuidString)
         let clock = now
         let store = DiaryStore(directory: root, currentTime: { clock })
-        let profile = DiaryProfile(name: "Synthetic owner")
+        let profile = adultProfile(name: "Synthetic owner")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay(at: now)
         let meal = try await capturedMeal(store, text: "Synthetic breakfast", photos: [], reviewFirst: false, dayID: day.id, at: now)

@@ -156,7 +156,7 @@ import Testing
         defer { fixture.cleanup() }
         await fixture.connection.restore()
         let store = DiaryStore(directory: fixture.directory.appending(path: "Diary"))
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic usage recovery"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic usage recovery"))
         let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)
         let delays = CoachUsageDelays()
@@ -193,7 +193,7 @@ import Testing
         defer { fixture.cleanup() }
         await fixture.connection.restore()
         let store = DiaryStore(directory: fixture.directory.appending(path: "Diary"))
-        let profile = DiaryProfile(name: "Synthetic original profile")
+        let profile = adultProfile(name: "Synthetic original profile")
         _ = try await store.createProfile(profile)
         let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)

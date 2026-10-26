@@ -36,7 +36,7 @@ func interruptAfterWrite<R>(_ store: DiaryStore, _ profileID: UUID, _ turnID: UU
     @Test func writeThenFailureCompletesIncomplete() async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachPartial-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        let store = DiaryStore(directory: root, currentTime: { now }); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root, currentTime: { now }); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         let turn = try await capturedTurn(store, text: "Eggs and a thing", photos: [], at: now, expectedProfileID: profile.id)
         let model = PartialModel([result([call("log_food", log(), id: "a")]), result([call("no_such_tool", "{}", id: "b")])])
@@ -48,7 +48,7 @@ func interruptAfterWrite<R>(_ store: DiaryStore, _ profileID: UUID, _ turnID: UU
 
     @Test func retryDoesNotReapplyReceipts() async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachPartial-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
+        let store = DiaryStore(directory: root); _ = try await store.createProfile(adultProfile(name: "Synthetic coach"))
         _ = try await store.startDay(at: Date())
         let today = diaryDateLabel(Date(), zone: TimeZone.current.identifier)
         let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
@@ -72,7 +72,7 @@ func interruptAfterWrite<R>(_ store: DiaryStore, _ profileID: UUID, _ turnID: UU
     @Test(arguments: [0, 1]) func cancellationAfterWriteKeepsFailurePath(kind: Int) async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachPartial-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        let store = DiaryStore(directory: root, currentTime: { now }); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root, currentTime: { now }); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         let turn = try await capturedTurn(store, text: "Eggs and a thing", photos: [], at: now, expectedProfileID: profile.id)
         let error: Error = kind == 0 ? URLError(.cancelled) : SessionError.sessionChanged
@@ -86,7 +86,7 @@ func interruptAfterWrite<R>(_ store: DiaryStore, _ profileID: UUID, _ turnID: UU
 
     @Test func photoOnlyRetrySendsFinishTheRest() async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachPartial-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
+        let store = DiaryStore(directory: root); _ = try await store.createProfile(adultProfile(name: "Synthetic coach"))
         _ = try await store.startDay(at: Date())
         let today = diaryDateLabel(Date(), zone: TimeZone.current.identifier)
         let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
@@ -105,7 +105,7 @@ func interruptAfterWrite<R>(_ store: DiaryStore, _ profileID: UUID, _ turnID: UU
 
     @Test func oneTapAnswersSendWhileComposingAndKeepTheDraft() async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachPartial-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
+        let store = DiaryStore(directory: root); _ = try await store.createProfile(adultProfile(name: "Synthetic coach"))
         _ = try await store.startDay(at: Date())
         let today = diaryDateLabel(Date(), zone: TimeZone.current.identifier)
         let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)

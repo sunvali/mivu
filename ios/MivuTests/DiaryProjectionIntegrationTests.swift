@@ -228,7 +228,7 @@ import Testing
         case "signOut":
             await store.signOut(); _ = try await store.selectPagedProfile(f.owner)
         default:
-            try await store.restore(f.complete(), expectedProfileID: f.owner)
+            try await store.restoreAdultFixture(f.complete(), expectedProfileID: f.owner)
         }
         let before = try f.durableRows()
         await #expect(throws: DiaryError.wrongOwner) {
@@ -441,7 +441,7 @@ import Testing
         if transition == "reselect" { _ = try await store.selectProfile(other); _ = try await store.selectProfile(f.owner) }
         else {
             let archive = try await store.snapshotForExport(expectedProfileID: f.owner)
-            try await store.restore(archive, expectedProfileID: f.owner)
+            try await store.restoreAdultFixture(archive, expectedProfileID: f.owner)
         }
         let before = try await store.snapshotForExport(expectedProfileID: f.owner)
         f.metrics.reset()
@@ -641,7 +641,7 @@ import Testing
         let instant = DayTests.date("2027-01-15T12:00:00Z")
         let day = TrackingDay(localDate: "2027-01-15", timeZoneID: "UTC", startAt: instant,
             completeness: scenario == "partial" ? .partial : .complete)
-        var source = DiarySnapshot(profile: DiaryProfile(name: "Synthetic totals parity", timeZoneID: "UTC"), days: [day], activeDayID: day.id)
+        var source = DiarySnapshot(profile: adultProfile(name: "Synthetic totals parity", timeZoneID: "UTC"), days: [day], activeDayID: day.id)
         if let state = SubmissionState(rawValue: scenario == "savedAndPending" ? "needsRetry" : scenario) {
             var meal = DiaryMeal(dayID: day.id, capturedAt: instant, eatenAt: instant,
                 revision: scenario == "savedAndPending" ? 1 : 0,
@@ -888,11 +888,11 @@ import Testing
         let oldPage = try { let db = try DiaryDatabase(url: f.url); return try db.coachDays(before: nil, expectedProfileID: f.profileID) }()
         let cursor = try #require(oldPage.cursor)
         if transition == "reselect" {
-            _ = try await store.createProfile(DiaryProfile(name: "Synthetic replacement selection"))
+            _ = try await store.createProfile(adultProfile(name: "Synthetic replacement selection"))
             _ = try await store.selectProfile(f.profileID)
         } else {
             let complete = try await store.snapshotForExport(expectedProfileID: f.profileID)
-            try await store.restore(complete, expectedProfileID: f.profileID)
+            try await store.restoreAdultFixture(complete, expectedProfileID: f.profileID)
         }
         metrics.reset()
         await #expect(throws: DiaryError.wrongOwner) {

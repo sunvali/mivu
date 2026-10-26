@@ -65,7 +65,7 @@ import Testing
 
     @Test func lateHistoricalReceiptLoadCannotPublishForAnotherStoreOwner() async throws {
         let f = try await fixture(); defer { try? FileManager.default.removeItem(at: f.path) }
-        let other = DiaryProfile(name: "Synthetic other", timeZoneID: "UTC")
+        let other = adultProfile(name: "Synthetic other", timeZoneID: "UTC")
         _ = try await f.store.createProfile(other); _ = try await f.store.selectProfile(f.profile.id)
         let gate = HistoricalReceiptGate()
         let model = DiaryViewModel(store: f.store, mealDetailLoading: { id, owner in
@@ -214,7 +214,7 @@ import Testing
     private func fixture() async throws -> (path: URL, store: DiaryStore, profile: DiaryProfile, historical: TrackingDay, today: TrackingDay, now: Date, metrics: DiaryQueryDiagnostics) {
         let path = URL.temporaryDirectory.appending(path: "HistoricalReceipt-" + UUID().uuidString)
         let metrics = DiaryQueryDiagnostics(), store = DiaryStore(directory: path, diagnostics: metrics)
-        let profile = DiaryProfile(name: "Synthetic historical receipt", timeZoneID: "UTC")
+        let profile = adultProfile(name: "Synthetic historical receipt", timeZoneID: "UTC")
         _ = try await store.createProfile(profile)
         let now = Date(timeIntervalSince1970: 1_792_411_200)
         let historical = try await store.startDay(at: now.addingTimeInterval(-86_400))

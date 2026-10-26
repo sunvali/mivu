@@ -11,6 +11,7 @@ final class DiaryDatabase {
 
     init(url: URL, create: Bool = false, diagnostics: DiaryQueryDiagnostics? = nil, expectedFileIdentity: UInt64? = nil) throws {
         self.url = url; self.diagnostics = diagnostics
+        try LocalDiaryFiles.excludeFromBackup(url.deletingLastPathComponent())
         if let expectedFileIdentity {
             guard (try? Self.identity(of: url)) == expectedFileIdentity else { throw DiaryError.persistenceFailed }
         }
@@ -21,6 +22,7 @@ final class DiaryDatabase {
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData
         }
         do {
+            try LocalDiaryFiles.excludeFromBackup(url)
             openedFileIdentity = try Self.identity(of: url)
             guard expectedFileIdentity == nil || openedFileIdentity == expectedFileIdentity else { throw DiaryError.persistenceFailed }
         }

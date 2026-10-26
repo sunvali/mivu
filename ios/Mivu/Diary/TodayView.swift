@@ -174,7 +174,7 @@ struct DiaryRootView: View {
             let createDefaultProfile = (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test")
             await services.loadDiary(createDefaultProfile: createDefaultProfile)
             hasLoaded = true
-            if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
+            if model.isAdultEligible && DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
             await services.start(createDefaultProfile: createDefaultProfile)
             // The first Siri use may have been on a locked phone, where no permission prompt can show.
@@ -192,6 +192,10 @@ struct DiaryRootView: View {
             if changing { coachHistory = nil }
             if changing { coach.cancel(); companionRuntime.stop(); companion.enterBackground(); refreshCompanion() }
             else { resetCompanionProfile(); Task { await coach.waitForWorker(); coach.resume() } }
+        }
+        .onChange(of: model.isAdultEligible) { _, eligible in
+            if eligible { Task { await services.start(createDefaultProfile: false) }; coach.resume(); openQuickLog(); openCoachRequest() }
+            else { coach.cancel(); quickLogOwner = nil; coachHistory = nil }
         }
         .onChange(of: model.readModel?.profile.id) { _, _ in
             coach.draft = MealDraft(); coach.errorMessage = nil
@@ -227,7 +231,7 @@ struct DiaryRootView: View {
                 attachCompanion()
                 refreshCompanion()
             }
-            if value == .active, hasLoaded, DiaryLaunch.rollsOverDays { Task { await model.rollOverDay() } }
+            if value == .active, hasLoaded, model.isAdultEligible, DiaryLaunch.rollsOverDays { Task { await model.rollOverDay() } }
             if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground(); await drainSiriPrompts() }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
         }
     }
@@ -310,7 +314,7 @@ struct DiaryRootView: View {
             }
             .tint(.diaryAccent)
         }
-        .fullScreenCover(isPresented: $showOnboarding) {
+        .fullScreenCover(isPresented: Binding(get: { showOnboarding && model.isAdultEligible }, set: { showOnboarding = $0 })) {
             OnboardingView(model: model, connection: connection) { showOnboarding = false }
         }
         .fullScreenCover(isPresented: Binding(get: { quickLogOwner != nil }, set: { if !$0 { quickLogOwner = nil } })) {
@@ -346,6 +350,8 @@ struct DiaryRootView: View {
                 ProgressView("Opening diary").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.diaryCanvas)
             } else if model.readModel == nil {
                 NavigationStack { DiarySetupView(model: model, onSelected: { selectedTab = "today" }, onCreated: { showOnboarding = true }) }
+            } else if !model.isAdultEligible {
+                AdultEligibilityView(model: model, connection: connection)
             } else {
                 rootTabs
             }
@@ -388,7 +394,7 @@ struct DiaryRootView: View {
         }
     }
     private func openQuickLog() {
-        guard quickLog.pending, hasLoaded else { return }
+        guard quickLog.pending, hasLoaded, model.isAdultEligible else { return }
         quickLog.pending = false
         // Without a diary there is nowhere to save; the app shows setup instead.
         guard let owner = model.selection, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
@@ -397,11 +403,11 @@ struct DiaryRootView: View {
         selectedTab = "today"; quickLogOwner = owner
     }
     private var showsPlanWelcome: Bool {
-        hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
+        hasLoaded && model.isAdultEligible && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
             && noteMealID == nil && notifiedMealID == nil && connection.showsPlanWelcome
     }
     private func openCoachRequest() {
-        guard quickLog.openCoach, hasLoaded else { return }
+        guard quickLog.openCoach, hasLoaded, model.isAdultEligible else { return }
         quickLog.openCoach = false
         guard model.selection != nil, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
         routes.route = nil; coachHistory = nil; noteMealID = nil

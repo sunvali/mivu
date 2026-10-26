@@ -60,6 +60,7 @@ struct DiaryExportCoordinator: Sendable {
         try Self.checkCapacity(at: temporaryDirectory, source: request.sourceURL)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         ownsRoot = true
+        try LocalDiaryFiles.excludeFromBackup(root)
         #if os(iOS)
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: root.path)
         #endif
@@ -69,6 +70,7 @@ struct DiaryExportCoordinator: Sendable {
         #if os(iOS)
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: destination.path)
         #endif
+        try LocalDiaryFiles.excludeFromBackup(destination)
         try await checkpoint(.cloneCreated, destination)
         try Task.checkCancellation()
         try await store.validateExportRequest(request)
@@ -145,7 +147,9 @@ struct DiaryExportCoordinator: Sendable {
     func prepareReplacement(_ incoming: DiarySnapshot, replacing ticket: DiaryExportTicket) async throws -> DiaryPreparedReplacement {
         try Task.checkCancellation()
         try await store.validateExportRequest(ticket.request, cloneHead: ticket.head)
-        let original = try await completeSnapshot(ticket)
+        var original = try await completeSnapshot(ticket), incoming = incoming
+        // Local attestation is neither portable authorization nor a health-data conflict.
+        original.profile.adultConfirmed = nil; incoming.profile.adultConfirmed = nil
         let replacement = try DiaryArchive.replacement(incoming, original: original)
         guard try JSONEncoder().encode(replacement).count <= ticket.request.maximumBytes else { throw DiaryError.invalidData }
         // Validated recovery must survive deletion of the original profile's directory.
@@ -157,6 +161,7 @@ struct DiaryExportCoordinator: Sendable {
         try Self.checkCapacity(at: root.deletingLastPathComponent(), source: ticket.request.sourceURL)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         ownsRoot = true
+        try LocalDiaryFiles.excludeFromBackup(root)
         #if os(iOS)
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: root.path)
         #endif

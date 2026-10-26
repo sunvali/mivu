@@ -25,7 +25,7 @@ import Testing
         #expect(DiaryLaunch.language == "en")
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        let profile = DiaryProfile(name: "יומן סינתטי", language: "he", preferences: "Synthetic retained preference")
+        let profile = adultProfile(name: "יומן סינתטי", language: "he", preferences: "Synthetic retained preference")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         let meal = try await capturedMeal(store, text: "Synthetic retained meal", photos: [MealPhoto(data: Data([1, 2, 3]))], reviewFirst: true, dayID: day.id)
@@ -50,7 +50,7 @@ import Testing
     @Test func failedPersistencePreservesComposerInputAndDoesNotAcknowledge() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        let profile = DiaryProfile(name: "Synthetic profile")
+        let profile = adultProfile(name: "Synthetic profile")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
@@ -67,7 +67,7 @@ import Testing
     @Test func repeatedSendUsesStableSubmissionAndReviewDoesNotCount() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        let profile = DiaryProfile(name: "Synthetic profile")
+        let profile = adultProfile(name: "Synthetic profile")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
@@ -94,7 +94,7 @@ import Testing
     @Test func selectedDayCapturePreservesActiveDayAndActualCaptureTime() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic historical diary", timeZoneID: "UTC"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic historical diary", timeZoneID: "UTC"))
         let historicalTime = try #require(ISO8601DateFormatter().date(from: "2026-10-10T10:00:00Z"))
         let capturedAt = try #require(ISO8601DateFormatter().date(from: "2026-10-16T14:00:00Z"))
         let historical = try await store.startDay(at: historicalTime)
@@ -118,7 +118,7 @@ import Testing
     @Test func captureDuringARunningSampleWorkerIsStillProcessed() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic busy worker", timeZoneID: "UTC"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic busy worker", timeZoneID: "UTC"))
         let day = try await store.startDay(at: Date())
         let gate = Task10Gate(), once = Task10Once()
         defer { Task { await gate.releaseAll() } }
@@ -140,7 +140,7 @@ import Testing
     @Test func profileSwitchAndSignOutHideOtherPrivateRecords() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        let first = DiaryProfile(name: "Synthetic A"), second = DiaryProfile(name: "Synthetic B")
+        let first = adultProfile(name: "Synthetic A"), second = adultProfile(name: "Synthetic B")
         _ = try await store.createProfile(first); let day = try await store.startDay()
         _ = try await capturedMeal(store, text: "Synthetic meal", photos: [], reviewFirst: false, dayID: day.id)
         _ = try await store.createProfile(second)
@@ -157,7 +157,7 @@ import Testing
     @Test func correctionUpdatesSameMealAndBackgroundRetainsPhotoCapture() async throws {
         let path = directory(); defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        let profile = DiaryProfile(name: "Synthetic profile")
+        let profile = adultProfile(name: "Synthetic profile")
         _ = try await store.createProfile(profile); let day = try await store.startDay()
         let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
         var draft = MealDraft(); draft.photos = [Data([1, 2, 3])]
@@ -210,7 +210,7 @@ import ImageIO
         let path = URL.temporaryDirectory.appending(path: name)
         defer { defaults.removePersistentDomain(forName: name); try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        let kept = DiaryProfile(name: "Synthetic kept"), removed = DiaryProfile(name: "Synthetic removed")
+        let kept = adultProfile(name: "Synthetic kept"), removed = adultProfile(name: "Synthetic removed")
         _ = try await store.createProfile(removed); _ = try await store.createProfile(kept); let day = try await store.startDay()
         _ = try await capturedMeal(store, text: "Synthetic meal", photos: [], reviewFirst: false, dayID: day.id)
         CompanionLastActive(defaults: defaults).record(Date(), for: removed.id)
@@ -294,7 +294,7 @@ private actor SelectionDelay {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory.appending(path: "Diary"))
         let backup = FolderBackup(directory: directory.appending(path: "Backup"))
-        let first = DiaryProfile(name: "Synthetic A"), second = DiaryProfile(name: "Synthetic B"), third = DiaryProfile(name: "Synthetic C")
+        let first = adultProfile(name: "Synthetic A"), second = adultProfile(name: "Synthetic B"), third = adultProfile(name: "Synthetic C")
         for profile in [first, second, third] { _ = try await store.createProfile(profile) }
         let delay = SelectionDelay()
         let model = DiaryViewModel(store: store, backup: backup, profileSelection: { id in
@@ -326,7 +326,7 @@ private actor SelectionDelay {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory.appending(path: "Diary"))
         let backup = FolderBackup(directory: directory.appending(path: "Backup"))
-        let first = DiaryProfile(name: "Synthetic A"), second = DiaryProfile(name: "Synthetic B")
+        let first = adultProfile(name: "Synthetic A"), second = adultProfile(name: "Synthetic B")
         _ = try await store.createProfile(first); _ = try await store.createProfile(second)
         let delay = SelectionDelay()
         let model = DiaryViewModel(store: store, backup: backup, profileSelection: { id in
@@ -355,7 +355,7 @@ private actor SelectionDelay {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DiaryStore(directory: directory.appending(path: "Diary"))
         let backup = FolderBackup(directory: directory.appending(path: "Backup"))
-        let profile = DiaryProfile(name: "Synthetic A")
+        let profile = adultProfile(name: "Synthetic A")
         _ = try await store.createProfile(profile)
         let model = DiaryViewModel(store: store, backup: backup)
         await model.switchProfile(profile.id)

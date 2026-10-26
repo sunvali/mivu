@@ -203,7 +203,7 @@ import Testing
         let originalSelection = try await store.selectionOwnership(expectedProfileID: f.profileID)
         let original = try await store.saveManualNutrition(payload, expectedSelection: originalSelection, expectedProfileID: f.profileID)
         let archive = try await store.snapshotForExport(expectedProfileID: f.profileID)
-        try await store.restore(archive, expectedProfileID: f.profileID)
+        try await store.restoreAdultFixture(archive, expectedProfileID: f.profileID)
         let selection = try await store.selectionOwnership(expectedProfileID: f.profileID), beforeState = try manualState(f)
         let restored = try await store.meal(id: payload.mealID, expectedProfileID: f.profileID)
         let restoredArchive = try await store.snapshotForExport(expectedProfileID: f.profileID)

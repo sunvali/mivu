@@ -6,7 +6,7 @@ struct DayTests {
     static func date(_ value: String) -> Date { ISO8601DateFormatter().date(from: value)! }
     static func ready(zone: String = "Asia/Jerusalem", at: String = "2026-10-10T09:00:00Z") async throws -> (DiaryStore, DiaryProfile, TrackingDay) {
         let store = DiaryStore(directory: DiaryTests.directory())
-        let profile = DiaryProfile(name: "Synthetic", timeZoneID: zone)
+        let profile = adultProfile(name: "Synthetic", timeZoneID: zone)
         _ = try await store.createProfile(profile)
         let day = try await store.startDay(at: date(at))
         return (store, profile, day)

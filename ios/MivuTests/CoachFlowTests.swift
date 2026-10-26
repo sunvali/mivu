@@ -85,7 +85,7 @@ private enum CoachFlowWaitFailure: Error, Equatable {
     private func fixture() async throws -> (DiaryViewModel, URL) {
         let path = URL.temporaryDirectory.appending(path: "CoachFlow-" + UUID().uuidString)
         let store = DiaryStore(directory: path)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic coach"))
         let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)
         return (diary, path)

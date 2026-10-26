@@ -33,7 +33,7 @@ enum ProgressUITestFixture {
         }
         let goal = GoalRecord(effectiveLocalDate: days[0].localDate, timeZoneID: zone.identifier,
                               targets: NutritionValues(kcal: 2_100, carbs: 240, protein: 140, fat: 70), goalWeightKg: 75, exerciseCreditEnabled: false)
-        return DiarySnapshot(revision: 1, profile: DiaryProfile(name: "Synthetic progress", timeZoneID: zone.identifier),
+        return DiarySnapshot(revision: 1, profile: DiaryProfile(name: "Synthetic progress", timeZoneID: zone.identifier, adultConfirmed: true),
                              days: days, meals: meals, weights: weights, goals: [goal], activeDayID: days.last!.id, previousDayConfirmedAt: now)
     }
 }

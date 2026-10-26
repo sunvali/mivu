@@ -13,7 +13,7 @@ private actor InputLog {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private func store() async throws -> (DiaryStore, DiaryProfile, URL) {
         let root = URL.temporaryDirectory.appending(path: "CoachMessages-" + UUID().uuidString)
-        let clock = now, store = DiaryStore(directory: root, currentTime: { clock }), profile = DiaryProfile(name: "Synthetic")
+        let clock = now, store = DiaryStore(directory: root, currentTime: { clock }), profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         return (store, profile, root)
     }

@@ -92,16 +92,25 @@ struct DiaryReport {
 
     // MARK: Files
 
-    func write(_ format: Format, to directory: URL) throws -> [URL] {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    func write(_ format: Format, to directory: URL, allowedRoot: URL = LocalDiaryFiles.local.exports) throws -> [URL] {
+        try LocalDiaryFiles.requireOwned(directory, root: allowedRoot)
+        try LocalDiaryFiles.createDirectory(allowedRoot)
+        let existed = FileManager.default.fileExists(atPath: directory.path)
+        var complete = false
+        defer { if !complete && !existed { try? FileManager.default.removeItem(at: directory) } }
+        try LocalDiaryFiles.createDirectory(directory)
         let files: [(String, Data)] = switch format {
         case .pdf: [("Mivu report \(label).pdf", pdfData())]
         case .csv: [("Mivu meals \(label).csv", Data(mealsCSV.utf8)), ("Mivu days \(label).csv", Data(daysCSV.utf8)), ("Mivu weights \(label).csv", Data(weightsCSV.utf8))]
         }
-        return try files.map { name, data in
+        let urls = try files.map { name, data in
             let url = directory.appendingPathComponent(name)
+            try LocalDiaryFiles.requireOwned(url, root: allowedRoot)
             try data.write(to: url, options: [.atomic, .completeFileProtection])
+            try LocalDiaryFiles.excludeFromBackup(url)
             return url
         }
+        complete = true
+        return urls
     }
 }

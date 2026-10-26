@@ -7,7 +7,7 @@ import UIKit
     private func fixture() async throws -> (URL, DiaryStore, DiaryProfile, DiaryViewModel) {
         let path = URL.temporaryDirectory.appending(path: "CompanionMoment-" + UUID().uuidString)
         let store = DiaryStore(directory: path)
-        let profile = DiaryProfile(name: "Synthetic owner", timeZoneID: "UTC")
+        let profile = adultProfile(name: "Synthetic owner", timeZoneID: "UTC")
         _ = try await store.createProfile(profile)
         _ = try await store.startDay()
         let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)

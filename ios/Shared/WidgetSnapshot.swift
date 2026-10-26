@@ -18,7 +18,13 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
     }
 
-    func write(to url: URL) throws { try JSONEncoder().encode(self).write(to: url, options: .atomic) }
+    func write(to url: URL) throws {
+        var parent = url.deletingLastPathComponent(), file = url, values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try parent.setResourceValues(values)
+        try JSONEncoder().encode(self).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try file.setResourceValues(values)
+    }
 
     /// The next waking-day start, in the day's own time zone so travel cannot shift it.
     static func nextRollover(after now: Date, timeZoneID: String, cutoffHour: Int) -> Date {

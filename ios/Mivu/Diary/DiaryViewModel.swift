@@ -122,7 +122,14 @@ enum DiaryCaptureResult: Equatable, Sendable {
             return Date()
         }
         return DiaryViewModel(store: DiaryStore(directory: directory, currentTime: processTime), sampleMode: DiaryLaunch.isSampleMode, preferences: DiaryLaunch.defaults,
-            backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)))
+            backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory),
+                allowedRoot: DiaryLaunch.isUITest ? directory : LocalDiaryFiles.local.documents,
+                localFolder: DiaryLaunch.isUITest ? directory.appending(path: "Backups") : LocalDiaryFiles.local.backups))
+    }
+    var isAdultEligible: Bool { readModel.map { AdultEligibility.isEligible($0.profile) } ?? false }
+    func confirmAdultEligibility() async {
+        guard let owner = selection?.identity.profileID else { return }
+        if await change({ try await store.confirmAdultEligibility(expectedProfileID: owner) }) { rememberSelection(); resumeCoach?() }
     }
     var activeDay: TrackingDay? { readModel?.activeDay }
     var todaysMeals: [MealReadModel] { readModel?.meals.sorted { $0.capturedAt > $1.capturedAt } ?? [] }
@@ -169,15 +176,18 @@ enum DiaryCaptureResult: Equatable, Sendable {
             profiles = try await store.profiles()
             #if DEBUG
             if DiaryHistoryUITestFixture.isEnabled, profiles.isEmpty {
-                _ = try await store.importProfile(DiaryHistoryUITestFixture.snapshot())
+                let imported = try await store.importProfile(DiaryHistoryUITestFixture.snapshot())
+                try await store.confirmAdultEligibility(expectedProfileID: imported.profile.id)
                 profiles = try await store.profiles()
             }
             if ProgressUITestFixture.isEnabled, profiles.isEmpty {
-                _ = try await store.importProfile(ProgressUITestFixture.snapshot())
+                let imported = try await store.importProfile(ProgressUITestFixture.snapshot())
+                try await store.confirmAdultEligibility(expectedProfileID: imported.profile.id)
                 profiles = try await store.profiles()
             }
             if DiaryLaunch.isCoachHistoryFixture, profiles.isEmpty {
-                _ = try await store.importProfile(CoachUITestInference.historySnapshot())
+                let imported = try await store.importProfile(CoachUITestInference.historySnapshot())
+                try await store.confirmAdultEligibility(expectedProfileID: imported.profile.id)
                 profiles = try await store.profiles()
             }
             #endif
@@ -185,7 +195,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 try await install(try await profileSelection(profile.id))
             } else if createDefaultProfile {
-                try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
+                try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier, adultConfirmed: true)))
                 profiles = try await store.profiles()
             }
         } catch { await recoverProfileSelection(previous); present(error) }
@@ -232,7 +242,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard !isChangingProfile, selection == token else { return }
         guard updated.head.timelineGeneration == token.identity.timelineGeneration,
               updated.head.revision >= (readModel?.head.revision ?? 0) else { return }
-        if updated.head.revision == readModel?.head.revision { return }
+        if updated.head.revision == readModel?.head.revision && updated.profile == readModel?.profile { return }
         let status = try await store.coachWorkStatus(expectedProfileID: profileID)
         if let changes { await photoLoader?.invalidate(changes) }
         else { await photoLoader?.purgeForMemoryPressure() }
@@ -242,6 +252,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard !isChangingProfile, selection == token, updated.head.revision >= (readModel?.head.revision ?? 0) else { return }
         photoRequestGeneration &+= 1; changeGeneration &+= 1
         readModel = updated; workStatus = status; exactMeals = meals; exactDays = days
+        rememberSelection()
         if let index = profiles.firstIndex(where: { $0.id == profileID }) { profiles[index] = updated.head.profile }
         queueBackup()
     }
@@ -471,7 +482,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard beginProfileTransition() else { return }; defer { finishProfileTransition() }
         let selected = readModel?.head.profile.id == owner
         do {
-            try await backup?.removeProfile(owner); try await store.deleteProfile(owner); preferences.map { CompanionLastActive(defaults: $0).forget(owner) }
+            try await backup?.removeProfile(owner); if !DiaryLaunch.isUITest { try LocalDiaryFiles.local.removeExports(profileID: owner) }; try await store.deleteProfile(owner); preferences.map { CompanionLastActive(defaults: $0).forget(owner) }
             if selected { await clearProfileSelection() }
             profiles = try await store.profiles()
         } catch { present(error) }
@@ -497,13 +508,16 @@ enum DiaryCaptureResult: Equatable, Sendable {
         if let previous { do { try await install(try await profileSelection(previous)); return } catch {} }
         await clearProfileSelection()
     }
-    private func rememberSelection() { if let id = readModel?.head.profile.id { preferences?.set(id.uuidString, forKey: "diarySelectedProfile"); preferences?.set(false, forKey: "diarySignedOut") } }
+    private func rememberSelection() { if let id = readModel?.head.profile.id { preferences?.set(isAdultEligible, forKey: AdultEligibility.lockedKey(id)); preferences?.set(id.uuidString, forKey: "diarySelectedProfile"); preferences?.set(false, forKey: "diarySignedOut") } }
     func loadProfiles() async { guard !isChangingProfile else { return }; do { profiles = try await store.profiles() } catch { present(error) } }
     private func selectBackupProfile(_ profileID: UUID?) async {
         backupGeneration = nil; backupScheduledRevision = nil; backupRequested = nil
         await backup?.selectProfile(profileID)
         if let owner = profileID, let backup {
-            do { backupGeneration = try await backup.generation(profileID: owner) } catch { backupStatus = FolderBackupStatus(pendingError: "Backup pending"); return }
+            do {
+                try await backup.configureLocal(profileID: owner)
+                backupGeneration = try await backup.generation(profileID: owner)
+            } catch { backupStatus = FolderBackupStatus(pendingError: "Backup pending"); return }
             backupStatus = await backup.status(profileID: owner)
         } else { backupStatus = FolderBackupStatus() }
     }
@@ -625,7 +639,7 @@ enum DiaryLaunch {
     static var language: String { "en" }
     static var directory: URL {
         if let id = testID { return URL.temporaryDirectory.appending(path: "MivuUITest-" + id.uuidString, directoryHint: .isDirectory) }
-        return URL.documentsDirectory.appending(path: "Diary", directoryHint: .isDirectory)
+        return LocalDiaryFiles.local.diary
     }
 }
 

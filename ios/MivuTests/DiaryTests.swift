@@ -6,7 +6,7 @@ struct DiaryTests {
     static func directory() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
     static func ready() async throws -> (DiaryStore, DiaryProfile, TrackingDay) {
         let store = DiaryStore(directory: directory())
-        let profile = DiaryProfile(name: "Synthetic owner")
+        let profile = adultProfile(name: "Synthetic owner")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay(at: Date(timeIntervalSince1970: 1_800_000_000))
         return (store, profile, day)
@@ -14,7 +14,7 @@ struct DiaryTests {
     @Test func captureIsDurableBeforeAnalysisAndRetryKeepsIdentity() async throws {
         let directory = Self.directory()
         let store = DiaryStore(directory: directory)
-        let profile = DiaryProfile(name: "Synthetic")
+        let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         let submission = UUID()
@@ -36,7 +36,7 @@ struct DiaryTests {
             try? FileManager.default.removeItem(at: retained)
         }
         let store = DiaryStore(directory: directory)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic"))
         let day = try await store.startDay()
         let before = try await store.snapshotForExport()
         let ownership = try await store.selectionOwnership(expectedProfileID: before.profile.id)
@@ -140,7 +140,7 @@ struct DiaryTests {
         let old = try await store.snapshotForExport()
         try await store.deleteMeal(meal.id)
         await #expect(throws: DiaryError.notFound) { try await store.applyAnalysis(SampleAnalyzer().analyze(input)) }
-        await #expect(throws: DiaryError.staleArchive) { try await store.restore(old, expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.staleArchive) { try await store.restoreAdultFixture(old, expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport().meals.isEmpty)
         #expect(try await store.snapshotForExport().deletedMealIDs.contains(meal.id))
     }
@@ -171,7 +171,7 @@ struct DiaryTests {
         let (store, profile, day) = try await Self.ready()
         let meal = try await capturedMeal(store, text: "apple", photos: [], reviewFirst: false, dayID: day.id)
         let input = try await store.analysisInput(mealID: meal.id, submissionID: meal.submissions[0].id)
-        let other = DiaryProfile(name: "Other synthetic")
+        let other = adultProfile(name: "Other synthetic")
         _ = try await store.createProfile(other)
         #expect(try await store.snapshotForExport().meals.isEmpty)
         await #expect(throws: DiaryError.wrongOwner) { try await store.processPending(expectedProfileID: profile.id) }
@@ -184,7 +184,7 @@ struct DiaryTests {
         let old = try await store.snapshotForExport()
         var invalid = old
         invalid.schemaVersion = 99
-        await #expect(throws: DiaryError.invalidData) { try await store.restore(invalid) }
+        await #expect(throws: DiaryError.invalidData) { try await store.restoreAdultFixture(invalid) }
         #expect(try await store.snapshotForExport() == old)
         invalid = old
         invalid.weights = [WeightEntry(dayID: old.activeDayID, measuredAt: Date(), value: .nan)]
@@ -193,7 +193,7 @@ struct DiaryTests {
     @Test func corruptDiskIsRejectedWithoutReplacement() async throws {
         let directory = Self.directory()
         let store = DiaryStore(directory: directory)
-        let profile = DiaryProfile(name: "Synthetic")
+        let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile)
         let url = directory.appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
         let bad = Data("not a diary".utf8)
@@ -239,7 +239,7 @@ struct DiaryTests {
         let before = try await store.snapshotForExport()
         var foreign = before
         foreign.profile.id = UUID()
-        await #expect(throws: DiaryError.wrongOwner) { try await store.restore(foreign) }
+        await #expect(throws: DiaryError.wrongOwner) { try await store.restoreAdultFixture(foreign) }
         let input = try await store.analysisInput(mealID: meal.id, submissionID: meal.submissions[0].id)
         var malformed = try SampleAnalyzer().analyze(input)
         malformed.items[0].nutrition.kcal = -1
@@ -320,11 +320,11 @@ struct DiaryTests {
         try await source.processPending()
         let backup = try await source.snapshotForExport()
         let fresh = DiaryStore(directory: Self.directory())
-        _ = try await fresh.importProfile(backup)
+        _ = try await fresh.importAdultFixture(backup)
         #expect(try await fresh.snapshotForExport() == backup)
         #expect(try await fresh.snapshotForExport().profile.id == profile.id)
         #expect(try await fresh.snapshotForExport().meals[0].id == meal.id)
-        await #expect(throws: DiaryError.invalidData) { try await fresh.importProfile(backup) }
+        await #expect(throws: DiaryError.invalidData) { try await fresh.importAdultFixture(backup) }
         #expect(try await fresh.snapshotForExport() == backup)
     }
     @Test func failedFreshImportDoesNotChangeSelection() async throws {
@@ -335,15 +335,15 @@ struct DiaryTests {
             try? FileManager.default.removeItem(at: retained)
         }
         let store = DiaryStore(directory: directory)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic"))
         let old = try await store.snapshotForExport()
         let ownership = try await store.selectionOwnership(expectedProfileID: old.profile.id)
         let relativePath = old.profile.id.uuidString + ".sqlite/diary.sqlite"
         let bytes = try Data(contentsOf: directory.appendingPathComponent(relativePath))
-        let incoming = DiarySnapshot(profile: DiaryProfile(name: "Imported"))
+        let incoming = DiarySnapshot(profile: adultProfile(name: "Imported"))
         try FileManager.default.moveItem(at: directory, to: retained)
         let obstruction = Data([0]); try obstruction.write(to: directory)
-        await #expect(throws: DiaryError.persistenceFailed) { try await store.importProfile(incoming) }
+        await #expect(throws: DiaryError.persistenceFailed) { try await store.importAdultFixture(incoming) }
         await #expect(throws: DiaryError.persistenceFailed) { try await store.snapshotForExport() }
         await #expect(throws: DiaryError.wrongOwner) { try await store.snapshotForExport(expectedProfileID: incoming.profile.id) }
         #expect(try Data(contentsOf: directory) == obstruction)
@@ -413,7 +413,7 @@ struct DiaryTests {
     @Test func encodedSizeRejectionPreservesFileMemoryAndReopenability() async throws {
         let directory = Self.directory()
         let store = DiaryStore(directory: directory, maximumFileBytes: 2000)
-        let profile = DiaryProfile(name: "Synthetic")
+        let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         let before = try await store.snapshotForExport()

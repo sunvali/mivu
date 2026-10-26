@@ -57,7 +57,7 @@ import UIKit
         do {
             try await gate.waitForArrivals(1)
             #expect(protection.begun == 1 && protection.ended == 0)
-            if outcome == "wrongOwner" { _ = try await f.diary.store.createProfile(DiaryProfile(name: "Other owner", timeZoneID: "UTC")) }
+            if outcome == "wrongOwner" { _ = try await f.diary.store.createProfile(adultProfile(name: "Other owner", timeZoneID: "UTC")) }
             await gate.releaseAll()
             #expect(!(try await sending.value))
             #expect(protection.ended == 1)

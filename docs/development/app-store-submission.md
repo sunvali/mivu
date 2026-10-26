@@ -14,8 +14,17 @@ submit.
 - Privacy Policy link and an "estimates, not medical advice" note in Settings.
   The same note appears on the onboarding targets step and in the empty Coach
   screen.
-- Onboarding will not set a weight-loss target below BMI 18.5. Pace is at most
-  0.75 kg a week, calories never go below 1200, and the minimum age is 13.
+- Mivu is for adults 18 and older. Each local profile requires an explicit
+  confirmation; a known under-18 birth year cannot override it. Existing gated
+  records remain readable/exportable/deletable. Restores require fresh confirmation.
+- Adult onboarding will not set a weight-loss target below BMI 18.5. Pace is at
+  most 0.75 kg a week and automated targets never go below 1200 calories.
+- Health backups and JSON/PDF/CSV exports are app-owned local copies only.
+  Operational files are private in Application Support; whole-Documents sharing stays disabled. An authenticated
+  Export Diary Shortcuts action returns portable copies for manual transfer. OS backup exclusion is reapplied but remains advisory.
+- Report reply lets the person review a selected generated answer and send an
+  email to support@mivuapp.com. Without configured Mail, Copy report prepares
+  text without sending it. Inbox monitoring and provider filtering need live proof.
 - Deleting the last local profile also disconnects ChatGPT.
 - iPhone only, portrait only. `ITSAppUsesNonExemptEncryption = NO`: the app uses
   HTTPS, hashing and Keychain only.
@@ -24,10 +33,10 @@ submit.
 
 ## Still needed from the owner
 
-1. **Publish mivuapp.com.** `MivuLinks.privacyPolicy` already points to
-   `https://mivuapp.com/privacy`. The pages live in the private `mivu-site`
-   repo and the hosting in `mivu-infra`; the link is dead until the domain is
-   registered and both are deployed. Enter the same URL in App Store Connect.
+1. **Reconcile the live privacy page** with the local-only backup policy and
+   email reporting. Privacy/support pages were live during the 26 October review;
+   the website's former iCloud wording needs a separate site update. Enter the
+   public privacy URL in App Store Connect.
 2. **Support URL** in App Store Connect: `https://mivuapp.com/support`.
 3. **Written permission from OpenAI** for a third-party app to use a person's
    ChatGPT plan through this sign-in flow. Apple may ask for it (5.2.2).
@@ -58,6 +67,9 @@ No analytics, advertising, location, contacts or identifiers are collected.
 > against the person's own plan.
 >
 > Test ChatGPT account: <email> / <password>
+>
+> Mivu requires users to confirm they are 18 or older. No online Mivu account is
+> created. Local archives and reports can be transferred manually using the Export Diary action in Shortcuts.
 >
 > Nutrition figures are labelled as estimates, not medical advice. Weight-loss
 > targets are limited to a healthy BMI and a moderate pace.

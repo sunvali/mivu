@@ -5,7 +5,7 @@ import Testing
 struct FoodSourceTests {
     private func store() async throws -> (DiaryStore, DiaryProfile, URL) {
         let root = URL.temporaryDirectory.appending(path: "FoodSource-" + UUID().uuidString)
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay()
         return (store, profile, root)
     }

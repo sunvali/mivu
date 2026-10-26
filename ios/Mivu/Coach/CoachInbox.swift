@@ -11,23 +11,29 @@ struct CoachInbox: Sendable {
     }
 
     let directory: URL
-    init(directory: URL) { self.directory = directory }
+    private let legacyDirectory: URL?
+    init(directory: URL, legacyDirectory: URL? = nil) { self.directory = directory; self.legacyDirectory = legacyDirectory }
     static var local: CoachInbox {
         // Beside the diary folder, never inside it; each UI test run gets its own.
         let name = DiaryLaunch.testID.map { "CoachInbox-" + $0.uuidString } ?? "CoachInbox"
-        return CoachInbox(directory: DiaryLaunch.directory.deletingLastPathComponent().appending(path: name, directoryHint: .isDirectory))
+        return CoachInbox(directory: DiaryLaunch.directory.deletingLastPathComponent().appending(path: name, directoryHint: .isDirectory),
+            legacyDirectory: DiaryLaunch.isUITest ? nil : LocalDiaryFiles.local.documents.appending(path: "CoachInbox"))
     }
 
     static let writeOptions: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
 
     func add(_ entry: Entry) throws {
+        if let legacyDirectory { try LocalDiaryFiles.prepareInbox(from: legacyDirectory, to: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [
             .posixPermissions: 0o700, .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        try LocalDiaryFiles.excludeFromBackup(directory)
         try JSONEncoder().encode(entry).write(to: file(entry.id), options: Self.writeOptions)
+        try LocalDiaryFiles.excludeFromBackup(file(entry.id))
     }
 
     /// Oldest first. A file that cannot be read is left in place rather than lost.
     func entries() -> [Entry] {
+        do { if let legacyDirectory { try LocalDiaryFiles.prepareInbox(from: legacyDirectory, to: directory) } } catch { return [] }
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension == "json" }
             .compactMap { try? JSONDecoder().decode(Entry.self, from: Data(contentsOf: $0)) }

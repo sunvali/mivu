@@ -13,7 +13,7 @@ struct DiaryReportTests {
             DiaryMeal(dayID: day.id, capturedAt: date(at), eatenAt: date(at), revision: revision,
                       items: [FoodItem(name: name, nutrition: NutritionValues(kcal: kcal, carbs: 10, protein: protein, fat: 5), provenance: .user)])
         }
-        return DiarySnapshot(profile: DiaryProfile(name: "Synthetic", timeZoneID: "UTC"),
+        return DiarySnapshot(profile: adultProfile(name: "Synthetic", timeZoneID: "UTC"),
             days: [earlier, monday, tuesday],
             meals: [meal(monday, "2026-09-01T08:10:00Z", "Yogurt, \"berries\"", kcal: 310, protein: 24),
                     meal(monday, "2026-09-01T13:00:00Z", "=HYPERLINK(1)", kcal: 520, protein: 42),
@@ -72,9 +72,29 @@ struct DiaryReportTests {
     @Test func filesAreWrittenForTheChosenFormat() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let csv = try Self.range.write(.csv, to: directory)
+        let csv = try Self.range.write(.csv, to: directory, allowedRoot: directory)
         #expect(csv.map(\.lastPathComponent) == ["Mivu meals 2026-09-01 to 2026-09-02.csv", "Mivu days 2026-09-01 to 2026-09-02.csv", "Mivu weights 2026-09-01 to 2026-09-02.csv"])
-        let pdf = try Self.range.write(.pdf, to: directory)
+        let pdf = try Self.range.write(.pdf, to: directory, allowedRoot: directory)
         #expect(pdf.map(\.lastPathComponent) == ["Mivu report 2026-09-01 to 2026-09-02.pdf"])
     }
+    @Test func reportRejectsExternalDestinationAndPreservesExistingFile() throws {
+        let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let sentinel = root.appending(path: "sentinel"), bytes = Data([1, 2, 3])
+        try bytes.write(to: sentinel)
+        #expect(throws: DiaryError.self) { try Self.range.write(.csv, to: root, allowedRoot: root.appending(path: "Owned")) }
+        #expect(try Data(contentsOf: sentinel) == bytes)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: root.path) == ["sentinel"])
+    }
+    @Test func reportFilesAndReplacementStayExcludedFromBackup() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for _ in 0..<2 {
+            let files = try Self.range.write(.csv, to: directory, allowedRoot: directory)
+            for file in files { #expect(try file.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true) }
+        }
+        #expect(try directory.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+    }
+
 }

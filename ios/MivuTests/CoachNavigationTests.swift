@@ -169,7 +169,7 @@ import Testing
         let loading = Task10Fixture.operation(gate: gate) { await history.show() }
         do {
             try await gate.waitForArrivals(1)
-            let other = try await f.diary.store.createProfile(DiaryProfile(name: "Other synthetic diary"))
+            let other = try await f.diary.store.createProfile(adultProfile(name: "Other synthetic diary"))
             await f.diary.switchProfile(other.profile.id)
             routes.synchronize(selection: f.diary.selection, isChangingProfile: false)
             await gate.releaseAll(); _ = try await loading.value
@@ -236,7 +236,7 @@ import Testing
         let loading = Task10Fixture.operation(gate: gate) { await history.show() }
         do {
             try await gate.waitForArrivals(1)
-            try await f.diary.store.restore(f.snapshot, expectedProfileID: owner.identity.profileID)
+            try await f.diary.store.restoreAdultFixture(f.snapshot, expectedProfileID: owner.identity.profileID)
             await f.diary.switchProfile(owner.identity.profileID)
             routes.synchronize(selection: f.diary.selection, isChangingProfile: false)
             await gate.releaseAll(); _ = try await loading.value
@@ -260,7 +260,7 @@ import Testing
             try await gate.waitForArrivals(1)
             routes.synchronize(selection: owner, isChangingProfile: true)
             if !failedTransition {
-                let other = try await f.diary.store.createProfile(DiaryProfile(name: "Round trip synthetic"))
+                let other = try await f.diary.store.createProfile(adultProfile(name: "Round trip synthetic"))
                 await f.diary.switchProfile(other.profile.id)
                 routes.synchronize(selection: f.diary.selection, isChangingProfile: false)
                 await f.diary.switchProfile(owner.identity.profileID)
@@ -328,10 +328,10 @@ import Testing
         do {
             try await gate.waitForArrivals(1)
             if change == "restore" {
-                try await store.restore(f.snapshot, expectedProfileID: owner.identity.profileID)
+                try await store.restoreAdultFixture(f.snapshot, expectedProfileID: owner.identity.profileID)
                 await f.diary.switchProfile(owner.identity.profileID)
             } else if change == "roundTrip" {
-                let other = try await store.createProfile(DiaryProfile(name: "Consumer round trip"))
+                let other = try await store.createProfile(adultProfile(name: "Consumer round trip"))
                 await f.diary.switchProfile(other.profile.id)
                 await f.diary.switchProfile(owner.identity.profileID)
             } else { consuming.cancel() }

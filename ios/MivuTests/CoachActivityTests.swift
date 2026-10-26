@@ -24,7 +24,7 @@ private actor ActivityInference {
         let path = URL.temporaryDirectory.appending(path: "CoachActivity-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }
         let store = DiaryStore(directory: path)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic coach"))
         let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)
         let suspended = ActivityInference()

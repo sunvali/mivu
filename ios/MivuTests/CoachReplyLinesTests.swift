@@ -8,7 +8,7 @@ import Testing
     private func store(goal: Double? = 1600, protein: Double? = nil, food: Double? = 1142) async throws -> (DiaryStore, DiaryProfile, URL) {
         let root = URL.temporaryDirectory.appending(path: "CoachReplyLines-" + UUID().uuidString)
         let clock = now
-        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         if let goal {
             _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: goal, protein: protein), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)

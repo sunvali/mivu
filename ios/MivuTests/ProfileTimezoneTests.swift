@@ -18,7 +18,7 @@ import Testing
     }
 
     @Test func profileDefaultUsesDeviceTimezone() {
-        #expect(DiaryProfile(name: "Synthetic").timeZoneID == TimeZone.current.identifier)
+        #expect(adultProfile(name: "Synthetic").timeZoneID == TimeZone.current.identifier)
     }
 
     @Test func newProfileDoesNotRewriteExistingCalendarContext() async throws {
@@ -30,13 +30,13 @@ import Testing
         }
         let instant = try #require(ISO8601DateFormatter().date(from: "2026-10-19T22:30:00Z"))
         let store = DiaryStore(directory: path, currentTime: { instant })
-        let profile = DiaryProfile(name: "Synthetic retained diary", timeZoneID: "Asia/Jerusalem")
+        let profile = adultProfile(name: "Synthetic retained diary", timeZoneID: "Asia/Jerusalem")
         _ = try await store.createProfile(profile)
         _ = try await store.startDay(at: instant)
         _ = try await capturedTurn(store, text: "Synthetic late meal", photos: [], at: instant, expectedProfileID: profile.id)
         let original = try await store.snapshotForExport()
         let restored = DiaryStore(directory: restoredPath)
-        _ = try await restored.importProfile(original)
+        _ = try await restored.importAdultFixture(original)
         let model = DiaryViewModel(store: restored, deviceTimeZone: { TimeZone(identifier: "America/Los_Angeles")! })
         await model.load(createDefaultProfile: false)
         await model.createProfile(name: "Synthetic new diary")

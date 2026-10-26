@@ -15,7 +15,7 @@ enum DiaryHistoryUITestFixture {
                 items: [FoodItem(name: "Synthetic history food", unit: "serving", nutrition: NutritionValues(kcal: 100),
                     provenance: .user, reference: "Entered manually", uncertain: false, nutrientSources: ["kcal": .user])])
         }
-        return DiarySnapshot(revision: 1, profile: DiaryProfile(name: "Synthetic history", timeZoneID: "UTC"),
+        return DiarySnapshot(revision: 1, profile: DiaryProfile(name: "Synthetic history", timeZoneID: "UTC", adultConfirmed: true),
             days: days, meals: meals, activeDayID: days.last!.id, previousDayConfirmedAt: at)
     }
 }

@@ -33,7 +33,7 @@ struct ManualNutritionPayloadTests {
             reviewFirst: false, state: .saved, proposal: AnalysisOutput(profileID: payload.profileID,
                 mealID: payload.mealID, submissionID: payload.submissionID, baseRevision: 0, items: payload.items),
             manualAcceptance: try ManualNutritionAcceptance(payload: payload))
-        return DiarySnapshot(profile: DiaryProfile(id: payload.profileID, name: "Synthetic"), days: [day],
+        return DiarySnapshot(profile: adultProfile(id: payload.profileID, name: "Synthetic"), days: [day],
             meals: [DiaryMeal(id: payload.mealID, dayID: day.id, capturedAt: payload.capturedAt,
                 eatenAt: payload.eatenAt, revision: 1, items: payload.items, submissions: [submission])], activeDayID: day.id)
     }

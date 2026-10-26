@@ -406,6 +406,7 @@ private final class CoachNavigationReadFence: Sendable {
         }
     }
     func resume() {
+        guard diary.isAdultEligible else { return }
         if let receipt = diary.captureReceipt, let owner = diary.selection, !diary.isChangingProfile,
            diary.companionCaptureEvent?.profileID == owner.identity.profileID,
            receipt != acceptedDiaryCapture || owner != acceptedDiaryCaptureOwner {

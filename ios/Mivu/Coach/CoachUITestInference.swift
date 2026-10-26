@@ -184,7 +184,7 @@ extension CoachUITestInference {
         var dinner = meal; dinner.id = historyID(911); dinner.dayID = repeated.id; dinner.photos = []
         dinner.items = dinner.items.enumerated().map { index, item in var item = item; item.id = historyID(940 + index); return item }
         dinner.submissions = [MealSubmission(id: historyID(912), baseRevision: 0, text: "Synthetic dinner", photoIDs: [], reviewFirst: false, state: .saved)]
-        var value = DiarySnapshot(revision: 9, profile: DiaryProfile(id: historyID(900), name: "Synthetic conversation", timeZoneID: "UTC"),
+        var value = DiarySnapshot(revision: 9, profile: DiaryProfile(id: historyID(900), name: "Synthetic conversation", timeZoneID: "UTC", adultConfirmed: true),
             days: [lunch, repeated, newer, empty], meals: [meal, dinner], activeDayID: empty.id, previousDayConfirmedAt: instant,
             activeConversationSegmentID: historyID(4000))
         value.coachTurns = (1...140).map { index in

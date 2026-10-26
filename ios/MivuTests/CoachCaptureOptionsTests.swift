@@ -19,7 +19,7 @@ private actor CaptureOptionReplies {
     @Test func conversationalReviewFirstLeavesNutritionOutOfTotals() async throws {
         let path = URL.temporaryDirectory.appending(path: "CoachReview-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }
-        let store = DiaryStore(directory: path), profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: path), profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         let turn = try await capturedTurn(store, text: "Review my soup before saving totals", photos: [], expectedProfileID: profile.id)
@@ -36,7 +36,7 @@ private actor CaptureOptionReplies {
     @Test func retryMealRequeuesItsOriginalCaptureWithoutCreatingFood() async throws {
         let path = URL.temporaryDirectory.appending(path: "CoachRetry-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }
-        let store = DiaryStore(directory: path), profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: path), profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile)
         let day = try await store.startDay()
         let meal = try await capturedMeal(store, text: "Synthetic pending soup", photos: [], reviewFirst: true, dayID: day.id, forCoach: true, expectedProfileID: profile.id)
@@ -54,7 +54,7 @@ private actor CaptureOptionReplies {
     @Test func manualPreferenceSaveRejectsAConcurrentCoachChange() async throws {
         let path = URL.temporaryDirectory.appending(path: "CoachPreferenceRace-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }
-        let store = DiaryStore(directory: path), original = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: path), original = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(original)
         var coachEdit = original; coachEdit.preferences = "New saved preference"
         try await store.updateProfile(coachEdit, expectedProfileID: original.id)

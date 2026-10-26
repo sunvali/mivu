@@ -8,7 +8,7 @@ import Testing
     }
 
     private func snapshot(zone: String = "UTC") -> DiarySnapshot {
-        DiarySnapshot(profile: DiaryProfile(name: "Synthetic progress", timeZoneID: zone))
+        DiarySnapshot(profile: adultProfile(name: "Synthetic progress", timeZoneID: zone))
     }
 
     private func day(_ label: String, _ coverage: DayCompleteness, zone: String = "UTC") -> TrackingDay {

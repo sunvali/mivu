@@ -199,7 +199,7 @@ import UIKit
     @Test func latestRecoveryPoseIsAppliedWhenInitialRootLoadFinishes() async throws {
         let path = URL.temporaryDirectory.appending(path: "CompanionRoot-" + UUID().uuidString)
         let store = DiaryStore(directory: path)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic root", timeZoneID: "UTC"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic root", timeZoneID: "UTC"))
         _ = try await store.startDay()
         let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)
@@ -248,7 +248,7 @@ import UIKit
     func saveDuringInitialLoadPlaysOnlyWhileItsPresentationIsCurrent(expired: Bool) async throws {
         let directory = URL.temporaryDirectory.appendingPathComponent("PipColdSave-" + UUID().uuidString)
         let store = DiaryStore(directory: directory)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic cold save", timeZoneID: "UTC"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic cold save", timeZoneID: "UTC"))
         _ = try await store.startDay()
         let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)
@@ -299,7 +299,7 @@ import UIKit
     @Test func firstRunTodayShowsPipWithoutInventingDiaryRecords() async throws {
         let directory = URL.temporaryDirectory.appendingPathComponent("PipEmptyToday-" + UUID().uuidString)
         let store = DiaryStore(directory: directory)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic empty", timeZoneID: "UTC"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic empty", timeZoneID: "UTC"))
         let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "PipEmpty-" + UUID().uuidString)))
@@ -327,7 +327,7 @@ import UIKit
     @Test func untouchedTodayKeepsBreathingDuringAnEmptyBackgroundCoachRefresh() async throws {
         let directory = URL.temporaryDirectory.appendingPathComponent("PipQuietToday-" + UUID().uuidString)
         let store = DiaryStore(directory: directory)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic quiet Today", timeZoneID: "UTC"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic quiet Today", timeZoneID: "UTC"))
         let gate = CompanionBackgroundRefreshGate()
         let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
             await gate.pauseIfArmed()
@@ -389,7 +389,7 @@ import UIKit
     func acceptedSendSurvivesFastSaveAndColdLoading(cold: Bool) async throws {
         let directory = URL.temporaryDirectory.appendingPathComponent("PipSubmit-" + UUID().uuidString)
         let store = DiaryStore(directory: directory)
-        _ = try await store.createProfile(DiaryProfile(name: "Synthetic submit", timeZoneID: "UTC"))
+        _ = try await store.createProfile(adultProfile(name: "Synthetic submit", timeZoneID: "UTC"))
         let diary = DiaryViewModel(store: store)
         await diary.load(createDefaultProfile: false)
         let connection = ChatGPTConnection(auth: AuthSession(store: CredentialStore(service: "PipSubmit-" + UUID().uuidString)))

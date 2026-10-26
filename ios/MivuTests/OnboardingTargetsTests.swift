@@ -9,6 +9,11 @@ import Testing
                           weightKg: weightKg, targetKg: targetKg)
     }
 
+    @Test func teenagersDoNotReceiveAdultTargets() {
+        let targets = answers(sex: .female, heightCm: 150, weightKg: 45, targetKg: 42, birthYear: 2013, pace: .faster).estimate(year: 2026)
+        #expect(targets == NutritionValues())
+    }
+
     @Test func estimateLosesAtTheChosenPace() {
         let targets = answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 62, birthYear: 1990).estimate(year: 2026)
         #expect(targets == NutritionValues(kcal: 1360, carbs: 127, protein: 112, fat: 45))
@@ -43,7 +48,7 @@ import Testing
     @Test func oldProfilesDecodeWithoutAboutAndInvalidAboutIsRejected() throws {
         let old = try JSONDecoder().decode(DiaryProfile.self, from: Data(#"{"id":"\#(UUID())","name":"Synthetic","language":"en","timeZoneID":"UTC","preferences":""}"#.utf8))
         #expect(old.about == nil)
-        var profile = DiaryProfile(name: "Synthetic", timeZoneID: "UTC")
+        var profile = adultProfile(name: "Synthetic", timeZoneID: "UTC")
         profile.about = ProfileAbout(heightCm: 400, birthYear: 1990)
         #expect(throws: DiaryError.self) {
             try validateDiaryMetadataFields(schemaVersion: 1, revision: 0, profile: profile, lineage: nil, previousDayConfirmedAt: nil)
@@ -54,7 +59,7 @@ import Testing
 @Suite @MainActor struct OnboardingSetupSaveTests {
     @Test func setupFinishedBeforeTheCutoffSetsTodaysGoal() async throws {
         let store = DiaryStore(directory: URL.temporaryDirectory.appending(path: "OnboardingSave-" + UUID().uuidString))
-        let profile = DiaryProfile(name: "Synthetic setup", timeZoneID: "Asia/Jerusalem")
+        let profile = adultProfile(name: "Synthetic setup", timeZoneID: "Asia/Jerusalem")
         _ = try await store.createProfile(profile)
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Jerusalem")!
         let afterMidnight = try #require(calendar.date(from: DateComponents(year: 2027, month: 1, day: 15, hour: 0, minute: 30)))

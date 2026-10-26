@@ -8,7 +8,7 @@ import Testing
     private func fixture() async throws -> (DiaryStore, DiaryProfile, URL) {
         let root = URL.temporaryDirectory.appending(path: "Coach-" + UUID().uuidString)
         let clock = now
-        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = DiaryProfile(name: "Synthetic")
+        let store = DiaryStore(directory: root, currentTime: { clock }); let profile = adultProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         return (store, profile, root)
     }
@@ -149,7 +149,7 @@ import Testing
     @Test func legacySQLiteUpgradeRetainsDiaryAndPersistsConversation() async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachLegacyUpgrade-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let profile = DiaryProfile(name: "Synthetic")
+        let profile = adultProfile(name: "Synthetic")
         let day = TrackingDay(localDate: "2027-01-15", timeZoneID: profile.timeZoneID, startAt: now)
         let before = DiarySnapshot(revision: 1, profile: profile, days: [day], activeDayID: day.id)
         let directory = root.appendingPathComponent(profile.id.uuidString + ".sqlite")
@@ -218,7 +218,7 @@ import Testing
         let yogurt = FoodItem(name: "Synthetic plain yogurt", quantity: 150, unit: "g", nutrition: NutritionValues(kcal: 90), provenance: .estimate, reference: String(repeating: "x", count: 1800))
         let newest = DiaryMeal(dayID: day.id, capturedAt: now, eatenAt: day.startAt, revision: 1, timePrecision: .dateOnly, items: [yogurt])
         source.meals.append(newest)
-        let store = DiaryStore(directory: root.appendingPathComponent("bounded-portions")); _ = try await store.importProfile(source)
+        let store = DiaryStore(directory: root.appendingPathComponent("bounded-portions")); _ = try await store.importAdultFixture(source)
         let turn = try await capturedTurn(store, text: "I ate another yogurt", photos: [], at: now, expectedProfileID: profile.id)
         let before = try await store.snapshotForExport()
         let context = try await store.coachContext(turnID: turn.id, expectedProfileID: profile.id)
@@ -329,7 +329,7 @@ import Testing
     @Test func firstCurrentChatStartsVisibleDayWhileHistoricalChatDoesNot() async throws {
         let root = URL.temporaryDirectory.appending(path: "FirstCoachDay-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic first chat")
+        let store = DiaryStore(directory: root); let profile = adultProfile(name: "Synthetic first chat")
         _ = try await store.createProfile(profile)
         let historical = try await capturedTurn(store, text: "Yesterday", photos: [], at: now, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: historical.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
@@ -397,7 +397,7 @@ import Testing
     }
     @Test(arguments: [false, true]) func explicitWakingDayChoiceResolvesSamePendingTurn(usePrevious: Bool) async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachChoice-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root), profile = DiaryProfile(name: "Synthetic choice")
+        let store = DiaryStore(directory: root), profile = adultProfile(name: "Synthetic choice")
         _ = try await store.createProfile(profile); let previous = try await store.startDay(at: now.addingTimeInterval(-86400))
         let turn = try await capturedTurn(store, text: "Food now", photos: [], at: now, expectedProfileID: profile.id)
         // Turns captured before automatic rollover may still be waiting for this answer.
@@ -417,7 +417,7 @@ import Testing
     }
     @Test func foodAfterTheCutoffWithYesterdayStillOpenStartsTheNewDay() async throws {
         let root = URL.temporaryDirectory.appending(path: "CoachRollover-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
-        let store = DiaryStore(directory: root), profile = DiaryProfile(name: "Synthetic rollover", timeZoneID: "UTC")
+        let store = DiaryStore(directory: root), profile = adultProfile(name: "Synthetic rollover", timeZoneID: "UTC")
         _ = try await store.createProfile(profile); let previous = try await store.startDay(at: now.addingTimeInterval(-86400))
         let turn = try await capturedTurn(store, text: "Food now", photos: [], at: now, expectedProfileID: profile.id)
         let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], expectedProfileID: profile.id)
@@ -553,7 +553,7 @@ import Testing
         let huge = WorkoutSession(dayID: day.id, performedAt: now, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 60, exercises: (0..<100).map { _ in WorkoutExercise(name: "Synthetic", sets: (0..<100).map { _ in WorkoutSet(repetitions: 10, loadKg: 40) }) }, estimatedBurnKcal: nil, burnSource: nil)
         snapshot.workouts.append(huge)
         let otherRoot = root.appendingPathComponent("bounded"), otherStore = DiaryStore(directory: otherRoot)
-        _ = try await otherStore.importProfile(snapshot)
+        _ = try await otherStore.importAdultFixture(snapshot)
         let report = try await otherStore.coachProgress(endingOn: "2027-01-15", days: 1, expectedProfileID: profile.id)
         #expect(report.workouts.count == 100); #expect(report.omittedWorkoutCount == 6); #expect(report.truncated)
         #expect(try coachJSON(report).utf8.count <= 65_536)
@@ -566,7 +566,7 @@ import Testing
         var snapshot = try await store.snapshotForExport()
         let original = WeightEntry(dayID: nil, measuredAt: now.addingTimeInterval(-60 * 86400), value: 70)
         snapshot.weights = [original]
-        let other = DiaryStore(directory: root.appendingPathComponent("legacy")); _ = try await other.importProfile(snapshot)
+        let other = DiaryStore(directory: root.appendingPathComponent("legacy")); _ = try await other.importAdultFixture(snapshot)
         let turn = try await capturedTurn(other, text: "Correct legacy weight", photos: [], at: now, expectedProfileID: profile.id)
         let receipts = try await other.applyCoachWrites([.correctWeight(id: original.id, value: 71, unit: "kg", revision: 1)], turnID: turn.id, epoch: other.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         let saved = try await other.snapshotForExport(), corrected = saved.weights[0]
@@ -626,7 +626,7 @@ import Testing
         let processingTime = now.addingTimeInterval(2 * 86400)
         var source = try await initial.snapshotForExport(); source.activeDayID = nil; source.activeConversationSegmentID = nil
         let store = DiaryStore(directory: root.appendingPathComponent("delayed"), currentTime: { processingTime })
-        _ = try await store.importProfile(source)
+        _ = try await store.importAdultFixture(source)
         if activeState == "older" { _ = try await store.startDay(at: now.addingTimeInterval(-86400)) }
         if activeState == "newer" { _ = try await store.startDay(at: processingTime) }
         let active = try await store.snapshotForExport().activeDayID
@@ -642,7 +642,7 @@ import Testing
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let existing = try await store.recordWeight(value: 70, at: now)
         var imported = try await store.snapshotForExport(); imported.activeDayID = nil; imported.activeConversationSegmentID = nil
-        let other = DiaryStore(directory: root.appendingPathComponent("inactive")); _ = try await other.importProfile(imported)
+        let other = DiaryStore(directory: root.appendingPathComponent("inactive")); _ = try await other.importAdultFixture(imported)
         let turn = try await capturedTurn(other, text: "Correct weight", photos: [], at: now, expectedProfileID: profile.id)
         _ = try await other.applyCoachWrites([.weight(date: "2027-01-15", value: 71, unit: "kg", revision: existing.revision)], turnID: turn.id, epoch: other.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         #expect(try await other.snapshotForExport().activeDayID == nil)

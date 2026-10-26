@@ -8,7 +8,7 @@ import Testing
         let inbox = CoachInbox(directory: URL.temporaryDirectory.appending(path: "MivuServicesInbox-" + UUID().uuidString))
         defer { try? FileManager.default.removeItem(at: path); try? FileManager.default.removeItem(at: inbox.directory) }
         let store = DiaryStore(directory: path)
-        let profile = try await store.createProfile(DiaryProfile(name: "Synthetic services"))
+        let profile = try await store.createProfile(adultProfile(name: "Synthetic services"))
         try inbox.add(CoachInbox.Entry(id: UUID(), profileID: profile.head.profile.id, text: "Synthetic toast", capturedAt: Date(timeIntervalSinceNow: -60)))
         let diary = DiaryViewModel(store: store), connection = ChatGPTConnection(appleModelAvailable: { false })
         let coach = CoachViewModel(diary: diary, connection: connection,
