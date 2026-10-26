@@ -50,7 +50,7 @@ class TodayViewModelTest {
         assertEquals("Saturday, October 24", s.displayDate)
         assertTrue(s.hasDay)
         assertEquals("1,550", s.kcal)
-        assertNull(s.protein) // one unknown protein makes the total unknown, never 0
+        assertEquals("31 g", s.protein) // known protein adds up; the unknown one is disclosed by the note (iOS #64)
         assertEquals("180 g", s.carbs)
         assertEquals("30 g", s.fat)
         assertTrue(s.unknownNote)
