@@ -89,7 +89,7 @@ fun CoachScreen(
     /** The field's camera: opens the in-app camera, which also offers the Photo Picker; a path retakes that draft photo. */
     onOpenCamera: (String?) -> Unit = {},
     hasCamera: Boolean = LocalContext.current.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY),
-    /** The footnote's "Connect ChatGPT for replies": sharing consent first ([onAgree]), then sign-in ([onConnect]). */
+    /** The bubble's "Connect": sharing consent first ([onAgree]), then sign-in ([onConnect]). */
     connection: ConnectionState = ConnectionState(),
     onAgree: () -> Unit = {},
     onConnect: () -> Unit = {},
@@ -189,10 +189,10 @@ fun CoachScreen(
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp))
         }
-        // Failures show in the composer caption beside Pip.
+        // Failures show in Pip's bubble; his day chip opens Today.
         CoachComposer(model, showStarters = state.loaded && state.error == null && rows.isEmpty(), focusRequester,
             onOpenCamera = onOpenCamera, hasCamera = hasCamera, modifier = Modifier.imePadding(),
-            connection = connection, onAgree = onAgree, onConnect = onConnect,
+            connection = connection, onAgree = onAgree, onConnect = onConnect, onSeeToday = onSeeToday,
             bubble = checkIn?.let { today -> { WeighInBubble(today) { model.updateText("My weight this morning is "); focusRequester.requestFocus() } } })
     }
 }

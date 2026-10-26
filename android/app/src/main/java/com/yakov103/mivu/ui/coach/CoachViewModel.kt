@@ -165,7 +165,11 @@ fun coachMessage(error: Throwable): String = when {
     else -> "Something went wrong. Your message is saved; tap Try again."
 }
 
-private val RECOVERY = setOf(CoachTurnState.needsRetry, CoachTurnState.waitingForConnection, CoachTurnState.waitingForNetwork)
+private val RECOVERY = setOf(CoachTurnState.needsRetry, CoachTurnState.waitingForConnection, CoachTurnState.waitingForNetwork,
+    CoachTurnState.needsClarification)
+
+/** What Pip's bubble reads from the model: the work in progress and the latest exchange's turn. */
+data class PipState(val processing: Boolean, val withPhotos: Boolean, val recovery: Boolean, val turnID: UUID?, val turnState: CoachTurnState?)
 
 class CoachViewModel(
     private val repository: DiaryRepository,
@@ -214,10 +218,17 @@ class CoachViewModel(
     val sending: StateFlow<Boolean> = _sending.asStateFlow()
     private val _importing = MutableStateFlow(false)
     val importing: StateFlow<Boolean> = _importing.asStateFlow()
-    private val _logging = MutableStateFlow<String?>(null)
+    private val _coachDay = MutableStateFlow<CoachDay?>(null)
 
-    /** "Logging to today · 2,100 kcal goal": the active day and its kcal goal, whichever exist. */
-    val logging: StateFlow<String?> = _logging.asStateFlow()
+    /** The active day's intake chip, read after every diary change; null without an active day. */
+    val coachDay: StateFlow<CoachDay?> = _coachDay.asStateFlow()
+    // shortcut: the photo wording only knows this model's last send; a retried or relaunched turn reads "Counting that up…".
+    private var sentWithPhotos = false
+    private var photoTurn: UUID? = null
+    private val _pip = MutableStateFlow(PipState(false, false, false, null, null))
+
+    /** Pip's bubble state, resolved with his pose. */
+    val pip: StateFlow<PipState> = _pip.asStateFlow()
 
     private val presentation = CompanionPresentation(System::currentTimeMillis).apply { attach(profileID) }
     private var playback = Playback.Hidden
@@ -234,10 +245,10 @@ class CoachViewModel(
             // Subscribed before the first read, so a change committed meanwhile is not missed.
             repository.changes.onSubscription { emit(Unit) }.conflate().collect {
                 if (loaded && error == null) refresh() else replace()
-                readLogging()
+                readCoachDay()
             }
         }
-        viewModelScope.launch { combine(activity, _message, _sending, _timeline) { _, _, _, _ -> }.collect { resolveCompanion() } }
+        viewModelScope.launch { combine(activity, _message, _sending, _timeline, connected) { _, _, _, _, _ -> }.collect { resolveCompanion() } }
     }
 
     fun updateText(value: String) { if (!_sending.value) store(_draft.value.copy(text = value.take(MAX_TEXT))) }
@@ -511,11 +522,14 @@ class CoachViewModel(
     private fun sendJob(): Job? {
         val draft = _draft.value
         if (_sending.value || _importing.value || !draft.canSend) return null
+        sentWithPhotos = draft.photos.isNotEmpty()
+        photoTurn = null
         _sending.value = true // the composer is disabled while sending, so the draft cannot change underneath
         clearHighlight()
         return viewModelScope.launch {
             try {
                 val turn = capture(draft)
+                if (sentWithPhotos) photoTurn = turn.id
                 _draft.value.photos.forEach { File(it).delete() } // the turn holds the bytes now
                 store(CoachDraft())
                 storeAttempt(null)
@@ -598,17 +612,23 @@ class CoachViewModel(
 
     private fun resolveCompanion() {
         val state = _timeline.value
-        val latest = state.exchanges.lastOrNull()?.takeIf { it.turn.id == state.latestID }?.turn?.state
+        val turn = state.exchanges.lastOrNull()?.takeIf { it.turn.id == state.latestID }?.turn
+        val recovery = _message.value != null || turn?.state in RECOVERY
+        // As iOS companionIsProcessing: a saved turn waiting for the worker still counts, so the line does not flicker to a greeting.
+        val processing = !recovery && (_sending.value || activity.value != null ||
+            (connected.value && turn?.state in setOf(CoachTurnState.captured, CoachTurnState.analyzing)))
+        val withPhotos = sentWithPhotos && (_sending.value || (photoTurn != null && turn?.id == photoTurn))
+        _pip.value = PipState(processing, withPhotos, recovery, turn?.id, turn?.state)
         val output = presentation.resolve(CompanionContext(CompanionSurface.Coach, isTyping = typing && !_sending.value,
-            isProcessing = activity.value != null, needsRecovery = _message.value != null || latest in RECOVERY, playback, caret))
+            isProcessing = activity.value != null, needsRecovery = recovery, playback, caret))
         _companion.value = output
         deadline?.cancel()
         deadline = output.nextDeadline?.let { at -> viewModelScope.launch { delay(at - System.currentTimeMillis()); resolveCompanion() } }
     }
 
-    private suspend fun readLogging() {
-        _logging.value = try {
-            read { loggingLine() }
+    private suspend fun readCoachDay() {
+        _coachDay.value = try {
+            read { coachDay() }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

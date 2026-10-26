@@ -58,9 +58,9 @@ fun ChatGPTConnectButton(
         ConnectStyle.Filled -> Button(onClick, modifier.fillMaxWidth(), enabled) { Text(title) }
         ConnectStyle.Outlined -> OutlinedButton(onClick, modifier.fillMaxWidth(), enabled,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)) { Text(title) }
-        // An inline footnote link, as Coach's "Manage usage".
+        // An inline link, as the action in Pip's Coach bubble.
         ConnectStyle.Link -> TextButton(onClick, modifier, enabled, contentPadding = PaddingValues(horizontal = 4.dp)) {
-            Text(title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
         }
     }
     if (askConsent) OpenAIConsent(onAgree = { askConsent = false; onAgree(); onConnect() }, onDismiss = { askConsent = false })

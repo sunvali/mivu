@@ -14,7 +14,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -247,7 +249,8 @@ class CoachScreenTest {
         db().transaction(null) { it.failCoachTurn(t.id, CoachTurnState.needsRetry) }
         launch()
         waitForText("Couldn't finish. Your message is saved.")
-        compose.onNodeWithText("Try again").performClick()
+        // The row's Try again; Pip's bubble offers the same retry (CoachComposerTest).
+        compose.onNode(hasText("Try again") and hasAnyAncestor(hasTestTag("coachTimeline"))).performClick()
         compose.waitUntil(10_000) { latest().state == CoachTurnState.captured && drains > 0 }
     }
 

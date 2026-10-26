@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasText
@@ -45,6 +46,33 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import com.yakov103.mivu.connection.ConnectionState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.text.TextLayoutResult
+import com.yakov103.mivu.diary.CoachCaptureContext
+import com.yakov103.mivu.diary.CoachSubmissionPayload
+import com.yakov103.mivu.diary.CoachTurnState
+import com.yakov103.mivu.diary.FoodItem
+import com.yakov103.mivu.diary.GoalRecord
+import com.yakov103.mivu.diary.ManualNutritionDayChoice
+import com.yakov103.mivu.diary.ManualNutritionOperation
+import com.yakov103.mivu.diary.ManualNutritionPayload
+import com.yakov103.mivu.diary.MealTimePrecision
+import com.yakov103.mivu.diary.NutritionProvenance
+import com.yakov103.mivu.diary.NutritionValues
+import com.yakov103.mivu.diary.captureCoachSubmission
+import com.yakov103.mivu.diary.failCoachTurn
+import com.yakov103.mivu.diary.prepareManualNutritionTarget
+import com.yakov103.mivu.diary.saveManualNutrition
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -65,6 +93,8 @@ class CoachComposerTest {
     private var connection by mutableStateOf(ConnectionState())
     private var agreed = 0
     private var connects = 0
+    private var seeToday = 0
+    private val activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null)
     private lateinit var model: CoachViewModel
     private val folder get() = File(context.cacheDir, "coach-test")
 
@@ -86,19 +116,21 @@ class CoachComposerTest {
     private fun db() = repository.database(profileID)
 
     private fun model(saved: SavedStateHandle = SavedStateHandle()) = CoachViewModel(repository, profileID, drain = { drains++ },
-        connected = connected, activity = MutableStateFlow<Pair<UUID, CoachActivity>?>(null), saved = saved,
+        connected = connected, activity = activity, saved = saved,
         prepare = { preparePhoto(context.contentResolver, it, folder) })
 
     private var retaking: String? = null
 
-    private fun launch(fontScale: Float? = null, saved: SavedStateHandle = SavedStateHandle(), hasCamera: Boolean = true) {
+    private fun launch(fontScale: Float? = null, saved: SavedStateHandle = SavedStateHandle(), hasCamera: Boolean = true, width: Int? = null) {
         model = model(saved)
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
                 MivuTheme {
-                    CoachScreen(model, onOpenMeal = {}, onSeeToday = {}, onSeeProgress = {}, onOpenCamera = { retaking = it }, hasCamera = hasCamera,
-                        connection = connection, onAgree = { agreed++ }, onConnect = { connects++ })
+                    Box(if (width != null) Modifier.requiredWidth(width.dp) else Modifier) {
+                        CoachScreen(model, onOpenMeal = {}, onSeeToday = { seeToday++ }, onSeeProgress = {}, onOpenCamera = { retaking = it },
+                            hasCamera = hasCamera, connection = connection, onAgree = { agreed++ }, onConnect = { connects++ })
+                    }
                 }
             }
         }
@@ -359,16 +391,113 @@ class CoachComposerTest {
         compose.waitUntil(10_000) { turns().size == 1 }
     }
 
-    @Test fun notConnectedFootnoteOffersConnect() {
+    private val greetings = listOf("Morning! What’s for breakfast?", "Ready for lunch?", "What have you had today?", "What’s for dinner?",
+        "Anything to log?")
+
+    private fun goal(kcal: Double) = db().transaction(db().head().revision) {
+        it.putGoal(GoalRecord(UUID.randomUUID(), "2026-01-01", ZoneId.systemDefault().id, 1, NutritionValues(kcal, 220.0, 120.0, 70.0), null, false))
+    }
+
+    private fun meal(kcal: Double) {
+        val at = Instant.now().truncatedTo(ChronoUnit.SECONDS)
+        val item = FoodItem(UUID.randomUUID(), "Synthetic plate", 1.0, "serving", NutritionValues(kcal, 10.0, 10.0, 10.0),
+            NutritionProvenance.user, "Entered manually", false, emptyMap())
+        db().saveManualNutrition(ManualNutritionPayload(profileID, UUID.randomUUID(), UUID.randomUUID(), ManualNutritionOperation.create,
+            db().prepareManualNutritionTarget(ManualNutritionDayChoice.Current, at), at, at, MealTimePrecision.exact, null, listOf(item)),
+            db().head().revision)
+    }
+
+    private fun failedTurn(): CoachTurn {
+        val h = db().head()
+        val turn = db().captureCoachSubmission(CoachSubmissionPayload(UUID.randomUUID(), "Synthetic soup", emptyList(),
+            CoachCaptureContext(Instant.now().truncatedTo(ChronoUnit.SECONDS), h.profile.timeZoneID, h.activeDayID, h.previousDayConfirmedAt,
+                h.activeConversationSegmentID)), h.revision)
+        db().transaction(null) { it.failCoachTurn(turn.id, CoachTurnState.needsRetry) }
+        return turn
+    }
+
+    private fun inBubble(text: String) = compose.onNode(hasText(text) and hasAnyAncestor(hasTestTag("coachPipLine")))
+
+    private fun waitForTag(tag: String) = compose.waitUntil(10_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
+
+    @Test fun idleBubbleGreetsAndChipOpensToday() {
+        connected.value = true
+        goal(2100.0)
         launch()
-        compose.onNodeWithText("Messages save on this phone.").assertIsDisplayed()
-        compose.onNodeWithText("Connect ChatGPT for replies").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        waitForTag("coachDate")
+        val said = greetings.filter { compose.onAllNodes(hasText(it) and hasAnyAncestor(hasTestTag("coachPipLine"))).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, said.size)
+        compose.onNodeWithTag("coachDate").assert(hasText("Today · 0 / 2,100 kcal"))
+            .assertContentDescriptionEquals("Logging to today, 0 of 2,100 kcal").assertHeightIsAtLeast(48.dp).performClick()
+        assertEquals(1, seeToday)
+        assertEquals("Opens Today", compose.onNodeWithTag("coachDate").fetchSemanticsNode().config[SemanticsActions.OnClick].label)
+    }
+
+    @Test fun bubbleSpansTheComposerWidth() {
+        connected.value = true
+        goal(2100.0)
+        meal(1935.0)
+        launch(width = 360)
+        val text = "Today · 1,935 / 2,100 kcal"
+        waitForText(text)
+        inBubble("Anything else to log?").assertIsDisplayed()
+        val bubble = compose.onNodeWithTag("coachPipLine").getBoundsInRoot()
+        val button = compose.onNodeWithContentDescription("Speak your meal").getBoundsInRoot()
+        assertTrue("Bubble $bubble passes the button $button", bubble.right > button.left)
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNode(hasText(text), useUnmergedTree = true).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action!!(layouts)
+        assertEquals(1, layouts.single().lineCount)
+    }
+
+    @Test fun typingHidesTheGreeting() {
+        connected.value = true
+        launch()
+        waitForTag("coachPipLine")
+        compose.onNodeWithTag("coachInput").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("coachPipLine").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("coachDate").assertIsDisplayed()
+    }
+
+    @Test fun needsRetryBubbleOffersTryAgain() {
+        connected.value = true
+        val turn = failedTurn()
+        launch()
+        waitForText("That one didn’t go through.")
+        // A failed send adds the explanation under Pip's line.
+        CoachViewModel.beforeCaptureForTest = { throw IOException("synthetic write failure") }
+        type("Synthetic tea")
+        compose.onNodeWithContentDescription("Send").performClick()
+        compose.waitUntil(10_000) { model.message.value != null && !model.sending.value }
+        inBubble(model.message.value!!).assertIsDisplayed()
+        inBubble("That one didn’t go through.").assertIsDisplayed()
+        activity.value = turn.id to CoachActivity.thinking
+        inBubble("Try again").assertIsNotEnabled()
+        activity.value = null
+        inBubble("Try again").assertIsEnabled().assertHeightIsAtLeast(48.dp).performClick()
+        compose.waitUntil(10_000) { db().coachTurn(turn.id)!!.state == CoachTurnState.captured && drains > 0 }
+    }
+
+    @Test fun largeFontHidesOnlyTheGreeting() {
+        connected.value = true
+        launch(fontScale = 2f)
+        waitForTag("coachDate")
+        compose.onNodeWithTag("coachPipLine").assertDoesNotExist()
+        failedTurn()
+        waitForText("That one didn’t go through.")
+        inBubble("Try again").assertIsDisplayed()
+    }
+
+    @Test fun notConnectedBubbleOffersConnect() {
+        launch()
+        inBubble("Connect ChatGPT so I can count for you").assertIsDisplayed()
+        inBubble("Connect").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithText("Messages save on this phone.").assertDoesNotExist()
         compose.onNodeWithText("Manage usage").assertDoesNotExist()
     }
 
-    @Test fun connectLinkAsksConsentFirst() {
+    @Test fun bubbleConnectAsksConsentFirst() {
         launch()
-        compose.onNodeWithText("Connect ChatGPT for replies").performClick()
+        inBubble("Connect").performClick()
         compose.onNodeWithText("Share with OpenAI?").assertIsDisplayed()
         assertEquals(0, connects)
         compose.onNodeWithText("Agree and Continue").performClick()

@@ -1,6 +1,13 @@
 package com.yakov103.mivu.ui.coach
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.onClick
+import com.yakov103.mivu.ui.today.tabular
+import java.time.LocalTime
 import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.ui.settings.ChatGPTConnectButton
 import com.yakov103.mivu.ui.settings.ConnectStyle
@@ -61,6 +68,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -86,7 +94,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
 import com.yakov103.mivu.pip.CompanionOutput
-import com.yakov103.mivu.pip.CompanionPose
 import com.yakov103.mivu.pip.CompanionRuntime
 import com.yakov103.mivu.pip.CompanionSurface
 import com.yakov103.mivu.pip.PipAssets
@@ -111,8 +118,8 @@ private val STARTERS = listOf("Log breakfast" to "For breakfast I had ", "Log my
     "How am I doing today?" to "How am I doing today?")
 
 /**
- * The docked composer: suggestion chips (empty conversation only), draft photos, Pip peeking over the field with the
- * logging caption, the field with its quote and camera, one round action, and the footnote.
+ * The docked composer: suggestion chips (empty conversation only), draft photos, Pip peeking over the field with his
+ * bubble and the day chip, the field with its quote and camera, one round action, and the footnote.
  */
 @Composable
 fun CoachComposer(
@@ -130,12 +137,16 @@ fun CoachComposer(
     onConnect: () -> Unit = {},
     /** The morning weigh-in bubble above Pip; hidden while the person types or speaks. */
     bubble: (@Composable () -> Unit)? = null,
+    /** The day chip opens Today. */
+    onSeeToday: () -> Unit = {},
 ) {
     val draft by model.draft.collectAsStateWithLifecycle()
     val sending by model.sending.collectAsStateWithLifecycle()
     val importing by model.importing.collectAsStateWithLifecycle()
     val message by model.message.collectAsStateWithLifecycle()
-    val logging by model.logging.collectAsStateWithLifecycle()
+    val coachDay by model.coachDay.collectAsStateWithLifecycle()
+    val pip by model.pip.collectAsStateWithLifecycle()
+    val activity by model.activity.collectAsStateWithLifecycle()
     val companion by model.companion.collectAsStateWithLifecycle()
     val phase by voice.phase.collectAsStateWithLifecycle()
     val levels by voice.levels.collectAsStateWithLifecycle()
@@ -177,41 +188,53 @@ fun CoachComposer(
         if (draft.photos.isNotEmpty()) DraftPhotos(draft.photos, enabled = !sending, onRemove = model::removePhoto,
             onRetake = onOpenCamera.takeIf { hasCamera }, inset)
         if (importing) Text("Preparing photos", inset, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(inset, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f)) {
-                // Pip stands on the field's flat top edge at the left, never on the round button.
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CoachPip(model, companion, if (large) 76.dp else 112.dp)
-                    Caption(logging, message, companion.pose == CompanionPose.Recovery, large,
-                        Modifier.weight(1f).padding(bottom = 6.dp))
+        // Pip stands on the left of the field's flat top edge, never on the round button; his bubble and chip may run over
+        // the button's column so short lines do not wrap (iOS #70).
+        Column(inset) {
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CoachPip(model, companion, if (large) 76.dp else 112.dp)
+                Column(Modifier.weight(1f)) {
+                    val line = PipLine.current(LocalTime.now().hour, coachDay?.mealsLogged == true, focused, connected, pip.processing,
+                        pip.withPhotos, pip.recovery, message, pip.turnState)
+                        // At large sizes the greeting would crowd the conversation; status and errors still show.
+                        ?.takeUnless { large && it is PipLine.Say }
+                    Crossfade(line, label = "pipLine") { shown ->
+                        if (shown != null) PipBubble(shown, connection, onAgree, onConnect,
+                            retry = pip.turnID?.let { id -> { model.retry(id) } }, working = activity != null)
+                    }
+                    coachDay?.let { DayChip(it.chip, onSeeToday) }
                 }
-                // Typing stops listening, so later speech never overwrites typed words.
-                Field(model, draft, sending, focusRequester, phase == CoachVoiceInput.Phase.Listening, levels,
-                    onFocus = { focused = it; if (it) voice.stop() }, hasCamera = hasCamera,
-                    onAddPhotos = { if (hasCamera) onOpenCamera(null) else picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) })
             }
-            // One round action: Stop while voice runs, the mic while the draft is empty, Send once there is something to send.
-            if (phase != CoachVoiceInput.Phase.Idle) FilledIconButton(voice::stop, Modifier.size(48.dp).semantics { contentDescription = "Stop listening" },
-                colors = IconButtonDefaults.filledIconButtonColors(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.onError)) {
-                if (phase == CoachVoiceInput.Phase.Preparing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onError)
-                else Icon(painterResource(R.drawable.ic_stop), contentDescription = null)
-            } else if (draft.canSend || sending) FilledIconButton({ focus.clearFocus(); model.send() },
-                Modifier.size(48.dp).semantics { contentDescription = "Send" }, enabled = !sending && !importing) {
-                if (sending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                else Icon(painterResource(R.drawable.ic_arrow_upward), contentDescription = null)
-            } else FilledTonalIconButton({
-                focus.clearFocus()
-                if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) listen()
-                else microphone.launch(Manifest.permission.RECORD_AUDIO)
-            }, Modifier.size(48.dp), enabled = voice.available) {
-                Icon(painterResource(R.drawable.ic_mic), contentDescription = "Speak your meal")
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Typing stops listening, so later speech never overwrites typed words.
+                Box(Modifier.weight(1f)) {
+                    Field(model, draft, sending, focusRequester, phase == CoachVoiceInput.Phase.Listening, levels,
+                        onFocus = { focused = it; if (it) voice.stop() }, hasCamera = hasCamera,
+                        onAddPhotos = { if (hasCamera) onOpenCamera(null) else picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) })
+                }
+                // One round action: Stop while voice runs, the mic while the draft is empty, Send once there is something to send.
+                if (phase != CoachVoiceInput.Phase.Idle) FilledIconButton(voice::stop, Modifier.size(48.dp).semantics { contentDescription = "Stop listening" },
+                    colors = IconButtonDefaults.filledIconButtonColors(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.onError)) {
+                    if (phase == CoachVoiceInput.Phase.Preparing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onError)
+                    else Icon(painterResource(R.drawable.ic_stop), contentDescription = null)
+                } else if (draft.canSend || sending) FilledIconButton({ focus.clearFocus(); model.send() },
+                    Modifier.size(48.dp).semantics { contentDescription = "Send" }, enabled = !sending && !importing) {
+                    if (sending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    else Icon(painterResource(R.drawable.ic_arrow_upward), contentDescription = null)
+                } else FilledTonalIconButton({
+                    focus.clearFocus()
+                    if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) listen()
+                    else microphone.launch(Manifest.permission.RECORD_AUDIO)
+                }, Modifier.size(48.dp), enabled = voice.available) {
+                    Icon(painterResource(R.drawable.ic_mic), contentDescription = "Speak your meal")
+                }
             }
         }
         note?.let {
             Text(it, inset.testTag("coachVoiceNote").semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Footnote(connected, connection, onAgree, onConnect, inset)
+        if (connected) Footnote(inset)
     }
 }
 
@@ -230,18 +253,49 @@ private fun CoachPip(model: CoachViewModel, output: CompanionOutput, width: Dp) 
     else Spacer(Modifier.size(width, (width.value * 288.8f / 277.8f).roundToInt().dp)) // the rig's "coach" crop
 }
 
-/** "Logging to today · 2,100 kcal goal", and in recovery the error, or that the message is safe. */
+/** Pip's speech (iOS pipBubble): the corner nearest Pip stays tight so the bubble reads as his. */
 @Composable
-private fun Caption(logging: String?, message: String?, recovery: Boolean, large: Boolean, modifier: Modifier) {
-    Column(modifier.semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        logging?.let {
-            // At large sizes the day and the goal stack instead of sharing a line.
-            Text(if (large) it.replace(" · ", "\n") else it, Modifier.testTag("coachCaption"), style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun PipBubble(line: PipLine, connection: ConnectionState, onAgree: () -> Unit, onConnect: () -> Unit, retry: (() -> Unit)?,
+    working: Boolean) {
+    val shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp)
+    val action = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+    Surface(Modifier.testTag("coachPipLine").semantics { liveRegion = LiveRegionMode.Polite }, shape = shape,
+        color = MaterialTheme.colorScheme.surface, border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
+                when (line) {
+                    is PipLine.Say -> Text(line.text)
+                    is PipLine.Working -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Animations off: a still ring, as iOS's static circle.dotted.
+                        if (ValueAnimator.areAnimatorsEnabled()) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else CircularProgressIndicator({ 0.75f }, Modifier.size(16.dp).clearAndSetSemantics {}, strokeWidth = 2.dp)
+                        Text(line.text)
+                    }
+                    is PipLine.Problem -> {
+                        Text(line.text, Modifier.testTag("coachError"))
+                        line.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        if (line.canRetry && retry != null) TextButton(retry, Modifier.heightIn(min = 48.dp), enabled = !working,
+                            contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Try again", style = action) }
+                    }
+                    PipLine.Connect -> {
+                        Text("Connect ChatGPT so I can count for you")
+                        ChatGPTConnectButton(connection, onAgree, onConnect, title = "Connect", style = ConnectStyle.Link)
+                    }
+                }
+            }
         }
-        if (message != null) Text(message, Modifier.testTag("coachError"), style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error)
-        else if (recovery) Text("Your message is safe here", style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** "Today · 1,240 / 2,000 kcal": the logging day and its intake; opens Today. The tap area reaches 48 dp around the capsule. */
+@Composable
+private fun DayChip(chip: CoachDayChip, onSeeToday: () -> Unit) {
+    Surface(onSeeToday, Modifier.testTag("coachDate").semantics { contentDescription = chip.spoken; onClick("Opens Today", null) }
+        .heightIn(min = 48.dp), shape = CircleShape, color = Color.Transparent) {
+        Box(contentAlignment = Alignment.CenterStart) {
+            Text(chip.text, Modifier.background(MivuTheme.colors.summarySurface, CircleShape).padding(horizontal = 12.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelMedium.tabular(), color = MaterialTheme.colorScheme.primary)
+        }
     }
 }
 
@@ -377,21 +431,15 @@ internal fun DraftPhotos(photos: List<String>, enabled: Boolean, onRemove: (Stri
     }
 }
 
-/** iOS footnote: not connected, messages still save here and the link connects; connected, the plan in use with Manage usage. */
+/** iOS footnote, connected only: the plan in use with Manage usage. Without a model, Pip's bubble offers the connection. */
 @Composable
-private fun Footnote(connected: Boolean, connection: ConnectionState, onAgree: () -> Unit, onConnect: () -> Unit, modifier: Modifier) {
-    val secondary = MaterialTheme.colorScheme.onSurfaceVariant
-    val small = MaterialTheme.typography.bodySmall
+private fun Footnote(modifier: Modifier) {
+    val uri = LocalUriHandler.current
     FlowRow(modifier, itemVerticalAlignment = Alignment.CenterVertically) {
-        if (!connected) {
-            Text("Messages save on this phone.", Modifier.padding(start = 4.dp), style = small, color = secondary)
-            ChatGPTConnectButton(connection, onAgree, onConnect, title = "Connect ChatGPT for replies", style = ConnectStyle.Link)
-        } else {
-            val uri = LocalUriHandler.current
-            Text("Using ChatGPT plan", Modifier.padding(start = 4.dp), style = small, color = secondary)
-            TextButton({ uri.openUri(MivuLinks.USAGE) }, Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
-                Text("Manage usage", style = small, fontWeight = FontWeight.SemiBold)
-            }
+        Text("Using ChatGPT plan", Modifier.padding(start = 4.dp), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton({ uri.openUri(MivuLinks.USAGE) }, Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
+            Text("Manage usage", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
         }
     }
 }
