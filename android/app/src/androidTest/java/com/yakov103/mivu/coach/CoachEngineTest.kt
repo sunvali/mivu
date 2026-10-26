@@ -26,6 +26,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -81,6 +82,26 @@ class CoachEngineTest {
     private fun stored(id: UUID) = db.read { it.coachTurnWithoutPhotos(id) }!!
     private fun run(script: Script, id: UUID) = runBlocking { CoachEngine(db, script::infer).run(id) }
     private fun failure(script: Script, id: UUID): Throwable = try { run(script, id); fail("expected failure"); throw AssertionError() } catch (e: Throwable) { e }
+
+    @Test fun lostStateWriteKeepsTheSharedErrorClean() {
+        // Shared error objects outlive the turn: a failed state write must not attach to them, even when it is the same object.
+        val error = ResponsesClient.Failure.UsageUnavailable
+        var armed = false
+        var lost: Exception = error
+        db.beforeCommit = { if (armed) throw lost }
+        try {
+            repeat(2) {
+                armed = false
+                if (it == 1) lost = android.database.SQLException("synthetic lost write")
+                val t = turn("Synthetic soup $it")
+                assertSame(error, failure(Script({ armed = true; throw error }), t.id))
+                assertEquals("the state write is lost", CoachTurnState.analyzing, stored(t.id).state)
+            }
+        } finally {
+            db.beforeCommit = null
+        }
+        assertEquals(0, error.suppressed.size)
+    }
 
     @Test fun textOnlyMealLogsAndCompletes() {
         val t = turn()

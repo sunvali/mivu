@@ -103,11 +103,11 @@ class CoachEngine(
                 isTransient(error) -> CoachTurnState.waitingForNetwork
                 else -> CoachTurnState.needsRetry
             }
-            // A lost state write is reported with the error; the worker then settles the turn.
+            // As iOS `try?`: a lost state write is logged, never attached to the (often shared) error; the worker settles the turn.
             try {
                 db.transaction(null) { it.failCoachTurn(turnID, state, needsDayChoice = error == DiaryError.AmbiguousDay, failureReason = reason) }
             } catch (w: Exception) {
-                error.addSuppressed(w)
+                Log.w(TAG, "Coach turn state write lost: ${failureReason(w)}")
             }
             throw error
         }
