@@ -56,12 +56,23 @@ Milestone 9 closed in [its record](../../verification/2026-10-25-android-play-re
 - The Play submission draft is [play-submission.md](../../development/play-submission.md); everything in the Console is
   the owner's.
 
+## iOS 1.1.1 catch-up
+The catch-up closed in [its record](../../verification/2026-10-26-android-ios-catchup.md) against iOS `5afd977f`.
+- Owner decisions, rows kept `pending` (reasons in the plan's "Deferred",
+  [catch-up plan](2026-10-26-android-ios-catchup.md)):
+  - #49, on-device Coach fallback (`coach-on-device`). ML Kit GenAI/AICore runs on few devices, has no tool calling
+    for Coach, and Android has no nutrition table.
+  - #50, profile delete (`profile-delete`). Android has no profiles screen yet; it belongs with porting profiles.
+- Lint grew from 23 to 37 warnings (`UseKtx`, `HardcodedText` and others; 0 errors). Triage them in a later pass.
+
 ## Physical phone (owner)
 Every check that needs a real phone is listed, with its steps, in the "Physical phone" section of the
 [milestone 9 record](../../verification/2026-10-25-android-play-readiness.md): Phase 0 items 2–5 (sign-in, inference,
 photo analysis, token refresh and Disconnect), Pip's smoothness, TalkBack, live voice, the keyboard on non-Coach screens
 and the composer gap, the widget and the notifications (reply and morning reminder), the API 31–32 clipboard toast,
 and the restore time from Drive or Downloads.
+- Power Saver keeps Pip moving (#69).
+- TalkBack reads the Coach day chip's spoken label ("Logging to today, …") and activates it.
 
 ## Later
 - `MaterialExpressiveTheme` and the Expressive `LoadingIndicator`: material3 1.4.0 keeps them internal. Take them with
@@ -72,3 +83,4 @@ and the restore time from Drive or Downloads.
 - Day complete: iOS has no trigger yet.
 - `record_source`: only fixes two invisible shortcuts, leftover photo copies after `delete_workout` and the
   `find_meals` origin fallback (meal seek uses the same fallback). The `shortcut:` comments stay until then.
+- Meal-analysis notification: apply iOS #72 'At least N kcal' with the #64 rule when it is built.
