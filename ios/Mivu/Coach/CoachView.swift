@@ -18,6 +18,7 @@ struct CoachView: View {
     @State private var surfaceVisible = false
     @State private var showingDetail = false
     @State private var showPhotos = false
+    @State private var sentWithPhotos = false
     @State private var composerHeight: CGFloat = 0
     @State private var textWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -291,7 +292,7 @@ struct CoachView: View {
             .accessibilityElement(children: .contain).accessibilityIdentifier("coachExchange-" + turn.id.uuidString)
             .accessibilityValue(row.isHighlighted ? "Selected source message" : "")
         } else if let date = row.date {
-            let label = CoachReplyLines.dayLabel(date, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)).capitalized(with: .current)
+            let label = CoachReplyLines.dayTitle(date, zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
             HStack { Rectangle().frame(height: 0.5); Text(label).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
                 .foregroundStyle(Color.diarySecondary).padding(.vertical, 8)
                 .accessibilityElement(children: .ignore).accessibilityLabel(label).accessibilityAddTraits(.isHeader)
@@ -315,30 +316,75 @@ struct CoachView: View {
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
                           size: typeSize.isAccessibilitySize ? 76 : 112, runtime: companionRuntime, surface: .coach,
                           onTouch: onCompanionTouch)
-            VStack(alignment: .leading, spacing: 4) {
-                let caption = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))
-                caption {
-                    if let day = coach.diary.activeDay {
-                        Text("Logging to " + CoachReplyLines.dayLabel(day.localDate, today: ProgressAnalytics.dateLabel(Date(), zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier))).accessibilityIdentifier("coachDate")
+            // The chip's 44-point tap area already pads it, so the stack itself adds no gap.
+            VStack(alignment: .leading, spacing: 0) {
+                if let line = pipLine { pipBubble(line).transition(.opacity) }
+                if let model = coach.diary.readModel, let day = model.activeDay {
+                    let chip = coachDayChip(localDate: day.localDate, today: ProgressAnalytics.dateLabel(Date(), zone: model.profile.timeZoneID),
+                                            kcal: model.totals.kcal, kcalPartial: model.meals.filter(\.isSaved).flatMap(\.items).contains { $0.nutrition.kcal == nil },
+                                            mealsLogged: !model.meals.isEmpty, goal: model.activeGoal?.targets.kcal)
+                    Button(action: openToday) {
+                        Text(chip.text).font(.footnote.weight(.medium)).monospacedDigit().foregroundStyle(Color.diaryAccent)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Color.diarySummarySurface, in: .capsule)
+                            .frame(minHeight: 44).contentShape(.rect)
                     }
-                    if let target = coach.diary.readModel?.activeGoal?.targets.kcal {
-                        if coach.diary.activeDay != nil, !typeSize.isAccessibilitySize { Text("·").accessibilityHidden(true) }
-                        Text("\(target.formatted(.number.precision(.fractionLength(0)))) kcal goal").accessibilityIdentifier("coachGoalSummary")
-                    }
-                }
-                .font(.caption).foregroundStyle(Color.diarySecondary)
-                if let error = coach.errorMessage, companionRecovery {
-                    Text(error).foregroundStyle(Color.diaryError).accessibilityIdentifier("coachError")
-                } else if companionRecovery {
-                    // While working, the timeline's activity card already says what is happening.
-                    Text("Your message is safe here").foregroundStyle(Color.diaryText)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(chip.spoken)
+                    .accessibilityHint("Opens Today").accessibilityIdentifier("coachDate")
                 }
             }
-            .font(.subheadline).fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 6)
-            .transaction { $0.animation = nil }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: pipLine)
         }
+        // shortcut: the photo wording only knows this view's last send; a retried or relaunched turn reads "Counting that up…".
+        .onChange(of: companionProcessing) { _, working in if !working { sentWithPhotos = false } }
         .accessibilityElement(children: .contain).accessibilityIdentifier("coachCompanionStrip")
+    }
+    private var pipLine: PipLine? {
+        let line = PipLine.current(hour: Calendar.current.component(.hour, from: .now), mealsLogged: !coach.diary.todaysMeals.isEmpty,
+                                   typing: editing, connected: coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture,
+                                   processing: companionProcessing, withPhotos: sentWithPhotos, recovery: companionRecovery,
+                                   error: coach.errorMessage, turnState: coach.companionTurn?.state)
+        // At accessibility sizes the greeting would crowd the conversation; status and errors still show.
+        if typeSize.isAccessibilitySize, case .say = line { return nil }
+        return line
+    }
+    private func pipBubble(_ line: PipLine) -> some View {
+        // The corner nearest Pip stays tight so the bubble reads as his speech.
+        let shape = UnevenRoundedRectangle(cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18))
+        return VStack(alignment: .leading, spacing: 4) {
+            switch line {
+            case .say(let text): Text(text)
+            case .working(let text):
+                HStack(spacing: 8) {
+                    if reduceMotion { Image(systemName: "circle.dotted").foregroundStyle(Color.diaryAccent).accessibilityHidden(true) }
+                    else { ProgressView().controlSize(.small).tint(Color.diaryAccent) }
+                    Text(text)
+                }
+            case .problem(let text, let detail, let canRetry):
+                Text(text).accessibilityIdentifier("coachError")
+                if let detail { Text(detail).font(.footnote).foregroundStyle(Color.diarySecondary) }
+                if canRetry, let turn = coach.companionTurn {
+                    Button("Try again") { Task { await coach.retry(turn.id) } }.modifier(BubbleAction()).disabled(coach.isWorking)
+                }
+            case .connect:
+                Text("Connect ChatGPT so I can count for you")
+                ChatGPTConnectButton(connection: coach.connection, title: "Connect").modifier(BubbleAction())
+            }
+        }
+        .font(.subheadline).foregroundStyle(Color.diaryText).fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Color.diarySurface, in: shape)
+        .overlay { shape.strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
+        .accessibilityElement(children: .contain).accessibilityIdentifier("coachPipLine")
+    }
+    private struct BubbleAction: ViewModifier {
+        func body(content: Content) -> some View {
+            content.font(.subheadline.weight(.semibold)).tint(Color.diaryAccent)
+                .frame(minHeight: 44, alignment: .leading).contentShape(.rect)
+        }
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -362,36 +408,33 @@ struct CoachView: View {
             if showsStarters { starters }
             if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
-            HStack(alignment: .bottom, spacing: 8) {
-                // Pip stands on the left of the field's flat top edge, never on the round button.
-                VStack(alignment: .leading, spacing: 0) {
-                    companionStrip
+            // Pip stands on the left of the field's flat top edge, never on the round button; his bubble and chip
+            // may run over the button's column so short lines do not wrap.
+            VStack(alignment: .leading, spacing: 0) {
+                companionStrip
+                HStack(alignment: .bottom, spacing: 8) {
                     composerInput
+                    // One round action: the mic while the draft is empty, Send once there is something to send.
+                    Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
                 }
-                // One round action: the mic while the draft is empty, Send once there is something to send.
-                Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
+                .animation(reduceMotion ? nil : .snappy, value: showsSend)
             }
-            .animation(reduceMotion ? nil : .snappy, value: showsSend)
             if let note = voice.note {
                 Text(note).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachVoiceNote")
             }
-            if !coach.connection.canInfer && !DiaryLaunch.isCoachInferenceFixture {
-                HStack(spacing: 4) {
-                    Text("Messages save on this iPhone.").foregroundStyle(Color.diarySecondary)
-                    ChatGPTConnectButton(connection: coach.connection, title: "Connect ChatGPT for replies")
-                        .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
+            // Without a model, Pip's bubble offers the connection instead of a footer line.
+            if coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture {
+                if coach.connection.provider == .apple {
+                    Text("Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.")
+                        .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachAppleLimits")
+                } else if coach.connection.planAuthorized {
+                    HStack(spacing: 4) {
+                        Text("Using ChatGPT plan").foregroundStyle(Color.diarySecondary)
+                        Link("Manage usage", destination: MivuLinks.chatGPTUsage)
+                            .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
+                    }
+                    .font(.caption).accessibilityIdentifier("coachPlanUsage")
                 }
-                .font(.caption)
-            } else if coach.connection.provider == .apple {
-                Text("Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.")
-                    .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachAppleLimits")
-            } else if coach.connection.planAuthorized {
-                HStack(spacing: 4) {
-                    Text("Using ChatGPT plan").foregroundStyle(Color.diarySecondary)
-                    Link("Manage usage", destination: MivuLinks.chatGPTUsage)
-                        .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
-                }
-                .font(.caption).accessibilityIdentifier("coachPlanUsage")
             }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 8)
@@ -512,7 +555,10 @@ struct CoachView: View {
     }
     private func stopListening() { Task { await voice.stop() } }
     private var send: some View {
-        Button { editing = false; Task { await voice.stop(); _ = await coach.send() } } label: {
+        Button {
+            editing = false; sentWithPhotos = !coach.attachmentDraft.attachments.isEmpty
+            Task { await voice.stop(); _ = await coach.send() }
+        } label: {
             Group {
                 if coach.isSending { ProgressView().tint(.white) }
                 else { Image(systemName: "arrow.up").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white) }

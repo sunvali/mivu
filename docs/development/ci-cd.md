@@ -190,9 +190,10 @@ Each has its own `version.txt`, `CHANGELOG.md`, version PR and tag (`ios-v1.2.0`
 `android-v0.2.0`). A commit bumps only the platforms whose folder it changes;
 shared folders (`docs`, `scripts`, `fixtures`, `design-system`) bump neither.
 iOS also updates its Xcode marketing version; Android reads `android/version.txt`
-as `versionName`, and its `versionCode` comes from the Play upload ledger. The iOS
-baseline is `1.0.0` and Android starts at `0.1.0`; existing rehearsal tags are
-preserved. `test_workflow_contract.py` fails if the packages are linked or share
+as `versionName`, and its `versionCode` comes from the Play upload ledger. iOS
+continues from the shared `v1.1.1` release (`last-release-sha` points at it, so
+the first `ios-v` release does not re-list older commits); Android starts at
+`0.1.0`. Existing `v*` and rehearsal tags are preserved. `test_workflow_contract.py` fails if the packages are linked or share
 a version file.
 Bootstrap starts after `4f97261eb10d2af2a1301251c8e46748d7cc0dab`.
 
@@ -205,6 +206,9 @@ For local delivery, check out the immutable version tag already merged into
 the intended device/archive destination and signing team, then archive and export
 through Organizer. Record the exact source SHA, build number, local test evidence
 and exported product. An unsigned archive cannot be installed on a phone.
+`CURRENT_PROJECT_VERSION` stays `1` in source; every App Store Connect upload needs
+a higher build number, so keep Organizer's "Automatically manage version and build
+number" on and record the number it assigns.
 
 Apple membership, signing identity, provisioning and any required agreements
 remain owner prerequisites. Keep signing credentials in the local Apple tooling;
@@ -212,6 +216,19 @@ GitHub CI needs no Apple secrets. Any requested TestFlight upload is performed
 locally through Organizer. An upload acknowledgement does not prove processing,
 tester availability or device installation; inspect those outcomes separately.
 Nothing in version automation submits to App Review or distributes a build.
+
+### Public source mirror
+
+This repository stays private. The App Store app's source is published separately
+under AGPL-3.0 so Mivu qualifies for OpenAI's open-source ChatGPT plan usage.
+After a version tag exists, export it locally into a checkout of the public repo,
+review the diff, then commit and push there:
+
+    python3 scripts/ci/export_public.py v1.1.0 ../mivu-public
+
+Only `ios/` and the files in `public/` (license, notice, README) are exported;
+the export refuses secret-looking content. Creating the public repository and
+every push to it are owner decisions.
 
 ```mermaid
 flowchart LR

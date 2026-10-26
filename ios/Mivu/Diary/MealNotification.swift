@@ -24,8 +24,10 @@ import UserNotifications
         }
         let names = items.map(\.name)
         let name = names.count <= 2 ? names.joined(separator: " and ") : names.prefix(2).joined(separator: ", ") + " and \(names.count - 2) more"
-        let calories = nutritionTotals(items).kcal.map { "\(Int($0.rounded())) kcal" }
-        if review { return ("\(name) is ready to review", (calories.map { "About \($0) · " } ?? "") + "Tap to review") }
+        // Foods without calories are left out of the sum, so the figure is a floor.
+        let partial = items.contains { $0.nutrition.kcal == nil }
+        let calories = nutritionTotals(items).kcal.map { (partial ? "At least " : "") + "\(Int($0.rounded())) kcal" }
+        if review { return ("\(name) is ready to review", (calories.map { "\(partial ? "" : "About ")\($0) · " } ?? "") + "Tap to review") }
         return ("\(name) logged", calories ?? "Calories not known yet")
     }
 

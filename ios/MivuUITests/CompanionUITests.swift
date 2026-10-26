@@ -301,7 +301,7 @@ import XCTest
             let app = launch(["--proof-largest-text", appearance])
             let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
             XCTAssertTrue(strip.waitForExistence(timeout: 5))
-            XCTAssertFalse(app.staticTexts["coachDate"].exists, "A first-use profile has no logging day before actual capture")
+            XCTAssertFalse(app.buttons["coachDate"].exists, "A first-use profile has no logging day before actual capture")
             XCTAssertFalse(app.buttons["coachEarlierMessages"].exists)
             XCTAssertFalse(app.buttons["coachLaterMessages"].exists)
             enter("Draft", in: app)
@@ -312,7 +312,7 @@ import XCTest
             app.buttons["coachSend"].tap()
             let review = app.buttons["coachMealLink"].firstMatch
             XCTAssertTrue(review.waitForExistence(timeout: 15))
-            let date = app.staticTexts["coachDate"]
+            let date = app.buttons["coachDate"]
             XCTAssertTrue(date.waitForExistence(timeout: 5))
             XCTAssertTrue(date.isHittable, "The actual captured logging date must remain readable at largest text")
             XCTAssertLessThanOrEqual(date.frame.maxY, app.textFields["coachInput"].frame.minY,

@@ -2,6 +2,7 @@ import XCTest
 
 @MainActor final class CoachUITests: XCTestCase {
     func testEarlierMessagesRemainReadableWhenNewInputArrives() {
+        executionTimeAllowance = 480 // Types and sends 22 messages through the on-screen keyboard.
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
         app.launch()
@@ -16,7 +17,8 @@ import XCTest
         XCTAssertFalse(app.staticTexts["History message 1"].exists, "Reopening should render only the latest twenty turns initially")
         XCTAssertFalse(app.buttons["coachEarlierMessages"].exists)
         let first = app.staticTexts["History message 1"]
-        for _ in 0..<16 where !first.isHittable { coachViewport(in: app).swipeDown() }
+        // An unlaid-out row has an empty frame, and asking it for hittability records a failure.
+        for _ in 0..<16 where !first.exists || first.frame.isEmpty || !first.isHittable { coachViewport(in: app).swipeDown() }
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         XCTAssertTrue(first.isHittable, "A real upward-history gesture must load and reveal the older page")
         enter("History message 22", in: app); app.buttons["coachSend"].tap()
@@ -104,7 +106,7 @@ import XCTest
         let receipt = app.buttons["coachMealLink"].firstMatch
         XCTAssertTrue(receipt.waitForExistence(timeout: 5))
         nudge(toward: receipt, in: app)
-        XCTAssertLessThan(receipt.frame.maxY, input.frame.minY - 8)
+        XCTAssertLessThan(receipt.frame.maxY, composerTop(in: app) - 8)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "English dark accessibility5 populated Coach"; screenshot.lifetime = .keepAlways; add(screenshot)
         openLatestMeal(in: app)
         XCTAssertFalse(app.tabBars.buttons["Coach"].isHittable)
@@ -287,14 +289,17 @@ import XCTest
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
-        let history = (1...32).map { "Synthetic history line \($0)." }.joined(separator: " ")
+        // Long enough to overflow the tallest iPhone, so there is history to scroll back into.
+        let history = (1...96).map { "Synthetic history line \($0)." }.joined(separator: " ")
         enter(history, in: app); app.buttons["coachSend"].tap()
         let status = app.staticTexts["Connect ChatGPT in Settings to continue"].firstMatch
         XCTAssertTrue(status.waitForExistence(timeout: 10))
         let latest = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: status)
         XCTAssertEqual(XCTWaiter.wait(for: [latest], timeout: 5), .completed)
         XCTAssertLessThan(status.frame.maxY, app.textFields["coachInput"].frame.minY)
-        coachViewport(in: app).swipeDown()
+        // Read history: scroll until the latest status is off screen, or the timeline keeps following it.
+        for _ in 0..<4 where status.isHittable { coachViewport(in: app).swipeDown() }
+        XCTAssertFalse(status.isHittable)
         let banner = app.staticTexts.matching(NSPredicate(format: "label == %@", history)).firstMatch
         XCTAssertTrue(banner.isHittable)
         enter("Synthetic new message", in: app); app.buttons["coachSend"].tap()
@@ -416,9 +421,9 @@ import XCTest
     }
     /// Slow drags toward an element: a fling can skip a control inside an exchange several screens tall.
     private func nudge(toward element: XCUIElement, in app: XCUIApplication) {
-        let viewport = coachViewport(in: app), input = app.textFields["coachInput"]
+        let viewport = coachViewport(in: app)
         for _ in 0..<16 {
-            if element.isHittable, element.frame.minY >= viewport.frame.minY, element.frame.maxY < input.frame.minY - 8 { break }
+            if element.isHittable, element.frame.minY >= viewport.frame.minY, element.frame.maxY < composerTop(in: app) - 8 { break }
             let above = element.exists && element.frame.minY < viewport.frame.minY + 8
             let start = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: above ? 200 : -200)),
@@ -429,11 +434,16 @@ import XCTest
     private func revealCoachLink(_ link: XCUIElement, in app: XCUIApplication) {
         // Hittable can include a partially clipped link whose center is under the composer.
         for _ in 0..<8 {
-            if link.isHittable && link.frame.maxY < app.textFields["coachInput"].frame.minY - 8 { break }
+            if link.isHittable && link.frame.maxY < composerTop(in: app) - 8 { break }
             coachViewport(in: app).swipeUp()
         }
         XCTAssertTrue(link.isHittable)
-        XCTAssertLessThan(link.frame.maxY, app.textFields["coachInput"].frame.minY - 8)
+        XCTAssertLessThan(link.frame.maxY, composerTop(in: app) - 8)
+    }
+    /// Pip's strip, with its tappable day chip, sits above the field; a link under it is not reachable.
+    private func composerTop(in app: XCUIApplication) -> CGFloat {
+        let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
+        return min(strip.exists ? strip.frame.minY : .infinity, app.textFields["coachInput"].frame.minY)
     }
     private func replyElements(in app: XCUIApplication) -> XCUIElementQuery {
         // Find the reply independently of its platform accessibility role.
@@ -480,7 +490,8 @@ import XCTest
         XCTAssertTrue(app.buttons["coachVoice"].isHittable, "An empty draft offers voice in the trailing slot")
         XCTAssertFalse(app.buttons["coachSend"].exists)
         let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
-        XCTAssertLessThanOrEqual(strip.frame.maxX, app.buttons["coachPhotos"].frame.minX, "Pip stands on the flat field, not the round camera")
+        // The strip also holds Pip's bubble and day chip, so only its leading 112 points are Pip.
+        XCTAssertLessThanOrEqual(strip.frame.minX + 112, app.buttons["coachVoice"].frame.minX, "Pip stands on the flat field, not the round button")
         XCTAssertLessThanOrEqual(strip.frame.maxY, app.textFields["coachInput"].frame.minY, "Pip must not cover the field")
         let starter = app.buttons["Log breakfast"]
         XCTAssertTrue(starter.isHittable); XCTAssertGreaterThanOrEqual(starter.frame.height, 44)

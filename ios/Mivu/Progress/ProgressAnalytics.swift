@@ -78,8 +78,8 @@ enum ProgressAnalytics {
     static func daily(localDate: String, days: [TrackingDay], subtotals: [NutritionTotals], hasFood: Bool, activeDayID: UUID?,
                       goal: GoalRecord?, workoutCount: Int, estimatedBurnKcal burn: Double?) -> DailyProgress {
         func sum(_ field: KeyPath<NutritionTotals, Double?>) -> Double? {
-            guard !subtotals.isEmpty, subtotals.allSatisfy({ $0[keyPath: field] != nil }) else { return nil }
-            return subtotals.reduce(0) { $0 + $1[keyPath: field]! }
+            let known = subtotals.compactMap { $0[keyPath: field] }
+            return known.isEmpty ? nil : known.reduce(0, +)
         }
         let totals: NutritionTotals? = subtotals.isEmpty ? nil : NutritionTotals(
             kcal: sum(\.kcal), carbs: sum(\.carbs), protein: sum(\.protein), fat: sum(\.fat),

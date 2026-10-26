@@ -269,10 +269,10 @@ actor DiaryStore {
             return try transaction.submissionParent(id: submissionID).map { try transaction.mealProjection(id: $0) }
         }
     }
-    func setCoachTurnState(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, expectedProfileID: UUID) throws {
+    func setCoachTurnState(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, failureReason: String? = nil, expectedProfileID: UUID) throws {
         _ = try pagedMutation(expectedProfileID) { database, head in
             let kept = state == .completed ? try database.coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID) : nil
-            return try database.updateCoachTurn(turnID: turnID, state: state, assistantText: kept?.assistantText, question: kept?.question, incomplete: kept?.incomplete, needsDayChoice: needsDayChoice, expected: head, maximumBytes: maximumFileBytes)
+            return try database.updateCoachTurn(turnID: turnID, state: state, assistantText: kept?.assistantText, question: kept?.question, incomplete: kept?.incomplete, needsDayChoice: needsDayChoice, failureReason: failureReason, expected: head, maximumBytes: maximumFileBytes)
         }
     }
     func completeCoachTurn(turnID: UUID, assistantText: String, question: CoachQuestion? = nil, incomplete: Bool? = nil, expectedProfileID: UUID) throws {
@@ -594,9 +594,9 @@ actor DiaryStore {
         try completeCoachTurn(turnID: turnID, assistantText: assistantText, question: question, incomplete: incomplete, expectedProfileID: expectedProfileID)
     }
 
-    func failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, epoch: UInt64, expectedProfileID: UUID) throws {
+    func failCoachTurn(turnID: UUID, state: CoachTurnState, needsDayChoice: Bool = false, failureReason: String? = nil, epoch: UInt64, expectedProfileID: UUID) throws {
         try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
-        try setCoachTurnState(turnID: turnID, state: state, needsDayChoice: needsDayChoice, expectedProfileID: expectedProfileID)
+        try setCoachTurnState(turnID: turnID, state: state, needsDayChoice: needsDayChoice, failureReason: failureReason, expectedProfileID: expectedProfileID)
     }
 
     func validateExportRequest(_ request: DiaryExportRequest, cloneHead: DiaryHead? = nil) throws {

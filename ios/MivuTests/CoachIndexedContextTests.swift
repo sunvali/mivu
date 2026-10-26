@@ -132,7 +132,7 @@ import Testing
             try await store.editItem(mealID: f.mealID, item: item, explicitNutrients: [], expectedRevision: 1, expectedProfileID: f.owner)
             try f.clearApplications()
         })
-        await #expect(throws: DiaryError.staleRevision) { try await f.run(store, accepted.id, transport) }
+        #expect(try await f.run(store, accepted.id, transport).receipts.isEmpty)
         let meal = try await store.meal(id: f.mealID, expectedProfileID: f.owner)
         #expect(meal.items[1].name == "Manually edited rice" && meal.items[0].quantity == 2)
         #expect(try await store.coachWorkItem(turnID: accepted.id, expectedProfileID: f.owner).receipts.isEmpty)
@@ -144,7 +144,7 @@ import Testing
         let f = try CoachLunchFixture(); defer { f.remove() }
         let store = try await f.store(), accepted = try await f.accept(store)
         let transport = CoachJourneyTransport(beforeCorrection: { try await store.deleteMeal(f.mealID, expectedProfileID: f.owner) })
-        await #expect(throws: DiaryError.notFound) { try await f.run(store, accepted.id, transport) }
+        #expect(try await f.run(store, accepted.id, transport).receipts.isEmpty)
         #expect(try f.rows("SELECT COUNT(*) FROM tombstone WHERE id = '\(f.mealID)' ") == [["1"]])
         #expect(try f.rows("SELECT COUNT(*) FROM meal WHERE id = '\(f.mealID)' ") == [["0"]])
         #expect(try await store.coachWorkItem(turnID: accepted.id, expectedProfileID: f.owner).receipts.isEmpty)
@@ -214,6 +214,7 @@ import Testing
         try await interruptAfterWrite(store, f.owner, accepted.id) {
             try await CoachEngine(store: store, infer: { try await script.infer($0, $1) }).run(turnID: accepted.id, expectedProfileID: f.owner)
         }
+        #expect(await script.rejections == 1)
         #expect(try f.businessRows() == before && f.applications() == 1)
         #expect(try await store.coachWorkItem(turnID: accepted.id, expectedProfileID: f.owner).receipts == work.receipts)
         #expect(await script.rounds >= 2)
@@ -256,6 +257,7 @@ import Testing
         } else {
             _ = try await CoachEngine(store: fresh, infer: { try await script.infer($0, $1) }).run(turnID: accepted.id, expectedProfileID: f.owner)
         }
+        #expect(await script.rejections == (newOperation ? 1 : 0))
         #expect(try await fresh.coachWorkItem(turnID: accepted.id, expectedProfileID: f.owner).receipts == before.receipts)
         #expect(try f.applications() == 1 && f.rows("SELECT COUNT(*) FROM weight") == [["0"]])
     }
@@ -328,9 +330,12 @@ private struct CoachPhotoWorkFixture {
 private actor CoachRecoveryScript {
     let variant: String
     private(set) var rounds = 0
+    private(set) var rejections = 0
     init(variant: String) { self.variant = variant }
     func infer(_ input: [CoachInferenceInput], _ tools: Data) async throws -> CoachInferenceResult {
         rounds += 1
+        // A rejected batch is returned as tool output; this synthetic model then stops without retrying the write.
+        if case .functionOutput(_, let output)? = input.last, output.contains("\"saved\":false") { rejections += 1; return try response([]) }
         if variant == "matched", rounds >= 4 { return try response([]) }
         if variant == "uninterrupted" {
             if rounds == 1 { return try response([("log_weight", ["local_date": "2027-01-15", "value": 70, "unit": "kg"])]) }

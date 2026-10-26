@@ -6,9 +6,12 @@ private actor PartialModel {
     var inputs: [[CoachInferenceInput]] = []
     var results: [CoachInferenceResult]
     let failure: Error?
-    init(_ results: [CoachInferenceResult], then failure: Error? = nil) { self.results = results; self.failure = failure }
+    let failingRequest: Int?
+    init(_ results: [CoachInferenceResult], then failure: Error? = nil, failingRequest: Int? = nil) { self.results = results; self.failure = failure; self.failingRequest = failingRequest }
     func infer(_ input: [CoachInferenceInput]) throws -> CoachInferenceResult {
         inputs.append(input)
+        // A rejected tool call is now corrected by the model, so a later failure needs a transport error.
+        if inputs.count == failingRequest { throw ResponsesClient.Failure.http(status: 400) }
         if results.isEmpty, let failure { throw failure }
         guard !results.isEmpty else { throw CoachError.limitExceeded }
         return results.removeFirst()
@@ -49,7 +52,7 @@ func interruptAfterWrite<R>(_ store: DiaryStore, _ profileID: UUID, _ turnID: UU
         _ = try await store.startDay(at: Date())
         let today = diaryDateLabel(Date(), zone: TimeZone.current.identifier)
         let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
-        let model = PartialModel([result([call("log_food", log(today), id: "a")]), result([call("no_such_tool", "{}", id: "b")]), result(text: "Nothing else to do.")])
+        let model = PartialModel([result([call("log_food", log(today), id: "a")]), result(text: "Nothing else to do.")], failingRequest: 2)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { input, _ in try await model.infer(input) } })
         coach.draft.text = "Eggs and a thing"
         #expect(await coach.send()); await coach.waitForWorker()
@@ -87,7 +90,7 @@ func interruptAfterWrite<R>(_ store: DiaryStore, _ profileID: UUID, _ turnID: UU
         _ = try await store.startDay(at: Date())
         let today = diaryDateLabel(Date(), zone: TimeZone.current.identifier)
         let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
-        let model = PartialModel([result([call("log_food", log(today), id: "a")]), result([call("no_such_tool", "{}", id: "b")]), result(text: "Nothing else to do.")])
+        let model = PartialModel([result([call("log_food", log(today), id: "a")]), result(text: "Nothing else to do.")], failingRequest: 2)
         let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { input, _ in try await model.infer(input) } })
         coach.draft.photos = [SyntheticConnectionProbe.image]
         #expect(await coach.send()); await coach.waitForWorker()

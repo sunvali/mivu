@@ -6,11 +6,12 @@ enum MotionPolicy {
     }
 
     static func playback(
-        reduceMotion: Bool, lowPower: Bool, thermalState: ProcessInfo.ThermalState,
+        reduceMotion: Bool, thermalState: ProcessInfo.ThermalState,
         sceneActive: Bool, selected: Bool, visible: Bool, covered: Bool
     ) -> Playback {
         guard sceneActive, selected, visible, !covered else { return .hidden }
-        guard !reduceMotion, !lowPower, thermalState != .serious, thermalState != .critical else {
+        // Low Power Mode keeps Pip moving on every tab; only Reduce Motion and serious heat hold him still.
+        guard !reduceMotion, thermalState != .serious, thermalState != .critical else {
             return .staticPose
         }
         return .animated

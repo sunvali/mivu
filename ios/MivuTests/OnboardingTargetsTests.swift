@@ -50,3 +50,19 @@ import Testing
         }
     }
 }
+
+@Suite @MainActor struct OnboardingSetupSaveTests {
+    @Test func setupFinishedBeforeTheCutoffSetsTodaysGoal() async throws {
+        let store = DiaryStore(directory: URL.temporaryDirectory.appending(path: "OnboardingSave-" + UUID().uuidString))
+        let profile = DiaryProfile(name: "Synthetic setup", timeZoneID: "Asia/Jerusalem")
+        _ = try await store.createProfile(profile)
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Jerusalem")!
+        let afterMidnight = try #require(calendar.date(from: DateComponents(year: 2027, month: 1, day: 15, hour: 0, minute: 30)))
+        let answers = OnboardingAnswers(about: ProfileAbout(heightCm: 165, birthYear: 1990, sex: .female, pace: .steady), weightKg: 70, targetKg: 62)
+        let targets = NutritionValues(kcal: 1800, carbs: 200, protein: 120, fat: 60)
+
+        try await OnboardingView.saveSetup(answers, targets: targets, savedWeightKg: nil, profile: profile, store: store, at: afterMidnight)
+
+        #expect(try await store.diaryReadModel(expectedProfileID: profile.id).activeGoal?.targets == targets)
+    }
+}

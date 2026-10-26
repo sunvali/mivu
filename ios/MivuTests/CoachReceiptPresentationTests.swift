@@ -40,7 +40,7 @@ import UIKit
         #expect(value.currentStatus == "Could not load current record")
     }
 
-    @Test func committedMacrosKeepKnownZeroAndRequireEveryItemForEachNutrient() {
+    @Test func committedMacrosKeepKnownZeroAndAddOnlyKnownValues() {
         var receipt = receipt()
         receipt.items[0].nutrition = NutritionValues(kcal: 100, carbs: 0, protein: 10.5, fat: 2)
         var other = receipt.items[0]; other.itemID = UUID(); other.nutrition = NutritionValues(kcal: 50, carbs: 0, protein: 4.5, fat: 3)
@@ -55,9 +55,13 @@ import UIKit
         receipt.items[1].nutrition?.protein = nil
         value = CoachReceiptPresentation(receipt: receipt, target: .unavailable)
         #expect(value.committedNutrition == "150 kcal")
-        #expect(value.committedMacros == "Carbs 0 g · Protein unknown · Fat 5 g")
+        #expect(value.committedMacros == "Carbs 0 g · Protein 10.5 g · Fat 5 g")
         #expect(value.nutritionCompleteness == "Some nutrients unknown")
         receipt.items[0].nutrition = nil
+        value = CoachReceiptPresentation(receipt: receipt, target: .loading)
+        #expect(value.committedNutrition == "50 kcal")
+        #expect(value.committedMacros == "Carbs 0 g · Protein unknown · Fat 3 g")
+        receipt.items[1].nutrition = nil
         value = CoachReceiptPresentation(receipt: receipt, target: .loading)
         #expect(value.committedNutrition == "Energy unknown")
         #expect(value.committedMacros == "Carbs unknown · Protein unknown · Fat unknown")

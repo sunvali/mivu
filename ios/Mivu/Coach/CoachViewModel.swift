@@ -297,7 +297,7 @@ private final class CoachNavigationReadFence: Sendable {
     private(set) var activeOperationTurn: CoachOperationMetadata?
     private var activeOperationOwnership: DiarySelectionOwnership?
     private var activeOperationRead = UUID()
-    private var companionTurn: CoachOperationMetadata? {
+    var companionTurn: CoachOperationMetadata? {
         guard activeOperationOwnership == diary.selection else { return nil }
         return activeOperationTurn
     }
@@ -422,6 +422,7 @@ private final class CoachNavigationReadFence: Sendable {
                 let acceptedCaptureAtPassStart = captureReceipt
                 let acceptedDiaryCaptureAtPassStart = diary.captureReceipt
                 var processingFailed = false
+                var unfinished: (turnID: UUID, error: any Error)?
                 do {
                     try await recoverLegacyCaptures(owner: owner)
                     while !Task.isCancelled {
@@ -440,12 +441,14 @@ private final class CoachNavigationReadFence: Sendable {
                             break
                         }
                         activity = nil; activityTurnID = nil
-                        if turn.state == .analyzing {
-                            try await diary.store.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: owner)
-                        }
-                        if turn.pendingMealID != nil, turn.receipts.isEmpty {
-                            _ = try await diary.store.preparePendingCoachTurn(turnID: turn.id, expectedProfileID: owner)
-                        }
+                        do {
+                            if turn.state == .analyzing {
+                                try await diary.store.setCoachTurnState(turnID: turn.id, state: .captured, expectedProfileID: owner)
+                            }
+                            if turn.pendingMealID != nil, turn.receipts.isEmpty {
+                                _ = try await diary.store.preparePendingCoachTurn(turnID: turn.id, expectedProfileID: owner)
+                            }
+                        } catch { unfinished = (turn.id, error); throw error }
                         let bound: Inference
                         do { bound = try inference() }
                         catch {
@@ -491,6 +494,7 @@ private final class CoachNavigationReadFence: Sendable {
                             guard !Task.isCancelled, diary.selection == selected else { break }
                             errorMessage = message(for: error)
                             processingFailed = true
+                            unfinished = (turn.id, error)
                             break
                         }
                         guard !Task.isCancelled, diary.selection == selected else { break }
@@ -502,7 +506,11 @@ private final class CoachNavigationReadFence: Sendable {
                     }
                 } catch {
                     processingFailed = true
+                    CoachEngine.logger.error("Coach worker failed: \(CoachEngine.failureReason(error), privacy: .public)")
                     if !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) }
+                }
+                if let unfinished, !Task.isCancelled, diary.selection == selected, !diary.isChangingProfile {
+                    await settle(unfinished.turnID, after: unfinished.error, owner: owner)
                 }
                 if diary.selection == selected, !diary.isChangingProfile { try? await diary.refresh(profileID: owner) }
                 if processingFailed {
@@ -514,6 +522,22 @@ private final class CoachNavigationReadFence: Sendable {
         }
     }
 
+    /// The engine records a failure only while its selection epoch holds. A turn it left unfinished still ends with its
+    /// saved-food summary or a Try again, never "Thinking…" with no way out.
+    private func settle(_ turnID: UUID, after error: any Error, owner: UUID) async {
+        let store = diary.store
+        guard let stored = try? await store.coachResult(turnID: turnID, expectedProfileID: owner),
+              [.captured, .analyzing].contains(stored.state) else { return }
+        // Saved food is never reported as a failure; the person can ask for the rest.
+        if !stored.receipts.isEmpty, let text = try? await store.coachCommittedSummary(turnID: turnID, expectedProfileID: owner),
+           (try? await store.completeCoachTurn(turnID: turnID, assistantText: text, incomplete: true, expectedProfileID: owner)) != nil {
+            errorMessage = nil
+            return
+        }
+        let reason = CoachEngine.failureReason(error)
+        CoachEngine.logger.error("Coach turn left unfinished: \(reason, privacy: .public)")
+        try? await store.setCoachTurnState(turnID: turnID, state: .needsRetry, failureReason: reason, expectedProfileID: owner)
+    }
     func chooseDay(_ turnID: UUID, usePrevious: Bool) async {
         guard !diary.isChangingProfile, let selected = diary.selection else { return }
         let owner = selected.identity.profileID

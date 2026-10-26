@@ -4,13 +4,18 @@ import OSLog
 
 extension DayProgressAttributes.ContentState {
     /// Built from the same daily report Today and the widget use, so no totals are computed twice.
-    init(report: DailyProgress, hideWhenLocked: Bool) {
+    init(readModel: DiaryReadModel, hideWhenLocked: Bool) {
+        let report = ProgressAnalytics.daily(readModel: readModel)
         let eaten = report.foodTotals, target = report.goal?.targets
+        // The same saved items the report adds; a nutrient any of them lacks is shown as a bound.
+        let items = readModel.meals.filter(\.isSaved).flatMap(\.items)
+        let fields: [(String, KeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("protein", \.protein), ("carbs", \.carbs), ("fat", \.fat)]
+        let partial = fields.filter { _, field in items.contains { $0.nutrition[keyPath: field] == nil } }.map(\.0)
         self.init(kcalEaten: eaten?.kcal, kcalTarget: target?.kcal,
                   protein: eaten?.protein, proteinTarget: target?.protein,
                   carbs: eaten?.carbs, carbsTarget: target?.carbs,
                   fat: eaten?.fat, fatTarget: target?.fat,
-                  hideWhenLocked: hideWhenLocked)
+                  hideWhenLocked: hideWhenLocked, partial: partial)
     }
 }
 
@@ -21,6 +26,9 @@ enum DayProgressSync: Equatable {
 
     /// iOS keeps an ended activity listed until its Lock Screen card goes; it can no longer be updated.
     static func isLive(_ state: ActivityState) -> Bool { state == .active || state == .stale }
+
+    /// iOS ends an activity by itself after eight hours but keeps its outdated card for up to four more.
+    static func lingers(_ state: ActivityState) -> Bool { state == .ended }
 
     static func decide(enabled: Bool, authorized: Bool, hasDiary: Bool, running: Int) -> DayProgressSync {
         guard enabled, authorized, hasDiary else { return .endAll }
@@ -40,7 +48,7 @@ private let liveActivityLog = Logger(subsystem: "com.yakov103.mivu", category: "
     var content = readModel.flatMap { model in
         model.activeDay.map { day in
             // Past the cutoff the numbers belong to yesterday, so the island asks to open Mivu instead.
-            ActivityContent(state: DayProgressAttributes.ContentState(report: ProgressAnalytics.daily(readModel: model), hideWhenLocked: hide),
+            ActivityContent(state: DayProgressAttributes.ContentState(readModel: model, hideWhenLocked: hide),
                             staleDate: WidgetSnapshot.nextRollover(after: Date(), timeZoneID: day.timeZoneID, cutoffHour: DayCutoff.hour))
         }
     }
@@ -69,7 +77,12 @@ extension DayProgressSync {
 
 private func applyDayProgress(enabled: Bool, authorized: Bool,
                               content: ActivityContent<DayProgressAttributes.ContentState>?) async {
-    let running = Activity<DayProgressAttributes>.activities.filter { DayProgressSync.isLive($0.activityState) }
+    let activities = Activity<DayProgressAttributes>.activities
+    // Otherwise a fresh activity would sit beside the old card with yesterday's or this morning's numbers.
+    for activity in activities where DayProgressSync.lingers(activity.activityState) {
+        await activity.end(nil, dismissalPolicy: .immediate)
+    }
+    let running = activities.filter { DayProgressSync.isLive($0.activityState) }
     switch DayProgressSync.decide(enabled: enabled, authorized: authorized, hasDiary: content != nil, running: running.count) {
     case .endAll:
         for activity in running { await activity.end(nil, dismissalPolicy: .immediate) }

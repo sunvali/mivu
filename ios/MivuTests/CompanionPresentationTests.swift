@@ -313,7 +313,7 @@ import Testing
         #expect(resumed.reactionID == nil)
     }
 
-    @Test(arguments: ["focus", "processing", "hidden", "background", "reducedMotion", "lowPower", "thermal", "character"])
+    @Test(arguments: ["focus", "processing", "hidden", "background", "reducedMotion", "thermal", "character"])
     func interruptedRestResumesWithoutDeadlineOrStaleReaction(interruption: String) {
         let presentation = resting()
         let interruptedAt = t.addingTimeInterval(1)
@@ -322,7 +322,7 @@ import Testing
         case "processing": _ = presentation.resolve(context: context(processing: true), now: interruptedAt)
         case "background": presentation.enterBackground()
         case "character": presentation.characterChanged(now: interruptedAt)
-        case "reducedMotion", "lowPower", "thermal":
+        case "reducedMotion", "thermal":
             _ = presentation.resolve(context: context(playback: .staticPose), now: interruptedAt)
         default: _ = presentation.resolve(context: context(playback: .hidden), now: interruptedAt)
         }

@@ -10,8 +10,12 @@
     "ios": {
       "package-name": "ios",
       "extra-files": [
-        { "type": "generic", "path": "Config/Shared.xcconfig" }
-      ]
+        {
+          "type": "generic",
+          "path": "Config/Shared.xcconfig"
+        }
+      ],
+      "last-release-sha": "ffa5dcd0141f466503a05db6eca65c720631b1d2"
     },
     "android": {
       "package-name": "android"
