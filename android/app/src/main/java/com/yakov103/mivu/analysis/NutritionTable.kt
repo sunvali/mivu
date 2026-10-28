@@ -5,7 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import java.io.File
 
 /** Read-only USDA FNDDS table bundled for on-device estimates; built by scripts/nutrition/build_fndds.py. Ports ios NutritionTable.swift. */
-class NutritionTable(private val file: File) {
+class NutritionTable(private val file: File) : FoodTable {
     data class Food(val code: Int, val description: String, val kcal: Double, val carbs: Double, val protein: Double, val fat: Double)
 
     private val database by lazy { SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY) }
@@ -25,7 +25,9 @@ class NutritionTable(private val file: File) {
     }
 
     /** Foods sharing a word with the phrase, so plain foods ("Apple, raw") beat dishes that mention them ("Pie, apple"). */
-    fun search(phrase: String, limit: Int = 5): List<Food> {
+    override fun search(phrase: String) = search(phrase, 5)
+
+    fun search(phrase: String, limit: Int): List<Food> {
         val terms = words(phrase)
         if (terms.isEmpty()) return emptyList()
         val lead = words(phrase.trim().substringBefore(' '))
@@ -37,7 +39,7 @@ class NutritionTable(private val file: File) {
     }
 
     /** Grams for one of `unit`: a portion naming the unit or a synonym, general "NFS" first. No default serving. */
-    fun portionGrams(code: Int, unit: String): Double? {
+    override fun portionGrams(code: Int, unit: String): Double? {
         val portions = database.rawQuery("select description, grams from portions where code = ?", arrayOf(code.toString())).use {
             buildList { while (it.moveToNext()) add(it.getString(0) to it.getDouble(1)) }
         }
