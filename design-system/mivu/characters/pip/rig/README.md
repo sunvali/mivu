@@ -1,8 +1,8 @@
 # Pip layered rig
 
 `pip.svg` is the editable source of truth for Pip's vector rig. `build.py`
-converts it to `ios/Mivu/Resources/Characters/pip/pip-rig.json`, which the app
-bundles. Never hand-edit the JSON.
+converts it to `pip-rig.json` in both `ios/Mivu/Resources/Characters/pip/` and
+`android/app/src/main/assets/pip/`, which each app bundles. Never hand-edit the JSON.
 
 ## Commands
 

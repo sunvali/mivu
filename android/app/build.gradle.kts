@@ -83,12 +83,12 @@ android {
         kotlin.setSrcDirs(smoke)
     }
     buildFeatures { compose = true }
+    androidResources { noCompress += "sqlite" } // the FNDDS asset is sized with openFd before it is copied
     // Synthetic SSE and archive fixtures live at the repo root, shared with other platforms.
     sourceSets.getByName("test").resources.srcDir("../../fixtures")
     sourceSets.getByName("androidTest").resources.srcDir("../../fixtures")
-    // Pip's rig is generated for iOS; Android reads the same file in place (never a copy).
-    sourceSets.getByName("main").assets.srcDir("../../ios/Mivu/Resources/Characters")
-    sourceSets.getByName("test").resources.srcDir("../../ios/Mivu/Resources/Characters")
+    // Pip's rig and the FNDDS table are Android's own copies in assets, written by the shared build scripts.
+    sourceSets.getByName("test").resources.srcDir("src/main/assets")
     // Pip's gestures are exported by iOS (`PipGestureFixtureTests`); the app reads asset `gestures.json` in place.
     sourceSets.getByName("main").assets.srcDir("../../fixtures/pip")
 }

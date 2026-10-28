@@ -2,6 +2,8 @@
 """Build the bundled on-device nutrition table from USDA FNDDS CSVs (public domain, CC0).
 
 Usage: build_fndds.py <unzipped FoodData_Central_survey_food_csv folder> <output .sqlite>
+Run it once per app, so the two copies never link at build time:
+  ios/Mivu/Resources/fndds.sqlite and android/app/src/main/assets/fndds.sqlite
 """
 import csv
 import sqlite3

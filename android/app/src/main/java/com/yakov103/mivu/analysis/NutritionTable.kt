@@ -1,0 +1,62 @@
+package com.yakov103.mivu.analysis
+
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import java.io.File
+
+/** Read-only USDA FNDDS table bundled for on-device estimates; built by scripts/nutrition/build_fndds.py. Ports ios NutritionTable.swift. */
+class NutritionTable(private val file: File) {
+    data class Food(val code: Int, val description: String, val kcal: Double, val carbs: Double, val protein: Double, val fat: Double)
+
+    private val database by lazy { SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY) }
+
+    // shortcut: the whole foods table (~7k rows) is ranked in memory and FTS5 is skipped (it may be missing on Android SQLite); index it if the table grows 10x.
+    private val foods by lazy {
+        database.rawQuery("select code, description, kcal, carbs, protein, fat from foods order by code", null).use {
+            buildList { while (it.moveToNext()) add(Food(it.getInt(0), it.getString(1), it.getDouble(2), it.getDouble(3), it.getDouble(4), it.getDouble(5))) }
+        }
+    }
+
+    /** Foods sharing a word with the phrase, so plain foods ("Apple, raw") beat dishes that mention them ("Pie, apple"). */
+    fun search(phrase: String, limit: Int = 5): List<Food> {
+        val terms = words(phrase)
+        if (terms.isEmpty()) return emptyList()
+        val lead = words(phrase.trim().substringBefore(' '))
+        fun score(food: Food): Triple<Int, Int, Int> {
+            val shared = words(food.description).count { it in terms }
+            val firstWord = words(food.description.substringBefore(','))
+            return Triple(shared, if (firstWord.any { it in terms || it in lead }) 1 else 0, -food.description.length)
+        }
+        return foods.map { it to score(it) }.filter { it.second.first > 0 }
+            .sortedWith(compareByDescending<Pair<Food, Triple<Int, Int, Int>>> { it.second.first }
+                .thenByDescending { it.second.second }.thenByDescending { it.second.third }.thenBy { it.first.code })
+            .take(limit).map { it.first }
+    }
+
+    /** Grams for one of `unit`: a portion naming the unit or a synonym, general "NFS" first. No default serving. */
+    fun portionGrams(code: Int, unit: String): Double? {
+        val portions = database.rawQuery("select description, grams from portions where code = ?", arrayOf(code.toString())).use {
+            buildList { while (it.moveToNext()) add(it.getString(0) to it.getDouble(1)) }
+        }
+        val synonyms = mapOf("slice" to listOf("slice", "piece"), "glass" to listOf("glass", "cup"),
+            "bowl" to listOf("bowl", "cup"), "mug" to listOf("mug", "cup"), "bar" to listOf("bar", "piece"))
+        val wanted = words(unit).flatMap { synonyms[it] ?: listOf(it) }.toSet()
+        val matches = portions.filter { (description, _) -> words(description).any { it in wanted } }
+        return (matches.firstOrNull { it.first.contains("NFS") } ?: matches.minByOrNull { it.first.length })?.second
+    }
+
+    companion object {
+        /** Lowercased words of three or more letters with a plural "s" dropped, so "eggs" names "Boiled egg" and "glass" stays whole. */
+        fun words(text: String): Set<String> = Regex("\\p{L}+").findAll(text.lowercase()).map { it.value }.filter { it.length >= 3 }
+            .map { if (it.endsWith("s") && !it.endsWith("ss")) it.dropLast(1) else it }.toSet()
+
+        fun bundled(context: Context): NutritionTable {
+            val copy = File(context.noBackupFilesDir, "fndds.sqlite")
+            val size = context.assets.openFd("fndds.sqlite").use { it.length }
+            if (!copy.exists() || copy.length() != size) {
+                context.assets.open("fndds.sqlite").use { input -> copy.outputStream().use { input.copyTo(it) } }
+            }
+            return NutritionTable(copy)
+        }
+    }
+}
