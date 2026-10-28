@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         val app = application as MivuApplication
         app.screenVisible = true
+        app.chatGPT.refreshNano() // a download or AICore update may have finished while Mivu was away
         app.rollOverDay()
     }
 

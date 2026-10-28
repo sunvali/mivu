@@ -127,7 +127,7 @@ class ChatGPTConnectionTest {
         saved()
         val c = restored()
         assertEquals(AccountState.disconnected, c.state.value.account)
-        assertFalse(c.state.value.canInfer)
+        assertFalse(c.state.value.planAuthorized)
         assertTrue(apiPaths.isEmpty())
     }
 
@@ -138,7 +138,7 @@ class ChatGPTConnectionTest {
         assertEquals(registration.id, state.registrationID)
         assertEquals(catalog, state.models.map { it.slug })
         assertEquals("synthetic-model-a", state.selectedModel)
-        assertTrue(state.canInfer)
+        assertTrue(state.planAuthorized)
     }
 
     @Test fun connectRequiresConsent() {
@@ -164,7 +164,7 @@ class ChatGPTConnectionTest {
         c.selectModel("synthetic-model-b")
         c.selectModel("not-in-catalog")
         assertEquals("synthetic-model-b", c.state.value.selectedModel)
-        assertTrue(c.state.value.canInfer)
+        assertTrue(c.state.value.planAuthorized)
     }
 
     @Test fun networkFailureShowsOfflineNotice() {
@@ -301,7 +301,7 @@ class ChatGPTConnectionTest {
         assertEquals(AccountState.planPermissionMissing, state.account)
         assertEquals(ConnectionNotice.revoked, state.notice)
         assertEquals("Enable ChatGPT plan usage", state.buttonTitle)
-        assertFalse(state.canInfer)
+        assertFalse(state.planAuthorized)
         val modelRequests = apiPaths.count { it == "/v1/models" }
         val relaunched = restored()
         assertEquals(AccountState.planPermissionMissing, relaunched.state.value.account)
@@ -317,12 +317,12 @@ class ChatGPTConnectionTest {
         assertEquals(AccountState.connected, c.state.value.account)
     }
 
-    @Test fun canInferFalseWithoutModels() {
+    @Test fun planUnauthorizedWithoutModels() {
         consent(); saved()
         catalog = emptyList()
         val c = restored()
         assertEquals(AccountState.connected, c.state.value.account)
-        assertFalse(c.state.value.canInfer)
+        assertFalse(c.state.value.planAuthorized)
         assertEquals(SessionError.NoActiveSession, respond(c).exceptionOrNull())
         assertFalse("/v1/responses" in apiPaths)
     }

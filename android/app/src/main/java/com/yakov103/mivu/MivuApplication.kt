@@ -7,7 +7,9 @@ import android.content.ComponentName
 import android.net.ConnectivityManager
 import android.net.Network
 import androidx.annotation.VisibleForTesting
+import com.yakov103.mivu.analysis.GeminiNano
 import com.yakov103.mivu.analysis.MealAnalysisWorker
+import com.yakov103.mivu.analysis.NutritionTable
 import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.analysis.SampleAnalyzer
 import com.yakov103.mivu.coach.CoachInferenceInput
@@ -101,7 +103,8 @@ class MivuApplication : Application() {
     // The one ChatGPT connection for the process; the debug proof screen shares it so refresh rotation has one owner.
     val chatGPT by lazy {
         val store = CredentialStore(this)
-        ChatGPTConnection(store, AuthSession(store), ResponsesClient(), getSharedPreferences("chatgpt", MODE_PRIVATE), scope)
+        ChatGPTConnection(store, AuthSession(store), ResponsesClient(), getSharedPreferences("chatgpt", MODE_PRIVATE), scope,
+            GeminiNano(), lazy { NutritionTable.bundled(this) })
     }
 
     /** The launch restore of the chosen ChatGPT account; Coach work waits for it, as iOS `start` runs restore before `resume`. */
@@ -113,6 +116,7 @@ class MivuApplication : Application() {
         // A force-stop clears alarms with no broadcast: every launch rebooks the reminder (or cancels it when off).
         MorningReminder.schedule(this)
         restored = scope.launch(Dispatchers.IO) { chatGPT.restore() }
+        chatGPT.refreshNano()
         publishWidget()
         // Restore spools (`cacheDir/archive-*`) left by a process that died mid-restore; none can be in use this early.
         scope.launch(Dispatchers.IO) { cacheDir.listFiles().orEmpty().filter { it.name.startsWith("archive-") }.forEach { it.deleteRecursively() } }

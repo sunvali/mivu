@@ -1,7 +1,12 @@
 package com.yakov103.mivu.connection
 
 import android.content.SharedPreferences
+import androidx.annotation.VisibleForTesting
 import com.yakov103.mivu.analysis.AvailableModel
+import com.yakov103.mivu.analysis.FoodTable
+import com.yakov103.mivu.analysis.GeminiNano
+import com.yakov103.mivu.analysis.OnDeviceInference
+import com.yakov103.mivu.analysis.OnDeviceModel
 import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.coach.CoachInferenceInput
 import com.yakov103.mivu.coach.CoachInferenceResult
@@ -10,9 +15,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -37,6 +45,13 @@ enum class ConnectionNotice(val text: String) {
     storageFailed("Local credentials could not be updated. Try again."),
 }
 
+@Suppress("EnumEntryName") // ML Kit `FeatureStatus`, plus AICore still fetching its configuration
+enum class NanoStatus { unavailable, downloadable, downloading, preparing, available }
+
+/** iOS `Provider`: `onDevice` is Gemini Nano, a no-account fallback for logging; ChatGPT is the main Coach. */
+@Suppress("EnumEntryName")
+enum class CoachProvider { chatGPT, onDevice }
+
 data class ConnectionState(
     val account: AccountState = AccountState.disconnected,
     val registrationID: String? = null,
@@ -47,8 +62,23 @@ data class ConnectionState(
     val notice: ConnectionNotice? = null,
     val consented: Boolean = false,
     val planWelcomeSeen: Boolean = false,
+    val storedProvider: CoachProvider? = null,
+    val nano: NanoStatus = NanoStatus.unavailable,
 ) {
-    val canInfer get() = account == AccountState.connected && !isConnecting && !isDisconnecting && models.any { it.slug == selectedModel }
+    val planAuthorized get() = account == AccountState.connected && !isConnecting && !isDisconnecting && models.any { it.slug == selectedModel }
+
+    /** The person's choice while it can answer; otherwise on-device when this phone can run it, then ChatGPT. */
+    val provider get() = when {
+        storedProvider != null && (storedProvider == CoachProvider.chatGPT || nano == NanoStatus.available) -> storedProvider
+        // Someone with a saved ChatGPT connection keeps it until they pick on-device, also while it restores at launch.
+        storedProvider == null && (planAuthorized || registrationID != null) -> CoachProvider.chatGPT
+        nano == NanoStatus.available -> CoachProvider.onDevice
+        else -> CoachProvider.chatGPT
+    }
+    /** Whether the current provider can answer a Coach turn now. */
+    val canInfer get() = if (provider == CoachProvider.onDevice) nano == NanoStatus.available else planAuthorized
+    /** Only ChatGPT tunes onboarding targets; the formula estimate beats the on-device model there. */
+    val tunesTargets get() = provider == CoachProvider.chatGPT && planAuthorized
     val showsPlanWelcome get() = account == AccountState.connected && !planWelcomeSeen
 
     /** iOS `ChatGPTConnectButton.defaultTitle`. */
@@ -70,10 +100,21 @@ class ChatGPTConnection(
     private val client: ResponsesClient,
     private val prefs: SharedPreferences,
     private val scope: CoroutineScope,
+    private val nano: GeminiNano? = null,
+    /** The process's one FNDDS table, opened on the first on-device turn. */
+    private val table: Lazy<FoodTable>? = null,
 ) {
     private val _state = MutableStateFlow(ConnectionState(consented = prefs.getBoolean(CONSENT, false),
-        planWelcomeSeen = prefs.getBoolean(WELCOME, false)))
+        planWelcomeSeen = prefs.getBoolean(WELCOME, false),
+        storedProvider = prefs.getString(PROVIDER, null)?.let { name -> CoachProvider.entries.firstOrNull { it.name == name } }))
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
+
+    /** Replaces Gemini Nano in instrumented tests and reports it available. */
+    @VisibleForTesting internal var onDeviceForTest: OnDeviceModel? = null
+        set(value) {
+            field = value
+            _state.update { it.copy(nano = if (value != null) NanoStatus.available else NanoStatus.unavailable) }
+        }
 
     // Guards generation and every state change that depends on it; nothing suspends while it is held.
     private val lock = Any()
@@ -110,6 +151,23 @@ class ChatGPTConnection(
         prefs.edit().putBoolean(WELCOME, true).apply()
         _state.update { it.copy(planWelcomeSeen = true) }
     }
+
+    fun choose(provider: CoachProvider) {
+        prefs.edit().putString(PROVIDER, provider.name).apply()
+        _state.update { it.copy(storedProvider = provider) }
+    }
+
+    /** Re-reads whether Gemini Nano can run on this phone, off the caller's thread; launch and each return call it. */
+    fun refreshNano() {
+        val nano = nano ?: return
+        scope.launch {
+            val status = nano.status()
+            if (onDeviceForTest == null) _state.update { it.copy(nano = status) }
+        }
+    }
+
+    /** Downloads Gemini Nano with progress 0..1, then re-reads its status. */
+    fun downloadNano(): Flow<Float> = (nano?.download() ?: emptyFlow()).onCompletion { refreshNano() }
 
     /** Starts a sign-in that [open]s the authorization URL in a browser; does nothing without consent or while busy. */
     fun connect(open: (String) -> Unit): Job = synchronized(lock) {
@@ -210,9 +268,16 @@ class ChatGPTConnection(
      * that turn goes through the returned function and ends with [SessionError.SessionChanged] once any of them changes.
      */
     fun inference(): suspend (List<CoachInferenceInput>, JsonObject?) -> CoachInferenceResult {
+        val s = _state.value
+        if (s.provider == CoachProvider.onDevice) {
+            val model = onDeviceForTest ?: nano
+            val table = table
+            if (!s.canInfer || model == null || table == null) return { _, _ -> throw SessionError.NoActiveSession }
+            return { input, tools -> OnDeviceInference.respond(input, tools, model, table.value) }
+        }
         val binding = synchronized(lock) {
-            val s = _state.value
-            if (s.canInfer) Binding(generation, s.registrationID, s.selectedModel) else null
+            val current = _state.value
+            if (current.planAuthorized) Binding(generation, current.registrationID, current.selectedModel) else null
         } ?: return { _, _ -> throw SessionError.NoActiveSession }
         return { input, tools -> respond(binding, input, tools) }
     }
@@ -224,7 +289,7 @@ class ChatGPTConnection(
             currentCoroutineContext().ensureActive()
             synchronized(lock) {
                 val s = _state.value
-                if (generation != revision || s.registrationID != owner || s.selectedModel != model || !s.canInfer) {
+                if (generation != revision || s.registrationID != owner || s.selectedModel != model || !s.planAuthorized) {
                     throw SessionError.SessionChanged
                 }
             }
@@ -315,5 +380,6 @@ class ChatGPTConnection(
         const val WELCOME = "chatGPTPlanWelcomeSeen"
         const val PAUSED = "pausedRegistrationID"
         const val SELECTED = "selectedRegistrationID"
+        const val PROVIDER = "aiProvider"
     }
 }

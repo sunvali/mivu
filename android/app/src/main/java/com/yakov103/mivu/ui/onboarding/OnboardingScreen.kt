@@ -237,7 +237,7 @@ class OnboardingViewModel(
         if (!prefilled) prefill()
         // As iOS: a connection made on the Connect step goes straight on to the results.
         viewModelScope.launch {
-            connection.map { it.canInfer }.distinctUntilChanged().collect { if (it && step == Step.connect) go(Step.results) }
+            connection.map { it.planAuthorized }.distinctUntilChanged().collect { if (it && step == Step.connect) go(Step.results) }
         }
     }
 
@@ -291,13 +291,13 @@ class OnboardingViewModel(
 
     fun advance() {
         var next = Step.entries.getOrElse(step.ordinal + 1) { Step.results }
-        if (next == Step.connect && connection.value.canInfer) next = Step.results
+        if (next == Step.connect && connection.value.planAuthorized) next = Step.results
         go(next)
     }
 
     fun back() {
         var previous = Step.entries.getOrElse(step.ordinal - 1) { Step.hello }
-        if (previous == Step.connect && connection.value.canInfer) previous = Step.diet
+        if (previous == Step.connect && connection.value.planAuthorized) previous = Step.diet
         go(previous)
     }
 
@@ -322,7 +322,7 @@ class OnboardingViewModel(
         // iOS sends a fresh request each time: a reply for earlier answers must not win.
         ask?.cancel(); asking = false
         show(answers.estimate(thisYear)); explanation = null; askFailed = false
-        if (connection.value.canInfer) askChatGPT() else react(CompanionPose.Saved)
+        if (connection.value.tunesTargets) askChatGPT() else react(CompanionPose.Saved)
     }
 
     /** One request with the answers; a reply that passes the checks replaces the estimate, anything else keeps it. */
