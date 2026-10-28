@@ -55,6 +55,7 @@ class NutritionTable(private val file: File) : FoodTable {
     private fun stems(text: String): Set<String> = letters.findAll(text.lowercase()).map { it.value }.filter { it.length >= 3 }.map {
         when {
             it.endsWith("ies") && it.length > 4 -> it.dropLast(3) + "y"
+            it.endsWith("ie") -> it.dropLast(2) + "y" // cookie and cookies meet at "cooky"
             it.endsWith("oes") -> it.dropLast(2)
             it.matches(sibilantPlural) -> it.dropLast(2)
             else -> words(it).firstOrNull() ?: it

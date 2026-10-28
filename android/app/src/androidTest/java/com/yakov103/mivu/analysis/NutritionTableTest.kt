@@ -21,6 +21,8 @@ class NutritionTableTest {
     @Test fun pluralsMeetTheirSingularFoods() {
         assertTrue(table.search("mashed potatoes").any { it.description.startsWith("Potato, mashed") })
         assertTrue(table.search("potatoes").any { it.description.startsWith("Potato") })
+        assertTrue(table.search("cookies").any { it.description.startsWith("Cookie") })
+        assertTrue(table.search("brownies").any { it.description.contains("brownie", ignoreCase = true) })
         assertTrue(table.search("berries").any { it.description.startsWith("Berries") })
     }
 
