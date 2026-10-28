@@ -96,4 +96,4 @@ The docs say nothing about mobile apps or App Store distribution.
 | Documented scopes, `resource`, PKCE S256, fresh `state` and `nonce` | `OAuthAttempt.swift` |
 | Loopback redirect `http://127.0.0.1:<port>/auth/callback` | `OAuthAttempt.swift` |
 | Responses API with `store: false`, `stream: true` | `ResponsesClient.swift` |
-| Tokens stay with the user | Keychain only, never logged or sent elsewhere |
+| Tokens stay with the user | Stored in the Keychain; sent only to OpenAI |
