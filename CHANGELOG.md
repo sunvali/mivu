@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/sunvali/mivu/compare/v1.1.2...v1.1.3) (2026-10-28)
+
+
+### Bug Fixes
+
+* **review:** add Report Reply and tighten privacy wording ([#80](https://github.com/sunvali/mivu/issues/80)) ([443eedc](https://github.com/sunvali/mivu/commit/443eedc106edf9f0da88d9d0307da13bcca0a52f))
+
 ## [1.1.2](https://github.com/sunvali/mivu/compare/v1.1.1...v1.1.2) (2026-10-28)
 
 
