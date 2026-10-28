@@ -25,7 +25,7 @@
 - **Sampling:** greedy (`temperature = 0f`, `topK = 1`).
 - **Model output:** plain JSON text parsed strictly. A bad parse throws `ResponsesClient.Failure.Malformed`, so the engine's model-output retry applies. No `genai-schema`, no KSP and no Preview function calling.
 - **Copy:** iOS #49 wording with "Apple Intelligence" changed to "Gemini Nano" and "iPhone" to "phone". The exact strings are in each task.
-- **Releases:** the iOS app, `ios/version.txt` and `ios/Config/` are untouched. Android reads `ios/Mivu/Resources/fndds.sqlite` only through gradle.
+- **No coupling to iOS (owner rule):** the Android build, tests and code never read anything under `ios/`. Android keeps its own copies of shared assets, written by the shared build scripts. Comments that name the iOS file a port came from are fine. The iOS app, `ios/version.txt` and `ios/Config/` are untouched.
 - **Process:** a failing test comes before behaviour. Lint must pass, because pre-push runs it. Commit messages never mention AI tools.
 
 ## Rulings made while planning
@@ -50,13 +50,17 @@
 
 ---
 
-### Task 1: Bundled FNDDS nutrition table
+### Task 1: Decouple Android assets from iOS, then add the bundled FNDDS nutrition table
 
 **Files:**
-- Modify: `android/app/build.gradle.kts`. Add a `Copy` task that puts `../../ios/Mivu/Resources/fndds.sqlite` into `build/generated/fndds/`, registered with `androidComponents.onVariants { it.sources.assets?.addGeneratedSourceDirectory(task, …) }`. Don't add all of `ios/Mivu/Resources`, which would duplicate the Pip rig.
+- Create: `android/app/src/main/assets/pip/pip-rig.json`, a copy of today's rig, and `android/app/src/main/assets/fndds.sqlite`, a copy of the FNDDS table.
+- Modify: `design-system/mivu/characters/pip/rig/build.py` and `scripts/nutrition/build_fndds.py`. Each writes its output to both the iOS and the Android path, so the two apps stay in sync with no build-time link. Update `scripts/nutrition/test_build_fndds.py` if it asserts the output path.
+- Modify: `android/app/build.gradle.kts`. Remove both `../../ios/Mivu/Resources/Characters` srcDirs. Test resources read `src/main/assets` instead, so tests that load `pip/pip-rig.json` still find it.
+- Modify: `scripts/ci/test_workflow_contract.py:158`. Assert that the Android gradle files contain no `ios/` at all: `assertNotIn('ios/', gradle)`.
 - Create: `android/app/src/main/java/com/yakov103/mivu/analysis/NutritionTable.kt`
 - Test (JVM): `android/app/src/test/java/com/yakov103/mivu/analysis/NutritionWordsTest.kt`
 - Test (instrumented): `android/app/src/androidTest/java/com/yakov103/mivu/analysis/NutritionTableTest.kt`. Port the cases in `ios/MivuTests/NutritionTableTests.swift`.
+- Run first: `python3 -m unittest scripts/ci/test_workflow_contract.py` fails until the gradle srcDirs are gone. Then it passes, along with the existing Pip rig JVM tests and the APK build.
 
 **Interfaces:**
 - Produces:
