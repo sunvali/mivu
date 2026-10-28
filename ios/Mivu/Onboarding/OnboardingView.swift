@@ -255,7 +255,7 @@ struct OnboardingView: View {
         case .connect:
             header("Let ChatGPT tune it", "Connect your ChatGPT account to turn your answers into personal targets.")
             card {
-                promise("lock.shield", "Private by default", "Only these answers are sent, once. Your diary stays on this iPhone.")
+                promise("lock.shield", "Private by default", "Mivu asks before sharing anything with OpenAI. Your diary stays on this iPhone.")
                 Divider()
                 promise("person.crop.circle.badge.checkmark", "Your own plan", "Recommended. Works with ChatGPT Plus or Pro and uses its allowance. No extra cost.")
             }

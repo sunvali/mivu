@@ -22,6 +22,7 @@ struct CoachView: View {
     @State private var composerHeight: CGFloat = 0
     @State private var textWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var voice = CoachVoiceInput()
     @State private var cameraPresentationID: UUID?
@@ -276,6 +277,7 @@ struct CoachView: View {
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
                             .contextMenu { messageActions(turn, fromPip: true) }
                             .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: true) }
+                            .accessibilityAction(named: "Report Reply") { openURL(MivuLinks.reportReply(CoachReplyLines.plain(answer))) }
                             .accessibilityIdentifier("coachReply")
                     }
                     turnActions(turn)
@@ -595,6 +597,9 @@ struct CoachView: View {
         Button("Reply", systemImage: "arrowshape.turn.up.left") { reply(to: turn, fromPip: fromPip) }
         let text = fromPip ? CoachReplyLines.plain(turn.assistantText ?? "") : turn.text
         if !text.isEmpty { Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text } }
+        if fromPip, !text.isEmpty {
+            Button("Report Reply", systemImage: "exclamationmark.bubble") { openURL(MivuLinks.reportReply(text)) }
+        }
     }
     private func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
         coach.reply(to: turn, fromPip: fromPip); editing = true
