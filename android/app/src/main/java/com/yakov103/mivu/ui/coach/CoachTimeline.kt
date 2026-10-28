@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import com.yakov103.mivu.R
 import com.yakov103.mivu.coach.CoachActivity
 import com.yakov103.mivu.coach.CoachReplyLines
+import com.yakov103.mivu.connection.CoachProvider
 import com.yakov103.mivu.diary.CoachExchange
 import com.yakov103.mivu.diary.CoachDestination
 import com.yakov103.mivu.diary.CoachReceiptTarget
@@ -132,6 +133,7 @@ fun CoachExchangeRow(
     actions: CoachRowActions,
     undoing: Set<String> = emptySet(),
     highlighted: Boolean = false,
+    provider: CoachProvider = CoachProvider.chatGPT,
     modifier: Modifier = Modifier,
 ) {
     val turn = exchange.turn
@@ -157,7 +159,7 @@ fun CoachExchangeRow(
                     CoachQuestionChips(question, exchange.questionMeals, enabled = true, loadPhoto = actions.mealPhoto, onPick = actions.answer)
                 }
                 if (turn.state != CoachTurnState.completed) {
-                    if (activity != null && turn.receipts.isEmpty()) ActivityRow(activity) else Status(turn.state)
+                    if (activity != null && turn.receipts.isEmpty()) ActivityRow(activity) else Status(turn, provider)
                     TurnChoices(turn, days, actions)
                 }
                 exchange.receipts.filter { it.mealID != null || it.workoutID != null }.forEach { receipt ->
@@ -306,13 +308,13 @@ private fun InputBubble(turn: CoachTurn, loadPhoto: suspend (UUID, UUID) -> Byte
 }
 
 @Composable
-private fun Status(state: CoachTurnState) {
-    val color = when (state) {
+private fun Status(turn: CoachTurn, provider: CoachProvider) {
+    val color = when (turn.state) {
         CoachTurnState.needsRetry -> MaterialTheme.colorScheme.error
         CoachTurnState.analyzing -> MaterialTheme.colorScheme.primary
         else -> MivuTheme.colors.warning
     }
-    Text(status(state), style = MaterialTheme.typography.bodyMedium, color = color)
+    Text(status(turn.state, provider, turn.failureReason), style = MaterialTheme.typography.bodyMedium, color = color)
 }
 
 /** "Log to <date>" while the turn needs its day; otherwise Try again for a turn that stopped. */
@@ -340,12 +342,17 @@ private val LINKS = mapOf(CoachDestination.settings to "Open Settings", CoachDes
 private val RETRYABLE = setOf(CoachTurnState.waitingForConnection, CoachTurnState.waitingForNetwork, CoachTurnState.needsRetry,
     CoachTurnState.needsClarification)
 
-private fun status(state: CoachTurnState) = when (state) {
+private fun status(state: CoachTurnState, provider: CoachProvider, failureReason: String?) = when (state) {
     CoachTurnState.captured -> "Waiting to start"
     CoachTurnState.analyzing -> "Thinking…"
     CoachTurnState.waitingForConnection -> "Connect ChatGPT in Settings to continue"
-    CoachTurnState.waitingForNetwork -> "Offline. I'll reply when you're back online."
-    CoachTurnState.needsRetry -> "Couldn't finish. Your message is saved."
+    CoachTurnState.waitingForNetwork -> if (provider == CoachProvider.onDevice) "I'll finish this when you're back in Mivu."
+        else "Offline. I'll reply when you're back online."
+    CoachTurnState.needsRetry -> when (failureReason) {
+        "OnDevice.BatteryQuota" -> "Pip needs a break. Try later, or use ChatGPT in Settings."
+        "OnDevice.ImagesUnsupported" -> "Photos need ChatGPT on this phone. Your meal is saved."
+        else -> "Couldn't finish. Your message is saved."
+    }
     CoachTurnState.needsClarification -> "I need a little more detail. Reply with it, or edit the record."
     CoachTurnState.completed -> "Completed"
 }

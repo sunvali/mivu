@@ -1,6 +1,7 @@
 package com.yakov103.mivu.coach
 
 import android.util.Log
+import com.yakov103.mivu.analysis.OnDeviceFailure
 import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.connection.SessionError
 import com.yakov103.mivu.diary.CoachMealCandidate
@@ -347,6 +348,13 @@ class CoachEngine(
                 ResponsesClient.Failure.UsageUnavailable -> "UsageUnavailable"
                 ResponsesClient.Failure.LimitExceeded -> "LimitExceeded"
             }
+            is OnDeviceFailure -> "OnDevice." + when (error) {
+                OnDeviceFailure.Busy -> "Busy"
+                OnDeviceFailure.Paused -> "Paused"
+                OnDeviceFailure.BatteryQuota -> "BatteryQuota"
+                OnDeviceFailure.ImagesUnsupported -> "ImagesUnsupported"
+                OnDeviceFailure.Unavailable -> "Unavailable"
+            }
             else -> error.javaClass.name.let { name ->
                 if (listOf("java.", "javax.", "android.").any(name::startsWith)) error.javaClass.simpleName.take(40) else "Other"
             }
@@ -402,6 +410,8 @@ class CoachEngine(
             is EOFException, is SSLException, is ProtocolException -> true
             SessionError.NetworkUnavailable, ResponsesClient.Failure.IncompleteResponse, ResponsesClient.Failure.UsageUnavailable -> true
             is ResponsesClient.Failure.Http -> error.code in 500..599 || error.code == 408
+            // Gemini Nano is busy, or Mivu left the foreground; the turn waits for the next start.
+            OnDeviceFailure.Busy, OnDeviceFailure.Paused -> true
             else -> false
         }
     }

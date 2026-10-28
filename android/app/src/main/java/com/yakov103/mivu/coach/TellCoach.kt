@@ -23,8 +23,12 @@ import kotlinx.coroutines.withContext
 enum class TellCoachOutcome(val line: String) {
     Sent("Sent to the Coach."),
     SavedNeedsConnection("Saved. Open Mivu to connect the Coach."),
+    SavedOpenToFinish("Saved. Pip will finish when you open Mivu."),
     NeedsSetup("Open Mivu to finish setup first."),
     Failed("I couldn't save that. Please try again."),
+    ;
+
+    val saved get() = this != Failed && this != NeedsSetup
 }
 
 /** iOS `TellCoach.run`: saves a message from outside the app into Coach history, without opening the app. */
@@ -48,9 +52,15 @@ object TellCoach {
         } catch (_: Exception) {
             return TellCoachOutcome.Failed
         }
-        app.followReply(submissionID)
+        // On-device turns never run in the background or notify: they finish when Mivu opens.
+        val onDevice = app.onDevice
+        if (!onDevice) app.followReply(submissionID)
         app.restored.join() // as iOS `start` before reading canInfer: a cold start must not say "connect" to a connected account
-        return if (canInferForTest ?: app.chatGPT.state.value.canInfer) TellCoachOutcome.Sent else TellCoachOutcome.SavedNeedsConnection
+        return when {
+            !(canInferForTest ?: app.chatGPT.state.value.canInfer) -> TellCoachOutcome.SavedNeedsConnection
+            onDevice -> TellCoachOutcome.SavedOpenToFinish
+            else -> TellCoachOutcome.Sent
+        }
     }
 
     private fun DiaryDatabase.save(text: String, photos: List<File>, id: UUID, at: Instant) {

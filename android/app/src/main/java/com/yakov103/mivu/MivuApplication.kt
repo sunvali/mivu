@@ -1,11 +1,13 @@
 package com.yakov103.mivu
 
+import android.app.Activity
 import android.app.Application
 import android.app.job.JobInfo
 import android.app.job.JobScheduler
 import android.content.ComponentName
 import android.net.ConnectivityManager
 import android.net.Network
+import android.os.Bundle
 import androidx.annotation.VisibleForTesting
 import com.yakov103.mivu.analysis.GeminiNano
 import com.yakov103.mivu.analysis.MealAnalysisWorker
@@ -19,6 +21,7 @@ import com.yakov103.mivu.coach.CoachReplyNotification
 import com.yakov103.mivu.coach.CoachWorker
 import com.yakov103.mivu.connection.AuthSession
 import com.yakov103.mivu.connection.ChatGPTConnection
+import com.yakov103.mivu.connection.CoachProvider
 import com.yakov103.mivu.connection.CredentialStore
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.day.MorningReminder
@@ -113,6 +116,15 @@ class MivuApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         DayCutoff.load(DiaryRepository.preferences(this))
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: Activity) { startedActivities++ }
+            override fun onActivityStopped(activity: Activity) { startedActivities-- }
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+            override fun onActivityResumed(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        })
         // A force-stop clears alarms with no broadcast: every launch rebooks the reminder (or cancels it when off).
         MorningReminder.schedule(this)
         restored = scope.launch(Dispatchers.IO) { chatGPT.restore() }
@@ -133,6 +145,8 @@ class MivuApplication : Application() {
     fun drainCoach(retryWaiting: Boolean = false): Job = scope.launch {
         val ready = repository.bootstrapState.filterIsInstance<Bootstrap.Ready>().first()
         restored.join() // a cold start must not save a healthy turn as waiting for a connection
+        // Gemini Nano runs only in the foreground: the turn stays pending and MainActivity.onStart resumes it.
+        if (onDevice && !isForeground) return@launch
         coachWorker.drain(ready.profileID, includeWaitingForConnection = chatGPT.state.value.canInfer, retryWaiting = retryWaiting)
         coachWorker.awaitIdle()
     }
@@ -162,6 +176,12 @@ class MivuApplication : Application() {
         // iOS continueInBackground; a stopped job posts the saved note for shared turns (expireFollowed).
         if (jobs.schedule(job.setExpedited(true).build()) == JobScheduler.RESULT_FAILURE) jobs.schedule(job.setExpedited(false).build())
     }
+
+    @Volatile private var startedActivities = 0
+    @VisibleForTesting internal var foregroundForTest: Boolean? = null
+    /** Whether a Mivu screen is started: Gemini Nano runs only then. */
+    val isForeground get() = foregroundForTest ?: (startedActivities > 0)
+    val onDevice get() = chatGPT.state.value.provider == CoachProvider.onDevice
 
     /** Set by [MainActivity] while it is started: replies to shared messages are not posted while Mivu is on screen. */
     @Volatile var screenVisible = false

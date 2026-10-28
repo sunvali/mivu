@@ -179,7 +179,7 @@ fun CoachScreen(
                 items(rows, key = { it.turn.id }) { exchange ->
                     CoachExchangeRow(exchange, isLatest = exchange.turn.id == state.latestID,
                         activity = activity?.takeIf { it.first == exchange.turn.id }?.second, days = state.days, actions = actions, undoing = undoing,
-                        highlighted = exchange.turn.id == state.highlighted)
+                        highlighted = exchange.turn.id == state.highlighted, provider = connection.provider)
                 }
             }
             // Centred in the space above the composer.

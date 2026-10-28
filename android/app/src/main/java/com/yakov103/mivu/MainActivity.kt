@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
         app.screenVisible = true
         app.chatGPT.refreshNano() // a download or AICore update may have finished while Mivu was away
         app.rollOverDay()
+        if (app.onDevice) app.drainCoach(retryWaiting = true) // on-device turns wait for the foreground
     }
 
     override fun onStop() {
@@ -67,7 +68,8 @@ class MainActivity : ComponentActivity() {
         app.screenVisible = false
         if (isChangingConfigurations) return // a rotation, not leaving the app
         // The process scope, so the check outlives an activity that is finishing.
-        app.scope.launch { if (app.hasPendingWork()) app.scheduleBackgroundDrain() }
+        // Gemini Nano cannot run in the background, so on-device turns wait for the next start instead of a job.
+        app.scope.launch { if (!app.onDevice && app.hasPendingWork()) app.scheduleBackgroundDrain() }
     }
 
     private companion object {

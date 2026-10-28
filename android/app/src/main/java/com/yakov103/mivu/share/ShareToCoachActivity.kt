@@ -203,7 +203,7 @@ class ShareViewModel(private val app: MivuApplication, private val content: Shar
             // The process scope: a started save finishes, and its reply is followed, even if the sheet goes away meanwhile.
             _outcome.value = app.scope.async {
                 TellCoach.run(app, text, photos, submissionID).also {
-                    if (it == TellCoachOutcome.Sent || it == TellCoachOutcome.SavedNeedsConnection) withContext(Dispatchers.IO) { folder.deleteRecursively() }
+                    if (it.saved) withContext(Dispatchers.IO) { folder.deleteRecursively() }
                 }
             }.await()
             _sending.value = false
@@ -212,7 +212,7 @@ class ShareViewModel(private val app: MivuApplication, private val content: Shar
 
     /** The saved line once per submission, so a rotation while the notification prompt is up neither toasts nor finishes again. */
     fun takeSavedLine(): String? {
-        val line = _outcome.value?.takeIf { it == TellCoachOutcome.Sent || it == TellCoachOutcome.SavedNeedsConnection }?.line
+        val line = _outcome.value?.takeIf { it.saved }?.line
         if (line == null || saved.get<Boolean>(ANNOUNCED) == true) return null
         saved[ANNOUNCED] = true
         return line
