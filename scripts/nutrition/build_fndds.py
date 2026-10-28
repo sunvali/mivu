@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Build the bundled on-device nutrition table from USDA FNDDS CSVs (public domain, CC0).
 
-Usage: build_fndds.py <unzipped FoodData_Central_survey_food_csv folder> <output .sqlite>
-Run it once per app, so the two copies never link at build time:
-  ios/Mivu/Resources/fndds.sqlite and android/app/src/main/assets/fndds.sqlite
+Usage: build_fndds.py <unzipped FoodData_Central_survey_food_csv folder> <output .sqlite>...
+Give every app's copy, so the apps stay in sync with no build-time link:
+  build_fndds.py <folder> ios/Mivu/Resources/fndds.sqlite android/app/src/main/assets/fndds.sqlite
 """
 import csv
+import shutil
 import sqlite3
 import sys
 from pathlib import Path
@@ -19,8 +20,8 @@ def rows(path):
         yield from csv.DictReader(file)
 
 
-def build(source, output):
-    source, output = Path(source), Path(output)
+def build(source, *outputs):
+    source, output = Path(source), Path(outputs[0])
     foods = {row['fdc_id']: {'description': row['description']} for row in rows(source / 'food.csv')}
     for row in rows(source / 'food_nutrient.csv'):
         name = NUTRIENTS.get(row['nutrient_id'])
@@ -48,10 +49,12 @@ def build(source, output):
         database.execute("insert into foods_fts(foods_fts) values ('rebuild')")
     database.execute('vacuum')
     database.close()
+    for copy in outputs[1:]:
+        shutil.copyfile(output, copy)
     return {'foods': len(complete), 'portions': len(portions)}
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3:
         sys.exit(__doc__)
-    print(build(sys.argv[1], sys.argv[2]))
+    print(build(*sys.argv[1:]))

@@ -18,7 +18,7 @@ class NutritionTable(private val file: File) : FoodTable {
             buildList {
                 while (it.moveToNext()) {
                     val food = Food(it.getInt(0), it.getString(1), it.getDouble(2), it.getDouble(3), it.getDouble(4), it.getDouble(5))
-                    add(Entry(food, words(food.description), words(food.description.substringBefore(','))))
+                    add(Entry(food, stems(food.description), stems(food.description.substringBefore(','))))
                 }
             }
         }
@@ -28,9 +28,9 @@ class NutritionTable(private val file: File) : FoodTable {
     override fun search(phrase: String) = search(phrase, 5)
 
     fun search(phrase: String, limit: Int): List<Food> {
-        val terms = words(phrase)
+        val terms = stems(phrase)
         if (terms.isEmpty()) return emptyList()
-        val lead = words(phrase.trim().substringBefore(' '))
+        val lead = stems(phrase.trim().substringBefore(' '))
         fun score(entry: Entry) = Triple(entry.words.count { it in terms }, if (entry.firstWord.any { it in terms || it in lead }) 1 else 0, -entry.food.description.length)
         return entries.map { it to score(it) }.filter { it.second.first > 0 }
             .sortedWith(compareByDescending<Pair<Entry, Triple<Int, Int, Int>>> { it.second.first }
@@ -50,9 +50,22 @@ class NutritionTable(private val file: File) : FoodTable {
         return (matches.firstOrNull { it.first.contains("NFS") } ?: matches.minByOrNull { it.first.length })?.second
     }
 
+    // Search-only stem approximating iOS's porter FTS: "potatoes" meets "Potato", "berries" meets "Berry". words() stays as on iOS for grounding.
+    private val sibilantPlural = Regex(".*(s|x|z|ch|sh)es")
+    private fun stems(text: String): Set<String> = letters.findAll(text.lowercase()).map { it.value }.filter { it.length >= 3 }.map {
+        when {
+            it.endsWith("ies") && it.length > 4 -> it.dropLast(3) + "y"
+            it.endsWith("oes") -> it.dropLast(2)
+            it.matches(sibilantPlural) -> it.dropLast(2)
+            else -> words(it).firstOrNull() ?: it
+        }
+    }.toSet()
+
     companion object {
+        private val letters = Regex("\\p{L}+")
+
         /** Lowercased words of three or more letters with a plural "s" dropped, so "eggs" names "Boiled egg" and "glass" stays whole. */
-        fun words(text: String): Set<String> = Regex("\\p{L}+").findAll(text.lowercase()).map { it.value }.filter { it.length >= 3 }
+        fun words(text: String): Set<String> = letters.findAll(text.lowercase()).map { it.value }.filter { it.length >= 3 }
             .map { if (it.endsWith("s") && !it.endsWith("ss")) it.dropLast(1) else it }.toSet()
 
         fun bundled(context: Context): NutritionTable {

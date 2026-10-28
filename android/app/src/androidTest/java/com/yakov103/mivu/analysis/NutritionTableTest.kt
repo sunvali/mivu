@@ -18,6 +18,12 @@ class NutritionTableTest {
         assertTrue(table.search("").isEmpty() && table.search("\"*)").isEmpty())
     }
 
+    @Test fun pluralsMeetTheirSingularFoods() {
+        assertTrue(table.search("mashed potatoes").any { it.description.startsWith("Potato, mashed") })
+        assertTrue(table.search("potatoes").any { it.description.startsWith("Potato") })
+        assertTrue(table.search("berries").any { it.description.startsWith("Berries") })
+    }
+
     @Test fun portionsResolveUnitsAndSynonymsButNoDefaultServing() {
         val apple = table.search("apple").first()
         assertEquals(200.0, table.portionGrams(apple.code, "medium")!!, 0.0)
