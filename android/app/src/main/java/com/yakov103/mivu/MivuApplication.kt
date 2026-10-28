@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 
 class MivuApplication : Application() {
@@ -112,6 +113,14 @@ class MivuApplication : Application() {
 
     /** The launch restore of the chosen ChatGPT account; Coach work waits for it, as iOS `start` runs restore before `resume`. */
     @VisibleForTesting internal lateinit var restored: Job
+    /** The launch Gemini Nano check; the provider is not known before it. */
+    @VisibleForTesting internal var nanoChecked: Job? = null
+
+    /** Restore and the first Nano check; a check slower than 2 s leaves Nano not available, so a capture never hangs. */
+    suspend fun awaitLaunch() {
+        restored.join()
+        withTimeoutOrNull(2_000) { nanoChecked?.join() }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -128,7 +137,7 @@ class MivuApplication : Application() {
         // A force-stop clears alarms with no broadcast: every launch rebooks the reminder (or cancels it when off).
         MorningReminder.schedule(this)
         restored = scope.launch(Dispatchers.IO) { chatGPT.restore() }
-        chatGPT.refreshNano()
+        nanoChecked = chatGPT.refreshNano()
         publishWidget()
         // Restore spools (`cacheDir/archive-*`) left by a process that died mid-restore; none can be in use this early.
         scope.launch(Dispatchers.IO) { cacheDir.listFiles().orEmpty().filter { it.name.startsWith("archive-") }.forEach { it.deleteRecursively() } }
@@ -144,7 +153,7 @@ class MivuApplication : Application() {
     /** Runs saved Coach turns once the diary is ready; the returned job finishes when the worker is idle, whoever started it. */
     fun drainCoach(retryWaiting: Boolean = false): Job = scope.launch {
         val ready = repository.bootstrapState.filterIsInstance<Bootstrap.Ready>().first()
-        restored.join() // a cold start must not save a healthy turn as waiting for a connection
+        awaitLaunch() // a cold start must not save a healthy turn as waiting for a connection
         // Gemini Nano runs only in the foreground: the turn stays pending and MainActivity.onStart resumes it.
         if (onDevice && !isForeground) return@launch
         coachWorker.drain(ready.profileID, includeWaitingForConnection = chatGPT.state.value.canInfer, retryWaiting = retryWaiting)
@@ -163,6 +172,7 @@ class MivuApplication : Application() {
     /** iOS `hasPendingWork`: a turn the worker would run now. Waiting for a connection counts only when ChatGPT can infer. */
     suspend fun hasPendingWork(): Boolean {
         val profileID = readyProfile() ?: return false
+        awaitLaunch()
         return withContext(Dispatchers.IO) {
             runCatching { repository.database(profileID).nextPendingCoachTurn(chatGPT.state.value.canInfer) != null }.getOrDefault(false)
         }

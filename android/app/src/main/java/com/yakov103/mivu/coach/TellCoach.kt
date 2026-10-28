@@ -52,10 +52,11 @@ object TellCoach {
         } catch (_: Exception) {
             return TellCoachOutcome.Failed
         }
+        // As iOS `start` before reading canInfer: a cold start must not say "connect" to a connected account.
+        app.awaitLaunch()
         // On-device turns never run in the background or notify: they finish when Mivu opens.
         val onDevice = app.onDevice
         if (!onDevice) app.followReply(submissionID)
-        app.restored.join() // as iOS `start` before reading canInfer: a cold start must not say "connect" to a connected account
         return when {
             !(canInferForTest ?: app.chatGPT.state.value.canInfer) -> TellCoachOutcome.SavedNeedsConnection
             onDevice -> TellCoachOutcome.SavedOpenToFinish

@@ -20,10 +20,11 @@ sealed interface PipLine {
 
     companion object {
         fun current(hour: Int, mealsLogged: Boolean, typing: Boolean, connected: Boolean, processing: Boolean, withPhotos: Boolean,
-                    recovery: Boolean, error: String?, turnState: CoachTurnState?): PipLine? {
+                    recovery: Boolean, error: String?, turnState: CoachTurnState?, onDevice: Boolean): PipLine? {
             if (recovery) return when (turnState) {
                 CoachTurnState.waitingForConnection -> Connect
-                CoachTurnState.waitingForNetwork -> Problem("I’m offline. I’ll pick this up when you’re back.", error, false)
+                CoachTurnState.waitingForNetwork -> Problem(if (onDevice) "I'll finish this when you're back in Mivu."
+                    else "I’m offline. I’ll pick this up when you’re back.", error, false)
                 CoachTurnState.needsClarification -> Problem("I need a bit more detail. My question is above.", error, false)
                 CoachTurnState.needsRetry -> Problem("That one didn’t go through.", error, true)
                 else -> Problem("Something went wrong.", error, false)

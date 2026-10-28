@@ -160,9 +160,9 @@ class ChatGPTConnection(
     }
 
     /** Re-reads whether Gemini Nano can run on this phone, off the caller's thread; launch and each return call it. */
-    fun refreshNano() {
-        val nano = nano ?: return
-        scope.launch {
+    fun refreshNano(): Job? {
+        val nano = nano ?: return null
+        return scope.launch {
             val status = nano.status()
             if (onDeviceForTest == null) _state.update { it.copy(nano = status) }
         }

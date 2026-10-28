@@ -17,8 +17,8 @@ class PipLineTest {
 
     private fun line(hour: Int = 12, mealsLogged: Boolean = false, typing: Boolean = false, connected: Boolean = true,
                      processing: Boolean = false, withPhotos: Boolean = false, recovery: Boolean = false,
-                     error: String? = null, turnState: CoachTurnState? = null) =
-        PipLine.current(hour, mealsLogged, typing, connected, processing, withPhotos, recovery, error, turnState)
+                     error: String? = null, turnState: CoachTurnState? = null, onDevice: Boolean = false) =
+        PipLine.current(hour, mealsLogged, typing, connected, processing, withPhotos, recovery, error, turnState, onDevice)
 
     @Test fun idleFollowsTheTimeOfDayUntilSomethingIsLogged() {
         assertEquals(PipLine.Say("Morning! What’s for breakfast?"), line(hour = 8))
@@ -45,6 +45,8 @@ class PipLineTest {
             line(recovery = true, error = detail, turnState = CoachTurnState.needsRetry))
         assertEquals(PipLine.Problem("I’m offline. I’ll pick this up when you’re back.", null, canRetry = false),
             line(recovery = true, turnState = CoachTurnState.waitingForNetwork))
+        assertEquals(PipLine.Problem("I'll finish this when you're back in Mivu.", null, canRetry = false),
+            line(recovery = true, turnState = CoachTurnState.waitingForNetwork, onDevice = true))
         assertEquals(PipLine.Problem("I need a bit more detail. My question is above.", null, canRetry = false),
             line(recovery = true, turnState = CoachTurnState.needsClarification))
         assertEquals(PipLine.Problem("Something went wrong.", detail, canRetry = false), line(recovery = true, error = detail))

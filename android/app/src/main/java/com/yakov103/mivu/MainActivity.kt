@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
         if (isChangingConfigurations) return // a rotation, not leaving the app
         // The process scope, so the check outlives an activity that is finishing.
         // Gemini Nano cannot run in the background, so on-device turns wait for the next start instead of a job.
-        app.scope.launch { if (!app.onDevice && app.hasPendingWork()) app.scheduleBackgroundDrain() }
+        app.scope.launch { if (app.hasPendingWork() && !app.onDevice) app.scheduleBackgroundDrain() }
     }
 
     private companion object {

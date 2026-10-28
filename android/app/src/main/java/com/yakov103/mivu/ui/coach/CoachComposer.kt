@@ -8,6 +8,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.semantics.onClick
 import com.yakov103.mivu.ui.today.tabular
 import java.time.LocalTime
+import com.yakov103.mivu.connection.CoachProvider
 import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.ui.settings.ChatGPTConnectButton
 import com.yakov103.mivu.ui.settings.ConnectStyle
@@ -201,7 +202,7 @@ fun CoachComposer(
                 CoachPip(model, companion, if (large) 76.dp else 112.dp)
                 Column(Modifier.weight(1f)) {
                     val line = PipLine.current(LocalTime.now().hour, coachDay?.mealsLogged == true, focused, connected, pip.processing,
-                        pip.withPhotos, pip.recovery, message, pip.turnState)
+                        pip.withPhotos, pip.recovery, message, pip.turnState, connection.provider == CoachProvider.onDevice)
                         // At large sizes the greeting would crowd the conversation; status and errors still show.
                         ?.takeUnless { large && it is PipLine.Say }
                     Crossfade(line, label = "pipLine") { shown ->

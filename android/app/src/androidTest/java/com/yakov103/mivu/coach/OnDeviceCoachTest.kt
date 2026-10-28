@@ -23,6 +23,8 @@ import com.yakov103.mivu.ui.today.TodayFixture
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -143,5 +145,30 @@ class OnDeviceCoachTest {
         assertTrue(app.getSystemService(JobScheduler::class.java).allPendingJobs.isEmpty())
         val tags = app.getSystemService(NotificationManager::class.java).activeNotifications.map { it.tag }
         assertTrue("coach-reply-$id" !in tags)
+    }
+
+    @Test fun coldStartShareWaitsForTheNanoCheck() {
+        app.foregroundForTest = false
+        app.chatGPT.onDeviceForTest = null // the launch check has not reported yet
+        app.nanoChecked = app.scope.launch { delay(500); app.chatGPT.onDeviceForTest = model }
+        val id = UUID.randomUUID()
+        assertEquals(TellCoachOutcome.SavedOpenToFinish, runBlocking { TellCoach.run(app, "Synthetic 2 eggs", emptyList(), id) })
+        assertTrue(app.getSystemService(JobScheduler::class.java).allPendingJobs.isEmpty())
+        assertEquals(CoachTurnState.captured, stored(id).state)
+    }
+
+    @Test fun slowNanoCheckDoesNotHoldACapture() {
+        app.foregroundForTest = false
+        app.chatGPT.onDeviceForTest = null
+        val slow = app.scope.launch { delay(60_000) }
+        app.nanoChecked = slow
+        try {
+            val started = System.nanoTime()
+            // Not known in time: Nano counts as not available, so the turn waits for a connection.
+            assertEquals(TellCoachOutcome.SavedNeedsConnection, runBlocking { TellCoach.run(app, "Synthetic pear", emptyList(), UUID.randomUUID()) })
+            assertTrue((System.nanoTime() - started) / 1_000_000 < 5_000)
+        } finally {
+            slow.cancel()
+        }
     }
 }
