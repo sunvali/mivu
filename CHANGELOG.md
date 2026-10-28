@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/sunvali/mivu/compare/v1.1.1...v1.1.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* **live-activity:** clear the outdated card iOS keeps after ending an activity ([#76](https://github.com/sunvali/mivu/issues/76)) ([8657ee8](https://github.com/sunvali/mivu/commit/8657ee8996e418dc7b015a8b819b23af7afe18bb))
+* **onboarding:** save setup targets on the waking day ([#75](https://github.com/sunvali/mivu/issues/75)) ([5afd977](https://github.com/sunvali/mivu/commit/5afd977fcec8e9ceb256cfdd615748926b07e506))
+
 ## [1.1.1](https://github.com/yakov103/mivu/compare/v1.1.0...v1.1.1) (2026-10-24)
 
 
