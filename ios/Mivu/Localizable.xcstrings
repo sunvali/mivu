@@ -3596,19 +3596,19 @@
         }
       }
     },
-    "Choose a private Files folder, including iCloud Drive when available. Folder acknowledgement does not confirm remote upload.": {
+    "Choose a private Files folder. Folder acknowledgement does not confirm remote upload.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose a private Files folder, including iCloud Drive when available. Folder acknowledgement does not confirm remote upload."
+            "value": "Choose a private Files folder. Folder acknowledgement does not confirm remote upload."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "בחרו תיקייה פרטית ביישום קבצים, כולל iCloud Drive כאשר הוא זמין. אישור השמירה בתיקייה אינו מאשר העלאה מרחוק."
+            "value": "בחרו תיקייה פרטית ביישום קבצים. אישור השמירה בתיקייה אינו מאשר העלאה מרחוק."
           }
         }
       }

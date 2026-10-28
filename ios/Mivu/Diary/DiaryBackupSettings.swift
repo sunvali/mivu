@@ -41,7 +41,7 @@ struct DiaryBackupSettings: View {
                 Button("Retry backup") { model.retryBackup() }.frame(minHeight: 44)
             } else { Text("No backup folder selected").foregroundStyle(Color.diarySecondary) }
             Button("Choose private backup folder") { folderPicker = true }.frame(minHeight: 44)
-            Text("Choose a private Files folder, including iCloud Drive when available. Folder acknowledgement does not confirm remote upload.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+            Text("Choose a private Files folder. Folder acknowledgement does not confirm remote upload.").font(.subheadline).foregroundStyle(Color.diarySecondary)
             Button("Export diary and photos") {
                 guard let token = model.selection else { return }
                 Task {
