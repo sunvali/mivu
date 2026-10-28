@@ -10,10 +10,17 @@ class NutritionTable(private val file: File) {
 
     private val database by lazy { SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY) }
 
+    private class Entry(val food: Food, val words: Set<String>, val firstWord: Set<String>)
+
     // shortcut: the whole foods table (~7k rows) is ranked in memory and FTS5 is skipped (it may be missing on Android SQLite); index it if the table grows 10x.
-    private val foods by lazy {
+    private val entries by lazy {
         database.rawQuery("select code, description, kcal, carbs, protein, fat from foods order by code", null).use {
-            buildList { while (it.moveToNext()) add(Food(it.getInt(0), it.getString(1), it.getDouble(2), it.getDouble(3), it.getDouble(4), it.getDouble(5))) }
+            buildList {
+                while (it.moveToNext()) {
+                    val food = Food(it.getInt(0), it.getString(1), it.getDouble(2), it.getDouble(3), it.getDouble(4), it.getDouble(5))
+                    add(Entry(food, words(food.description), words(food.description.substringBefore(','))))
+                }
+            }
         }
     }
 
@@ -22,15 +29,11 @@ class NutritionTable(private val file: File) {
         val terms = words(phrase)
         if (terms.isEmpty()) return emptyList()
         val lead = words(phrase.trim().substringBefore(' '))
-        fun score(food: Food): Triple<Int, Int, Int> {
-            val shared = words(food.description).count { it in terms }
-            val firstWord = words(food.description.substringBefore(','))
-            return Triple(shared, if (firstWord.any { it in terms || it in lead }) 1 else 0, -food.description.length)
-        }
-        return foods.map { it to score(it) }.filter { it.second.first > 0 }
-            .sortedWith(compareByDescending<Pair<Food, Triple<Int, Int, Int>>> { it.second.first }
-                .thenByDescending { it.second.second }.thenByDescending { it.second.third }.thenBy { it.first.code })
-            .take(limit).map { it.first }
+        fun score(entry: Entry) = Triple(entry.words.count { it in terms }, if (entry.firstWord.any { it in terms || it in lead }) 1 else 0, -entry.food.description.length)
+        return entries.map { it to score(it) }.filter { it.second.first > 0 }
+            .sortedWith(compareByDescending<Pair<Entry, Triple<Int, Int, Int>>> { it.second.first }
+                .thenByDescending { it.second.second }.thenByDescending { it.second.third }.thenBy { it.first.food.code })
+            .take(limit).map { it.first.food }
     }
 
     /** Grams for one of `unit`: a portion naming the unit or a synonym, general "NFS" first. No default serving. */
