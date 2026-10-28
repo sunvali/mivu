@@ -317,6 +317,19 @@ class ChatGPTConnectionTest {
         assertEquals(AccountState.connected, c.state.value.account)
     }
 
+    @Test fun disconnectLeavesNanoAsTheDefault() {
+        consent(); saved()
+        val c = restored()
+        c.onDeviceForTest = object : com.yakov103.mivu.analysis.OnDeviceModel {
+            override suspend fun turn(text: String, images: List<ByteArray>) = error("unused")
+            override suspend fun pick(phrase: String, options: List<com.yakov103.mivu.analysis.NutritionTable.Food>) = 0
+        }
+        assertEquals(CoachProvider.chatGPT, c.state.value.provider)
+        runBlocking { c.disconnect() }
+        assertFalse(c.state.value.savedRegistration)
+        assertEquals(CoachProvider.onDevice, c.state.value.provider)
+    }
+
     @Test fun planUnauthorizedWithoutModels() {
         consent(); saved()
         catalog = emptyList()

@@ -1,6 +1,9 @@
 package com.yakov103.mivu.connection
 
 import com.yakov103.mivu.analysis.AvailableModel
+import com.yakov103.mivu.analysis.LocalTurn
+import com.yakov103.mivu.analysis.NutritionTable
+import com.yakov103.mivu.analysis.OnDeviceModel
 import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.coach.CoachTools
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +32,23 @@ class CoachProviderTest {
         val state = ConnectionState(registrationID = "synthetic-registration", nano = NanoStatus.available)
         assertEquals(CoachProvider.chatGPT, state.provider)
         assertFalse(state.canInfer)
+    }
+
+    @Test fun savedAccountStaysChatGPT() {
+        val state = ConnectionState(savedRegistration = true, nano = NanoStatus.available)
+        assertEquals(CoachProvider.chatGPT, state.provider)
+        assertFalse(state.canInfer)
+    }
+
+    @Test fun savedAccountStaysChatGPTWhenRestoreIsSkippedOrFails() {
+        val prefs = MemoryPreferences()
+        prefs.edit().putString("selectedRegistrationID", "synthetic-missing-registration").apply()
+        val skipped = connection(prefs).apply { onDeviceForTest = Fake; runBlocking { restore() } } // no consent
+        assertEquals(CoachProvider.chatGPT, skipped.state.value.provider)
+        prefs.edit().putBoolean("openAISharingConsent", true).apply()
+        val failed = connection(prefs).apply { onDeviceForTest = Fake; runBlocking { restore() } } // nothing in the store
+        assertNull(failed.state.value.registrationID)
+        assertEquals(CoachProvider.chatGPT, failed.state.value.provider)
     }
 
     @Test fun connectedChatGPTStaysTheDefaultWhenNanoIsAvailable() {
@@ -77,6 +97,11 @@ class CoachProviderTest {
         val c = connection(prefs).apply { choose(CoachProvider.onDevice) }
         val error = runBlocking { runCatching { c.inference()(emptyList(), CoachTools.declarations()) }.exceptionOrNull() }
         assertEquals(SessionError.NoActiveSession, error)
+    }
+
+    private object Fake : OnDeviceModel {
+        override suspend fun turn(text: String, images: List<ByteArray>) = LocalTurn(LocalTurn.Intent.other)
+        override suspend fun pick(phrase: String, options: List<NutritionTable.Food>) = 0
     }
 
     private fun connection(prefs: MemoryPreferences): ChatGPTConnection {

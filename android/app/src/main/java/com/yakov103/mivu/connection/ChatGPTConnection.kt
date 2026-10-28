@@ -63,6 +63,8 @@ data class ConnectionState(
     val consented: Boolean = false,
     val planWelcomeSeen: Boolean = false,
     val storedProvider: CoachProvider? = null,
+    /** A chosen ChatGPT account is saved, whether or not it restored (iOS reads `selectedRegistrationID`). */
+    val savedRegistration: Boolean = false,
     val nano: NanoStatus = NanoStatus.unavailable,
 ) {
     val planAuthorized get() = account == AccountState.connected && !isConnecting && !isDisconnecting && models.any { it.slug == selectedModel }
@@ -71,7 +73,7 @@ data class ConnectionState(
     val provider get() = when {
         storedProvider != null && (storedProvider == CoachProvider.chatGPT || nano == NanoStatus.available) -> storedProvider
         // Someone with a saved ChatGPT connection keeps it until they pick on-device, also while it restores at launch.
-        storedProvider == null && (planAuthorized || registrationID != null) -> CoachProvider.chatGPT
+        storedProvider == null && (planAuthorized || registrationID != null || savedRegistration) -> CoachProvider.chatGPT
         nano == NanoStatus.available -> CoachProvider.onDevice
         else -> CoachProvider.chatGPT
     }
@@ -105,7 +107,7 @@ class ChatGPTConnection(
     private val table: Lazy<FoodTable>? = null,
 ) {
     private val _state = MutableStateFlow(ConnectionState(consented = prefs.getBoolean(CONSENT, false),
-        planWelcomeSeen = prefs.getBoolean(WELCOME, false),
+        planWelcomeSeen = prefs.getBoolean(WELCOME, false), savedRegistration = prefs.getString(SELECTED, null) != null,
         storedProvider = prefs.getString(PROVIDER, null)?.let { name -> CoachProvider.entries.firstOrNull { it.name == name } }))
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
@@ -198,6 +200,7 @@ class ChatGPTConnection(
             val session = auth.establish(code, attempt.verifier, attempt.nonce, returning?.id)
             val applied = ifCurrent(revision) {
                 prefs.edit().putString(SELECTED, session.registration.id).apply()
+                _state.update { it.copy(savedRegistration = true) }
                 if (prefs.getString(PAUSED, null) == session.registration.id) prefs.edit().remove(PAUSED).apply()
                 _state.update { it.copy(models = emptyList(), selectedModel = "") }
                 apply(auth.snapshot())
@@ -243,6 +246,7 @@ class ChatGPTConnection(
             ifCurrent(revision) {
                 if (outcome != null) {
                     if (prefs.getString(SELECTED, null) == previous.registrationID) prefs.edit().remove(SELECTED).apply()
+                    _state.update { it.copy(savedRegistration = prefs.getString(SELECTED, null) != null) }
                     val notice = if (outcome == RevocationOutcome.Confirmed) ConnectionNotice.disconnected else ConnectionNotice.unconfirmed
                     _state.update { it.copy(notice = notice) }
                 } else {
@@ -251,6 +255,7 @@ class ChatGPTConnection(
                     apply(retained)
                     if (retained != null && retained.registrationID == previous.registrationID) {
                         prefs.edit().putString(SELECTED, retained.registrationID).apply()
+                        _state.update { it.copy(savedRegistration = true) }
                         _state.update { it.copy(models = previous.models, selectedModel = previous.selectedModel) }
                     }
                     _state.update { it.copy(notice = ConnectionNotice.storageFailed) }
