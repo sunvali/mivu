@@ -372,7 +372,7 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth() }
+                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true) }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
                 NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
@@ -714,6 +714,9 @@ struct TodayView: View {
                     todayList { leadingSections; trailingSections }.accessibilityIdentifier("todaySummaryColumn")
                     todayList { mealSections }.accessibilityIdentifier("todayMealsColumn")
                 }
+            } else if isLiveDay {
+                // Meals first, so the meal Coach just changed shows above the keyboard.
+                todayList { mealSections; leadingSections; trailingSections }
             } else {
                 todayList { leadingSections; mealSections; trailingSections }
             }
@@ -739,7 +742,10 @@ struct TodayView: View {
                         DiaryManualAction(identifier: "addManually") { showManualNutrition = true }
                     }
                 }
+                // Sideways the bar would span the whole display; keep the buttons phone-sized.
+                .frame(maxWidth: isWide ? 560 : .infinity)
                 .padding(.horizontal, 20).padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
                 .background(Color.diaryCanvas)
             }
         }

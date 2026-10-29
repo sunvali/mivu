@@ -20,6 +20,7 @@ import XCTest
         XCTAssertTrue(meals.exists)
         XCTAssertLessThanOrEqual(summary.frame.maxX, meals.frame.minX + 1)
         XCTAssertTrue(app.buttons["logWeight"].exists, "Weight stays in the summary column")
+        XCTAssertLessThanOrEqual(app.buttons["logMeal"].frame.width, 300, "Capture buttons keep a normal size sideways")
     }
 
     func testUprightTodayStaysOneColumn() throws {
@@ -45,6 +46,16 @@ import XCTest
         let changed = app.descendants(matching: .any)["justChangedMeal"]
         XCTAssertTrue(changed.waitForExistence(timeout: 20), "The meal Coach logged lights up in the live day")
         XCTAssertGreaterThan(changed.frame.minX, input.frame.maxX - 1, "The live day sits beside the chat")
+        XCTAssertLessThan(changed.frame.minY, liveDay.frame.midY, "The changed meal shows near the top, above the keyboard")
+        XCTAssertFalse(app.buttons["coachFollowUp-today"].exists, "See today is redundant beside the live day")
+    }
+
+    func testSidewaysDiaryKeepsReadableWidth() {
+        let app = launch(wide: true)
+        app.buttons["Diary"].firstMatch.tap()
+        let intake = app.staticTexts["Recorded intake"]
+        XCTAssertTrue(intake.waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(intake.frame.minX, 70, "Diary is capped and centered, not stretched")
     }
 
     func testSidewaysProgressUsesTwoColumns() {
@@ -55,5 +66,6 @@ import XCTest
         XCTAssertTrue(primary.waitForExistence(timeout: 10))
         XCTAssertTrue(secondary.exists)
         XCTAssertLessThanOrEqual(primary.frame.maxX, secondary.frame.minX + 1)
+        XCTAssertLessThanOrEqual(app.buttons["openWeight"].frame.maxX, primary.frame.maxX + 1, "Weight balances the left column")
     }
 }

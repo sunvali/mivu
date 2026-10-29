@@ -131,11 +131,11 @@ struct DiaryProgressView: View {
                         // The last report stays on screen during a range switch, so a failed switch must still say so.
                         if let loadError { loadFailure(loadError) }
                         ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
-                    }
-                    let secondary = VStack(spacing: 12) {
                         sectionTitle("Weight")
                         NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
                             .buttonStyle(.plain).accessibilityIdentifier("openWeight")
+                    }
+                    let secondary = VStack(spacing: 12) {
                         sectionTitle("Average day")
                         detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
                         sectionTitle("More")

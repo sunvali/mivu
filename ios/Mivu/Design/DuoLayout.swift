@@ -81,11 +81,12 @@ struct DuoBeside<Primary: View, Secondary: View>: View {
 }
 
 private struct DuoReadableWidth: ViewModifier {
+    let evenWhenWide: Bool
     @Environment(\.isWideLayout) private var isWide
     @Environment(\.windowSizeClass) private var windowSizeClass
     func body(content: Content) -> some View {
         content
-            .frame(maxWidth: windowSizeClass == .regular && !isWide ? DuoLayout.readableWidth : .infinity)
+            .frame(maxWidth: windowSizeClass == .regular && (evenWhenWide || !isWide) ? DuoLayout.readableWidth : .infinity)
             .frame(maxWidth: .infinity)
             .background(Color.diaryCanvas)
     }
@@ -93,5 +94,6 @@ private struct DuoReadableWidth: ViewModifier {
 
 extension View {
     /// Caps upright inner-display content at a readable width; a no-op everywhere else.
-    func duoReadableWidth() -> some View { modifier(DuoReadableWidth()) }
+    /// `evenWhenWide` also caps it sideways, for single-column screens.
+    func duoReadableWidth(evenWhenWide: Bool = false) -> some View { modifier(DuoReadableWidth(evenWhenWide: evenWhenWide)) }
 }

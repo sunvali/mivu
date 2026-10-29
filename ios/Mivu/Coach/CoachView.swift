@@ -22,6 +22,7 @@ struct CoachView: View {
     @State private var composerHeight: CGFloat = 0
     @State private var textWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isWideLayout) private var isWide
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var voice = CoachVoiceInput()
@@ -734,7 +735,8 @@ struct CoachView: View {
                 }
             }
             if coach.timeline?.window.isLatest(turn.id) == true {
-                let followUps = CoachReplyLines.followUps(for: turn)
+                // Sideways the live day already sits beside the chat.
+                let followUps = CoachReplyLines.followUps(for: turn).filter { !(isWide && $0 == .today) }
                 if !followUps.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(followUps, id: \.self) { followUp in
