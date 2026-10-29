@@ -17,8 +17,12 @@ struct CoachReceiptPresentation: Equatable {
     var committedItems: [String] {
         receipt.items.map { "\($0.name) · \($0.quantity.formatted(.number.grouping(.never))) \($0.unit)" }
     }
+    /// A whole record the Coach deleted; its card only offers Undo.
+    var isRemoval: Bool { ["/delete_meal/", "/delete_weight/", "/delete_workout/"].contains { receipt.operationKey.contains($0) } }
     var committedStatus: String {
-        switch receipt.submissionState {
+        if isRemoval { return "Removed" }
+        if receipt.operationKey.contains("/delete_photo/") { return "Photo removed" }
+        return switch receipt.submissionState {
         case .saved: "Saved food"
         case .awaitingReview: "Estimate awaiting review"
         default: "Recorded operation"
@@ -189,7 +193,7 @@ struct CoachReceiptView: View {
             if let notice = presentation.changeNotice {
                 Text(notice).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptChange")
             }
-            if let notice = presentation.targetNotice {
+            if !presentation.isRemoval, let notice = presentation.targetNotice {
                 Text(notice).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptTargetStatus")
             }
             if let macros = presentation.committedMacros {
@@ -268,7 +272,7 @@ struct CoachReceiptView: View {
         .accessibilityIdentifier("coachReceiptMacroBar")
     }
     @ViewBuilder private var reviewButton: some View {
-        if receipt.mealID != nil || receipt.workoutID != nil {
+        if !presentation.isRemoval, receipt.mealID != nil || receipt.workoutID != nil {
             Button(action: open) {
                 Group {
                     if dynamicTypeSize.isAccessibilitySize {
