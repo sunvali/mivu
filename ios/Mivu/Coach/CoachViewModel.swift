@@ -395,15 +395,16 @@ private final class CoachNavigationReadFence: Sendable {
         captureNeedsProcessing = true
         resume()
     }
-    /// Captures the selected profile's inbox entries, oldest first; each is removed only after its capture is saved.
     /// Siri text saved while the phone was locked; it reaches the Coach only after the person sends it.
-    private(set) var queuedSiri: [CoachInbox.Entry] = []
+    private var waitingSiri: [CoachInbox.Entry] = []
+    /// Follows the selected profile, so a profile switch never shows another diary's message.
+    var queuedSiri: [CoachInbox.Entry] { waitingSiri.filter { $0.profileID == diary.selection?.identity.profileID } }
     var inbox: CoachInbox?
     func loadQueuedSiri() {
-        guard let inbox, let owner = diary.selection?.identity.profileID, !diary.profiles.isEmpty else { queuedSiri = []; return }
+        guard let inbox, !diary.profiles.isEmpty else { waitingSiri = []; return }
         let profiles = Set(diary.profiles.map(\.id))
         for entry in inbox.entries() where !profiles.contains(entry.profileID) { try? inbox.remove(entry.id) }
-        queuedSiri = inbox.entries().filter { $0.profileID == owner }
+        waitingSiri = inbox.entries()
     }
     /// The entry ID is the submission ID, so a send after a crash reconciles instead of saving twice.
     func sendQueued(_ entry: CoachInbox.Entry) async {

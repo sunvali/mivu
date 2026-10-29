@@ -444,6 +444,19 @@ extension CoachFlowTests {
         #expect(try await turns(diary).isEmpty)
         #expect(inbox.entries().isEmpty && coach.queuedSiri.isEmpty)
     }
+    @Test func queuedSiriFollowsTheSelectedProfile() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let coach = siriCoach(diary), inbox = inbox(), first = try #require(diary.selection?.identity.profileID)
+        defer { try? FileManager.default.removeItem(at: inbox.directory) }
+        coach.inbox = inbox
+        try inbox.add(CoachInbox.Entry(id: UUID(), profileID: first, text: "Synthetic toast", capturedAt: Date()))
+        coach.loadQueuedSiri()
+        await diary.createProfile(name: "Synthetic second")
+        #expect(diary.selection?.identity.profileID != first)
+        #expect(coach.queuedSiri.isEmpty)
+        await diary.switchProfile(first)
+        #expect(coach.queuedSiri.map(\.text) == ["Synthetic toast"])
+    }
     @Test func queuedEntriesOfDeletedProfilesArePruned() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let coach = siriCoach(diary), inbox = inbox()
