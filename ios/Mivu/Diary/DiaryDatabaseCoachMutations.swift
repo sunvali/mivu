@@ -12,10 +12,11 @@ extension DiaryDatabase {
             for write in normalized {
                 let key = "\(turnID)/\(write.target)"
                 if let prior = turn.receipts.first(where: { $0.operationKey == key }) { results.append(prior); continue }
-                let before = try transaction.undoSnapshot(write, turn: turn)
+                let before = try transaction.undoSnapshot(write, turn: turn), held = try transaction.deletedSnapshot(write)
                 var receipt = try transaction.applyCoachWrite(write, turn: turn, at: at)
                 receipt.operationKey = key; receipt.commandFingerprint = try write.commandFingerprint()
                 if let before, let mealID = receipt.mealID { try transaction.saveUndo(key: key, turnID: turnID, mealID: mealID, before: before) }
+                if let held { try transaction.saveDeletedUndo(key: key, turnID: turnID, snapshot: held, at: at) }
                 newReceipts.append(receipt); results.append(receipt)
             }
             if !newReceipts.isEmpty {
@@ -331,6 +332,7 @@ extension DiaryTransaction {
         return (mealID, Int(sqlite3_column_int64(statement, 1)), try database.mutationText(statement, 4), before, sqlite3_column_int64(statement, 3) != 0)
     }
     func coachUndoState(_ key: String) throws -> CoachUndoState? {
+        if let held = try deletedUndoState(key) { return held }
         guard let undo = try coachUndo(key) else { return nil }
         if undo.undone { return .undone }
         do { return try undoState(undo.mealID) == undo.afterState ? .available : nil } catch DiaryError.notFound { return nil }
