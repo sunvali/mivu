@@ -10,8 +10,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +59,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.center
+import androidx.compose.ui.unit.toOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -98,6 +99,25 @@ internal fun rememberPhoto(photo: MealPhoto, load: suspend (UUID) -> ByteArray?)
 
 private const val MAX_ZOOM = 5f
 
+/**
+ * The zoom (100-500%) and pan after asking for [next], keeping the photo point under [focus] (from the viewer's centre)
+ * where it was and the photo inside the viewer.
+ */
+internal fun photoZoom(zoom: Float, offset: Offset, focus: Offset, next: Float, size: IntSize): Pair<Float, Offset> {
+    val scale = next.coerceIn(1f, MAX_ZOOM)
+    val moved = focus - (focus - offset) * (scale / zoom)
+    val maxX = size.width * (scale - 1) / 2
+    val maxY = size.height * (scale - 1) / 2
+    return scale to Offset(moved.x.coerceIn(-maxX, maxX), moved.y.coerceIn(-maxY, maxY))
+}
+
+/** Shown only when the owner chose before or after; most photos come from Coach or a shortcut with no timing. */
+internal val PhotoRole.timing get() = when (this) {
+    PhotoRole.before -> "Before eating"
+    PhotoRole.after -> "After eating"
+    PhotoRole.unspecified -> null
+}
+
 /** iOS MealPhotoViewer: full screen, pinch or double-tap zoom, zoom buttons, and delete with a confirmation. */
 @Composable
 internal fun MealPhotoViewer(photo: MealPhoto, busy: Boolean, load: suspend (UUID) -> ByteArray?, onDelete: () -> Unit, onClose: () -> Unit) {
@@ -107,25 +127,9 @@ internal fun MealPhotoViewer(photo: MealPhoto, busy: Boolean, load: suspend (UUI
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val (image, failed) = rememberPhoto(photo, load)
 
-    fun clamp(next: Offset, scale: Float): Offset {
-        val maxX = size.width * (scale - 1) / 2
-        val maxY = size.height * (scale - 1) / 2
-        return Offset(next.x.coerceIn(-maxX, maxX), next.y.coerceIn(-maxY, maxY))
-    }
-    fun zoomTo(next: Float) {
-        zoom = next.coerceIn(1f, MAX_ZOOM)
-        offset = clamp(offset, zoom)
-    }
-    val transform = rememberTransformableState { change, pan, _ ->
-        zoomTo(zoom * change)
-        offset = clamp(offset + pan, zoom)
-    }
+    fun zoomTo(next: Float, focus: Offset = Offset.Zero) = photoZoom(zoom, offset, focus, next, size).let { zoom = it.first; offset = it.second }
     val percent = "${(zoom * 100).toInt()}%"
-    val timing = when (photo.role) {
-        PhotoRole.before -> "Before eating"
-        PhotoRole.after -> "After eating"
-        PhotoRole.unspecified -> "Unspecified"
-    }
+    val timing = photo.role.timing
     val onPhoto = Color.White
     val buttonColors = IconButtonDefaults.iconButtonColors(contentColor = onPhoto, disabledContentColor = onPhoto.copy(alpha = 0.38f))
 
@@ -148,9 +152,17 @@ internal fun MealPhotoViewer(photo: MealPhoto, busy: Boolean, load: suspend (UUI
                             image, contentDescription = null, contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize()
                                 .testTag("mealPhotoZoom")
-                                .semantics { contentDescription = "Meal photo"; stateDescription = "Zoom $percent" }
-                                .pointerInput(Unit) { detectTapGestures(onDoubleTap = { zoomTo(if (zoom > 1f) 1f else 2f) }) }
-                                .transformable(transform)
+                                .semantics { contentDescription = "Meal photo"; stateDescription = "Zoom ${(zoom * 100).toInt()} percent" }
+                                // Taps and pinches arrive in the viewer's own space; the zoom is measured from its centre.
+                                .pointerInput(Unit) {
+                                    detectTapGestures(onDoubleTap = { tap -> zoomTo(if (zoom > 1f) 1f else 2f, tap - size.center.toOffset()) })
+                                }
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { centroid, pan, change, _ ->
+                                        zoomTo(zoom * change, centroid - size.center.toOffset())
+                                        offset = photoZoom(zoom, offset + pan, Offset.Zero, zoom, size).second
+                                    }
+                                }
                                 .graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = offset.x; translationY = offset.y },
                         )
                         failed -> Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
@@ -164,7 +176,7 @@ internal fun MealPhotoViewer(photo: MealPhoto, busy: Boolean, load: suspend (UUI
                 }
                 Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Photo timing: $timing", style = MaterialTheme.typography.bodyMedium, color = onPhoto.copy(alpha = 0.72f))
+                    if (timing != null) Text("Photo timing: $timing", style = MaterialTheme.typography.bodyMedium, color = onPhoto.copy(alpha = 0.72f))
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         IconButton({ zoomTo(zoom - 1) }, Modifier.testTag("zoomOutPhoto"), enabled = zoom > 1f, colors = buttonColors) {
                             Icon(painterResource(R.drawable.ic_zoom_out), contentDescription = "Zoom out")

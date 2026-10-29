@@ -94,7 +94,6 @@ import com.yakov103.mivu.diary.MealPhoto
 import com.yakov103.mivu.diary.MealSubmission
 import com.yakov103.mivu.diary.MealTimePrecision
 import com.yakov103.mivu.diary.NutritionProvenance
-import com.yakov103.mivu.diary.PhotoRole
 import com.yakov103.mivu.diary.SubmissionState
 import com.yakov103.mivu.diary.TrackingDay
 import com.yakov103.mivu.diary.hasUnresolvedInput
@@ -486,8 +485,7 @@ private fun AttachedPhoto(photo: MealPhoto, busy: Boolean, load: suspend (UUID) 
             .semantics { this.contentDescription = "Meal photo" }
         if (image != null) Image(image, contentDescription = null, modifier, contentScale = ContentScale.Crop) else Box(modifier)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(when (photo.role) { PhotoRole.before -> "Before eating"; PhotoRole.after -> "After eating"; PhotoRole.unspecified -> "Timing unspecified" },
-                Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(photo.role.timing.orEmpty(), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onDelete, Modifier.heightIn(min = 48.dp), enabled = !busy, colors = ButtonDefaults.textButtonColors(
                 contentColor = MaterialTheme.colorScheme.error)) { Text("Delete photo") }
         }

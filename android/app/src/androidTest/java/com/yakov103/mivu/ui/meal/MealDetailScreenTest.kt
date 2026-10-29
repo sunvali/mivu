@@ -4,7 +4,12 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
@@ -201,6 +206,24 @@ class MealDetailScreenTest {
         compose.onNode(hasText("Greek yogurt") and isHeading()).assertIsDisplayed()
         assertEquals(0, meal(meal.id)!!.photos.size)
         assertEquals(1, meal(meal.id)!!.items.size)
+    }
+
+    @Test fun photoViewerZoomsAroundTheTapAndHidesUnsetTiming() {
+        val meal = savedMeal(food("Greek yogurt", 190.0, 17.0, 8.0, 5.0), photos = 1)
+        open(meal.id)
+        waitFor(hasTestTag("viewMealPhoto"))
+        assertTrue(compose.onAllNodes(hasText("Timing unspecified")).fetchSemanticsNodes().isEmpty())
+        compose.onAllNodesWithTag("viewMealPhoto").onFirst().performClick()
+        waitFor(hasTestTag("mealPhotoZoom"))
+        assertTrue(compose.onAllNodes(hasText("Photo timing", substring = true)).fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithTag("mealPhotoZoom").performTouchInput { doubleClick(Offset(width * 0.75f, height * 0.5f)) }
+        compose.onNodeWithText("200%").assertIsDisplayed()
+        compose.onNodeWithTag("mealPhotoZoom").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Zoom 200 percent"))
+        compose.onNodeWithTag("mealPhotoZoom").performTouchInput { doubleClick(center) }
+        compose.onNodeWithText("100%").assertIsDisplayed()
+        compose.onNodeWithTag("mealPhotoZoom").performTouchInput { pinch(Offset(width * 0.45f, height * 0.5f), Offset(width * 0.55f, height * 0.5f),
+            Offset(width * 0.3f, height * 0.5f), Offset(width * 0.7f, height * 0.5f)) }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("100%")).fetchSemanticsNodes().isEmpty() }
     }
 
     @Test fun markReviewedSavesProposal() {
