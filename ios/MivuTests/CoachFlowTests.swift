@@ -410,40 +410,69 @@ extension CoachFlowTests {
         await coach.waitForWorker()
         #expect(try await turns(diary).filter { $0.id == id }.count == 1)
     }
-    @Test func drainCapturesAndRemovesEntries() async throws {
+    @Test func queuedSiriWaitsForApproval() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let coach = siriCoach(diary), inbox = inbox(), owner = try #require(diary.selection?.identity.profileID)
         defer { try? FileManager.default.removeItem(at: inbox.directory) }
+        coach.inbox = inbox
         try inbox.add(CoachInbox.Entry(id: UUID(), profileID: owner, text: "Synthetic toast", capturedAt: Date(timeIntervalSinceNow: -60)))
         try inbox.add(CoachInbox.Entry(id: UUID(), profileID: owner, text: "Synthetic tea", capturedAt: Date(timeIntervalSinceNow: -30)))
-        await coach.drainInbox(inbox)
-        await coach.waitForWorker()
-        #expect(try await turns(diary).map(\.text) == ["Synthetic toast", "Synthetic tea"])
-        #expect(inbox.entries().isEmpty)
+        coach.loadQueuedSiri()
+        #expect(coach.queuedSiri.map(\.text) == ["Synthetic toast", "Synthetic tea"])
+        #expect(try await turns(diary).isEmpty)
     }
-    @Test func drainSkipsOtherProfileEntries() async throws {
+    @Test func sendQueuedCapturesAndRemoves() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let coach = siriCoach(diary), inbox = inbox(), owner = try #require(diary.selection?.identity.profileID)
+        defer { try? FileManager.default.removeItem(at: inbox.directory) }
+        coach.inbox = inbox
+        let entry = CoachInbox.Entry(id: UUID(), profileID: owner, text: "Synthetic toast", capturedAt: Date(timeIntervalSinceNow: -60))
+        try inbox.add(entry); coach.loadQueuedSiri()
+        await coach.sendQueued(entry)
+        await coach.waitForWorker()
+        #expect(try await turns(diary).map(\.text) == ["Synthetic toast"])
+        #expect(inbox.entries().isEmpty && coach.queuedSiri.isEmpty)
+    }
+    @Test func discardQueuedRemovesWithoutCapture() async throws {
+        let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
+        let coach = siriCoach(diary), inbox = inbox(), owner = try #require(diary.selection?.identity.profileID)
+        defer { try? FileManager.default.removeItem(at: inbox.directory) }
+        coach.inbox = inbox
+        let entry = CoachInbox.Entry(id: UUID(), profileID: owner, text: "Synthetic toast", capturedAt: Date())
+        try inbox.add(entry); coach.loadQueuedSiri()
+        coach.discardQueued(entry)
+        #expect(try await turns(diary).isEmpty)
+        #expect(inbox.entries().isEmpty && coach.queuedSiri.isEmpty)
+    }
+    @Test func queuedEntriesOfDeletedProfilesArePruned() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let coach = siriCoach(diary), inbox = inbox()
         defer { try? FileManager.default.removeItem(at: inbox.directory) }
-        let other = CoachInbox.Entry(id: UUID(), profileID: UUID(), text: "Synthetic toast", capturedAt: Date())
-        try inbox.add(other)
-        await coach.drainInbox(inbox)
-        #expect(try await turns(diary).isEmpty)
-        #expect(inbox.entries() == [other])
+        coach.inbox = inbox
+        try inbox.add(CoachInbox.Entry(id: UUID(), profileID: UUID(), text: "Synthetic toast", capturedAt: Date()))
+        coach.loadQueuedSiri()
+        #expect(inbox.entries().isEmpty && coach.queuedSiri.isEmpty)
     }
-    @Test func drainTwiceStoresOneTurn() async throws {
+    @Test func sendingAnAlreadyCapturedEntryStoresOneTurn() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }
         let coach = siriCoach(diary), inbox = inbox(), owner = try #require(diary.selection?.identity.profileID)
         defer { try? FileManager.default.removeItem(at: inbox.directory) }
+        coach.inbox = inbox
         let entry = CoachInbox.Entry(id: UUID(), profileID: owner, text: "Synthetic toast", capturedAt: Date(timeIntervalSinceNow: -60))
         try inbox.add(entry)
         // A crash after capture but before removal leaves the entry behind.
-        try await coach.captureExternal(profileID: try #require(diary.selection?.identity.profileID), entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
+        try await coach.captureExternal(profileID: owner, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
         await coach.waitForWorker()
-        await coach.drainInbox(inbox)
+        await coach.sendQueued(entry)
         await coach.waitForWorker()
         #expect(try await turns(diary).filter { $0.id == entry.id }.count == 1)
         #expect(inbox.entries().isEmpty)
+    }
+    @Test func inboxRefusesMoreThanTwentyEntries() throws {
+        let inbox = inbox(); defer { try? FileManager.default.removeItem(at: inbox.directory) }
+        for index in 0..<20 { try inbox.add(CoachInbox.Entry(id: UUID(), profileID: UUID(), text: "Synthetic \(index)", capturedAt: Date())) }
+        #expect(throws: (any Error).self) { try inbox.add(CoachInbox.Entry(id: UUID(), profileID: UUID(), text: "One too many", capturedAt: Date())) }
+        #expect(inbox.entries().count == 20)
     }
     @Test func externalCaptureWithReusedIDKeepsFirstCapture() async throws {
         let (diary, path) = try await fixture(); defer { try? FileManager.default.removeItem(at: path) }

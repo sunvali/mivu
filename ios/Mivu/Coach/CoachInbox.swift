@@ -1,7 +1,7 @@
 import Foundation
 
 /// Siri prompts spoken while the phone is locked, when the diary file cannot open.
-/// Readable after the first unlock since restart; the app captures them into Coach history later.
+/// Readable after the first unlock since restart; the person sends or discards each one in the app.
 struct CoachInbox: Sendable {
     struct Entry: Codable, Equatable, Sendable {
         let id: UUID
@@ -20,7 +20,11 @@ struct CoachInbox: Sendable {
 
     static let writeOptions: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
 
+    /// Bounds what someone holding a locked phone can pile up.
+    static let limit = 20
+
     func add(_ entry: Entry) throws {
+        guard entries().count < Self.limit else { throw CocoaError(.fileWriteOutOfSpace) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [
             .posixPermissions: 0o700, .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
         try JSONEncoder().encode(entry).write(to: file(entry.id), options: Self.writeOptions)

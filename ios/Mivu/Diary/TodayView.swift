@@ -385,6 +385,7 @@ struct DiaryRootView: View {
                     }.toolbar { profileControl }
                 }
             }
+            .badge(coach.queuedSiri.count)
         }
     }
     private func openQuickLog() {
@@ -567,8 +568,8 @@ struct DiaryRootView: View {
     }
     private func continueInBackground() { services.continueCoachInBackground() }
     private func drainSiriPrompts() async {
-        guard !services.inbox.entries().isEmpty else { return }
-        await coach.drainInbox(services.inbox)
+        coach.loadQueuedSiri()
+        guard !coach.queuedSiri.isEmpty else { return }
         await MealNotification.requestPermissionIfNeeded()
     }
     private func endBackgroundLease() { services.endCoachBackground() }

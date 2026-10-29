@@ -396,14 +396,25 @@ private final class CoachNavigationReadFence: Sendable {
         resume()
     }
     /// Captures the selected profile's inbox entries, oldest first; each is removed only after its capture is saved.
-    func drainInbox(_ inbox: CoachInbox) async {
-        guard let owner = diary.selection?.identity.profileID else { return }
-        for entry in inbox.entries() where entry.profileID == owner {
-            do {
-                try await captureExternal(profileID: entry.profileID, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
-                try inbox.remove(entry.id)
-            } catch { return }
-        }
+    /// Siri text saved while the phone was locked; it reaches the Coach only after the person sends it.
+    private(set) var queuedSiri: [CoachInbox.Entry] = []
+    var inbox: CoachInbox?
+    func loadQueuedSiri() {
+        guard let inbox, let owner = diary.selection?.identity.profileID, !diary.profiles.isEmpty else { queuedSiri = []; return }
+        let profiles = Set(diary.profiles.map(\.id))
+        for entry in inbox.entries() where !profiles.contains(entry.profileID) { try? inbox.remove(entry.id) }
+        queuedSiri = inbox.entries().filter { $0.profileID == owner }
+    }
+    /// The entry ID is the submission ID, so a send after a crash reconciles instead of saving twice.
+    func sendQueued(_ entry: CoachInbox.Entry) async {
+        do {
+            try await captureExternal(profileID: entry.profileID, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
+            try inbox?.remove(entry.id)
+        } catch { errorMessage = "Could not save on this iPhone. Your input is still here." }
+        loadQueuedSiri()
+    }
+    func discardQueued(_ entry: CoachInbox.Entry) {
+        try? inbox?.remove(entry.id); loadQueuedSiri()
     }
     func resume() {
         if let receipt = diary.captureReceipt, let owner = diary.selection, !diary.isChangingProfile,
