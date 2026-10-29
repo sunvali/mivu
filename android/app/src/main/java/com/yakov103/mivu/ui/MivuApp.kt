@@ -210,7 +210,7 @@ fun MivuApp(
         when (state) {
             is Bootstrap.Ready -> Shell(repository, (state as Bootstrap.Ready).profileID, onMealCaptured, coach, connection, appScope, setupNewDiary,
                 quickRequest)
-            Bootstrap.Failed -> SetupMessage("Couldn't create your diary") {
+            Bootstrap.Failed -> SetupMessage("Couldn't open your diary") {
                 Button(onClick = { scope.launch { repository.bootstrap() } }) { Text("Try again") }
             }
             is Bootstrap.Choose -> ChooseDiary((state as Bootstrap.Choose).profiles) { id -> scope.launch { repository.choose(id) } }

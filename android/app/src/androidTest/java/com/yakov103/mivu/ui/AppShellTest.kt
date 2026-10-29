@@ -30,6 +30,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import kotlinx.coroutines.runBlocking
 
 class AppShellTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -71,8 +72,27 @@ class AppShellTest {
 
     @Test fun bootstrapFailureOffersRetry() {
         launch(DiaryRepository(context, create = { _, _ -> throw IOException("synthetic") }))
-        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Couldn't create your diary")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Couldn't open your diary")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Try again").assertIsDisplayed()
+    }
+
+    @Test fun unreadableDiaryFolderNeverStartsANewDiary() {
+        val existing = DiaryProfile(UUID.randomUUID(), "Synthetic owner", "en", "UTC", "")
+        DiaryDatabase.create(context, existing).close()
+        val profiles = File(context.filesDir, "profiles")
+        var created = 0
+        val repository = DiaryRepository(context, create = { c, p -> created++; DiaryDatabase.create(c, p) })
+        this.repository = repository
+        try {
+            profiles.setReadable(false); profiles.setExecutable(false)
+            assertEquals(Bootstrap.Failed, runBlocking { repository.bootstrap() })
+        } finally {
+            profiles.setReadable(true); profiles.setExecutable(true)
+        }
+        assertEquals(0, created)
+        assertEquals(Bootstrap.Ready(existing.id), runBlocking { repository.bootstrap() })
+        assertEquals(1, profiles.listFiles()!!.size)
+        repository.database(existing.id).close()
     }
 
     @Test fun missingSelectedDiaryAsksToChooseInsteadOfOpeningAnother() {

@@ -47,11 +47,14 @@ class DiaryRepository(
     val changes: SharedFlow<Unit> = _changes
 
     /**
-     * Opens the selected diary, or creates "My diary" when there is none. Never touches an existing diary's data, and
+     * Opens the selected diary, or creates "My diary" only when the diary folder is readable and empty. Never touches an existing diary's data, and
      * never silently opens a different diary than the stored selection: when that diary is gone it asks to [choose].
      */
     suspend fun bootstrap(): Bootstrap = publish {
-        val diaries = File(context.filesDir, "profiles").listFiles().orEmpty()
+        val profiles = File(context.filesDir, "profiles")
+        // A folder that exists but cannot be listed is unreadable, not empty: never start a second diary next to it.
+        val listing = profiles.listFiles() ?: if (profiles.exists()) return@publish Bootstrap.Failed else emptyArray()
+        val diaries = listing
             .filter { File(it, DIARY_FILE).isFile }
             .mapNotNull { dir -> runCatching { UUID.fromString(dir.name) }.getOrNull()?.let { it to dir } }
         val stored = preferences.getString(SELECTED_PROFILE, null)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
