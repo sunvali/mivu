@@ -446,6 +446,23 @@ import XCTest
         XCTAssertTrue(row.label.contains("Meal"), "Photo-only pending/review meals need a readable fallback title; actual label: " + row.label)
     }
 
+    func testPinchZoomGrowsAroundTheFingers() {
+        let app = launch()
+        let row = capturePhotoOnlyReview(in: app)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "Awaiting review"), object: row)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        reveal(row, in: app); row.tap()
+        let photo = app.buttons["viewMealPhoto"].firstMatch
+        reveal(photo, in: app); photo.tap()
+        let zoom = app.scrollViews["mealPhotoZoom"], image = app.images["Meal photo"]
+        XCTAssertTrue(image.waitForExistence(timeout: 5))
+        zoom.pinch(withScale: 2.5, velocity: 2)
+        XCTAssertNotEqual(app.staticTexts["photoZoomLevel"].label, "100%")
+        XCTAssertGreaterThan(image.frame.width, zoom.frame.width * 1.5)
+        XCTAssertEqual(image.frame.midX, zoom.frame.midX, accuracy: 40, "A pinch in the middle keeps the middle in view")
+        XCTAssertEqual(image.frame.midY, zoom.frame.midY, accuracy: 40)
+    }
+
     func testMealPhotoViewerClosingAndCancelledDeletionPreserveRecord() {
         let app = launch()
         let row = capturePhotoOnlyReview(in: app)
@@ -456,7 +473,7 @@ import XCTest
         let photo = app.buttons["viewMealPhoto"].firstMatch
         reveal(photo, in: app); photo.tap()
         XCTAssertTrue(app.navigationBars["Meal photo"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Photo timing: Unspecified"].exists)
+        XCTAssertFalse(app.staticTexts["Photo timing: Unspecified"].exists, "No timing line for a photo without one")
         app.buttons["zoomInPhoto"].tap()
         XCTAssertEqual(app.staticTexts["photoZoomLevel"].label, "200%")
         app.scrollViews["mealPhotoZoom"].doubleTap()

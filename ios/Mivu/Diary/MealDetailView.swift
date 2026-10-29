@@ -52,8 +52,7 @@ struct MealDetailView: View {
                                     }.buttonStyle(.plain).accessibilityLabel("Meal photo")
                                         .accessibilityHint("Open full-screen photo viewer").accessibilityIdentifier("viewMealPhoto")
                                     HStack {
-                                        Text(photo.role == .before ? "Before eating" : photo.role == .after ? "After eating" : "Timing unspecified")
-                                            .font(.caption).foregroundStyle(Color.diarySecondary)
+                                        if let timing = photo.role.timing { Text(timing).font(.caption).foregroundStyle(Color.diarySecondary) }
                                         Spacer()
                                         Button("Delete photo", role: .destructive) { deletion = .photo(photo.photoID) }.frame(minHeight: 44)
                                     }
@@ -739,40 +738,26 @@ private struct FoodItemEditor: View {
 private struct MealPhotoViewer: View {
     @Bindable var model: DiaryViewModel
     let photo: DiaryPhotoReference
-    @State private var original: Data?
+    @State private var original: UIImage?
     let delete: () async -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var zoom: CGFloat = 1
-    @GestureState private var magnification: CGFloat = 1
     @State private var showDelete = false
     @State private var deleting = false
-    private var scale: CGFloat { min(5, max(1, zoom * magnification)) }
-    private var timing: String { photo.role == .before ? "Before eating" : photo.role == .after ? "After eating" : "Unspecified" }
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                if let original, let image = UIImage(data: original) {
-                    GeometryReader { geometry in
-                        ScrollView([.horizontal, .vertical]) {
-                            Image(uiImage: image).resizable().scaledToFit()
-                                .frame(width: geometry.size.width * scale, height: geometry.size.height * scale)
-                                .accessibilityLabel("Meal photo")
-                                .accessibilityValue("Zoom \(Int(scale * 100)) percent")
-                        }
-                        .accessibilityIdentifier("mealPhotoZoom")
-                        .simultaneousGesture(MagnifyGesture().updating($magnification) { value, state, _ in state = value.magnification }
-                            .onEnded { value in zoom = min(5, max(1, zoom * value.magnification)) })
-                        .onTapGesture(count: 2) { zoom = zoom > 1 ? 1 : 2 }
-                    }
+                if let original {
+                    ZoomablePhoto(image: original, zoom: $zoom)
                 } else {
                     ContentUnavailableView("Photo unavailable", systemImage: "photo", description: Text("The saved attachment could not be displayed."))
                 }
                 VStack(spacing: 8) {
-                    Text("Photo timing: \(timing)").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    if let timing = photo.role.timing { Text("Photo timing: \(timing)").font(.subheadline).foregroundStyle(Color.diarySecondary) }
                     HStack(spacing: 20) {
                         Button { zoom = max(1, zoom - 1) } label: { Image(systemName: "minus.magnifyingglass").frame(minWidth: 44, minHeight: 44) }
                             .accessibilityLabel("Zoom out").accessibilityIdentifier("zoomOutPhoto").disabled(zoom <= 1)
-                        Text("\(Int(scale * 100))%").monospacedDigit().accessibilityIdentifier("photoZoomLevel")
+                        Text("\(Int((zoom * 100).rounded()))%").monospacedDigit().accessibilityIdentifier("photoZoomLevel")
                         Button { zoom = min(5, zoom + 1) } label: { Image(systemName: "plus.magnifyingglass").frame(minWidth: 44, minHeight: 44) }
                             .accessibilityLabel("Zoom in").accessibilityIdentifier("zoomInPhoto").disabled(zoom >= 5)
                     }.buttonStyle(.glass)
@@ -784,7 +769,7 @@ private struct MealPhotoViewer: View {
                 do {
                     let data = try await model.store.photoContent(photo, expectedProfileID: token.identity.profileID)
                     try await model.store.validateSelection(epoch: token.selectionEpoch, expectedProfileID: token.identity.profileID)
-                    guard !Task.isCancelled, !model.isChangingProfile, model.selection == token else { return }; original = data
+                    guard !Task.isCancelled, !model.isChangingProfile, model.selection == token else { return }; original = UIImage(data: data)
                 } catch { original = nil }
             }
             .navigationTitle("Meal photo").navigationBarTitleDisplayMode(.inline)
@@ -804,4 +789,71 @@ private struct MealPhotoViewer: View {
             .interactiveDismissDisabled(deleting)
         }
     }
+}
+
+/// UIScrollView zooms around the pinch point and keeps the photo centered, like Photos.
+private struct ZoomablePhoto: UIViewRepresentable {
+    let image: UIImage
+    @Binding var zoom: CGFloat
+    func makeCoordinator() -> Coordinator { Coordinator(zoom: $zoom) }
+    func makeUIView(context: Context) -> PhotoScrollView {
+        let view = PhotoScrollView(image: image)
+        view.delegate = context.coordinator
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        view.addGestureRecognizer(doubleTap)
+        return view
+    }
+    func updateUIView(_ view: PhotoScrollView, context: Context) {
+        context.coordinator.zoom = $zoom
+        if view.imageView.image !== image { view.imageView.image = image; view.setNeedsLayout() }
+        if abs(view.zoomScale - zoom) > 0.01 { view.setZoomScale(zoom, animated: true) }
+        view.imageView.accessibilityValue = "Zoom \(Int((zoom * 100).rounded())) percent"
+    }
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        var zoom: Binding<CGFloat>
+        init(zoom: Binding<CGFloat>) { self.zoom = zoom }
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? { (scrollView as? PhotoScrollView)?.imageView }
+        func scrollViewDidZoom(_ scrollView: UIScrollView) { scrollView.setNeedsLayout(); zoom.wrappedValue = scrollView.zoomScale }
+        @objc func doubleTap(_ tap: UITapGestureRecognizer) {
+            guard let view = tap.view as? PhotoScrollView else { return }
+            if view.zoomScale > 1 { view.setZoomScale(1, animated: true); return }
+            let point = tap.location(in: view.imageView), size = CGSize(width: view.bounds.width / 2, height: view.bounds.height / 2)
+            view.zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)
+        }
+    }
+}
+
+final class PhotoScrollView: UIScrollView {
+    let imageView: UIImageView
+    private var fittedBounds = CGSize.zero
+    init(image: UIImage) {
+        imageView = UIImageView(image: image)
+        super.init(frame: .zero)
+        minimumZoomScale = 1; maximumZoomScale = 5
+        showsHorizontalScrollIndicator = false; showsVerticalScrollIndicator = false
+        contentInsetAdjustmentBehavior = .never
+        accessibilityIdentifier = "mealPhotoZoom"
+        imageView.isAccessibilityElement = true; imageView.accessibilityLabel = "Meal photo"
+        addSubview(imageView)
+    }
+    required init?(coder: NSCoder) { nil }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.size != fittedBounds, let image = imageView.image, image.size.width > 0, image.size.height > 0 {
+            // Size the photo to fit at 100%; zooming then scales this frame.
+            fittedBounds = bounds.size; zoomScale = 1
+            let fit = min(bounds.width / image.size.width, bounds.height / image.size.height)
+            imageView.frame = CGRect(origin: .zero, size: CGSize(width: image.size.width * fit, height: image.size.height * fit))
+            contentSize = imageView.frame.size
+        }
+        // Center the photo while it is smaller than the screen.
+        let x = max(0, (bounds.width - contentSize.width) / 2), y = max(0, (bounds.height - contentSize.height) / 2)
+        if contentInset != UIEdgeInsets(top: y, left: x, bottom: y, right: x) { contentInset = UIEdgeInsets(top: y, left: x, bottom: y, right: x) }
+    }
+}
+
+extension PhotoRole {
+    /// Shown only when the owner chose before or after; most photos have no timing.
+    var timing: String? { self == .before ? "Before eating" : self == .after ? "After eating" : nil }
 }
