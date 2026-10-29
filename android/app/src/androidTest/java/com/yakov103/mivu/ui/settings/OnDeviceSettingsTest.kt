@@ -60,6 +60,15 @@ class OnDeviceSettingsTest {
         compose.onNodeWithText("Continue with ChatGPT").assertIsDisplayed()
     }
 
+    @Test fun missingNanoAfterChoosingItStillOffersChatGPT() {
+        state = ConnectionState(storedProvider = CoachProvider.onDevice, nanoKnown = true)
+        screen()
+        compose.onNodeWithText("On this phone (Gemini Nano)").assertIsNotEnabled()
+        compose.onNodeWithText("ChatGPT (recommended)").performClick()
+        assertEquals(listOf(CoachProvider.chatGPT), chosen)
+        compose.onNodeWithText("Continue with ChatGPT").assertIsDisplayed()
+    }
+
     @Test fun downloadableKeepsOptionDisabledAndShowsProgress() {
         state = ConnectionState(nano = NanoStatus.downloadable)
         screen()

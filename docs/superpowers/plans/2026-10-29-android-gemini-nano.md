@@ -43,7 +43,7 @@
 ## Review Focus
 
 1. **The app goes to the background mid-turn:** Nano throws `BACKGROUND_USE_BLOCKED`, and the turn must end as `waitingForNetwork` with the on-device copy, never `needsRetry`. Pinned in Task 4.
-2. **The Nano status changes while on-device is stored:** the provider falls back to ChatGPT only when a ChatGPT account exists; otherwise the turn waits. Pinned in Task 3.
+2. **The Nano status changes while on-device is stored:** the provider stays on-device and the turn waits (owner decision after the build: never switch to ChatGPT automatically). Pinned in `CoachProviderTest`.
 3. **Food names:** a message with no photo whose foods aren't named in it logs nothing ("Nothing to change."). "make it 3" on a two-item meal changes nothing. Pinned in Task 2.
 4. **Malformed model JSON** (code fences, extra fields, missing intent, negative numbers) parses or fails as `Malformed`, never crashes, and clamps numbers to 0…100000. Pinned in Task 2.
 5. **The onboarding connect step on a Nano phone:** it must not auto-skip because `canInfer` is true. Only ChatGPT authorization skips it. Pinned in Task 5.

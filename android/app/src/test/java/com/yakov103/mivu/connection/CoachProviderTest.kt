@@ -61,10 +61,12 @@ class CoachProviderTest {
         assertTrue(state.canInfer && state.tunesTargets)
     }
 
-    @Test fun storedOnDeviceWithoutNanoFallsBackToConnectedChatGPT() {
-        val state = chatGPT.copy(storedProvider = CoachProvider.onDevice, nano = NanoStatus.downloadable, nanoKnown = true)
-        assertEquals(CoachProvider.chatGPT, state.provider)
-        assertTrue(state.canInfer)
+    @Test fun storedOnDeviceWithoutNanoNeverSwitchesToChatGPT() {
+        // The person chose to keep meals on the phone; only they can choose to send them to OpenAI.
+        val state = chatGPT.copy(storedProvider = CoachProvider.onDevice, nano = NanoStatus.unavailable, nanoKnown = true)
+        assertEquals(CoachProvider.onDevice, state.provider)
+        assertFalse(state.canInfer)
+        assertTrue(state.nanoMissing)
     }
 
     @Test fun storedOnDeviceWaitsOnDeviceUntilTheNanoCheckReports() {
@@ -90,14 +92,16 @@ class CoachProviderTest {
         c.refreshNano()!!.join()
         assertEquals(CoachProvider.onDevice, c.state.value.provider)
         assertFalse(c.state.value.canInfer)
+        assertFalse(c.state.value.nanoMissing)
         c.statusForTest = { NanoStatus.unavailable }
         c.refreshNano()!!.join()
-        assertEquals(CoachProvider.chatGPT, c.state.value.provider)
+        assertEquals(CoachProvider.onDevice, c.state.value.provider)
+        assertTrue(c.state.value.nanoMissing)
     }
 
     @Test fun storedOnDeviceWithoutNanoOrAccountCannotInfer() {
         val state = ConnectionState(storedProvider = CoachProvider.onDevice, nanoKnown = true)
-        assertEquals(CoachProvider.chatGPT, state.provider)
+        assertEquals(CoachProvider.onDevice, state.provider)
         assertFalse(state.canInfer)
     }
 

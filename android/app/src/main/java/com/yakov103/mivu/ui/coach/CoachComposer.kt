@@ -202,7 +202,8 @@ fun CoachComposer(
                 CoachPip(model, companion, if (large) 76.dp else 112.dp)
                 Column(Modifier.weight(1f)) {
                     val line = PipLine.current(LocalTime.now().hour, coachDay?.mealsLogged == true, focused, connected, pip.processing,
-                        pip.withPhotos, pip.recovery, message, pip.turnState, connection.provider == CoachProvider.onDevice)
+                        pip.withPhotos, pip.recovery, message, pip.turnState, connection.provider == CoachProvider.onDevice,
+                        connection.nanoMissing)
                         // At large sizes the greeting would crowd the conversation; status and errors still show.
                         ?.takeUnless { large && it is PipLine.Say }
                     Crossfade(line, label = "pipLine") { shown ->

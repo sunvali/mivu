@@ -73,17 +73,18 @@ data class ConnectionState(
     val planAuthorized get() = account == AccountState.connected && !isConnecting && !isDisconnecting && models.any { it.slug == selectedModel }
 
     /**
-     * The person's choice while it can answer; otherwise on-device when this phone can run it, then ChatGPT. A stored
-     * on-device choice holds, unable to answer, until a Nano check reports the model is not available.
+     * The person's choice, always: a stored on-device choice never switches to ChatGPT on its own, so meals stay on the
+     * phone until the person picks ChatGPT. Without a choice, on-device when this phone can run it, then ChatGPT.
      */
     val provider get() = when {
-        storedProvider == CoachProvider.onDevice && !nanoKnown -> CoachProvider.onDevice
-        storedProvider != null && (storedProvider == CoachProvider.chatGPT || nano == NanoStatus.available) -> storedProvider
+        storedProvider != null -> storedProvider
         // Someone with a saved ChatGPT connection keeps it until they pick on-device, also while it restores at launch.
-        storedProvider == null && (planAuthorized || registrationID != null || savedRegistration) -> CoachProvider.chatGPT
+        planAuthorized || registrationID != null || savedRegistration -> CoachProvider.chatGPT
         nano == NanoStatus.available -> CoachProvider.onDevice
         else -> CoachProvider.chatGPT
     }
+    /** On-device is chosen but a Nano check says the model cannot answer; Pip points to Settings. */
+    val nanoMissing get() = provider == CoachProvider.onDevice && nanoKnown && nano != NanoStatus.available
     /** Whether the current provider can answer a Coach turn now. */
     val canInfer get() = if (provider == CoachProvider.onDevice) nano == NanoStatus.available else planAuthorized
     /** Only ChatGPT tunes onboarding targets; the formula estimate beats the on-device model there. */

@@ -158,7 +158,8 @@ fun ConnectionScreen(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (state.nano != NanoStatus.unavailable) {
+            // A chosen Gemini Nano that went missing keeps the picker, so ChatGPT stays one tap away.
+            if (state.nano != NanoStatus.unavailable || onDevice) {
                 WhiteCard { ProviderPicker(state, onChoose, onDownloadNano) }
                 Footnote(if (onDevice) ON_DEVICE_FOOTER else CHATGPT_FOOTER)
             }
@@ -167,7 +168,7 @@ fun ConnectionScreen(
                     SettingsRow(if (connected) "ChatGPT connected" else "Connect for meal analysis",
                         if (connected) R.drawable.ic_check else R.drawable.ic_person, bold = true)
                 }
-                if (state.nano == NanoStatus.unavailable) Footnote(CHATGPT_FOOTER)
+                if (state.nano == NanoStatus.unavailable && !onDevice) Footnote(CHATGPT_FOOTER)
                 Footnote("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage " +
                     "limits. Captures save locally without a connection.")
             }

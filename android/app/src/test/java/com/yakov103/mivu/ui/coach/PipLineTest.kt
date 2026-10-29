@@ -17,8 +17,8 @@ class PipLineTest {
 
     private fun line(hour: Int = 12, mealsLogged: Boolean = false, typing: Boolean = false, connected: Boolean = true,
                      processing: Boolean = false, withPhotos: Boolean = false, recovery: Boolean = false,
-                     error: String? = null, turnState: CoachTurnState? = null, onDevice: Boolean = false) =
-        PipLine.current(hour, mealsLogged, typing, connected, processing, withPhotos, recovery, error, turnState, onDevice)
+                     error: String? = null, turnState: CoachTurnState? = null, onDevice: Boolean = false, nanoMissing: Boolean = false) =
+        PipLine.current(hour, mealsLogged, typing, connected, processing, withPhotos, recovery, error, turnState, onDevice, nanoMissing)
 
     @Test fun idleFollowsTheTimeOfDayUntilSomethingIsLogged() {
         assertEquals(PipLine.Say("Morning! What’s for breakfast?"), line(hour = 8))
@@ -34,6 +34,10 @@ class PipLineTest {
         assertEquals(PipLine.Connect, line(typing = true, connected = false))
         // An on-device choice waiting for its Nano check never asks for ChatGPT.
         assertEquals(PipLine.Working("Waiting to start"), line(connected = false, onDevice = true))
+        // A missing model points to Settings rather than switching to ChatGPT.
+        assertEquals(PipLine.Problem("Gemini Nano isn’t ready on this phone.",
+            "Your meals are saved. To use ChatGPT instead, choose it in Settings → Coach AI.", false),
+            line(connected = false, onDevice = true, nanoMissing = true))
     }
 
     @Test fun workingNamesTheInput() {

@@ -20,7 +20,7 @@ sealed interface PipLine {
 
     companion object {
         fun current(hour: Int, mealsLogged: Boolean, typing: Boolean, connected: Boolean, processing: Boolean, withPhotos: Boolean,
-                    recovery: Boolean, error: String?, turnState: CoachTurnState?, onDevice: Boolean): PipLine? {
+                    recovery: Boolean, error: String?, turnState: CoachTurnState?, onDevice: Boolean, nanoMissing: Boolean = false): PipLine? {
             if (recovery) return when (turnState) {
                 CoachTurnState.waitingForConnection -> Connect
                 CoachTurnState.waitingForNetwork -> Problem(if (onDevice) "I'll finish this when you're back in Mivu."
@@ -30,8 +30,13 @@ sealed interface PipLine {
                 else -> Problem("Something went wrong.", error, false)
             }
             if (processing) return Working(if (withPhotos) "Looking at your photo…" else "Counting that up…")
-            // An on-device choice waiting for its Nano check never asks for ChatGPT.
-            if (!connected) return if (onDevice) Working("Waiting to start") else Connect
+            // An on-device choice never asks to connect ChatGPT: it waits for its Nano check, or points to Settings.
+            if (!connected) return when {
+                nanoMissing -> Problem("Gemini Nano isn’t ready on this phone.",
+                    "Your meals are saved. To use ChatGPT instead, choose it in Settings → Coach AI.", false)
+                onDevice -> Working("Waiting to start")
+                else -> Connect
+            }
             if (typing) return null
             if (mealsLogged) return Say("Anything else to log?")
             return Say(when (hour) {

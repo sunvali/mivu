@@ -56,7 +56,7 @@ These would count as failure even if the feature works.
 `ChatGPTConnection` gains a provider: `chatGPT` or `onDevice`, stored in its preferences. These rules follow iOS `Provider`:
 
 - **Default:** ChatGPT when a ChatGPT account is saved, including while it restores. Otherwise on-device, when Nano is available.
-- **Fallback:** a stored on-device choice whose model is no longer available falls back to ChatGPT.
+- **No automatic switch (owner decision, 2026-10-29):** a stored on-device choice never switches to ChatGPT, even when a ChatGPT account exists and Nano reports unavailable. ML Kit beta5 reports transient errors as unavailable, so a switch could send meals to OpenAI the person meant to keep on the phone. Turns wait; Pip says "Gemini Nano isn’t ready on this phone" and points to Settings › Coach AI, which keeps the picker so ChatGPT is one tap away. This differs from iOS.
 - **`canInfer`:** true for on-device whenever the model is `AVAILABLE`. It does not depend on consent.
 - **`inference()`:** returns the on-device function behind the same `infer` signature the engine already uses, so `CoachEngine`, `CoachTools`, receipts, fingerprints and replay stay unchanged. The model name recorded on estimates is `gemini-nano`, the counterpart of iOS `apple-intelligence`.
 
@@ -100,7 +100,7 @@ Reuse the iOS #49 wording, with "Apple Intelligence" changed to "Gemini Nano" an
 
 ### Turns that change provider, and captures from outside the app
 
-- **My call, as iOS:** a pending turn runs with the provider that is current when it runs. A person who switches to ChatGPT has chosen to send to OpenAI, and ChatGPT consent still applies. A stored on-device choice falls back to ChatGPT only when a ChatGPT account exists; otherwise the turn waits.
+- **My call, as iOS:** a pending turn runs with the provider that is current when it runs. A person who switches to ChatGPT has chosen to send to OpenAI, and ChatGPT consent still applies. A stored on-device choice never switches to ChatGPT on its own; the turn waits until Nano answers or the person picks ChatGPT.
 - **My call:** share, widget and quick-tile captures in on-device mode are accepted and saved. They wait for the foreground with the copy "Saved. Pip will finish when you open Mivu." No background run and no notification.
 - **My call:** if a phone accepts text but rejects an image request, the turn goes to needs-retry with "Photos need ChatGPT on this phone; your meal is saved." The photo button is not hidden up front. Revisit this on a real device.
 
