@@ -25,6 +25,19 @@
 
 All of them pass on the iOS 27 simulator, and none of them touch the files this branch changes.
 
+## After final review (`607a85e7`)
+
+| Run | Scope | Result |
+|---|---|---|
+| Full unit suite, iOS 27.0 | `MivuTests` | 1272 passed, 4 failed, 1 skipped |
+| Review-fix tests | `CoachDeleteUndoTests` (20), `CoachReceiptPresentationTests`, `CoachUndoTests` | 44/44 |
+| Receipt UI | `testCoachDeletedWorkoutShowsUndoAndRestores`, `testReceiptUndo` | 2/2 |
+
+**The 4 iOS 27 failures are pre-existing or environmental.**
+
+- `TellCoachTests` `unlockedCapturesTurn` and `uncertainSaveIsReconciledNotFailed` fail the same way on untouched `main` @ `8dc3a327` on iOS 27. They pass 11/11 on iOS 26.5.
+- `LoopbackCallbackTests` (local socket) and `PipRigViewTests.interruptStartsFromPresentationValue` (animation timing) passed in the iOS 26.5 full run.
+
 ## Not run
 
 - The full UI suite was not run. Only the affected UI tests above were run.
