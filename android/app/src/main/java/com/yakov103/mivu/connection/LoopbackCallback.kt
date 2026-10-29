@@ -50,11 +50,12 @@ class LoopbackCallback : AutoCloseable {
         client.soTimeout = 5000
         val target = readTarget(client)
         val ok = target != null
-        val body = if (ok) "You can return to Mivu." else "Invalid request."
-        val status = if (ok) "200 OK" else "400 Bad Request"
+        // Signed in: send the browser straight back to Mivu (MainActivity's mivu://connected filter); the link is the fallback.
+        val body = if (ok) "<a href=\"$RETURN\">Return to Mivu</a>" else "Invalid request."
+        val head = if (ok) "302 Found\r\nLocation: $RETURN\r\nContent-Type: text/html" else "400 Bad Request\r\nContent-Type: text/plain"
         client.getOutputStream().apply {
             write(
-                ("HTTP/1.1 $status\r\nContent-Type: text/plain; charset=utf-8\r\n" +
+                ("HTTP/1.1 $head; charset=utf-8\r\n" +
                     "Content-Length: ${body.length}\r\nConnection: close\r\n\r\n$body").toByteArray(),
             )
             flush()
@@ -86,6 +87,7 @@ class LoopbackCallback : AutoCloseable {
 
     private companion object {
         const val PATH = "/auth/callback"
+        const val RETURN = "mivu://connected"
         const val MAX_HEAD = 16384
     }
 }

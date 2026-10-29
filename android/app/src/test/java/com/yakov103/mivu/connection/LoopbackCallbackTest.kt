@@ -40,10 +40,12 @@ class LoopbackCallbackTest {
             val waiting = async(start = CoroutineStart.UNDISPATCHED) { it.await() }
             val response = get(base, "/auth/callback?code=c&state=s")
             assertEquals("$base?code=c&state=s", withTimeout(5000) { waiting.await() })
-            assertTrue(response.startsWith("HTTP/1.1 200 OK\r\n"))
-            assertTrue(response.contains("Content-Type: text/plain; charset=utf-8"))
+            // The browser goes straight back to Mivu; the link is the fallback if it refuses the redirect.
+            assertTrue(response.startsWith("HTTP/1.1 302 Found\r\n"))
+            assertTrue(response.contains("Location: mivu://connected\r\n"))
+            assertTrue(response.contains("Content-Type: text/html; charset=utf-8"))
             assertTrue(response.contains("Connection: close"))
-            assertTrue(response.endsWith("\r\n\r\nYou can return to Mivu."))
+            assertTrue(response.endsWith("\r\n\r\n<a href=\"mivu://connected\">Return to Mivu</a>"))
         }
     }
 
