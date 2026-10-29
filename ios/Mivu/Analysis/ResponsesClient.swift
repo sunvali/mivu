@@ -96,7 +96,7 @@ struct ResponsesClient: Sendable {
 
     func models(accessToken: String) async throws -> [AvailableModel] {
         let request = try request(path: "models", accessToken: accessToken)
-        let (bytes, response) = try await session.bytes(for: request)
+        let (bytes, response) = try await session.bytes(for: request, delegate: RejectAuthRedirects())
         defer { bytes.task.cancel() }
         var diagnostic: ResponseFailureDiagnostic?
         try await check(response, bytes: bytes, diagnostic: &diagnostic)
@@ -182,7 +182,7 @@ struct ResponsesClient: Sendable {
         var failureDiagnostic: ResponseFailureDiagnostic?
         var httpStatus: Int?
         do {
-            let (bytes, response) = try await session.bytes(for: request)
+            let (bytes, response) = try await session.bytes(for: request, delegate: RejectAuthRedirects())
             defer { bytes.task.cancel() }
             httpStatus = (response as? HTTPURLResponse)?.statusCode
             try await check(response, bytes: bytes, diagnostic: &failureDiagnostic, captureDiagnostic: diagnostic != nil)
