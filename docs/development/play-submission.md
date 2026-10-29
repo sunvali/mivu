@@ -59,6 +59,9 @@ parts swapped for their Android counterparts. Recount after edits.
   alternative).
 - **Contact email:** support@mivuapp.com (**Owner:** create the mailbox).
 - **Privacy policy URL:** https://mivuapp.com/privacy (**Owner:** publish it).
+  Add: on-device meals stay on the phone; ML Kit sends Google diagnostic
+  device identifiers and configured languages (**owner to confirm** the
+  wording).
 - **App icon (512 × 512):** `design-system/mivu/precision-glass/icon/android/play-icon-512.png`.
 - **Feature graphic (1024 × 500):** `docs/verification/android-play/listing/feature-graphic.png` (Pip, the name and
   the App Store subtitle; rendered from HTML with headless Chrome).
@@ -144,7 +147,11 @@ How the app works, from the code:
   `auth.openai.com` (`CredentialStore.hostID`, `OAuthAttempt.kt`).
 - All network traffic is HTTPS. The only `http://` address is the sign-in
   callback on `127.0.0.1`, which never leaves the phone.
-- No analytics, crash reporting, advertising or location SDK; no advertising ID.
+- With Gemini Nano chosen, Coach turns run on the phone and meals stay on the
+  phone. Google's ML Kit GenAI SDK (`genai-prompt`) sends Google diagnostic
+  device identifiers and the configured languages.
+- No analytics, crash reporting, advertising or location SDK of Mivu's own; no
+  advertising ID.
 
 **Overview questions**
 
@@ -168,6 +175,7 @@ Mivu.
 | App activity › Other user-generated content | Coach messages and meal names and notes | Yes | Yes | No (as above) | Optional |
 | Personal info › Name | The profile name, part of the profile in the Coach context (**owner to confirm**: it is often a nickname, but it is sent) | Yes | Yes | No (as above) | Optional |
 | Device or other IDs | The random per-install `ext_agent_host_id` sent at sign-in (**owner to confirm** whether Play counts it) | Yes | Yes | No | Optional |
+| Device or other IDs › diagnostics (ML Kit) | Device identifiers collected by Google ML Kit for diagnostics when Gemini Nano is used; not shared by Mivu (**owner to confirm** the entry) | Yes | No | No | Optional |
 
 **Not collected:** location, contacts, financial info, calendar, files and docs,
 web browsing, app interactions, crash logs, diagnostics, advertising ID.
@@ -235,9 +243,10 @@ plan for it.
   profanity, drugs or gambling; users do not interact with each other; no
   location sharing; generated text from an AI chatbot (answer the AI question
   "yes"). **Owner to confirm** the rating the questionnaire returns.
-- **Target audience:** 13 and over (onboarding enforces it); not designed for
-  children. **Owner to confirm** whether to choose 18+ to avoid Families
-  questions.
+- **Target audience:** 18 and over. The ML Kit GenAI terms require users to be
+  18+, so the app may not be directed at under-18s. **Owner to confirm** the
+  18+ audience. Onboarding still refuses birth years under 13; whether to
+  raise that is a separate decision.
 - **Ads:** no ads.
 - **News app:** no. **Government app:** no. **Financial features:** none.
 - **COVID-19 / health research:** no.
