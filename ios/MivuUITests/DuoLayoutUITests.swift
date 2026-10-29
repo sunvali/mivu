@@ -22,8 +22,11 @@ import XCTest
         XCTAssertTrue(app.buttons["logWeight"].exists, "Weight stays in the summary column")
     }
 
-    func testUprightTodayStaysOneColumn() {
+    func testUprightTodayStaysOneColumn() throws {
         let app = launch(wide: false)
+        // XCUITest can't rotate the Duo's inner display; the open pose is wider than tall, so check upright windows only.
+        let window = app.windows.firstMatch.frame
+        try XCTSkipIf(window.width > window.height, "Needs an upright window: run Closed, or rotate the open Duo upright")
         XCTAssertFalse(app.descendants(matching: .any)["todayMealsColumn"].exists)
         XCTAssertTrue(app.buttons["logWeight"].exists)
     }
@@ -42,5 +45,15 @@ import XCTest
         let changed = app.descendants(matching: .any)["justChangedMeal"]
         XCTAssertTrue(changed.waitForExistence(timeout: 20), "The meal Coach logged lights up in the live day")
         XCTAssertGreaterThan(changed.frame.minX, input.frame.maxX - 1, "The live day sits beside the chat")
+    }
+
+    func testSidewaysProgressUsesTwoColumns() {
+        let app = launch(wide: true)
+        app.buttons["Progress"].firstMatch.tap()
+        let primary = app.descendants(matching: .any)["progressPrimaryColumn"]
+        let secondary = app.descendants(matching: .any)["progressSecondaryColumn"]
+        XCTAssertTrue(primary.waitForExistence(timeout: 10))
+        XCTAssertTrue(secondary.exists)
+        XCTAssertLessThanOrEqual(primary.frame.maxX, secondary.frame.minX + 1)
     }
 }
