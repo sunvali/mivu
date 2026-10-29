@@ -204,7 +204,8 @@ import XCTest
     private func openEditor(_ app: XCUIApplication, details: Bool = true) {
         let edit = app.buttons["editItem"].firstMatch
         XCTAssertTrue(edit.waitForExistence(timeout: 10))
-        for _ in 0..<6 where !edit.isHittable { app.swipeUp() }
+        // Rows with trailing buttons can wrap taller; keep the tap clear of the pinned meal bar.
+        reveal(edit, in: app, above: app.buttons["mealAskPip"])
         edit.tap()
         XCTAssertTrue(app.textFields["itemQuantity"].waitForExistence(timeout: 5))
         let toggle = app.buttons["foodMoreDetails"]
