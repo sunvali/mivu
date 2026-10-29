@@ -130,6 +130,7 @@ enum PhotoImport {
 struct PhotoInput: View {
     @Binding var photos: [Data]
     @Environment(\.diaryPhotoLimiter) private var limiter
+    @Environment(\.isHalfFolded) private var isHalfFolded
     let preparation: PhotoPreparation
     @Binding var importFailed: Bool
     @State private var selected: [PhotosPickerItem] = []
@@ -165,7 +166,11 @@ struct PhotoInput: View {
         .onAppear { preparation.use(limiter: limiter) }
         .buttonStyle(.borderless)
         .tint(.diaryAccent)
-        .sheet(isPresented: $showCamera) { CameraCapture(preparation: preparation, onPhoto: { if photos.count < 8 { photos.append($0) } }, onFailure: { importFailed = true }).ignoresSafeArea() }
+        .sheet(isPresented: $showCamera) {
+            let add: (Data) -> Void = { if photos.count < 8 { photos.append($0) } }
+            if isHalfFolded { TabletopCameraView(preparation: preparation, onPhoto: add, onFailure: { importFailed = true }) }
+            else { CameraCapture(preparation: preparation, onPhoto: add, onFailure: { importFailed = true }).ignoresSafeArea() }
+        }
         .alert(noticeTitle, isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } }), presenting: notice) { value in
             switch value {
             case .cameraDenied:

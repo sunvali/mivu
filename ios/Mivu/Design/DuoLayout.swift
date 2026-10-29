@@ -31,6 +31,7 @@ struct DuoLayoutRoot<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var size = CGSize.zero
+    @State private var halfFolded = false
     private let forcedWide = DiaryLaunch.isUITest && ProcessInfo.processInfo.arguments.contains("--wide-layout-ui-test")
 
     var body: some View {
@@ -39,8 +40,25 @@ struct DuoLayoutRoot<Content: View>: View {
             .environment(\.horizontalSizeClass, wide ? .regular : .compact)
             .environment(\.isWideLayout, wide)
             .environment(\.windowSizeClass, sizeClass)
+            .environment(\.isHalfFolded, halfFolded)
             .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
+            .background {
+                if #available(iOS 27.1, *) { HingeReader { halfFolded = $0 } }
+            }
     }
+}
+
+/// Reports whether the Duo's hinge is partly open (propped on a table); always false on other iPhones.
+@available(iOS 27.1, *)
+private struct HingeReader: UIViewRepresentable {
+    let onChange: (Bool) -> Void
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.addInteraction(UIHingeInteraction { _, update in onChange(update.hinge?.status == .partiallyOpen) })
+        return view
+    }
+    func updateUIView(_ view: UIView, context: Context) {}
 }
 
 /// Sideways, shows `secondary` beside `primary` in an even split; otherwise only `primary`.
