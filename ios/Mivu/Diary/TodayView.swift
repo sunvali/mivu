@@ -352,7 +352,7 @@ struct DiaryRootView: View {
             } else if model.readModel == nil {
                 NavigationStack { DiarySetupView(model: model, onSelected: { selectedTab = "today"; openQuickLog() }, onCreated: { showOnboarding = true }) }
             } else {
-                rootTabs
+                DuoLayoutRoot { rootTabs }
             }
         }
     }
@@ -362,7 +362,7 @@ struct DiaryRootView: View {
                 NavigationStack {
                     TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
                               onCompanionContextChanged: updateCompanionContext,
-                              onCompanionTouch: touchCompanion).toolbar { profileControl }
+                              onCompanionTouch: touchCompanion).toolbar { profileControl }.duoReadableWidth()
                 }
                 .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
                 .task(id: loggedMealID) {
@@ -372,10 +372,10 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl } }
+                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
-                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl } }
+                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                 NavigationStack {
@@ -387,7 +387,7 @@ struct DiaryRootView: View {
                               openHistory: openCoachHistory, openToday: { selectedTab = "today" },
                               openProgress: { selectedTab = "progress" }) { destination in
                         routes.route = SettingsRoute(destination: destination)
-                    }.toolbar { profileControl }
+                    }.toolbar { profileControl }.duoReadableWidth()
                 }
             }
             .badge(coach.queuedSiri.count)
