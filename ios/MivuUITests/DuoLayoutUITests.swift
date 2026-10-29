@@ -50,8 +50,9 @@ import XCTest
         XCTAssertFalse(app.buttons["coachFollowUp-today"].exists, "See today is redundant beside the live day")
     }
 
-    func testSidewaysDiaryKeepsReadableWidth() {
+    func testSidewaysDiaryKeepsReadableWidth() throws {
         let app = launch(wide: true)
+        try XCTSkipIf(app.windows.firstMatch.frame.width < 760, "Needs the sideways inner display, wider than the readable width")
         app.buttons["Diary"].firstMatch.tap()
         let intake = app.staticTexts["Recorded intake"]
         XCTAssertTrue(intake.waitForExistence(timeout: 10))
@@ -67,5 +68,48 @@ import XCTest
         XCTAssertTrue(secondary.exists)
         XCTAssertLessThanOrEqual(primary.frame.maxX, secondary.frame.minX + 1)
         XCTAssertLessThanOrEqual(app.buttons["openWeight"].frame.maxX, primary.frame.maxX + 1, "Weight balances the left column")
+    }
+
+    // Propped half-open on a table: content stays on the standing half, controls move to the flat half.
+    private func launchTable(_ extra: [String]) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english",
+                               "--duo-posture-ui-test", "table"] + extra
+        app.launch()
+        return app
+    }
+
+    func testTableCoachMovesComposerToTheFlatHalf() {
+        let app = launchTable([])
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(input.frame.minY, app.windows.firstMatch.frame.midY, "The composer sits on the flat half")
+        XCTAssertLessThanOrEqual(app.tables.firstMatch.frame.maxY, app.windows.firstMatch.frame.midY + 1, "The conversation stays on the standing half")
+    }
+
+    func testTableProgressPutsTheChartAboveTheDetails() {
+        let app = launchTable(["--coach-navigation-start-today", "--diary-history-fixture"])
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
+        app.buttons["Progress"].firstMatch.tap()
+        let primary = app.descendants(matching: .any)["progressPrimaryColumn"]
+        let secondary = app.descendants(matching: .any)["progressSecondaryColumn"]
+        XCTAssertTrue(primary.waitForExistence(timeout: 10))
+        XCTAssertLessThanOrEqual(primary.frame.maxY, secondary.frame.minY + 1, "Chart on the standing half, details below")
+    }
+
+    func testTableCameraKeepsShootingUntilDone() {
+        let app = launchTable([])
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["coachPhotos"].waitForExistence(timeout: 5)); app.buttons["coachPhotos"].tap()
+        let shutter = app.buttons["coachCameraShutter"]
+        XCTAssertTrue(shutter.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(shutter.frame.minY, app.windows.firstMatch.frame.midY, "Shutter on the flat half")
+        XCTAssertTrue(app.buttons["coachCameraTimer"].exists, "A self-timer for hands-free shots")
+        XCTAssertTrue(app.buttons["syntheticPhoto"].waitForExistence(timeout: 5)); app.buttons["syntheticPhoto"].tap()
+        XCTAssertTrue(app.staticTexts["1 photo added"].waitForExistence(timeout: 5), "The camera stays open for the next plate")
+        app.buttons["coachCameraDone"].tap()
+        XCTAssertTrue(app.textFields["coachInput"].waitForExistence(timeout: 5))
+        XCTAssertFalse(shutter.exists)
     }
 }

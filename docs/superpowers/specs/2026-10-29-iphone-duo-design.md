@@ -155,3 +155,20 @@ SmartGym, NYT Cooking).
 - Column breakpoints at large Dynamic Type sizes.
 - Test shape: a small unit test for the wide/upright decision, plus focused UI
   tests on the Duo simulator for upright, sideways and the fold transition.
+
+## Fold-aware modes (owner request, 2026-10-30)
+
+The owner asked for real benefit when the Duo is folded part-way. Posture comes from the fold's
+division reserved region (`GeometryProxy.reservedRegions(kind: .division)`): an upright crease is
+**book**, a level crease is **table**, no active crease is **flat**.
+
+- **Fold-aware splits:** every two-pane screen (Coach beside the live day, Today, Progress) uses one
+  `DuoSplit` that sizes its panes to meet exactly at the crease. It is built from stacks, not
+  `ArrangementView`, so the primary pane keeps its identity and scroll position across poses.
+- **Coach at the table:** the conversation stays on the standing half; Pip, starters, the field, camera
+  and mic move to the flat half.
+- **Progress at the table:** range picker and chart on the standing half, the rest scrolls below.
+- **Table camera:** Coach's camera puts the preview on the standing half and the controls on the flat
+  half, stays open for several plates (up to 8) until Done, and offers a 3-second timer.
+- The earlier sample-mode tabletop camera is removed; Coach's camera is the real capture path.
+- Not built: snapping by voice, and showing Pip's estimate inside the camera. Coach estimates after Done.

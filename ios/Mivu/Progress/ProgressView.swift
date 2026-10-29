@@ -5,6 +5,7 @@ struct DiaryProgressView: View {
     @Bindable var model: DiaryViewModel
     let openDiary: () -> Void
     @Environment(\.isWideLayout) private var isWide
+    @Environment(\.duoPosture) private var posture
     @State private var range = ProgressRange.week
     @State private var showGoals = false
     @State private var showWeight = false
@@ -103,6 +104,29 @@ struct DiaryProgressView: View {
                                      value: entry.unit == "lb" ? entry.value * 0.45359237 : entry.value)
         }
     }
+    private var splitAxis: Axis? { isWide ? .horizontal : posture == .table ? .vertical : nil }
+    private func pane(@ViewBuilder _ content: () -> some View) -> some View {
+        ScrollView { VStack(spacing: 12) { content() }.padding(.horizontal, 20).padding(.bottom, 24) }
+    }
+    @ViewBuilder private func primaryCards(_ snapshot: ProgressSnapshot, _ progress: CoachProgress) -> some View {
+        Picker("Range", selection: $range) {
+            ForEach(ProgressRange.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("progressRange")
+        // The last report stays on screen during a range switch, so a failed switch must still say so.
+        if let loadError { loadFailure(loadError) }
+        ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
+        sectionTitle("Weight")
+        NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
+            .buttonStyle(.plain).accessibilityIdentifier("openWeight")
+    }
+    @ViewBuilder private func secondaryCards(_ snapshot: ProgressSnapshot, _ progress: CoachProgress) -> some View {
+        sectionTitle("Average day")
+        detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
+        sectionTitle("More")
+        more(snapshot, progress)
+    }
     private var selectedWeight: WeightObservation? {
         guard let selectedWeightDate else { return nil }
         return weights.min {
@@ -117,49 +141,30 @@ struct DiaryProgressView: View {
     }
 
     var body: some View {
-        // A plain stack, not a List: List kept stale row heights after a range change and let cards overlap.
-        ScrollView {
-            VStack(spacing: 12) {
-                if readModel != nil, let snapshot, let progress = visibleProgress {
-                    // Sideways on the Duo the cards sit in two columns; otherwise one stack, unchanged order.
-                    let primary = VStack(spacing: 12) {
-                        Picker("Range", selection: $range) {
-                            ForEach(ProgressRange.allCases) { Text($0.title).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .accessibilityIdentifier("progressRange")
-                        // The last report stays on screen during a range switch, so a failed switch must still say so.
-                        if let loadError { loadFailure(loadError) }
-                        ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
-                        sectionTitle("Weight")
-                        NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
-                            .buttonStyle(.plain).accessibilityIdentifier("openWeight")
-                    }
-                    let secondary = VStack(spacing: 12) {
-                        sectionTitle("Average day")
-                        detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
-                        sectionTitle("More")
-                        more(snapshot, progress)
-                    }
-                    if isWide {
-                        HStack(alignment: .top, spacing: 20) {
-                            primary.accessibilityElement(children: .contain).accessibilityIdentifier("progressPrimaryColumn")
-                            secondary.accessibilityElement(children: .contain).accessibilityIdentifier("progressSecondaryColumn")
-                        }
-                    } else {
-                        primary
-                        secondary
-                    }
-                } else if model.selection != nil {
-                    if let loadError { loadFailure(loadError) } else { ProgressView("Loading progress…").padding(.top, 40) }
-                } else {
-                    ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle")
+        Group {
+            // Sideways the cards sit in two columns; on a table the chart stands above the details. Each pane scrolls alone.
+            if let axis = splitAxis, readModel != nil, let snapshot, let progress = visibleProgress {
+                DuoSplit(axis: axis) {
+                    pane { primaryCards(snapshot, progress) }.accessibilityIdentifier("progressPrimaryColumn")
+                } secondary: {
+                    pane { secondaryCards(snapshot, progress) }.accessibilityIdentifier("progressSecondaryColumn")
                 }
+            } else {
+                // A plain stack, not a List: List kept stale row heights after a range change and let cards overlap.
+                pane {
+                    if readModel != nil, let snapshot, let progress = visibleProgress {
+                        primaryCards(snapshot, progress)
+                        secondaryCards(snapshot, progress)
+                    } else if model.selection != nil {
+                        if let loadError { loadFailure(loadError) } else { ProgressView("Loading progress…").padding(.top, 40) }
+                    } else {
+                        ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle")
+                    }
+                }
+                .accessibilityIdentifier("progressList")
             }
-            .padding(.horizontal, 20).padding(.bottom, 24)
         }
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .accessibilityIdentifier("progressList")
         .navigationTitle("Progress")
         .sheet(isPresented: $showWorkout) { WorkoutEditorView(model: model, localDate: today) }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }

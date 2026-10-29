@@ -23,6 +23,18 @@ struct DuoLayoutTests {
         #expect(!DuoLayout.isWide(size: CGSize(width: 466, height: 678), horizontal: .compact, typeSize: .large))
     }
 
+    @Test func noFoldIsFlat() {
+        #expect(DuoLayout.posture(fold: nil) == .flat)
+    }
+
+    @Test func uprightCreaseIsBook() {
+        #expect(DuoLayout.posture(fold: CGRect(x: 470, y: 0, width: 12, height: 669)) == .book)
+    }
+
+    @Test func levelCreaseIsTable() {
+        #expect(DuoLayout.posture(fold: CGRect(x: 0, y: 470, width: 669, height: 12)) == .table)
+    }
+
     private let first = UUID(), second = UUID()
 
     @Test func firstLoadHighlightsNothing() {

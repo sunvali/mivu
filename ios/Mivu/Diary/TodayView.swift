@@ -710,8 +710,9 @@ struct TodayView: View {
     var body: some View {
         Group {
             if isWide {
-                HStack(spacing: 0) {
+                DuoSplit {
                     todayList { leadingSections; trailingSections }.accessibilityIdentifier("todaySummaryColumn")
+                } secondary: {
                     todayList { mealSections }.accessibilityIdentifier("todayMealsColumn")
                 }
             } else if isLiveDay {

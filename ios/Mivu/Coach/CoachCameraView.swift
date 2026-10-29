@@ -12,7 +12,10 @@ struct CoachCameraView: View {
     @State private var error: String?
     @State private var importing: Task<Void, Never>?
     @State private var closing = false
+    @State private var shotsAdded = 0
+    @State private var countdown: Int?
     @Environment(\.scenePhase) private var scene
+    @Environment(\.duoPosture) private var posture
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -34,13 +37,47 @@ struct CoachCameraView: View {
             Task { try? await draft.endPresentation(presentationID); try? await camera.close(presentationID: presentationID) }
         }
     }
+    /// Propped on a table: the preview fills the standing half, the controls sit on the flat half, and the camera
+    /// stays open so several plates can be snapped before Done.
+    private var atTable: Bool { posture == .table && retaking == nil }
     private var cameraSurface: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            CoachCameraPreview(camera: camera, presentationID: presentationID).ignoresSafeArea()
-            if scene != .active || !state.isRunning { statusCover }
-            cameraControls
+        DuoSplit(axis: .vertical, showsSecondary: atTable) {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                CoachCameraPreview(camera: camera, presentationID: presentationID).ignoresSafeArea(edges: atTable ? [.top, .horizontal] : .all)
+                if scene != .active || !state.isRunning { statusCover }
+                if let countdown {
+                    Text("\(countdown)").font(.system(size: 96, weight: .bold, design: .rounded)).monospacedDigit()
+                        .shadow(radius: 8).accessibilityLabel("Taking photo in \(countdown)")
+                }
+                if !atTable { cameraControls }
+            }
+        } secondary: {
+            tableControls
         }
+        .background(Color.black.ignoresSafeArea())
+    }
+    private var tableControls: some View {
+        VStack(spacing: 20) {
+            topControls
+            Spacer(minLength: 0)
+            Text(shotsAdded == 0 ? "Snap when ready." : shotsAdded == 1 ? "1 photo added" : "\(shotsAdded) photos added")
+                .font(.headline).accessibilityIdentifier("coachCameraTally")
+            HStack(spacing: 16) {
+                libraryButton.frame(maxWidth: .infinity, alignment: .leading)
+                shutterButton
+                timerButton.frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            if (DiaryLaunch.isSampleMode || DiaryLaunch.isCoachUITest), state.phase == .unavailable { syntheticButton }
+            Spacer(minLength: 0)
+        }.padding(24)
+    }
+    private var timerButton: some View {
+        Button { startTimer() } label: {
+            Label("3-second timer", systemImage: "timer").labelStyle(.iconOnly).font(.title2).frame(minWidth: 52, minHeight: 52)
+        }
+        .disabled(shutterDisabled || countdown != nil)
+        .accessibilityIdentifier("coachCameraTimer")
     }
     private var statusCover: some View {
         ZStack {
@@ -73,7 +110,11 @@ struct CoachCameraView: View {
     }
     private var topControls: some View {
         HStack {
-            Button("Close") { finish() }.frame(minWidth: 64, minHeight: 44).accessibilityIdentifier("coachCameraClose")
+            if shotsAdded > 0 {
+                Button("Done") { finish() }.fontWeight(.semibold).frame(minWidth: 64, minHeight: 44).accessibilityIdentifier("coachCameraDone")
+            } else {
+                Button("Close") { finish() }.frame(minWidth: 64, minHeight: 44).accessibilityIdentifier("coachCameraClose")
+            }
             Spacer()
             if draft.isPreparing { ProgressView("Preparing photo").tint(.white) }
         }
@@ -98,10 +139,29 @@ struct CoachCameraView: View {
                 .overlay { Circle().stroke(.black.opacity(0.6), lineWidth: 3).padding(5) }
         }
         .frame(minWidth: 80, minHeight: 80)
-        .disabled(!state.isRunning || state.isCapturing || draft.isPreparing || scene != .active || closing)
+        .disabled(shutterDisabled)
         .opacity(state.isRunning ? 1 : 0.4)
         .accessibilityLabel(retaking == nil ? "Take photo" : "Retake photo")
         .accessibilityIdentifier("coachCameraShutter")
+    }
+    private var shutterDisabled: Bool {
+        !state.isRunning || state.isCapturing || draft.isPreparing || scene != .active || closing
+            || (atTable && draft.attachments.count >= 8)
+    }
+    private func startTimer() {
+        importing = Task {
+            for second in (1...3).reversed() {
+                countdown = second
+                guard (try? await Task.sleep(for: .seconds(1))) != nil, !closing else { countdown = nil; return }
+            }
+            countdown = nil
+            shutter()
+        }
+    }
+    /// At the table the camera stays for the next plate; otherwise a photo returns straight to Coach.
+    private func added() {
+        guard !Task.isCancelled, !closing else { return }
+        if atTable { shotsAdded += 1 } else { finish() }
     }
     private var syntheticButton: some View {
         Button(DiaryLaunch.isSampleMode ? "Add synthetic apple photo" : "Add synthetic test photo") {
@@ -157,13 +217,13 @@ struct CoachCameraView: View {
     }
     private func shutter() {
         importing = Task {
-            do { try await draft.capture(using: camera, presentationID: presentationID, replacing: retaking); guard !Task.isCancelled, !closing else { return }; finish() }
+            do { try await draft.capture(using: camera, presentationID: presentationID, replacing: retaking); added() }
             catch { if !Task.isCancelled, !closing { self.error = "Could not take photo. Your note and other photos are kept." } }
         }
     }
     private func importData(_ data: Data) {
         importing = Task {
-            do { _ = try await draft.importSelections([.init { data }], presentationID: presentationID); guard !Task.isCancelled, !closing else { return }; finish() }
+            do { _ = try await draft.importSelections([.init { data }], presentationID: presentationID); added() }
             catch { if !Task.isCancelled, !closing { self.error = "Could not add photo. Your input is kept." } }
         }
     }

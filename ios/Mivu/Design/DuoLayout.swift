@@ -9,6 +9,15 @@ enum DuoLayout {
         horizontal == .regular && size.width > size.height && !typeSize.isAccessibilitySize
     }
 
+    enum Posture { case flat, book, table }
+
+    /// Folded part-way, the crease's direction says how the Duo stands: an upright crease is a book,
+    /// a level one is a table with a standing half above a flat half.
+    static func posture(fold: CGRect?) -> Posture {
+        guard let fold else { return .flat }
+        return fold.width > fold.height ? .table : .book
+    }
+
     /// The meal that just appeared or was revised (meal ID → revision), so the live day beside
     /// Coach can light it up. Nothing on first load.
     static func changedMeal(previous: [UUID: Int]?, current: [UUID: Int]) -> UUID? {
@@ -19,7 +28,7 @@ enum DuoLayout {
 
 extension EnvironmentValues {
     @Entry var isWideLayout = false
-    @Entry var isHalfFolded = false
+    @Entry var duoPosture = DuoLayout.Posture.flat
     /// The window's real width class, kept before the root forces compact while upright.
     @Entry var windowSizeClass: UserInterfaceSizeClass? = nil
 }
@@ -31,8 +40,13 @@ struct DuoLayoutRoot<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var size = CGSize.zero
-    @State private var halfFolded = false
+    @State private var fold: CGRect?
     private let forcedWide = DiaryLaunch.isUITest && ProcessInfo.processInfo.arguments.contains("--wide-layout-ui-test")
+    private let forcedPosture: DuoLayout.Posture? = {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard DiaryLaunch.isUITest, let index = arguments.firstIndex(of: "--duo-posture-ui-test"), index + 1 < arguments.count else { return nil }
+        return switch arguments[index + 1] { case "table": .table; case "book": .book; default: nil }
+    }()
 
     var body: some View {
         let wide = forcedWide || DuoLayout.isWide(size: size, horizontal: sizeClass, typeSize: typeSize)
@@ -40,42 +54,63 @@ struct DuoLayoutRoot<Content: View>: View {
             .environment(\.horizontalSizeClass, wide ? .regular : .compact)
             .environment(\.isWideLayout, wide)
             .environment(\.windowSizeClass, sizeClass)
-            .environment(\.isHalfFolded, halfFolded)
+            .environment(\.duoPosture, forcedPosture ?? DuoLayout.posture(fold: fold))
             .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
-            .background {
-                if #available(iOS 27.1, *) { HingeReader { halfFolded = $0 } }
+            .modifier(FoldReader { fold = $0 })
+    }
+}
+
+/// The Duo's crease while it is folded part-way, in this view's coordinates; nil when flat or on other iPhones.
+private struct FoldReader: ViewModifier {
+    let onChange: (CGRect?) -> Void
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.onGeometryChange(for: CGRect?.self) { proxy in
+                proxy.reservedRegions(kind: .division).first { $0.isActive }?.frame
+            } action: { onChange($0) }
+        } else { content }
+    }
+}
+
+/// Two panes that meet exactly at the crease when the Duo is folded part-way, and split evenly otherwise.
+/// Built from stacks rather than `ArrangementView`, so `primary` keeps its identity (and scroll position)
+/// while `secondary` comes and goes as the Duo turns or folds.
+struct DuoSplit<Primary: View, Secondary: View>: View {
+    var axis: Axis = .horizontal
+    var showsSecondary = true
+    @ViewBuilder let primary: Primary
+    @ViewBuilder let secondary: Secondary
+    @State private var fold: CGRect?
+
+    var body: some View {
+        // Only a crease across this split's axis divides it; book splits side by side, table top and bottom.
+        let crease = showsSecondary ? fold.flatMap { (axis == .horizontal) == ($0.height > $0.width) ? $0 : nil } : nil
+        let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
+        layout {
+            primary
+                .frame(width: axis == .horizontal ? crease?.minX : nil, height: axis == .vertical ? crease?.minY : nil)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if showsSecondary {
+                if let crease { Color.clear.frame(width: axis == .horizontal ? crease.width : nil, height: axis == .vertical ? crease.height : nil) }
+                secondary.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .modifier(FoldReader { fold = $0 })
     }
 }
 
-/// Reports whether the Duo's hinge is partly open (propped on a table); always false on other iPhones.
-@available(iOS 27.1, *)
-private struct HingeReader: UIViewRepresentable {
-    let onChange: (Bool) -> Void
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.isUserInteractionEnabled = false
-        view.addInteraction(UIHingeInteraction { _, update in onChange(update.hinge?.status == .partiallyOpen) })
-        return view
-    }
-    func updateUIView(_ view: UIView, context: Context) {}
-}
-
-/// Sideways, shows `secondary` beside `primary` in an even split; otherwise only `primary`.
-/// The secondary column lays out like a phone, and `primary` keeps its identity across the switch.
+/// Sideways, shows `secondary` beside `primary`, meeting at the crease in book pose; otherwise only `primary`.
+/// The secondary column lays out like a phone.
 struct DuoBeside<Primary: View, Secondary: View>: View {
     @ViewBuilder let primary: Primary
     @ViewBuilder let secondary: Secondary
     @Environment(\.isWideLayout) private var isWide
 
     var body: some View {
-        HStack(spacing: 0) {
-            primary
-            if isWide {
-                secondary
-                    .environment(\.isWideLayout, false)
-                    .environment(\.horizontalSizeClass, .compact)
-            }
+        DuoSplit(showsSecondary: isWide) { primary } secondary: {
+            secondary
+                .environment(\.isWideLayout, false)
+                .environment(\.horizontalSizeClass, .compact)
         }
     }
 }
