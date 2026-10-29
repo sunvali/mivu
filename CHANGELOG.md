@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0](https://github.com/sunvali/mivu/compare/v1.1.3...v1.2.0) (2026-10-29)
+
+
+### Features
+
+* **coach:** undo Coach deletes and add visible meal and food delete ([3cd57f7](https://github.com/sunvali/mivu/commit/3cd57f7654a497dc24f30721e383ffbdc571bcd4))
+
+
+### Bug Fixes
+
+* **diary:** never start a new diary when the existing one cannot be read ([#86](https://github.com/sunvali/mivu/issues/86)) ([737d647](https://github.com/sunvali/mivu/commit/737d6475733d35fa1e12d77a5cef07f9e2da5f58))
+* **diary:** zoom meal photos around the pinch point ([#87](https://github.com/sunvali/mivu/issues/87)) ([e462f02](https://github.com/sunvali/mivu/commit/e462f02dbee1589360daa3eed006dfbeaadc853b))
+* **siri:** approve locked-phone Siri messages and harden connection requests ([92ac174](https://github.com/sunvali/mivu/commit/92ac17440476a5c0ad708b7b168bd41c909e04e9))
+
 ## [1.1.3](https://github.com/sunvali/mivu/compare/v1.1.2...v1.1.3) (2026-10-28)
 
 
