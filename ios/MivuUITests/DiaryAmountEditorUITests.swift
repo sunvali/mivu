@@ -162,6 +162,47 @@ import XCTest
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10))
     }
 
+    private func launchWithLoggedMeal() -> (XCUIApplication, XCUIElement) {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
+        app.buttons["logMeal"].tap()
+        let note = app.textFields["mealText"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5)); note.tap(); note.typeText("Synthetic bread")
+        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
+        app.buttons["sendMeal"].tap()
+        let row = app.buttons["mealRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        let bar = app.buttons["logMeal"]
+        for _ in 0..<4 where bar.exists && row.frame.maxY > bar.frame.minY { app.collectionViews.firstMatch.swipeUp() }
+        return (app, row)
+    }
+
+    func testSwipeOnTodayMealDeletesItAfterConfirm() {
+        let (app, row) = launchWithLoggedMeal()
+        row.swipeLeft()
+        let delete = app.buttons["deleteMealRow"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5)); delete.tap()
+        let confirm = app.buttons["confirmDeleteMealRow"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertTrue(row.exists, "Nothing is removed before the confirmation")
+        confirm.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10))
+    }
+
+    func testLongPressOnTodayMealOffersDelete() {
+        let (app, row) = launchWithLoggedMeal()
+        row.press(forDuration: 1.2)
+        let delete = app.buttons["Delete meal"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5)); delete.tap()
+        XCTAssertTrue(app.buttons["confirmDeleteMealRow"].firstMatch.waitForExistence(timeout: 5))
+        // Shown as a popover from the row: tapping outside dismisses it without deleting.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+        XCTAssertTrue(app.buttons["confirmDeleteMealRow"].firstMatch.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(row.exists, "Dismissing keeps the meal")
+    }
+
     func testFoodRowAskPipButtonPrefillsCoach() {
         let app = launchWithMeal()
         let ask = app.buttons["askPipFood"].firstMatch

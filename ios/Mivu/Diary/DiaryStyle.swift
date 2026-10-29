@@ -235,6 +235,29 @@ struct MealThumbnail: View {
     }
 }
 
+/// Swipe or long-press a meal row to delete it, always behind the confirmation meal details use.
+struct MealRowDeletion: ViewModifier {
+    let meal: MealReadModel
+    let model: DiaryViewModel
+    @State private var confirming = false
+    func body(content: Content) -> some View {
+        content
+            // Not .destructive: that role removes the row before the person confirms.
+            .swipeActions(edge: .trailing) {
+                Button("Delete", systemImage: "trash") { confirming = true }.tint(.red).accessibilityIdentifier("deleteMealRow")
+            }
+            .contextMenu { Button("Delete meal", systemImage: "trash", role: .destructive) { confirming = true } }
+            .confirmationDialog("Delete this meal?", isPresented: $confirming, titleVisibility: .visible) {
+                Button("Delete meal", role: .destructive) { Task { await delete() } }.accessibilityIdentifier("confirmDeleteMealRow")
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("This removes the meal and its attached photos from this diary.") }
+    }
+    private func delete() async {
+        guard let owner = model.readModel?.profile.id else { return }
+        await model.change { try await model.store.deleteMeal(meal.id, expectedProfileID: owner) }
+    }
+}
+
 struct MealRow: View {
     let meal: MealReadModel
     var prominent = false

@@ -643,6 +643,7 @@ struct TodayView: View {
                         NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
                             .diarySummaryCard()
                             .accessibilityIdentifier("mealRow")
+                            .modifier(MealRowDeletion(meal: meal, model: model))
                     }
                 } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
                 if let day = model.activeDay, snapshot.activeGoal == nil {
