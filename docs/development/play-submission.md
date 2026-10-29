@@ -162,8 +162,8 @@ How the app works, from the code:
 | Do you provide a way for users to request that their data is deleted? | Yes: in-app deletion of each meal, photo, weight and workout; Disconnect ChatGPT; Android's Clear storage or uninstall erases everything. Mivu holds no copy elsewhere. **Owner to confirm** how to describe data already sent to OpenAI under the person's ChatGPT account. |
 | Account creation | The app does not let users create an account. ChatGPT sign-in is OpenAI's account, so account deletion does not apply. |
 
-**Data types** — each is collected and shared with OpenAI, only when the person
-uses Coach with ChatGPT connected; optional (the diary works without it); for
+**Data types** — each, except the ML Kit row, is collected and shared with
+OpenAI, only when the person uses Coach with ChatGPT connected; optional (the diary works without it); for
 App functionality; not used for tracking, ads, analytics or personalization by
 Mivu.
 
@@ -175,10 +175,11 @@ Mivu.
 | App activity › Other user-generated content | Coach messages and meal names and notes | Yes | Yes | No (as above) | Optional |
 | Personal info › Name | The profile name, part of the profile in the Coach context (**owner to confirm**: it is often a nickname, but it is sent) | Yes | Yes | No (as above) | Optional |
 | Device or other IDs | The random per-install `ext_agent_host_id` sent at sign-in (**owner to confirm** whether Play counts it) | Yes | Yes | No | Optional |
-| Device or other IDs › diagnostics (ML Kit) | Device identifiers collected by Google ML Kit for diagnostics when Gemini Nano is used; not shared by Mivu (**owner to confirm** the entry) | Yes | No | No | Optional |
+| App info and performance › Diagnostics (ML Kit) | Diagnostic device identifiers and configured languages collected by Google ML Kit when Gemini Nano is used; not shared by Mivu (**owner to confirm** the category against ML Kit's Data safety guidance, and whether Device or other IDs also applies) | Yes | No | No | Optional |
 
 **Not collected:** location, contacts, financial info, calendar, files and docs,
-web browsing, app interactions, crash logs, diagnostics, advertising ID.
+web browsing, app interactions, crash logs, advertising ID. Diagnostics are
+collected only by ML Kit, in the row above.
 
 **Voice input** uses Android's system speech recognizer; Mivu receives only the
 transcribed text, which then goes into the message like typed text. The audio
