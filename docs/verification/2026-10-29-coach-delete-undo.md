@@ -1,7 +1,7 @@
 # Coach delete Undo and food-row delete — verification
 
 - Branch: `feat/coach-delete-undo`. Base: `main` @ `8dc3a327`.
-- Tested source: `5057b08fdcdc0b12ae3a2c4c25cd6d6b11dd4904`. This commit only adds this record.
+- Tested source: `5057b08f` for the first runs, then `607a85e7` for the runs after the final review. The commits after `607a85e7` only add this record.
 - Runner: `xcodebuildmcp simulator test`, scheme `Mivu`, test plan `Mivu`, Debug, local Xcode at `/Applications/Xcode.app`.
 - Simulators: iPhone 17 Pro on iOS 26.5 (`42CE2315…`) and iOS 27.0 (`DD662DAB…`).
 - Spec: `docs/superpowers/specs/2026-10-29-coach-delete-undo-design.md`
