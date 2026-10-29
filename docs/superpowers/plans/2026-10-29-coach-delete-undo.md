@@ -94,6 +94,7 @@ Steps:
 - [ ] **Step 1: Write the failing tests.** Use a mutable clock box in `DiaryStore(directory:currentTime:)`.
   - `@Test func undoExpiresAfterTenMinutes()`: advance the clock 601 s. Expect `coachUndoAvailable == false`, then reopen the store and expect the row count to be 0. Add a test-only `heldDeletedUndoCount(expectedProfileID:)` behind `#if DEBUG`, or query through an existing debug read.
   - `@Test func buttonHidesAfterNextMessageButRowSurvivesOneTurn()`: capture turn B. Expect `coachUndoAvailable == false` and the held count to be 1. Capture turn C. Expect the held count to be 0.
+  - `@Test func deletingProfileRemovesHeldBytes()`: hold a meal delete that has a photo, call `deleteProfile`, then assert the profile's `.sqlite` directory no longer exists.
 - [ ] **Step 2: Run and confirm failure.** Expect FAIL.
 - [ ] **Step 3: Implement.**
   - Call `purgeDeletedUndo(now:keepTurnID: previousTurnID)` inside the capture transaction and when a profile opens.
