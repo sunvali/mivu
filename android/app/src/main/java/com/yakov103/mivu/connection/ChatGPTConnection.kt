@@ -64,14 +64,20 @@ data class ConnectionState(
     /** A chosen ChatGPT account is saved, whether or not it restored (iOS reads `selectedRegistrationID`). */
     val savedRegistration: Boolean = false,
     val nano: NanoStatus = NanoStatus.unavailable,
+    /** A Nano check has answered; until then [nano] is only the default. */
+    val nanoKnown: Boolean = false,
     /** Gemini Nano download progress 0..1 while one runs; it keeps running when the person leaves the screen. */
     val nanoProgress: Float? = null,
     val nanoFailed: Boolean = false,
 ) {
     val planAuthorized get() = account == AccountState.connected && !isConnecting && !isDisconnecting && models.any { it.slug == selectedModel }
 
-    /** The person's choice while it can answer; otherwise on-device when this phone can run it, then ChatGPT. */
+    /**
+     * The person's choice while it can answer; otherwise on-device when this phone can run it, then ChatGPT. A stored
+     * on-device choice holds, unable to answer, until a Nano check reports the model is not available.
+     */
     val provider get() = when {
+        storedProvider == CoachProvider.onDevice && !nanoKnown -> CoachProvider.onDevice
         storedProvider != null && (storedProvider == CoachProvider.chatGPT || nano == NanoStatus.available) -> storedProvider
         // Someone with a saved ChatGPT connection keeps it until they pick on-device, also while it restores at launch.
         storedProvider == null && (planAuthorized || registrationID != null || savedRegistration) -> CoachProvider.chatGPT
@@ -116,7 +122,7 @@ class ChatGPTConnection(
     @VisibleForTesting internal var onDeviceForTest: OnDeviceModel? = null
         set(value) {
             field = value
-            _state.update { it.copy(nano = if (value != null) NanoStatus.available else NanoStatus.unavailable) }
+            _state.update { it.copy(nano = if (value != null) NanoStatus.available else NanoStatus.unavailable, nanoKnown = value != null) }
         }
 
     // Guards generation and every state change that depends on it; nothing suspends while it is held.
@@ -160,16 +166,16 @@ class ChatGPTConnection(
         _state.update { it.copy(storedProvider = provider) }
     }
 
-    @VisibleForTesting internal var statusForTest: (suspend () -> NanoStatus)? = null
+    @VisibleForTesting internal var statusForTest: (suspend () -> NanoStatus?)? = null
     @VisibleForTesting internal var downloadForTest: (() -> Flow<Float>)? = null
     private var nanoDownload: Job? = null
 
-    /** Re-reads whether Gemini Nano can run on this phone, off the caller's thread; launch and each return call it. */
+    /** Re-reads whether Gemini Nano can run on this phone, off the caller's thread; launch and each return call it. A failed check keeps what is known. */
     fun refreshNano(): Job? {
         val read = statusForTest ?: nano?.let { it::status } ?: return null
         return scope.launch {
-            val status = read()
-            if (onDeviceForTest == null) _state.update { it.copy(nano = status) }
+            val status = read() ?: return@launch
+            if (onDeviceForTest == null) _state.update { it.copy(nano = status, nanoKnown = true) }
         }
     }
 

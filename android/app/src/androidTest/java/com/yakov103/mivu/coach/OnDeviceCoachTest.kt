@@ -170,18 +170,40 @@ class OnDeviceCoachTest {
         assertTrue("coach-reply-${t.id}" !in tags)
     }
 
-    @Test fun slowNanoCheckDoesNotHoldACapture() {
+    @Test fun slowNanoCheckKeepsAnOnDeviceShareOffChatGPT() {
+        InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         app.foregroundForTest = false
-        app.chatGPT.onDeviceForTest = null
+        app.chatGPT.onDeviceForTest = null // the launch check has not reported yet
         val slow = app.scope.launch { delay(60_000) }
         app.nanoChecked = slow
+        val id = UUID.randomUUID()
         try {
             val started = System.nanoTime()
-            // Not known in time: Nano counts as not available, so the turn waits for a connection.
-            assertEquals(TellCoachOutcome.SavedNeedsConnection, runBlocking { TellCoach.run(app, "Synthetic pear", emptyList(), UUID.randomUUID()) })
+            // Still the person's on-device choice: saved for Mivu, never followed in a job or sent to ChatGPT.
+            assertEquals(TellCoachOutcome.SavedOpenToFinish, runBlocking { TellCoach.run(app, "Synthetic pear", emptyList(), id) })
             assertTrue((System.nanoTime() - started) / 1_000_000 < 5_000)
+            assertTrue(app.followed.isEmpty())
+            assertTrue(app.getSystemService(JobScheduler::class.java).allPendingJobs.isEmpty())
+            app.foregroundForTest = true
+            drain(true) // skipped until the check lands
+            assertEquals(CoachTurnState.captured, stored(id).state)
+            runBlocking { delay(2_500) } // past the 2-second fallback
+            val tags = app.getSystemService(NotificationManager::class.java).activeNotifications.map { it.tag }
+            assertTrue("coach-reply-$id" !in tags)
         } finally {
             slow.cancel()
+            app.chatGPT.onDeviceForTest = model
+            app.foregroundForTest = true
+            drain(true) // the check landed: the turn finishes on this phone
         }
+        assertEquals(CoachTurnState.completed, stored(id).state)
+    }
+
+    @Test fun backgroundWorkerNeverBindsNano() {
+        app.foregroundForTest = false
+        val t = send("Synthetic 2 eggs")
+        // As a JobService pass that reached the worker without the drain gate.
+        runBlocking { withTimeout(30_000) { app.coachWorker.drain((app.repository.bootstrapState.value as Bootstrap.Ready).profileID, includeWaitingForConnection = true, retryWaiting = true); app.coachWorker.awaitIdle() } }
+        assertEquals(CoachTurnState.captured, stored(t.id).state)
     }
 }

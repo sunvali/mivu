@@ -142,7 +142,13 @@ internal val FoodItem.sourceCaption: String
             NutritionProvenance.identifiedSource -> "Retrieved nutrition source"
             NutritionProvenance.estimate -> "Estimated nutrition"
         },
-        estimatedBy?.takeIf { provenance != NutritionProvenance.user }?.let { if (it == OnDeviceInference.MODEL) "Gemini Nano" else "ChatGPT" },
+        estimatedBy?.takeIf { provenance != NutritionProvenance.user }?.let {
+            when (it) {
+                OnDeviceInference.MODEL -> "Gemini Nano"
+                "apple-intelligence" -> "Apple Intelligence" // restored iOS archives
+                else -> "ChatGPT"
+            }
+        },
     ).joinToString(" · ")
 
 private val DiaryMeal.pendingReview: MealSubmission?

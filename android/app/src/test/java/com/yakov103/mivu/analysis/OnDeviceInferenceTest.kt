@@ -148,6 +148,15 @@ class OnDeviceInferenceTest {
         assertEquals(80.0, items(r).single().num("kcal"), 0.0)
     }
 
+    @Test fun aPausedOrBusyPickFailsTheTurnSoItWaits() {
+        val cookie = NutritionTable.Food(3, "Cookie, chocolate chip", 480.0, 0.0, 0.0, 0.0)
+        for (failure in listOf(OnDeviceFailure.Paused, OnDeviceFailure.Busy)) {
+            val error = runCatching { run("a cookie", LocalTurn(LocalTurn.Intent.log, listOf(food("cookie", kcal = 80.0))),
+                table = Table(listOf(cookie)), pick = { _, _ -> throw failure }) }.exceptionOrNull()
+            assertEquals(failure, error)
+        }
+    }
+
     @Test fun caloriesNeverFallBelowWhatTheMacrosImply() {
         val coke = food("Coca cola", unit = "can", kcal = 3.0, carbs = 35.0, per100 = listOf(1.0, 10.6, 0.0, 0.0))
         assertEquals(140.0, items(run("a can of coca cola", LocalTurn(LocalTurn.Intent.log, listOf(coke)))).single().num("kcal"), 0.0)

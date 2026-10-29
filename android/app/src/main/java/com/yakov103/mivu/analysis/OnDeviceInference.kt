@@ -152,10 +152,10 @@ object OnDeviceInference {
         val amount = food.quantity.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }
         val choice = try {
             model.pick("$amount ${food.unit} ${food.name}", options)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            return null // A failed pick keeps the estimate rather than failing the turn.
+        } catch (e: Exception) {
+            // A paused or busy model makes the turn wait and rerun; any other failed pick keeps the estimate.
+            if (e is CancellationException || e is OnDeviceFailure.Paused || e is OnDeviceFailure.Busy) throw e
+            return null
         }
         val match = options.getOrNull(choice - 1) ?: return null
         // shortcut: ml counts as grams, close for drinks; use FNDDS "fl oz" portions if density matters.

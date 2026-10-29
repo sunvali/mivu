@@ -5,6 +5,7 @@ import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
 import com.google.mlkit.genai.common.GenAiException.ErrorCode
+import com.google.mlkit.genai.prompt.Candidate
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.content
 import com.google.mlkit.genai.prompt.generateContentRequest
@@ -30,7 +31,8 @@ sealed class OnDeviceFailure : Exception() {
 class GeminiNano : OnDeviceModel {
     private val client by lazy { Generation.getClient() }
 
-    suspend fun status(): NanoStatus = status { client.checkStatus() }
+    /** The model's status, or null when the check failed without an answer from AICore. */
+    suspend fun status(): NanoStatus? = status { client.checkStatus() }
 
     /** Download progress 0..1; a failed download ends the flow with its error. */
     fun download(): Flow<Float> = flow {
@@ -58,16 +60,25 @@ class GeminiNano : OnDeviceModel {
         val request = generateContentRequest(content {
             for (image in images) image(BitmapFactory.decodeByteArray(image, 0, image.size) ?: throw OnDeviceFailure.ImagesUnsupported)
             text(prompt)
-        }) { temperature = 0f; topK = 1 }
+        }) { temperature = 0f; topK = 1; maxOutputTokens = MAX_OUTPUT_TOKENS }
         val response = try {
             client.generateContent(request)
         } catch (e: GenAiException) {
             throw failure(e.errorCode, images.isNotEmpty())
         }
-        return response.candidates.firstOrNull()?.text ?: throw ResponsesClient.Failure.Malformed("no candidate")
+        return response.candidates.firstOrNull().let { reply(it?.text, it?.finishReason) }
     }
 
     companion object {
+        // About 90 tokens per food object: eight foods with room for whitespace and a fence; the API allows 4K.
+        private const val MAX_OUTPUT_TOKENS = 1536
+
+        /** A candidate's text; one cut off at the token limit is never parsed as a shorter answer. */
+        fun reply(text: String?, finishReason: Int?): String = when {
+            finishReason == Candidate.FinishReason.MAX_TOKENS -> throw ResponsesClient.Failure.Malformed("truncated")
+            else -> text ?: throw ResponsesClient.Failure.Malformed("no candidate")
+        }
+
         /** Maps an ML Kit [ErrorCode]; image codes count only on a request that carried photos. */
         fun failure(code: Int, images: Boolean = false): Exception = when (code) {
             ErrorCode.BUSY -> OnDeviceFailure.Busy
@@ -78,8 +89,8 @@ class GeminiNano : OnDeviceModel {
             else -> OnDeviceFailure.Unavailable
         }
 
-        /** `checkStatus()` as a [NanoStatus]; any failure hides the option. */
-        internal inline fun status(check: () -> Int): NanoStatus = try {
+        /** `checkStatus()` as a [NanoStatus]; an AICore error hides the option, and any other failure answers nothing (null). */
+        internal inline fun status(check: () -> Int): NanoStatus? = try {
             when (check()) {
                 FeatureStatus.AVAILABLE -> NanoStatus.available
                 FeatureStatus.DOWNLOADING -> NanoStatus.downloading
@@ -92,7 +103,7 @@ class GeminiNano : OnDeviceModel {
             // AICore 606 FEATURE_NOT_FOUND: its configuration is still downloading, for minutes to hours.
             if (e.aiCoreErrorCode == 606) NanoStatus.preparing else NanoStatus.unavailable
         } catch (_: Exception) {
-            NanoStatus.unavailable
+            null
         }
 
         private const val TURN = """Read one food diary message and reply with only one JSON object:

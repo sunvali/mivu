@@ -12,6 +12,7 @@ import androidx.annotation.VisibleForTesting
 import com.yakov103.mivu.analysis.GeminiNano
 import com.yakov103.mivu.analysis.MealAnalysisWorker
 import com.yakov103.mivu.analysis.NutritionTable
+import com.yakov103.mivu.analysis.OnDeviceFailure
 import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.analysis.SampleAnalyzer
 import com.yakov103.mivu.coach.CoachInferenceInput
@@ -116,7 +117,7 @@ class MivuApplication : Application() {
     /** The launch Gemini Nano check; the provider is not known before it. */
     @VisibleForTesting internal var nanoChecked: Job? = null
 
-    /** The first Nano check; one slower than 2 s leaves Nano not available, so a capture never hangs. */
+    /** The first Nano check, for at most 2 s so a capture never hangs; a stored on-device choice still waits for it. */
     suspend fun awaitNano() { withTimeoutOrNull(2_000) { nanoChecked?.join() } }
 
     /** Restore, then [awaitNano]: the provider and canInfer are settled. */
@@ -150,15 +151,21 @@ class MivuApplication : Application() {
 
     /** Replaces the ChatGPT binding in instrumented tests, so they run scripted inference only. */
     @VisibleForTesting internal var coachInferenceForTest: (() -> suspend (List<CoachInferenceInput>, JsonObject) -> CoachInferenceResult)? = null
-    val coachWorker by lazy { CoachWorker(repository, { coachInferenceForTest?.invoke() ?: chatGPT.inference() }, scope = scope) }
+    val coachWorker by lazy {
+        CoachWorker(repository, {
+            if (onDevice && !isForeground) throw OnDeviceFailure.Paused // never bind Nano in a job: the turn stays captured
+            coachInferenceForTest?.invoke() ?: chatGPT.inference()
+        }, scope = scope)
+    }
     private val watchingNetwork = AtomicBoolean(false)
 
     /** Runs saved Coach turns once the diary is ready; the returned job finishes when the worker is idle, whoever started it. */
     fun drainCoach(retryWaiting: Boolean = false): Job = scope.launch {
         val ready = repository.bootstrapState.filterIsInstance<Bootstrap.Ready>().first()
         awaitLaunch() // a cold start must not save a healthy turn as waiting for a connection
-        // Gemini Nano runs only in the foreground: the turn stays pending and MainActivity.onStart resumes it.
-        if (onDevice && !isForeground) return@launch
+        // Gemini Nano runs only in the foreground, once its check lands: the turn stays pending and MainActivity.onStart
+        // or the canInfer collector resumes it.
+        if (onDevice && (!isForeground || !chatGPT.state.value.canInfer)) return@launch
         coachWorker.drain(ready.profileID, includeWaitingForConnection = chatGPT.state.value.canInfer, retryWaiting = retryWaiting)
         coachWorker.awaitIdle()
     }

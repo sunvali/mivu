@@ -17,12 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.yakov103.mivu.connection.CoachProvider
 import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.connection.NanoStatus
-import com.yakov103.mivu.diary.FoodItem
-import com.yakov103.mivu.diary.NutritionProvenance
-import com.yakov103.mivu.diary.NutritionValues
-import com.yakov103.mivu.ui.meal.sourceCaption
 import com.yakov103.mivu.ui.theme.MivuTheme
-import java.util.UUID
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -93,11 +88,5 @@ class OnDeviceSettingsTest {
         state = ConnectionState(nano = NanoStatus.available, storedProvider = CoachProvider.onDevice)
         compose.setContent { MivuTheme { SettingsScreen(state, onOpenConnection = {}, onBack = {}) } }
         compose.onNodeWithText("Gemini Nano").assertIsDisplayed()
-    }
-
-    @Test fun estimateLabelNamesGeminiNano() {
-        val item = FoodItem(UUID.randomUUID(), "Synthetic toast", 1.0, "slice", NutritionValues(80.0, 14.0, 3.0, 1.0),
-            NutritionProvenance.estimate, "ref", false, emptyMap(), estimatedBy = "gemini-nano")
-        assertEquals("Estimated nutrition · Gemini Nano", item.sourceCaption)
     }
 }

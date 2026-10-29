@@ -54,13 +54,12 @@ object TellCoach {
         }
         // The provider reads saved choices and the Nano check, not restore: the follow is scheduled before restore's wait.
         app.awaitNano()
-        // On-device turns never run in the background or notify: they finish when Mivu opens.
-        val onDevice = app.onDevice
-        if (!onDevice) app.followReply(submissionID)
+        // On-device turns, also before the Nano check lands, never run in the background or notify: they finish when Mivu opens.
+        if (app.onDevice) return TellCoachOutcome.SavedOpenToFinish
+        app.followReply(submissionID)
         app.restored.join() // as iOS `start` before reading canInfer: a cold start must not say "connect" to a connected account
         return when {
             !(canInferForTest ?: app.chatGPT.state.value.canInfer) -> TellCoachOutcome.SavedNeedsConnection
-            onDevice -> TellCoachOutcome.SavedOpenToFinish
             else -> TellCoachOutcome.Sent
         }
     }

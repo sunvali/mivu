@@ -58,13 +58,30 @@ class CoachProviderTest {
     }
 
     @Test fun storedOnDeviceWithoutNanoFallsBackToConnectedChatGPT() {
-        val state = chatGPT.copy(storedProvider = CoachProvider.onDevice, nano = NanoStatus.downloadable)
+        val state = chatGPT.copy(storedProvider = CoachProvider.onDevice, nano = NanoStatus.downloadable, nanoKnown = true)
         assertEquals(CoachProvider.chatGPT, state.provider)
         assertTrue(state.canInfer)
     }
 
+    @Test fun storedOnDeviceWaitsOnDeviceUntilTheNanoCheckReports() {
+        val state = chatGPT.copy(storedProvider = CoachProvider.onDevice, savedRegistration = true)
+        assertEquals(CoachProvider.onDevice, state.provider)
+        assertFalse(state.canInfer)
+    }
+
+    @Test fun failedNanoCheckKeepsTheStoredOnDeviceChoice() = runBlocking {
+        val c = connection(MemoryPreferences()).apply { choose(CoachProvider.onDevice) }
+        c.statusForTest = { null } // the check threw: nothing is known
+        c.refreshNano()!!.join()
+        assertEquals(CoachProvider.onDevice, c.state.value.provider)
+        assertFalse(c.state.value.canInfer)
+        c.statusForTest = { NanoStatus.unavailable }
+        c.refreshNano()!!.join()
+        assertEquals(CoachProvider.chatGPT, c.state.value.provider)
+    }
+
     @Test fun storedOnDeviceWithoutNanoOrAccountCannotInfer() {
-        val state = ConnectionState(storedProvider = CoachProvider.onDevice)
+        val state = ConnectionState(storedProvider = CoachProvider.onDevice, nanoKnown = true)
         assertEquals(CoachProvider.chatGPT, state.provider)
         assertFalse(state.canInfer)
     }

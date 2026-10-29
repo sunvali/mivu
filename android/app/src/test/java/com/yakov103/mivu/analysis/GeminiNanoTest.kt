@@ -3,6 +3,7 @@ package com.yakov103.mivu.analysis
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
 import com.google.mlkit.genai.common.GenAiException.ErrorCode
+import com.google.mlkit.genai.prompt.Candidate
 import com.yakov103.mivu.connection.NanoStatus
 import java.time.Duration
 import org.junit.Assert.assertEquals
@@ -29,6 +30,14 @@ class GeminiNanoTest {
         // AICore 606 FEATURE_NOT_FOUND: its configuration is still downloading.
         assertEquals(NanoStatus.preparing, GeminiNano.status { throw GenAiException(null, ErrorCode.NOT_AVAILABLE, Duration.ZERO, 606, 3) })
         assertEquals(NanoStatus.unavailable, GeminiNano.status { throw GenAiException(null, ErrorCode.NOT_AVAILABLE, Duration.ZERO, 601, 4) })
-        assertEquals(NanoStatus.unavailable, GeminiNano.status { throw SecurityException("synthetic") })
+        // Not an AICore answer: the check failed and nothing is known.
+        assertEquals(null, GeminiNano.status { throw SecurityException("synthetic") })
+    }
+
+    @Test fun truncatedReplyIsMalformed() {
+        assertEquals("{}", GeminiNano.reply("{}", Candidate.FinishReason.STOP))
+        assertEquals(ResponsesClient.Failure.Malformed("truncated"),
+            runCatching { GeminiNano.reply("{\"intent\": \"log\", \"foods\": [", Candidate.FinishReason.MAX_TOKENS) }.exceptionOrNull())
+        assertEquals(ResponsesClient.Failure.Malformed("no candidate"), runCatching { GeminiNano.reply(null, null) }.exceptionOrNull())
     }
 }
