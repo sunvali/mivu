@@ -53,6 +53,45 @@ extension DiaryTransaction {
         let fresh = now.timeIntervalSinceReferenceDate - sqlite3_column_double(statement, 1) <= coachDeletedUndoSeconds
         return fresh && sqlite3_column_int64(statement, 2) == 0 ? .available : nil
     }
+    func isHeldDelete(_ key: String) throws -> Bool {
+        try database.mutationInteger("SELECT COUNT(*) FROM coach_undo_deleted WHERE operationKey = ?", [.text(key)]) == 1
+    }
+    /// Asking Pip may still undo from the very next message, after the card's button has gone.
+    func deletedUndoUsable(_ key: String, now: Date, turn: CoachTurn) throws -> Bool {
+        try database.mutationInteger("""
+            SELECT COUNT(*) FROM coach_undo_deleted d JOIN coach_index t ON t.turnID = d.turnID JOIN coach_index c ON c.turnID = ?
+            WHERE d.operationKey = ? AND d.undone = 0 AND d.createdAt >= ?
+              AND NOT EXISTS (SELECT 1 FROM coach_index m WHERE m.sequence > t.sequence AND m.sequence < c.sequence)
+            """, [.text(turn.id.uuidString), .text(key), .real(now.timeIntervalSinceReferenceDate - coachDeletedUndoSeconds)]) == 1
+    }
+    enum Restored { case meal(UUID), weight(UUID), workout(UUID) }
+    /// Recreates the held record under new IDs, so tombstones never shrink; never overwrites what exists now.
+    func undoDeleted(_ key: String) throws -> Restored {
+        let statement = try database.mutationStatement("SELECT payload, undone FROM coach_undo_deleted WHERE operationKey = ?", [.text(key)])
+        defer { sqlite3_finalize(statement) }
+        guard try database.mutationStep(statement) else { throw DiaryError.notFound }
+        guard sqlite3_column_int64(statement, 1) == 0 else { throw DiaryError.staleRevision }
+        let restored: Restored
+        switch try JSONDecoder().decode(CoachDeletedSnapshot.self, from: database.mutationBlob(statement, 0)) {
+        case .meal(var meal, let items, let photos):
+            // A meal row starts itemless at revision 0; items come next, then its own revision.
+            let revision = meal.revision; meal.id = UUID(); meal.revision = 0
+            try insertMeal(meal); try replaceItems(items, mealID: meal.id)
+            meal.revision = revision; try saveMeal(meal)
+            for photo in photos { try insertPhoto(photo, owner: .meal(meal.id)) }
+            restored = .meal(meal.id)
+        case .photo(let mealID, let photo):
+            try insertPhoto(photo, owner: .meal(mealID)); restored = .meal(mealID)
+        case .weight(var weight):
+            if let dayID = weight.dayID, try self.weight(on: dayID) != nil { throw DiaryError.staleRevision }
+            weight.id = UUID(); try saveWeight(weight); restored = .weight(weight.id)
+        case .workout(var workout):
+            workout.id = UUID(); try saveWorkout(workout); restored = .workout(workout.id)
+        }
+        let id: UUID = switch restored { case .meal(let id), .weight(let id), .workout(let id): id }
+        try database.execute("UPDATE coach_undo_deleted SET undone = 1, restoredID = ? WHERE operationKey = ?", [.text(id.uuidString), .text(key)])
+        return restored
+    }
     private func mealSnapshot(_ id: UUID) throws -> CoachDeletedSnapshot {
         let photos = try photoReferences(owner: .meal(id)).compactMap { try mealPhoto(id, $0.photoID) }
         return .meal(try mealRecord(id: id), items: try mealItems(id: id), photos: photos)

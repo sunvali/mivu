@@ -503,7 +503,7 @@ actor DiaryStore {
 
     func undoCoachChange(operationKey: String, expectedProfileID: UUID) throws {
         try pagedMutation(expectedProfileID) { database, head in
-            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { _ = try $0.undoCoachChange(operationKey) }
+            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { _ = try $0.undoCoachChange(operationKey, now: currentTime()) }
         }
     }
 
