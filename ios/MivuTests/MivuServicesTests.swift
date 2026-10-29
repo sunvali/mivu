@@ -3,7 +3,7 @@ import Testing
 @testable import Mivu
 
 @Suite @MainActor struct MivuServicesTests {
-    @Test func startRunsOnceAndDrainsInbox() async throws {
+    @Test func startRunsOnceAndListsInboxForApproval() async throws {
         let path = URL.temporaryDirectory.appending(path: "MivuServices-" + UUID().uuidString)
         let inbox = CoachInbox(directory: URL.temporaryDirectory.appending(path: "MivuServicesInbox-" + UUID().uuidString))
         defer { try? FileManager.default.removeItem(at: path); try? FileManager.default.removeItem(at: inbox.directory) }
@@ -21,7 +21,7 @@ import Testing
         await coach.waitForWorker()
 
         #expect(diary.selection?.identity.profileID == profile.head.profile.id)
-        #expect(inbox.entries().isEmpty)
-        #expect(try await store.snapshotForExport().coachTurns.map(\.text) == ["Synthetic toast"])
+        #expect(coach.queuedSiri.map(\.text) == ["Synthetic toast"])
+        #expect(try await store.snapshotForExport().coachTurns.isEmpty, "Nothing reaches the Coach before Send")
     }
 }
