@@ -23,10 +23,12 @@ private struct DiarySetupView: View {
             Group {
                 if failed {
                     ContentUnavailableView {
-                        Label("Couldn't create your diary", systemImage: "exclamationmark.triangle")
+                        Label("Couldn't open your diary", systemImage: "exclamationmark.triangle")
                     } actions: {
                         Button("Try again") { Task { await startNew() } }.buttonStyle(.glassProminent).tint(.diaryAccent)
                     }
+                    // A locked phone keeps the diary file closed; open it as soon as the owner unlocks.
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in Task { await startNew() } }
                 } else {
                     ProgressView("Setting up your diary").task { await startNew() }
                 }
@@ -60,8 +62,9 @@ private struct DiarySetupView: View {
     }
     private func startNew() async {
         failed = false
-        await model.createProfile(name: model.profiles.isEmpty ? "My diary" : "Diary \(model.profiles.count + 1)")
-        if model.readModel != nil { onSelected(); onCreated() } else { failed = true }
+        var created = true
+        if model.profiles.isEmpty { created = await model.createFirstProfile() } else { await model.createProfile(name: "Diary \(model.profiles.count + 1)") }
+        if model.readModel != nil { onSelected(); if created { onCreated() } } else { failed = true }
     }
 }
 
@@ -385,6 +388,7 @@ struct DiaryRootView: View {
                     }.toolbar { profileControl }
                 }
             }
+            .badge(coach.queuedSiri.count)
         }
     }
     private func openQuickLog() {
@@ -567,8 +571,8 @@ struct DiaryRootView: View {
     }
     private func continueInBackground() { services.continueCoachInBackground() }
     private func drainSiriPrompts() async {
-        guard !services.inbox.entries().isEmpty else { return }
-        await coach.drainInbox(services.inbox)
+        coach.loadQueuedSiri()
+        guard !coach.queuedSiri.isEmpty else { return }
         await MealNotification.requestPermissionIfNeeded()
     }
     private func endBackgroundLease() { services.endCoachBackground() }
@@ -643,6 +647,7 @@ struct TodayView: View {
                         NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
                             .diarySummaryCard()
                             .accessibilityIdentifier("mealRow")
+                            .modifier(MealRowDeletion(meal: meal, model: model))
                     }
                 } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
                 if let day = model.activeDay, snapshot.activeGoal == nil {

@@ -18,6 +18,7 @@ import UIKit
     init(diary: DiaryViewModel, connection: ChatGPTConnection, coach: CoachViewModel, nutritionKeys: NutritionAPIKeyStore,
          inbox: CoachInbox = .local, restore: (@MainActor () async -> Void)? = nil) {
         self.diary = diary; self.connection = connection; self.coach = coach; self.nutritionKeys = nutritionKeys; self.inbox = inbox
+        coach.inbox = inbox
         // UI tests never restore a saved connection.
         self.restore = restore ?? { if !DiaryLaunch.isUITest { await connection.restore() } }
     }
@@ -49,14 +50,19 @@ import UIKit
         await loading?.value
     }
 
-    /// Loads the diary, restores the connection, starts the Coach worker and captures waiting Siri prompts, once.
+    /// Loads the diary, restores the connection, starts the Coach worker and lists waiting Siri prompts, once.
     func start(createDefaultProfile: Bool) async {
         await loadDiary(createDefaultProfile: createDefaultProfile)
         if starting == nil {
-            starting = Task { [restore, coach, inbox] in
+            starting = Task { [restore, coach, diary, inbox] in
                 await restore()
                 coach.startMonitoring(); coach.resume()
-                await coach.drainInbox(inbox)
+                #if DEBUG
+                if DiaryLaunch.isUITest, ProcessInfo.processInfo.arguments.contains("--siri-queue-fixture"), let owner = diary.selection?.identity.profileID {
+                    try? inbox.add(CoachInbox.Entry(id: UUID(), profileID: owner, text: "Synthetic queued toast", capturedAt: Date()))
+                }
+                #endif
+                coach.loadQueuedSiri()
             }
         }
         await starting?.value

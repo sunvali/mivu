@@ -4,6 +4,9 @@
 !.env.example
 *.p12
 *.mobileprovision
+*.p8
+*.pem
+*.key
 
 # Xcode and Swift build output
 .DS_Store

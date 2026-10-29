@@ -208,6 +208,7 @@ private struct DaySections: View {
                     }
                     ForEach(meals, id: \.id) { meal in
                         NavigationLink { MealDetailView(model: model, mealID: meal.id) } label: { MealRow(meal: meal, model: model) }
+                            .modifier(MealRowDeletion(meal: meal, model: model))
                             .accessibilityIdentifier("historyMeal")
                             .diarySummaryCard()
                     }

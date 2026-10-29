@@ -22,6 +22,7 @@ struct CoachView: View {
     @State private var composerHeight: CGFloat = 0
     @State private var textWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var voice = CoachVoiceInput()
     @State private var cameraPresentationID: UUID?
@@ -77,7 +78,7 @@ struct CoachView: View {
         // The conversation scrolls behind Pip and the composer; the table insets its content by the composer's height.
         .overlay(alignment: .bottom) {
             if coach.diary.readModel != nil {
-                composer.fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 8) { queuedSiri; composer }.fixedSize(horizontal: false, vertical: true)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
             }
         }
@@ -276,6 +277,7 @@ struct CoachView: View {
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
                             .contextMenu { messageActions(turn, fromPip: true) }
                             .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: true) }
+                            .accessibilityAction(named: "Report Reply") { openURL(MivuLinks.reportReply(CoachReplyLines.plain(answer))) }
                             .accessibilityIdentifier("coachReply")
                     }
                     turnActions(turn)
@@ -384,6 +386,28 @@ struct CoachView: View {
         func body(content: Content) -> some View {
             content.font(.subheadline.weight(.semibold)).tint(Color.diaryAccent)
                 .frame(minHeight: 44, alignment: .leading).contentShape(.rect)
+        }
+    }
+    /// One Siri message saved while locked; it reaches the Coach only on Send.
+    @ViewBuilder private var queuedSiri: some View {
+        if let entry = coach.queuedSiri.first {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(coach.queuedSiri.count > 1 ? "From Siri while locked · \(coach.queuedSiri.count) waiting" : "From Siri while locked")
+                    .font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary)
+                Text("“\(entry.text)”").lineLimit(4)
+                Text(entry.capturedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Color.diarySecondary)
+                HStack {
+                    Spacer()
+                    Button(role: .destructive) { coach.discardQueued(entry) } label: { Text("Discard").frame(minWidth: 44, minHeight: 44) }
+                        .accessibilityIdentifier("discardQueuedSiri")
+                    Button { Task { await coach.sendQueued(entry) } } label: { Text("Send").frame(minWidth: 44, minHeight: 36) }
+                        .buttonStyle(.borderedProminent).accessibilityIdentifier("sendQueuedSiri")
+                }
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color.diarySummarySurface))
+            .padding(.horizontal, 16)
+            .accessibilityElement(children: .contain).accessibilityIdentifier("queuedSiri")
         }
     }
     private var composer: some View {
@@ -595,6 +619,9 @@ struct CoachView: View {
         Button("Reply", systemImage: "arrowshape.turn.up.left") { reply(to: turn, fromPip: fromPip) }
         let text = fromPip ? CoachReplyLines.plain(turn.assistantText ?? "") : turn.text
         if !text.isEmpty { Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text } }
+        if fromPip, !text.isEmpty {
+            Button("Report Reply", systemImage: "exclamationmark.bubble") { openURL(MivuLinks.reportReply(text)) }
+        }
     }
     private func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
         coach.reply(to: turn, fromPip: fromPip); editing = true
@@ -689,7 +716,7 @@ struct CoachView: View {
                     Button("Try again") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
                 }
             }
-            ForEach(turn.receipts.filter { $0.mealID != nil || $0.workoutID != nil }, id: \.operationKey) { receipt in
+            ForEach(turn.receipts.filter(CoachReceiptPresentation.showsCard), id: \.operationKey) { receipt in
                 CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt), undoState: coach.undoState(receipt),
                                  undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }

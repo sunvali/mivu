@@ -557,3 +557,33 @@ private func sessionReturning(status: Int, body: Data, capture: RequestCapture? 
     configuration.httpAdditionalHeaders = ["Fixture-ID": id]
     return URLSession(configuration: configuration)
 }
+
+/// Answers every api.openai.com request with a redirect elsewhere and records whether anything reached that other host.
+private final class RedirectFixtureProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var reachedElsewhere = false
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url else { return }
+        if url.host == "api.openai.com" {
+            let target = URLRequest(url: URL(string: "https://elsewhere.example/v1/models")!)
+            let response = HTTPURLResponse(url: url, statusCode: 302, httpVersion: nil, headerFields: ["Location": target.url!.absoluteString])!
+            client?.urlProtocol(self, wasRedirectedTo: target, redirectResponse: response)
+            client?.urlProtocolDidFinishLoading(self)
+        } else {
+            Self.reachedElsewhere = true
+            client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+        }
+    }
+    override func stopLoading() {}
+}
+
+@Suite(.serialized) struct ResponsesClientRedirectTests {
+    @Test func bearerRequestsNeverFollowRedirects() async throws {
+        RedirectFixtureProtocol.reachedElsewhere = false
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RedirectFixtureProtocol.self]
+        await #expect(throws: (any Error).self) { try await ResponsesClient(session: URLSession(configuration: configuration)).models(accessToken: "synthetic-token") }
+        #expect(!RedirectFixtureProtocol.reachedElsewhere)
+    }
+}

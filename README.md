@@ -80,3 +80,7 @@ See [repository instructions](AGENTS.md) and the concise
 For companion animation work, use the repository-local
 [Mivu animation skill](.agents/skills/mivu-animation/SKILL.md), including its
 source map, regeneration commands and native verification recipe.
+
+## License
+
+Mivu is licensed under the [GNU Affero General Public License v3.0](LICENSE).

@@ -15,7 +15,7 @@
           "path": "Config/Shared.xcconfig"
         }
       ],
-      "last-release-sha": "ffa5dcd0141f466503a05db6eca65c720631b1d2"
+      "last-release-sha": "594e8aaeff620b68d55288f07c2e8ed4cf81b284"
     },
     "android": {
       "package-name": "android"

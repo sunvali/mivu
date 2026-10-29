@@ -29,6 +29,12 @@ struct ConnectionTests {
         #expect(fixture.requests.values.isEmpty)
     }
 
+    @Test func connectWithoutSharingConsentNeverOpensTheBrowser() async {
+        let connection = ChatGPTConnection(preferences: UserDefaults(suiteName: UUID().uuidString)!)
+        var opened = false
+        await connection.connect { _ in opened = true }
+        #expect(!opened && !connection.isConnecting)
+    }
     @Test func openAISharingConsentStartsUnsetAndPersists() {
         let preferences = UserDefaults(suiteName: UUID().uuidString)!
         let connection = ChatGPTConnection(preferences: preferences)
@@ -411,6 +417,7 @@ extension ConnectionTests {
             }
         }
         let preferences = UserDefaults(suiteName: UUID().uuidString)!
+        preferences.set(true, forKey: "openAISharingConsent")
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let connection = ChatGPTConnection(auth: AuthSession(session: session, store: store),

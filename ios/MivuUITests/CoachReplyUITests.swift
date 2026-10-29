@@ -42,6 +42,20 @@ import XCTest
         XCTAssertFalse(app.otherElements["coachReplyBar"].waitForExistence(timeout: 1))
     }
 
+    func testOnlyPipRepliesCanBeReported() {
+        let app = launch()
+        let id = send("Synthetic report source", in: app)
+        app.staticTexts["coachText-" + id].press(forDuration: 1)
+        XCTAssertTrue(app.buttons["Reply"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Report Reply"].exists, "People report Pip's replies, not their own messages")
+        app.buttons["Reply"].tap()
+        app.buttons["coachReplyCancel"].tap()
+        exchange(id, in: app).descendants(matching: .any).matching(identifier: "coachReply").firstMatch.press(forDuration: 1)
+        let report = app.buttons["Report Reply"]
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Report Reply in Pip's reply menu"; proof.lifetime = .keepAlways; add(proof)
+    }
+
     func testDiaryDayAskPipQuotesDay() {
         let app = launchDiary()
         XCTAssertTrue(app.selectDiaryDate("2026-10-12"))

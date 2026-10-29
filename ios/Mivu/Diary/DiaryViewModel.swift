@@ -466,6 +466,12 @@ enum DiaryCaptureResult: Equatable, Sendable {
         do { try await install(try await store.createProfile(DiaryProfile(name: name, timeZoneID: deviceTimeZone().identifier))); profiles = try await store.profiles() }
         catch { await recoverProfileSelection(previous); present(error) }
     }
+    /// Only a readable, empty diary folder starts "My diary"; a failed read (locked phone, upgrade error) retries instead.
+    @discardableResult func createFirstProfile() async -> Bool {
+        do { profiles = try await store.profiles() } catch { present(error); return false }
+        guard profiles.isEmpty else { await load(createDefaultProfile: false); return false }
+        await createProfile(name: "My diary"); return readModel != nil
+    }
     func signOut() async { guard beginProfileTransition() else { return }; defer { finishProfileTransition() }; await clearProfileSelection() }
     func deleteProfile(_ owner: UUID) async {
         guard beginProfileTransition() else { return }; defer { finishProfileTransition() }

@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.2.0](https://github.com/sunvali/mivu/compare/v1.1.3...v1.2.0) (2026-10-29)
+
+
+### Features
+
+* **coach:** undo Coach deletes and add visible meal and food delete ([3cd57f7](https://github.com/sunvali/mivu/commit/3cd57f7654a497dc24f30721e383ffbdc571bcd4))
+
+
+### Bug Fixes
+
+* **diary:** never start a new diary when the existing one cannot be read ([#86](https://github.com/sunvali/mivu/issues/86)) ([737d647](https://github.com/sunvali/mivu/commit/737d6475733d35fa1e12d77a5cef07f9e2da5f58))
+* **diary:** zoom meal photos around the pinch point ([#87](https://github.com/sunvali/mivu/issues/87)) ([e462f02](https://github.com/sunvali/mivu/commit/e462f02dbee1589360daa3eed006dfbeaadc853b))
+* **siri:** approve locked-phone Siri messages and harden connection requests ([92ac174](https://github.com/sunvali/mivu/commit/92ac17440476a5c0ad708b7b168bd41c909e04e9))
+
+## [1.1.3](https://github.com/sunvali/mivu/compare/v1.1.2...v1.1.3) (2026-10-28)
+
+
+### Bug Fixes
+
+* **review:** add Report Reply and tighten privacy wording ([#80](https://github.com/sunvali/mivu/issues/80)) ([443eedc](https://github.com/sunvali/mivu/commit/443eedc106edf9f0da88d9d0307da13bcca0a52f))
+
+## [1.1.2](https://github.com/sunvali/mivu/compare/v1.1.1...v1.1.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* **live-activity:** clear the outdated card iOS keeps after ending an activity ([#76](https://github.com/sunvali/mivu/issues/76)) ([8657ee8](https://github.com/sunvali/mivu/commit/8657ee8996e418dc7b015a8b819b23af7afe18bb))
+* **onboarding:** save setup targets on the waking day ([#75](https://github.com/sunvali/mivu/issues/75)) ([5afd977](https://github.com/sunvali/mivu/commit/5afd977fcec8e9ceb256cfdd615748926b07e506))
+
 ## [1.1.1](https://github.com/yakov103/mivu/compare/v1.1.0...v1.1.1) (2026-10-24)
 
 

@@ -55,6 +55,8 @@ final class DiaryDatabase {
             }
             // Outside the version gate so already-migrated profiles gain it too; derived state, not archived.
             try execute("CREATE TABLE IF NOT EXISTS coach_undo (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, mealID TEXT NOT NULL, afterRevision INTEGER NOT NULL, afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
+            // Held copies of Coach deletes; outside storage_quota, so Undo never blocks a delete.
+            try execute("CREATE TABLE IF NOT EXISTS coach_undo_deleted (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, payload BLOB NOT NULL, createdAt REAL NOT NULL, restoredID TEXT, undone INTEGER NOT NULL DEFAULT 0)")
         } catch {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData

@@ -143,6 +143,21 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Undone"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["coachUndo"].exists)
     }
+    func testCoachDeletedWorkoutShowsUndoAndRestores() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        enter("30 minutes of strength", in: app); app.buttons["coachSend"].tap()
+        waitForReply(to: "30 minutes of strength", in: app)
+        enter("Synthetic remove workout", in: app); app.buttons["coachSend"].tap()
+        waitForReply(to: "Synthetic remove workout", in: app)
+        let undo = app.buttons["coachUndo"].firstMatch
+        XCTAssertTrue(undo.waitForExistence(timeout: 10))
+        revealCoachLink(undo, in: app)
+        undo.tap()
+        XCTAssertTrue(app.staticTexts["Undone"].waitForExistence(timeout: 10))
+    }
     func testFixtureMealCorrectionHistoricalReviewAndConversationRelaunch() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]

@@ -151,7 +151,8 @@ final class ChatGPTConnection {
     }
 
     func connect(openBrowser: @escaping @MainActor (URL) async throws -> Void) async {
-        guard !isConnecting, !isDisconnecting, !isAnalyzing else { return }
+        // Consent is enforced here, not only by the buttons that call this.
+        guard !isConnecting, !isDisconnecting, !isAnalyzing, sharingConsented else { return }
         generation += 1
         failureDiagnostic = nil
         let revision = generation
