@@ -676,7 +676,7 @@ private final class CoachNavigationReadFence: Sendable {
         receiptTargets = receiptTargets.filter { ids.contains($0.key) }
         do {
             let values = try await diary.store.coachReceiptTargets(exchanges: rows, expectedSelection: token)
-            let undo = try await diary.store.coachUndoStates(keys: rows.flatMap { $0.receipts.filter { $0.mealID != nil }.map(\.operationKey) }, expectedProfileID: token.identity.profileID)
+            let undo = try await diary.store.coachUndoStates(keys: rows.flatMap { $0.receipts.map(\.operationKey) }, expectedProfileID: token.identity.profileID)
             let dayIDs = Set(rows.filter(\.needsDayChoice).compactMap(\.trackingDayID))
             let labels: [UUID: String]
             if dayIDs.isEmpty { labels = [:] }

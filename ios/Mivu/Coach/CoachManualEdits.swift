@@ -206,7 +206,8 @@ extension CoachTools {
         case "undo_change":
             try keys(["operation_key"], ["operation_key"])
             let key = try string("operation_key"), parts = key.split(separator: "/", maxSplits: 1).map(String.init)
-            let food = ["food/", "correct/", "edit_item/", "append_food/", "delete_item/", "scale_meal/"]
+            let food = ["food/", "correct/", "edit_item/", "append_food/", "delete_item/", "scale_meal/",
+                        "delete_meal/", "delete_photo/", "delete_weight/", "delete_workout/", "undo/"]
             guard parts.count == 2, UUID(uuidString: parts[0]) != nil, food.contains(where: parts[1].hasPrefix) else { throw CoachError.invalidArguments }
             write = .undo(operationKey: key)
         case "open_settings":

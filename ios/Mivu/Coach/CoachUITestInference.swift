@@ -54,6 +54,8 @@ enum CoachUITestInference {
             name = "open_settings"; arguments = ["destination": "backup"]
         } else if text.contains("morning"), text.contains("70 kg") {
             name = "log_weight"; arguments = ["local_date": localDate, "value": 70, "unit": "kg"]
+        } else if text.contains("synthetic remove workout"), let workout = context.workouts?.last {
+            name = "delete_workout"; arguments = ["workout_id": workout.id.uuidString, "expected_revision": workout.revision]
         } else if text.contains("30 minutes of strength") {
             name = "log_workout"
             arguments = ["local_date": localDate, "kind": "strength", "duration_minutes": 30,

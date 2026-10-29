@@ -12,10 +12,17 @@ extension DiaryDatabase {
             for write in normalized {
                 let key = "\(turnID)/\(write.target)"
                 if let prior = turn.receipts.first(where: { $0.operationKey == key }) { results.append(prior); continue }
-                let before = try transaction.undoSnapshot(write, turn: turn)
+                let before = try transaction.undoSnapshot(write, turn: turn), held = try transaction.deletedSnapshot(write)
                 var receipt = try transaction.applyCoachWrite(write, turn: turn, at: at)
                 receipt.operationKey = key; receipt.commandFingerprint = try write.commandFingerprint()
                 if let before, let mealID = receipt.mealID { try transaction.saveUndo(key: key, turnID: turnID, mealID: mealID, before: before) }
+                if let held {
+                    try transaction.saveDeletedUndo(key: key, turnID: turnID, snapshot: held, at: at)
+                    // Tells the model this delete can still be undone.
+                    var result = try JSONSerialization.jsonObject(with: Data(receipt.resultJSON.utf8)) as? [String: Any] ?? [:]
+                    result["undo_key"] = key; result["undo_until"] = "next message"
+                    receipt.resultJSON = String(decoding: try JSONSerialization.data(withJSONObject: result, options: .sortedKeys), as: UTF8.self)
+                }
                 newReceipts.append(receipt); results.append(receipt)
             }
             if !newReceipts.isEmpty {
@@ -172,6 +179,8 @@ extension DiaryTransaction {
                 guard head.revision == revision else { throw DiaryError.staleRevision }
                 guard turn.captureTimeZoneID == head.profile.timeZoneID, diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == diaryDateLabel(at, zone: head.profile.timeZoneID), try head.activeDayID.map({ try database.trackingDay(id: $0).startAt <= turn.capturedAt }) ?? true else { throw DiaryError.ambiguousDay }
             case .coverage(let date, _): _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID)
+            case .undo(let key) where try isHeldDelete(key):
+                guard try deletedUndoUsable(key, now: at, turn: turn) else { throw DiaryError.staleRevision }
             case .undo(let key):
                 guard let undo = try coachUndo(key) else { throw CoachError.invalidArguments }
                 guard !undo.undone, try undoState(undo.mealID) == undo.afterState else { throw DiaryError.staleRevision }
@@ -330,13 +339,18 @@ extension DiaryTransaction {
         let before = sqlite3_column_type(statement, 2) == SQLITE_NULL ? nil : try JSONDecoder().decode([FoodItem].self, from: database.mutationBlob(statement, 2))
         return (mealID, Int(sqlite3_column_int64(statement, 1)), try database.mutationText(statement, 4), before, sqlite3_column_int64(statement, 3) != 0)
     }
-    func coachUndoState(_ key: String) throws -> CoachUndoState? {
+    func coachUndoState(_ key: String, now: Date) throws -> CoachUndoState? {
+        if try database.mutationInteger("SELECT COUNT(*) FROM coach_undo_deleted WHERE operationKey = ?", [.text(key)]) == 1 { return try deletedUndoState(key, now: now) }
         guard let undo = try coachUndo(key) else { return nil }
         if undo.undone { return .undone }
         do { return try undoState(undo.mealID) == undo.afterState ? .available : nil } catch DiaryError.notFound { return nil }
     }
     /// Restores the snapshot only while the meal is exactly as that change left it; never recreates a deleted meal.
-    @discardableResult func undoCoachChange(_ key: String) throws -> UUID? {
+    @discardableResult func undoCoachChange(_ key: String, now: Date) throws -> UUID? {
+        if try isHeldDelete(key) {
+            guard try deletedUndoState(key, now: now) == .available else { throw DiaryError.staleRevision }
+            if case .meal(let id) = try undoDeleted(key) { return id } else { return nil }
+        }
         guard let undo = try coachUndo(key) else { throw DiaryError.notFound }
         guard !undo.undone, try undoState(undo.mealID) == undo.afterState else { throw DiaryError.staleRevision }
         if let before = undo.before { _ = try commitSavedItems(mealID: undo.mealID, items: before, expectedRevision: undo.afterRevision) }
@@ -423,10 +437,16 @@ extension DiaryTransaction {
         case .coverage(let date, let completeness):
             var day = try coachDay(date, turn: turn, activateIfEmpty: false, exact: true); day.completeness = completeness; try saveDay(day)
             receipt.dayID = day.id; receipt.resultJSON = try coachJSON(day)
+        case .undo(let key) where try isHeldDelete(key):
+            switch try undoDeleted(key) {
+            case .meal(let id): receipt.mealID = id; receipt.dayID = try mealRecord(id: id).dayID; receipt.resultJSON = try coachJSON(mealResult(id))
+            case .weight(let id): let value = try weight(id: id); receipt.weightID = id; receipt.dayID = try weightReceiptDay(value).id; receipt.resultJSON = try coachJSON(value)
+            case .workout(let id): let value = try workout(id: id); receipt.workoutID = id; receipt.dayID = value.dayID; receipt.resultJSON = try coachJSON(value)
+            }
         case .undo(let key):
             guard let mealID = try coachUndo(key)?.mealID else { throw DiaryError.notFound }
             receipt.dayID = try mealRecord(id: mealID).dayID
-            if let restored = try undoCoachChange(key) { receipt.mealID = restored; receipt.resultJSON = try coachJSON(mealResult(restored)) }
+            if let restored = try undoCoachChange(key, now: at) { receipt.mealID = restored; receipt.resultJSON = try coachJSON(mealResult(restored)) }
             else { receipt.resultJSON = try coachJSON(Deleted(id: mealID)) }
         case .open(let destination):
             receipt.destination = destination

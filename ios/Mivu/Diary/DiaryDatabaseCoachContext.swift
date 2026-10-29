@@ -139,10 +139,14 @@ extension DiaryDatabase {
         }
         guard try JSONEncoder().encode(value).count <= 60_000 else { throw CoachError.limitExceeded }; return value
     }
-    private static func receiptLine(_ receipts: [CoachReceipt]) -> String? {
-        let parts = receipts.compactMap { r -> String? in
+    /// Marks meals removed since, from any source, so Pip never treats an old receipt as a live record.
+    private func receiptLine(_ receipts: [CoachReceipt]) throws -> String? {
+        let parts = try receipts.compactMap { r -> String? in
             guard r.mealID != nil || r.itemID != nil else { return nil }
-            return "saved key=\(r.operationKey)" + (r.mealID.map { " meal=\($0.uuidString)" } ?? "") + (r.itemID.map { " item=\($0.uuidString)" } ?? "")
+            let meal = try r.mealID.map { id in
+                " meal=\(id.uuidString)" + (try mutationInteger("SELECT COUNT(*) FROM meal WHERE id = ?", [.text(id.uuidString)]) == 0 ? " deleted" : "")
+            }
+            return "saved key=\(r.operationKey)" + (meal ?? "") + (r.itemID.map { " item=\($0.uuidString)" } ?? "")
         }
         return parts.isEmpty ? nil : coachBoundedText("[" + parts.joined(separator: "; ") + "]", bytes: 1024)
     }
@@ -159,7 +163,7 @@ extension DiaryDatabase {
                 diagnostics?.recordTurnDecode()
                 let turn = try JSONDecoder().decode(CoachTurn.self, from: mutationBlob(previous, 1))
                 if recent.isEmpty, turn.state == .completed { pendingQuestion = turn.question; pendingQuestion?.originalText = coachBoundedText(turn.text, bytes: 1024) } // only the immediately previous turn; bounded for the 60 KB cap
-                recent.append(.init(id: turn.id, capturedAt: turn.capturedAt, text: coachBoundedText(turn.text, bytes: 1024), assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) }, receipts: Self.receiptLine(turn.receipts)))
+                recent.append(.init(id: turn.id, capturedAt: turn.capturedAt, text: coachBoundedText(turn.text, bytes: 1024), assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) }, receipts: try receiptLine(turn.receipts)))
             }
             recent.reverse(); while try JSONEncoder().encode(recent).count > 8192 { recent.removeFirst() }
             let daysQuery = try domainStatement("SELECT payload FROM day ORDER BY ordinal DESC, id DESC LIMIT 14")
@@ -229,7 +233,7 @@ extension DiaryDatabase {
             case .message(let id, _):
                 guard let turn = try transaction.turn(id: id) else { throw DiaryError.notFound }
                 value.turn = .init(id: turn.id, capturedAt: turn.capturedAt, text: coachBoundedText(turn.text, bytes: 1024),
-                                   assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) }, receipts: Self.receiptLine(turn.receipts))
+                                   assistantText: turn.assistantText.map { coachBoundedText($0, bytes: 1024) }, receipts: try receiptLine(turn.receipts))
             case .meal(let id), .item(let id, _):
                 if case .item(_, let itemID) = reply.target,
                    !(try transaction.mealItems(id: id)).contains(where: { $0.id == itemID }) { throw DiaryError.notFound }

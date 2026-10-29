@@ -287,6 +287,17 @@ struct MealDetailView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Ask Pip about \(item.name)")
             .accessibilityIdentifier("askPipFood")
+            if meal.state == .saved {
+                // The meal's only food deletes the meal, as the food editor does.
+                Button { deletion = meal.items.count > 1 ? .food(item, revision: meal.revision) : .meal } label: {
+                    Image(systemName: "minus.circle").font(.body.weight(.semibold)).foregroundStyle(.red)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete \(item.name)")
+                .accessibilityIdentifier("deleteFoodRow")
+            }
         }
     }
     private func displayTitle(_ meal: MealReadModel) -> String {

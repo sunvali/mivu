@@ -125,6 +125,84 @@ import XCTest
         XCTAssertTrue(app.buttons["deleteMealFromFood"].exists)
     }
 
+    func testFoodRowDeleteButtonRemovesOneFood() {
+        let app = launchWithMeal()
+        let add = app.buttons["addFoodManually"]
+        reveal(add, in: app, above: app.buttons["mealAskPip"])
+        add.tap()
+        let name = app.textFields["manualFoodName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Synthetic milk")
+        let calories = app.textFields["manualCalories"]
+        for _ in 0..<4 where !calories.isHittable { app.swipeUp() }
+        calories.tap(); calories.typeText("80")
+        if app.buttons["doneManualNutrition"].exists { app.buttons["doneManualNutrition"].tap() }
+        app.buttons["saveManualNutrition"].tap()
+        let foods = app.buttons.matching(identifier: "editItem")
+        let two = NSPredicate { _, _ in foods.count == 2 }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: two, object: nil)], timeout: 10), .completed)
+        let delete = app.buttons["Delete Synthetic milk"]
+        reveal(delete, in: app, above: app.buttons["mealAskPip"])
+        XCTAssertEqual(delete.identifier, "deleteFoodRow")
+        XCTAssertGreaterThanOrEqual(delete.frame.height, 44)
+        delete.tap()
+        XCTAssertTrue(app.staticTexts["Delete Synthetic milk?"].waitForExistence(timeout: 5))
+        app.buttons["confirmDeleteFood"].firstMatch.tap()
+        let one = NSPredicate { _, _ in foods.count == 1 }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: one, object: nil)], timeout: 10), .completed)
+    }
+
+    func testFoodRowDeleteOnLastFoodOffersDeleteMeal() {
+        let app = launchWithMeal()
+        let delete = app.buttons.matching(identifier: "deleteFoodRow").firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 10))
+        delete.tap()
+        let title = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Delete “")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        app.buttons["Delete meal"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10))
+    }
+
+    private func launchWithLoggedMeal() -> (XCUIApplication, XCUIElement) {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
+        app.buttons["logMeal"].tap()
+        let note = app.textFields["mealText"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5)); note.tap(); note.typeText("Synthetic bread")
+        if app.buttons["doneMealText"].exists { app.buttons["doneMealText"].tap() }
+        app.buttons["sendMeal"].tap()
+        let row = app.buttons["mealRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        let bar = app.buttons["logMeal"]
+        for _ in 0..<4 where bar.exists && row.frame.maxY > bar.frame.minY { app.collectionViews.firstMatch.swipeUp() }
+        return (app, row)
+    }
+
+    func testSwipeOnTodayMealDeletesItAfterConfirm() {
+        let (app, row) = launchWithLoggedMeal()
+        row.swipeLeft()
+        let delete = app.buttons["deleteMealRow"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5)); delete.tap()
+        let confirm = app.buttons["confirmDeleteMealRow"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertTrue(row.exists, "Nothing is removed before the confirmation")
+        confirm.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10))
+    }
+
+    func testLongPressOnTodayMealOffersDelete() {
+        let (app, row) = launchWithLoggedMeal()
+        row.press(forDuration: 1.2)
+        let delete = app.buttons["Delete meal"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5)); delete.tap()
+        XCTAssertTrue(app.buttons["confirmDeleteMealRow"].firstMatch.waitForExistence(timeout: 5))
+        // Shown as a popover from the row: tapping outside dismisses it without deleting.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+        XCTAssertTrue(app.buttons["confirmDeleteMealRow"].firstMatch.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(row.exists, "Dismissing keeps the meal")
+    }
+
     func testFoodRowAskPipButtonPrefillsCoach() {
         let app = launchWithMeal()
         let ask = app.buttons["askPipFood"].firstMatch
@@ -167,7 +245,8 @@ import XCTest
     private func openEditor(_ app: XCUIApplication, details: Bool = true) {
         let edit = app.buttons["editItem"].firstMatch
         XCTAssertTrue(edit.waitForExistence(timeout: 10))
-        for _ in 0..<6 where !edit.isHittable { app.swipeUp() }
+        // Rows with trailing buttons can wrap taller; keep the tap clear of the pinned meal bar.
+        reveal(edit, in: app, above: app.buttons["mealAskPip"])
         edit.tap()
         XCTAssertTrue(app.textFields["itemQuantity"].waitForExistence(timeout: 5))
         let toggle = app.buttons["foodMoreDetails"]
