@@ -36,6 +36,7 @@ import com.yakov103.mivu.coach.CoachInferenceInput
 import com.yakov103.mivu.coach.CoachInferenceResult
 import com.yakov103.mivu.connection.AccountState
 import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.connection.NanoStatus
 import com.yakov103.mivu.diary.Bootstrap
 import com.yakov103.mivu.diary.CalendarDayRule
 import com.yakov103.mivu.diary.DayCutoff
@@ -97,6 +98,7 @@ class OnboardingScreenTest {
     private fun host(
         state: ConnectionState = ConnectionState(),
         fontScale: Float? = null,
+        onChooseNano: () -> Unit = {},
         infer: suspend (List<CoachInferenceInput>, JsonObject?) -> CoachInferenceResult = { _, _ -> error("no inference expected") },
     ): UUID {
         val id = TodayFixture.diary(context)
@@ -105,7 +107,7 @@ class OnboardingScreenTest {
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
-                MivuTheme { OnboardingScreen(model, onAgree = {}, onConnect = {}, onFinish = { finished = true }) }
+                MivuTheme { OnboardingScreen(model, onAgree = {}, onConnect = {}, onFinish = { finished = true }, onChooseNano = onChooseNano) }
             }
         }
         return id
@@ -212,6 +214,24 @@ class OnboardingScreenTest {
         toResults(viaConnect = true)
         compose.onNodeWithText("Estimate").assertIsDisplayed()
         compose.onNodeWithTag("onboardingKcal").assertTextContains(whole(estimate().kcal))
+    }
+
+    @Test fun availableNanoIsOfferedAndReachesResults() {
+        var chose = 0
+        host(ConnectionState(nano = NanoStatus.available), onChooseNano = { chose++ })
+        answer(); next(); waitFor(heading("How do you eat?")); next()
+        waitFor(heading("Let ChatGPT tune it"))
+        compose.onNodeWithText("No account, but much less accurate. It only logs meals and changes amounts.").assertIsDisplayed()
+        compose.onNodeWithTag("onboardingChooseNano").assertIsDisplayed().performClick()
+        waitFor(heading("Your daily targets"))
+        assertEquals(1, chose)
+    }
+
+    @Test fun downloadableNanoOffersADownload() {
+        host(ConnectionState(nano = NanoStatus.downloadable))
+        answer(); next(); waitFor(heading("How do you eat?")); next()
+        waitFor(heading("Let ChatGPT tune it"))
+        compose.onNodeWithTag("onboardingChooseNano").assertTextContains("Download Gemini Nano instead")
     }
 
     @Test fun connectedSkipsTheConnectStep() {

@@ -46,7 +46,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import com.yakov103.mivu.connection.CoachProvider
 import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.connection.NanoStatus
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.ui.Modifier
@@ -514,5 +516,14 @@ class CoachComposerTest {
         compose.onNodeWithText("Using ChatGPT plan", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Manage usage").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         compose.onNodeWithText("Connect ChatGPT for replies").assertDoesNotExist()
+    }
+
+    @Test fun onDeviceFootnoteExplainsTheLimits() {
+        connected.value = true
+        connection = ConnectionState(nano = NanoStatus.available, storedProvider = CoachProvider.onDevice)
+        launch()
+        compose.onNodeWithText("Gemini Nano on this phone only logs meals and changes amounts, with lower accuracy. " +
+            "Choose ChatGPT in Settings → Coach AI for more.").assertIsDisplayed()
+        compose.onNodeWithText("Using ChatGPT plan", substring = true).assertDoesNotExist()
     }
 }

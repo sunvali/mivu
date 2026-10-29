@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -27,11 +29,13 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,12 +49,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -58,9 +65,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yakov103.mivu.R
 import com.yakov103.mivu.connection.AccountState
+import com.yakov103.mivu.connection.CoachProvider
 import com.yakov103.mivu.connection.ConnectionNotice
 import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.connection.NanoStatus
 import com.yakov103.mivu.ui.today.WhiteCard
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /** iOS `SettingsView`, reduced to the rows Android can back: Your day, Setup (goals, setup with Pip, backup, Coach AI) and Support. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,7 +113,7 @@ fun SettingsScreen(
             }
             WhiteCard(onClick = onOpenConnection) {
                 SettingsRow("Coach AI", R.drawable.ic_auto_awesome) {
-                    Text(if (state.account == AccountState.connected) "ChatGPT" else "Connect ChatGPT",
+                    Text(if (state.provider == CoachProvider.onDevice) "Gemini Nano" else if (state.account == AccountState.connected) "ChatGPT" else "Connect ChatGPT",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -129,8 +140,12 @@ fun ConnectionScreen(
     onSelectModel: (String) -> Unit,
     onDisconnect: () -> Unit,
     onBack: () -> Unit,
+    onChoose: (CoachProvider) -> Unit = {},
+    downloadNano: () -> Flow<Float> = { emptyFlow() },
 ) {
     val uri = LocalUriHandler.current
+    val download = rememberNanoDownload(downloadNano)
+    val onDevice = state.provider == CoachProvider.onDevice
     val connected = state.account == AccountState.connected
     Scaffold(
         topBar = {
@@ -146,13 +161,19 @@ fun ConnectionScreen(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            WhiteCard {
-                SettingsRow(if (connected) "ChatGPT connected" else "Connect for meal analysis",
-                    if (connected) R.drawable.ic_check else R.drawable.ic_person, bold = true)
+            if (state.nano != NanoStatus.unavailable) {
+                WhiteCard { ProviderPicker(state, onChoose, download) }
+                Footnote(if (onDevice) ON_DEVICE_FOOTER else CHATGPT_FOOTER)
             }
-            Footnote("Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI.")
-            Footnote("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage " +
-                "limits. Captures save locally without a connection.")
+            if (!onDevice || state.registrationID != null) {
+                WhiteCard {
+                    SettingsRow(if (connected) "ChatGPT connected" else "Connect for meal analysis",
+                        if (connected) R.drawable.ic_check else R.drawable.ic_person, bold = true)
+                }
+                if (state.nano == NanoStatus.unavailable) Footnote(CHATGPT_FOOTER)
+                Footnote("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage " +
+                    "limits. Captures save locally without a connection.")
+            }
             state.notice?.let { notice ->
                 // A finished disconnect is news, not an error.
                 val neutral = notice == ConnectionNotice.disconnected
@@ -169,7 +190,7 @@ fun ConnectionScreen(
                     Text("Connecting", style = MaterialTheme.typography.bodyLarge)
                 }
                 OutlinedButton(onCancel, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Cancel connection") }
-            } else {
+            } else if (!onDevice || state.registrationID != null) {
                 ChatGPTConnectButton(state, onAgree, onConnect, style = if (connected) ConnectStyle.Outlined else ConnectStyle.Filled)
             }
             if (state.models.isNotEmpty()) ModelPicker(state, onSelectModel)
@@ -184,6 +205,50 @@ fun ConnectionScreen(
                 Icon(painterResource(R.drawable.ic_open_in_new), contentDescription = null, Modifier.size(18.dp))
                 Text("Manage usage", Modifier.padding(start = 8.dp))
             }
+        }
+    }
+}
+
+private const val CHATGPT_FOOTER = "Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI."
+private const val ON_DEVICE_FOOTER = "Runs on this phone with no account, but estimates are much less accurate. It only logs meals and " +
+    "changes amounts; connect ChatGPT for accurate estimates, questions and other edits."
+
+/** iOS inline provider picker: on-device is selectable only once Gemini Nano is ready; the rows below get it there. */
+@Composable
+private fun ProviderPicker(state: ConnectionState, onChoose: (CoachProvider) -> Unit, download: NanoDownload) {
+    val ready = state.nano == NanoStatus.available
+    Column(Modifier.selectableGroup()) {
+        ProviderOption("ChatGPT (recommended)", null, state.provider == CoachProvider.chatGPT, true) { onChoose(CoachProvider.chatGPT) }
+        ProviderOption("On this phone (Gemini Nano)", "No account, but much lower accuracy", state.provider == CoachProvider.onDevice, ready) {
+            onChoose(CoachProvider.onDevice)
+        }
+    }
+    val progress = download.progress
+    when {
+        progress != null -> LinearProgressIndicator({ progress }, Modifier.fillMaxWidth().padding(16.dp).semantics {
+            contentDescription = "Downloading Gemini Nano"
+        })
+        state.nano == NanoStatus.downloadable -> {
+            TextButton(download::start, Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) { Text("Download Gemini Nano") }
+            if (download.failed) Text("Could not download Gemini Nano. Try again.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+        }
+        state.nano == NanoStatus.preparing || state.nano == NanoStatus.downloading ->
+            Text("Getting ready…", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ProviderOption(title: String, caption: String?, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected, enabled, Role.RadioButton, onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp)
+            .alpha(if (enabled) 1f else 0.5f),
+        horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected, onClick = null)
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            caption?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }

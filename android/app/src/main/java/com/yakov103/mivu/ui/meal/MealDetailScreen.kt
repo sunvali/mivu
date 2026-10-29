@@ -87,6 +87,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
+import com.yakov103.mivu.analysis.OnDeviceInference
 import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.FoodItem
 import com.yakov103.mivu.diary.MealPhoto
@@ -141,7 +142,7 @@ internal val FoodItem.sourceCaption: String
             NutritionProvenance.identifiedSource -> "Retrieved nutrition source"
             NutritionProvenance.estimate -> "Estimated nutrition"
         },
-        estimatedBy?.takeIf { provenance != NutritionProvenance.user }?.let { if (it == "apple-intelligence") "Apple Intelligence" else "ChatGPT" },
+        estimatedBy?.takeIf { provenance != NutritionProvenance.user }?.let { if (it == OnDeviceInference.MODEL) "Gemini Nano" else "ChatGPT" },
     ).joinToString(" · ")
 
 private val DiaryMeal.pendingReview: MealSubmission?

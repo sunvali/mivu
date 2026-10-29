@@ -241,7 +241,10 @@ fun CoachComposer(
             Text(it, inset.testTag("coachVoiceNote").semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (connected) Footnote(inset)
+        if (connected && connection.provider == CoachProvider.onDevice) Text(
+            "Gemini Nano on this phone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.",
+            inset.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else if (connected) Footnote(inset)
     }
 }
 

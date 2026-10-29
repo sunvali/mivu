@@ -86,6 +86,7 @@ import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.coach.CoachInferenceInput
 import com.yakov103.mivu.coach.CoachInferenceResult
 import com.yakov103.mivu.connection.ConnectionState
+import com.yakov103.mivu.connection.NanoStatus
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.GoalRecord
 import com.yakov103.mivu.diary.NutritionValues
@@ -115,6 +116,7 @@ import com.yakov103.mivu.ui.progress.editorFailure
 import com.yakov103.mivu.ui.progress.fieldText
 import com.yakov103.mivu.ui.progress.progressNumber
 import com.yakov103.mivu.ui.settings.ChatGPTConnectButton
+import com.yakov103.mivu.ui.settings.rememberNanoDownload
 import com.yakov103.mivu.ui.theme.MivuTheme
 import com.yakov103.mivu.ui.today.KG_PER_LB
 import com.yakov103.mivu.ui.today.WhiteCard
@@ -132,8 +134,10 @@ import kotlin.reflect.KProperty
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -385,7 +389,10 @@ class OnboardingViewModel(
 /** Full screen setup hosted by Pip. [onFinish] closes it: "Later", or after the targets are saved. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun OnboardingScreen(model: OnboardingViewModel, onAgree: () -> Unit, onConnect: () -> Unit, onFinish: () -> Unit) {
+fun OnboardingScreen(
+    model: OnboardingViewModel, onAgree: () -> Unit, onConnect: () -> Unit, onFinish: () -> Unit,
+    onChooseNano: () -> Unit = {}, downloadNano: () -> Flow<Float> = { emptyFlow() },
+) {
     val connection by model.connection.collectAsStateWithLifecycle()
     val step = model.step
     LaunchedEffect(model.saved) { if (model.saved) onFinish() }
@@ -422,20 +429,35 @@ fun OnboardingScreen(model: OnboardingViewModel, onAgree: () -> Unit, onConnect:
             ) {
                 Page(model, connection, pip, if (imeVisible) 64.dp else 96.dp)
             }
-            Actions(model, connection, onAgree, onConnect)
+            Actions(model, connection, onAgree, onConnect, onChooseNano, downloadNano)
         }
     }
 }
 
 @Composable
-private fun Actions(model: OnboardingViewModel, connection: ConnectionState, onAgree: () -> Unit, onConnect: () -> Unit) {
+private fun Actions(
+    model: OnboardingViewModel, connection: ConnectionState, onAgree: () -> Unit, onConnect: () -> Unit,
+    onChooseNano: () -> Unit, downloadNano: () -> Flow<Float>,
+) {
     val step = model.step
+    val toResults = { onChooseNano(); model.go(OnboardingViewModel.Step.results) }
+    val download = rememberNanoDownload(downloadNano, toResults)
     Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         model.saveError?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodyMedium) }
         if (step == OnboardingViewModel.Step.connect) {
             ChatGPTConnectButton(connection, onAgree, onConnect)
+            val nano = connection.nano
+            if (nano == NanoStatus.available || nano == NanoStatus.downloadable) {
+                download.progress?.let { LinearProgressIndicator({ it }, Modifier.fillMaxWidth().semantics { contentDescription = "Downloading Gemini Nano" }) }
+                TextButton(if (nano == NanoStatus.available) toResults else download::start, Modifier.heightIn(min = 48.dp).testTag("onboardingChooseNano"),
+                    enabled = download.progress == null) {
+                    Text(if (nano == NanoStatus.available) "Use Gemini Nano instead" else "Download Gemini Nano instead")
+                }
+                Footnote(if (download.failed) "Could not download Gemini Nano. Try again."
+                    else "No account, but much less accurate. It only logs meals and changes amounts.")
+            }
             TextButton({ model.go(OnboardingViewModel.Step.results) }, Modifier.heightIn(min = 48.dp).testTag("onboardingSkipConnect")) {
                 Text("Use the estimate instead")
             }

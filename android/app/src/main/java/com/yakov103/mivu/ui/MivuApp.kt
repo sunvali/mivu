@@ -97,6 +97,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CoroutineScope
 import com.yakov103.mivu.coach.CoachActivity
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import com.yakov103.mivu.ui.diary.DiaryScreen
@@ -122,6 +123,7 @@ import com.yakov103.mivu.diary.DiaryRepository
 import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import com.yakov103.mivu.connection.CoachProvider
 import com.yakov103.mivu.connection.ChatGPTConnection
 import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.ui.settings.BackupExportScreen
@@ -483,6 +485,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     // Leaving the screen must not stop (or drop) a disconnect halfway through deleting the session.
                     onDisconnect = { appScope.launch { withContext(NonCancellable) { connection?.disconnect() } } },
                     onBack = { navController.popBackStack() },
+                    onChoose = { connection?.choose(it) },
+                    downloadNano = { connection?.downloadNano() ?: emptyFlow() },
                 )
             }
             // Full screen over Coach: Coach is no longer resumed, so Pip hides; the draft lives in the activity's model.
@@ -534,7 +538,8 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                         { connection?.inference() ?: { _, _ -> throw SessionError.NoActiveSession } }, createSavedStateHandle())
                 }
                 OnboardingScreen(model, onAgree = { connection?.recordConsent() }, onConnect = connect,
-                    onFinish = { navController.popBackStack<Route.Onboarding>(inclusive = true) })
+                    onFinish = { navController.popBackStack<Route.Onboarding>(inclusive = true) },
+                    onChooseNano = { connection?.choose(CoachProvider.onDevice) }, downloadNano = { connection?.downloadNano() ?: emptyFlow() })
             }
             // Sample mode only: Today offers "Log meal" there. Analysis runs outside the screen, after it closes.
             dialog<Route.Composer>(
