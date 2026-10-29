@@ -17,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
@@ -24,6 +26,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -81,6 +84,35 @@ class ChatGPTConnectionTest {
 
     private fun connection() = ChatGPTConnection(store, AuthSession(store, auth.endpoints),
         ResponsesClient("http://127.0.0.1:${api.address.port}/v1/"), prefs, scope)
+
+    @Test fun nanoDownloadOutlivesTheScreenAndRefreshesStatus() = runBlocking {
+        val gate = CompletableDeferred<Unit>()
+        var starts = 0
+        val c = connection()
+        c.downloadForTest = { starts++; flow { emit(0.5f); gate.await(); emit(1f) } }
+        c.statusForTest = { NanoStatus.available }
+        val job = c.startNanoDownload()!!
+        assertSame(job, c.startNanoDownload()) // idempotent while running
+        withTimeout(5_000) { c.state.first { it.nanoProgress == 0.5f } }
+        gate.complete(Unit) // no screen collects anything: the app-scope job finishes alone
+        job.join()
+        withTimeout(5_000) { c.state.first { it.nano == NanoStatus.available } }
+        assertNull(c.state.value.nanoProgress)
+        assertEquals(false, c.state.value.nanoFailed)
+        assertEquals(1, starts)
+    }
+
+    @Test fun failedNanoDownloadIsFlaggedAndRetryable() = runBlocking {
+        val c = connection()
+        c.downloadForTest = { flow { throw java.io.IOException("synthetic") } }
+        c.statusForTest = { NanoStatus.downloadable }
+        c.startNanoDownload()!!.join()
+        assertEquals(true, c.state.value.nanoFailed)
+        assertNull(c.state.value.nanoProgress)
+        c.downloadForTest = { flow { emit(1f) } }
+        c.startNanoDownload()!!.join()
+        assertEquals(false, c.state.value.nanoFailed)
+    }
 
     private fun now() = System.currentTimeMillis() / 1000
 

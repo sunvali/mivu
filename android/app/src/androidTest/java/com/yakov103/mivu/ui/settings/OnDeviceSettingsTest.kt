@@ -4,7 +4,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -24,10 +23,6 @@ import com.yakov103.mivu.diary.NutritionValues
 import com.yakov103.mivu.ui.meal.sourceCaption
 import com.yakov103.mivu.ui.theme.MivuTheme
 import java.util.UUID
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flow
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -36,15 +31,17 @@ import org.junit.Test
 class OnDeviceSettingsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val chosen = mutableListOf<CoachProvider>()
+    private var downloads = 0
     private var state by mutableStateOf(ConnectionState(nano = NanoStatus.available))
 
     private val footer = "Runs on this phone with no account, but estimates are much less accurate. It only logs meals and changes " +
         "amounts; connect ChatGPT for accurate estimates, questions and other edits."
 
-    private fun screen(download: () -> Flow<Float> = { emptyFlow() }) = compose.setContent {
+    private fun screen() = compose.setContent {
         MivuTheme {
             ConnectionScreen(state, onAgree = {}, onConnect = {}, onCancel = {}, onSelectModel = {}, onDisconnect = {}, onBack = {},
-                onChoose = { chosen += it; state = state.copy(storedProvider = it) }, downloadNano = download)
+                onChoose = { chosen += it; state = state.copy(storedProvider = it) },
+                onDownloadNano = { downloads++; state = state.copy(nanoProgress = 0.4f) })
         }
     }
 
@@ -70,19 +67,18 @@ class OnDeviceSettingsTest {
 
     @Test fun downloadableKeepsOptionDisabledAndShowsProgress() {
         state = ConnectionState(nano = NanoStatus.downloadable)
-        val progress = MutableSharedFlow<Float>()
-        screen { progress }
+        screen()
         compose.onNodeWithText("On this phone (Gemini Nano)").assertIsNotEnabled()
         compose.onNodeWithText("Download Gemini Nano").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Download Gemini Nano").fetchSemanticsNodes().isEmpty() }
+        assertEquals(1, downloads)
+        compose.onNodeWithText("Download Gemini Nano").assertDoesNotExist()
         compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertIsDisplayed()
     }
 
     @Test fun failedDownloadShowsErrorAndKeepsButton() {
-        state = ConnectionState(nano = NanoStatus.downloadable)
-        screen { flow { throw java.io.IOException("synthetic") } }
-        compose.onNodeWithText("Download Gemini Nano").performClick()
-        compose.waitUntil(5_000) { exists("Could not download Gemini Nano. Try again.") }
+        state = ConnectionState(nano = NanoStatus.downloadable, nanoFailed = true)
+        screen()
+        compose.onNodeWithText("Could not download Gemini Nano. Try again.").assertIsDisplayed()
         compose.onNodeWithText("Download Gemini Nano").assertIsDisplayed()
     }
 

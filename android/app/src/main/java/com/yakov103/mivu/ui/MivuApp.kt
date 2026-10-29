@@ -97,7 +97,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CoroutineScope
 import com.yakov103.mivu.coach.CoachActivity
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import com.yakov103.mivu.ui.diary.DiaryScreen
@@ -486,7 +485,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                     onDisconnect = { appScope.launch { withContext(NonCancellable) { connection?.disconnect() } } },
                     onBack = { navController.popBackStack() },
                     onChoose = { connection?.choose(it) },
-                    downloadNano = { connection?.downloadNano() ?: emptyFlow() },
+                    onDownloadNano = { connection?.startNanoDownload() },
                 )
             }
             // Full screen over Coach: Coach is no longer resumed, so Pip hides; the draft lives in the activity's model.
@@ -539,7 +538,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                 }
                 OnboardingScreen(model, onAgree = { connection?.recordConsent() }, onConnect = connect,
                     onFinish = { navController.popBackStack<Route.Onboarding>(inclusive = true) },
-                    onChooseNano = { connection?.choose(CoachProvider.onDevice) }, downloadNano = { connection?.downloadNano() ?: emptyFlow() })
+                    onChooseNano = { connection?.choose(CoachProvider.onDevice) }, onDownloadNano = { connection?.startNanoDownload() })
             }
             // Sample mode only: Today offers "Log meal" there. Analysis runs outside the screen, after it closes.
             dialog<Route.Composer>(

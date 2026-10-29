@@ -99,6 +99,7 @@ class OnboardingScreenTest {
         state: ConnectionState = ConnectionState(),
         fontScale: Float? = null,
         onChooseNano: () -> Unit = {},
+        onDownloadNano: () -> Unit = {},
         infer: suspend (List<CoachInferenceInput>, JsonObject?) -> CoachInferenceResult = { _, _ -> error("no inference expected") },
     ): UUID {
         val id = TodayFixture.diary(context)
@@ -107,7 +108,7 @@ class OnboardingScreenTest {
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
-                MivuTheme { OnboardingScreen(model, onAgree = {}, onConnect = {}, onFinish = { finished = true }, onChooseNano = onChooseNano) }
+                MivuTheme { OnboardingScreen(model, onAgree = {}, onConnect = {}, onFinish = { finished = true }, onChooseNano = onChooseNano, onDownloadNano = onDownloadNano) }
             }
         }
         return id
@@ -227,11 +228,14 @@ class OnboardingScreenTest {
         assertEquals(1, chose)
     }
 
-    @Test fun downloadableNanoOffersADownload() {
-        host(ConnectionState(nano = NanoStatus.downloadable))
+    @Test fun downloadableNanoStartsTheDownloadAndReachesResults() {
+        var started = 0
+        host(ConnectionState(nano = NanoStatus.downloadable), onDownloadNano = { started++ })
         answer(); next(); waitFor(heading("How do you eat?")); next()
         waitFor(heading("Let ChatGPT tune it"))
-        compose.onNodeWithTag("onboardingChooseNano").assertTextContains("Download Gemini Nano instead")
+        compose.onNodeWithTag("onboardingChooseNano").assertTextContains("Download Gemini Nano instead").performClick()
+        waitFor(heading("Your daily targets"))
+        assertEquals(1, started)
     }
 
     @Test fun connectedSkipsTheConnectStep() {

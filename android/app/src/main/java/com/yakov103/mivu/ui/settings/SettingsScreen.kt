@@ -70,8 +70,6 @@ import com.yakov103.mivu.connection.ConnectionNotice
 import com.yakov103.mivu.connection.ConnectionState
 import com.yakov103.mivu.connection.NanoStatus
 import com.yakov103.mivu.ui.today.WhiteCard
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 
 /** iOS `SettingsView`, reduced to the rows Android can back: Your day, Setup (goals, setup with Pip, backup, Coach AI) and Support. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -141,10 +139,9 @@ fun ConnectionScreen(
     onDisconnect: () -> Unit,
     onBack: () -> Unit,
     onChoose: (CoachProvider) -> Unit = {},
-    downloadNano: () -> Flow<Float> = { emptyFlow() },
+    onDownloadNano: () -> Unit = {},
 ) {
     val uri = LocalUriHandler.current
-    val download = rememberNanoDownload(downloadNano)
     val onDevice = state.provider == CoachProvider.onDevice
     val connected = state.account == AccountState.connected
     Scaffold(
@@ -162,7 +159,7 @@ fun ConnectionScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (state.nano != NanoStatus.unavailable) {
-                WhiteCard { ProviderPicker(state, onChoose, download) }
+                WhiteCard { ProviderPicker(state, onChoose, onDownloadNano) }
                 Footnote(if (onDevice) ON_DEVICE_FOOTER else CHATGPT_FOOTER)
             }
             if (!onDevice || state.registrationID != null) {
@@ -215,7 +212,7 @@ private const val ON_DEVICE_FOOTER = "Runs on this phone with no account, but es
 
 /** iOS inline provider picker: on-device is selectable only once Gemini Nano is ready; the rows below get it there. */
 @Composable
-private fun ProviderPicker(state: ConnectionState, onChoose: (CoachProvider) -> Unit, download: NanoDownload) {
+private fun ProviderPicker(state: ConnectionState, onChoose: (CoachProvider) -> Unit, onDownload: () -> Unit) {
     val ready = state.nano == NanoStatus.available
     Column(Modifier.selectableGroup()) {
         ProviderOption("ChatGPT (recommended)", null, state.provider == CoachProvider.chatGPT, true) { onChoose(CoachProvider.chatGPT) }
@@ -223,14 +220,14 @@ private fun ProviderPicker(state: ConnectionState, onChoose: (CoachProvider) -> 
             onChoose(CoachProvider.onDevice)
         }
     }
-    val progress = download.progress
+    val progress = state.nanoProgress
     when {
         progress != null -> LinearProgressIndicator({ progress }, Modifier.fillMaxWidth().padding(16.dp).semantics {
             contentDescription = "Downloading Gemini Nano"
         })
         state.nano == NanoStatus.downloadable -> {
-            TextButton(download::start, Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) { Text("Download Gemini Nano") }
-            if (download.failed) Text("Could not download Gemini Nano. Try again.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            TextButton(onDownload, Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) { Text("Download Gemini Nano") }
+            if (state.nanoFailed) Text("Could not download Gemini Nano. Try again.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
         state.nano == NanoStatus.preparing || state.nano == NanoStatus.downloading ->

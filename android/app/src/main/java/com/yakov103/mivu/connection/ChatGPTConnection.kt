@@ -19,8 +19,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -66,6 +64,9 @@ data class ConnectionState(
     /** A chosen ChatGPT account is saved, whether or not it restored (iOS reads `selectedRegistrationID`). */
     val savedRegistration: Boolean = false,
     val nano: NanoStatus = NanoStatus.unavailable,
+    /** Gemini Nano download progress 0..1 while one runs; it keeps running when the person leaves the screen. */
+    val nanoProgress: Float? = null,
+    val nanoFailed: Boolean = false,
 ) {
     val planAuthorized get() = account == AccountState.connected && !isConnecting && !isDisconnecting && models.any { it.slug == selectedModel }
 
@@ -159,17 +160,37 @@ class ChatGPTConnection(
         _state.update { it.copy(storedProvider = provider) }
     }
 
+    @VisibleForTesting internal var statusForTest: (suspend () -> NanoStatus)? = null
+    @VisibleForTesting internal var downloadForTest: (() -> Flow<Float>)? = null
+    private var nanoDownload: Job? = null
+
     /** Re-reads whether Gemini Nano can run on this phone, off the caller's thread; launch and each return call it. */
     fun refreshNano(): Job? {
-        val nano = nano ?: return null
+        val read = statusForTest ?: nano?.let { it::status } ?: return null
         return scope.launch {
-            val status = nano.status()
+            val status = read()
             if (onDeviceForTest == null) _state.update { it.copy(nano = status) }
         }
     }
 
-    /** Downloads Gemini Nano with progress 0..1, then re-reads its status. */
-    fun downloadNano(): Flow<Float> = (nano?.download() ?: emptyFlow()).onCompletion { refreshNano() }
+    /** Downloads Gemini Nano in the app's scope, so leaving a screen does not stop it; one at a time, then re-reads its status. */
+    fun startNanoDownload(): Job? = synchronized(lock) {
+        nanoDownload?.takeIf { it.isActive }?.let { return it }
+        val download = downloadForTest?.invoke() ?: nano?.download() ?: return null
+        _state.update { it.copy(nanoProgress = 0f, nanoFailed = false) }
+        scope.launch {
+            try {
+                download.collect { progress -> _state.update { it.copy(nanoProgress = progress) } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(nanoFailed = true) }
+            } finally {
+                _state.update { it.copy(nanoProgress = null) }
+            }
+            refreshNano()
+        }.also { nanoDownload = it }
+    }
 
     /** Starts a sign-in that [open]s the authorization URL in a browser; does nothing without consent or while busy. */
     fun connect(open: (String) -> Unit): Job = synchronized(lock) {
