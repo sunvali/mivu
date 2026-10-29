@@ -23,10 +23,12 @@ private struct DiarySetupView: View {
             Group {
                 if failed {
                     ContentUnavailableView {
-                        Label("Couldn't create your diary", systemImage: "exclamationmark.triangle")
+                        Label("Couldn't open your diary", systemImage: "exclamationmark.triangle")
                     } actions: {
                         Button("Try again") { Task { await startNew() } }.buttonStyle(.glassProminent).tint(.diaryAccent)
                     }
+                    // A locked phone keeps the diary file closed; open it as soon as the owner unlocks.
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in Task { await startNew() } }
                 } else {
                     ProgressView("Setting up your diary").task { await startNew() }
                 }
@@ -60,8 +62,9 @@ private struct DiarySetupView: View {
     }
     private func startNew() async {
         failed = false
-        await model.createProfile(name: model.profiles.isEmpty ? "My diary" : "Diary \(model.profiles.count + 1)")
-        if model.readModel != nil { onSelected(); onCreated() } else { failed = true }
+        var created = true
+        if model.profiles.isEmpty { created = await model.createFirstProfile() } else { await model.createProfile(name: "Diary \(model.profiles.count + 1)") }
+        if model.readModel != nil { onSelected(); if created { onCreated() } } else { failed = true }
     }
 }
 
