@@ -598,77 +598,88 @@ struct TodayView: View {
     @State private var showGoals = false
     @State private var savedMealID: UUID?
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
-    var body: some View {
-        List {
-            if model.sampleMode { Section { SampleBanner().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) } }
-            if let snapshot = model.readModel {
-                if let savedMealID, let meal = model.meal(savedMealID) {
-                    Section {
-                        let lateDay = lateMealDay(meal)
-                        NavigationLink(value: savedMealID) {
-                            Label(lateDay.map { "Added to \(wakingDayTitle($0.localDate))" } ?? "Saved on this iPhone", systemImage: "checkmark.circle")
-                                .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
-                        }.accessibilityIdentifier("savedMealReceipt")
-                        // Moving opens today's calendar date, so offer it only while that is still the meal's date.
-                        if lateDay != nil, diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID) == diaryDateLabel(Date(), zone: snapshot.profile.timeZoneID) {
-                            Button("Move to \(wakingDayTitle(diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID)))", systemImage: "arrow.uturn.forward") {
-                                Task { await moveToCalendarDay(meal) }
-                            }.font(.subheadline).frame(minHeight: 44).accessibilityIdentifier("moveLateMeal")
-                        }
+    @Environment(\.isWideLayout) private var isWide
+    // Sideways on the Duo, the summary and the meals sit in two columns; otherwise one list, unchanged order.
+    @ViewBuilder private var leadingSections: some View {
+        if model.sampleMode { Section { SampleBanner().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) } }
+        if let snapshot = model.readModel {
+            if let savedMealID, let meal = model.meal(savedMealID) {
+                Section {
+                    let lateDay = lateMealDay(meal)
+                    NavigationLink(value: savedMealID) {
+                        Label(lateDay.map { "Added to \(wakingDayTitle($0.localDate))" } ?? "Saved on this iPhone", systemImage: "checkmark.circle")
+                            .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
+                    }.accessibilityIdentifier("savedMealReceipt")
+                    // Moving opens today's calendar date, so offer it only while that is still the meal's date.
+                    if lateDay != nil, diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID) == diaryDateLabel(Date(), zone: snapshot.profile.timeZoneID) {
+                        Button("Move to \(wakingDayTitle(diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID)))", systemImage: "arrow.uturn.forward") {
+                            Task { await moveToCalendarDay(meal) }
+                        }.font(.subheadline).frame(minHeight: 44).accessibilityIdentifier("moveLateMeal")
                     }
                 }
-                if let day = model.activeDay, let recap = model.morningRecap, model.todaysMeals.isEmpty, dismissedMorningDay != day.id.uuidString {
-                    Section {
-                        MorningCheckInCard(model: model, day: day, previous: recap.previous, previousTarget: recap.target, todayWeight: snapshot.weight) {
-                            withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
-                        }
-                    }.transition(.opacity)
-                }
+            }
+            if let day = model.activeDay, let recap = model.morningRecap, model.todaysMeals.isEmpty, dismissedMorningDay != day.id.uuidString {
                 Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        summaryDate
-                        if let day = model.activeDay {
-                            intakeHero(totals: snapshot.totals, day: day)
-                            if snapshot.activeGoal != nil {
-                                todayGoal(snapshot: snapshot, day: day)
-                            }
-                        } else {
-                            intakeHero(totals: nutritionTotals([]), day: nil)
+                    MorningCheckInCard(model: model, day: day, previous: recap.previous, previousTarget: recap.target, todayWeight: snapshot.weight) {
+                        withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
+                    }
+                }.transition(.opacity)
+            }
+            Section {
+                VStack(alignment: .leading, spacing: 16) {
+                    summaryDate
+                    if let day = model.activeDay {
+                        intakeHero(totals: snapshot.totals, day: day)
+                        if snapshot.activeGoal != nil {
+                            todayGoal(snapshot: snapshot, day: day)
                         }
+                    } else {
+                        intakeHero(totals: nutritionTotals([]), day: nil)
+                    }
+                }.diarySummaryCard()
+            }
+        } else {
+            Section { Text("Choose a private local profile in Settings to open your diary.").foregroundStyle(Color.diarySecondary) }
+        }
+    }
+    @ViewBuilder private var mealSections: some View {
+        if model.readModel != nil {
+            Section {
+                if model.todaysMeals.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Your first meal starts here", systemImage: "fork.knife").font(.headline)
+                        Text("Add photos or a note.").foregroundStyle(Color.diarySecondary)
                     }.diarySummaryCard()
                 }
-                Section {
-                    if model.todaysMeals.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Your first meal starts here", systemImage: "fork.knife").font(.headline)
-                            Text("Add photos or a note.").foregroundStyle(Color.diarySecondary)
-                        }.diarySummaryCard()
-                    }
-                    ForEach(model.todaysMeals, id: \.id) { meal in
-                        NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
-                            .diarySummaryCard()
-                            .accessibilityIdentifier("mealRow")
-                            .modifier(MealRowDeletion(meal: meal, model: model))
-                    }
-                } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
-                if let day = model.activeDay, snapshot.activeGoal == nil {
-                    Section { todayGoal(snapshot: snapshot, day: day).diarySummaryCard() }
+                ForEach(model.todaysMeals, id: \.id) { meal in
+                    NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
+                        .diarySummaryCard()
+                        .accessibilityIdentifier("mealRow")
+                        .modifier(MealRowDeletion(meal: meal, model: model))
                 }
-                Section {
-                    Button { showWeight = true } label: {
-                        HStack {
-                            Label { Text("Morning weight") } icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
-                            Spacer()
-                            if let entry = snapshot.weight {
-                                Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()
-                            } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
-                        }.frame(minHeight: 44)
-                    }.accessibilityIdentifier("logWeight").diarySummaryCard()
-                }
-            } else {
-                Section { Text("Choose a private local profile in Settings to open your diary.").foregroundStyle(Color.diarySecondary) }
+            } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
+        }
+    }
+    @ViewBuilder private var trailingSections: some View {
+        if let snapshot = model.readModel {
+            if let day = model.activeDay, snapshot.activeGoal == nil {
+                Section { todayGoal(snapshot: snapshot, day: day).diarySummaryCard() }
+            }
+            Section {
+                Button { showWeight = true } label: {
+                    HStack {
+                        Label { Text("Morning weight") } icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
+                        Spacer()
+                        if let entry = snapshot.weight {
+                            Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()
+                        } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
+                    }.frame(minHeight: 44)
+                }.accessibilityIdentifier("logWeight").diarySummaryCard()
             }
         }
+    }
+    private func todayList(@ViewBuilder _ content: () -> some View) -> some View {
+        List { content() }
         .listStyle(.plain)
         .listRowSpacing(0)
         .listSectionSpacing(12)
@@ -676,6 +687,18 @@ struct TodayView: View {
         .environment(\.defaultMinListRowHeight, 56)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
+    }
+    var body: some View {
+        Group {
+            if isWide {
+                HStack(spacing: 0) {
+                    todayList { leadingSections; trailingSections }.accessibilityIdentifier("todaySummaryColumn")
+                    todayList { mealSections }.accessibilityIdentifier("todayMealsColumn")
+                }
+            } else {
+                todayList { leadingSections; mealSections; trailingSections }
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             if model.readModel != nil {
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
