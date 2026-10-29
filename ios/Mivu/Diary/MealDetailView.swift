@@ -738,7 +738,7 @@ private struct FoodItemEditor: View {
 private struct MealPhotoViewer: View {
     @Bindable var model: DiaryViewModel
     let photo: DiaryPhotoReference
-    @State private var original: Data?
+    @State private var original: UIImage?
     let delete: () async -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var zoom: CGFloat = 1
@@ -747,8 +747,8 @@ private struct MealPhotoViewer: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                if let original, let image = UIImage(data: original) {
-                    ZoomablePhoto(image: image, zoom: $zoom)
+                if let original {
+                    ZoomablePhoto(image: original, zoom: $zoom)
                 } else {
                     ContentUnavailableView("Photo unavailable", systemImage: "photo", description: Text("The saved attachment could not be displayed."))
                 }
@@ -769,7 +769,7 @@ private struct MealPhotoViewer: View {
                 do {
                     let data = try await model.store.photoContent(photo, expectedProfileID: token.identity.profileID)
                     try await model.store.validateSelection(epoch: token.selectionEpoch, expectedProfileID: token.identity.profileID)
-                    guard !Task.isCancelled, !model.isChangingProfile, model.selection == token else { return }; original = data
+                    guard !Task.isCancelled, !model.isChangingProfile, model.selection == token else { return }; original = UIImage(data: data)
                 } catch { original = nil }
             }
             .navigationTitle("Meal photo").navigationBarTitleDisplayMode(.inline)
