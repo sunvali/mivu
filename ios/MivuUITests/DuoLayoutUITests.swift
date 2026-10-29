@@ -27,4 +27,20 @@ import XCTest
         XCTAssertFalse(app.descendants(matching: .any)["todayMealsColumn"].exists)
         XCTAssertTrue(app.buttons["logWeight"].exists)
     }
+
+    func testSidewaysCoachShowsLiveDayAndHighlightsChange() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture",
+                               "--proof-english", "--wide-layout-ui-test"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        let liveDay = app.descendants(matching: .any)["coachLiveDay"]
+        XCTAssertTrue(liveDay.waitForExistence(timeout: 5))
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Two eggs, three bread slices and salad")
+        app.buttons["coachSend"].tap()
+        let changed = app.descendants(matching: .any)["justChangedMeal"]
+        XCTAssertTrue(changed.waitForExistence(timeout: 20), "The meal Coach logged lights up in the live day")
+        XCTAssertGreaterThan(changed.frame.minX, input.frame.maxX - 1, "The live day sits beside the chat")
+    }
 }

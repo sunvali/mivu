@@ -378,16 +378,25 @@ struct DiaryRootView: View {
                 NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
-                NavigationStack {
-                    CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
-                              onCompanionContextChanged: updateCompanionContext,
-                              onCompanionTouch: touchCompanion,
-                              navigationRequest: coachRoutes.request,
-                              onNavigationConsumed: { coachRoutes.consume($0) },
-                              openHistory: openCoachHistory, openToday: { selectedTab = "today" },
-                              openProgress: { selectedTab = "progress" }) { destination in
-                        routes.route = SettingsRoute(destination: destination)
-                    }.toolbar { profileControl }.duoReadableWidth()
+                DuoBeside {
+                    NavigationStack {
+                        CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
+                                  onCompanionContextChanged: updateCompanionContext,
+                                  onCompanionTouch: touchCompanion,
+                                  navigationRequest: coachRoutes.request,
+                                  onNavigationConsumed: { coachRoutes.consume($0) },
+                                  openHistory: openCoachHistory, openToday: { selectedTab = "today" },
+                                  openProgress: { selectedTab = "progress" }) { destination in
+                            routes.route = SettingsRoute(destination: destination)
+                        }.toolbar { profileControl }.duoReadableWidth()
+                    }
+                } secondary: {
+                    // The day Coach is changing, beside the chat; Pip stays a still image so the rig mounts once.
+                    NavigationStack {
+                        TodayView(model: model, companionOutput: CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil),
+                                  companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, isLiveDay: true)
+                    }
+                    .accessibilityIdentifier("coachLiveDay")
                 }
             }
             .badge(coach.queuedSiri.count)
@@ -586,9 +595,14 @@ struct TodayView: View {
     let companionRuntime: CompanionRuntime
     let onCompanionContextChanged: (CompanionContext) -> Void
     var onCompanionTouch: (CompanionTouch) -> Void = { _ in }
+    /// Shown beside Coach: no capture bar, and the meal Coach just added or corrected lights up.
+    var isLiveDay = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openDiaryCoach) private var openChat
+    @State private var mealRevisions: [UUID: Int]?
+    @State private var changedMealID: UUID?
     @State private var showManualNutrition = false
     @State private var companionVisible = false
     @State private var surfaceVisible = false
@@ -652,11 +666,15 @@ struct TodayView: View {
                     }.diarySummaryCard()
                 }
                 ForEach(model.todaysMeals, id: \.id) { meal in
+                    let justChanged = meal.id == changedMealID
                     NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
                         .diarySummaryCard()
-                        .accessibilityIdentifier("mealRow")
+                        .overlay { if justChanged { RoundedRectangle(cornerRadius: 24).inset(by: 8).stroke(Color.diaryAccent, lineWidth: 2) } }
+                        .accessibilityIdentifier(justChanged ? "justChangedMeal" : "mealRow")
+                        .accessibilityValue(justChanged ? "Just updated" : "")
                         .modifier(MealRowDeletion(meal: meal, model: model))
                 }
+                .animation(reduceMotion ? nil : .snappy, value: changedMealID)
             } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
         }
     }
@@ -678,6 +696,7 @@ struct TodayView: View {
             }
         }
     }
+    private var currentRevisions: [UUID: Int] { Dictionary(uniqueKeysWithValues: model.todaysMeals.map { ($0.id, $0.revision) }) }
     private func todayList(@ViewBuilder _ content: () -> some View) -> some View {
         List { content() }
         .listStyle(.plain)
@@ -699,8 +718,17 @@ struct TodayView: View {
                 todayList { leadingSections; mealSections; trailingSections }
             }
         }
+        .task(id: currentRevisions) {
+            guard isLiveDay else { return }
+            let changed = DuoLayout.changedMeal(previous: mealRevisions, current: currentRevisions)
+            mealRevisions = currentRevisions
+            guard let changed else { return }
+            changedMealID = changed
+            guard (try? await Task.sleep(for: .seconds(3))) != nil else { return }
+            changedMealID = nil
+        }
         .safeAreaInset(edge: .bottom) {
-            if model.readModel != nil {
+            if model.readModel != nil, !isLiveDay {
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
                     if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill") { showComposer = true } }
                     else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one

@@ -22,4 +22,22 @@ struct DuoLayoutTests {
     @Test func outerDisplayIsNotWide() {
         #expect(!DuoLayout.isWide(size: CGSize(width: 466, height: 678), horizontal: .compact, typeSize: .large))
     }
+
+    private let first = UUID(), second = UUID()
+
+    @Test func firstLoadHighlightsNothing() {
+        #expect(DuoLayout.changedMeal(previous: nil, current: [first: 1]) == nil)
+    }
+
+    @Test func newMealIsTheChange() {
+        #expect(DuoLayout.changedMeal(previous: [first: 1], current: [first: 1, second: 1]) == second)
+    }
+
+    @Test func correctedMealIsTheChange() {
+        #expect(DuoLayout.changedMeal(previous: [first: 1, second: 1], current: [first: 1, second: 2]) == second)
+    }
+
+    @Test func unchangedOrDeletedMealsAreNoChange() {
+        #expect(DuoLayout.changedMeal(previous: [first: 1, second: 1], current: [first: 1]) == nil)
+    }
 }

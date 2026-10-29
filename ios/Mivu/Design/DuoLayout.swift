@@ -8,6 +8,13 @@ enum DuoLayout {
     static func isWide(size: CGSize, horizontal: UserInterfaceSizeClass?, typeSize: DynamicTypeSize) -> Bool {
         horizontal == .regular && size.width > size.height && !typeSize.isAccessibilitySize
     }
+
+    /// The meal that just appeared or was revised (meal ID → revision), so the live day beside
+    /// Coach can light it up. Nothing on first load.
+    static func changedMeal(previous: [UUID: Int]?, current: [UUID: Int]) -> UUID? {
+        guard let previous else { return nil }
+        return current.first { id, revision in previous[id].map { $0 < revision } ?? true }?.key
+    }
 }
 
 extension EnvironmentValues {
@@ -33,6 +40,25 @@ struct DuoLayoutRoot<Content: View>: View {
             .environment(\.isWideLayout, wide)
             .environment(\.windowSizeClass, sizeClass)
             .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
+    }
+}
+
+/// Sideways, shows `secondary` beside `primary` in an even split; otherwise only `primary`.
+/// The secondary column lays out like a phone, and `primary` keeps its identity across the switch.
+struct DuoBeside<Primary: View, Secondary: View>: View {
+    @ViewBuilder let primary: Primary
+    @ViewBuilder let secondary: Secondary
+    @Environment(\.isWideLayout) private var isWide
+
+    var body: some View {
+        HStack(spacing: 0) {
+            primary
+            if isWide {
+                secondary
+                    .environment(\.isWideLayout, false)
+                    .environment(\.horizontalSizeClass, .compact)
+            }
+        }
     }
 }
 
