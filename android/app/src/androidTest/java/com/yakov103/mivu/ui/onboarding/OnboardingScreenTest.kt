@@ -217,6 +217,16 @@ class OnboardingScreenTest {
         compose.onNodeWithTag("onboardingKcal").assertTextContains(whole(estimate().kcal))
     }
 
+    @Test fun connectStepSaysMivuAsksBeforeSharing() {
+        host()
+        answer()
+        next()
+        waitFor(heading("How do you eat?"))
+        next()
+        waitFor(heading("Let ChatGPT tune it"))
+        compose.onNodeWithText("Mivu asks before sharing anything with OpenAI. Your diary stays on this phone.").assertIsDisplayed()
+    }
+
     @Test fun availableNanoIsOfferedAndReachesResults() {
         var chose = 0
         host(ConnectionState(nano = NanoStatus.available), onChooseNano = { chose++ })
