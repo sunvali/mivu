@@ -1,9 +1,11 @@
 package com.yakov103.mivu.coach
 
+import android.Manifest
 import android.app.NotificationManager
 import android.app.job.JobScheduler
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import com.yakov103.mivu.MivuApplication
 import com.yakov103.mivu.analysis.LocalTurn
 import com.yakov103.mivu.analysis.NutritionTable
@@ -155,6 +157,17 @@ class OnDeviceCoachTest {
         assertEquals(TellCoachOutcome.SavedOpenToFinish, runBlocking { TellCoach.run(app, "Synthetic 2 eggs", emptyList(), id) })
         assertTrue(app.getSystemService(JobScheduler::class.java).allPendingJobs.isEmpty())
         assertEquals(CoachTurnState.captured, stored(id).state)
+    }
+
+    @Test fun stoppedJobPostsNothingOnDevice() {
+        InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
+        app.foregroundForTest = false
+        val t = send("Synthetic 2 eggs")
+        app.followed += t.id // a share followed before Nano was known, then its job stopped
+        app.expireFollowed()
+        runBlocking { delay(1_000) }
+        val tags = app.getSystemService(NotificationManager::class.java).activeNotifications.map { it.tag }
+        assertTrue("coach-reply-${t.id}" !in tags)
     }
 
     @Test fun slowNanoCheckDoesNotHoldACapture() {

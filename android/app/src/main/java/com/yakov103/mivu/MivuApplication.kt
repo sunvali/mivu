@@ -116,10 +116,13 @@ class MivuApplication : Application() {
     /** The launch Gemini Nano check; the provider is not known before it. */
     @VisibleForTesting internal var nanoChecked: Job? = null
 
-    /** Restore and the first Nano check; a check slower than 2 s leaves Nano not available, so a capture never hangs. */
+    /** The first Nano check; one slower than 2 s leaves Nano not available, so a capture never hangs. */
+    suspend fun awaitNano() { withTimeoutOrNull(2_000) { nanoChecked?.join() } }
+
+    /** Restore, then [awaitNano]: the provider and canInfer are settled. */
     suspend fun awaitLaunch() {
         restored.join()
-        withTimeoutOrNull(2_000) { nanoChecked?.join() }
+        awaitNano()
     }
 
     override fun onCreate() {
@@ -205,7 +208,7 @@ class MivuApplication : Application() {
         scope.launch {
             drainCoach().join()
             val turn = existingProfile()?.let { id -> withContext(Dispatchers.IO) { runCatching { repository.database(id).coachTurn(turnID) }.getOrNull() } }
-            if (turn != null && !screenVisible) CoachReplyNotification.post(this@MivuApplication, turn)
+            if (turn != null && !screenVisible && !onDevice) CoachReplyNotification.post(this@MivuApplication, turn)
             followed -= turnID
         }
     }
@@ -214,7 +217,7 @@ class MivuApplication : Application() {
     fun expireFollowed() {
         val turns = followed.toList()
         followed.clear()
-        if (turns.isEmpty()) return
+        if (turns.isEmpty() || onDevice) return // an on-device turn finishes in Mivu, never with a notification
         scope.launch(Dispatchers.IO) {
             val db = existingProfile()?.let { repository.database(it) } ?: return@launch
             fun running(id: UUID) = runCatching { db.coachTurn(id) }.getOrNull()

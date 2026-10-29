@@ -18,6 +18,10 @@ import java.io.IOException
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -144,6 +148,24 @@ class TellCoachTest {
         assertEquals(TellCoachOutcome.SavedNeedsConnection, run("Synthetic yogurt", id = id))
         assertEquals(before + 1, count())
         assertEquals("Synthetic yogurt", db.coachTurn(id)!!.text)
+    }
+
+    @Test fun followsTheReplyBeforeRestoreFinishes() = runBlocking {
+        // A sheet dismissed during a slow launch restore must already have its job: the follow comes before that wait.
+        val original = app.restored
+        val restoring = CompletableDeferred<Unit>()
+        app.restored = app.scope.launch { restoring.await() }
+        try {
+            val id = UUID.randomUUID()
+            val run = app.scope.async { TellCoach.run(app, "Synthetic toast", emptyList(), id) }
+            withTimeout(5_000) { while (id !in app.followed) delay(20) }
+            assertFalse(run.isCompleted)
+            restoring.complete(Unit)
+            assertEquals(TellCoachOutcome.Sent, withTimeout(10_000) { run.await() })
+        } finally {
+            restoring.complete(Unit)
+            app.restored = original
+        }
     }
 
     @Test fun photosAreSavedWithTheTurn() {
