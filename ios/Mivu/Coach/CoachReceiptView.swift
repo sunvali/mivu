@@ -17,11 +17,17 @@ struct CoachReceiptPresentation: Equatable {
     var committedItems: [String] {
         receipt.items.map { "\($0.name) · \($0.quantity.formatted(.number.grouping(.never))) \($0.unit)" }
     }
+    /// The write after the turn ID, so an undo of a delete never reads as the delete itself.
+    private static func write(_ key: String) -> Substring { key.split(separator: "/", maxSplits: 1).last ?? "" }
+    /// Decided by the receipt alone, so a card never vanishes while undo availability reloads.
+    static func showsCard(_ receipt: CoachCommittedReceipt) -> Bool {
+        receipt.mealID != nil || receipt.workoutID != nil || ["delete_weight/", "undo/"].contains { write(receipt.operationKey).hasPrefix($0) }
+    }
     /// A whole record the Coach deleted; its card only offers Undo.
-    var isRemoval: Bool { ["/delete_meal/", "/delete_weight/", "/delete_workout/"].contains { receipt.operationKey.contains($0) } }
+    var isRemoval: Bool { ["delete_meal/", "delete_weight/", "delete_workout/"].contains { Self.write(receipt.operationKey).hasPrefix($0) } }
     var committedStatus: String {
         if isRemoval { return "Removed" }
-        if receipt.operationKey.contains("/delete_photo/") { return "Photo removed" }
+        if Self.write(receipt.operationKey).hasPrefix("delete_photo/") { return "Photo removed" }
         return switch receipt.submissionState {
         case .saved: "Saved food"
         case .awaitingReview: "Estimate awaiting review"

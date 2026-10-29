@@ -694,7 +694,7 @@ struct CoachView: View {
                     Button("Try again") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
                 }
             }
-            ForEach(turn.receipts.filter { $0.mealID != nil || $0.workoutID != nil || coach.undoState($0) != nil }, id: \.operationKey) { receipt in
+            ForEach(turn.receipts.filter(CoachReceiptPresentation.showsCard), id: \.operationKey) { receipt in
                 CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt), undoState: coach.undoState(receipt),
                                  undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }

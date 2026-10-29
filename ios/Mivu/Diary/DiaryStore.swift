@@ -43,7 +43,8 @@ actor DiaryStore {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)
         return try pagedMutation(expectedProfileID) { database, head in
             let summary = try database.captureCoachSubmission(payload, expected: head, maximumBytes: maximumFileBytes)
-            try database.purgeDeletedUndo(now: currentTime(), newestTurnID: payload.submissionID)
+            // Housekeeping only: the capture is already durable and stale copies stay hidden on read.
+            try? database.purgeDeletedUndo(now: currentTime(), newestTurnID: payload.submissionID)
             return summary
         }
     }
@@ -130,7 +131,7 @@ actor DiaryStore {
                 try checkpoint(.beforeCommit, source)
             })
         }
-        try database.purgeDeletedUndo(now: currentTime())
+        try? database.purgeDeletedUndo(now: currentTime())
         let projection = try database.diaryReadModel(expectedProfileID: id)
         try database.validateFileIdentity()
         finishSubscribers(); profileSelectionEpoch &+= 1

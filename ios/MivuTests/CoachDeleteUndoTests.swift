@@ -229,4 +229,31 @@ private final class TestClock: @unchecked Sendable { var now = Date(timeInterval
         let receipt = try await deletedMeal(store, profile, meal)
         #expect(receipt.resultJSON.contains("\"undo_key\"") && receipt.resultJSON.contains("next message"))
     }
+
+    @Test func voiceUndoReceiptIsNotLabelledRemoved() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let deleted = DiaryDatabase.coachCommittedReceipt(try await deletedMeal(store, profile, meal))
+        let undone = DiaryDatabase.coachCommittedReceipt(try #require(try await voiceUndo(store, profile, deleted.operationKey).receipts.first))
+        #expect(CoachReceiptPresentation(receipt: deleted, target: .unavailable).committedStatus == "Removed")
+        #expect(CoachReceiptPresentation(receipt: undone, target: .loading).committedStatus != "Removed")
+        #expect(!CoachReceiptPresentation(receipt: undone, target: .loading).isRemoval)
+    }
+
+    @Test func removalCardsShowFromTheReceiptAlone() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let weight = try await store.setWeight(dayID: meal.dayID, value: 70, expectedRevision: nil, expectedProfileID: profile.id)
+        let receipt = DiaryDatabase.coachCommittedReceipt(try #require(try await coach(store, profile, [.deleteWeight(id: weight.id, revision: weight.revision)]).first))
+        #expect(CoachReceiptPresentation.showsCard(receipt))
+    }
+
+    @Test func captureSurvivesAFailedUndoPurge() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await deletedMeal(store, profile, meal)
+        try DiaryDatabase(url: root.appending(path: profile.id.uuidString + ".sqlite/diary.sqlite"))
+            .execute("CREATE TRIGGER block_purge BEFORE DELETE ON coach_undo_deleted BEGIN SELECT RAISE(ABORT, 'synthetic purge failure'); END")
+        clock.now += 601
+        _ = try await capturedTurn(store, text: "Next message", photos: [], at: clock.now, expectedProfileID: profile.id)
+        let reopened = DiaryStore(directory: root, currentTime: { [clock] in clock.now })
+        _ = try await reopened.selectPagedProfile(profile.id)
+    }
 }
