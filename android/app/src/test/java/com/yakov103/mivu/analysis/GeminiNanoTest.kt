@@ -29,8 +29,9 @@ class GeminiNanoTest {
         assertEquals(NanoStatus.available, GeminiNano.status { FeatureStatus.AVAILABLE })
         // AICore 606 FEATURE_NOT_FOUND: its configuration is still downloading.
         assertEquals(NanoStatus.preparing, GeminiNano.status { throw GenAiException(null, ErrorCode.NOT_AVAILABLE, Duration.ZERO, 606, 3) })
-        assertEquals(NanoStatus.unavailable, GeminiNano.status { throw GenAiException(null, ErrorCode.NOT_AVAILABLE, Duration.ZERO, 601, 4) })
-        // Not an AICore answer: the check failed and nothing is known.
+        // Only a returned UNAVAILABLE is an answer: any other error, transient or not, leaves the check unfinished.
+        assertEquals(null, GeminiNano.status { throw GenAiException(null, ErrorCode.NOT_AVAILABLE, Duration.ZERO, 601, 4) })
+        assertEquals(null, GeminiNano.status { throw GenAiException(null, ErrorCode.BUSY, Duration.ZERO, 0, 4) })
         assertEquals(null, GeminiNano.status { throw SecurityException("synthetic") })
     }
 

@@ -30,7 +30,8 @@ sealed interface PipLine {
                 else -> Problem("Something went wrong.", error, false)
             }
             if (processing) return Working(if (withPhotos) "Looking at your photo…" else "Counting that up…")
-            if (!connected) return Connect
+            // An on-device choice waiting for its Nano check never asks for ChatGPT.
+            if (!connected) return if (onDevice) Working("Waiting to start") else Connect
             if (typing) return null
             if (mealsLogged) return Say("Anything else to log?")
             return Say(when (hour) {

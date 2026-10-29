@@ -1,11 +1,15 @@
 package com.yakov103.mivu.connection
 
+import com.google.mlkit.genai.common.GenAiException
+import com.google.mlkit.genai.common.GenAiException.ErrorCode
 import com.yakov103.mivu.analysis.AvailableModel
+import com.yakov103.mivu.analysis.GeminiNano
 import com.yakov103.mivu.analysis.LocalTurn
 import com.yakov103.mivu.analysis.NutritionTable
 import com.yakov103.mivu.analysis.OnDeviceModel
 import com.yakov103.mivu.analysis.ResponsesClient
 import com.yakov103.mivu.coach.CoachTools
+import java.time.Duration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -65,6 +69,17 @@ class CoachProviderTest {
 
     @Test fun storedOnDeviceWaitsOnDeviceUntilTheNanoCheckReports() {
         val state = chatGPT.copy(storedProvider = CoachProvider.onDevice, savedRegistration = true)
+        assertEquals(CoachProvider.onDevice, state.provider)
+        assertFalse(state.canInfer)
+    }
+
+    @Test fun busyNanoCheckKeepsOnDeviceOverConnectedChatGPT() = runBlocking {
+        val c = connection(MemoryPreferences()).apply { choose(CoachProvider.onDevice) }
+        c.statusForTest = { GeminiNano.status { throw GenAiException(null, ErrorCode.BUSY, Duration.ZERO, 0, 4) } }
+        c.refreshNano()!!.join()
+        val state = c.state.value.copy(account = chatGPT.account, registrationID = chatGPT.registrationID,
+            models = chatGPT.models, selectedModel = chatGPT.selectedModel)
+        assertTrue(state.planAuthorized)
         assertEquals(CoachProvider.onDevice, state.provider)
         assertFalse(state.canInfer)
     }

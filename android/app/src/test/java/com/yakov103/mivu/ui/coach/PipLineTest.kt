@@ -32,6 +32,8 @@ class PipLineTest {
         assertNull(line(typing = true))
         assertEquals(PipLine.Working("Counting that up…"), line(typing = true, processing = true))
         assertEquals(PipLine.Connect, line(typing = true, connected = false))
+        // An on-device choice waiting for its Nano check never asks for ChatGPT.
+        assertEquals(PipLine.Working("Waiting to start"), line(connected = false, onDevice = true))
     }
 
     @Test fun workingNamesTheInput() {

@@ -31,7 +31,7 @@ sealed class OnDeviceFailure : Exception() {
 class GeminiNano : OnDeviceModel {
     private val client by lazy { Generation.getClient() }
 
-    /** The model's status, or null when the check failed without an answer from AICore. */
+    /** The model's status, or null when the check failed: only a returned UNAVAILABLE says the model is gone. */
     suspend fun status(): NanoStatus? = status { client.checkStatus() }
 
     /** Download progress 0..1; a failed download ends the flow with its error. */
@@ -89,7 +89,7 @@ class GeminiNano : OnDeviceModel {
             else -> OnDeviceFailure.Unavailable
         }
 
-        /** `checkStatus()` as a [NanoStatus]; an AICore error hides the option, and any other failure answers nothing (null). */
+        /** `checkStatus()` as a [NanoStatus]; a failed check, even BUSY or NOT_AVAILABLE, answers nothing (null) and is retried on return. */
         internal inline fun status(check: () -> Int): NanoStatus? = try {
             when (check()) {
                 FeatureStatus.AVAILABLE -> NanoStatus.available
@@ -101,7 +101,7 @@ class GeminiNano : OnDeviceModel {
             throw e
         } catch (e: GenAiException) {
             // AICore 606 FEATURE_NOT_FOUND: its configuration is still downloading, for minutes to hours.
-            if (e.aiCoreErrorCode == 606) NanoStatus.preparing else NanoStatus.unavailable
+            if (e.aiCoreErrorCode == 606) NanoStatus.preparing else null
         } catch (_: Exception) {
             null
         }
