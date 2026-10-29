@@ -78,7 +78,7 @@ struct CoachView: View {
         // The conversation scrolls behind Pip and the composer; the table insets its content by the composer's height.
         .overlay(alignment: .bottom) {
             if coach.diary.readModel != nil {
-                composer.fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 8) { queuedSiri; composer }.fixedSize(horizontal: false, vertical: true)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
             }
         }
@@ -386,6 +386,28 @@ struct CoachView: View {
         func body(content: Content) -> some View {
             content.font(.subheadline.weight(.semibold)).tint(Color.diaryAccent)
                 .frame(minHeight: 44, alignment: .leading).contentShape(.rect)
+        }
+    }
+    /// One Siri message saved while locked; it reaches the Coach only on Send.
+    @ViewBuilder private var queuedSiri: some View {
+        if let entry = coach.queuedSiri.first {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(coach.queuedSiri.count > 1 ? "From Siri while locked · \(coach.queuedSiri.count) waiting" : "From Siri while locked")
+                    .font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary)
+                Text("“\(entry.text)”").lineLimit(4)
+                Text(entry.capturedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Color.diarySecondary)
+                HStack {
+                    Spacer()
+                    Button(role: .destructive) { coach.discardQueued(entry) } label: { Text("Discard").frame(minWidth: 44, minHeight: 44) }
+                        .accessibilityIdentifier("discardQueuedSiri")
+                    Button { Task { await coach.sendQueued(entry) } } label: { Text("Send").frame(minWidth: 44, minHeight: 36) }
+                        .buttonStyle(.borderedProminent).accessibilityIdentifier("sendQueuedSiri")
+                }
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color.diarySummarySurface))
+            .padding(.horizontal, 16)
+            .accessibilityElement(children: .contain).accessibilityIdentifier("queuedSiri")
         }
     }
     private var composer: some View {

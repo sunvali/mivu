@@ -59,13 +59,13 @@ import Testing
         await f.services.coach.waitForWorker()
         #expect(try await turns(f).map(\.text) == ["Synthetic eggs"])
     }
-    @Test func unlockedDrainsInboxFirst() async throws {
+    @Test func unlockedLeavesLockedQueueForApproval() async throws {
         let f = try await fixture(); defer { f.clean() }
         try f.inbox.add(CoachInbox.Entry(id: UUID(), profileID: f.profileID, text: "Synthetic toast", capturedAt: Date(timeIntervalSinceNow: -60)))
         _ = await run("Synthetic eggs", f)
         await f.services.coach.waitForWorker()
-        #expect(f.inbox.entries().isEmpty)
-        #expect(try await turns(f).map(\.text) == ["Synthetic toast", "Synthetic eggs"])
+        #expect(f.inbox.entries().map(\.text) == ["Synthetic toast"])
+        #expect(try await turns(f).map(\.text) == ["Synthetic eggs"])
     }
     @Test func foregroundRunOnlyResumes() async throws {
         let f = try await fixture(); defer { f.clean() }

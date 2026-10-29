@@ -395,15 +395,27 @@ private final class CoachNavigationReadFence: Sendable {
         captureNeedsProcessing = true
         resume()
     }
-    /// Captures the selected profile's inbox entries, oldest first; each is removed only after its capture is saved.
-    func drainInbox(_ inbox: CoachInbox) async {
-        guard let owner = diary.selection?.identity.profileID else { return }
-        for entry in inbox.entries() where entry.profileID == owner {
-            do {
-                try await captureExternal(profileID: entry.profileID, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
-                try inbox.remove(entry.id)
-            } catch { return }
-        }
+    /// Siri text saved while the phone was locked; it reaches the Coach only after the person sends it.
+    private var waitingSiri: [CoachInbox.Entry] = []
+    /// Follows the selected profile, so a profile switch never shows another diary's message.
+    var queuedSiri: [CoachInbox.Entry] { waitingSiri.filter { $0.profileID == diary.selection?.identity.profileID } }
+    var inbox: CoachInbox?
+    func loadQueuedSiri() {
+        guard let inbox, !diary.profiles.isEmpty else { waitingSiri = []; return }
+        let profiles = Set(diary.profiles.map(\.id))
+        for entry in inbox.entries() where !profiles.contains(entry.profileID) { try? inbox.remove(entry.id) }
+        waitingSiri = inbox.entries()
+    }
+    /// The entry ID is the submission ID, so a send after a crash reconciles instead of saving twice.
+    func sendQueued(_ entry: CoachInbox.Entry) async {
+        do {
+            try await captureExternal(profileID: entry.profileID, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
+            try inbox?.remove(entry.id)
+        } catch { errorMessage = "Could not save on this iPhone. Your input is still here." }
+        loadQueuedSiri()
+    }
+    func discardQueued(_ entry: CoachInbox.Entry) {
+        try? inbox?.remove(entry.id); loadQueuedSiri()
     }
     func resume() {
         if let receipt = diary.captureReceipt, let owner = diary.selection, !diary.isChangingProfile,
