@@ -2,7 +2,7 @@
 
 For App Review (Guideline 5.2.2) and anyone checking how Mivu uses a person's
 ChatGPT plan. Code links point to the released source, tag
-[`v1.1.3`](https://github.com/sunvali/mivu/tree/v1.1.3) (`8dc3a327`).
+[`v1.2.0`](https://github.com/sunvali/mivu/tree/v1.2.0) (`594e8aae`).
 
 ## Why no separate approval from OpenAI is needed
 
@@ -26,24 +26,36 @@ Mivu matches the open-source, locally hosted case:
 - **Not paid:** Mivu is free, with no in-app purchases, subscriptions, ads or
   purchase links.
 
+### Check it yourself
+
+- GitHub shows the license as AGPL-3.0 on the
+  [repository page](https://github.com/sunvali/mivu); the full text is in
+  [LICENSE](../../LICENSE).
+- The submitted build is version 1.2.0, built from tag
+  [`v1.2.0`](https://github.com/sunvali/mivu/releases/tag/v1.2.0).
+- The app talks only to `auth.openai.com` (sign-in), `api.openai.com` (requests)
+  and, if the person adds their own key, `api.nal.usda.gov`. It links to
+  `chatgpt.com/settings/usage` (Manage usage) and `mivuapp.com` (privacy policy).
+  There is no Mivu server.
+
 ## Following OpenAI's flow and guidelines
 
 | Requirement | Where Mivu does it |
 |---|---|
-| First registration through `dynamic_agent_client` with `agent_name_hint=Mivu`, then the issued client ID | [OAuthAttempt.swift:43-56](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/OAuthAttempt.swift#L43-L56) |
-| Persisted host ID (`ext_agent_host_id`) | [OAuthAttempt.swift:44](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/OAuthAttempt.swift#L44) |
-| Exactly the documented scopes and `resource=https://api.openai.com/v1` | [OAuthAttempt.swift:47-48](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/OAuthAttempt.swift#L47-L48) |
-| Use the plan only when `chatgpt.tokens.use.direct` was granted | [Credentials.swift:24](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/Credentials.swift#L24) |
-| PKCE with S256 | [OAuthAttempt.swift:51-52](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/OAuthAttempt.swift#L51-L52) |
-| Loopback callback on `127.0.0.1` | [LoopbackCallback.swift:24-36](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/LoopbackCallback.swift#L24-L36) |
-| Validate state, nonce and the ID token | [AuthSession.swift:41-74](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/AuthSession.swift#L41-L74) |
-| Protect credentials (Keychain, this device only) | [CredentialStore.swift:30](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/CredentialStore.swift#L30) |
-| Responses API with `store: false` and `stream: true` | [ResponsesClient.swift:153](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Analysis/ResponsesClient.swift#L153) |
-| Label the action "Continue with ChatGPT" | [ChatGPTConnectButton.swift:20](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/ChatGPTConnectButton.swift#L20) |
-| One-time "You're using your ChatGPT plan" notice with "Got it" | [TodayView.swift:203-205](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Diary/TodayView.swift#L203-L205) |
-| "Using ChatGPT plan" with "Manage usage" near the composer | [CoachView.swift:434-435](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Coach/CoachView.swift#L434-L435) |
-| "Manage usage" link in Settings | [SettingsView.swift:242](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Diary/SettingsView.swift#L242) |
-| Usage-limit message points to Manage usage | [ChatGPTConnection.swift:23](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/ChatGPTConnection.swift#L23) |
+| First registration through `dynamic_agent_client` with `agent_name_hint=Mivu`, then the issued client ID | [OAuthAttempt.swift:43-56](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/OAuthAttempt.swift#L43-L56) |
+| Persisted host ID (`ext_agent_host_id`) | [OAuthAttempt.swift:44](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/OAuthAttempt.swift#L44) |
+| Exactly the documented scopes and `resource=https://api.openai.com/v1` | [OAuthAttempt.swift:47-48](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/OAuthAttempt.swift#L47-L48) |
+| Use the plan only when `chatgpt.tokens.use.direct` was granted | [Credentials.swift:24](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/Credentials.swift#L24) |
+| PKCE with S256 | [OAuthAttempt.swift:51-52](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/OAuthAttempt.swift#L51-L52) |
+| Loopback callback on `127.0.0.1` | [LoopbackCallback.swift:24-36](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/LoopbackCallback.swift#L24-L36) |
+| Validate state, nonce and the ID token | [AuthSession.swift:41-74](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/AuthSession.swift#L41-L74) |
+| Protect credentials (Keychain, this device only) | [CredentialStore.swift:30](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/CredentialStore.swift#L30) |
+| Responses API with `store: false` and `stream: true` | [ResponsesClient.swift:153](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Analysis/ResponsesClient.swift#L153) |
+| Label the action "Continue with ChatGPT" | [ChatGPTConnectButton.swift:20](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/ChatGPTConnectButton.swift#L20) |
+| One-time "You're using your ChatGPT plan" notice with "Got it" | [TodayView.swift:206-208](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Diary/TodayView.swift#L206-L208) |
+| "Using ChatGPT plan" with "Manage usage" near the composer | [CoachView.swift:456-457](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Coach/CoachView.swift#L456-L457) |
+| "Manage usage" link in Settings | [SettingsView.swift:242](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Diary/SettingsView.swift#L242) |
+| Usage-limit message points to Manage usage | [ChatGPTConnection.swift:23](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/ChatGPTConnection.swift#L23) |
 
 OpenAI's guides: [UI/UX guidelines](https://developers.openai.com/siwc/ui-ux-guidelines),
 [registration and sign-in](https://developers.openai.com/siwc/token-sharing-open-source/sign-in),
@@ -53,7 +65,7 @@ OpenAI's guides: [UI/UX guidelines](https://developers.openai.com/siwc/ui-ux-gui
 
 Before sign-in, Mivu names OpenAI and the data it sends, and nothing is shared
 until the person agrees
-([OpenAIConsent.swift:23-27](https://github.com/sunvali/mivu/blob/8dc3a3279b0664a20ff039a0b168bac85384d7f3/ios/Mivu/Connection/OpenAIConsent.swift#L23-L27)).
+([OpenAIConsent.swift:23-27](https://github.com/sunvali/mivu/blob/594e8aaeff620b68d55288f07c2e8ed4cf81b284/ios/Mivu/Connection/OpenAIConsent.swift#L23-L27)).
 The same screen says food searches go to USDA FoodData Central only if the
 person adds their own USDA key. The diary stays on the iPhone. The person can
 disconnect at any time in Settings, and a Coach reply can be reported with
