@@ -256,4 +256,27 @@ private final class TestClock: @unchecked Sendable { var now = Date(timeInterval
         let reopened = DiaryStore(directory: root, currentTime: { [clock] in clock.now })
         _ = try await reopened.selectPagedProfile(profile.id)
     }
+
+    @Test func historyMarksMealsDeletedSince() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await capturedTurn(store, text: "Synthetic apple", photos: [], at: clock.now, expectedProfileID: profile.id)
+        let apple = FoodItem(name: "Apple", quantity: 1, unit: "piece", nutrition: NutritionValues(kcal: 95), provenance: .estimate, reference: "Synthetic")
+        let logged = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID), items: [apple], expectedProfileID: profile.id)
+        let appleID = try #require(logged.mealID)
+        try await store.deleteMeal(appleID, expectedProfileID: profile.id)
+        let next = try await capturedTurn(store, text: "Make it bigger", photos: [], at: clock.now, expectedProfileID: profile.id)
+        let line = try #require(try await store.coachContext(turnID: next.id, expectedProfileID: profile.id).recentTurns.compactMap(\.receipts).first { $0.contains(appleID.uuidString) })
+        #expect(line.contains("meal=\(appleID.uuidString) deleted"))
+        #expect(meal.id != appleID)
+    }
+
+    @Test func historyLeavesLiveMealsUnmarked() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await capturedTurn(store, text: "Synthetic apple", photos: [], at: clock.now, expectedProfileID: profile.id)
+        let apple = FoodItem(name: "Apple", quantity: 1, unit: "piece", nutrition: NutritionValues(kcal: 95), provenance: .estimate, reference: "Synthetic")
+        _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID), items: [apple], expectedProfileID: profile.id)
+        let next = try await capturedTurn(store, text: "Make it bigger", photos: [], at: clock.now, expectedProfileID: profile.id)
+        let lines = try await store.coachContext(turnID: next.id, expectedProfileID: profile.id).recentTurns.compactMap(\.receipts)
+        #expect(!lines.isEmpty && lines.allSatisfy { !$0.contains("deleted") })
+    }
 }
