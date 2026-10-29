@@ -473,7 +473,7 @@ import XCTest
         let photo = app.buttons["viewMealPhoto"].firstMatch
         reveal(photo, in: app); photo.tap()
         XCTAssertTrue(app.navigationBars["Meal photo"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Photo timing: Unspecified"].exists)
+        XCTAssertFalse(app.staticTexts["Photo timing: Unspecified"].exists, "No timing line for a photo without one")
         app.buttons["zoomInPhoto"].tap()
         XCTAssertEqual(app.staticTexts["photoZoomLevel"].label, "200%")
         app.scrollViews["mealPhotoZoom"].doubleTap()

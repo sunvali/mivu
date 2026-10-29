@@ -52,8 +52,7 @@ struct MealDetailView: View {
                                     }.buttonStyle(.plain).accessibilityLabel("Meal photo")
                                         .accessibilityHint("Open full-screen photo viewer").accessibilityIdentifier("viewMealPhoto")
                                     HStack {
-                                        Text(photo.role == .before ? "Before eating" : photo.role == .after ? "After eating" : "Timing unspecified")
-                                            .font(.caption).foregroundStyle(Color.diarySecondary)
+                                        if let timing = photo.role.timing { Text(timing).font(.caption).foregroundStyle(Color.diarySecondary) }
                                         Spacer()
                                         Button("Delete photo", role: .destructive) { deletion = .photo(photo.photoID) }.frame(minHeight: 44)
                                     }
@@ -745,7 +744,6 @@ private struct MealPhotoViewer: View {
     @State private var zoom: CGFloat = 1
     @State private var showDelete = false
     @State private var deleting = false
-    private var timing: String { photo.role == .before ? "Before eating" : photo.role == .after ? "After eating" : "Unspecified" }
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -755,7 +753,7 @@ private struct MealPhotoViewer: View {
                     ContentUnavailableView("Photo unavailable", systemImage: "photo", description: Text("The saved attachment could not be displayed."))
                 }
                 VStack(spacing: 8) {
-                    Text("Photo timing: \(timing)").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    if let timing = photo.role.timing { Text("Photo timing: \(timing)").font(.subheadline).foregroundStyle(Color.diarySecondary) }
                     HStack(spacing: 20) {
                         Button { zoom = max(1, zoom - 1) } label: { Image(systemName: "minus.magnifyingglass").frame(minWidth: 44, minHeight: 44) }
                             .accessibilityLabel("Zoom out").accessibilityIdentifier("zoomOutPhoto").disabled(zoom <= 1)
@@ -853,4 +851,9 @@ final class PhotoScrollView: UIScrollView {
         let x = max(0, (bounds.width - contentSize.width) / 2), y = max(0, (bounds.height - contentSize.height) / 2)
         if contentInset != UIEdgeInsets(top: y, left: x, bottom: y, right: x) { contentInset = UIEdgeInsets(top: y, left: x, bottom: y, right: x) }
     }
+}
+
+extension PhotoRole {
+    /// Shown only when the owner chose before or after; most photos have no timing.
+    var timing: String? { self == .before ? "Before eating" : self == .after ? "After eating" : nil }
 }
