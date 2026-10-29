@@ -331,8 +331,8 @@ extension DiaryTransaction {
         let before = sqlite3_column_type(statement, 2) == SQLITE_NULL ? nil : try JSONDecoder().decode([FoodItem].self, from: database.mutationBlob(statement, 2))
         return (mealID, Int(sqlite3_column_int64(statement, 1)), try database.mutationText(statement, 4), before, sqlite3_column_int64(statement, 3) != 0)
     }
-    func coachUndoState(_ key: String) throws -> CoachUndoState? {
-        if let held = try deletedUndoState(key) { return held }
+    func coachUndoState(_ key: String, now: Date) throws -> CoachUndoState? {
+        if try database.mutationInteger("SELECT COUNT(*) FROM coach_undo_deleted WHERE operationKey = ?", [.text(key)]) == 1 { return try deletedUndoState(key, now: now) }
         guard let undo = try coachUndo(key) else { return nil }
         if undo.undone { return .undone }
         do { return try undoState(undo.mealID) == undo.afterState ? .available : nil } catch DiaryError.notFound { return nil }

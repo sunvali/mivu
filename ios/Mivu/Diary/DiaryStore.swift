@@ -41,7 +41,11 @@ actor DiaryStore {
     func captureCoachSubmission(_ payload: CoachSubmissionPayload, expectedSelection: DiarySelectionOwnership,
                                 expectedProfileID: UUID) throws -> CoachExchangeSummary {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)
-        return try pagedMutation(expectedProfileID) { try $0.captureCoachSubmission(payload, expected: $1, maximumBytes: maximumFileBytes) }
+        return try pagedMutation(expectedProfileID) { database, head in
+            let summary = try database.captureCoachSubmission(payload, expected: head, maximumBytes: maximumFileBytes)
+            try database.purgeDeletedUndo(now: currentTime(), newestTurnID: payload.submissionID)
+            return summary
+        }
     }
     func reconcileCoachCapture(submissionID: UUID, expectedManifest: CoachSubmissionManifest,
                                expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws -> CoachCaptureReconciliation {
@@ -126,6 +130,7 @@ actor DiaryStore {
                 try checkpoint(.beforeCommit, source)
             })
         }
+        try database.purgeDeletedUndo(now: currentTime())
         let projection = try database.diaryReadModel(expectedProfileID: id)
         try database.validateFileIdentity()
         finishSubscribers(); profileSelectionEpoch &+= 1
@@ -491,7 +496,7 @@ actor DiaryStore {
         return try database.domainRead(expectedProfileID: expectedProfileID) { head in
             let transaction = DiaryTransaction(database: database, head: head)
             var states: [String: CoachUndoState] = [:]
-            for key in keys { states[key] = try transaction.coachUndoState(key) }
+            for key in keys { states[key] = try transaction.coachUndoState(key, now: currentTime()) }
             return states
         }
     }

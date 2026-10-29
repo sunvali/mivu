@@ -56,6 +56,43 @@ private final class TestClock: @unchecked Sendable { var now = Date(timeInterval
         for receipt in receipts { #expect(try await available(store, profile, receipt)) }
     }
 
+    private func heldCount(_ root: URL, _ profile: DiaryProfile) throws -> Int {
+        try DiaryDatabase(url: root.appending(path: profile.id.uuidString + ".sqlite/diary.sqlite")).mutationInteger("SELECT COUNT(*) FROM coach_undo_deleted")
+    }
+    private func deletedMeal(_ store: DiaryStore, _ profile: DiaryProfile, _ meal: DiaryMeal) async throws -> CoachReceipt {
+        try #require(try await coach(store, profile, [.manual(.deleteMeal(mealID: meal.id, revision: meal.revision))]).first)
+    }
+
+    @Test func undoExpiresAfterTenMinutes() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let receipt = try await deletedMeal(store, profile, meal)
+        clock.now += 601
+        #expect(try await available(store, profile, receipt) == false)
+        let reopened = DiaryStore(directory: root, currentTime: { [clock] in clock.now })
+        _ = try await reopened.selectPagedProfile(profile.id)
+        #expect(try heldCount(root, profile) == 0)
+    }
+
+    @Test func buttonHidesAfterNextMessageButRowSurvivesOneTurn() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let receipt = try await deletedMeal(store, profile, meal)
+        _ = try await capturedTurn(store, text: "Next message", photos: [], at: clock.now, expectedProfileID: profile.id)
+        #expect(try await available(store, profile, receipt) == false)
+        #expect(try heldCount(root, profile) == 1)
+        _ = try await capturedTurn(store, text: "Message after that", photos: [], at: clock.now, expectedProfileID: profile.id)
+        #expect(try heldCount(root, profile) == 0)
+    }
+
+    @Test func deletingProfileRemovesHeldBytes() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await deletedMeal(store, profile, meal)
+        let other = DiaryProfile(name: "Synthetic second")
+        _ = try await store.createProfile(other)
+        let file = root.appending(path: profile.id.uuidString + ".sqlite")
+        try await store.deleteProfile(profile.id)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
     @Test func undoOfLoggedMealHoldsSnapshot() async throws {
         let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Synthetic apple", photos: [], at: clock.now, expectedProfileID: profile.id)
