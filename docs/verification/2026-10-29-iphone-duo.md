@@ -59,3 +59,10 @@ Xcode 27.1, iPhoneOS27.1.sdk, local `xcodebuild -testPlan Mivu SWIFT_VERSION=6.0
 - Coach timeline rows stay 84 pt narrower than the composer in Book pose and sideways; three fixes failed and were reverted.
 - Progress's chart card is taller than the standing half in table pose, so its bars need a scroll.
 - The crease split has no automated test because a forced posture has no real crease.
+
+**After review, source f739d4f6**
+
+- The independent review found nothing blocking and no path that changes a normal iPhone. Its two cheap findings were fixed: the shutter is disabled during the table timer, which re-checks before firing, and a later change clears the live-day highlight. There's no automated test for the timer race, because the simulator has no camera.
+- Duo table pose: `DuoLayoutUITests` 7 passed, 1 skipped. Book pose: `DuoLayoutTests` + `DuoLayoutUITests` passed, with 4 upright-only skips, 0 failed.
+- iPhone 17, iOS 27.0: `SmokeUITests`, `RootTabNavigationUITests` and `QuickLogUITests`: 6 passed.
+- Deferred, cosmetic and Duo only: entering or leaving table pose drops keyboard focus (the draft stays), and switching Progress or Today layouts resets scroll position.
