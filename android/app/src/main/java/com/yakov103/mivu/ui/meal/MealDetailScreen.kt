@@ -38,6 +38,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
@@ -253,7 +254,11 @@ fun MealDetailScreen(
                 }
                 item(key = "foodsHeader") { SectionHeader("Foods") }
                 item(key = "foods") {
-                    FoodsCard(meal, busy, onEdit = { viewModel.edit(it, meal.revision, null) }, onAskPip = { onAskPip(askFood(meal, it, state.day)) }, onDelete = { deletion = Deletion.Food(it, meal.revision) })
+                    FoodsCard(meal, busy, onEdit = { viewModel.edit(it, meal.revision, null) }, onAskPip = { onAskPip(askFood(meal, it, state.day)) }, onDelete = {
+                        // A meal's only food deletes the meal, as the food editor does.
+                        deletion = if (meal.items.size > 1) Deletion.Food(it, meal.revision)
+                        else Deletion.Meal(meal.revision, mealTitle(meal), state.day?.localDate.orEmpty())
+                    })
                 }
                 if (meal.revision > 0 && !meal.hasUnresolvedInput) item(key = "add") {
                     FilledTonalButton(onAddFoodManually, Modifier.padding(horizontal = Gutter).heightIn(min = 48.dp).testTag("addFoodManually")) {
@@ -492,18 +497,22 @@ private fun AttachedPhoto(photo: MealPhoto, busy: Boolean, load: suspend (UUID) 
     }
 }
 
-/** The saved foods in one card; each row swipes left to delete (saved meals with more than one food) and right to Ask Pip. */
+/**
+ * The saved foods in one card; each row has a Delete button (saved meals) and swipes left to delete (more than one food) and
+ * right to Ask Pip.
+ */
 @Composable
 private fun FoodsCard(meal: DiaryMeal, busy: Boolean, onEdit: (FoodItem) -> Unit, onAskPip: (FoodItem) -> Unit, onDelete: (FoodItem) -> Unit) {
     WhiteCard(Modifier.padding(horizontal = Gutter)) {
         Column {
             if (meal.items.isEmpty()) Text("No saved items yet", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            val canDelete = meal.items.size > 1 && meal.state == SubmissionState.saved && !busy
+            val saved = meal.state == SubmissionState.saved
+            val canSwipe = meal.items.size > 1 && saved && !busy
             meal.items.forEachIndexed { index, item ->
                 key(item.id) {
                     if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                    FoodRow(item, canDelete, { onEdit(item) }, { onAskPip(item) }, { onDelete(item) })
+                    FoodRow(item, canSwipe, saved && !busy, { onEdit(item) }, { onAskPip(item) }, { onDelete(item) })
                 }
             }
         }
@@ -511,7 +520,7 @@ private fun FoodsCard(meal: DiaryMeal, busy: Boolean, onEdit: (FoodItem) -> Unit
 }
 
 @Composable
-private fun FoodRow(item: FoodItem, canDelete: Boolean, onEdit: () -> Unit, onAskPip: () -> Unit, onDelete: () -> Unit) {
+private fun FoodRow(item: FoodItem, canDelete: Boolean, canRemove: Boolean, onEdit: () -> Unit, onAskPip: () -> Unit, onDelete: () -> Unit) {
     val swipe = rememberSwipeToDismissBoxState()
     val scope = rememberCoroutineScope()
     SwipeToDismissBox(
@@ -567,6 +576,9 @@ private fun FoodRow(item: FoodItem, canDelete: Boolean, onEdit: () -> Unit, onAs
                 colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MivuTheme.colors.summarySurface,
                     contentColor = MaterialTheme.colorScheme.primary)) {
                 Icon(painterResource(R.drawable.ic_auto_awesome), contentDescription = "Ask Pip about ${item.name}")
+            }
+            if (canRemove) IconButton(onDelete, Modifier.size(48.dp).testTag("deleteFoodRow")) {
+                Icon(painterResource(R.drawable.ic_delete), contentDescription = "Delete ${item.name}", tint = MaterialTheme.colorScheme.error)
             }
         }
     }

@@ -30,7 +30,10 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.test.core.app.ApplicationProvider
@@ -99,6 +102,30 @@ class TodayScreenTest {
             .assert(hasContentDescription("Day actions, ", substring = true))
         compose.onNodeWithTag("todayDayActions").performClick()
         compose.onNodeWithTag("startNewDay").assertIsDisplayed()
+    }
+
+    @Test fun longPressingAMealDeletesItOnlyAfterConfirmation() {
+        TodayFixture.seed(context, photo = false)
+        launch()
+        waitFor("mealRow")
+        compose.onAllNodesWithTag("mealRow")[0].performTouchInput { longClick() }
+        compose.onNodeWithText("Delete this meal?").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onAllNodesWithTag("mealRow").assertCountEquals(2)
+        compose.onAllNodesWithTag("mealRow")[0].performTouchInput { longClick() }
+        compose.onNodeWithTag("confirmDeleteMealRow").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("mealRow").fetchSemanticsNodes().size == 1 }
+    }
+
+    @Test fun swipingAMealAsksBeforeDeletingAndKeepsTheRow() {
+        TodayFixture.seed(context, photo = false)
+        launch()
+        waitFor("mealRow")
+        compose.onAllNodesWithTag("mealRow")[0].performTouchInput { swipeLeft() }
+        compose.onNodeWithText("Delete this meal?").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.waitForIdle()
+        compose.onAllNodesWithTag("mealRow").assertCountEquals(2)
     }
 
     @Test fun failedReadOffersTryAgainAndKeepsTheLastGoodDay() {

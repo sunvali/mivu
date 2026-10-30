@@ -29,6 +29,7 @@ import com.yakov103.mivu.diary.WeightEntry
 import com.yakov103.mivu.diary.WorkoutSession
 import com.yakov103.mivu.diary.dailyProgress
 import com.yakov103.mivu.diary.diaryDateLabel
+import com.yakov103.mivu.diary.deleteMeal
 import com.yakov103.mivu.diary.moveMeal
 import com.yakov103.mivu.diary.wakingDayTitle
 import com.yakov103.mivu.diary.nutritionTotals
@@ -248,6 +249,17 @@ class TodayViewModel(private val repository: DiaryRepository, val profileID: UUI
             val start = { db.startDay(Instant.now(), db.head().revision) }
             try {
                 try { start() } catch (_: DiaryError.StaleRevision) { start() }
+            } catch (e: Exception) {
+                _messages.send("Could not complete action. ${failureMessage(e)}")
+            }
+        }
+    }
+
+    /** The row's swipe or long-press delete, once confirmed. */
+    fun deleteMeal(meal: DiaryMeal) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.database(profileID).deleteMeal(meal)
             } catch (e: Exception) {
                 _messages.send("Could not complete action. ${failureMessage(e)}")
             }

@@ -31,7 +31,9 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
@@ -146,6 +148,17 @@ class DiaryScreenTest {
         // A skipped day with no meals.
         pill(seeded.today.minusDays(2)).performClick()
         waitForText("No meals recorded for this day.")
+    }
+
+    @Test fun longPressingAHistoryMealDeletesItAfterConfirmation() {
+        val seeded = launchDiary()
+        pill(seeded.today.minusDays(1)).performClick()
+        waitForText("Oat porridge")
+        val before = compose.onAllNodesWithTag("historyMeal").fetchSemanticsNodes().size
+        compose.onAllNodesWithTag("historyMeal").onFirst().performScrollTo().performTouchInput { longClick() }
+        compose.onNodeWithText("Delete this meal?").assertIsDisplayed()
+        compose.onNodeWithTag("confirmDeleteMealRow").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("historyMeal").fetchSemanticsNodes().size == before - 1 }
     }
 
     @Test fun askPipQuotesTheRecordedDay() {

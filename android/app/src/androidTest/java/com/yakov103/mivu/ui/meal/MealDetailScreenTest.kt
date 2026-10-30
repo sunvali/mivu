@@ -8,6 +8,8 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.assertIsDisplayed
@@ -27,6 +29,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import com.yakov103.mivu.analysis.MealAnalysisWorker
@@ -162,6 +165,31 @@ class MealDetailScreenTest {
         compose.onNodeWithTag("confirmDeleteFood").performClick()
         waitGone(hasText("Blueberries"))
         assertEquals(listOf("Greek yogurt"), meal(meal.id)!!.items.map { it.name })
+    }
+
+    @Test fun foodRowDeleteButtonConfirmsAndRemovesTheFood() {
+        val meal = savedMeal(food("Greek yogurt", 190.0, 17.0, 8.0, 5.0), food("Blueberries", 46.0, 0.6, 11.5, 0.3))
+        open(meal.id)
+        waitFor(hasText("Blueberries"))
+        compose.onNodeWithContentDescription("Delete Blueberries").performScrollTo().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
+        waitFor(isDialog())
+        compose.onNodeWithText("Delete Blueberries?").assertIsDisplayed()
+        compose.onNodeWithTag("confirmDeleteFood").performClick()
+        waitGone(hasText("Blueberries"))
+        assertEquals(listOf("Greek yogurt"), meal(meal.id)!!.items.map { it.name })
+    }
+
+    @Test fun foodRowDeleteButtonOnTheOnlyFoodAsksToDeleteTheMeal() {
+        val meal = savedMeal(food("Greek yogurt", 190.0, 17.0, 8.0, 5.0))
+        open(meal.id)
+        waitFor(hasText("Greek yogurt") and isHeading())
+        compose.onNodeWithContentDescription("Delete Greek yogurt").performScrollTo().performClick()
+        val date = db().read { it.day(meal.dayID)!!.localDate }
+        waitFor(isDialog())
+        compose.onNodeWithText("Delete “Greek yogurt” on $date?").assertIsDisplayed()
+        compose.onNodeWithTag("confirmDeleteMeal").performClick()
+        compose.waitUntil(10_000) { wentBack }
+        assertNull(meal(meal.id))
     }
 
     @Test fun deleteFoodHiddenForSingleFood() {

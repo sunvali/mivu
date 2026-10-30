@@ -58,7 +58,7 @@ import com.yakov103.mivu.ui.coach.AskPip
 import com.yakov103.mivu.ui.progress.title
 import com.yakov103.mivu.diary.WorkoutSession
 import com.yakov103.mivu.ui.theme.MivuTheme
-import com.yakov103.mivu.ui.today.MealRow
+import com.yakov103.mivu.ui.today.MealCard
 import com.yakov103.mivu.ui.today.WhiteCard
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -169,9 +169,7 @@ private fun DiaryContent(state: DiaryUiState, viewModel: DiaryViewModel, onOpenM
                     }
                 }
                 items(detail.meals, key = { it.id }) { meal ->
-                    WhiteCard(padded.testTag("historyMeal"), onClick = { onOpenMeal(meal.id) }) {
-                        MealRow(meal, viewModel::photoBytes, Modifier.padding(16.dp))
-                    }
+                    MealCard(meal, viewModel::photoBytes, { onOpenMeal(meal.id) }, viewModel::deleteMeal, padded.testTag("historyMeal"))
                 }
                 if (detail.workouts.isNotEmpty()) {
                     item(key = "workoutsHeader") { SectionHeader("Workouts", padded) }

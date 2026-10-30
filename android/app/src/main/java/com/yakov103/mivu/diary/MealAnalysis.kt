@@ -96,6 +96,12 @@ internal fun DiaryDatabase.Tx.commitDirectEdit(meal: DiaryMeal, items: List<Food
 /** iOS `deleteMeal`; the store's meal delete repairs the Coach turns that use its photos. */
 fun DiaryDatabase.deleteMeal(mealID: UUID, expectedRevision: Long) = transaction(expectedRevision) { it.deleteMeal(mealID) }
 
+/** A person's delete of [meal] as they saw it, refused once it changed. Permanent: only Coach deletes can be undone. */
+fun DiaryDatabase.deleteMeal(meal: DiaryMeal) = atHead { tx ->
+    if (tx.mealRecord(meal.id).revision != meal.revision) throw DiaryError.StaleRevision
+    tx.deleteMeal(meal.id)
+}
+
 internal fun DiaryDatabase.Tx.deleteMeal(mealID: UUID) {
     mealRecord(mealID)
     delete(DiaryDatabase.Tombstone.meal, mealID)

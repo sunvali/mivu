@@ -15,7 +15,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +46,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +60,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
@@ -78,6 +84,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yakov103.mivu.R
+import com.yakov103.mivu.ui.meal.ConfirmDelete
+import kotlinx.coroutines.launch
 import com.yakov103.mivu.diary.DiaryMeal
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.layout.LayoutBoundsHolder
@@ -148,7 +156,9 @@ fun TodayScreen(
                         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
                 if (state.meals.isEmpty()) item(key = "empty") { FirstMealCard() }
-                items(state.meals, key = { it.id }) { meal -> MealCard(meal, viewModel::photoBytes, onOpenMeal) }
+                items(state.meals, key = { it.id }) { meal ->
+                    MealCard(meal, viewModel::photoBytes, onOpenMeal?.let { { it(meal.id) } }, viewModel::deleteMeal, Modifier.testTag("mealRow"))
+                }
                 item(key = "weight") { WeightRow(state.weight, onAddWeight) }
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = Gutter))
@@ -382,20 +392,50 @@ private fun FirstMealCard() {
     }
 }
 
+/**
+ * A meal row on Today and in the Diary: tap opens it, and swipe left or long-press deletes it behind the same confirmation
+ * meal detail uses (iOS MealRowDeletion). A manual delete stays permanent, with no Undo.
+ */
 @Composable
-private fun MealCard(meal: DiaryMeal, loadPhoto: suspend (UUID, UUID) -> ByteArray?, onOpenMeal: ((UUID) -> Unit)?) {
-    WhiteCard(Modifier.testTag("mealRow"), onClick = onOpenMeal?.let { { it(meal.id) } }) {
-        MealRow(meal, loadPhoto, Modifier.padding(16.dp))
+internal fun MealCard(meal: DiaryMeal, loadPhoto: suspend (UUID, UUID) -> ByteArray?, onOpen: (() -> Unit)?, onDelete: (DiaryMeal) -> Unit, modifier: Modifier = Modifier) {
+    var confirming by remember { mutableStateOf(false) }
+    val swipe = rememberSwipeToDismissBoxState()
+    val scope = rememberCoroutineScope()
+    SwipeToDismissBox(
+        swipe,
+        backgroundContent = {
+            // Only while swiping: the card is the row, so nothing shows behind it at rest.
+            if (swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart) Row(
+                Modifier.fillMaxSize().clip(CardShape).background(MaterialTheme.colorScheme.error).padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Icon(painterResource(R.drawable.ic_delete), contentDescription = null, tint = MaterialTheme.colorScheme.onError)
+                Spacer(Modifier.size(8.dp))
+                Text("Delete", color = MaterialTheme.colorScheme.onError, style = MaterialTheme.typography.labelLarge)
+            }
+        },
+        enableDismissFromStartToEnd = false,
+        onDismiss = { scope.launch { swipe.reset() }; confirming = true }, // the row stays until the person confirms
+    ) {
+        WhiteCard(modifier, onClick = onOpen, onLongClick = { confirming = true }) { MealRow(meal, loadPhoto, Modifier.padding(16.dp)) }
     }
+    if (confirming) ConfirmDelete("Delete this meal?", "This removes the meal and its attached photos from this diary.", "Delete meal",
+        "confirmDeleteMealRow", { confirming = false; onDelete(meal) }, { confirming = false })
 }
 
 /** iOS diarySummaryCard on Android: a white card with a hairline edge instead of a shadow. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun WhiteCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+internal fun WhiteCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
     val m = modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CardShape)
     val color = MaterialTheme.colorScheme.surface
-    if (onClick != null) Surface(onClick, m, shape = CardShape, color = color, content = content)
-    else Surface(m, shape = CardShape, color = color, content = content)
+    when {
+        onLongClick != null -> Surface(m.clip(CardShape).combinedClickable(onLongClickLabel = "Delete meal", onLongClick = onLongClick,
+            role = Role.Button, onClick = onClick ?: {}), shape = CardShape, color = color, content = content)
+        onClick != null -> Surface(onClick, m, shape = CardShape, color = color, content = content)
+        else -> Surface(m, shape = CardShape, color = color, content = content)
+    }
 }
 
 @Composable

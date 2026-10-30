@@ -7,9 +7,11 @@ import com.yakov103.mivu.diary.DayDetail
 import com.yakov103.mivu.diary.DayStatus
 import com.yakov103.mivu.diary.DiaryDaySummary
 import com.yakov103.mivu.diary.DiaryError
+import com.yakov103.mivu.diary.DiaryMeal
 import com.yakov103.mivu.diary.DiaryRepository
 import com.yakov103.mivu.diary.dayDetail
 import com.yakov103.mivu.diary.dayStatus
+import com.yakov103.mivu.diary.deleteMeal
 import com.yakov103.mivu.diary.diaryWeek
 import com.yakov103.mivu.diary.earliestRecordDate
 import com.yakov103.mivu.diary.setCompleteness
@@ -161,6 +163,19 @@ class DiaryViewModel(
                 _messages.send("Could not complete action. ${failureMessage(e)}")
             } finally {
                 skipping = false
+            }
+        }
+    }
+
+    /** The row's swipe or long-press delete, once confirmed. */
+    fun deleteMeal(meal: DiaryMeal) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.database(profileID).deleteMeal(meal) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _messages.send("Could not complete action. ${failureMessage(e)}")
             }
         }
     }
