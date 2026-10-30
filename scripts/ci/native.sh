@@ -19,16 +19,16 @@ record = dict(sourceCommit=subprocess.check_output(['git', 'rev-parse', 'HEAD'],
 PY
 }
 trap record_provenance EXIT
-# Choose a stable Xcode 26 installation, never the image's beta default.
+# Choose a stable Xcode 27 installation, never the image's beta default.
 export DEVELOPER_DIR
 DEVELOPER_DIR=$(python3 - <<'PY'
 import glob, re
-paths = glob.glob('/Applications/Xcode_26*.app/Contents/Developer')
+paths = glob.glob('/Applications/Xcode_27*.app/Contents/Developer')
 def version(path):
     return tuple(int(n) for n in re.findall(r'\d+', path.split('.app')[0]))
 paths = [p for p in paths if not any(word in p.lower() for word in ('beta', 'rc'))]
 if not paths:
-    raise SystemExit('No stable Xcode 26 installation available.')
+    raise SystemExit('No stable Xcode 27 installation available.')
 print(max(paths, key=version))
 PY
 )
