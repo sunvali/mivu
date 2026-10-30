@@ -2,6 +2,7 @@
 
 package com.yakov103.mivu.diary
 
+import android.database.SQLException
 import android.database.sqlite.SQLiteDatabase
 import com.yakov103.mivu.coach.CoachManualEdit
 import com.yakov103.mivu.coach.CoachWrite
@@ -40,11 +41,16 @@ internal sealed interface Restored {
 internal fun SQLiteDatabase.purgeDeletedUndo(now: Instant) =
     execSQL("DELETE FROM coach_undo_deleted WHERE createdAt < ?", arrayOf(now.toEpochMilli() - WINDOW_MS))
 
-/** Also erases the copies older than the turn before [newestTurnID], so Undo by voice lasts one more message. */
-internal fun DiaryDatabase.Tx.purgeDeletedUndo(now: Instant, newestTurnID: UUID) {
+/** With [beforeCapture], also erases the copies older than the newest turn, which a capture makes the turn before: Undo by voice lasts one more message. */
+internal fun DiaryDatabase.Tx.purgeDeletedUndo(now: Instant, beforeCapture: Boolean) {
     exec("DELETE FROM coach_undo_deleted WHERE createdAt < ?", listOf(now.toEpochMilli() - WINDOW_MS))
-    exec("DELETE FROM coach_undo_deleted WHERE turnID IN (SELECT id FROM coach_turn WHERE ordinal < " +
-        "(SELECT MAX(ordinal) FROM coach_turn WHERE id != ?))", listOf(newestTurnID.swift))
+    if (beforeCapture) exec("DELETE FROM coach_undo_deleted WHERE turnID IN (SELECT id FROM coach_turn WHERE ordinal < " +
+        "(SELECT MAX(ordinal) FROM coach_turn))", emptyList())
+}
+
+/** Housekeeping in its own transaction, so a failure here (even a full phone) never reaches the write that follows. */
+internal fun DiaryDatabase.purgeDeletedUndoApart(now: Instant, beforeCapture: Boolean = false) {
+    try { transaction(null) { it.purgeDeletedUndo(now, beforeCapture) } } catch (_: SQLException) {} catch (_: DiaryError) {} // a constraint failure arrives as InvalidData
 }
 
 /** Nothing for writes that delete nothing; an undo of a logged meal deletes the whole meal. */
@@ -121,7 +127,8 @@ internal fun DiaryDatabase.Tx.undoDeleted(key: String): Restored {
         // Adding a photo overwrites nothing, so it goes back whatever the meal's revision; a gone meal is refused.
         is HeldDelete.Photo -> {
             val meal = mealRecord(held.mealID)
-            saveMeal(meal.copy(photos = meal.photos + held.photo.copy(data = heldPhotoBytes(key, held.photo.id))))
+            // A new ID, so a paused turn that replays its delete_photo still finds the photo gone.
+            saveMeal(meal.copy(photos = meal.photos + held.photo.copy(id = UUID.randomUUID(), data = heldPhotoBytes(key, held.photo.id))))
             Restored.Meal(meal.id)
         }
         is HeldDelete.Weight -> {
@@ -138,4 +145,11 @@ internal fun DiaryDatabase.Tx.undoDeleted(key: String): Restored {
     }
     exec("UPDATE coach_undo_deleted SET undone = 1 WHERE operationKey = ?", listOf(key))
     return restored
+}
+
+/** When the earliest copy still open to Undo expires, or null; the Coach screen hides that Undo button then. */
+fun DiaryDatabase.heldUndoExpiry(now: Instant = Instant.now()): Instant? = read { tx ->
+    tx.query("SELECT MIN(createdAt) FROM coach_undo_deleted WHERE undone = 0 AND createdAt > ?", listOf((now.toEpochMilli() - WINDOW_MS).toString())) {
+        if (it.moveToFirst() && !it.isNull(0)) Instant.ofEpochMilli(it.getLong(0) + WINDOW_MS) else null
+    }
 }

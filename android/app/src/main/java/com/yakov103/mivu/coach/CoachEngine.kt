@@ -324,6 +324,7 @@ class CoachEngine(
                 DiaryError.AmbiguousDay -> "AmbiguousDay"
                 DiaryError.QuotaExceeded -> "QuotaExceeded"
                 DiaryError.Busy -> "Busy"
+                DiaryError.UndoExpired -> "UndoExpired"
             }
             is SessionError -> "SessionError." + when (error) {
                 SessionError.NoActiveSession -> "NoActiveSession"

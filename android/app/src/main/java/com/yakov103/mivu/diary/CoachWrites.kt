@@ -36,8 +36,9 @@ fun DiaryDatabase.validateCoachWrites(
 /** Applies the batch with one receipt per write; a write whose key already has a receipt returns it unchanged. */
 fun DiaryDatabase.applyCoachWrites(
     turnID: UUID, writes: List<CoachWrite>, mode: CoachWriteMode = CoachWriteMode.uninterrupted, at: Instant = Instant.now(),
-): List<CoachReceipt> =
-    atHead { tx ->
+): List<CoachReceipt> {
+    purgeDeletedUndoApart(at) // copies past their window go while the app stays open
+    return atHead { tx ->
         val turn = tx.coachTurn(turnID) ?: throw DiaryError.NotFound
         val normalized = tx.validateCoachWrites(turn, writes, mode, at)
         val batch = CoachBatch(turn, at)
@@ -63,6 +64,7 @@ fun DiaryDatabase.applyCoachWrites(
         }
         results
     }
+}
 
 /**
  * Restores the meal as the change left it only while nothing changed it since; never recreates a deleted meal. A Coach delete
@@ -542,7 +544,11 @@ private fun DiaryDatabase.Tx.undoSnapshot(write: CoachWrite, turn: CoachTurn): L
 
 internal fun DiaryDatabase.Tx.undoCoachChange(key: String, now: Instant): UUID? {
     if (isHeldDelete(key)) {
-        if (deletedUndoState(key, now) != CoachUndoState.Available) throw DiaryError.StaleRevision
+        when (deletedUndoState(key, now)) {
+            CoachUndoState.Available -> {}
+            CoachUndoState.Undone -> throw DiaryError.StaleRevision
+            null -> throw DiaryError.UndoExpired
+        }
         return (undoDeleted(key) as? Restored.Meal)?.id
     }
     val undo = coachUndo(key) ?: throw DiaryError.NotFound

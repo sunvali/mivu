@@ -66,6 +66,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.yakov103.mivu.diary.retryCoachTurn
+import com.yakov103.mivu.diary.heldUndoExpiry
 import com.yakov103.mivu.diary.undoCoachChange
 import com.yakov103.mivu.ui.coach.CoachHistoryWindow.Direction
 import com.yakov103.mivu.ui.coach.CoachHistoryWindow.EdgeState
@@ -157,6 +158,7 @@ fun coachMessage(error: Throwable): String = when {
     CoachEngine.isTransient(error) -> "You're offline. Your message is saved and I'll reply when you're back online."
     error is CancellationException || error == SessionError.SessionChanged -> "The connection changed. Your message is saved; tap Try again."
     error == ResponsesClient.Failure.QuotaReached -> "You've reached your ChatGPT usage limit. Your message is saved; see Manage usage in Settings."
+    error == DiaryError.UndoExpired -> "Undo is no longer available."
     error == DiaryError.StaleRevision -> "Something changed while I was working. Check it, then try again."
     error == DiaryError.InvalidAmountUnitChange -> error.message.orEmpty()
     error == DiaryError.AmbiguousDay -> "Which day is this for?"
@@ -246,6 +248,7 @@ class CoachViewModel(
             repository.changes.onSubscription { emit(Unit) }.conflate().collect {
                 if (loaded && error == null) refresh() else replace()
                 readCoachDay()
+                scheduleExpiry()
             }
         }
         viewModelScope.launch { combine(activity, _message, _sending, _timeline, connected) { _, _, _, _, _ -> }.collect { resolveCompanion() } }
@@ -709,6 +712,27 @@ class CoachViewModel(
      * iOS change refresh: resident pages are read again by range and updated in place. Newer turns never join a page here;
      * they mark the later edge, which loads as a page while the reader follows the latest (or waits for Jump to latest).
      */
+    private var expiry: Job? = null
+
+    /** A held delete's Undo button hides at its ten minutes without waiting for another change. */
+    private suspend fun scheduleExpiry() {
+        val at = try {
+            read { heldUndoExpiry() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        expiry?.cancel()
+        expiry = at?.let {
+            viewModelScope.launch {
+                delay(maxOf(0L, it.toEpochMilli() - System.currentTimeMillis()) + 500)
+                refresh()
+                scheduleExpiry()
+            }
+        }
+    }
+
     private suspend fun refresh() {
         val started = generation
         val spans = window.spans

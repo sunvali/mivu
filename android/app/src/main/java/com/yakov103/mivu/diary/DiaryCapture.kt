@@ -1,6 +1,5 @@
 package com.yakov103.mivu.diary
 
-import android.database.SQLException
 import android.util.Log
 import com.yakov103.mivu.coach.CoachEngine
 import com.yakov103.mivu.coach.coachCommittedSummary
@@ -45,8 +44,10 @@ sealed interface Reconciliation {
 }
 
 /** Saves the capture in one transaction; a retry with the same manifest returns the stored turn unchanged. */
-fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expectedRevision: Long, now: Instant = Instant.now()): CoachTurn =
-    transaction(expectedRevision) { tx ->
+fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expectedRevision: Long, now: Instant = Instant.now()): CoachTurn {
+    // Before the capture, apart from it; a retry of an accepted capture must not age the copies again.
+    if (read { it.coachTurnWithoutPhotos(payload.submissionID) } == null) purgeDeletedUndoApart(now, beforeCapture = true)
+    return transaction(expectedRevision) { tx ->
         tx.coachTurn(payload.submissionID)?.let { existing ->
             if (existing.submissionManifest != payload.manifest) throw DiaryError.StaleRevision
             return@transaction existing
@@ -66,11 +67,9 @@ fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expect
             state = CoachTurnState.captured, receipts = emptyList(), captureTimeZoneID = c.timeZoneID,
             activeDayID = c.activeDayID, photoIDs = payload.attachments.map { it.id },
             submissionManifest = payload.manifest, captureSegmentID = c.activeConversationSegmentID,
-        ).also(tx::putCoachTurn).also {
-            // Housekeeping only: the capture stands, and stale copies stay hidden on read.
-            try { tx.purgeDeletedUndo(now, it.id) } catch (_: SQLException) {}
-        }
+        ).also(tx::putCoachTurn)
     }
+}
 
 /** After an uncertain failure: whether the capture committed, and with this exact content. */
 fun DiaryDatabase.reconcileCoachCapture(payload: CoachSubmissionPayload): Reconciliation = read { tx ->

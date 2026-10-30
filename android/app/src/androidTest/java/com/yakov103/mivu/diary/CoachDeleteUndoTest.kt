@@ -107,7 +107,7 @@ class CoachDeleteUndoTest {
         val receipt = deleteMeal(fixture())
         clock = clock.plusSeconds(601)
         assertNull(undoState(receipt))
-        throws<DiaryError.StaleRevision> { db.undoCoachChange(receipt.operationKey, clock) }
+        throws<DiaryError.UndoExpired> { db.undoCoachChange(receipt.operationKey, clock) }
         assertTrue(meals().isEmpty())
     }
 
@@ -119,6 +119,25 @@ class CoachDeleteUndoTest {
         db = DiaryDatabase.open(context, profile.id)
         assertEquals(0, count("coach_undo_deleted"))
         assertEquals(0, count("coach_undo_deleted_photo"))
+    }
+
+    @Test fun aWriteErasesCopiesPastTheWindowWhileTheAppStaysOpen() {
+        clock = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(601)
+        val meal = fixture()
+        val t = turn("Same turn, later write") // no later capture: only the write itself can purge
+        apply(manual(CoachManualEdit.DeleteMeal(meal.id, meal.revision)), turn = t)
+        assertEquals(1, count("coach_undo_deleted_photo"))
+        clock = Instant.now().truncatedTo(ChronoUnit.SECONDS)
+        apply(manual(CoachManualEdit.Coverage("2026-10-01", DayCompleteness.untracked)), turn = t)
+        assertEquals(0, count("coach_undo_deleted"))
+        assertEquals(0, count("coach_undo_deleted_photo"))
+    }
+
+    @Test fun heldUndoExpiryNamesTheEarliestLiveCopy() {
+        assertNull(db.heldUndoExpiry(clock))
+        deleteMeal(fixture())
+        assertEquals(clock.plusSeconds(600), db.heldUndoExpiry(clock))
+        assertNull(db.heldUndoExpiry(clock.plusSeconds(601)))
     }
 
     @Test fun buttonHidesAfterNextMessageButRowSurvivesOneTurn() {
@@ -164,7 +183,10 @@ class CoachDeleteUndoTest {
         val receipt = apply(manual(CoachManualEdit.DeletePhoto(meal.id, meal.photos.single().id, meal.revision))).single()
         assertTrue(meals().single().photos.isEmpty())
         db.undoCoachChange(receipt.operationKey, clock)
-        assertArrayEquals(photoBytes, meals().single().photos.single().data)
+        val restored = meals().single().photos.single()
+        assertArrayEquals(photoBytes, restored.data)
+        // A new ID, so a paused turn that deleted the old one can still replay.
+        assertTrue(restored.id != meal.photos.single().id)
     }
 
     @Test fun photoUndoRefusedWhenMealGone() {

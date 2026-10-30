@@ -17,6 +17,7 @@ sealed class DiaryError(message: String? = null) : Exception(message) {
     object WrongOwner : DiaryError("wrong owner")
     object InvalidAmountUnitChange : DiaryError("Enter or clear each known nutrient when changing to an unrelated unit.")
     object StaleRevision : DiaryError("stale revision")
+    object UndoExpired : DiaryError("undo expired") // a Coach delete held for Undo past its window
     object StaleArchive : DiaryError("stale archive")
     object NotFound : DiaryError("not found")
     object EmptyCapture : DiaryError("empty capture")
