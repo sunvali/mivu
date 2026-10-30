@@ -162,7 +162,7 @@ fun CoachExchangeRow(
                     if (activity != null && turn.receipts.isEmpty()) ActivityRow(activity) else Status(turn, provider)
                     TurnChoices(turn, days, actions)
                 }
-                exchange.receipts.filter { it.mealID != null || it.workoutID != null }.forEach { receipt ->
+                exchange.receipts.filter(CoachReceiptPresentation::showsCard).forEach { receipt ->
                     CoachReceiptCard(receipt, exchange.targets[receipt.operationKey] ?: CoachReceiptTarget.Loading, exchange.undo[receipt.operationKey],
                         undoing = receipt.operationKey in undoing, onUndo = { actions.undo(receipt.operationKey) }, onOpen = { receipt.mealID?.let(actions.openMeal) })
                 }

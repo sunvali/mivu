@@ -206,7 +206,7 @@ internal fun DiaryDatabase.Tx.coachInferenceContext(turnID: UUID): CoachContext 
     // Only the immediately previous turn; bounded for the 60 KB cap.
     val pendingQuestion = previous.firstOrNull()?.takeIf { it.state == CoachTurnState.completed }
         ?.let { t -> t.question?.copy(originalText = coachBoundedText(t.text, 1024)) }
-    val recent = previous.reversed().map { it.contextTurn() }.toMutableList()
+    val recent = previous.reversed().map { contextTurn(it) }.toMutableList()
     while (size(ListSerializer(CoachContext.Turn.serializer()), recent) > 8192) recent.removeAt(0)
     val days = boundedRecords("day", TrackingDay.serializer(), null, emptyList(), "ordinal DESC, id DESC", 14).reversed()
     val activeDayID = work.resolvedDayID ?: work.activeDayID
@@ -295,7 +295,7 @@ private fun DiaryDatabase.Tx.replyContext(reply: CoachReply): CoachContext.Reply
     val value = CoachContext.Reply(reply.target, reply.excerpt)
     return try {
         when (val target = reply.target) {
-            is CoachReply.Target.Message -> value.copy(turn = (coachTurnWithoutPhotos(target.turnID) ?: throw DiaryError.NotFound).contextTurn())
+            is CoachReply.Target.Message -> value.copy(turn = contextTurn(coachTurnWithoutPhotos(target.turnID) ?: throw DiaryError.NotFound))
             is CoachReply.Target.Meal, is CoachReply.Target.Item -> {
                 val mealID = if (target is CoachReply.Target.Item) target.mealID else (target as CoachReply.Target.Meal).mealID
                 if (target is CoachReply.Target.Item && mealItems(mealID).none { it.id == target.itemID }) throw DiaryError.NotFound
@@ -375,16 +375,19 @@ fun coachCommittedReceipt(receipt: CoachReceipt): CoachCommittedReceipt {
     return value.copy(items = items.map { CoachCommittedItem(it.id, it.name, it.quantity, it.unit, it.nutrition, it.provenance, it.uncertain) })
 }
 
-private fun receiptLine(receipts: List<CoachReceipt>): String? {
+/** Marks meals removed since, from any source, so Pip never treats an old receipt as a live record. */
+private fun DiaryDatabase.Tx.receiptLine(receipts: List<CoachReceipt>): String? {
     val parts = receipts.mapNotNull { r ->
         if (r.mealID == null && r.itemID == null) null
-        else "saved key=${r.operationKey}" + (r.mealID?.let { " meal=${it.key}" } ?: "") + (r.itemID?.let { " item=${it.key}" } ?: "")
+        else "saved key=${r.operationKey}" + (r.mealID?.let {
+            " meal=${it.key}" + if (count("SELECT COUNT(*) FROM meal WHERE id = ?", listOf(it.key)) == 0) " deleted" else ""
+        } ?: "") + (r.itemID?.let { " item=${it.key}" } ?: "")
     }
     return if (parts.isEmpty()) null else coachBoundedText("[" + parts.joinToString("; ") + "]", 1024)
 }
 
-private fun CoachTurn.contextTurn() = CoachContext.Turn(id, capturedAt, coachBoundedText(text, 1024),
-    assistantText?.let { coachBoundedText(it, 1024) }, receiptLine(receipts))
+private fun DiaryDatabase.Tx.contextTurn(turn: CoachTurn) = CoachContext.Turn(turn.id, turn.capturedAt, coachBoundedText(turn.text, 1024),
+    turn.assistantText?.let { coachBoundedText(it, 1024) }, receiptLine(turn.receipts))
 
 internal fun DiaryDatabase.Tx.mealRow(id: UUID): DiaryMeal =
     boundedRecords("meal", DiaryMeal.serializer(), "id = ?", listOf(id.key), "ordinal", 1).firstOrNull() ?: throw DiaryError.NotFound

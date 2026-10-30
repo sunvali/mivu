@@ -100,6 +100,15 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
                 db.execSQL("CREATE TABLE IF NOT EXISTS coach_undo (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL " +
                     "REFERENCES coach_turn(id) ON DELETE CASCADE, mealID TEXT NOT NULL, afterRevision INTEGER NOT NULL, " +
                     "afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
+                // Short-lived copies of Coach deletes for Undo (CoachDeletedUndo.kt): derived like coach_undo, so never archived,
+                // backed up or reported. Photo bytes sit beside the payload, as in the record tables.
+                db.execSQL("CREATE TABLE IF NOT EXISTS coach_undo_deleted (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL " +
+                    "REFERENCES coach_turn(id) ON DELETE CASCADE, payload BLOB NOT NULL, createdAt INTEGER NOT NULL, " +
+                    "undone INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS coach_undo_deleted_photo (id TEXT PRIMARY KEY, parent TEXT NOT NULL " +
+                    "REFERENCES coach_undo_deleted(operationKey) ON DELETE CASCADE, bytes BLOB NOT NULL)")
+                // Housekeeping only: a failed purge leaves the copies hidden, and the diary still opens.
+                runCatching { db.purgeDeletedUndo(Instant.now()) }
                 // Coach timeline pages seek by ordinal, so a 10,000-turn diary reads only the page's rows.
                 db.execSQL("CREATE INDEX IF NOT EXISTS coach_turn_ordinal ON coach_turn(ordinal)")
                 // iOS DiaryDatabaseMigration.swift:73-79: child and ordinal lookups read only their rows, so a day's or a
@@ -200,6 +209,9 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
             val before = if (it.isNull(3)) null else decode(it.getBlob(3), ListSerializer(FoodItem.serializer()))
             CoachUndo(mealID, it.getInt(1), it.getString(2), before, it.getLong(4) != 0L)
         }
+
+        /** The bytes of a photo held for [key]'s Undo. */
+        internal fun heldPhotoBytes(key: String, photoID: UUID): ByteArray = bytes("coach_undo_deleted_photo", "$key/${photoID.key}")
 
         /** Marks [key]'s snapshot used; the caller's meal write commits it. */
         internal fun markUndone(key: String) = db.execSQL("UPDATE coach_undo SET undone = 1 WHERE operationKey = ?", arrayOf(key))
@@ -355,6 +367,9 @@ class DiaryDatabase private constructor(private val db: SQLiteDatabase, private 
 
     /** Test seam: how many complete diary reads ran; ordinary Coach paths keep it at zero. */
     @VisibleForTesting internal var snapshotReads = 0
+
+    /** Test seam: the room left on the phone for a copy held for Undo (a Coach delete goes ahead without Undo when it is short). */
+    @VisibleForTesting internal var freeBytes: () -> Long = { file.usableSpace }
 
     /** Test seam: runs after a transaction's row writes, before its head write and commit. */
     @VisibleForTesting internal var beforeCommit: (() -> Unit)? = null

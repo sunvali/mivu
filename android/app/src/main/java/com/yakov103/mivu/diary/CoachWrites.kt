@@ -14,6 +14,9 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 // Port of ios/Mivu/Diary/DiaryDatabaseCoachMutations.swift: applyCoachWrites (:5), validateCoachWrites (:33-73),
 // validateReplay (:88), validateCoachWrite (:112), coachDay (:182), addedCoachItems (:204), applyCoachWrite (:215),
@@ -44,8 +47,11 @@ fun DiaryDatabase.applyCoachWrites(
             val prior = turn.receipts.firstOrNull { it.operationKey == key }
             if (prior != null) { results += prior; continue }
             val before = tx.undoSnapshot(write, turn)
-            val receipt = tx.applyCoachWrite(write, batch).copy(operationKey = key, commandFingerprint = write.commandFingerprint())
+            val held = tx.deletedSnapshot(write)
+            var receipt = tx.applyCoachWrite(write, batch).copy(operationKey = key, commandFingerprint = write.commandFingerprint())
             if (before != null && receipt.mealID != null) tx.saveUndo(key, turnID, receipt.mealID, before)
+            // Tells the model this delete can still be undone.
+            if (held != null && tx.holdDelete(key, turnID, held, at, freeBytes())) receipt = receipt.copy(resultJSON = undoHint(receipt.resultJSON, key))
             batch.added += receipt
             results += receipt
         }
@@ -58,8 +64,14 @@ fun DiaryDatabase.applyCoachWrites(
         results
     }
 
-/** Restores the meal as the change left it only while nothing changed it since; never recreates a deleted meal. */
-fun DiaryDatabase.undoCoachChange(operationKey: String): UUID? = atHead { it.undoCoachChange(operationKey) }
+/**
+ * Restores the meal as the change left it only while nothing changed it since; never recreates a deleted meal. A Coach delete
+ * still held for Undo is recreated under new IDs instead (CoachDeletedUndo.kt).
+ */
+fun DiaryDatabase.undoCoachChange(operationKey: String, now: Instant = Instant.now()): UUID? = atHead { it.undoCoachChange(operationKey, now) }
+
+private fun undoHint(json: String, key: String) = JsonObject((SwiftJson.parseToJsonElement(json).jsonObject +
+    mapOf("undo_key" to JsonPrimitive(key), "undo_until" to JsonPrimitive("next message"))).toSortedMap()).toString()
 
 private class CoachBatch(val turn: CoachTurn, val at: Instant) {
     val added = mutableListOf<CoachReceipt>()
@@ -89,7 +101,7 @@ private val DiaryMeal.state get() = submissions.lastOrNull()?.state ?: Submissio
 private fun DiaryDatabase.Tx.mealInfo(id: UUID) = mealWithoutPhotoBytes(id) ?: throw DiaryError.NotFound
 
 /** iOS `saveMeal` stamps the change revision. */
-private fun DiaryDatabase.Tx.saveMeal(meal: DiaryMeal) = save(meal.copy(changedRevision = (head.revision + 1).toInt()))
+internal fun DiaryDatabase.Tx.saveMeal(meal: DiaryMeal) = save(meal.copy(changedRevision = (head.revision + 1).toInt()))
 
 private fun DiaryDatabase.Tx.mealResult(id: UUID): String {
     val m = mealInfo(id)
@@ -238,7 +250,9 @@ private fun DiaryDatabase.Tx.validateCoachWrite(write: CoachWrite, turn: CoachTu
                 if (zone != profileZone || diaryDateLabel(turn.capturedAt, zone) != diaryDateLabel(at, profileZone) || !ordered) throw DiaryError.AmbiguousDay
             }
             is CoachManualEdit.Coverage -> diaryDateOnlyInstant(e.date, zone)
-            is CoachManualEdit.Undo -> {
+            is CoachManualEdit.Undo -> if (isHeldDelete(e.operationKey)) {
+                if (!deletedUndoUsable(e.operationKey, at, turn)) throw DiaryError.StaleRevision
+            } else {
                 val undo = coachUndo(e.operationKey) ?: throw CoachError.InvalidArguments
                 if (undo.undone || undoState(mealInfo(undo.mealID)) != undo.afterState) throw DiaryError.StaleRevision
             }
@@ -478,10 +492,18 @@ private fun DiaryDatabase.Tx.applyManual(edit: CoachManualEdit, batch: CoachBatc
             putDay(day)
             receipt.copy(dayID = day.id, resultJSON = coachJSON(TrackingDay.serializer(), day))
         }
-        is CoachManualEdit.Undo -> {
+        is CoachManualEdit.Undo -> if (isHeldDelete(edit.operationKey)) when (val restored = undoDeleted(edit.operationKey)) {
+            is Restored.Meal -> mealReceipt(restored.id)
+            is Restored.Weight -> weight(restored.id).let {
+                receipt.copy(dayID = weightReceiptDay(it).id, weightID = it.id, resultJSON = coachJSON(WeightEntry.serializer(), it))
+            }
+            is Restored.Workout -> workout(restored.id).let {
+                receipt.copy(dayID = it.dayID, workoutID = it.id, resultJSON = coachJSON(WorkoutSession.serializer(), it))
+            }
+        } else {
             val mealID = coachUndo(edit.operationKey)?.mealID ?: throw DiaryError.NotFound
             val dayID = mealInfo(mealID).dayID
-            val restored = undoCoachChange(edit.operationKey)
+            val restored = undoCoachChange(edit.operationKey, batch.at)
             if (restored != null) mealReceipt(restored)
             else receipt.copy(dayID = dayID, resultJSON = coachJSON(Deleted.serializer(), Deleted(mealID)))
         }
@@ -518,7 +540,11 @@ private fun DiaryDatabase.Tx.undoSnapshot(write: CoachWrite, turn: CoachTurn): L
     else -> null
 }
 
-internal fun DiaryDatabase.Tx.undoCoachChange(key: String): UUID? {
+internal fun DiaryDatabase.Tx.undoCoachChange(key: String, now: Instant): UUID? {
+    if (isHeldDelete(key)) {
+        if (deletedUndoState(key, now) != CoachUndoState.Available) throw DiaryError.StaleRevision
+        return (undoDeleted(key) as? Restored.Meal)?.id
+    }
     val undo = coachUndo(key) ?: throw DiaryError.NotFound
     val meal = mealRecord(undo.mealID)
     if (undo.undone || undoState(meal) != undo.afterState) throw DiaryError.StaleRevision

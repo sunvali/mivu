@@ -19,10 +19,20 @@ import java.util.Locale
 data class CoachReceiptPresentation(val receipt: CoachCommittedReceipt, val target: CoachReceiptTarget) {
     data class ItemRow(val name: String, val amount: String, val kcal: String)
 
-    val committedStatus: String get() = when (receipt.submissionState) {
-        SubmissionState.saved -> "Saved food"
-        SubmissionState.awaitingReview -> "Estimate awaiting review"
-        else -> "Recorded operation"
+    /** A whole record the Coach deleted; its card only offers Undo. */
+    val isRemoval: Boolean get() = REMOVALS.keys.any { write(receipt).startsWith(it) }
+
+    /** What a removal card names, since a deleted record has no foods to list. */
+    val removedRecord: String? get() = REMOVALS.entries.firstOrNull { write(receipt).startsWith(it.key) }?.value
+
+    val committedStatus: String get() = when {
+        isRemoval -> "Removed"
+        write(receipt).startsWith("delete_photo/") -> "Photo removed"
+        else -> when (receipt.submissionState) {
+            SubmissionState.saved -> "Saved food"
+            SubmissionState.awaitingReview -> "Estimate awaiting review"
+            else -> "Recorded operation"
+        }
     }
 
     val committedNutrition: String? get() = if (receipt.items.isEmpty()) null else committedTotal { it.kcal }?.let(::energy) ?: "Energy unknown"
@@ -58,7 +68,7 @@ data class CoachReceiptPresentation(val receipt: CoachCommittedReceipt, val targ
         else -> null
     }
 
-    val targetNotice: String? get() = when (target) {
+    val targetNotice: String? get() = if (isRemoval) null else when (target) {
         CoachReceiptTarget.Loading, CoachReceiptTarget.Unavailable, CoachReceiptTarget.Failed -> currentStatus
         is CoachReceiptTarget.Meal -> {
             val state = target.meal.state
@@ -109,13 +119,22 @@ data class CoachReceiptPresentation(val receipt: CoachCommittedReceipt, val targ
     private fun committedTotal(nutrient: (NutritionValues) -> Double?): Double? =
         receipt.items.mapNotNull { it.nutrition?.let(nutrient) }.takeIf { it.isNotEmpty() }?.sum()
 
-    private companion object {
-        val us = DecimalFormatSymbols(Locale.US)
-        fun whole(value: Double): String = DecimalFormat("#,##0", us).apply { roundingMode = RoundingMode.HALF_EVEN }.format(value)
-        fun energy(value: Double) = whole(value) + " kcal"
+    companion object {
+        private val REMOVALS = mapOf("delete_meal/" to "Meal", "delete_weight/" to "Weight", "delete_workout/" to "Workout")
+
+        /** The write after the turn ID, so an undo of a delete never reads as the delete itself. */
+        private fun write(receipt: CoachCommittedReceipt) = receipt.operationKey.substringAfter('/', "")
+
+        /** Decided by the receipt alone, so a card never vanishes while undo availability reloads. */
+        fun showsCard(receipt: CoachCommittedReceipt): Boolean =
+            receipt.mealID != null || receipt.workoutID != null || write(receipt).let { it.startsWith("delete_weight/") || it.startsWith("undo/") }
+
+        private val us = DecimalFormatSymbols(Locale.US)
+        private fun whole(value: Double): String = DecimalFormat("#,##0", us).apply { roundingMode = RoundingMode.HALF_EVEN }.format(value)
+        private fun energy(value: Double) = whole(value) + " kcal"
         /** Swift `.number.grouping(.never)`: every significant digit, no grouping. */
-        fun plain(value: Double): String = BigDecimal(value.toString()).stripTrailingZeros().toPlainString()
-        fun macros(carbs: Double?, protein: Double?, fat: Double?): String {
+        private fun plain(value: Double): String = BigDecimal(value.toString()).stripTrailingZeros().toPlainString()
+        private fun macros(carbs: Double?, protein: Double?, fat: Double?): String {
             fun grams(value: Double?) = value?.let { CoachReplyLines.number(it) + " g" } ?: "unknown"
             return "Carbs ${grams(carbs)} · Protein ${grams(protein)} · Fat ${grams(fat)}"
         }

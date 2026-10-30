@@ -30,7 +30,7 @@ sealed interface CoachReceiptTarget {
     data class Workout(val session: WorkoutSession, val localDate: String) : CoachReceiptTarget
 }
 
-/** Read from coach_undo; the committed receipt itself never changes. */
+/** Read from coach_undo and coach_undo_deleted; the committed receipt itself never changes. */
 enum class CoachUndoState { Available, Undone }
 
 /**
@@ -49,7 +49,7 @@ data class CoachExchange(
 data class CoachPage(val exchanges: List<CoachExchange>, val hasEarlier: Boolean, val hasLater: Boolean)
 
 /** One read transaction: at most [limit] exchanges, oldest first; one extra row tells whether the paged edge goes on. */
-fun DiaryDatabase.coachPage(request: CoachPageRequest, limit: Int = 20): CoachPage = read { tx ->
+fun DiaryDatabase.coachPage(request: CoachPageRequest, limit: Int = 20, now: Instant = Instant.now()): CoachPage = read { tx ->
     val (where, args, descending) = when (request) {
         CoachPageRequest.Latest -> Triple(null, emptyList<String>(), true)
         is CoachPageRequest.Before -> Triple("ordinal < ?", listOf(request.ordinal.toString()), true)
@@ -67,10 +67,10 @@ fun DiaryDatabase.coachPage(request: CoachPageRequest, limit: Int = 20): CoachPa
     }
     val earlier = if (descending) more else rows.firstOrNull()?.let { exists("<", it.second) } ?: false
     val later = if (descending) rows.lastOrNull()?.let { exists(">", it.second) } ?: false else more
-    CoachPage(rows.map { (id, ordinal) -> tx.coachExchange(swiftUUID(id) ?: throw DiaryError.InvalidData("coach turn"), ordinal) }, earlier, later)
+    CoachPage(rows.map { (id, ordinal) -> tx.coachExchange(swiftUUID(id) ?: throw DiaryError.InvalidData("coach turn"), ordinal, now) }, earlier, later)
 }
 
-private fun DiaryDatabase.Tx.coachExchange(id: UUID, ordinal: Long): CoachExchange {
+private fun DiaryDatabase.Tx.coachExchange(id: UUID, ordinal: Long, now: Instant): CoachExchange {
     val turn = coachTurnWithoutPhotos(id) ?: throw DiaryError.InvalidData("coach turn")
     val meals = mutableMapOf<UUID, DiaryMeal?>()
     fun meal(mealID: UUID) = meals.getOrPut(mealID) { mealWithoutPhotoBytes(mealID) }
@@ -86,6 +86,7 @@ private fun DiaryDatabase.Tx.coachExchange(id: UUID, ordinal: Long): CoachExchan
                 workout(receipt.workoutID).let { w -> day(w.dayID)?.let { CoachReceiptTarget.Workout(w, it.localDate) } }
             } catch (_: DiaryError.NotFound) { null } ?: CoachReceiptTarget.Unavailable
         }
+        if (isHeldDelete(key)) { deletedUndoState(key, now)?.let { undo[key] = it }; continue }
         val snapshot = coachUndo(key) ?: continue
         when {
             snapshot.undone -> undo[key] = CoachUndoState.Undone

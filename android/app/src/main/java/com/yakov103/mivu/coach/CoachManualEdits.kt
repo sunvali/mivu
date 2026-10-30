@@ -235,7 +235,8 @@ internal fun parseManual(call: CoachToolCall, args: CoachTools.Args, meals: List
             val key = string("operation_key")
             // Swift's split drops empty pieces; a leading "/" fails the UUID check either way.
             val parts = key.split("/", limit = 2)
-            val food = listOf("food/", "correct/", "edit_item/", "append_food/", "delete_item/", "scale_meal/")
+            val food = listOf("food/", "correct/", "edit_item/", "append_food/", "delete_item/", "scale_meal/",
+                "delete_meal/", "delete_photo/", "delete_weight/", "delete_workout/", "undo/")
             if (parts.size != 2 || swiftUUID(parts[0]) == null || food.none { parts[1].startsWith(it) }) invalid()
             CoachManualEdit.Undo(key)
         }

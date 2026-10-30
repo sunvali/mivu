@@ -1,8 +1,10 @@
 package com.yakov103.mivu.diary
 
+import android.database.SQLException
 import android.util.Log
 import com.yakov103.mivu.coach.CoachEngine
 import com.yakov103.mivu.coach.coachCommittedSummary
+import java.time.Instant
 import java.util.UUID
 
 // Port of CoachSubmissionPayload (ios/Mivu/Coach/CoachModels.swift) and captureCoachSubmission /
@@ -43,7 +45,7 @@ sealed interface Reconciliation {
 }
 
 /** Saves the capture in one transaction; a retry with the same manifest returns the stored turn unchanged. */
-fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expectedRevision: Long): CoachTurn =
+fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expectedRevision: Long, now: Instant = Instant.now()): CoachTurn =
     transaction(expectedRevision) { tx ->
         tx.coachTurn(payload.submissionID)?.let { existing ->
             if (existing.submissionManifest != payload.manifest) throw DiaryError.StaleRevision
@@ -64,7 +66,10 @@ fun DiaryDatabase.captureCoachSubmission(payload: CoachSubmissionPayload, expect
             state = CoachTurnState.captured, receipts = emptyList(), captureTimeZoneID = c.timeZoneID,
             activeDayID = c.activeDayID, photoIDs = payload.attachments.map { it.id },
             submissionManifest = payload.manifest, captureSegmentID = c.activeConversationSegmentID,
-        ).also(tx::putCoachTurn)
+        ).also(tx::putCoachTurn).also {
+            // Housekeeping only: the capture stands, and stale copies stay hidden on read.
+            try { tx.purgeDeletedUndo(now, it.id) } catch (_: SQLException) {}
+        }
     }
 
 /** After an uncertain failure: whether the capture committed, and with this exact content. */

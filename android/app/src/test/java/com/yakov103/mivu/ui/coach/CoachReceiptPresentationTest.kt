@@ -13,7 +13,9 @@ import java.time.Instant
 import java.util.Locale
 import java.util.UUID
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -84,5 +86,33 @@ class CoachReceiptPresentationTest {
         assertEquals("Weight saved", CoachReceiptPresentation(weight.copy(weightValue = null), CoachReceiptTarget.Unavailable).weightLabel)
         assertNull(CoachReceiptPresentation(weight.copy(operationKey = "${turnID}/delete_weight/x"), CoachReceiptTarget.Unavailable).weightLabel)
         assertNull(CoachReceiptPresentation(receipt(), CoachReceiptTarget.Unavailable).weightLabel)
+    }
+
+    private fun removal(write: String, mealID: UUID? = null, weightID: UUID? = null, workoutID: UUID? = null) =
+        CoachCommittedReceipt("$turnID/$write", turnID, mealID = mealID, weightID = weightID, workoutID = workoutID, committedRevision = 3)
+
+    @Test fun removalsReadRemovedAndOnlyOfferUndo() {
+        val meal = removal("delete_meal/${UUID.randomUUID()}", mealID = UUID.randomUUID())
+        val weight = removal("delete_weight/${UUID.randomUUID()}", weightID = UUID.randomUUID())
+        val workout = removal("delete_workout/${UUID.randomUUID()}", workoutID = UUID.randomUUID())
+        for (receipt in listOf(meal, weight, workout)) {
+            val p = CoachReceiptPresentation(receipt, CoachReceiptTarget.Unavailable)
+            assertEquals("Removed", p.committedStatus)
+            assertTrue(p.isRemoval)
+            assertTrue(CoachReceiptPresentation.showsCard(receipt))
+        }
+        assertEquals("Photo removed", CoachReceiptPresentation(removal("delete_photo/a/b", mealID = UUID.randomUUID()), CoachReceiptTarget.Loading).committedStatus)
+    }
+
+    @Test fun anUndoOfARemovalIsNotLabelledRemoved() {
+        val undone = removal("undo/$turnID/delete_meal/${UUID.randomUUID()}", mealID = UUID.randomUUID())
+        assertFalse(CoachReceiptPresentation(undone, CoachReceiptTarget.Loading).isRemoval)
+        assertEquals("Recorded operation", CoachReceiptPresentation(undone, CoachReceiptTarget.Loading).committedStatus)
+        assertTrue(CoachReceiptPresentation.showsCard(removal("undo/$turnID/food/2026-10-24")))
+    }
+
+    @Test fun ordinaryReceiptsKeepTheirCardRule() {
+        assertFalse(CoachReceiptPresentation.showsCard(removal("start_day")))
+        assertTrue(CoachReceiptPresentation.showsCard(receipt()))
     }
 }

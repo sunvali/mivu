@@ -214,6 +214,11 @@ class CoachToolsTest {
         assertEquals(CoachManualEdit.Coverage("2026-10-22", DayCompleteness.untracked),
             (write("set_day_coverage", """{"local_date":"2026-10-22","skipped":true}""") as CoachWrite.Manual).edit)
         rejects("undo_change", """{"operation_key":"${s(110)}/weight/2026-10-24"}""")
+        // iOS #83: a Coach delete, or the removal an undo of a logged meal made, can be undone too.
+        for (kind in listOf("delete_meal/${s(20)}", "delete_photo/${s(20)}/${s(31)}", "delete_weight/${s(80)}", "delete_workout/${s(90)}", "undo/${s(111)}/food/2026-10-24")) {
+            assertEquals("undo/${s(110)}/$kind", write("undo_change", """{"operation_key":"${s(110)}/$kind"}""").target)
+        }
+        rejects("undo_change", """{"operation_key":"${s(110)}/open_settings/x"}""")
         assertEquals("undo/${s(110)}/food/2026-10-24", write("undo_change", """{"operation_key":"${s(110)}/food/2026-10-24"}""").target)
         rejects("open_settings", """{"destination":"billing"}""")
         // Patch keys ignore expected_* guards and null fields, so a retry with the same intent matches.

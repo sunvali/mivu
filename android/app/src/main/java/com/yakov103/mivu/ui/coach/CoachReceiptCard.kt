@@ -70,9 +70,10 @@ fun CoachReceiptCard(
                     color = if (undo == CoachUndoState.Undone) secondary else MivuTheme.colors.success)
             }
             // One TalkBack stop: "Oatmeal with banana, 427 kcal".
-            val spoken = listOfNotNull(title(receipt), presentation.committedNutrition).joinToString(", ")
+            val title = presentation.removedRecord ?: title(receipt)
+            val spoken = listOfNotNull(title, presentation.committedNutrition).joinToString(", ")
             Row(Modifier.clearAndSetSemantics { contentDescription = spoken }, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(title(receipt), Modifier.weight(1f).padding(bottom = 2.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(title, Modifier.weight(1f).padding(bottom = 2.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 presentation.committedNutrition?.let { energy ->
                     val kcal = energy.removeSuffix(" kcal")
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -96,7 +97,7 @@ fun CoachReceiptCard(
             }
             if (presentation.itemRows.isNotEmpty()) Details(presentation)
             val review = @Composable {
-                if (receipt.mealID != null || receipt.workoutID != null) FilledTonalButton(
+                if (!presentation.isRemoval && (receipt.mealID != null || receipt.workoutID != null)) FilledTonalButton(
                     onClick = onOpen,
                     // Android has no workout detail yet; a workout receipt shows the action without opening it.
                     enabled = target is CoachReceiptTarget.Meal,
