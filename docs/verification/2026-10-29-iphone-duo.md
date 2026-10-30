@@ -90,6 +90,8 @@ Also changed: the live-day task returns early outside the Coach side pane; the "
 
 **Review:** an independent review of these commits found nothing blocking. Its one change, limiting the zero minimums to a crease so normal iPhones keep the original frames, is applied.
 
-**Not verified:** Closed and open-flat need Device Hub, and fold/unfold there with a draft is untested. The full 9-screen comparison and the iOS 26.5 regression weren't repeated. VoiceOver wasn't exercised.
+**Closed pose (466×678 pt), same app source, Device Hub:** `DuoLayoutUITests` 4 passed, 7 skipped (they need the inner display); `DuoLayoutTests` 12 passed. Full screen and one column on all four tabs, and typing with the on-screen keyboard keeps the field above it. The system places the tabs in the vertical bar beside the camera. Three tests first failed because they assumed a taller window, so they now scroll to Weight or skip in Closed; the app code didn't change.
+
+**Not verified:** Open-flat upright needs Device Hub, and fold/unfold there with a draft is untested. The full 9-screen comparison and the iOS 26.5 regression weren't repeated. VoiceOver wasn't exercised.
 
 **Known limit:** at accessibility text sizes the table composer can overflow upward past the crease.

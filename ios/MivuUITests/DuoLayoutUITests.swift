@@ -12,8 +12,9 @@ import XCTest
         return app
     }
 
-    func testSidewaysTodaySplitsSummaryAndMeals() {
+    func testSidewaysTodaySplitsSummaryAndMeals() throws {
         let app = launch(wide: true)
+        try XCTSkipIf(app.windows.firstMatch.frame.height < 760, "Too short to show Weight without scrolling: not a sideways window")
         let summary = app.descendants(matching: .any)["todaySummaryColumn"]
         let meals = app.descendants(matching: .any)["todayMealsColumn"]
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
@@ -29,6 +30,8 @@ import XCTest
         let window = app.windows.firstMatch.frame
         try XCTSkipIf(window.width > window.height, "Needs an upright window: run Closed, or rotate the open Duo upright")
         XCTAssertFalse(app.descendants(matching: .any)["todayMealsColumn"].exists)
+        // The list loads rows as they scroll in, and the outer display is short.
+        for _ in 0..<4 where !app.buttons["logWeight"].exists { app.swipeUp() }
         XCTAssertTrue(app.buttons["logWeight"].exists)
     }
 
@@ -92,6 +95,7 @@ import XCTest
         let window = app.windows.firstMatch.frame
         // Sideways, the crease always runs top to bottom, so table pose only exists upright.
         try XCTSkipIf(window.width > window.height, "Needs an upright window: rotate the open Duo upright")
+        try XCTSkipIf(window.height < 760, "The closed Duo can't stand in table pose")
         return app
     }
 
