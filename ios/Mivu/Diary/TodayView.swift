@@ -64,7 +64,8 @@ private struct DiarySetupView: View {
         failed = false
         var created = true
         if model.profiles.isEmpty { created = await model.createFirstProfile() } else { await model.createProfile(name: "Diary \(model.profiles.count + 1)") }
-        if model.readModel != nil { onSelected(); if created { onCreated() } } else { failed = true }
+        // Setup opens first so a waiting Snap It camera follows it instead of covering it.
+        if model.readModel != nil { if created { onCreated() }; onSelected() } else { failed = true }
     }
 }
 
@@ -189,6 +190,7 @@ struct DiaryRootView: View {
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
         .onOpenURL { if $0.host == "today" { selectedTab = "today" } }
         .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest(); openNotifiedMeal() }
+        .onChange(of: showOnboarding) { _, _ in openQuickLog() }
         .onChange(of: mealNotifications.openedMealID, initial: true) { _, _ in openNotifiedMeal() }
         .onChange(of: model.isChangingProfile) { _, changing in
             coachRoutes.synchronize(selection: model.selection, isChangingProfile: changing)
@@ -348,7 +350,7 @@ struct DiaryRootView: View {
             if !hasLoaded {
                 ProgressView("Opening diary").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.diaryCanvas)
             } else if model.readModel == nil {
-                NavigationStack { DiarySetupView(model: model, onSelected: { selectedTab = "today" }, onCreated: { showOnboarding = true }) }
+                NavigationStack { DiarySetupView(model: model, onSelected: { selectedTab = "today"; openQuickLog() }, onCreated: { showOnboarding = true }) }
             } else {
                 rootTabs
             }
@@ -392,10 +394,9 @@ struct DiaryRootView: View {
         }
     }
     private func openQuickLog() {
-        guard quickLog.pending, hasLoaded else { return }
+        // Without a diary there is nowhere to save; the request waits for setup so the camera still opens.
+        guard quickLog.pending, hasLoaded, let owner = model.selection, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
         quickLog.pending = false
-        // Without a diary there is nowhere to save; the app shows setup instead.
-        guard let owner = model.selection, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
         // shortcut: sheets presented inside a tab (composer, Coach camera) stay up and block this cover; dismiss them if that shows up in use.
         routes.route = nil; coachHistory = nil; noteMealID = nil
         selectedTab = "today"; quickLogOwner = owner

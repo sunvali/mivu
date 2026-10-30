@@ -491,17 +491,18 @@ enum DiaryCaptureResult: Equatable, Sendable {
         changesTask?.cancel(); cancelSampleWorker(); backupTask?.cancel(); backupRequested = nil; return true
     }
     private func finishProfileTransition() { isChangingProfile = false; queueBackup(); resumeWorker() }
-    private func clearProfileSelection() async {
+    private func clearProfileSelection(rememberSignOut: Bool = true) async {
         await backup?.selectProfile(nil); await store.signOut()
         if let photoLoader { await photoLoader.purgeForMemoryPressure() }
         selection = nil; manualCaptureAttempt = nil; readModel = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
         photoRequestGeneration &+= 1; changeGeneration &+= 1
         backupGeneration = nil; backupStatus = FolderBackupStatus(); backupScheduledRevision = nil
-        preferences?.set(true, forKey: "diarySignedOut"); preferences?.removeObject(forKey: "diarySelectedProfile")
+        if rememberSignOut { preferences?.set(true, forKey: "diarySignedOut"); preferences?.removeObject(forKey: "diarySelectedProfile") }
     }
     private func recoverProfileSelection(_ previous: UUID?) async {
         if let previous { do { try await install(try await profileSelection(previous)); return } catch {} }
-        await clearProfileSelection()
+        // A failed read (locked phone, Snap It launch) is not a sign-out; the next read reopens the same diary.
+        await clearProfileSelection(rememberSignOut: false)
     }
     private func rememberSelection() { if let id = readModel?.head.profile.id { preferences?.set(id.uuidString, forKey: "diarySelectedProfile"); preferences?.set(false, forKey: "diarySignedOut") } }
     func loadProfiles() async { guard !isChangingProfile else { return }; do { profiles = try await store.profiles() } catch { present(error) } }
