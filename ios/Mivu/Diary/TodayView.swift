@@ -671,7 +671,7 @@ struct TodayView: View {
                         .diarySummaryCard()
                         .overlay { if justChanged { RoundedRectangle(cornerRadius: 24).inset(by: 8).stroke(Color.diaryAccent, lineWidth: 2) } }
                         .accessibilityIdentifier(justChanged ? "justChangedMeal" : "mealRow")
-                        .accessibilityValue(justChanged ? "Just updated" : "")
+                        .accessibilityHint(justChanged ? "Just updated" : "") // A value here would hide MealRow's "Needs review".
                         .modifier(MealRowDeletion(meal: meal, model: model))
                 }
                 .animation(reduceMotion ? nil : .snappy, value: changedMealID)
@@ -723,6 +723,7 @@ struct TodayView: View {
             }
         }
         .task(id: isLiveDay ? currentRevisions : nil) {
+            guard isLiveDay else { return }
             let changed = DuoLayout.changedMeal(previous: mealRevisions, current: currentRevisions)
             mealRevisions = currentRevisions
             // Set even when nil: a cancelled wait below never cleared the last highlight.

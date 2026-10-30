@@ -87,7 +87,7 @@ struct CoachView: View {
 
     var body: some View {
         // Propped on a table, the conversation keeps the standing half and the controls move to the flat half.
-        DuoSplit(axis: .vertical, showsSecondary: atTable) {
+        DuoSplit(axis: .vertical, showsSecondary: atTable, followsCrease: !editing) {
             conversation
                 // The conversation scrolls behind Pip and the composer; the table insets its content by the composer's height.
                 .overlay(alignment: .bottom) {
@@ -96,7 +96,7 @@ struct CoachView: View {
                     }
                 }
         } secondary: {
-            composerStack
+            composerStack.frame(maxHeight: .infinity, alignment: .bottom)
         }
         .background(Color.diaryCanvas)
         // Beside the live day the sidebar is on the far page, but this NavigationStack still inherits its inset.

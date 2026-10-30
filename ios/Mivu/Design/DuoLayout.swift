@@ -55,7 +55,8 @@ struct DuoLayoutRoot<Content: View>: View {
             .environment(\.isWideLayout, wide)
             .environment(\.windowSizeClass, sizeClass)
             .environment(\.duoPosture, forcedPosture ?? DuoLayout.posture(fold: fold))
-            .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
+            // The whole window: the keyboard shortens the content, and an upright Duo must not read as sideways.
+            .background { Color.clear.onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }.ignoresSafeArea() }
             .modifier(FoldReader { fold = $0 })
     }
 }
@@ -78,13 +79,15 @@ private struct FoldReader: ViewModifier {
 struct DuoSplit<Primary: View, Secondary: View>: View {
     var axis: Axis = .horizontal
     var showsSecondary = true
+    /// False splits evenly even across a crease, for when the keyboard has taken over the flat half.
+    var followsCrease = true
     @ViewBuilder let primary: Primary
     @ViewBuilder let secondary: Secondary
     @State private var fold: CGRect?
 
     var body: some View {
         // Only a crease across this split's axis divides it; book splits side by side, table top and bottom.
-        let crease = showsSecondary ? fold.flatMap { (axis == .horizontal) == ($0.height > $0.width) ? $0 : nil } : nil
+        let crease = showsSecondary && followsCrease ? fold.flatMap { (axis == .horizontal) == ($0.height > $0.width) ? $0 : nil } : nil
         let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
         layout {
             // The crease size goes outside, so a flexible primary can't grow past the crease.

@@ -32,6 +32,19 @@ import XCTest
         XCTAssertTrue(app.buttons["logWeight"].exists)
     }
 
+    func testUprightKeyboardKeepsOneColumn() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        let window = app.windows.firstMatch.frame
+        try XCTSkipIf(window.width > window.height, "Needs an upright window: rotate the open Duo upright")
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap()
+        try XCTSkipUnless(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Needs the software keyboard")
+        XCTAssertFalse(app.descendants(matching: .any)["coachLiveDay"].waitForExistence(timeout: 3),
+                       "The keyboard shortens the view, but the window is still upright")
+    }
+
     func testSidewaysCoachShowsLiveDayAndHighlightsChange() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture",
@@ -89,6 +102,25 @@ import XCTest
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         XCTAssertGreaterThan(input.frame.minY, app.windows.firstMatch.frame.midY, "The composer sits on the flat half")
         XCTAssertLessThanOrEqual(app.tables.firstMatch.frame.maxY, app.windows.firstMatch.frame.midY + 1, "The conversation stays on the standing half")
+    }
+
+    func testTableComposerRestsOnTheTabBar() throws {
+        let app = try launchTable([])
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15))
+        XCTAssertLessThan(app.buttons["Coach"].firstMatch.frame.minY - input.frame.maxY, 72,
+                          "The composer sits at the bottom of the flat half, so a tall one can't slide under the tab bar")
+    }
+
+    func testTableKeyboardKeepsTheFieldVisible() throws {
+        let app = try launchTable(["--coach-inference-fixture"])
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap()
+        let keyboard = app.keyboards.firstMatch
+        try XCTSkipUnless(keyboard.waitForExistence(timeout: 5), "Needs the software keyboard")
+        input.typeText("Two eggs")
+        XCTAssertLessThanOrEqual(input.frame.maxY, keyboard.frame.minY, "The field stays above the keyboard")
+        XCTAssertEqual(input.value as? String, "Two eggs", "The field keeps focus while it moves")
     }
 
     func testTableProgressPutsTheChartAboveTheDetails() throws {
