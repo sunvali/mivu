@@ -87,9 +87,10 @@ struct DuoSplit<Primary: View, Secondary: View>: View {
         let crease = showsSecondary ? fold.flatMap { (axis == .horizontal) == ($0.height > $0.width) ? $0 : nil } : nil
         let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
         layout {
+            // The crease size goes outside, so a flexible primary can't grow past the crease.
             primary
-                .frame(width: axis == .horizontal ? crease?.minX : nil, height: axis == .vertical ? crease?.minY : nil)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: axis == .horizontal ? crease?.minX : nil, height: axis == .vertical ? crease?.minY : nil)
             if showsSecondary {
                 if let crease { Color.clear.frame(width: axis == .horizontal ? crease.width : nil, height: axis == .vertical ? crease.height : nil) }
                 secondary.frame(maxWidth: .infinity, maxHeight: .infinity)
