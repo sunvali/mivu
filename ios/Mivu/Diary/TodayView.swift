@@ -722,8 +722,7 @@ struct TodayView: View {
                 todayList { leadingSections; mealSections; trailingSections }
             }
         }
-        .task(id: currentRevisions) {
-            guard isLiveDay else { return }
+        .task(id: isLiveDay ? currentRevisions : nil) {
             let changed = DuoLayout.changedMeal(previous: mealRevisions, current: currentRevisions)
             mealRevisions = currentRevisions
             guard let changed else { return }
