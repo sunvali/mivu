@@ -76,7 +76,7 @@ struct CoachCameraView: View {
         Button { startTimer() } label: {
             Label("3-second timer", systemImage: "timer").labelStyle(.iconOnly).font(.title2).frame(minWidth: 52, minHeight: 52)
         }
-        .disabled(shutterDisabled || countdown != nil)
+        .disabled(shutterDisabled)
         .accessibilityIdentifier("coachCameraTimer")
     }
     private var statusCover: some View {
@@ -145,7 +145,7 @@ struct CoachCameraView: View {
         .accessibilityIdentifier("coachCameraShutter")
     }
     private var shutterDisabled: Bool {
-        !state.isRunning || state.isCapturing || draft.isPreparing || scene != .active || closing
+        !state.isRunning || state.isCapturing || draft.isPreparing || scene != .active || closing || countdown != nil
             || (atTable && draft.attachments.count >= 8)
     }
     private func startTimer() {
@@ -155,6 +155,7 @@ struct CoachCameraView: View {
                 guard (try? await Task.sleep(for: .seconds(1))) != nil, !closing else { countdown = nil; return }
             }
             countdown = nil
+            guard !shutterDisabled else { return }
             shutter()
         }
     }

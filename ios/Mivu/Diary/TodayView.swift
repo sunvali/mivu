@@ -725,9 +725,9 @@ struct TodayView: View {
         .task(id: isLiveDay ? currentRevisions : nil) {
             let changed = DuoLayout.changedMeal(previous: mealRevisions, current: currentRevisions)
             mealRevisions = currentRevisions
-            guard let changed else { return }
+            // Set even when nil: a cancelled wait below never cleared the last highlight.
             changedMealID = changed
-            guard (try? await Task.sleep(for: .seconds(3))) != nil else { return }
+            guard changed != nil, (try? await Task.sleep(for: .seconds(3))) != nil else { return }
             changedMealID = nil
         }
         .safeAreaInset(edge: .bottom) {
