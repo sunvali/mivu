@@ -1,5 +1,7 @@
 # iPhone Duo Support Implementation Plan
 
+> Shipped as one PR. The sidebar and Diary split tasks were dropped; see "What shipped differs from the first draft" in the spec.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Mivu fills the iPhone Duo inner display, stays the normal app when held upright, uses a sidebar and two-column layouts when turned sideways, and offers a half-folded meal-snap camera.

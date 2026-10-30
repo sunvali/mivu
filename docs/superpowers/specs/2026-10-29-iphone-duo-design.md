@@ -1,6 +1,22 @@
 # iPhone Duo support — design
 
-Date: 2026-10-29. Status: draft for owner approval.
+Date: 2026-10-29. Status: approved and shipped in one PR.
+
+## What shipped differs from the first draft
+
+The sections below keep the original reasoning. Where they disagree, this list wins:
+
+- One PR, not three, at the owner's request.
+- No app sidebar. The system's own vertical bar already holds the four tabs and the profile control
+  when sideways, so `.sidebarAdaptable` wasn't added.
+- Diary stays one column, capped at a readable width, in every pose.
+- Sideways panes meet at the crease in book pose rather than always splitting 50/50.
+- Table layouts cover Coach, Progress and the camera; see "Fold-aware modes", which replaces the
+  non-goal about table-pose layouts.
+- The half-folded camera is Coach's own camera. The sample-mode camera described below was removed.
+- While typing in table pose, the keyboard covers the flat half, so the split stops following the
+  crease and the field sits right above the keyboard.
+- "Sideways" compares the whole window, so the keyboard can't make an upright Duo read as wide.
 
 ## Intent
 
