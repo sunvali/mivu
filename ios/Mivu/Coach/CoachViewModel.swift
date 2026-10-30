@@ -671,6 +671,7 @@ private final class CoachNavigationReadFence: Sendable {
     private var linksGeneration: UInt64?
     private var linksAreCurrent: Bool { !diary.isChangingProfile && linksSelection == diary.selection && linksGeneration == diary.changeGeneration }
     private var linksRequest = UUID()
+    @ObservationIgnored private var undoExpiry: Task<Void, Never>?
     private(set) var linksRevision = 0
     private(set) var historyFixtureFacts = ""
     struct FixtureReplyStatus: Equatable {
@@ -688,6 +689,7 @@ private final class CoachNavigationReadFence: Sendable {
         receiptTargets = receiptTargets.filter { ids.contains($0.key) }
         do {
             let values = try await diary.store.coachReceiptTargets(exchanges: rows, expectedSelection: token)
+            let undoLeft = try await diary.store.expireCoachUndo(expectedProfileID: token.identity.profileID)
             let undo = try await diary.store.coachUndoStates(keys: rows.flatMap { $0.receipts.map(\.operationKey) }, expectedProfileID: token.identity.profileID)
             let dayIDs = Set(rows.filter(\.needsDayChoice).compactMap(\.trackingDayID))
             let labels: [UUID: String]
@@ -695,9 +697,20 @@ private final class CoachNavigationReadFence: Sendable {
             else { labels = try await diary.store.coachCapturedDayLabels(ids: dayIDs, expectedSelection: token) }
             guard diary.selection == token, !diary.isChangingProfile, linksRequest == request, diary.changeGeneration == generation, !Task.isCancelled else { return }
             linksSelection = token; linksGeneration = generation; receiptTargets = values; undoStates = undo; capturedDayLabels = labels; linksRevision += 1
+            scheduleUndoExpiry(after: undoLeft)
         } catch {
             guard diary.selection == token, linksRequest == request, diary.changeGeneration == generation, !Task.isCancelled else { return }
             linksSelection = token; linksGeneration = generation; receiptTargets = Dictionary(uniqueKeysWithValues: ids.map { ($0, .failed) }); undoStates = [:]; capturedDayLabels = [:]; linksRevision += 1
+        }
+    }
+    /// A held delete's Undo goes at its ten minutes, and the held copy with it, without waiting for another change.
+    private func scheduleUndoExpiry(after seconds: TimeInterval?) {
+        undoExpiry?.cancel()
+        undoExpiry = seconds.map { seconds in
+            Task { [weak self, sleep] in
+                guard (try? await sleep(.seconds(seconds + 1))) != nil, !Task.isCancelled else { return }
+                await self?.refreshLinks()
+            }
         }
     }
     private func refreshHistoryFixtureFacts() async {
