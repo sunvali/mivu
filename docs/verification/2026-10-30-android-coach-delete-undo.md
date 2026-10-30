@@ -46,3 +46,22 @@ Plan: [Coach delete Undo](../superpowers/plans/2026-10-29-coach-delete-undo.md).
 - Long-press on a Today or History meal row opens the delete confirmation directly (iOS shows a one-item context menu first).
 - The `undo_change` tool description is unchanged: the declarations are locked to the iOS golden (`declarationsMatchIosGolden`) and iOS did not change the text.
 - Days are never deleted on Android, so no day is re-resolved when a meal comes back.
+
+## Fix round
+
+Tested source: `aa664784a39d6174e69dd023b06e9af87c06c95a` (the commits after it change docs only). Same environment and rules as above.
+
+- Held copies are erased by any Coach write (`applyCoachWrites`) and before each capture, each in its own transaction whose failure is ignored; the capture transaction no longer swallows errors.
+- The Coach screen schedules a refresh at the earliest held expiry (`heldUndoExpiry`); a tap on an expired held Undo throws `DiaryError.UndoExpired`, shown as "Undo is no longer available."
+- Photo Undo restores the photo under a new ID.
+
+| Scope | Result |
+|---|---|
+| JVM `:app:testDebugUnitTest` (new `CoachMessageTest`) | 397 passed, 0 failed; `:app:lintDebug` successful |
+| `CoachDeleteUndoTest` (+2 new, 2 changed) | 24/24 |
+| `CoachWritesTest` | 18/18 |
+| `CoachTimelineTest` | 11/11 |
+| `DiaryCaptureTest` | 16/16 |
+| `CoachScreenTest` | 22/22 |
+
+Failed first: `CoachMessageTest`, and in `CoachDeleteUndoTest` `undoExpiresAfterTenMinutes` (expected `UndoExpired`), `undoRestoresPhotoToExistingMeal` (new ID), `aWriteErasesCopiesPastTheWindowWhileTheAppStaysOpen` and `heldUndoExpiryNamesTheEarliestLiveCopy`. The screen's scheduled refresh has no automated test; it is not seen running on a screen.
