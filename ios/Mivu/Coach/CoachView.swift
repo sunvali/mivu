@@ -99,6 +99,8 @@ struct CoachView: View {
             composerStack
         }
         .background(Color.diaryCanvas)
+        // Beside the live day the sidebar is on the far page, but this NavigationStack still inherits its inset.
+        .ignoresSafeArea(.container, edges: isWide ? .trailing : [])
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {

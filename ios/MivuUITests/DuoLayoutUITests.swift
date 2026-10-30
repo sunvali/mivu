@@ -71,16 +71,19 @@ import XCTest
     }
 
     // Propped half-open on a table: content stays on the standing half, controls move to the flat half.
-    private func launchTable(_ extra: [String]) -> XCUIApplication {
+    private func launchTable(_ extra: [String]) throws -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english",
                                "--duo-posture-ui-test", "table"] + extra
         app.launch()
+        let window = app.windows.firstMatch.frame
+        // Sideways, the crease always runs top to bottom, so table pose only exists upright.
+        try XCTSkipIf(window.width > window.height, "Needs an upright window: rotate the open Duo upright")
         return app
     }
 
-    func testTableCoachMovesComposerToTheFlatHalf() {
-        let app = launchTable([])
+    func testTableCoachMovesComposerToTheFlatHalf() throws {
+        let app = try launchTable([])
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         let input = app.textFields["coachInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
@@ -88,8 +91,8 @@ import XCTest
         XCTAssertLessThanOrEqual(app.tables.firstMatch.frame.maxY, app.windows.firstMatch.frame.midY + 1, "The conversation stays on the standing half")
     }
 
-    func testTableProgressPutsTheChartAboveTheDetails() {
-        let app = launchTable(["--coach-navigation-start-today", "--diary-history-fixture"])
+    func testTableProgressPutsTheChartAboveTheDetails() throws {
+        let app = try launchTable(["--coach-navigation-start-today", "--diary-history-fixture"])
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 15))
         app.buttons["Progress"].firstMatch.tap()
         let primary = app.descendants(matching: .any)["progressPrimaryColumn"]
@@ -98,8 +101,8 @@ import XCTest
         XCTAssertLessThanOrEqual(primary.frame.maxY, secondary.frame.minY + 1, "Chart on the standing half, details below")
     }
 
-    func testTableCameraKeepsShootingUntilDone() {
-        let app = launchTable([])
+    func testTableCameraKeepsShootingUntilDone() throws {
+        let app = try launchTable([])
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["coachPhotos"].waitForExistence(timeout: 5)); app.buttons["coachPhotos"].tap()
         let shutter = app.buttons["coachCameraShutter"]

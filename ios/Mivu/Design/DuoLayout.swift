@@ -113,6 +113,7 @@ struct DuoBeside<Primary: View, Secondary: View>: View {
                 .environment(\.isWideLayout, false)
                 .environment(\.horizontalSizeClass, .compact)
         }
+        .background(Color.diaryCanvas)
     }
 }
 
