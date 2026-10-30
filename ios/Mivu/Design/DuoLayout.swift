@@ -88,15 +88,18 @@ struct DuoSplit<Primary: View, Secondary: View>: View {
     var body: some View {
         // Only a crease across this split's axis divides it; book splits side by side, table top and bottom.
         let crease = showsSecondary && followsCrease ? fold.flatMap { (axis == .horizontal) == ($0.height > $0.width) ? $0 : nil } : nil
+        let minimum: CGFloat? = crease == nil ? nil : 0
         let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
         layout {
             // The crease size goes outside, so a flexible primary can't grow past the crease.
+            // Zero minimums at a crease: a pane that reported an oversized height or width would shift
+            // this split, move the crease in its coordinates, and re-lay out forever.
             primary
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: minimum, maxWidth: .infinity, minHeight: minimum, maxHeight: .infinity)
                 .frame(width: axis == .horizontal ? crease?.minX : nil, height: axis == .vertical ? crease?.minY : nil)
             if showsSecondary {
                 if let crease { Color.clear.frame(width: axis == .horizontal ? crease.width : nil, height: axis == .vertical ? crease.height : nil) }
-                secondary.frame(maxWidth: .infinity, maxHeight: .infinity)
+                secondary.frame(minWidth: minimum, maxWidth: .infinity, minHeight: minimum, maxHeight: .infinity)
             }
         }
         .modifier(FoldReader { fold = $0 })

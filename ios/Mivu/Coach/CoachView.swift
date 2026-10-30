@@ -96,9 +96,10 @@ struct CoachView: View {
                     }
                 }
         } secondary: {
-            composerStack.frame(maxHeight: .infinity, alignment: .bottom)
+            composerStack.frame(minHeight: 0, maxHeight: .infinity, alignment: .bottom)
         }
-        .background(Color.diaryCanvas)
+        // Also behind the keyboard: on the Duo it can sit lower than the inset it reports, leaving a bare window band.
+        .background { Color.diaryCanvas.ignoresSafeArea() }
         // Beside the live day the sidebar is on the far page, but this NavigationStack still inherits its inset.
         .ignoresSafeArea(.container, edges: isWide ? .trailing : [])
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
