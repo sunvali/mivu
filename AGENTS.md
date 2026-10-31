@@ -31,6 +31,8 @@ for this native app. No web frontend is required.
 - Follow the PR/CI/release contract in [CI and delivery](docs/development/ci-cd.md):
   merge through a reviewed PR, verify required checks and artifacts, and keep
   release claims tied to the exact merged revision and observed run.
+- PRs touching `ios/`, `android/`, `fixtures/` or `design-system/mivu/` must update
+  `docs/parity.md` or state `Parity: unchanged - <reason>` in the description; CI fails otherwise.
 - Before merge, run Ponytail Review, fix blocking findings, and verify CI.
   Follow the owner's existing authorization for merging; do not add approval gates.
 - Use Conventional Commit PR/squash titles. All hosted jobs use `ubuntu-slim`

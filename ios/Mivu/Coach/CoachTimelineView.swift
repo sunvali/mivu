@@ -27,6 +27,8 @@ struct CoachTimelineView: UIViewRepresentable {
     var onViewportRefreshReady: (@MainActor (@escaping ViewportRefresh) -> Void)? = nil
     var onAccessibilityPageRequestReady: (@MainActor (@escaping AccessibilityPageRequest) -> Void)? = nil
     var onReply: (@MainActor (CoachExchangeSummary) -> Void)? = nil
+    /// Set only while the composer is editing, so a tap on the conversation closes the keyboard.
+    var dismissKeyboard: (@MainActor () -> Void)? = nil
     let content: (CoachTimelineRow) -> AnyView
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
@@ -42,6 +44,9 @@ struct CoachTimelineView: UIViewRepresentable {
         table.dataSource = context.coordinator; table.delegate = context.coordinator
         let replyPan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.replyPan(_:)))
         replyPan.delegate = context.coordinator; table.addGestureRecognizer(replyPan)
+        let keyboardTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.keyboardTap))
+        keyboardTap.cancelsTouchesInView = false // rows keep their own taps
+        keyboardTap.delegate = context.coordinator; table.addGestureRecognizer(keyboardTap)
         table.onViewport = { [weak coordinator = context.coordinator] in coordinator?.reportViewport() }
         context.coordinator.table = table
         context.coordinator.baselineCompletion()
@@ -151,10 +156,20 @@ struct CoachTimelineView: UIViewRepresentable {
         private var swipingCell: CoachTimelineCell?
         private var swipeArmed = false
         func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+            if gesture is UITapGestureRecognizer { return owner.dismissKeyboard != nil }
             guard let pan = gesture as? UIPanGestureRecognizer, owner.onReply != nil, let table else { return false }
             let velocity = pan.velocity(in: table)
             return velocity.x > 0 && velocity.x > abs(velocity.y) * 2 && replyTurn(at: pan.location(in: table)) != nil
         }
+        func gestureRecognizer(_ gesture: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            gesture is UITapGestureRecognizer
+        }
+        func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard gesture is UITapGestureRecognizer, let jump = table?.jumpButton else { return true }
+            return touch.view?.isDescendant(of: jump) != true
+        }
+        @objc func keyboardTap() { owner.dismissKeyboard?() }
         private func replyTurn(at point: CGPoint) -> (CoachTimelineCell, CoachExchangeSummary)? {
             guard let table, let path = table.indexPathForRow(at: point), table.rows.indices.contains(path.row),
                   let turn = table.rows[path.row].exchange, let cell = table.cellForRow(at: path) as? CoachTimelineCell else { return nil }

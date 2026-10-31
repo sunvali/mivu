@@ -104,6 +104,25 @@ import XCTest
         XCTAssertEqual(app.textFields["coachInput"].value as? String, "Keep across diary links")
     }
 
+    func testTappingTheConversationClosesTheKeyboardAndKeepsTheDraft() {
+        let app = launch()
+        let table = app.tables["coachViewport"], input = app.textFields["coachInput"], keyboard = app.keyboards.firstMatch
+        table.swipeDown()
+        let jump = app.buttons["Jump to latest"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 10))
+        input.tap(); input.typeText("Keep this draft")
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        // Controls over the conversation keep their own job and leave the keyboard up.
+        jump.tap()
+        XCTAssertTrue(keyboard.isHittable)
+        table.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !keyboard.exists || !keyboard.frame.intersects(app.frame)
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed)
+        XCTAssertEqual(input.value as? String, "Keep this draft")
+    }
+
     private func launch(_ extra: [String] = [], initialTab: String = "Coach") -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-history-fixture", "--coach-inference-fixture", "--proof-english"] + extra
