@@ -1,6 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "bootstrap-sha": "4f97261eb10d2af2a1301251c8e46748d7cc0dab",
+  "last-release-sha": "594e8aaeff620b68d55288f07c2e8ed4cf81b284",
   "release-type": "simple",
   "include-component-in-tag": true,
   "separate-pull-requests": true,
@@ -15,7 +16,7 @@
           "path": "Config/Shared.xcconfig"
         }
       ],
-      "last-release-sha": "594e8aaeff620b68d55288f07c2e8ed4cf81b284"
+      "exclude-paths": ["ios/MivuTests", "ios/MivuUITests"]
     },
     "android": {
       "package-name": "android"

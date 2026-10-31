@@ -186,15 +186,17 @@ navigation changes, physical-device checks, or Ponytail Review before merge. Rep
 Squash merges use the Conventional Commit PR title: `fix: ...` bumps patch,
 `feat: ...` bumps minor, and `feat!: ...` or a breaking change bumps major.
 iOS and Android are separate release-please packages and are never coupled.
-Each has its own `version.txt`, `CHANGELOG.md`, version PR and tag (`ios-v1.2.0`,
-`android-v0.2.0`). A commit bumps only the platforms whose folder it changes;
-shared folders (`docs`, `scripts`, `fixtures`, `design-system`) bump neither.
+Each has its own `version.txt`, `CHANGELOG.md`, version PR, tag and GitHub release
+(`ios-v1.2.1`, `android-v0.2.0`). A commit bumps a platform only when it changes
+that platform's folder; test-only iOS changes (`ios/MivuTests`, `ios/MivuUITests`)
+and shared folders (`docs`, `scripts`, `fixtures`, `design-system`) bump neither.
+A commit that touches both platforms bumps both, so keep them in separate PRs.
 iOS also updates its Xcode marketing version; Android reads `android/version.txt`
-as `versionName`, and its `versionCode` comes from the Play upload ledger. iOS
-continues from the shared `v1.1.1` release (`last-release-sha` points at it, so
-the first `ios-v` release does not re-list older commits); Android starts at
-`0.1.0`. Existing `v*` and rehearsal tags are preserved. `test_workflow_contract.py` fails if the packages are linked or share
-a version file.
+as `versionName`, and its `versionCode` comes from the Play upload ledger. iOS continues from the shared
+`v1.2.0` release: `last-release-sha` points at it and must stay at the top level
+of the config, the only place release-please reads it. Android starts at `0.1.0`.
+Existing `v*` and rehearsal tags are preserved. `test_workflow_contract.py` fails
+if the packages are linked or share a version file.
 Bootstrap starts after `4f97261eb10d2af2a1301251c8e46748d7cc0dab`.
 
 Merging a reviewed version PR creates its tag and GitHub release. Version notes
@@ -224,7 +226,7 @@ under AGPL-3.0 so Mivu qualifies for OpenAI's open-source ChatGPT plan usage.
 After a version tag exists, export it locally into a checkout of the public repo,
 review the diff, then commit and push there:
 
-    python3 scripts/ci/export_public.py v1.1.0 ../mivu-public
+    python3 scripts/ci/export_public.py ios-v1.2.1 ../mivu-public
 
 Only `ios/` and the files in `public/` (license, notice, README) are exported;
 the export refuses secret-looking content. Creating the public repository and

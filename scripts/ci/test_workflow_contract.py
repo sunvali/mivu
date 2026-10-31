@@ -148,6 +148,16 @@ class PlatformVersions(unittest.TestCase):
                     self.assertFalse(file.startswith(('/', '..')), 'Version files stay inside their package')
                     self.assertTrue((self.root / path / file).exists())
 
+    def test_ios_counts_commits_from_its_last_release_only(self):
+        config = json.loads((self.root / 'release-please-config.json').read_text())
+        self.assertRegex(config['last-release-sha'], r'^[0-9a-f]{40}$')
+        for package in config['packages'].values():
+            self.assertNotIn('last-release-sha', package, 'Release-please reads this key only at the top level')
+
+    def test_test_only_changes_release_nothing(self):
+        config = json.loads((self.root / 'release-please-config.json').read_text())
+        self.assertEqual(config['packages']['ios']['exclude-paths'], ['ios/MivuTests', 'ios/MivuUITests'])
+
     def test_each_app_reads_only_its_own_version(self):
         self.assertFalse((self.root / 'version.txt').exists(), 'No shared root version')
         for platform in ('ios', 'android'):
