@@ -212,7 +212,7 @@ private struct DaySections: View {
                             .accessibilityIdentifier("historyMeal")
                             .diarySummaryCard()
                     }
-                } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
+                } header: { DiarySectionHeader(title: "Meals") }
                 let workouts = snapshot.workouts.filter { $0.dayID == dayID }.sorted { $0.performedAt < $1.performedAt }
                 if !workouts.isEmpty {
                     Section {
@@ -223,7 +223,7 @@ private struct DaySections: View {
                                 }.frame(minHeight: 44)
                             }.diarySummaryCard()
                         }
-                    } header: { Text("Workouts").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
+                    } header: { DiarySectionHeader(title: "Workouts") }
                 }
             }
         }

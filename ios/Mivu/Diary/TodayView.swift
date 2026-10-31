@@ -675,7 +675,7 @@ struct TodayView: View {
                         .modifier(MealRowDeletion(meal: meal, model: model))
                 }
                 .animation(reduceMotion ? nil : .snappy, value: changedMealID)
-            } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
+            } header: { DiarySectionHeader(title: "Meals") }
         }
     }
     @ViewBuilder private var trailingSections: some View {
