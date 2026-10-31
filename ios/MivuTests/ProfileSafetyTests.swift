@@ -35,12 +35,16 @@ import Testing
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path) }
 
         let diary = DiaryViewModel(store: DiaryStore(directory: root), preferences: defaults)
+        diary.protectedDataAvailable = { false }
         await diary.load(createDefaultProfile: false)
+        await diary.createFirstProfile()
         #expect(diary.readModel == nil)
+        #expect(diary.errorMessage == nil, "A locked phone is expected, so no alert waits at unlock")
         #expect(!defaults.bool(forKey: "diarySignedOut"), "A failed read is not a sign-out")
         #expect(defaults.string(forKey: "diarySelectedProfile") == existing.uuidString)
 
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        diary.protectedDataAvailable = { true }
         await diary.createFirstProfile()
         #expect(diary.readModel?.head.profile.id == existing, "Unlocking reopens the diary without the chooser")
         await diary.signOut()

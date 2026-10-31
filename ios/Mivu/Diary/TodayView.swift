@@ -196,7 +196,7 @@ struct DiaryRootView: View {
             coachRoutes.synchronize(selection: model.selection, isChangingProfile: changing)
             if changing { coachHistory = nil }
             if changing { coach.cancel(); companionRuntime.stop(); companion.enterBackground(); refreshCompanion() }
-            else { resetCompanionProfile(); Task { await coach.waitForWorker(); coach.resume() } }
+            else { resetCompanionProfile(); openQuickLog(); Task { await coach.waitForWorker(); coach.resume() } }
         }
         .onChange(of: model.readModel?.profile.id) { _, _ in
             coach.draft = MealDraft(); coach.errorMessage = nil
