@@ -135,8 +135,10 @@ import XCTest
         let settings = app.buttons["profileSettings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 15))
         settings.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        // The Setup section sits below the fold, and the list builds rows only as they scroll in.
         let redo = app.buttons["redoOnboarding"]
-        XCTAssertTrue(redo.waitForExistence(timeout: 5))
+        reveal(redo, in: app)
         redo.tap()
         let next = app.buttons["onboardingNext"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
