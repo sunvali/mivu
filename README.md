@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/pip.png" alt="Pip, Mivu's orange fox companion wearing a teal scarf" width="160">
+  <img src="ios/Mivu/Assets.xcassets/AppIcon.appiconset/AppIcon.png" alt="The Mivu app icon: Pip, an orange fox wearing a teal scarf" width="160">
 </p>
 
 <h1 align="center">Mivu</h1>
