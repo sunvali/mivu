@@ -14,6 +14,7 @@ struct CoachCameraView: View {
     @State private var closing = false
     @State private var shotsAdded = 0
     @State private var countdown: Int?
+    @State private var timer: Task<Void, Never>?
     @Environment(\.scenePhase) private var scene
     @Environment(\.duoPosture) private var posture
     @Environment(\.dismiss) private var dismiss
@@ -27,6 +28,8 @@ struct CoachCameraView: View {
             if !visible && selected.isEmpty { Task { try? await camera.libraryCancelled() } }
         }
         .onChange(of: selected) { _, items in startImport(items) }
+        // Picking the phone up stops a countdown that was set for the table.
+        .onChange(of: atTable) { timer?.cancel() }
         .alert("Could not add photo", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil; selected = []; Task { try? await camera.libraryCancelled() } }
         } message: { Text(error ?? "") }
@@ -149,7 +152,7 @@ struct CoachCameraView: View {
             || (atTable && draft.attachments.count >= 8)
     }
     private func startTimer() {
-        importing = Task {
+        timer = Task {
             for second in (1...3).reversed() {
                 countdown = second
                 guard (try? await Task.sleep(for: .seconds(1))) != nil, !closing else { countdown = nil; return }
@@ -162,7 +165,9 @@ struct CoachCameraView: View {
     /// At the table the camera stays for the next plate; otherwise a photo returns straight to Coach.
     private func added() {
         guard !Task.isCancelled, !closing else { return }
-        if atTable { shotsAdded += 1 } else { finish() }
+        guard atTable else { finish(); return }
+        shotsAdded += 1
+        AccessibilityNotification.Announcement(shotsAdded == 1 ? "1 photo added" : "\(shotsAdded) photos added").post()
     }
     private var syntheticButton: some View {
         Button(DiaryLaunch.isSampleMode ? "Add synthetic apple photo" : "Add synthetic test photo") {
