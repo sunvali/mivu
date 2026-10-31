@@ -58,7 +58,8 @@ struct CoachView: View {
                 CoachTimelineView(timeline: timeline, rows: timelineRows(timeline), diagnostics: fixtureDiagnostics,
                     jumpToLatest: jumpToLatestAction(timeline), bottomInset: composerHeight, onViewportRefreshReady: { refreshViewport = $0 },
                     onAccessibilityPageRequestReady: { requestAccessibilityPage = $0 },
-                    onReply: { turn in reply(to: turn, fromPip: turn.assistantText != nil) }) { row in
+                    onReply: { turn in reply(to: turn, fromPip: turn.assistantText != nil) },
+                    dismissKeyboard: editing ? { editing = false } : nil) { row in
                     AnyView(timelineContent(row))
                 }
                 .dynamicTypeSize(diagnostics.largeText ? .accessibility2 : typeSize)
