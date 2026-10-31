@@ -23,6 +23,21 @@ import XCTest
         XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
     }
 
+    func testCameraRequestWaitsForTheDiaryChooser() {
+        let id = UUID().uuidString, app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", id, "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
+        app.terminate()
+        app.launchArguments += ["-diarySignedOut", "YES", "--quick-log"]
+        app.launch()
+        let diary = app.buttons["My diary"]
+        XCTAssertTrue(diary.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["quickLogSyntheticPhoto"].exists)
+        diary.tap()
+        XCTAssertTrue(app.buttons["quickLogSyntheticPhoto"].waitForExistence(timeout: 10))
+    }
+
     func testOpenCoachRequestLandsOnCoach() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--open-coach"]

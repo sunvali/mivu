@@ -502,6 +502,16 @@ actor DiaryStore {
         }
     }
 
+    /// Erases held copies past their window; the seconds until the next one ends, if any.
+    func expireCoachUndo(expectedProfileID: UUID) throws -> TimeInterval? {
+        let database = try pagedConnection(expectedProfileID: expectedProfileID).database
+        // Housekeeping only: stale copies stay hidden on read.
+        try? database.purgeDeletedUndo(now: currentTime())
+        return try database.domainRead(expectedProfileID: expectedProfileID) { head in
+            try DiaryTransaction(database: database, head: head).deletedUndoSecondsLeft(now: currentTime())
+        }
+    }
+
     func undoCoachChange(operationKey: String, expectedProfileID: UUID) throws {
         try pagedMutation(expectedProfileID) { database, head in
             try database.transaction(expected: head, maximumBytes: maximumFileBytes) { _ = try $0.undoCoachChange(operationKey, now: currentTime()) }
