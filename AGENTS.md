@@ -68,6 +68,20 @@ for this native app. No web frontend is required.
   never cache failed, zero-test or malformed evidence. Hook units do not replace
   focused UI smoke/affected-journey verification or Ponytail Review before merge.
 
+## Android
+
+Follow the [Android design](docs/superpowers/specs/2026-10-23-android-app-design.md)
+and keep `docs/parity.md` current; iOS stays the behavior source of truth.
+Use Gradle and an emulator in place of XcodeBuildMCP. Record the exact source
+SHA, device/API level and result counts in `docs/verification/`. Emulator
+results never prove camera, sign-in or notifications; keep those `blocked`
+until tested on a physical phone. Verify the release build on a physical phone
+from the exact AAB uploaded, and commit its `android/play-uploads.txt` line
+right after each upload. The opt-in pre-push hook runs
+`./gradlew :app:testDebugUnitTest` only when `android/` changed, so export
+`JAVA_HOME` (e.g. Android Studio's bundled JBR) and `ANDROID_HOME` first.
+If the emulator cannot resolve auth.openai.com, start it with `-dns-server 8.8.8.8`.
+
 ## Companion animation work
 
 For Pip artwork, the rig, motion, gestures, pose transitions, lifecycle, character

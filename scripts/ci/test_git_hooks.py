@@ -96,7 +96,7 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
                               capture_output=True, text=True, check=True)
 
     def commit(self):
-        self.git('add', '.githooks', 'scripts', 'ios', 'README.md')
+        self.git('add', '.githooks', 'scripts', 'ios', 'README.md', *(['android'] if (self.root / 'android').exists() else []))
         self.git('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'test: synthetic fixture')
 
     def version(self, value):
@@ -253,6 +253,26 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('No available iPhone', result.stderr)
         self.assertEqual(len(self.calls()), 1)
+
+    def test_android_check_runs_units_and_lint(self):
+        log = self.root.parent / (self.root.name + '-gradle.log')
+        gradlew = self.root / 'android/gradlew'
+        gradlew.parent.mkdir()
+        gradlew.write_text('#!/bin/sh\necho "$PWD $*" >> "$GRADLE_LOG"\n[ -z "$GRADLE_FAIL" ]\n')
+        gradlew.chmod(0o755)
+        self.commit()
+        self.assertEqual(self.push(GRADLE_LOG=str(log)).returncode, 0)
+        self.assertEqual(log.read_text(), f'{self.root.resolve()}/android :app:testDebugUnitTest :app:lintDebug\n')
+        self.assertEqual(self.calls(), [])
+        self.git('update-ref', 'refs/remotes/origin/main', self.git('rev-parse', 'HEAD').stdout.strip())
+        (self.root / 'README.md').write_text('Docs only\n')
+        self.commit()
+        self.assertEqual(self.push(remote=self.git('rev-parse', 'HEAD~1').stdout.strip(), GRADLE_LOG=str(log)).returncode, 0)
+        self.assertEqual(len(log.read_text().splitlines()), 1)
+        gradlew.write_text(gradlew.read_text() + '# changed\n')
+        self.commit()
+        failed = self.push(remote=self.git('rev-parse', 'HEAD~1').stdout.strip(), GRADLE_LOG=str(log), GRADLE_FAIL='1')
+        self.assertNotEqual(failed.returncode, 0)
 
     def test_native_non_head_push_is_blocked(self):
         self.native_commit()

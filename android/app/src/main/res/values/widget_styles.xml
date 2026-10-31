@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iOS CaloriesWidgetView type: a bold, tabular intake figure that shrinks to fit, then subheadline and caption text. -->
+<resources>
+    <style name="Widget.Mivu.Figure" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">19dp</item>
+        <item name="android:autoSizeStepGranularity">1dp</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:gravity">bottom|start</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">-0.03</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:textColor">@color/widget_text</item>
+    </style>
+    <style name="Widget.Mivu.Goal" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:maxLines">1</item>
+        <!-- iOS caps widget type at xLarge and lets lines shrink: the floor is in dp, so very large text shrinks to fit. -->
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">11dp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+        <item name="android:autoSizeMaxTextSize">15sp</item>
+        <item name="android:textColor">@color/widget_text</item>
+    </style>
+    <style name="Widget.Mivu.Bar" parent="@android:style/Widget.DeviceDefault.ProgressBar.Horizontal">
+        <item name="android:layout_height">6dp</item>
+        <item name="android:minHeight">6dp</item>
+        <item name="android:maxHeight">6dp</item>
+        <item name="android:max">1000</item>
+        <item name="android:progress">0</item>
+        <item name="android:progressDrawable">@drawable/widget_bar</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+    <style name="Widget.Mivu.SetTarget" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:text">Set a target</item>
+        <item name="android:maxLines">1</item>
+        <!-- iOS caps widget type at xLarge and lets lines shrink: the floor is in dp, so very large text shrinks to fit. -->
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">11dp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+        <item name="android:autoSizeMaxTextSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/widget_accent</item>
+        <item name="android:visibility">gone</item>
+    </style>
+    <style name="Widget.Mivu.Action" parent="">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:paddingHorizontal">10dp</item>
+        <item name="android:drawablePadding">6dp</item>
+        <!-- iOS caps widget type at xLarge and lets lines shrink: the floor is in dp, so very large text shrinks to fit. -->
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">11dp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+        <item name="android:autoSizeMaxTextSize">15sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+    <style name="Widget.Mivu.SetupLine" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <!-- iOS caps widget type at xLarge and lets lines shrink: the floor is in dp, so very large text shrinks to fit. -->
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">11dp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+    </style>
+</resources>

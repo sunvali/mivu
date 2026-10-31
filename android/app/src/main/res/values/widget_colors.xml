@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ios/Shared/MivuColors.swift: the widget draws with the app's palette (light). -->
+<resources>
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_text">#142023</color>
+    <color name="widget_secondary">#53646B</color>
+    <color name="widget_accent">#006D75</color>
+    <!-- The goal bar's track: the accent at 16%. -->
+    <color name="widget_accent_track">#29006D75</color>
+    <color name="widget_action_text">#FFFFFF</color>
+    <color name="widget_summary_surface">#EAF5F3</color>
+</resources>

@@ -37,6 +37,12 @@ painted atlas. Lottie and Rive plans are historical. Paths below are repo-relati
 | Eligibility | `MotionPolicy.swift` |
 | Surface context and accepted/durable signals | `ios/Mivu/Diary/TodayView.swift`, `DiaryViewModel.swift`; `ios/Mivu/Coach/CoachView.swift`, `CoachViewModel.swift` |
 | Future characters and persisted selection | `CharacterCatalog.swift`, `CompanionSelection.swift` |
+| Android rig asset (reads the iOS `pip-rig.json` and `fixtures/pip/gestures.json` in place) | `android/app/src/main/java/com/yakov103/mivu/pip/PipRigAsset.kt`, `PipAssets` in `PipCompanion.kt` |
+| Android scene and drawing | `pip/PipRigScene.kt`, `PipRig.kt` |
+| Android motion (springs, gestures, idle) | `pip/PipMotion.kt`, `PipPose.kt`, `PipGestures.kt`, `PipIdleScheduler.kt`, `MivuMotion.kt` |
+| Android runtime and presentation | `pip/CompanionRuntime.kt`, `CompanionPresentation.kt`, `PipCompanion.kt` |
+| Android policy | `pip/MotionPolicy.kt` |
+| Android preview (debug only) | `android/app/src/debug/java/com/yakov103/mivu/PipRigPreviewActivity.kt` |
 
 ## Make the change at its owner
 

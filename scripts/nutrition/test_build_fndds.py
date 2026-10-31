@@ -18,7 +18,7 @@ def write(path, header, rows):
 class BuildFNDDS(unittest.TestCase):
     def test_keeps_four_nutrients_real_portions_and_stemmed_search(self):
         with tempfile.TemporaryDirectory() as folder:
-            source, output = Path(folder), Path(folder) / 'fndds.sqlite'
+            source, output, second = Path(folder), Path(folder) / 'fndds.sqlite', Path(folder) / 'android.sqlite'
             write(source / 'food.csv', ['fdc_id', 'data_type', 'description', 'food_category_id', 'publication_date'],
                   [['1', 'survey_fndds_food', 'Pizza, pepperoni, regular crust', '3802', '2022-10-28'],
                    ['2', 'survey_fndds_food', 'Soft drink, cola, diet', '7102', '2022-10-28']])
@@ -29,9 +29,10 @@ class BuildFNDDS(unittest.TestCase):
                   [['20', '1', '1', '', '9999', '1 slice', '', '107.0'], ['21', '1', '2', '', '9999', 'Quantity not specified', '', '0.0'],
                    ['22', '2', '1', '', '9999', '1 can (12 fl oz)', '', '368.0']])
 
-            counts = build(source, output)
+            counts = build(source, output, second)
 
             self.assertEqual(counts, {'foods': 2, 'portions': 2})
+            self.assertEqual(second.read_bytes(), output.read_bytes(), 'Every output path gets the table')
             database = sqlite3.connect(output)
             self.assertEqual(database.execute('select description, kcal, carbs, protein, fat from foods where code = 1').fetchone(),
                              ('Pizza, pepperoni, regular crust', 276, 30.1, 11.9, 12.1))

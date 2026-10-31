@@ -148,6 +148,8 @@ The committed check scripts must match the working copy. Deletions need no check
 Known remote commits are compared with each pushed commit; new branches use their
 merge base with `origin/main`. Documentation-only pushes skip native work when
 native inputs match that baseline. Missing baselines require native verification.
+Android pushes run unit tests and lint (`:app:testDebugUnitTest :app:lintDebug`).
+The Google Play submission draft for the owner is [play-submission.md](play-submission.md).
 
 Native inputs include the entire `ios/` tree and the hook's test helper/recipe.
 A native push must check the current `HEAD`, with no dirty or untracked native
@@ -189,7 +191,8 @@ Each has its own `version.txt`, `CHANGELOG.md`, version PR, tag and GitHub relea
 that platform's folder; test-only iOS changes (`ios/MivuTests`, `ios/MivuUITests`)
 and shared folders (`docs`, `scripts`, `fixtures`, `design-system`) bump neither.
 A commit that touches both platforms bumps both, so keep them in separate PRs.
-iOS also updates its Xcode marketing version. iOS continues from the shared
+iOS also updates its Xcode marketing version; Android reads `android/version.txt`
+as `versionName`, and its `versionCode` comes from the Play upload ledger. iOS continues from the shared
 `v1.2.0` release: `last-release-sha` points at it and must stay at the top level
 of the config, the only place release-please reads it. Android starts at `0.1.0`.
 Existing `v*` and rehearsal tags are preserved. `test_workflow_contract.py` fails
@@ -208,6 +211,9 @@ and exported product. An unsigned archive cannot be installed on a phone.
 `CURRENT_PROJECT_VERSION` stays `1` in source; every App Store Connect upload needs
 a higher build number, so keep Organizer's "Automatically manage version and build
 number" on and record the number it assigns.
+
+For Android, check out the `android-v` tag instead and follow the signed build steps in
+[play-submission.md](play-submission.md); the upload's ledger line goes in a later PR.
 
 Apple membership, signing identity, provisioning and any required agreements
 remain owner prerequisites. Keep signing credentials in the local Apple tooling;

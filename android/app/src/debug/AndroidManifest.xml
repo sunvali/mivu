@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".ConnectionProofActivity"
+            android:exported="true"
+            android:label="Mivu proof">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- Process-kill probe for scripts/android/kill_capture_check.sh; debug builds only. -->
+        <activity
+            android:name=".CaptureProbeActivity"
+            android:exported="true" />
+        <!-- Pip rig review: rest pose at shipping sizes; debug builds only. -->
+        <activity
+            android:name=".PipRigPreviewActivity"
+            android:exported="true" />
+    </application>
+</manifest>

@@ -1,0 +1,2 @@
+event: response.failed
+data: {"type":"response.failed","response":{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}}

@@ -1,0 +1,2 @@
+# Play upload ledger: one line per upload, strictly increasing version codes.
+# code name sha date track

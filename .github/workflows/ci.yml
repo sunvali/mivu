@@ -1,6 +1,7 @@
 name: CI
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,8 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 2
           persist-credentials: false
       - name: Check CI scripts
         run: |
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           bash -n scripts/ci/native.sh scripts/ci/signed.sh
+          python3 scripts/ci/parity.py
+          python3 scripts/ci/play_ledger.py android/play-uploads.txt

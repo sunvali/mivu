@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No updatePeriodMillis: the app publishes on every diary change and an alarm zeroes the figure at the day cutoff.
+     maxResizeWidth is about four phone cells (a four-cell widget measured 373 dp on a Pixel grid). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_calories_description"
+    android:initialLayout="@layout/widget_calories_small"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:maxResizeWidth="420dp"
+    android:previewLayout="@layout/widget_calories_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

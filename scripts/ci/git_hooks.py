@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 NATIVE = ('ios', 'scripts/ci/git_hooks.py', '.githooks/pre-push')
+ANDROID = ('android',)
 QUICK = ('scripts/ci', '.githooks', '.github/workflows')
 QUICK_UNIT_SUITES = ['CoachReceiptPresentationTests', 'DiaryPreferencesDraftTests', 'ManualNutritionDraftTests', 'ProgressEditorStateTests', 'CoachCaptureOptionsTests']
 UNIT_SELECTORS = ['MivuTests/' + suite for suite in QUICK_UNIT_SUITES]
@@ -176,6 +177,14 @@ def native_check(head):
         print(f"Native units: {counts['passed']} passed, 0 failed, {counts['skipped']} skipped.")
 
 
+def android_check(head):
+    clean(ANDROID)
+    # Gradle finds Java through JAVA_HOME or PATH and fails with its own message if missing.
+    subprocess.run(['./gradlew', ':app:testDebugUnitTest', ':app:lintDebug'], cwd='android', check=True)
+    if git('rev-parse', 'HEAD').strip() != head:
+        raise ValueError('HEAD changed during Android verification; push again.')
+
+
 def unchanged(head, inputs, tools):
     clean(NATIVE)
     if git('rev-parse', 'HEAD').strip() != head or tree('HEAD', NATIVE) != inputs or environment() != tools:
@@ -196,23 +205,28 @@ def pre_push():
     clean(QUICK)
     if any(tree(source, QUICK) != tree(head, QUICK) for source, _ in refs):
         raise ValueError('Check scripts differ from pushed source; check out that commit before pushing.')
-    native = False
+    native = android = False
     for source, remote in refs:
         try:
             baseline = (git('merge-base', source, 'origin/main').strip() if set(remote) == {'0'}
                         else git('rev-parse', remote + '^{commit}').strip())
             needs_native = tree(source, NATIVE) != tree(baseline, NATIVE)
+            needs_android = tree(source, ANDROID) != tree(baseline, ANDROID)
         except subprocess.CalledProcessError:
-            needs_native = True
-        if needs_native and source != head:
+            needs_native = needs_android = True
+        needs_android &= bool(tree(source, ANDROID))
+        if (needs_native or needs_android) and source != head:
             raise ValueError('Native changes must be pushed from their checked-out HEAD.')
         native |= needs_native
+        android |= needs_android
     subprocess.run(['python3', '-m', 'unittest', 'discover', '-s', 'scripts/ci', '-p', 'test_*.py'],
                    env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'), check=True)
     subprocess.run(['bash', '-n', 'scripts/ci/native.sh', 'scripts/ci/signed.sh'], check=True)
     if native:
         native_check(head)
-    else:
+    if android:
+        android_check(head)
+    if not (native or android):
         print('Quick checks passed; native inputs unchanged.')
     clean(QUICK)
     if git('rev-parse', 'HEAD').strip() != head:

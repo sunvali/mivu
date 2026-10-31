@@ -1,4 +1,4 @@
-"""Convert rig/pip.svg into ios/Mivu/Resources/Characters/pip/pip-rig.json.
+"""Convert rig/pip.svg into pip-rig.json for iOS (ios/Mivu/Resources/Characters/pip/) and Android (android/app/src/main/assets/pip/).
 
 Usage: python3 build.py [--png OUT_DIR]   (--png needs cairosvg, see README)
 """
@@ -13,6 +13,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "pip.svg"
 OUTPUT = HERE.parents[4] / "ios/Mivu/Resources/Characters/pip/pip-rig.json"
+ANDROID_OUTPUT = HERE.parents[4] / "android/app/src/main/assets/pip/pip-rig.json"  # Android keeps its own copy
 SVG = "{http://www.w3.org/2000/svg}"
 SETS = ("standing", "seated", "curled")
 IDENTITY = (1, 0, 0, 1, 0, 0)
@@ -179,7 +180,9 @@ def build():
     rig = {"version": 2, "artboard": 512, "ground": 472, "parallaxScale": PARALLAX_SCALE,
            "frames": {"today": frame(set_bounds(parts, "standing"), 8), "coach": coach_frame(root, parts)},
            "parts": sorted(parts, key=lambda p: p["z"])}
-    OUTPUT.write_text(json.dumps(rig, separators=(",", ":")) + "\n")
+    for output in (OUTPUT, ANDROID_OUTPUT):
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(rig, separators=(",", ":")) + "\n")
     return rig
 
 
@@ -234,6 +237,6 @@ if __name__ == "__main__":
     parser.add_argument("--png", type=Path, help="also render each set (light, dark) to OUT_DIR and the fallback imagesets")
     args = parser.parse_args()
     rig = build()
-    print(f"wrote {len(rig['parts'])} parts to {OUTPUT}")
+    print(f"wrote {len(rig['parts'])} parts to {OUTPUT} and {ANDROID_OUTPUT}")
     if args.png:
         render_sets(args.png, rig)

@@ -1,0 +1,1233 @@
+{
+  "description" : "Private local diary and progress operations",
+  "name" : "mivu",
+  "tools" : [
+    {
+      "description" : "Ask before logging only when food, serving, day or an existing record is genuinely ambiguous. Unknown exact grams or milliliters alone do not block a clearly labelled estimate from text, photos or a clear matching committed portion. Choose portion for an ambiguous serving, food for food identity, day for the recording date, meal or workout for an ambiguous existing record. Use this tool alone, before any writes in this turn. Add candidates (at most 4 real meal_id, optional item_id) when the choice is among known records. Use kind confirm with exactly one meal candidate (meal_id only) before deleting a whole meal. The app displays its own question; the user answers in a new turn.",
+      "name" : "ask_clarification",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "candidates" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "item_id" : {
+                  "type" : [
+                    "string",
+                    "null"
+                  ]
+                },
+                "meal_id" : {
+                  "type" : "string"
+                }
+              },
+              "required" : [
+                "item_id",
+                "meal_id"
+              ],
+              "type" : "object"
+            },
+            "maxItems" : 4,
+            "type" : [
+              "array",
+              "null"
+            ]
+          },
+          "kind" : {
+            "enum" : [
+              "portion",
+              "food",
+              "day",
+              "meal",
+              "workout",
+              "confirm"
+            ],
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "candidates",
+          "kind"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Read actual progress for an inclusive 1, 7 or 30 calendar-day window. Real record IDs/revisions and omitted counts support historical corrections. Food remaining and estimated burn are separate; adherence means Within 10% of target.",
+      "name" : "get_progress",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "days" : {
+            "enum" : [
+              1,
+              7,
+              30
+            ],
+            "type" : "integer"
+          },
+          "ending_on" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "days",
+          "ending_on"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Read a complete owned workout before replacement/edit. Oversized records are refused; never replace unseen sets.",
+      "name" : "get_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "workout_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "workout_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Log one weight per date. Corrections require expected_revision; historical correction after travel must use retrieved weight_id, preserving day and measured time. Model measured_at cannot confirm exact time. Current morning weight explicitly starts that waking day.",
+      "name" : "log_weight",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "local_date" : {
+            "type" : "string"
+          },
+          "measured_at" : {
+            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "unit" : {
+            "enum" : [
+              "kg",
+              "lb"
+            ],
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "number"
+          },
+          "weight_id" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "local_date",
+          "measured_at",
+          "unit",
+          "value",
+          "weight_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Log one new session per turn/date; another session needs another turn. Timestamps are unconfirmed date-only. Estimated burn stays separate from food.",
+      "name" : "log_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "burn_source" : {
+            "enum" : [
+              "userEstimate",
+              "modelEstimate",
+              null
+            ],
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "duration_minutes" : {
+            "type" : "integer"
+          },
+          "estimated_burn_kcal" : {
+            "type" : [
+              "number",
+              "null"
+            ]
+          },
+          "exercises" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "name" : {
+                  "type" : "string"
+                },
+                "sets" : {
+                  "items" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "load_kg" : {
+                        "type" : [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "repetitions" : {
+                        "type" : "integer"
+                      }
+                    },
+                    "required" : [
+                      "load_kg",
+                      "repetitions"
+                    ],
+                    "type" : "object"
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [
+                "name",
+                "sets"
+              ],
+              "type" : "object"
+            },
+            "type" : "array"
+          },
+          "kind" : {
+            "enum" : [
+              "strength",
+              "cardio",
+              "other"
+            ],
+            "type" : "string"
+          },
+          "local_date" : {
+            "type" : "string"
+          },
+          "performed_at" : {
+            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required" : [
+          "burn_source",
+          "duration_minutes",
+          "estimated_burn_kcal",
+          "exercises",
+          "kind",
+          "local_date",
+          "performed_at"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Replace a complete retrieved workout using its real ID/revision. Preserve its day/time; include all existing sets that should remain.",
+      "name" : "edit_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "burn_source" : {
+            "enum" : [
+              "userEstimate",
+              "modelEstimate",
+              null
+            ],
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "duration_minutes" : {
+            "type" : "integer"
+          },
+          "estimated_burn_kcal" : {
+            "type" : [
+              "number",
+              "null"
+            ]
+          },
+          "exercises" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "name" : {
+                  "type" : "string"
+                },
+                "sets" : {
+                  "items" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "load_kg" : {
+                        "type" : [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "repetitions" : {
+                        "type" : "integer"
+                      }
+                    },
+                    "required" : [
+                      "load_kg",
+                      "repetitions"
+                    ],
+                    "type" : "object"
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [
+                "name",
+                "sets"
+              ],
+              "type" : "object"
+            },
+            "type" : "array"
+          },
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "kind" : {
+            "enum" : [
+              "strength",
+              "cardio",
+              "other"
+            ],
+            "type" : "string"
+          },
+          "performed_at" : {
+            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "workout_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "burn_source",
+          "duration_minutes",
+          "estimated_burn_kcal",
+          "exercises",
+          "expected_revision",
+          "kind",
+          "performed_at",
+          "workout_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Delete an owned workout with its actual revision.",
+      "name" : "delete_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "workout_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "workout_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Delete an owned weight with its actual revision.",
+      "name" : "delete_weight",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "weight_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "weight_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Read actual bounded diary and capture clock. truncated and omittedMeals explicitly mark details not included.",
+      "name" : "get_context",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+
+        },
+        "required" : [
+
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Read at most 20 actual dated meal candidates across matching diary days. Use captured calendar date and original description to identify lunch; date-only noon is not evidence. hasMore and omissions cannot establish uniqueness. Retrieve get_meal before correction.",
+      "name" : "get_meals_for_date",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "after_meal_id" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "target_local_date" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "after_meal_id",
+          "target_local_date"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Search saved meals by food name, newest first, at most 10 candidates with their dates. Optional inclusive from_date/to_date local dates. Use for older references; call get_meal on the chosen meal before any edit or delete of it.",
+      "name" : "find_meals",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "from_date" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "query" : {
+            "type" : "string"
+          },
+          "to_date" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required" : [
+          "from_date",
+          "query",
+          "to_date"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Retrieve actual owner-scoped meal by UUID before correction. omittedItemCount marks unavailable details requiring manual review.",
+      "name" : "get_meal",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "meal_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "meal_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Search retrieved nutrition evidence; unavailable means use clearly uncertain estimates.",
+      "name" : "lookup_nutrition",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "query" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "query"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Set review_first true when the user wants a proposal before totals. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.",
+      "name" : "log_food",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "eaten_at" : {
+            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "items" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "carbs" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "evidence_id" : {
+                  "type" : [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "fat" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "kcal" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "name" : {
+                  "type" : "string"
+                },
+                "protein" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "quantity" : {
+                  "type" : "number"
+                },
+                "unit" : {
+                  "type" : "string"
+                }
+              },
+              "required" : [
+                "carbs",
+                "evidence_id",
+                "fat",
+                "kcal",
+                "name",
+                "protein",
+                "quantity",
+                "unit"
+              ],
+              "type" : "object"
+            },
+            "type" : "array"
+          },
+          "review_first" : {
+            "type" : [
+              "boolean",
+              "null"
+            ]
+          },
+          "target_local_date" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "eaten_at",
+          "items",
+          "review_first",
+          "target_local_date"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Correct only quantity on a retrieved actual item, preserving its nutrition basis and sources.",
+      "name" : "correct_item",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "item_id" : {
+            "type" : "string"
+          },
+          "meal_id" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "type" : "number"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "item_id",
+          "meal_id",
+          "quantity"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Patch only named fields on a retrieved saved or review item. Null name/quantity/unit means unchanged. nutrients lists only changed nutrient totals; a null value clears that nutrient. Preserve other items. Use review_submission_id for an unaccepted proposal; this does not accept it.",
+      "name" : "edit_item",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "item_id" : {
+            "type" : "string"
+          },
+          "meal_id" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "nutrients" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "nutrient" : {
+                  "enum" : [
+                    "kcal",
+                    "carbs",
+                    "protein",
+                    "fat"
+                  ],
+                  "type" : "string"
+                },
+                "value" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required" : [
+                "nutrient",
+                "value"
+              ],
+              "type" : "object"
+            },
+            "type" : [
+              "array",
+              "null"
+            ]
+          },
+          "quantity" : {
+            "type" : [
+              "number",
+              "null"
+            ]
+          },
+          "review_submission_id" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "unit" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "item_id",
+          "meal_id",
+          "name",
+          "nutrients",
+          "quantity",
+          "review_submission_id",
+          "unit"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Append only new foods to an explicitly retrieved existing saved meal; never repeat its current foods. Group all additions to this meal into one call per turn; retries replay that first addition. Returns the committed meal. Use log_food for a new meal.",
+      "name" : "append_food",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "items" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "carbs" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "evidence_id" : {
+                  "type" : [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "fat" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "kcal" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "name" : {
+                  "type" : "string"
+                },
+                "protein" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "quantity" : {
+                  "type" : "number"
+                },
+                "unit" : {
+                  "type" : "string"
+                }
+              },
+              "required" : [
+                "carbs",
+                "evidence_id",
+                "fat",
+                "kcal",
+                "name",
+                "protein",
+                "quantity",
+                "unit"
+              ],
+              "type" : "object"
+            },
+            "type" : "array"
+          },
+          "meal_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "items",
+          "meal_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Save an explicitly accepted retrieved meal proposal into totals. Use its submission ID and current meal revision. Never accept an estimate just because the user requests an edit.",
+      "name" : "accept_review",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "meal_id" : {
+            "type" : "string"
+          },
+          "submission_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "meal_id",
+          "submission_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Move an existing retrieved meal's tracking date to target_local_date (yyyy-MM-dd), preserving active waking day and its original capture/eating time and precision. A 04:00 meal can belong to the previous waking day.",
+      "name" : "move_meal",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "meal_id" : {
+            "type" : "string"
+          },
+          "target_local_date" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "meal_id",
+          "target_local_date"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Delete an explicitly requested retrieved meal and its photos. Use its real ID/revision; never delete to compensate for eating.",
+      "name" : "delete_meal",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "meal_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "meal_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Delete one explicitly requested food from a retrieved saved meal using its real item ID and meal revision. If it is the meal's only food, do not call this; for the only food use ask_clarification kind confirm with that meal.",
+      "name" : "delete_item",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "item_id" : {
+            "type" : "string"
+          },
+          "meal_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "item_id",
+          "meal_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Change the whole saved meal's portions proportionally so its known calories total target_kcal (ratio 0.1 to 3 of the current total). Use for requests like \"make this meal 650 kcal\" or \"I only ate about two thirds\"; use edit_item for one food. Needs a retrieved saved meal and its revision; refused for unaccepted estimates or meals with 0 known kcal.",
+      "name" : "scale_meal",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "meal_id" : {
+            "type" : "string"
+          },
+          "target_kcal" : {
+            "type" : "number"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "meal_id",
+          "target_kcal"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Attach current turn's actual attachedPhotoIDs to a retrieved meal, preserving the original photo bytes. Choose before/after only when supplied. Does not change food totals; pair with explicit food edits when needed.",
+      "name" : "attach_photos",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "meal_id" : {
+            "type" : "string"
+          },
+          "photo_ids" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "role" : {
+            "enum" : [
+              "unspecified",
+              "before",
+              "after"
+            ],
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "meal_id",
+          "photo_ids",
+          "role"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Delete an explicitly requested photo using a retrieved meal's photo ID and revision. Removes retained copies, without deleting the food.",
+      "name" : "delete_photo",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "meal_id" : {
+            "type" : "string"
+          },
+          "photo_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "meal_id",
+          "photo_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Requeue an existing paused meal capture without creating a new meal or food record. Uses original saved input. Only the later successful analysis can confirm food saved.",
+      "name" : "retry_meal",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "meal_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "meal_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Read exact dated goal settings and the goal effective on local_date (yyyy-MM-dd), plus diary revision. Exact goal null means use null expected_revision to create a setting for that date.",
+      "name" : "get_goals",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "local_date" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "local_date"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Read complete saved dietary preferences and timezone plus diary revision before editing. Context preferences may be truncated; do not replace omitted text.",
+      "name" : "get_preferences",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+
+        },
+        "required" : [
+
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Apply only explicit user-requested target changes, never an inferred prescription. First get_goals for this effective_local_date. targets is a patch: omitted nutrients remain; null value unsets a target. Null goal_weight_kg keeps it; clear_goal_weight true unsets it. Unspecified exercise credit remains unchanged. Existing exact date requires expected_revision; new date uses null. Returns saved settings; creates no intake day.",
+      "name" : "set_goals",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "clear_goal_weight" : {
+            "type" : [
+              "boolean",
+              "null"
+            ]
+          },
+          "effective_local_date" : {
+            "type" : "string"
+          },
+          "exercise_credit_enabled" : {
+            "type" : [
+              "boolean",
+              "null"
+            ]
+          },
+          "expected_revision" : {
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "goal_weight_kg" : {
+            "type" : [
+              "number",
+              "null"
+            ]
+          },
+          "targets" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "nutrient" : {
+                  "enum" : [
+                    "kcal",
+                    "carbs",
+                    "protein",
+                    "fat"
+                  ],
+                  "type" : "string"
+                },
+                "value" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required" : [
+                "nutrient",
+                "value"
+              ],
+              "type" : "object"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "clear_goal_weight",
+          "effective_local_date",
+          "exercise_credit_enabled",
+          "expected_revision",
+          "goal_weight_kg",
+          "targets"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Update explicitly requested preferences/timezone after reading complete get_preferences. Null fields preserve saved values; empty preferences clears them. expected_diary_revision protects unseen concurrent changes. Does not change historical day labels, credentials, or language.",
+      "name" : "update_preferences",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_diary_revision" : {
+            "type" : "integer"
+          },
+          "preferences" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "timezone" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required" : [
+          "expected_diary_revision",
+          "preferences",
+          "timezone"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Explicitly start the current waking day from the persisted capture clock. Read fresh context for expected_diary_revision. Delayed captures cannot reverse a newer waking-day choice.",
+      "name" : "start_day",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_diary_revision" : {
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "expected_diary_revision"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Mark a local date skipped so it stays out of statistics, or count it again. Days close on their own at the waking-day rollover; this never closes or activates a day.",
+      "name" : "set_day_coverage",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "local_date" : {
+            "type" : "string"
+          },
+          "skipped" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "local_date",
+          "skipped"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Undo one earlier Coach change by the operation key from its [saved key=…] line or a delete's undo_key: log_food, append_food, edit_item, correct_item, scale_meal, delete_item, delete_meal, delete_photo, delete_weight or delete_workout. A food change restores the meal exactly as it was before that change (an undone log_food removes the meal), refused if anything changed the meal since. A delete, including an undone log_food, comes back under a new ID, refused after the next message or ten minutes. Not for goals or settings.",
+      "name" : "undo_change",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "operation_key" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "operation_key"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Offer a native Settings link for accounts, local profiles, secrets or Files backup. The user must tap and complete the native action; this tool never authorizes, deletes a profile, restores a backup or claims those actions succeeded.",
+      "name" : "open_settings",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "destination" : {
+            "enum" : [
+              "settings",
+              "profiles",
+              "connection",
+              "nutritionSource",
+              "backup"
+            ],
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "destination"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    }
+  ],
+  "type" : "namespace"
+}

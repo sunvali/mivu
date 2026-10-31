@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iOS setUpText: shown instead of the figure until a diary is open. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_setup"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:visibility="gone">
+
+    <TextView
+        android:id="@+id/widget_setup_title"
+        style="@style/Widget.Mivu.SetupLine"
+        android:autoSizeMaxTextSize="17sp"
+        android:fontFamily="sans-serif-medium"
+        android:maxLines="1"
+        android:text="Set up Mivu"
+        android:textColor="@color/widget_text" />
+
+    <TextView
+        android:id="@+id/widget_setup_body"
+        style="@style/Widget.Mivu.SetupLine"
+        android:layout_marginTop="4dp"
+        android:autoSizeMaxTextSize="12sp"
+        android:maxLines="2"
+        android:text="Pip will track your day here."
+        android:textColor="@color/widget_secondary" />
+</LinearLayout>

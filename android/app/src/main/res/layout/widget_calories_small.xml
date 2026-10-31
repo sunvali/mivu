@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iOS CaloriesWidgetView.small: the figure, the goal bar and Pip in the corner. Starts as the setup text: the
+     launcher may draw this initial layout before the first update, so it carries no numbers. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:clipToOutline="true"
+    android:theme="@android:style/Theme.DeviceDefault.DayNight">
+
+    <ImageView
+        android:id="@+id/widget_pip"
+        android:layout_width="wrap_content"
+        android:layout_height="76dp"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="10dp"
+        android:adjustViewBounds="true"
+        android:importantForAccessibility="no"
+        android:scaleType="fitEnd"
+        android:src="@drawable/pip_wave" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:id="@+id/widget_figure"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:importantForAccessibility="yes"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_eaten"
+                style="@style/Widget.Mivu.Figure"
+                android:layout_height="38dp"
+                android:autoSizeMaxTextSize="32dp" />
+
+            <TextView
+                android:id="@+id/widget_goal"
+                style="@style/Widget.Mivu.Goal" />
+        </LinearLayout>
+
+        <include
+            layout="@layout/widget_calories_setup"
+            android:visibility="visible" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:minHeight="8dp" />
+
+        <ProgressBar
+            android:id="@+id/widget_bar"
+            style="@style/Widget.Mivu.Bar"
+            android:layout_width="64dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/widget_set_target"
+            style="@style/Widget.Mivu.SetTarget" />
+    </LinearLayout>
+</FrameLayout>

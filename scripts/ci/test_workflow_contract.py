@@ -50,6 +50,7 @@ class ReleaseAutomation(unittest.TestCase):
         ci = load_workflow('ci.yml')
         triggers = ci.get('on', ci.get('true'))
         self.assertEqual(set(triggers), {'pull_request', 'workflow_dispatch'})
+        self.assertEqual(triggers['pull_request']['types'], ['opened', 'synchronize', 'reopened', 'edited'])
         self.assertEqual(ci['permissions'], {'contents': 'read'})
         self.assertEqual(set(ci['jobs']), {'checks'})
         checks = ci['jobs']['checks']
@@ -57,9 +58,12 @@ class ReleaseAutomation(unittest.TestCase):
         self.assertEqual(len(checks['steps']), 2)
         checkout, scripts = checks['steps']
         self.assertFalse(checkout['with']['persist-credentials'])
+        self.assertEqual(checkout['with']['fetch-depth'], 2)
         self.assertEqual(scripts['run'].splitlines(), [
             "python3 -m unittest discover -s scripts/ci -p 'test_*.py'",
             'bash -n scripts/ci/native.sh scripts/ci/signed.sh',
+            'python3 scripts/ci/parity.py',
+            'python3 scripts/ci/play_ledger.py android/play-uploads.txt',
         ])
 
     def test_title_edits_run_only_the_lightweight_title_check(self):
@@ -165,6 +169,9 @@ class PlatformVersions(unittest.TestCase):
         self.assertFalse((self.root / 'version.txt').exists(), 'No shared root version')
         for platform in ('ios', 'android'):
             self.assertRegex((self.root / platform / 'version.txt').read_text(), r'^\d+\.\d+\.\d+\n?$')
+        gradle = (self.root / 'android/app/build.gradle.kts').read_text()
+        self.assertIn('file("../version.txt")', gradle)
+        self.assertNotIn('ios/', gradle, 'Android keeps its own copies of shared assets')
         xcconfig = (self.root / 'ios/Config/Shared.xcconfig').read_text()
         self.assertRegex(xcconfig, r'MARKETING_VERSION = [\d.]+ // x-release-please-version')
 
