@@ -18,7 +18,7 @@ import XCTest
         XCTAssertTrue(photo.waitForExistence(timeout: 3))
         photo.tap()
         let send = app.buttons["coachSend"]
-        XCTAssertTrue(send.isHittable)
+        XCTAssertTrue(send.wait(for: \.isHittable, toEqual: true, timeout: 3), "The camera has closed")
         send.tap()
         XCTAssertTrue(app.staticTexts["Synthetic smoke lunch"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 5))
