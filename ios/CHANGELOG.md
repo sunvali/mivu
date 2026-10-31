@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/sunvali/mivu/compare/ios-v1.2.1...ios-v1.3.0) (2026-10-31)
+
+
+### Features
+
+* **duo:** full iPhone Duo support with sideways, book and table layouts ([#90](https://github.com/sunvali/mivu/issues/90)) ([cd78de6](https://github.com/sunvali/mivu/commit/cd78de6046aee39259db2f67403037aeeb6beaa8))
+
 ## [1.2.1](https://github.com/sunvali/mivu/compare/ios-v1.2.0...ios-v1.2.1) (2026-10-31)
 
 
