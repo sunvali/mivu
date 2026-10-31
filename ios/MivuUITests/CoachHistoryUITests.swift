@@ -61,9 +61,9 @@ import XCTest
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
     func reveal(_ element: XCUIElement, app: XCUIApplication) {
-        // The floating composer overlays the chat's bottom; a control under it reports hittable but taps the composer.
+        // Pip's strip and the composer float over the chat's bottom; a control under them reports hittable but taps them.
         func clear() -> Bool {
-            let composer = app.textFields["coachInput"]
+            let strip = app.otherElements["coachCompanionStrip"], composer = strip.exists ? strip : app.textFields["coachInput"]
             return element.isHittable && (!composer.exists || element.frame.maxY <= composer.frame.minY - 8)
         }
         for _ in 0..<14 where !clear() {

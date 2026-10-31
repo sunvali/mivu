@@ -1,17 +1,22 @@
 import XCTest
 
-@MainActor final class CoachReplyUITests: XCTestCase {
+@MainActor final class CoachReplyUITests: CoachHistoryTestSupport {
     func testSwipeReplyQuotesPipSendsAndQuoteSeeksOriginal() {
         let app = launch()
         let source = send("Synthetic reply source", in: app)
         _ = send("Synthetic later message", in: app)
         let sourceRow = exchange(source, in: app)
+        // Two saved-food cards outgrow the screen, and a row above the viewport reports an empty frame.
+        for _ in 0..<4 where sourceRow.frame.isEmpty { leaveLatest(app) }
+        reveal(sourceRow, app: app)
         sourceRow.swipeRight()
         let action = app.buttons["Reply"]
         if action.waitForExistence(timeout: 2), action.isHittable { action.tap() }
         XCTAssertTrue(app.otherElements["coachReplyBar"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Replying to Pip"].exists)
         let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Composer reply quote"; proof.lifetime = .keepAlways; add(proof)
+        // A send doesn't move a reader who scrolled away from the latest.
+        app.buttons["Jump to latest"].tap()
         let reply = send("About that answer", in: app)
         XCTAssertFalse(app.otherElements["coachReplyBar"].exists, "Sending clears the composer quote")
         let quote = app.buttons["coachQuote-" + reply]
@@ -50,7 +55,10 @@ import XCTest
         XCTAssertFalse(app.buttons["Report Reply"].exists, "People report Pip's replies, not their own messages")
         app.buttons["Reply"].tap()
         app.buttons["coachReplyCancel"].tap()
-        exchange(id, in: app).descendants(matching: .any).matching(identifier: "coachReply").firstMatch.press(forDuration: 1)
+        // Reply focuses the composer; the keyboard leaves room for only the end of the exchange's card.
+        let answer = exchange(id, in: app).descendants(matching: .any).matching(identifier: "coachReply").firstMatch
+        leaveLatest(app); reveal(answer, app: app)
+        answer.press(forDuration: 1)
         let report = app.buttons["Report Reply"]
         XCTAssertTrue(report.waitForExistence(timeout: 5))
         let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Report Reply in Pip's reply menu"; proof.lifetime = .keepAlways; add(proof)
@@ -91,6 +99,12 @@ import XCTest
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         return app
+    }
+    /// A shorter drag ends within 80 points of the bottom, where the table snaps back to following the latest.
+    private func leaveLatest(_ app: XCUIApplication) {
+        let gutter = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.3))
+        gutter.press(forDuration: 0.05, thenDragTo: gutter.withOffset(CGVector(dx: 0, dy: 200)),
+            withVelocity: .slow, thenHoldForDuration: 0.2)
     }
     /// Sends text, waits for Pip's answer and returns the turn's ID.
     private func send(_ text: String, in app: XCUIApplication) -> String {
