@@ -377,6 +377,7 @@ final class CoachTimelineTable: UITableView {
     var onViewport: (() -> Void)?
     private var restoring = false
     private var layingOut = false
+    private var laidOutWidth: CGFloat = 0
     private var reportScheduled = false
     #if DEBUG
     weak var diagnostics: CoachTimelineDiagnostics?
@@ -403,6 +404,15 @@ final class CoachTimelineTable: UITableView {
     }
     override func layoutSubviews() {
         guard !layingOut else { super.layoutSubviews(); return }
+        // The iPhone Duo changes width when it folds or turns; on-screen rows kept text laid out for the old width.
+        if laidOutWidth > 0, abs(bounds.width - laidOutWidth) > 0.5, !isApplyingRows,
+           let coordinator = delegate as? CoachTimelineView.Coordinator {
+            for cell in visibleCells.compactMap({ $0 as? CoachTimelineCell }) {
+                guard let id = cell.rowID, let row = rows.first(where: { $0.id == id }) else { continue }
+                coordinator.configure(cell, row: row)
+            }
+        }
+        laidOutWidth = bounds.width
         layingOut = true; super.layoutSubviews(); layingOut = false
         if let jumpButton { bringSubviewToFront(jumpButton) }
         restorePosition(); scheduleViewportReport()

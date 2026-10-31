@@ -77,9 +77,9 @@ cp "$signing_dir/profile.mobileprovision" "$profile_path"
 export DEVELOPER_DIR
 DEVELOPER_DIR=$(python3 - <<'PY'
 import glob, re
-paths = [p for p in glob.glob('/Applications/Xcode_26*.app/Contents/Developer')
+paths = [p for p in glob.glob('/Applications/Xcode_27*.app/Contents/Developer')
          if not any(word in p.lower() for word in ('beta', 'rc'))]
-if not paths: raise SystemExit('No stable Xcode 26 installation available.')
+if not paths: raise SystemExit('No stable Xcode 27 installation available.')
 print(max(paths, key=lambda p: tuple(map(int, re.findall(r'\d+', p.split('.app')[0])))))
 PY
 )

@@ -353,3 +353,14 @@ extension FoodItem {
         [provenance.description, provenance == .user ? nil : estimatedByLabel].compactMap { $0 }.joined(separator: " · ")
     }
 }
+
+struct DiarySectionHeader: View {
+    let title: LocalizedStringKey
+    @Environment(\.isWideLayout) private var isWide
+
+    var body: some View {
+        Text(title).font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil)
+            // Sideways the list can drop its side margin, so line up with the cards explicitly.
+            .listRowInsets(isWide ? EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20) : nil)
+    }
+}

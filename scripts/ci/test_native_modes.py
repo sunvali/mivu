@@ -23,12 +23,12 @@ with (output / 'commands.jsonl').open('a') as log:
     log.write(json.dumps([name, *args]) + '\n')
 if name == 'python3':
     data = sys.stdin.buffer.read() if args[0] in ('-', '-c') else None
-    if args[0] == '-' and b"glob.glob('/Applications/Xcode_26" in data:
-        print('/Applications/Xcode_26.6.app/Contents/Developer')
+    if args[0] == '-' and b"glob.glob('/Applications/Xcode_27" in data:
+        print('/Applications/Xcode_27.6.app/Contents/Developer')
     else:
         sys.exit(subprocess.run([os.environ['REAL_PYTHON'], *args], input=data).returncode)
 elif name == 'xcodebuild':
-    if '-version' in args: print('Xcode 26.6')
+    if '-version' in args: print('Xcode 27.1')
     if 'test' in args:
         pathlib.Path(args[args.index('-resultBundlePath') + 1]).mkdir()
         sys.exit(int(os.environ['TEST_STATUS']))

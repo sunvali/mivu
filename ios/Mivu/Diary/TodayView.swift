@@ -352,7 +352,7 @@ struct DiaryRootView: View {
             } else if model.readModel == nil {
                 NavigationStack { DiarySetupView(model: model, onSelected: { selectedTab = "today"; openQuickLog() }, onCreated: { showOnboarding = true }) }
             } else {
-                rootTabs
+                DuoLayoutRoot { rootTabs }
             }
         }
     }
@@ -362,7 +362,7 @@ struct DiaryRootView: View {
                 NavigationStack {
                     TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
                               onCompanionContextChanged: updateCompanionContext,
-                              onCompanionTouch: touchCompanion).toolbar { profileControl }
+                              onCompanionTouch: touchCompanion).toolbar { profileControl }.duoReadableWidth()
                 }
                 .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
                 .task(id: loggedMealID) {
@@ -372,22 +372,31 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl } }
+                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true) }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
-                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl } }
+                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
-                NavigationStack {
-                    CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
-                              onCompanionContextChanged: updateCompanionContext,
-                              onCompanionTouch: touchCompanion,
-                              navigationRequest: coachRoutes.request,
-                              onNavigationConsumed: { coachRoutes.consume($0) },
-                              openHistory: openCoachHistory, openToday: { selectedTab = "today" },
-                              openProgress: { selectedTab = "progress" }) { destination in
-                        routes.route = SettingsRoute(destination: destination)
-                    }.toolbar { profileControl }
+                DuoBeside {
+                    NavigationStack {
+                        CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
+                                  onCompanionContextChanged: updateCompanionContext,
+                                  onCompanionTouch: touchCompanion,
+                                  navigationRequest: coachRoutes.request,
+                                  onNavigationConsumed: { coachRoutes.consume($0) },
+                                  openHistory: openCoachHistory, openToday: { selectedTab = "today" },
+                                  openProgress: { selectedTab = "progress" }) { destination in
+                            routes.route = SettingsRoute(destination: destination)
+                        }.toolbar { profileControl }.duoReadableWidth()
+                    }
+                } secondary: {
+                    // The day Coach is changing, beside the chat; Pip stays a still image so the rig mounts once.
+                    NavigationStack {
+                        TodayView(model: model, companionOutput: CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil),
+                                  companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, isLiveDay: true)
+                    }
+                    .accessibilityIdentifier("coachLiveDay")
                 }
             }
             .badge(coach.queuedSiri.count)
@@ -586,9 +595,14 @@ struct TodayView: View {
     let companionRuntime: CompanionRuntime
     let onCompanionContextChanged: (CompanionContext) -> Void
     var onCompanionTouch: (CompanionTouch) -> Void = { _ in }
+    /// Shown beside Coach: no capture bar, and the meal Coach just added or corrected lights up.
+    var isLiveDay = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openDiaryCoach) private var openChat
+    @State private var mealRevisions: [UUID: Int]?
+    @State private var changedMealID: UUID?
     @State private var showManualNutrition = false
     @State private var companionVisible = false
     @State private var surfaceVisible = false
@@ -598,77 +612,93 @@ struct TodayView: View {
     @State private var showGoals = false
     @State private var savedMealID: UUID?
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
-    var body: some View {
-        List {
-            if model.sampleMode { Section { SampleBanner().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) } }
-            if let snapshot = model.readModel {
-                if let savedMealID, let meal = model.meal(savedMealID) {
-                    Section {
-                        let lateDay = lateMealDay(meal)
-                        NavigationLink(value: savedMealID) {
-                            Label(lateDay.map { "Added to \(wakingDayTitle($0.localDate))" } ?? "Saved on this iPhone", systemImage: "checkmark.circle")
-                                .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
-                        }.accessibilityIdentifier("savedMealReceipt")
-                        // Moving opens today's calendar date, so offer it only while that is still the meal's date.
-                        if lateDay != nil, diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID) == diaryDateLabel(Date(), zone: snapshot.profile.timeZoneID) {
-                            Button("Move to \(wakingDayTitle(diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID)))", systemImage: "arrow.uturn.forward") {
-                                Task { await moveToCalendarDay(meal) }
-                            }.font(.subheadline).frame(minHeight: 44).accessibilityIdentifier("moveLateMeal")
-                        }
+    @Environment(\.isWideLayout) private var isWide
+    // Sideways on the Duo, the summary and the meals sit in two columns; otherwise one list, unchanged order.
+    @ViewBuilder private var leadingSections: some View {
+        if model.sampleMode { Section { SampleBanner().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) } }
+        if let snapshot = model.readModel {
+            if let savedMealID, let meal = model.meal(savedMealID) {
+                Section {
+                    let lateDay = lateMealDay(meal)
+                    NavigationLink(value: savedMealID) {
+                        Label(lateDay.map { "Added to \(wakingDayTitle($0.localDate))" } ?? "Saved on this iPhone", systemImage: "checkmark.circle")
+                            .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
+                    }.accessibilityIdentifier("savedMealReceipt")
+                    // Moving opens today's calendar date, so offer it only while that is still the meal's date.
+                    if lateDay != nil, diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID) == diaryDateLabel(Date(), zone: snapshot.profile.timeZoneID) {
+                        Button("Move to \(wakingDayTitle(diaryDateLabel(meal.capturedAt, zone: snapshot.profile.timeZoneID)))", systemImage: "arrow.uturn.forward") {
+                            Task { await moveToCalendarDay(meal) }
+                        }.font(.subheadline).frame(minHeight: 44).accessibilityIdentifier("moveLateMeal")
                     }
                 }
-                if let day = model.activeDay, let recap = model.morningRecap, model.todaysMeals.isEmpty, dismissedMorningDay != day.id.uuidString {
-                    Section {
-                        MorningCheckInCard(model: model, day: day, previous: recap.previous, previousTarget: recap.target, todayWeight: snapshot.weight) {
-                            withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
-                        }
-                    }.transition(.opacity)
-                }
+            }
+            if let day = model.activeDay, let recap = model.morningRecap, model.todaysMeals.isEmpty, dismissedMorningDay != day.id.uuidString {
                 Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        summaryDate
-                        if let day = model.activeDay {
-                            intakeHero(totals: snapshot.totals, day: day)
-                            if snapshot.activeGoal != nil {
-                                todayGoal(snapshot: snapshot, day: day)
-                            }
-                        } else {
-                            intakeHero(totals: nutritionTotals([]), day: nil)
+                    MorningCheckInCard(model: model, day: day, previous: recap.previous, previousTarget: recap.target, todayWeight: snapshot.weight) {
+                        withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
+                    }
+                }.transition(.opacity)
+            }
+            Section {
+                VStack(alignment: .leading, spacing: 16) {
+                    summaryDate
+                    if let day = model.activeDay {
+                        intakeHero(totals: snapshot.totals, day: day)
+                        if snapshot.activeGoal != nil {
+                            todayGoal(snapshot: snapshot, day: day)
                         }
+                    } else {
+                        intakeHero(totals: nutritionTotals([]), day: nil)
+                    }
+                }.diarySummaryCard()
+            }
+        } else {
+            Section { Text("Choose a private local profile in Settings to open your diary.").foregroundStyle(Color.diarySecondary) }
+        }
+    }
+    @ViewBuilder private var mealSections: some View {
+        if model.readModel != nil {
+            Section {
+                if model.todaysMeals.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Your first meal starts here", systemImage: "fork.knife").font(.headline)
+                        Text("Add photos or a note.").foregroundStyle(Color.diarySecondary)
                     }.diarySummaryCard()
                 }
-                Section {
-                    if model.todaysMeals.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Your first meal starts here", systemImage: "fork.knife").font(.headline)
-                            Text("Add photos or a note.").foregroundStyle(Color.diarySecondary)
-                        }.diarySummaryCard()
-                    }
-                    ForEach(model.todaysMeals, id: \.id) { meal in
-                        NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
-                            .diarySummaryCard()
-                            .accessibilityIdentifier("mealRow")
-                            .modifier(MealRowDeletion(meal: meal, model: model))
-                    }
-                } header: { Text("Meals").font(.title3.weight(.bold)).foregroundStyle(Color.diaryText).textCase(nil) }
-                if let day = model.activeDay, snapshot.activeGoal == nil {
-                    Section { todayGoal(snapshot: snapshot, day: day).diarySummaryCard() }
+                ForEach(model.todaysMeals, id: \.id) { meal in
+                    let justChanged = meal.id == changedMealID
+                    NavigationLink(value: meal.id) { MealRow(meal: meal, prominent: true, model: model) }
+                        .diarySummaryCard()
+                        .overlay { if justChanged { RoundedRectangle(cornerRadius: 24).inset(by: 8).stroke(Color.diaryAccent, lineWidth: 2) } }
+                        .accessibilityIdentifier(justChanged ? "justChangedMeal" : "mealRow")
+                        .accessibilityHint(justChanged ? "Just updated" : "") // A value here would hide MealRow's "Needs review".
+                        .modifier(MealRowDeletion(meal: meal, model: model))
                 }
-                Section {
-                    Button { showWeight = true } label: {
-                        HStack {
-                            Label { Text("Morning weight") } icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
-                            Spacer()
-                            if let entry = snapshot.weight {
-                                Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()
-                            } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
-                        }.frame(minHeight: 44)
-                    }.accessibilityIdentifier("logWeight").diarySummaryCard()
-                }
-            } else {
-                Section { Text("Choose a private local profile in Settings to open your diary.").foregroundStyle(Color.diarySecondary) }
+                .animation(reduceMotion ? nil : .snappy, value: changedMealID)
+            } header: { DiarySectionHeader(title: "Meals") }
+        }
+    }
+    @ViewBuilder private var trailingSections: some View {
+        if let snapshot = model.readModel {
+            if let day = model.activeDay, snapshot.activeGoal == nil {
+                Section { todayGoal(snapshot: snapshot, day: day).diarySummaryCard() }
+            }
+            Section {
+                Button { showWeight = true } label: {
+                    HStack {
+                        Label { Text("Morning weight") } icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
+                        Spacer()
+                        if let entry = snapshot.weight {
+                            Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()
+                        } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
+                    }.frame(minHeight: 44)
+                }.accessibilityIdentifier("logWeight").diarySummaryCard()
             }
         }
+    }
+    private var currentRevisions: [UUID: Int] { Dictionary(uniqueKeysWithValues: model.todaysMeals.map { ($0.id, $0.revision) }) }
+    private func todayList(@ViewBuilder _ content: () -> some View) -> some View {
+        List { content() }
         .listStyle(.plain)
         .listRowSpacing(0)
         .listSectionSpacing(12)
@@ -676,8 +706,33 @@ struct TodayView: View {
         .environment(\.defaultMinListRowHeight, 56)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
+    }
+    var body: some View {
+        Group {
+            if isWide {
+                DuoSplit {
+                    todayList { leadingSections; trailingSections }.accessibilityIdentifier("todaySummaryColumn")
+                } secondary: {
+                    todayList { mealSections }.accessibilityIdentifier("todayMealsColumn")
+                }
+            } else if isLiveDay {
+                // Meals first, so the meal Coach just changed shows above the keyboard.
+                todayList { mealSections; leadingSections; trailingSections }
+            } else {
+                todayList { leadingSections; mealSections; trailingSections }
+            }
+        }
+        .task(id: isLiveDay ? currentRevisions : nil) {
+            guard isLiveDay else { return }
+            let changed = DuoLayout.changedMeal(previous: mealRevisions, current: currentRevisions)
+            mealRevisions = currentRevisions
+            // Set even when nil: a cancelled wait below never cleared the last highlight.
+            changedMealID = changed
+            guard changed != nil, (try? await Task.sleep(for: .seconds(3))) != nil else { return }
+            changedMealID = nil
+        }
         .safeAreaInset(edge: .bottom) {
-            if model.readModel != nil {
+            if model.readModel != nil, !isLiveDay {
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
                     if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill") { showComposer = true } }
                     else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
@@ -688,7 +743,10 @@ struct TodayView: View {
                         DiaryManualAction(identifier: "addManually") { showManualNutrition = true }
                     }
                 }
+                // Sideways the bar would span the whole display; keep the buttons phone-sized.
+                .frame(maxWidth: isWide ? 560 : .infinity)
                 .padding(.horizontal, 20).padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
                 .background(Color.diaryCanvas)
             }
         }

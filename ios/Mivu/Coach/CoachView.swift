@@ -22,6 +22,8 @@ struct CoachView: View {
     @State private var composerHeight: CGFloat = 0
     @State private var textWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isWideLayout) private var isWide
+    @Environment(\.duoPosture) private var posture
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var voice = CoachVoiceInput()
@@ -49,14 +51,19 @@ struct CoachView: View {
             diaryGeneration: coach.diary.changeGeneration)
     }
 
-    var body: some View {
+    private var atTable: Bool { posture == .table && coach.diary.readModel != nil }
+    private var conversationInset: CGFloat { atTable ? 0 : composerHeight }
+    private var composerStack: some View {
+        VStack(spacing: 8) { queuedSiri; composer }.fixedSize(horizontal: false, vertical: true)
+    }
+    private var conversation: some View {
         VStack(spacing: 0) {
             if let timeline = coach.timeline, coach.diary.readModel != nil {
                 #if DEBUG
                 if DiaryLaunch.isCoachHistoryFixture { diagnosticControls }
                 #endif
                 CoachTimelineView(timeline: timeline, rows: timelineRows(timeline), diagnostics: fixtureDiagnostics,
-                    jumpToLatest: jumpToLatestAction(timeline), bottomInset: composerHeight, onViewportRefreshReady: { refreshViewport = $0 },
+                    jumpToLatest: jumpToLatestAction(timeline), bottomInset: conversationInset, onViewportRefreshReady: { refreshViewport = $0 },
                     onAccessibilityPageRequestReady: { requestAccessibilityPage = $0 },
                     onReply: { turn in reply(to: turn, fromPip: turn.assistantText != nil) },
                     dismissKeyboard: editing ? { editing = false } : nil) { row in
@@ -67,23 +74,34 @@ struct CoachView: View {
                     if timeline.exchanges.isEmpty, timeline.error == nil {
                         ContentUnavailableView("What would you like to record?", systemImage: "text.bubble",
                             description: Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate. Coach gives estimates, not medical advice."))
-                            .allowsHitTesting(false).padding(.bottom, composerHeight)
+                            .allowsHitTesting(false).padding(.bottom, conversationInset)
                     }
                 }
                 .overlay(alignment: .top) { edge(.earlier, timeline: timeline) }
-                .overlay(alignment: .bottom) { edge(.later, timeline: timeline).padding(.bottom, composerHeight) }
+                .overlay(alignment: .bottom) { edge(.later, timeline: timeline).padding(.bottom, conversationInset) }
             } else if coach.diary.readModel == nil {
                 ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Settings to choose a private local profile."))
             } else { ProgressView("Loading conversation").frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
-        // The conversation scrolls behind Pip and the composer; the table insets its content by the composer's height.
-        .overlay(alignment: .bottom) {
-            if coach.diary.readModel != nil {
-                VStack(spacing: 8) { queuedSiri; composer }.fixedSize(horizontal: false, vertical: true)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
-            }
+    }
+
+    var body: some View {
+        // Propped on a table, the conversation keeps the standing half and the controls move to the flat half.
+        DuoSplit(axis: .vertical, showsSecondary: atTable, followsCrease: !editing) {
+            conversation
+                // The conversation scrolls behind Pip and the composer; the table insets its content by the composer's height.
+                .overlay(alignment: .bottom) {
+                    if coach.diary.readModel != nil, !atTable {
+                        composerStack.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
+                    }
+                }
+        } secondary: {
+            composerStack.frame(minHeight: 0, maxHeight: .infinity, alignment: .bottom)
         }
-        .background(Color.diaryCanvas)
+        // Also behind the keyboard: on the Duo it can sit lower than the inset it reports, leaving a bare window band.
+        .background { Color.diaryCanvas.ignoresSafeArea() }
+        // Beside the live day the sidebar is on the far page, but this NavigationStack still inherits its inset.
+        .ignoresSafeArea(.container, edges: isWide ? .trailing : [])
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -734,7 +752,8 @@ struct CoachView: View {
                 }
             }
             if coach.timeline?.window.isLatest(turn.id) == true {
-                let followUps = CoachReplyLines.followUps(for: turn)
+                // Sideways the live day already sits beside the chat.
+                let followUps = CoachReplyLines.followUps(for: turn).filter { !(isWide && $0 == .today) }
                 if !followUps.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(followUps, id: \.self) { followUp in
