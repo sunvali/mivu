@@ -6,7 +6,7 @@
   "include-component-in-tag": true,
   "separate-pull-requests": true,
   "pull-request-header": "Updates this platform's version and changelog.",
-  "pull-request-footer": "Review the changes and merge when ready to release.",
+  "pull-request-footer": "Parity: unchanged - version and changelog only\n\nReview the changes and merge when ready to release.",
   "packages": {
     "ios": {
       "package-name": "ios",

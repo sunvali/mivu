@@ -1,6 +1,7 @@
 """Check the parity matrix validator."""
 import sys
 import tempfile
+import json
 import unittest
 from pathlib import Path
 
@@ -51,6 +52,11 @@ class ParityMatrix(unittest.TestCase):
             self.assertEqual(check(table(row(ios='done', evidence=evidence)), root), [])
             missing = 'iOS: nope.md [TestA] · Android: -'
             self.assertTrue(any('today' in e for e in check(table(row(ios='done', evidence=missing)), root)))
+
+    def test_version_prs_pass_without_a_matrix_change(self):
+        config = json.loads((Path(__file__).parents[2] / 'release-please-config.json').read_text())
+        body = f"{config['pull-request-header']}\n---\n\nNotes\n\n---\n{config['pull-request-footer']}"
+        self.assertFalse(parity.needs_update(['android/version.txt', 'android/CHANGELOG.md'], body))
 
     def test_shared_paths_need_matrix_change(self):
         self.assertTrue(parity.needs_update(['android/app/x.kt'], ''))
