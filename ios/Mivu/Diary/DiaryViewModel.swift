@@ -59,6 +59,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private var dayDetailRequests: [UUID: UUID] = [:]
     var resumeCoach: (() -> Void)?
     var retryCoachMeal: ((UUID) -> Void)?
+    var protectedDataAvailable: () -> Bool = { UIApplication.shared.isProtectedDataAvailable }
     var profiles: [DiaryProfile] = []
     var errorMessage: String?
     var manualDayChanged = false
@@ -188,7 +189,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
                 try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
                 profiles = try await store.profiles()
             }
-        } catch { await recoverProfileSelection(previous); present(error) }
+        } catch { await recoverProfileSelection(previous); presentUnlessLocked(error) }
     }
     private func install(_ initial: DiaryReadModel) async throws {
         let owner = initial.head.profile.id, token = try await store.selectionOwnership(expectedProfileID: initial.head.profile.id)
@@ -468,7 +469,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     }
     /// Only a readable, empty diary folder starts "My diary"; a failed read (locked phone, upgrade error) retries instead.
     @discardableResult func createFirstProfile() async -> Bool {
-        do { profiles = try await store.profiles() } catch { present(error); return false }
+        do { profiles = try await store.profiles() } catch { presentUnlessLocked(error); return false }
         guard profiles.isEmpty else { await load(createDefaultProfile: false); return false }
         await createProfile(name: "My diary"); return readModel != nil
     }
@@ -491,17 +492,18 @@ enum DiaryCaptureResult: Equatable, Sendable {
         changesTask?.cancel(); cancelSampleWorker(); backupTask?.cancel(); backupRequested = nil; return true
     }
     private func finishProfileTransition() { isChangingProfile = false; queueBackup(); resumeWorker() }
-    private func clearProfileSelection() async {
+    private func clearProfileSelection(rememberSignOut: Bool = true) async {
         await backup?.selectProfile(nil); await store.signOut()
         if let photoLoader { await photoLoader.purgeForMemoryPressure() }
         selection = nil; manualCaptureAttempt = nil; readModel = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
         photoRequestGeneration &+= 1; changeGeneration &+= 1
         backupGeneration = nil; backupStatus = FolderBackupStatus(); backupScheduledRevision = nil
-        preferences?.set(true, forKey: "diarySignedOut"); preferences?.removeObject(forKey: "diarySelectedProfile")
+        if rememberSignOut { preferences?.set(true, forKey: "diarySignedOut"); preferences?.removeObject(forKey: "diarySelectedProfile") }
     }
     private func recoverProfileSelection(_ previous: UUID?) async {
         if let previous { do { try await install(try await profileSelection(previous)); return } catch {} }
-        await clearProfileSelection()
+        // A failed read (locked phone, Snap It launch) is not a sign-out; the next read reopens the same diary.
+        await clearProfileSelection(rememberSignOut: false)
     }
     private func rememberSelection() { if let id = readModel?.head.profile.id { preferences?.set(id.uuidString, forKey: "diarySelectedProfile"); preferences?.set(false, forKey: "diarySignedOut") } }
     func loadProfiles() async { guard !isChangingProfile else { return }; do { profiles = try await store.profiles() } catch { present(error) } }
@@ -587,6 +589,8 @@ enum DiaryCaptureResult: Equatable, Sendable {
             } catch is CancellationError {} catch { if selection == token { present(error) } }
         }
     }
+    /// A locked phone keeps the diary closed until unlock, when setup retries; a real failure shows then.
+    private func presentUnlessLocked(_ error: Error) { if protectedDataAvailable() { present(error) } }
     private func present(_ error: Error) { errorMessage = (error as? LocalizedError)?.errorDescription ?? "Could not save on this iPhone. Your input is still here." }
 }
 

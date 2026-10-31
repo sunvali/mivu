@@ -24,6 +24,33 @@ import Testing
         #expect(try diaryFolders(root) == 1)
     }
 
+    @Test func lockedLaunchOpensTheSameDiaryOnceReadable() async throws {
+        let root = URL.temporaryDirectory.appending(path: "ProfileSafety-" + UUID().uuidString)
+        let suite = "ProfileSafety-" + UUID().uuidString, defaults = try #require(UserDefaults(suiteName: suite))
+        defer { try? FileManager.default.removeItem(at: root); defaults.removePersistentDomain(forName: suite) }
+        let existing = try await DiaryStore(directory: root).createProfile(DiaryProfile(name: "Synthetic owner")).head.profile.id
+        defaults.set(existing.uuidString, forKey: "diarySelectedProfile")
+        let file = root.appending(path: existing.uuidString + ".sqlite/diary.sqlite")
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: file.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path) }
+
+        let diary = DiaryViewModel(store: DiaryStore(directory: root), preferences: defaults)
+        diary.protectedDataAvailable = { false }
+        await diary.load(createDefaultProfile: false)
+        await diary.createFirstProfile()
+        #expect(diary.readModel == nil)
+        #expect(diary.errorMessage == nil, "A locked phone is expected, so no alert waits at unlock")
+        #expect(!defaults.bool(forKey: "diarySignedOut"), "A failed read is not a sign-out")
+        #expect(defaults.string(forKey: "diarySelectedProfile") == existing.uuidString)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        diary.protectedDataAvailable = { true }
+        await diary.createFirstProfile()
+        #expect(diary.readModel?.head.profile.id == existing, "Unlocking reopens the diary without the chooser")
+        await diary.signOut()
+        #expect(defaults.bool(forKey: "diarySignedOut"), "A real sign-out still sticks")
+    }
+
     @Test func emptyPhoneStartsMyDiary() async throws {
         let root = URL.temporaryDirectory.appending(path: "ProfileSafety-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
