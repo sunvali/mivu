@@ -92,6 +92,12 @@ Also changed: the live-day task returns early outside the Coach side pane; the "
 
 **Closed pose (466×678 pt), same app source, Device Hub:** `DuoLayoutUITests` 4 passed, 7 skipped (they need the inner display); `DuoLayoutTests` 12 passed. Full screen and one column on all four tabs, and typing with the on-screen keyboard keeps the field above it. The system places the tabs in the vertical bar beside the camera. Three tests first failed because they assumed a taller window, so they now scroll to Weight or skip in Closed; the app code didn't change.
 
-**Not verified:** Open-flat upright needs Device Hub, and fold/unfold there with a draft is untested. The full 9-screen comparison and the iOS 26.5 regression weren't repeated. VoiceOver wasn't exercised.
+**Open flat, app source 7515c1d0, Device Hub:** upright `DuoLayoutUITests` 9 passed, 2 skipped; sideways 4 passed, 7 skipped, in 3 of 4 runs; `DuoLayoutTests` 12 passed. iPhone 17 Pro iOS 27.0: Smoke, RootTab and QuickLog 6 passed, 12 unit passed. By hand, all four tabs in both directions; typing with the on-screen keyboard keeps the field above it, and a draft and the keyboard survive rotating upright to sideways. Sending from there updates the live day.
+
+- Sideways, the Today and Diary section headers sat 20 pt left of their cards. A shared header now sets the inset on wide layouts only, so phones keep the system default. Checked on screenshots, because the accessibility frame reports the whole header row, not the text, so there is no automated test.
+- The Closed skip in `testSidewaysTodaySplitsSummaryAndMeals` tested height and also skipped the sideways inner display. It tests width now and passes there.
+- One sideways run failed `testTableCameraKeepsShootingUntilDone`: the app stalled 60 seconds in launch with `--duo-posture-ui-test table`, then wasn't running, with no crash report. It didn't recur in 15 launches of that configuration at idle CPU or 3 more suite runs. App CPU during the stall wasn't captured, so a return of the crease layout hang can't be ruled out. Table pose only exists upright, so that launch skips sideways.
+
+**Not verified:** Fold/unfold in Device Hub with a draft is untested. The full 9-screen comparison and the iOS 26.5 regression weren't repeated. VoiceOver wasn't exercised.
 
 **Known limit:** at accessibility text sizes the table composer can overflow upward past the crease.
