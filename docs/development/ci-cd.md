@@ -26,7 +26,9 @@ using the pinned release-please action, and explicitly dispatches CI and title
 checks for its token-created version PRs. The configured component branches are
 `release-please--branches--main--components--ios` and
 `release-please--branches--main--components--android`; unexpected branches fail
-before dispatch. The bot never approves or merges a PR.
+before dispatch. The footer carries the `Parity: unchanged` line the parity gate
+requires. GitHub holds the bot's own `pull_request` runs until someone approves them
+in the PR's Checks tab; the bot never approves or merges a PR.
 
 Keep `MIVU_ACTIONS_USAGE_APPROVED`, `MIVU_ACTIONS_ALLOWANCE_VERIFIED` and
 `MIVU_AUTO_PACKAGE_RELEASES` false. These gates protect older workflow revisions;
