@@ -82,6 +82,55 @@ private final class TestClock: @unchecked Sendable { var now = Date(timeInterval
         #expect(try heldCount(root, profile) == 0)
     }
 
+    @Test func lateUndoSaysItIsNoLongerAvailable() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let receipt = try await deletedMeal(store, profile, meal)
+        clock.now += 601
+        await #expect(throws: DiaryError.undoExpired) { try await undo(store, profile, receipt) }
+        #expect(DiaryError.undoExpired.errorDescription == "Undo is no longer available.")
+        // The same tap, once the held copy has already gone.
+        _ = try await store.expireCoachUndo(expectedProfileID: profile.id)
+        #expect(try heldCount(root, profile) == 0)
+        await #expect(throws: DiaryError.undoExpired) { try await undo(store, profile, receipt) }
+    }
+
+    @Test func expiringReportsTheTimeLeftAndKeepsTheUndoneCard() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        #expect(try await store.expireCoachUndo(expectedProfileID: profile.id) == nil)
+        let receipt = try await deletedMeal(store, profile, meal)
+        clock.now += 100
+        #expect(try await store.expireCoachUndo(expectedProfileID: profile.id) == 500)
+        try await undo(store, profile, receipt)
+        #expect(try await store.expireCoachUndo(expectedProfileID: profile.id) == nil)
+        clock.now += 501
+        _ = try await store.expireCoachUndo(expectedProfileID: profile.id)
+        #expect(try await store.coachUndoStates(keys: [receipt.operationKey], expectedProfileID: profile.id)[receipt.operationKey] == .undone)
+        let held = try DiaryDatabase(url: root.appending(path: profile.id.uuidString + ".sqlite/diary.sqlite"))
+            .mutationInteger("SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM coach_undo_deleted")
+        #expect(held == 0)
+    }
+
+    @Test func openCoachDropsUndoAndHeldBytesAtTheTenMinuteMark() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let receipt = DiaryDatabase.coachCommittedReceipt(try await deletedMeal(store, profile, meal))
+        let diary = DiaryViewModel(store: store); await diary.load(createDefaultProfile: false)
+        let clock = clock, deadline = clock.now + 600
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), sleep: { _ in
+            while clock.now <= deadline { try await Task.sleep(for: .milliseconds(5)) }
+        })
+        let connected = Task { await coach.connectTimeline() }; defer { connected.cancel() }
+        func waitUntil(_ done: () -> Bool) async throws {
+            for _ in 0..<2_000 where !done() { try await Task.sleep(for: .milliseconds(5)) }
+            #expect(done())
+        }
+        try await waitUntil { coach.undoState(receipt) == .available }
+        clock.now += 601
+        try await waitUntil { coach.undoState(receipt) == nil }
+        #expect(try heldCount(root, profile) == 0)
+        await coach.undo(receipt)
+        #expect(diary.errorMessage == "Undo is no longer available.")
+    }
+
     @Test func buttonHidesAfterNextMessageButRowSurvivesOneTurn() async throws {
         let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let receipt = try await deletedMeal(store, profile, meal)
@@ -144,6 +193,17 @@ private final class TestClock: @unchecked Sendable { var now = Date(timeInterval
         #expect(try await store.snapshotForExport().meals.first?.photos.isEmpty == true)
         try await undo(store, profile, receipt)
         #expect(try await store.snapshotForExport().meals.first?.photos.map(\.data) == [photoBytes])
+    }
+
+    @Test func undonePhotoComesBackUnderANewIDSoItsDeleteStillReplays() async throws {
+        let (store, profile, meal, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let photo = try #require(meal.photos.first)
+        let delete = CoachWrite.manual(.deletePhoto(mealID: meal.id, photoID: photo.id, revision: meal.revision))
+        let receipt = try #require(try await coach(store, profile, [delete]).first)
+        try await undo(store, profile, receipt)
+        #expect(try await store.snapshotForExport().meals.first?.photos.map(\.id).contains(photo.id) == false)
+        let turnID = try #require(UUID(uuidString: String(receipt.operationKey.prefix(36))))
+        try await store.validateCoachWrites([delete], turnID: turnID, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id, mode: .replayOnly)
     }
 
     @Test func photoUndoRefusedWhenMealGone() async throws {
@@ -222,6 +282,14 @@ private final class TestClock: @unchecked Sendable { var now = Date(timeInterval
             #expect(throws: Never.self) { try parse("\(turn)/\(kind)") }
         }
         #expect(throws: CoachError.invalidArguments) { try parse("\(turn)/open_settings/x") }
+    }
+
+    @Test func undoChangeToolOffersDeletes() throws {
+        let root = try #require(JSONSerialization.jsonObject(with: CoachTools.declarations()) as? [String: Any])
+        let tools = try #require(root["tools"] as? [[String: Any]])
+        let text = try #require(tools.first { $0["name"] as? String == "undo_change" }?["description"] as? String)
+        for tool in ["delete_meal", "delete_photo", "delete_weight", "delete_workout"] { #expect(text.contains(tool)) }
+        #expect(!text.contains("Not for whole-meal"))
     }
 
     @Test func deleteResultTellsTheModelHowToUndo() async throws {

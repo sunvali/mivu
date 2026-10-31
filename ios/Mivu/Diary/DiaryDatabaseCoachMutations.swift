@@ -348,10 +348,17 @@ extension DiaryTransaction {
     /// Restores the snapshot only while the meal is exactly as that change left it; never recreates a deleted meal.
     @discardableResult func undoCoachChange(_ key: String, now: Date) throws -> UUID? {
         if try isHeldDelete(key) {
-            guard try deletedUndoState(key, now: now) == .available else { throw DiaryError.staleRevision }
+            switch try deletedUndoState(key, now: now) {
+            case .available: break
+            case .undone: throw DiaryError.staleRevision
+            case nil: throw DiaryError.undoExpired
+            }
             if case .meal(let id) = try undoDeleted(key) { return id } else { return nil }
         }
-        guard let undo = try coachUndo(key) else { throw DiaryError.notFound }
+        guard let undo = try coachUndo(key) else {
+            // A purged held copy leaves only the key behind.
+            throw ["/delete_", "/undo/"].contains(where: key.contains) ? DiaryError.undoExpired : DiaryError.notFound
+        }
         guard !undo.undone, try undoState(undo.mealID) == undo.afterState else { throw DiaryError.staleRevision }
         if let before = undo.before { _ = try commitSavedItems(mealID: undo.mealID, items: before, expectedRevision: undo.afterRevision) }
         else { try deleteMeal(undo.mealID) }

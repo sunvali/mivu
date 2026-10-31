@@ -13,8 +13,9 @@ let coachDeletedUndoSeconds: TimeInterval = 600
 
 extension DiaryDatabase {
     /// Erases held copies past the window; with `newestTurnID`, also those older than the turn before it.
+    /// An undone row holds no copy and stays past the window, so its card keeps reading as undone.
     func purgeDeletedUndo(now: Date, newestTurnID: UUID? = nil) throws {
-        try execute("DELETE FROM coach_undo_deleted WHERE createdAt < ?", [.real(now.timeIntervalSinceReferenceDate - coachDeletedUndoSeconds)])
+        try execute("DELETE FROM coach_undo_deleted WHERE undone = 0 AND createdAt < ?", [.real(now.timeIntervalSinceReferenceDate - coachDeletedUndoSeconds)])
         guard let newestTurnID else { return }
         try execute("""
             DELETE FROM coach_undo_deleted WHERE turnID IN (SELECT turnID FROM coach_index WHERE sequence <
@@ -53,6 +54,14 @@ extension DiaryTransaction {
         let fresh = now.timeIntervalSinceReferenceDate - sqlite3_column_double(statement, 1) <= coachDeletedUndoSeconds
         return fresh && sqlite3_column_int64(statement, 2) == 0 ? .available : nil
     }
+    /// Seconds until the earliest copy still open to Undo expires; nil with none held.
+    func deletedUndoSecondsLeft(now: Date) throws -> TimeInterval? {
+        let oldest = now.timeIntervalSinceReferenceDate - coachDeletedUndoSeconds
+        let statement = try database.mutationStatement("SELECT MIN(createdAt) FROM coach_undo_deleted WHERE undone = 0 AND createdAt >= ?", [.real(oldest)])
+        defer { sqlite3_finalize(statement) }
+        guard try database.mutationStep(statement), sqlite3_column_type(statement, 0) != SQLITE_NULL else { return nil }
+        return sqlite3_column_double(statement, 0) - oldest
+    }
     func isHeldDelete(_ key: String) throws -> Bool {
         try database.mutationInteger("SELECT COUNT(*) FROM coach_undo_deleted WHERE operationKey = ?", [.text(key)]) == 1
     }
@@ -80,8 +89,9 @@ extension DiaryTransaction {
             meal.revision = revision; try saveMeal(meal)
             for photo in photos { try insertPhoto(photo, owner: .meal(meal.id)) }
             restored = .meal(meal.id)
-        case .photo(let mealID, let photo):
-            try insertPhoto(photo, owner: .meal(mealID)); restored = .meal(mealID)
+        case .photo(let mealID, var photo):
+            // A new ID, so a paused turn that replays its delete_photo still finds the photo gone.
+            photo.id = UUID(); try insertPhoto(photo, owner: .meal(mealID)); restored = .meal(mealID)
         case .weight(var weight):
             if let dayID = weight.dayID, try self.weight(on: dayID) != nil { throw DiaryError.staleRevision }
             weight.id = UUID(); try saveWeight(weight); restored = .weight(weight.id)
@@ -89,7 +99,7 @@ extension DiaryTransaction {
             workout.id = UUID(); try saveWorkout(workout); restored = .workout(workout.id)
         }
         let id: UUID = switch restored { case .meal(let id), .weight(let id), .workout(let id): id }
-        try database.execute("UPDATE coach_undo_deleted SET undone = 1, restoredID = ? WHERE operationKey = ?", [.text(id.uuidString), .text(key)])
+        try database.execute("UPDATE coach_undo_deleted SET undone = 1, restoredID = ?, payload = x'' WHERE operationKey = ?", [.text(id.uuidString), .text(key)])
         return restored
     }
     private func mealSnapshot(_ id: UUID) throws -> CoachDeletedSnapshot {
