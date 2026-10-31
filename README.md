@@ -1,86 +1,94 @@
-# Mivu
+<p align="center">
+  <img src="ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/pip.png" alt="Pip, Mivu's orange fox companion wearing a teal scarf" width="160">
+</p>
 
-Mivu is a native iPhone food diary built with SwiftUI and Swift 6 for iOS 26 and
-newer. Coach saves conversational text and photos, with Today, meal review,
-History and Settings alongside it. The Hebrew language selector is disabled for now; existing profile
-and archive data, including stored language values, must remain intact.
+<h1 align="center">Mivu</h1>
 
-## Meet Pip
+<p align="center"><strong>A private food diary you can just talk to.</strong></p>
 
-<img src="ios/Mivu/Assets.xcassets/Companion/Pip/PipPreview.imageset/pip.png" alt="Pip, Mivu’s orange fox companion wearing a teal scarf" width="240">
+Tell Mivu what you ate in your own words, by photo or by voice. It records the
+meal with estimated calories and macros, and you can review and fix every number.
 
-Pip is Mivu’s fox companion, bringing playful gestures and gentle feedback to
-Today and Coach. Pip respects Reduce Motion and keeps your diary content clear.
+Your diary stays on your device. There is no Mivu account, no Mivu server, no ads
+and no tracking.
 
-## Conversational tracking
+<p align="center">
+  <img src="docs/app-store/screenshots/01-coach.png" alt="Coach logging a meal described in plain language" width="30%">
+  <img src="docs/app-store/screenshots/02-today.png" alt="Today showing calories and macros against daily targets" width="30%">
+  <img src="docs/app-store/screenshots/03-progress.png" alt="Progress charting weight and intake over time" width="30%">
+</p>
 
-Input saves locally before analysis. Connect ChatGPT and select an eligible model
-in Settings to analyze meals; offline input remains available for retry. Food
-operations update real diary records, and estimates remain open to review and
-correction. Live text/image recognition still needs provider acceptance; the
-[core verification record](docs/verification/2026-10-12-coach-core.md) distinguishes
-tested native persistence from external and physical-device gates.
+## What you get
 
-An explicit `--sample-mode` launch uses a clearly labeled synthetic apple estimate.
-Sample mode and isolated inference fixtures do not establish food recognition.
+- **Log the way you talk.** "Two eggs, toast and a coffee with milk" becomes a
+  meal in your diary. Weight and workouts go in the same conversation.
+- **Fix anything by asking.** Tell Coach to change an amount or a food, or edit
+  it by hand.
+- **See your day.** Track calories and macros against your targets, with a full
+  diary and progress charts.
+- **Meet Pip.** Your fox companion sets up your daily targets and reacts as you
+  log.
+- **Keep your data.** Back up to a folder you choose, or export everything at any
+  time.
 
-## Private data and backups
+## How the AI works
 
-Diary records are stored locally in separate app-owned profiles. You can choose
-a private folder in Files for backup, or export and import a portable archive.
-“Saved to backup folder” confirms the file-provider write; it does not confirm
-that iCloud or another remote service has finished syncing it. Keep the folder
-available and check the displayed backup status.
+Mivu has no AI bill of its own. You connect your own ChatGPT plan through OpenAI's
+[Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source),
+so you don't need an API key.
 
-## Run on a simulator
+- Mivu asks before anything is shared with OpenAI, and you can disconnect at any
+  time.
+- Logging by hand, history, progress and backups all work without ChatGPT.
+- On supported iPhones, Apple Intelligence can log meals on-device instead.
 
-Open `ios/Mivu.xcodeproj` in Xcode, select the `Mivu` scheme and an iOS 26 or
-newer simulator, then run. Use XcodeBuildMCP for simulator builds, tests, and
-interaction checks. See the [native MVP plan](docs/superpowers/plans/2026-10-12-native-diary-mvp.md)
-for scope and acceptance, [design system](design-system/mivu/MASTER.md) for
-visual and accessibility guidance, and [CI and delivery](docs/development/ci-cd.md)
-for hosted checks and release prerequisites. For owner-run live testing after the core build is ready, see [personal iPhone testing](docs/development/personal-iphone-testing.md). The [accepted MVP addendum](docs/superpowers/specs/2026-10-12-sample-mvp-addendum.md)
-records product and backup requirements.
+Nutrition figures are estimates, not medical advice.
 
-## Development
+## Run it
 
-Use synthetic inputs in diagnostics and tests. Never commit credentials or
-personal meal data. Keep changes on a feature branch, preserve English LTR,
-Dynamic Type, VoiceOver, reduced motion, and accessible touch targets. Hebrew RTL
-is not an MVP acceptance requirement. Report verification with its actual
-environment, result, and remaining gates; workflow files alone are not evidence
-of a hosted run. The released baseline remains a sample diary; conversational food
-tracking is implemented on this branch, and progress tracking plus manual Coach
-controls are present in the current branch. Live account-backed behavior and
-physical-iPhone acceptance remain pending; see [Coach edit parity and device
-acceptance](docs/development/coach-edit-parity.md) for the contract and unchecked
-device checklist. See the [merged Coach foundation evidence](docs/verification/2026-10-12-coach-foundation.md), the [coach feature audit](docs/verification/2026-10-12-coach-feature-audit.md),
-[conversational coach design](docs/superpowers/specs/2026-10-12-conversational-coach-design.md),
-and [P0 implementation plan](docs/superpowers/plans/2026-10-12-coach-p0.md) for
-the current scope and evidence.
+### iPhone
 
-## Fast local checks
+You need Xcode 27 or later. The app runs on iOS 26 and newer.
 
-Use focused `MivuTests/<Suite>` tests for changed logic. For UI/navigation changes,
-run `python3 scripts/ci/smoke.py --simulator-id <reserved-UUID>`; it fails after
-120 seconds, including build time. Use a dedicated simulator when other agents
-are working. The default Xcode plan, `MivuQuick`, runs one
-capture/persistence/navigation smoke journey. Run only the changed unit test or
-its suite plus directly affected callers; do not rerun unchanged passing checks. The complete `Mivu` plan
-remains available for longer runs; it is not required on every PR. See
-[the test selection policy](docs/development/ci-cd.md#local-native-verification)
-for commands, cold-build limits and full-suite triggers.
+1. Open `ios/Mivu.xcodeproj`.
+2. Choose the `Mivu` scheme and an iPhone simulator.
+3. Press Run.
 
-## Agent guidance
+To run on a real device, set your own signing team and bundle identifiers.
 
-The [navigation and summary layout guide](docs/development/navigation-and-summary-layout.md) records the approved card treatment, tab responsibilities and applied UX research.
+### Android
 
-See [repository instructions](AGENTS.md) and the concise
-[Copilot instructions](.github/copilot-instructions.md).
-For companion animation work, use the repository-local
-[Mivu animation skill](.agents/skills/mivu-animation/SKILL.md), including its
-source map, regeneration commands and native verification recipe.
+The Android app is at an early stage and needs Android 12 or newer. Open `android/`
+in Android Studio, or build it from the command line:
+
+```bash
+cd android && ./gradlew :app:assembleDebug
+```
+
+## What's where
+
+| Folder | What's inside |
+| --- | --- |
+| [`ios/`](ios) | The iPhone app, written in SwiftUI |
+| [`android/`](android) | The Android app, written in Kotlin and Compose |
+| [`design-system/`](design-system/mivu/MASTER.md) | Colors, type, components and Pip's artwork |
+| [`docs/`](docs) | Plans, design specs and test records |
+| [`scripts/`](scripts) | CI checks and build tools |
+
+## Contributing
+
+Pull requests are not accepted at this time. For questions, visit
+[mivuapp.com/support](https://mivuapp.com/support).
+
+To find your way around the project, start with these:
+
+- [Product plan](docs/superpowers/plans/2026-10-12-native-diary-mvp.md)
+- [Design system](design-system/mivu/MASTER.md)
+- [Testing and releases](docs/development/ci-cd.md)
+- [Repository rules](AGENTS.md)
 
 ## License
 
-Mivu is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+The code is licensed under the [GNU AGPL v3.0](LICENSE). The Mivu name, icon and
+Pip artwork are not, so remove them before you distribute a modified version. See
+the [notice](public/NOTICE.md) for details and third-party credits.
