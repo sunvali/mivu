@@ -104,6 +104,8 @@ Also changed: the live-day task returns early outside the Coach side pane; the "
 - `SmokeUITests.testOfflineCaptureSurvivesRelaunchAndNavigation` failed 3 of 10 runs on the branch while other builds kept load near 30, always at the immediate `send.isHittable` check after the camera closes. Clean main passed 10 of 10, mostly at lower load, so the branch may close the camera slightly later. The test now waits up to 3 seconds and passed 10 of 10 on the branch. Loads weren't matched, so this shows the button arrives, not that the timing equals main's.
 - A first iPhone 17 Pro run failed two CoachNavigation tests with the runner killed. Another session had shut that simulator down, so the rerun used iPhone 17.
 
+**Rebased again on main f8c45835:** no conflicts and no app source change. That range adds the Android app, release config and iOS fixture tests. Only the pre-push native units ran on it; the results above stand for the app source. `docs/parity.md` gained the `iphone-duo` row.
+
 **Not verified:** Fold/unfold in Device Hub with a draft is untested. The full 9-screen comparison and the iOS 26.5 regression weren't repeated. VoiceOver wasn't exercised.
 
 **Known limit:** at accessibility text sizes the table composer can overflow upward past the crease.
