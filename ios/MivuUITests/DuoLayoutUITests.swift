@@ -14,7 +14,7 @@ import XCTest
 
     func testSidewaysTodaySplitsSummaryAndMeals() throws {
         let app = launch(wide: true)
-        try XCTSkipIf(app.windows.firstMatch.frame.height < 760, "Too short to show Weight without scrolling: not a sideways window")
+        try XCTSkipIf(app.windows.firstMatch.frame.width < 760, "Needs the sideways inner display: the closed Duo is too short to show Weight")
         let summary = app.descendants(matching: .any)["todaySummaryColumn"]
         let meals = app.descendants(matching: .any)["todayMealsColumn"]
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
