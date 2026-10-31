@@ -98,6 +98,12 @@ Also changed: the live-day task returns early outside the Coach side pane; the "
 - The Closed skip in `testSidewaysTodaySplitsSummaryAndMeals` tested height and also skipped the sideways inner display. It tests width now and passes there.
 - One sideways run failed `testTableCameraKeepsShootingUntilDone`: the app stalled 60 seconds in launch with `--duo-posture-ui-test table`, then wasn't running, with no crash report. It didn't recur in 15 launches of that configuration at idle CPU or 3 more suite runs. App CPU during the stall wasn't captured, so a return of the crease layout hang can't be ruled out. Table pose only exists upright, so that launch skips sideways.
 
+**Rebased on main 30438168, app source 5aece5ac, Xcode 27.1:** the rebase had no conflicts; the three new main commits touch Undo, locked launch and UI test scrolling. Open sideways on the Duo, iOS 27.1: `DuoLayoutUITests` 4 passed, 7 skipped; `DuoLayoutTests` 12 passed. iPhone 17, iOS 27.0: CoachNavigation, QuickLog and RootTab 10 passed; `CoachChatLayoutTests`, `DuoLayoutTests`, `CoachDeleteUndoTests` and `ProfileSafetyTests` 43 passed. With the forced table posture on iPhone 17, `testTableCameraKeepsShootingUntilDone` passed. The upright Duo suite wasn't repeated: the simulator stayed sideways after rotate commands.
+
+- An independent review found nothing blocking. Its timer finding is fixed: leaving table pose cancels a running countdown, so the camera can't fire as the phone is picked up. That cancel needs a real fold, so no test covers it. Each table shot now posts a VoiceOver announcement, also unexercised.
+- `SmokeUITests.testOfflineCaptureSurvivesRelaunchAndNavigation` failed 3 of 10 runs on the branch while other builds kept load near 30, always at the immediate `send.isHittable` check after the camera closes. Clean main passed 10 of 10, mostly at lower load, so the branch may close the camera slightly later. The test now waits up to 3 seconds and passed 10 of 10 on the branch. Loads weren't matched, so this shows the button arrives, not that the timing equals main's.
+- A first iPhone 17 Pro run failed two CoachNavigation tests with the runner killed. Another session had shut that simulator down, so the rerun used iPhone 17.
+
 **Not verified:** Fold/unfold in Device Hub with a draft is untested. The full 9-screen comparison and the iOS 26.5 regression weren't repeated. VoiceOver wasn't exercised.
 
 **Known limit:** at accessibility text sizes the table composer can overflow upward past the crease.
