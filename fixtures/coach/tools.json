@@ -1186,7 +1186,7 @@
       "type" : "function"
     },
     {
-      "description" : "Undo one earlier Coach food change by the operation key from its [saved key=…] line: log_food, append_food, edit_item, correct_item, scale_meal or delete_item. Restores the meal exactly as it was before that change (an undone log_food removes the meal), refused if anything changed the meal since. Not for whole-meal deletes, weights, workouts, goals or settings.",
+      "description" : "Undo one earlier Coach change by the operation key from its [saved key=…] line or a delete's undo_key: log_food, append_food, edit_item, correct_item, scale_meal, delete_item, delete_meal, delete_photo, delete_weight or delete_workout. A food change restores the meal exactly as it was before that change (an undone log_food removes the meal), refused if anything changed the meal since. A delete, including an undone log_food, comes back under a new ID, refused after the next message or ten minutes. Not for goals or settings.",
       "name" : "undo_change",
       "parameters" : {
         "additionalProperties" : false,
