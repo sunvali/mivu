@@ -212,6 +212,9 @@ and exported product. An unsigned archive cannot be installed on a phone.
 a higher build number, so keep Organizer's "Automatically manage version and build
 number" on and record the number it assigns.
 
+For Android, check out the `android-v` tag instead and follow the signed build steps in
+[play-submission.md](play-submission.md); the upload's ledger line goes in a later PR.
+
 Apple membership, signing identity, provisioning and any required agreements
 remain owner prerequisites. Keep signing credentials in the local Apple tooling;
 GitHub CI needs no Apple secrets. Any requested TestFlight upload is performed
