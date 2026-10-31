@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/sunvali/mivu/compare/v1.2.0...v1.2.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **coach:** end held delete Undo on time and restore photos under new IDs ([#92](https://github.com/sunvali/mivu/issues/92)) ([72dcd4d](https://github.com/sunvali/mivu/commit/72dcd4d7ec898193b4276324e3e1d2d8ebdc1333))
+* **diary:** keep the diary and camera request on a locked launch ([#91](https://github.com/sunvali/mivu/issues/91)) ([e6404ad](https://github.com/sunvali/mivu/commit/e6404adb1c68a26953881e03f2f333485232bff9))
+
 ## [1.2.0](https://github.com/sunvali/mivu/compare/v1.1.3...v1.2.0) (2026-10-29)
 
 
