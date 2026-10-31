@@ -122,8 +122,8 @@ class QuickCaptureTest {
         }
     }
 
-    @Test fun requestIsDroppedWhileChoosingADiary() {
-        // A second diary and a lost selection: the app asks to choose before any diary is ready, and iOS drops the request.
+    @Test fun requestWaitsForTheDiaryChooser() {
+        // A second diary and a lost selection: the app asks to choose before any diary is ready, and the camera opens after.
         val other = DiaryProfile(UUID.randomUUID(), "Synthetic other", "en", "UTC", "")
         DiaryDatabase.create(app, other).close()
         DiaryRepository.preferences(app).edit().putString("selectedProfile", UUID.randomUUID().toString()).commit()
@@ -131,14 +131,14 @@ class QuickCaptureTest {
         assertTrue(app.repository.bootstrapState.value is Bootstrap.Choose)
         ActivityScenario.launch<MainActivity>(quickIntent(app, QuickAction.SnapIt)).use {
             waitFor(hasText("Choose a diary"))
-            compose.waitUntil(5_000) { app.quickRequest.value == null }
-            compose.onNodeWithText("My diary").performClick()
-            waitFor(hasText("Today") and isHeading())
             assertTrue(!exists(camera))
+            compose.onNodeWithText("My diary").performClick()
+            waitFor(camera)
+            assertNull(app.quickRequest.value)
         }
     }
 
-    @Test fun snapItOnANewDiaryShowsSetupNotTheCamera() {
+    @Test fun snapItOnANewDiaryWaitsForSetup() {
         TodayFixture.wipe(app)
         runBlocking { app.repository.bootstrap() } // creates "My diary", so setup with Pip opens once
         try {
@@ -146,6 +146,8 @@ class QuickCaptureTest {
                 waitFor(hasTestTag("onboardingLater"))
                 compose.waitForIdle()
                 assertTrue(!exists(camera))
+                compose.onNodeWithTag("onboardingLater").performClick()
+                waitFor(camera)
                 assertNull(app.quickRequest.value)
             }
         } finally {
