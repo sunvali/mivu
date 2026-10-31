@@ -1,16 +1,25 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "bootstrap-sha": "4f97261eb10d2af2a1301251c8e46748d7cc0dab",
+  "last-release-sha": "594e8aaeff620b68d55288f07c2e8ed4cf81b284",
   "release-type": "simple",
-  "include-component-in-tag": false,
-  "pull-request-header": "Updates Mivu's version and changelog.",
+  "include-component-in-tag": true,
+  "separate-pull-requests": true,
+  "pull-request-header": "Updates this platform's version and changelog.",
   "pull-request-footer": "Review the changes and merge when ready to release.",
   "packages": {
-    ".": {
-      "package-name": "mivu",
+    "ios": {
+      "package-name": "ios",
       "extra-files": [
-        { "type": "generic", "path": "ios/Config/Shared.xcconfig" }
-      ]
+        {
+          "type": "generic",
+          "path": "Config/Shared.xcconfig"
+        }
+      ],
+      "exclude-paths": ["ios/MivuTests", "ios/MivuUITests"]
+    },
+    "android": {
+      "package-name": "android"
     }
   }
 }

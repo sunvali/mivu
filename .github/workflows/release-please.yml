@@ -26,15 +26,21 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
       # Token-created PRs/tags do not automatically start other workflows.
-      - name: Check the version pull request
-        if: steps.release.outputs.pr != ''
+      - name: Check the version pull requests
+        if: steps.release.outputs.prs_created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_PR: ${{ steps.release.outputs.pr }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
         run: |
-          branch=$(python3 -c 'import json, os; print(json.loads(os.environ["RELEASE_PR"])["headBranchName"])')
-          title=$(python3 -c 'import json, os; print(json.loads(os.environ["RELEASE_PR"])["title"])')
-          [ "$branch" = release-please--branches--main--components--mivu ] || { echo 'Unexpected release branch.' >&2; exit 1; }
-          gh workflow run commit-title.yml --repo "$GH_REPO" --ref "$branch" -f "title=$title"
-          gh workflow run ci.yml --repo "$GH_REPO" --ref "$branch"
+          python3 -c '
+          import json, os, subprocess
+          prs = json.loads(os.environ["RELEASE_PRS"])
+          allowed = {"release-please--branches--main--components--ios", "release-please--branches--main--components--android"}
+          if not allowed.issuperset(pr["headBranchName"] for pr in prs):
+              raise SystemExit("Unexpected release branch.")
+          for pr in prs:
+              target = ["--repo", os.environ["GH_REPO"], "--ref", pr["headBranchName"]]
+              subprocess.run(["gh", "workflow", "run", "commit-title.yml", *target, "-f", "title=" + pr["title"]], check=True)
+              subprocess.run(["gh", "workflow", "run", "ci.yml", *target], check=True)
+          '
