@@ -3,7 +3,9 @@ import XCTest
 @MainActor class CoachHistoryTestSupport: XCTestCase {
     func launchHistory(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--coach-history-fixture", "--proof-english"] + extra
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--coach-history-fixture", "--proof-english",
+            // The fixture's empty latest day shows the check-in over the timeline; saved dismissals differ per simulator.
+            "-morningCardDismissedDay", "00000000-0000-0000-0000-000000000904"] + extra
         app.launch(); XCTAssertTrue(app.tables["coachViewport"].waitForExistence(timeout: 15))
         _ = try? waitHistory(app); return app
     }
