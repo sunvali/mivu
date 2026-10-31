@@ -12,9 +12,22 @@ This is the owner's approved policy from 2026-10-14.
 ```sh
 python3 -m unittest discover -s scripts/ci -p 'test_*.py'
 bash -n scripts/ci/native.sh scripts/ci/signed.sh
+python3 scripts/ci/parity.py
+python3 scripts/ci/play_ledger.py android/play-uploads.txt
 ```
 
 The shell check validates syntax; it does not execute native or signing scripts.
+`play_ledger.py` validates the Play upload ledger. `parity.py` validates
+`docs/parity.md` and, on pull requests, fails when the PR changes `ios/`, `android/`,
+`fixtures/` or `design-system/mivu/` without changing that file. If a PR adds or
+changes no feature behavior, put this line in its description instead:
+
+```text
+Parity: unchanged - <reason>
+```
+
+CI checks the PR merged with the latest `main`, so an open branch can hit this rule
+before it has the script. Editing the description reruns the check.
 Workflow contract tests inspect every workflow for Slim runners and short limits.
 CI has a read-only token, no Apple/provider secrets, and no privileged
 `pull_request_target` execution. Checkout credentials are not persisted. New
