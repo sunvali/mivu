@@ -214,6 +214,12 @@ Existing `v*` and rehearsal tags are preserved. `test_workflow_contract.py` fail
 if the packages are linked or share a version file.
 Bootstrap starts after `4f97261eb10d2af2a1301251c8e46748d7cc0dab`.
 
+Both version PRs edit neighbouring lines of `.release-please-manifest.json`, so the
+second one to merge conflicts once the first lands, and the bot does not refresh a PR
+whose notes are unchanged. Merge `main` into its branch, keep `main`'s value for the
+released platform and the PR's new value for its own, and push. A push by the owner
+runs the required checks without approval. Merge one version PR at a time.
+
 Merging a reviewed version PR creates its tag and GitHub release. Version notes
 and tags are separate from binary delivery. There is no hosted release packaging,
 signing, artifact publishing or TestFlight workflow.
