@@ -156,6 +156,11 @@ final class PipRigView: UIView {
     private func opacity(of part: PipRigAsset.Part, in pose: PipPose) -> Float? {
         if part.name.hasPrefix("cheek-blush") { return pose.blush ? 1 : 0 }
         if part.name.hasPrefix("heart-"), let n = Int(part.name.dropFirst(6)) { return n <= pose.hearts ? 1 : 0 }
+        if part.name.hasPrefix("prop-"), !Self.isProgressProp(part) {
+            guard let prop = pose.prop, part.name.hasPrefix("prop-\(prop.rawValue)") else { return 0 }
+            guard let bite = part.name.components(separatedBy: ".bite-").dropFirst().first.flatMap({ Int($0) }) else { return 1 }
+            return bite <= pose.bites ? 1 : 0
+        }
         // nil: not shown at all, like any hidden part. The card's own parts start hidden too, so all follow the flag.
         guard Self.isProgressProp(part), showsProgressProps else { return nil }
         return 1

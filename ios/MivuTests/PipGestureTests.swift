@@ -24,7 +24,7 @@ import Testing
     }
 
     /// Named exception: only these change the body set on purpose, so only they end somewhere other than standing rest.
-    private static let setChangers: Set<String> = ["curl-up", "wake"]
+    private static let setChangers: Set<String> = ["curl-up", "wake", "rise-up", "drop-down"]
 
     private static func expectedEnd(of gesture: PipGesture) -> PipPose {
         var end = PipPose.rest
@@ -36,6 +36,7 @@ import Testing
     @Test func onlyCurlUpAndWakeChangeTheBodySet() {
         #expect(Set(PipGestureLibrary.all.filter { $0.endSet != nil }.map(\.name)) == Self.setChangers)
         #expect(PipGestureLibrary.wake.endSet == .standing && PipGestureLibrary.gesture(forIdle: .curlUp)?.endSet == .curled)
+        #expect(PipGestureLibrary.riseUp.endSet == .upright && PipGestureLibrary.dropDown(endingIn: .seated).endSet == .seated)
         for gesture in PipGestureLibrary.all where !Self.setChangers.contains(gesture.name) {
             #expect(gesture.keys.allSatisfy { $0.pose.set == .standing }, "\(gesture.name)")
         }
@@ -132,6 +133,64 @@ import Testing
                 #expect(gesture.keys.last?.pose.joints[name]?.offset.y == 0)
             }
         }
+    }
+
+    /// Eating and workout gestures play on the upright body; the debug preview and any later trainer rise into it first.
+    @Test func eatingAndWorkoutsPlayUpright() {
+        let names = ["eat-apple", "eat-bowl", "eat-yum", "sip-water", "workout-squat", "workout-jumping-jack", "workout-side-bend",
+                     "workout-breather", "stretch-reach", "yoga-tree"]
+        for name in names { #expect(PipGestureLibrary.named(name).stance == .upright, "\(name)") }
+        for name in ["workout-squat", "workout-jumping-jack", "workout-side-bend"] { #expect(PipGestureLibrary.named(name).loops, "\(name)") }
+        #expect(PipGestureLibrary.named("eat-apple").keys.contains { $0.pose.prop == .apple && $0.pose.bites == 2 })
+        for gesture in PipGestureLibrary.all where gesture.stance == nil { #expect(gesture.keys.allSatisfy { $0.pose.prop == nil }, "\(gesture.name)") }
+    }
+
+    @Test func uprightLimbsMatchTheRig() throws {
+        let asset = try PipRigAsset.load(PipRigAssetTests.bundledData())
+        func pivot(_ name: String) throws -> CGPoint {
+            let part = try #require(asset.parts.first { $0.id == "\(name)@upright" })
+            return CGPoint(x: part.pivot[0], y: part.pivot[1])
+        }
+        #expect(try pivot("body") == PipUpright.body)
+        for side in [PipPose.Side.left, .right] {
+            let s = side == .left ? "l" : "r"
+            #expect(try [pivot("arm-\(s)"), pivot("forearm-\(s)"), pivot("paw-\(s)")] == PipUpright.arm(side).points)
+            #expect(try [pivot("leg-\(s)"), pivot("shin-\(s)"), pivot("foot-\(s)")] == PipUpright.leg(side).points)
+        }
+    }
+
+    private func turned(_ point: CGPoint, by angle: CGFloat) -> CGPoint {
+        CGPoint(x: point.x * cos(angle) - point.y * sin(angle), y: point.x * sin(angle) + point.y * cos(angle))
+    }
+
+    /// Where the limb's end lands in the body's own space, from the joints a pose set.
+    private func end(of chain: PipUpright.Chain, _ upper: CGFloat, _ lower: CGFloat) -> CGPoint {
+        let knee = turned(CGPoint(x: chain.joint.x - chain.root.x, y: chain.joint.y - chain.root.y), by: upper)
+        let ankle = turned(CGPoint(x: chain.end.x - chain.joint.x, y: chain.end.y - chain.joint.y), by: upper + lower)
+        return CGPoint(x: chain.root.x + knee.x + ankle.x, y: chain.root.y + knee.y + ankle.y)
+    }
+
+    @Test(arguments: [(drop: CGFloat(22), spread: CGFloat(0), lean: CGFloat(0), sway: CGFloat(0)), (14, 30, 0, 0), (6, 0, -10, 0), (4, 0, 1.5, -12)])
+    func stanceKeepsBothFeetPlantedAndFlat(drop: CGFloat, spread: CGFloat, lean: CGFloat, sway: CGFloat) {
+        let pose = PipPose.rest.stance(drop: drop, spread: spread, lean: lean, sway: sway)
+        let body = pose.joints["body"]!
+        for (side, s, out) in [(PipPose.Side.left, "l", -spread), (.right, "r", spread)] {
+            let chain = PipUpright.leg(side)
+            let upper = pose.joints["leg-\(s)"]!.rotation, lower = pose.joints["shin-\(s)@upright"]!.rotation
+            let local = end(of: chain, upper, lower)
+            let centred = turned(CGPoint(x: local.x - PipUpright.body.x, y: local.y - PipUpright.body.y), by: body.rotation)
+            #expect(abs(centred.x + PipUpright.body.x + body.offset.x - (chain.end.x + out)) < 0.5, "\(s) ankle stays put")
+            #expect(abs(centred.y + PipUpright.body.y + body.offset.y - chain.end.y) < 0.5, "\(s) ankle stays down")
+            #expect(abs(upper + lower + pose.joints["foot-\(s)"]!.rotation + body.rotation) < 0.001, "\(s) foot stays flat")
+        }
+    }
+
+    @Test func reachPutsTheWristOnItsTargetAndLevelsThePaw() {
+        let pose = PipPose.rest.reach(.right, x: 386, y: 292, paw: 180)
+        let arm = pose.joints["arm-r"]!.rotation, forearm = pose.joints["forearm-r"]!.rotation
+        let wrist = end(of: PipUpright.arm(.right), arm, forearm)
+        #expect(abs(wrist.x - 386) < 0.5 && abs(wrist.y - 292) < 0.5)
+        #expect(abs(sin(arm + forearm + pose.joints["paw-r"]!.rotation)) < 0.001, "The paw points straight up")
     }
 
     @Test func recoveryIsNeverCheerful() {

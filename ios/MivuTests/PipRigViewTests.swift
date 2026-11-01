@@ -248,6 +248,19 @@ import UIKit
                 "Hidden on every screen but Progress")
     }
 
+    /// Only the held food shows, and each bite uncovers one more bite mark; the Progress chart card never follows a pose.
+    @Test func foodPropsFollowThePose() throws {
+        var pose = PipPose.rest.holding(.apple, bites: 1)
+        pose.set = .upright
+        let view = try rig(pose)
+        let opacity = { (id: String) in view.layer(named: "\(id)@upright")?.isHidden == false ? view.layer(named: "\(id)@upright")?.opacity : 0 }
+        #expect(opacity("prop-apple") == 1 && opacity("prop-apple.bite-1") == 1)
+        #expect(opacity("prop-apple.bite-2") == 0 && opacity("prop-cup") == 0 && opacity("prop-bowl") == 0)
+        #expect(view.layer(named: "prop-chart")?.isHidden == true)
+        view.apply(pose.holding(nil), animated: false)
+        #expect(opacity("prop-apple") == 0)
+    }
+
     @Test(arguments: [(PipPose.BodySet.seated, PipMoment.saved), (.curled, .earTwitch)])
     func gesturesKeepTheActiveBodySet(set: PipPose.BodySet, moment: PipMoment) async throws {
         let view = PipRigView(asset: try PipRigAsset.load(PipRigAssetTests.bundledData()), set: set)

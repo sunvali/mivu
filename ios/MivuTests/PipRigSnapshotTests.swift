@@ -24,7 +24,7 @@ import UIKit
         return (layer.sublayers ?? []).reduce(box) { $0.union(drawnBounds($1, in: root)) }
     }
 
-    @Test(arguments: [PipPose.BodySet.standing, .seated, .curled])
+    @Test(arguments: [PipPose.BodySet.standing, .seated, .curled, .upright])
     func allSetsFitArtboardInBothAppearances(set: PipPose.BodySet) throws {
         for dark in [false, true] {
             for side in [200.0, 40.0] as [CGFloat] {
@@ -74,7 +74,7 @@ import UIKit
 
     @Test func headRidesTheActiveSetsBody() throws {
         let view = try rig(.standing)
-        for set in [PipPose.BodySet.seated, .curled, .standing] {
+        for set in [PipPose.BodySet.seated, .curled, .upright, .standing] {
             var pose = PipPose.rest
             pose.set = set
             view.apply(pose, animated: false)

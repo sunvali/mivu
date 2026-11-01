@@ -19,6 +19,12 @@ arrives at by `at` seconds; unlisted joints rest. Build keys with the builder in
   `mouth(.closedSmile/.smallOpen/.bigOpen/.o/.concerned/.yawn)`, `look(x, y)`,
   `turn`, `blushing()`, `hearts(count, drift:)`.
 - `PipGesture("name", loops: true) { ... }` repeats from its first key.
+- `PipGesture("name", stance: .upright) { ... }` is authored on the two-legged body: play it between
+  `PipGestureLibrary.riseUp` and `dropDown(endingIn:)`. There, use `stance(drop:spread:lean:sway:lift:)` (feet stay
+  planted; legs are about 65 points long, so a wide spread or lean needs some `drop`), `reach(side, x:, y:, paw:)` (wrist
+  target in artboard points; paw degrees on screen, 0 hangs, 180 up), `leg(side, x:, y:, foot:)`,
+  `holding(.apple/.cup/.bowl, bites:)` and `chew(amount)`. `pawUp` is for the four-legged standing body only.
+  Upright gestures stay out of `fixtures/pip/gestures.json` until Android has the set.
 
 ## Worked example: a "proud" gesture after a correction is reviewed twice
 
