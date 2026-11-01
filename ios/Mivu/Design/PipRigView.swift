@@ -27,6 +27,8 @@ final class PipRigView: UIView {
         let token: Int
         let completion: (Bool) -> Void
         var work: [DispatchWorkItem] = []
+        /// Layers carrying a baked track, frozen where they are if the gesture is cut short.
+        var tracked: [CALayer] = []
         init(token: Int, completion: @escaping (Bool) -> Void) { self.token = token; self.completion = completion }
     }
 
@@ -114,14 +116,14 @@ final class PipRigView: UIView {
         CATransaction.commit()
     }
 
-    /// Shared parts on `body` (the head views, hearts) follow whichever set's body is active.
+    /// Shared parts on `body` (the head views, hearts) follow whichever part of the active set carries the mount.
     private static func ridesHeadMount(_ part: PipRigAsset.Part) -> Bool { part.parent == "body" && part.set == nil }
 
     private func mountHead(on set: PipPose.BodySet) {
-        let body = asset.parts.first { $0.name == "body" && $0.set == set.rawValue }
-        let host = body.flatMap { containers[$0.id] } ?? root
+        let carrier = asset.parts.first { $0.mount != nil && $0.set == set.rawValue }
+        let host = carrier.flatMap { containers[$0.id] } ?? root
         if headMount.superlayer !== host { host.addSublayer(headMount) }
-        let m = body?.mount ?? [1, 0, 0]
+        let m = carrier?.mount ?? [1, 0, 0]
         headMount.setAffineTransform(CGAffineTransform(a: m[0], b: 0, c: 0, d: m[0], tx: m[1], ty: m[2]))
     }
 
@@ -270,13 +272,99 @@ extension PipRigView {
     /// Eyes reach a head turn's direction this long before the head finishes turning.
     private static let eyesLead: TimeInterval = 0.08
 
-    /// Plays the gesture's keys as springs. `completion(false)` if another play, `removeAllMotion()` or deallocation ends it first.
+    /// Plays the gesture's keys as springs, or its beats as one baked curve. `completion(false)` if another play,
+    /// `removeAllMotion()` or deallocation ends it first.
     func play(_ gesture: PipGesture, completion: @escaping (Bool) -> Void) {
         stopPlayback()
         playbackTick += 1
         let run = Playback(token: playbackTick, completion: completion)
         playback = run
-        schedule(gesture, run: run)
+        if gesture.beats.isEmpty {
+            schedule(gesture, run: run)
+        } else {
+            let resting = gesture.endSet.flatMap { $0 == .upright ? nil : $0 } ?? pose.set
+            let frames = PipBake.frames(of: gesture.beats, loops: gesture.loops).map { beat in
+                var frame = beat.pose
+                frame.set = beat.grounded ? resting : .upright
+                return frame
+            }
+            show(frames[0])
+            track(frames, loops: gesture.loops, run: run)
+            scheduleLooks(of: frames, loops: gesture.loops, run: run)
+        }
+    }
+
+    /// Hands every moving joint to the render server as one keyframe track per component, so the curve stays smooth even
+    /// when the main thread is busy. Rotations are unwrapped, so nothing spins the long way round between two frames.
+    private func track(_ frames: [PipPose], loops: Bool, run: Playback) {
+        let moved = Set(frames.flatMap(\.joints.keys))
+        for part in asset.parts where moved.contains(part.id) || moved.contains(part.name) || part.parallax != nil && part.parallax != 0
+            || irisReach[part.id] != nil || pupilReach[part.id] != nil || glintIris[part.id] != nil {
+            guard let container = containers[part.id] else { continue }
+            let joints = frames.map { joint(of: part, in: $0, slide: Self.view(for: $0.headTurn).1) }
+            var rotations = joints.map(\.rotation)
+            for i in rotations.indices.dropFirst() { rotations[i] = rotations[i - 1] + PipUpright.wrapped(rotations[i] - rotations[i - 1]) }
+            let values = [rotations, joints.map(\.offset.x), joints.map(\.offset.y), joints.map(\.scale.width), joints.map(\.scale.height)]
+            let live = container.presentation() ?? container
+            for (component, track) in zip(Self.components, values) {
+                let animation = CAKeyframeAnimation(keyPath: component.path)
+                // A loop starts on the plain upright pose; a one-shot may be cutting in on anything, even a rep stopped halfway.
+                let now = (live.value(forKeyPath: component.path) as? NSNumber).map { CGFloat($0.floatValue) }
+                animation.values = loops ? track : now.map { PipBake.easedIn(track, from: $0) } ?? track
+                animation.duration = Double(frames.count - 1) / PipBake.rate
+                animation.repeatCount = loops ? .infinity : 1
+                animation.fillMode = .forwards
+                animation.isRemovedOnCompletion = false
+                container.add(animation, forKey: component.key)
+            }
+            run.tracked.append(container)
+        }
+    }
+
+    /// Eyes, mouth, props, the head view and the body set change in steps along the curve; the tracks own the joints.
+    private func scheduleLooks(of frames: [PipPose], loops: Bool, run: Playback) {
+        var shown = Self.look(of: frames[0])
+        for (i, frame) in frames.enumerated() where Self.look(of: frame) != shown {
+            shown = Self.look(of: frame)
+            after(Double(i) / PipBake.rate, run) { [unowned self] in show(frame) }
+        }
+        after(Double(frames.count - 1) / PipBake.rate, run) { [unowned self] in
+            run.work.removeAll()
+            if loops {
+                scheduleLooks(of: frames, loops: true, run: run)
+                return
+            }
+            show(frames[frames.count - 1])
+            releaseTracks(of: run)
+            playback = nil
+            run.completion(true)
+        }
+    }
+
+    private static func look(of pose: PipPose) -> PipPose {
+        var look = pose
+        look.joints = [:]
+        look.gaze = .zero
+        look.headTurn = view(for: pose.headTurn).0 == "front" ? 0 : pose.headTurn > 0 ? 1 : -1
+        return look
+    }
+
+    private func show(_ frame: PipPose) {
+        let turned = Self.view(for: frame.headTurn).0 != Self.view(for: pose.headTurn).0
+        transition(to: frame, period: 0, springs: false)
+        if turned { blink() } // the swap lands while the eyes are shut, as in `step`
+    }
+
+    /// Leaves each tracked layer exactly where it is on screen, so whatever plays next starts from there.
+    private func releaseTracks(of run: Playback) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for layer in run.tracked {
+            layer.transform = (layer.presentation() ?? layer).transform
+            Self.components.forEach { layer.removeAnimation(forKey: $0.key) }
+        }
+        CATransaction.commit()
+        run.tracked.removeAll()
     }
 
     private func schedule(_ gesture: PipGesture, run: Playback) {
@@ -313,6 +401,7 @@ extension PipRigView {
         playback = nil
         run.work.forEach { $0.cancel() }
         run.work.removeAll()
+        releaseTracks(of: run)
         run.completion(false)
     }
 
@@ -401,7 +490,7 @@ extension PipRigView {
     static let blinkDuration: TimeInterval = 0.16
 
     /// Moves to `target` with one spring per changed joint component, each starting from what is on screen now.
-    private func transition(to target: PipPose, period: TimeInterval) {
+    private func transition(to target: PipPose, period: TimeInterval, springs: Bool = true) {
         var before: [String: [Float]] = [:]
         var model: [String: [Float]] = [:]
         // A layer that was hidden has no meaningful presentation value: it snaps to its pose instead of springing.
@@ -417,7 +506,7 @@ extension PipRigView {
             // Lower legs and paws trail the upper leg, like ears, tail and scarf trail the body (overlapping action).
             let follower = ["ear-", "tail-2", "tail-3", "tail-4", "scarf-end-", "forearm-", "paw-"].contains { part.name.hasPrefix($0) }
             let gazePart = irisReach[part.id] != nil || pupilReach[part.id] != nil || glintIris[part.id] != nil
-            for (i, component) in Self.components.enumerated() {
+            for (i, component) in Self.components.enumerated() where springs {
                 let to = Float((container.value(forKeyPath: component.path) as? NSNumber)?.floatValue ?? 0)
                 // Only a changed target springs; a running spring, and the additive breath on top of it, are left alone.
                 guard let old = model[part.id]?[i], abs(old - to) > 0.0005 else { continue }

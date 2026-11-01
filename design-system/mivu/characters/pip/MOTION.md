@@ -63,7 +63,8 @@ Durations come from `MivuMotion` and the gesture library.
 | Pat (long press) | 1.3 s | Leans into the hand, closed eyes, blush, tail wag, a heart drifts up |
 
 Upright gestures are authored but not yet tied to an app moment; review them with the preview's **Food and workouts** button.
-Each plays between `rise-up` (0.38 s) and `drop-down` (0.38 s), which swap to the two-legged `upright` body inside a crouch:
+Each plays between `rise-up` (0.70 s) and `drop-down` (0.80 s), which swap to the two-legged `upright` body inside a crouch, tipped so the head stays where it was.
+They are not sprung key to key: beats describe hips, spine, head and wrists, `PipBake` draws one 60 fps curve through them and solves the limbs on every frame, and the render server plays it. Feet stay planted, paws swing on arcs around the shoulder, and head, ears, tail, scarf and chest fluff are damped springs trailing the hips, so their lag, overshoot and the squash and stretch come from the motion itself. Author anticipation and overshoot in the beats; never key follow-through by hand.
 
 | Gesture | Duration | Acting |
 | --- | ---: | --- |

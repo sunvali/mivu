@@ -34,8 +34,8 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip-rig.json",
-    "sha256": "394d3bf683ba005316da8762b6678e029a8368f5a07e09235487c996d73844b9",
-    "bytes": 348437,
+    "sha256": "9e84f3f3fce9c762ddbdb1ed577029d9d4b659fd9bd1f278a8bf231b018e793a",
+    "bytes": 349425,
     "formatVersion": 2,
     "canvas": [
       512,
@@ -52,7 +52,7 @@
     "tests": "design-system/mivu/characters/pip/rig/test_rig.py",
     "instructions": "design-system/mivu/characters/pip/rig/README.md"
   },
-  "targetRuntime": "Native Core Animation (CAShapeLayer rig, CASpringAnimation); no third-party runtime",
+  "targetRuntime": "Native Core Animation (CAShapeLayer rig, CASpringAnimation, baked CAKeyframeAnimation tracks); no third-party runtime",
   "fallbacks": [
     {
       "name": "PipResting",

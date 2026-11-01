@@ -95,7 +95,9 @@ The body exists as three sets, each traced from its painting like the head:
   so joints can rotate without gaps. Parts the painting doesn't show (far hind legs, curled
   arms and scarf ends) sit fully behind the visible ones.
 - `upright` shares the head, scarf and tail placement of `standing`, so the swap between them barely moves him. It alone has a
-  knee: `leg → shin → foot`, with `body@upright` pivoting at the hips for leans. `PipUpright` in `PipGesture.swift` repeats its limb
+  knee: `leg → shin → foot`, and a waist: `body@upright` holds the hips, pivoting there for leans, and carries `torso@upright`, which
+  holds the arms, scarf and head mount (`data-mount` sits on it). The two halves share a circle round the waist pivot, so the
+  silhouette stays closed through a bend, and the torso's cream overlaps the belly's so no seam shows. `PipUpright` in `PipGesture.swift` repeats its limb
   pivots for the arm and leg solvers (`uprightLimbsMatchTheRig` keeps them equal). Its arms draw over the head so held food stays in
   front; overhead arms therefore go wide, never across the face.
 - Food lives in the upright paws, hidden until a pose holds it: `prop-apple` (with `bite-1…2`), `prop-cup`, `prop-bowl` (far paw) and

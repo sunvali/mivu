@@ -248,6 +248,20 @@ import UIKit
                 "Hidden on every screen but Progress")
     }
 
+    /// Beats reach the render server as whole tracks; cutting one short leaves every layer where it is and hands the keys back.
+    @Test func beatsPlayAsTracksAndReleaseWhenCut() throws {
+        var pose = PipPose.rest
+        pose.set = .upright
+        let view = try rig(pose)
+        var finished: Bool?
+        view.play(PipGestureLibrary.named("workout-squat")) { finished = $0 }
+        let torso = try #require(view.layer(named: "torso@upright"))
+        #expect(torso.animation(forKey: "pip.rotation") is CAKeyframeAnimation)
+        #expect(view.layer(named: "head@front")?.superlayer?.superlayer === torso, "The head rides the upper body")
+        view.removeAllMotion()
+        #expect(finished == false && torso.animation(forKey: "pip.rotation") == nil)
+    }
+
     /// Only the held food shows, and each bite uncovers one more bite mark; the Progress chart card never follows a pose.
     @Test func foodPropsFollowThePose() throws {
         var pose = PipPose.rest.holding(.apple, bites: 1)

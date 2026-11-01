@@ -21,6 +21,8 @@ struct PipGesture {
     var endSet: PipPose.BodySet?
     /// The body set the gesture is authored on, when that is not the resting one; play it between `riseUp` and `dropDown`.
     var stance: PipPose.BodySet?
+    /// Upright gestures play these as one continuous curve (`PipBake`) instead of a spring per key.
+    var beats: [PipBeat] = []
     var duration: TimeInterval { keys.last?.at ?? 0 }
 
     init(name: String, keys: [(at: TimeInterval, pose: PipPose)], loops: Bool = false, endSet: PipPose.BodySet? = nil, stance: PipPose.BodySet? = nil) {
@@ -32,10 +34,18 @@ struct PipGesture {
     }
 
     /// `PipGesture("saved") { $0.at(0.07) { $0.nod(6) }; $0.settle(at: 0.45) }`
-    init(_ name: String, loops: Bool = false, stance: PipPose.BodySet? = nil, _ build: (inout Builder) -> Void) {
+    init(_ name: String, loops: Bool = false, _ build: (inout Builder) -> Void) {
         var builder = Builder()
         build(&builder)
-        self.init(name: name, keys: builder.keys, loops: loops, endSet: builder.endSet, stance: stance)
+        self.init(name: name, keys: builder.keys, loops: loops, endSet: builder.endSet)
+    }
+
+    /// `PipGesture(beats: "workout-squat", loops: true) { $0.at(0); $0.at(0.6) { $0.stance(drop: 30) }; $0.at(1.2) }`
+    init(beats name: String, loops: Bool = false, _ build: (inout BeatBuilder) -> Void) {
+        var builder = BeatBuilder()
+        build(&builder)
+        self.init(name: name, keys: builder.keys, loops: loops, endSet: builder.endSet, stance: .upright)
+        beats = builder.beats
     }
 
     struct Builder {
@@ -49,6 +59,30 @@ struct PipGesture {
             var end = pose(.rest)
             end.set = set
             keys.append((time, end))
+            endSet = set
+        }
+    }
+
+    struct BeatBuilder {
+        fileprivate(set) var beats: [PipBeat] = []
+        fileprivate(set) var keys: [(at: TimeInterval, pose: PipPose)] = []
+        fileprivate(set) var endSet: PipPose.BodySet?
+
+        mutating func at(_ time: TimeInterval, _ beat: (PipBeat) -> PipBeat = { $0 }) {
+            var next = beat(PipBeat())
+            next.at = time
+            beats.append(next)
+            keys.append((time, next.pose))
+        }
+        mutating func settle(at time: TimeInterval) {
+            at(time)
+            keys[keys.count - 1].pose = .rest
+        }
+        /// Ends on another body set: upright after the rise, the surface's resting one after the drop.
+        mutating func end(in set: PipPose.BodySet, at time: TimeInterval) {
+            at(time) { set == .upright ? $0 : $0.down() }
+            keys[keys.count - 1].pose = .rest
+            keys[keys.count - 1].pose.set = set
             endSet = set
         }
     }
@@ -74,6 +108,10 @@ enum PipUpright {
     }
 
     static let body = CGPoint(x: 316, y: 400)
+    static let waist = CGPoint(x: 316, y: 352)
+    /// The head views are drawn rolled toward the snout for the four-legged body; this many degrees sets them level on a
+    /// straight spine. The turned view is rolled most.
+    static func level(turn: CGFloat) -> CGFloat { 5.5 + 3.5 * max(0, min(1, turn)) }
     static func arm(_ side: PipPose.Side) -> Chain {
         side == .left
             ? Chain(root: CGPoint(x: 274, y: 292), joint: CGPoint(x: 258, y: 340), end: CGPoint(x: 260, y: 384))
@@ -153,8 +191,8 @@ extension PipPose {
 
     // MARK: Upright body
 
-    /// Puts the wrist on (`x`, `y`) in the body's own artboard space, elbow outward. `paw` is the paw's angle on screen
-    /// in degrees: 0 hangs, 180 points up (the pose food is drawn for); nil leaves it following the forearm.
+    /// Puts the wrist on (`x`, `y`) in the torso's own artboard space, elbow outward. `paw` is the paw's angle in that
+    /// space in degrees: 0 hangs, 180 points up (the pose food is drawn for); nil leaves it following the forearm.
     func reach(_ side: Side, x: CGFloat, y: CGFloat, paw: CGFloat? = nil) -> PipPose {
         let s = side == .left ? "l" : "r"
         let arm = PipUpright.arm(side).solve(to: CGPoint(x: x, y: y), bend: side == .left ? 1 : -1)
@@ -164,24 +202,25 @@ extension PipPose {
     }
 
     /// Stands the upright body with both feet flat on the ground while it sinks `drop`, spreads each foot `spread`,
-    /// leans `lean` degrees at the hips and shifts `sway`. `lift` then raises the whole of Pip, feet included.
+    /// leans `lean` degrees at the hips and shifts `sway`. `lift` then raises the whole of Pip, feet included, and `foot`
+    /// splays the toes that far off flat. `tuck` moves the right ankle off the ground, its foot at `tuckFoot` on screen.
     /// A wide `spread` needs some `drop`: the legs are about 65 points long.
-    func stance(drop: CGFloat = 0, spread: CGFloat = 0, lean: CGFloat = 0, sway: CGFloat = 0, lift: CGFloat = 0) -> PipPose {
+    func stance(drop: CGFloat = 0, spread: CGFloat = 0, lean: CGFloat = 0, sway: CGFloat = 0, lift: CGFloat = 0,
+                foot: CGFloat = 0, tuck: CGVector = .zero, tuckFoot: CGFloat = 0) -> PipPose {
         var copy = edited(["body"]) { $0.offset = CGPoint(x: sway, y: drop - lift); $0.rotation = Self.radians(lean) }
         for side in [Side.left, .right] {
             let chain = PipUpright.leg(side)
+            let raised = side == .right ? tuck : .zero
             // The ground stays still, so in the body's own space the ankle counter-moves.
-            let target = CGPoint(x: chain.end.x + (side == .left ? -spread : spread) - sway - PipUpright.body.x,
-                                 y: chain.end.y - drop - PipUpright.body.y)
+            let target = CGPoint(x: chain.end.x + (side == .left ? -spread : spread) + raised.dx - sway - PipUpright.body.x,
+                                 y: chain.end.y + raised.dy - drop - PipUpright.body.y)
             let back = -Self.radians(lean)
             copy = copy.leg(side, to: CGPoint(x: PipUpright.body.x + target.x * cos(back) - target.y * sin(back),
-                                              y: PipUpright.body.y + target.x * sin(back) + target.y * cos(back)), foot: 0)
+                                              y: PipUpright.body.y + target.x * sin(back) + target.y * cos(back)),
+                            foot: (side == .left ? -foot : foot) + (side == .right ? tuckFoot : 0))
         }
         return copy
     }
-
-    /// Moves one ankle to (`x`, `y`) in the body's space, knee outward, with the foot at `foot` degrees on screen.
-    func leg(_ side: Side, x: CGFloat, y: CGFloat, foot: CGFloat) -> PipPose { leg(side, to: CGPoint(x: x, y: y), foot: foot) }
 
     private func leg(_ side: Side, to ankle: CGPoint, foot: CGFloat) -> PipPose {
         let s = side == .left ? "l" : "r"
@@ -197,11 +236,5 @@ extension PipPose {
         copy.prop = prop
         copy.bites = bites
         return copy
-    }
-
-    /// One chew: the cheeks fill as the jaw closes, so alternate positive and negative `amount`.
-    func chew(_ amount: CGFloat) -> PipPose {
-        edited(["head"]) { $0.scale = CGSize(width: 1 + amount, height: 1 - amount) }
-            .mouth(amount > 0 ? .closedSmile : .smallOpen)
     }
 }

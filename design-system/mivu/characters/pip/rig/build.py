@@ -134,7 +134,7 @@ def collect(node, matrix, parent, part_set, parts, hidden=False, view=None):
                 "fillDark": path.get("data-fill-dark") or path.get("fill"),
                 "path": flatten_path(path.get("d"), m, part_id),
             }
-            if child.get("data-mount"):  # body of a set: where the head views sit on it, art = k * head + t
+            if child.get("data-mount"):  # the part of a set the head views sit on, art = k * head + t
                 part["mount"] = [float(v) for v in child.get("data-mount").split()]
             parts.append(part)
         collect(child, m, part_id or parent, child_set, parts, child_hidden, child_view)
@@ -142,7 +142,7 @@ def collect(node, matrix, parent, part_set, parts, hidden=False, view=None):
 
 def set_bounds(parts, name, below=None):
     """Union bounds of a set at rest: its visible parts plus the default head view on its mount (points above `below`)."""
-    k, tx, ty = next(p["mount"] for p in parts if p["id"] == ("body" if name == "standing" else f"body@{name}"))
+    k, tx, ty = next(p["mount"] for p in parts if p["set"] == name and "mount" in p)
     xs, ys = [], []
     for p in parts:
         if p["visible"] and (p["set"] == name or p["view"] == "right"):
@@ -201,9 +201,9 @@ def set_svg(name, dark=False, crop=None):
         ET.SubElement(clip, f"{SVG}rect", x=number(x), y=number(y), width=number(w), height=number(h))
         for g in root.findall(f"{SVG}g"):
             g.set("clip-path", "url(#crop)")
-    body = "body" if name == "standing" else f"body@{name}"
-    mount = next((g.get("data-mount") for g in root.iter(f"{SVG}g") if g.get("id") == body), "1 0 0")
-    k, tx, ty = mount.split()
+    mounts = (g.get("data-mount") for s in root.iter(f"{SVG}g") if s.get("data-set") == name
+              for g in s.iter(f"{SVG}g") if g.get("data-mount"))
+    k, tx, ty = next(mounts, "1 0 0").split()
     for g in root.iter(f"{SVG}g"):
         if g.get("data-set") not in (None, name):
             g.set("display", "none")

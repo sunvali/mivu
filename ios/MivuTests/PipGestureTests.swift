@@ -151,7 +151,7 @@ import Testing
             let part = try #require(asset.parts.first { $0.id == "\(name)@upright" })
             return CGPoint(x: part.pivot[0], y: part.pivot[1])
         }
-        #expect(try pivot("body") == PipUpright.body)
+        #expect(try pivot("body") == PipUpright.body && pivot("torso") == PipUpright.waist)
         for side in [PipPose.Side.left, .right] {
             let s = side == .left ? "l" : "r"
             #expect(try [pivot("arm-\(s)"), pivot("forearm-\(s)"), pivot("paw-\(s)")] == PipUpright.arm(side).points)
@@ -183,6 +183,86 @@ import Testing
             #expect(abs(centred.y + PipUpright.body.y + body.offset.y - chain.end.y) < 0.5, "\(s) ankle stays down")
             #expect(abs(upper + lower + pose.joints["foot-\(s)"]!.rotation + body.rotation) < 0.001, "\(s) foot stays flat")
         }
+    }
+
+    private static let upright = PipGestureLibrary.all.filter { !$0.beats.isEmpty }
+
+    @Test func everyUprightGestureIsBaked() {
+        #expect(Self.upright.count == PipGestureLibrary.all.filter { $0.stance == .upright }.count && Self.upright.count == 12)
+    }
+
+    /// The whole point of solving limbs on every frame: a foot on the ground never skates, between beats as well as on them.
+    @Test(arguments: ["workout-squat", "workout-side-bend", "workout-breather", "stretch-reach"])
+    func feetStayPlantedOnEveryBakedFrame(name: String) {
+        let gesture = PipGestureLibrary.named(name)
+        for beat in PipBake.frames(of: gesture.beats, loops: gesture.loops) {
+            let pose = beat.pose, body = pose.joints["body"]!
+            for (side, s) in [(PipPose.Side.left, "l"), (.right, "r")] {
+                let chain = PipUpright.leg(side)
+                let local = end(of: chain, pose.joints["leg-\(s)"]!.rotation, pose.joints["shin-\(s)@upright"]!.rotation)
+                let centred = turned(CGPoint(x: local.x - PipUpright.body.x, y: local.y - PipUpright.body.y), by: body.rotation)
+                #expect(abs(centred.x + PipUpright.body.x + body.offset.x - chain.end.x) < 0.5, "\(name) \(s) slid")
+                #expect(abs(centred.y + PipUpright.body.y + body.offset.y - chain.end.y) < 0.5, "\(name) \(s) left the ground")
+            }
+        }
+    }
+
+    /// Fluency, measured: no joint jumps between two frames. Only the frame that swaps bodies may, and that swap is masked.
+    @Test func bakedMotionNeverJumps() {
+        for gesture in Self.upright {
+            let frames = PipBake.frames(of: gesture.beats, loops: gesture.loops)
+            for (a, b) in zip(frames, frames.dropFirst()) where a.grounded == b.grounded {
+                let before = a.pose, after = b.pose
+                for (name, joint) in after.joints {
+                    let turn = abs(PipUpright.wrapped(joint.rotation - (before.joints[name]?.rotation ?? 0)))
+                    #expect(turn < (name.hasPrefix("paw-") ? 0.5 : 0.3), "\(gesture.name): \(name) turns \(turn) in a frame")
+                }
+            }
+        }
+    }
+
+    @Test func loopsCloseAndOneShotsLandOnTheirLastBeat() {
+        for gesture in Self.upright {
+            let frames = PipBake.frames(of: gesture.beats, loops: gesture.loops)
+            let first = frames[0], last = frames[frames.count - 1]
+            if gesture.loops {
+                #expect(abs(gesture.beats[0].drop) + abs(gesture.beats[0].lift) + abs(gesture.beats[0].bend) == 0, "\(gesture.name) starts upright")
+                for (a, b) in [(first.drop, last.drop), (first.nod, last.nod), (first.earLeft, last.earLeft), (first.tail4, last.tail4)] {
+                    #expect(abs(a - b) < 0.5, "\(gesture.name) does not close")
+                }
+            } else {
+                #expect(last.earLeft == 0 && last.tail4 == 0 && last.scarfRight == 0 && last.headSink == 0, "\(gesture.name)")
+                #expect(last.grounded == (gesture.name == "drop-down"), "\(gesture.name)")
+            }
+        }
+    }
+
+    @Test func aGestureEasesInFromWhereverPipIs() {
+        let track = (0..<30).map { CGFloat($0) }
+        let eased = PipBake.easedIn(track, from: 40)
+        #expect(eased[0] == 40 && Array(eased[12...]) == Array(track[12...]))
+        #expect(zip(eased, eased.dropFirst()).allSatisfy { abs($1 - $0) < 8 }, "No jump on the way in")
+    }
+
+    /// The head views are drawn rolled for the four-legged body; on a straight spine Pip's head sits level, and it stays
+    /// mostly level while the spine tips under it.
+    @Test func theHeadStaysLevelOverTheSpine() throws {
+        let still = PipBake.frames(of: PipGestureLibrary.named("stretch-reach").beats, loops: false)
+        #expect(abs(still[0].nod - PipUpright.level(turn: 0)) < 0.01)
+        let bend = PipGestureLibrary.named("workout-side-bend")
+        let frames = PipBake.frames(of: bend.beats, loops: true)
+        let deepest = try #require(frames.max { abs($0.bend) < abs($1.bend) })
+        #expect(abs(deepest.bend) > 10)
+        #expect((deepest.nod - PipUpright.level(turn: 0)) * deepest.bend < 0, "The head counters the bend")
+    }
+
+    /// Ears and tail are never keyed on a jump: they lag the body on the way up and overshoot on the way down.
+    @Test func looseEndsTrailTheBody() {
+        let jack = PipGestureLibrary.named("workout-jumping-jack")
+        let frames = PipBake.frames(of: jack.beats, loops: true)
+        #expect(Set(frames.map(\.earLeft)).count > 20 && frames.contains { $0.earLeft != $0.earRight })
+        #expect(frames.contains { $0.tail1 != $0.tail4 }, "The wave runs down the tail")
+        #expect(frames.contains { $0.stretch > 0.05 } && frames.contains { $0.stretch < -0.05 }, "It stretches rising and squashes landing")
     }
 
     @Test func reachPutsTheWristOnItsTargetAndLevelsThePaw() {

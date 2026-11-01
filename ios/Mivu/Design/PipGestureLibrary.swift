@@ -185,95 +185,175 @@ enum PipGestureLibrary {
         },
 
         // MARK: Upright: food and workouts
-        // Two-legged Pip: the standing body has four feet down, so these need the upright set. A gesture with `stance:` is
-        // authored on it; play it between `riseUp` and `dropDown`.
-        PipGesture("rise-up", stance: .upright) {
-            $0.at(0.14) { $0.squash(0.07).nod(4).earPerk(-8) }
-            $0.end(in: .upright, at: 0.38)
+        // Two-legged Pip: the standing body has four feet down, so these need the upright set, played between `riseUp` and
+        // `dropDown`. Beats are the storytelling poses; `PipBake` adds the curves and the follow-through, so give each move
+        // its anticipation and overshoot here and leave ears, tail and scarf to the physics.
+        PipGesture(beats: "rise-up") {
+            $0.at(0) { $0.down() }
+            $0.at(0.10) { $0.down().squash(0.09).nod(5).earPerk(-10) }
+            $0.at(0.15) { $0.down().squash(0.10).nod(6).earPerk(-12) }
+            // The same crouch on the new body, tipped so the head lands where the four-legged one left it.
+            $0.at(0.16) { $0.stance(drop: 24, lean: 10).spine(bend: 5).nod(6).earPerk(-12) }
+            $0.at(0.34) { $0.stance(lift: 9).spine(stretch: 0.06).nod(-3).earPerk(8).tailWag(14) }
+            $0.at(0.50) { $0.stance(drop: 6).spine(stretch: -0.02).nod(2).tailWag(-8) }
+            $0.end(in: .upright, at: 0.70)
         },
-        PipGesture("drop-down", stance: .upright) {
-            $0.at(0.14) { $0.stance(drop: 12).nod(3).earPerk(-6) }
-            $0.end(in: .standing, at: 0.38)
+        PipGesture(beats: "drop-down") {
+            $0.at(0)
+            $0.at(0.14) { $0.stance(lift: 0).spine(stretch: 0.04).nod(-3).earPerk(6) }
+            $0.at(0.38) { $0.stance(drop: 24, lean: 10).spine(bend: 5).nod(6).earPerk(-6) }
+            $0.at(0.39) { $0.down().squash(0.10).nod(6).earPerk(-8) }
+            $0.at(0.56) { $0.down().squash(-0.03).nod(-1).earPerk(4).tailWag(10) }
+            $0.end(in: .standing, at: 0.80)
         },
-        PipGesture("eat-apple", stance: .upright) {
-            $0.at(0.26) { lookAtApple($0).earPerk(10).eyes(.wide) }
-            $0.at(0.42) { toMouth($0, .apple).mouth(.bigOpen).earPerk(6) }
-            $0.at(0.52) { toMouth($0, .apple, bites: 1).nod(9).eyes(.closedHappy) }
-            $0.at(0.66) { lookAtApple($0, bites: 1).chew(0.03).eyes(.closedHappy).tailWag(10) }
-            $0.at(0.78) { lookAtApple($0, bites: 1).chew(-0.02).eyes(.closedHappy).tailWag(-10) }
-            $0.at(0.90) { lookAtApple($0, bites: 1).chew(0.03).eyes(.closedHappy).tailWag(10) }
-            $0.at(1.08) { toMouth($0, .apple, bites: 1).mouth(.bigOpen) }
-            $0.at(1.18) { toMouth($0, .apple, bites: 2).nod(9).eyes(.closedHappy) }
-            $0.at(1.32) { lookAtApple($0, bites: 2).chew(0.03).eyes(.closedHappy).tailWag(10) }
-            $0.at(1.44) { lookAtApple($0, bites: 2).chew(-0.02).eyes(.closedHappy).tailWag(-10) }
-            $0.at(1.66) { lookAtApple($0, bites: 2).eyes(.closedHappy).blushing().earPerk(10).tailWag(14) }
-            $0.settle(at: 1.95)
+        PipGesture(beats: "eat-apple") {
+            $0.at(0)
+            $0.at(0.14) { holdApple($0, .apple, x: 376, y: 368).look(0.5, 0.4) }
+            $0.at(0.28) { holdApple($0, .apple, x: 386, y: 328).stance(drop: 3).nod(2).look(0.5, 0.7).eyes(.wide).earPerk(10) }
+            $0.at(0.46) { holdApple($0, .apple, x: 388, y: 326).nod(-2).spine(stretch: 0.03).look(0.5, 0.8).eyes(.wide).mouth(.bigOpen).earPerk(12) }
+            $0.at(0.60) { holdApple($0, .apple, x: 366, y: 298).spine(bend: 4, stretch: -0.02).nod(11).eyes(.closedHappy).mouth(.bigOpen) }
+            $0.at(0.66) { holdApple($0, .apple, bites: 1, x: 366, y: 298).spine(bend: 4, stretch: -0.03).nod(12).eyes(.closedHappy) }
+            $0.at(0.84) { holdApple($0, .apple, bites: 1, x: 384, y: 328).stance(drop: 4).chew(0.035).eyes(.closedHappy).tailWag(10) }
+            $0.at(0.94) { holdApple($0, .apple, bites: 1, x: 384, y: 328).stance(drop: 1).chew(-0.02).eyes(.closedHappy).tailWag(-6) }
+            $0.at(1.04) { holdApple($0, .apple, bites: 1, x: 384, y: 328).stance(drop: 4).chew(0.035).eyes(.closedHappy).tailWag(10) }
+            $0.at(1.14) { holdApple($0, .apple, bites: 1, x: 386, y: 326).chew(-0.02).look(0.5, 0.8).earPerk(8) }
+            $0.at(1.26) { holdApple($0, .apple, bites: 1, x: 366, y: 298).spine(bend: 4, stretch: -0.02).nod(11).eyes(.closedHappy).mouth(.bigOpen) }
+            $0.at(1.32) { holdApple($0, .apple, bites: 2, x: 366, y: 298).spine(bend: 4, stretch: -0.03).nod(12).eyes(.closedHappy) }
+            $0.at(1.48) { holdApple($0, .apple, bites: 2, x: 384, y: 332).stance(drop: 4).chew(0.035).eyes(.closedHappy).tailWag(12) }
+            $0.at(1.58) { holdApple($0, .apple, bites: 2, x: 384, y: 332).stance(drop: 1).chew(-0.02).eyes(.closedHappy).tailWag(-8) }
+            $0.at(1.70) { holdApple($0, .apple, bites: 2, x: 380, y: 338).spine(stretch: 0.03).nod(-3).eyes(.closedHappy).blushing().earPerk(12).tailWag(14) }
+            $0.at(1.76) { $0.reach(.right, x: 380, y: 346, paw: 90).reach(.left, x: 276, y: 366, paw: 60).eyes(.closedHappy).blushing() }
+            $0.settle(at: 2.00)
         },
-        PipGesture("eat-bowl", stance: .upright) {
-            $0.at(0.28) { spoon($0, x: 340, y: 344, paw: -140).look(0, 1).nod(5).earPerk(8) }
-            $0.at(0.56) { spoon($0, x: 370, y: 300, paw: 180).mouth(.bigOpen).look(0.4, 0.8).nod(2) }
-            $0.at(0.68) { spoon($0, x: 370, y: 306, paw: 180).nod(6).eyes(.closedHappy) }
-            $0.at(0.82) { spoon($0, x: 362, y: 330, paw: -160).chew(0.03).eyes(.closedHappy).tailWag(10) }
-            $0.at(0.96) { spoon($0, x: 362, y: 330, paw: -160).chew(-0.02).eyes(.closedHappy).tailWag(-10) }
-            $0.at(1.24) { spoon($0, x: 340, y: 344, paw: -140).look(0, 1).nod(5) }
-            $0.at(1.50) { spoon($0, x: 370, y: 300, paw: 180).mouth(.bigOpen).look(0.4, 0.8).nod(2) }
-            $0.at(1.62) { spoon($0, x: 370, y: 306, paw: 180).nod(6).eyes(.closedHappy) }
-            $0.settle(at: 1.95)
+        PipGesture(beats: "eat-bowl") {
+            $0.at(0)
+            $0.at(0.14) { spoon($0, x: 372, y: 368, paw: -100).look(0, 0.6) }
+            $0.at(0.30) { spoon($0, x: 336, y: 348, paw: -130).nod(5).look(0, 1).earPerk(8) }
+            $0.at(0.38) { spoon($0, x: 332, y: 356, paw: -130).nod(6).look(0, 1).stance(drop: 3) }
+            $0.at(0.56) { spoon($0, x: 356, y: 312, paw: 176).nod(1).look(0.4, 0.7).mouth(.bigOpen).earPerk(6) }
+            $0.at(0.68) { spoon($0, x: 350, y: 300, paw: 176).spine(bend: 3, stretch: -0.02).nod(9).eyes(.closedHappy).mouth(.bigOpen) }
+            $0.at(0.74) { spoon($0, x: 352, y: 304, paw: 176).spine(bend: 3, stretch: -0.02).nod(9).eyes(.closedHappy) }
+            $0.at(0.90) { spoon($0, x: 364, y: 332, paw: -160).stance(drop: 4).chew(0.035).eyes(.closedHappy).tailWag(10) }
+            $0.at(1.00) { spoon($0, x: 364, y: 332, paw: -160).stance(drop: 1).chew(-0.02).eyes(.closedHappy).tailWag(-6) }
+            $0.at(1.10) { spoon($0, x: 364, y: 332, paw: -160).stance(drop: 4).chew(0.03).eyes(.closedHappy).tailWag(10) }
+            $0.at(1.30) { spoon($0, x: 334, y: 354, paw: -130).nod(6).look(0, 1) }
+            $0.at(1.52) { spoon($0, x: 356, y: 312, paw: 176).nod(1).look(0.4, 0.7).mouth(.bigOpen) }
+            $0.at(1.62) { spoon($0, x: 350, y: 300, paw: 176).spine(bend: 3, stretch: -0.02).nod(9).eyes(.closedHappy).mouth(.bigOpen) }
+            $0.at(1.68) { spoon($0, x: 352, y: 304, paw: 176).spine(bend: 3, stretch: -0.02).nod(9).eyes(.closedHappy) }
+            $0.at(1.76) { $0.reach(.right, x: 380, y: 346, paw: 90).reach(.left, x: 268, y: 362, paw: 60).chew(0.03).eyes(.closedHappy) }
+            $0.settle(at: 2.00)
         },
-        PipGesture("sip-water", stance: .upright) {
-            $0.at(0.28) { sip($0, x: 394, y: 316, paw: 180).look(0.5, 0.6).earPerk(8) }
-            $0.at(0.54) { sip($0, x: 390, y: 286, paw: 158).nod(-9).mouth(.o).eyes(.closedHappy) }
-            $0.at(1.10) { sip($0, x: 388, y: 280, paw: 146).nod(-11).mouth(.o).eyes(.closedHappy).tailWag(8) }
-            $0.at(1.34) { sip($0, x: 394, y: 316, paw: 180).nod(3).mouth(.smallOpen).eyes(.closedHappy) }
-            $0.at(1.56) { sip($0, x: 394, y: 316, paw: 180).earPerk(10).blushing().tailWag(12) }
-            $0.settle(at: 1.85)
-        },
-        // After a meal: full and content, a paw patting the belly.
-        PipGesture("eat-yum", stance: .upright) {
-            $0.at(0.30) { $0.reach(.left, x: 310, y: 372, paw: 90).reach(.right, x: 344, y: 372, paw: -90).eyes(.closedHappy).mouth(.smallOpen).earPerk(8) }
-            $0.at(0.50) { $0.reach(.left, x: 310, y: 364, paw: 90).reach(.right, x: 344, y: 364, paw: -90).eyes(.closedHappy).blushing().hearts(1).tailWag(14) }
-            $0.at(0.70) { $0.reach(.left, x: 310, y: 372, paw: 90).reach(.right, x: 344, y: 372, paw: -90).eyes(.closedHappy).blushing().hearts(1, drift: 12).tailWag(-14) }
-            $0.at(0.90) { $0.reach(.left, x: 310, y: 364, paw: 90).reach(.right, x: 344, y: 364, paw: -90).eyes(.closedHappy).blushing().hearts(1, drift: 24).tailWag(14) }
-            $0.settle(at: 1.25)
-        },
-        PipGesture("workout-squat", loops: true, stance: .upright) {
-            $0.at(0.55) { $0.stance(drop: 24).reach(.left, x: 300, y: 322, paw: 150).reach(.right, x: 332, y: 322, paw: -150).nod(4).mouth(.smallOpen).tailWag(-10) }
-            $0.at(0.80) { $0.stance(drop: 24).reach(.left, x: 300, y: 322, paw: 150).reach(.right, x: 332, y: 322, paw: -150).nod(4).mouth(.smallOpen).tailWag(-10) }
-            $0.at(1.30) { $0.stance().reach(.left, x: 256, y: 360, paw: 10).reach(.right, x: 376, y: 360, paw: -10).nod(-3).earPerk(8).tailWag(10) }
-        },
-        PipGesture("workout-jumping-jack", loops: true, stance: .upright) {
-            $0.at(0.18) { $0.stance(spread: 20, lift: 14).reach(.left, x: 216, y: 270, paw: 110).reach(.right, x: 416, y: 270, paw: -110).turn(0.2).mouth(.smallOpen).tailWag(16).scarf(-8) }
-            $0.at(0.34) { $0.stance(drop: 14, spread: 30).reach(.left, x: 200, y: 215, paw: 145).reach(.right, x: 436, y: 222, paw: -145).turn(0.2).eyes(.closedHappy).mouth(.bigOpen).earPerk(14) }
-            $0.at(0.52) { $0.stance(spread: 18, lift: 14).reach(.left, x: 216, y: 300, paw: 90).reach(.right, x: 416, y: 300, paw: -90).turn(0.2).mouth(.smallOpen).tailWag(-16).scarf(8) }
-            $0.at(0.68) { $0.stance(drop: 6).reach(.left, x: 244, y: 378, paw: 8).reach(.right, x: 388, y: 378, paw: -8).turn(0.2).earPerk(-6) }
-        },
-        PipGesture("workout-side-bend", loops: true, stance: .upright) {
-            $0.at(0.70) { $0.stance(drop: 6, lean: -10).reach(.right, x: 420, y: 216, paw: -150).reach(.left, x: 280, y: 372, paw: 60).turn(0.2).eyes(.closedHappy).tailWag(16) }
-            $0.at(1.00) { $0.stance(drop: 6, lean: -10).reach(.right, x: 420, y: 216, paw: -150).reach(.left, x: 280, y: 372, paw: 60).turn(0.2).eyes(.closedHappy).tailWag(16) }
-            $0.at(1.70) { $0.stance(drop: 6, lean: 10).reach(.left, x: 212, y: 216, paw: 150).reach(.right, x: 352, y: 372, paw: -60).turn(0.2).eyes(.closedHappy).tailWag(-16) }
-            $0.at(2.00) { $0.stance(drop: 6, lean: 10).reach(.left, x: 212, y: 216, paw: 150).reach(.right, x: 352, y: 372, paw: -60).turn(0.2).eyes(.closedHappy).tailWag(-16) }
-        },
-        // Rests with paws on knees, tongue out, then wipes the brow.
-        PipGesture("workout-breather", stance: .upright) {
-            $0.at(0.30) { $0.stance(drop: 10).reach(.left, x: 262, y: 396, paw: 10).reach(.right, x: 370, y: 396, paw: -10).nod(7).mouth(.bigOpen).eyes(.half).earPerk(-10) }
-            $0.at(0.54) { $0.stance(drop: 6).reach(.left, x: 262, y: 390, paw: 10).reach(.right, x: 370, y: 390, paw: -10).nod(5).mouth(.smallOpen).eyes(.half).earPerk(-10) }
-            $0.at(0.78) { $0.stance(drop: 10).reach(.left, x: 262, y: 396, paw: 10).reach(.right, x: 370, y: 396, paw: -10).nod(7).mouth(.bigOpen).eyes(.half).earPerk(-10) }
-            $0.at(1.10) { $0.stance().reach(.right, x: 400, y: 214, paw: -120).nod(-3).eyes(.closedHappy).mouth(.smallOpen).earPerk(6) }
-            $0.at(1.30) { $0.stance().reach(.right, x: 384, y: 206, paw: -105).nod(-3).eyes(.closedHappy).mouth(.closedSmile).earPerk(8).tailWag(10) }
-            $0.settle(at: 1.65)
-        },
-        PipGesture("stretch-reach", stance: .upright) {
-            $0.at(0.60) { $0.stance().reach(.left, x: 200, y: 218, paw: 145).reach(.right, x: 436, y: 218, paw: -145).nod(-6).turn(0.2).eyes(.closedHappy).earPerk(12).tailWag(12) }
-            $0.at(1.30) { $0.stance().reach(.left, x: 194, y: 226, paw: 140).reach(.right, x: 442, y: 226, paw: -140).nod(-7).turn(0.2).eyes(.closedHappy).mouth(.smallOpen).earPerk(14).tailWag(14) }
+        PipGesture(beats: "sip-water") {
+            $0.at(0)
+            $0.at(0.14) { sip($0, x: 376, y: 368, paw: -160).look(0.5, 0.4) }
+            $0.at(0.28) { sip($0, x: 388, y: 326, paw: 180).look(0.5, 0.7).earPerk(8).stance(drop: 3) }
+            $0.at(0.48) { sip($0, x: 366, y: 292, paw: 160).spine(bend: -3, stretch: 0.02).nod(-7).mouth(.o).eyes(.closedHappy) }
+            $0.at(0.80) { sip($0, x: 364, y: 286, paw: 150).spine(bend: -7, stretch: 0.03).nod(-12).mouth(.o).eyes(.closedHappy).tailWag(8) }
+            $0.at(1.10) { sip($0, x: 362, y: 282, paw: 140).spine(bend: -8, stretch: 0.03).nod(-13).mouth(.o).eyes(.closedHappy).tailWag(-6) }
+            $0.at(1.32) { sip($0, x: 386, y: 326, paw: 180).stance(drop: 4).nod(4).mouth(.smallOpen).eyes(.closedHappy) }
+            $0.at(1.54) { sip($0, x: 386, y: 330, paw: 180).spine(stretch: 0.03).nod(-2).eyes(.closedHappy).blushing().earPerk(10).tailWag(12) }
+            $0.at(1.70) { $0.reach(.right, x: 378, y: 362, paw: 40).reach(.left, x: 276, y: 366, paw: 60).eyes(.closedHappy).blushing() }
             $0.settle(at: 1.90)
         },
-        // A wobble on one leg, sole to the knee, paws at the heart. Two tiny tilts sell the balance.
-        PipGesture("yoga-tree", stance: .upright) {
-            $0.at(0.35) { $0.stance(drop: 4, sway: -12).reach(.left, x: 298, y: 330, paw: 150).reach(.right, x: 334, y: 330, paw: -150).turn(0.2).eyes(.half) }
-            $0.at(0.70) { treeLeg($0, wobble: -1.5).eyes(.closedHappy) }
-            $0.at(1.05) { treeLeg($0, wobble: 1.5).eyes(.closedHappy).tailWag(8) }
-            $0.at(1.40) { treeLeg($0, wobble: 0).eyes(.closedHappy).tailWag(-8) }
-            $0.settle(at: 1.90)
+        // After a meal: full and content, paws patting the belly while the weight rocks from side to side.
+        PipGesture(beats: "eat-yum") {
+            $0.at(0)
+            $0.at(0.30) { belly($0, y: 366).spine(bend: 3).stance(drop: 3, sway: 2).eyes(.closedHappy).mouth(.smallOpen).earPerk(8) }
+            $0.at(0.50) { belly($0, y: 356).spine(bend: -3).stance(drop: 0, sway: -2).eyes(.closedHappy).blushing().hearts(1).tailWag(14) }
+            $0.at(0.70) { belly($0, y: 366).spine(bend: 3).stance(drop: 3, sway: 2).eyes(.closedHappy).blushing().hearts(1, drift: 12).tailWag(-14) }
+            $0.at(0.90) { belly($0, y: 356).spine(bend: -3).stance(drop: 0, sway: -2).eyes(.closedHappy).blushing().hearts(1, drift: 24).tailWag(14) }
+            $0.at(1.08) { belly($0, y: 364).spine(bend: 1).stance(drop: 2).eyes(.closedHappy).blushing().hearts(1, drift: 34) }
+            $0.settle(at: 1.40)
+        },
+        // Each rep starts and ends on the plain upright pose, so a loop can begin from the rise and hand over to the drop.
+        PipGesture(beats: "workout-squat", loops: true) {
+            let top: (PipBeat) -> PipBeat = { $0.turn(0).reach(.left, x: 250, y: 376, paw: 8).reach(.right, x: 382, y: 376, paw: -8) }
+            let bottom: (PipBeat) -> PipBeat = { $0.turn(0).reach(.left, x: 298, y: 326, paw: 150).reach(.right, x: 334, y: 326, paw: -150).mouth(.smallOpen) }
+            $0.at(0) { $0.turn(0) }
+            $0.at(0.20) { top($0).spine(stretch: 0.025).nod(-2).earPerk(6) }
+            $0.at(0.72) { bottom($0).stance(drop: 30).spine(stretch: -0.02).nod(4).look(0, 0.3) }
+            $0.at(0.90) { bottom($0).stance(drop: 33).spine(stretch: -0.03).nod(5).look(0, 0.3) }
+            $0.at(1.26) { top($0).stance().spine(stretch: 0.045).nod(-3).earPerk(8).eyes(.closedHappy).tailWag(12) }
+            $0.at(1.46) { top($0).stance(drop: 3).eyes(.closedHappy) }
+            $0.at(1.70) { $0.turn(0) }
+        },
+        PipGesture(beats: "workout-jumping-jack", loops: true) {
+            let down: (PipBeat, CGFloat) -> PipBeat = { beat, out in
+                beat.turn(0).reach(.left, x: 268 - out, y: 382, paw: 8).reach(.right, x: 364 + out, y: 382, paw: -8)
+            }
+            // Short of full reach: a straight arm's elbow snaps as it passes, a nearly straight one swings through.
+            let wide: (PipBeat, CGFloat, CGFloat, CGFloat) -> PipBeat = { beat, out, height, paw in
+                beat.turn(0).reach(.left, x: out, y: height, paw: paw).reach(.right, x: 632 - out, y: height, paw: -paw)
+            }
+            $0.at(0) { $0.turn(0) }
+            $0.at(0.12) { down($0, 4).stance(drop: 13).spine(stretch: -0.04).look(0, 0.2) }
+            $0.at(0.28) { wide($0, 192, 300, 90).stance(drop: 6, spread: 16, lift: 32).spine(stretch: 0.05).mouth(.smallOpen) }
+            $0.at(0.40) { wide($0, 212, 232, 130).stance(drop: 17, spread: 30).spine(stretch: -0.03).eyes(.closedHappy).mouth(.bigOpen) }
+            $0.at(0.50) { wide($0, 226, 216, 145).stance(drop: 20, spread: 30).spine(stretch: -0.05).eyes(.closedHappy).mouth(.bigOpen) }
+            $0.at(0.66) { wide($0, 192, 300, 90).stance(drop: 6, spread: 15, lift: 28).spine(stretch: 0.05).mouth(.smallOpen) }
+            $0.at(0.78) { down($0, 14).stance(drop: 12).spine(stretch: -0.03).mouth(.smallOpen) }
+            $0.at(0.92) { down($0, 2).stance(drop: 3) }
+            $0.at(1.08) { $0.turn(0) }
+        },
+        PipGesture(beats: "workout-side-bend", loops: true) {
+            let right: (PipBeat, CGFloat) -> PipBeat = { beat, amount in
+                beat.turn(0).reach(.right, x: 414, y: 214, paw: -150).reach(.left, x: 264, y: 366, paw: 60)
+                    .stance(drop: 5, lean: -3 * amount, sway: 7 * amount).spine(bend: -15 * amount).eyes(.closedHappy)
+            }
+            let left: (PipBeat, CGFloat) -> PipBeat = { beat, amount in
+                beat.turn(0).reach(.left, x: 218, y: 214, paw: 150).reach(.right, x: 368, y: 366, paw: -60)
+                    .stance(drop: 5, lean: 3 * amount, sway: -7 * amount).spine(bend: 15 * amount).eyes(.closedHappy)
+            }
+            $0.at(0) { $0.turn(0) }
+            $0.at(0.58) { right($0, 1).tailWag(14) }
+            $0.at(0.94) { right($0, 1.12).tailWag(16) }
+            $0.at(1.40) { $0.turn(0).stance(drop: 3).look(0.2, 0) }
+            $0.at(1.98) { left($0, 1).tailWag(-14) }
+            $0.at(2.34) { left($0, 1.12).tailWag(-16) }
+            $0.at(2.80) { $0.turn(0) }
+        },
+        // Paws on knees, panting, then the brow gets wiped and the breath comes back.
+        PipGesture(beats: "workout-breather") {
+            let knees: (PipBeat, CGFloat) -> PipBeat = { beat, puff in
+                beat.turn(0).stance(drop: 15 - puff * 4).reach(.left, x: 262, y: 382, paw: 10).reach(.right, x: 370, y: 382, paw: -10)
+                    .spine(stretch: puff * 0.03).nod(6).eyes(.closedHappy).earPerk(-10)
+            }
+            $0.at(0)
+            $0.at(0.26) { knees($0, 0).mouth(.bigOpen) }
+            $0.at(0.42) { knees($0, 1).mouth(.smallOpen) }
+            $0.at(0.58) { knees($0, 0).mouth(.bigOpen) }
+            $0.at(0.74) { knees($0, 1).mouth(.smallOpen) }
+            $0.at(1.04) { $0.turn(0).reach(.right, x: 410, y: 226, paw: -130).spine(stretch: 0.03).nod(-3).eyes(.closedHappy).mouth(.smallOpen).earPerk(4) }
+            $0.at(1.24) { $0.turn(0).reach(.right, x: 372, y: 208, paw: -110).spine(bend: -3, stretch: 0.03).nod(-5).eyes(.closedHappy).earPerk(8).tailWag(10) }
+            $0.at(1.42) { $0.turn(0).reach(.right, x: 392, y: 300, paw: -60).stance(drop: 5).nod(3).eyes(.closedHappy).mouth(.closedSmile).tailWag(-8) }
+            $0.settle(at: 1.80)
+        },
+        PipGesture(beats: "stretch-reach") {
+            let overhead: (PipBeat, CGFloat, CGFloat) -> PipBeat = { beat, out, height in
+                beat.turn(0).reach(.left, x: 216 - out, y: height, paw: 150).reach(.right, x: 416 + out, y: height, paw: -150)
+            }
+            $0.at(0) { $0.turn(0) }
+            $0.at(0.30) { $0.turn(0).stance(drop: 10).spine(stretch: -0.03).nod(3).earPerk(-6).reach(.left, x: 276, y: 372, paw: 20).reach(.right, x: 356, y: 372, paw: -20) }
+            $0.at(0.72) { overhead($0, 0, 222).stance(lift: 0).spine(stretch: 0.05).nod(-6).eyes(.closedHappy).mouth(.smallOpen).earPerk(10).tailWag(12) }
+            $0.at(1.14) { overhead($0, 8, 216).spine(bend: 2, stretch: 0.07).nod(-7).eyes(.closedHappy).mouth(.smallOpen).earPerk(14).tailWag(16) }
+            $0.at(1.42) { overhead($0, 4, 222).spine(bend: -2, stretch: 0.06).nod(-6).eyes(.closedHappy).mouth(.smallOpen).earPerk(12).tailWag(-8) }
+            $0.at(1.70) { $0.turn(0).stance(drop: 7).spine(stretch: -0.02).nod(3).eyes(.closedHappy) }
+            $0.settle(at: 1.98)
+        },
+        // Weight onto the left foot, sole to the knee, paws at the heart; the arms and hips correct a wobble.
+        PipGesture(beats: "yoga-tree") {
+            let tree: (PipBeat, CGFloat) -> PipBeat = { beat, wobble in
+                beat.turn(0).stance(drop: 4, lean: wobble * 0.5, sway: -13 + wobble).tuck(x: -36, y: -36, foot: -40).spine(bend: -wobble * 1.4)
+                    .reach(.left, x: 298, y: 330, paw: 150).reach(.right, x: 334, y: 330, paw: -150)
+            }
+            $0.at(0) { $0.turn(0) }
+            $0.at(0.34) { $0.turn(0).stance(drop: 5, sway: -13).look(-0.3, 0.2) }
+            $0.at(0.62) { tree($0, -3).look(-0.2, 0.3) }
+            $0.at(0.88) { tree($0, 2.5).eyes(.closedHappy) }
+            $0.at(1.14) { tree($0, -1.5).eyes(.closedHappy).tailWag(8) }
+            $0.at(1.40) { tree($0, 0.6).eyes(.closedHappy).tailWag(-8) }
+            $0.at(1.62) { $0.turn(0).stance(drop: 5, sway: -7).eyes(.closedHappy) }
+            $0.settle(at: 1.92)
         },
 
         // MARK: Taps
@@ -375,26 +455,22 @@ enum PipGestureLibrary {
         return drop
     }
 
-    private static func lookAtApple(_ pose: PipPose, bites: Int = 0) -> PipPose {
-        pose.stance().holding(.apple, bites: bites).reach(.right, x: 392, y: 316, paw: 180).reach(.left, x: 318, y: 334, paw: 120).look(0.5, 0.6)
-    }
-
-    private static func toMouth(_ pose: PipPose, _ prop: PipPose.Prop, bites: Int = 0) -> PipPose {
-        pose.stance().holding(prop, bites: bites).reach(.right, x: 386, y: 292, paw: 180).reach(.left, x: 318, y: 334, paw: 120).nod(6)
+    /// The right paw holds the food; the other tucks to the chest so it never hangs dead.
+    private static func holdApple(_ beat: PipBeat, _ prop: PipPose.Prop, bites: Int = 0, x: CGFloat, y: CGFloat) -> PipBeat {
+        beat.holding(prop, bites: bites).reach(.right, x: x, y: y, paw: 180).reach(.left, x: 300, y: 340, paw: 120)
     }
 
     /// The bowl stays level in the far paw while the spoon travels.
-    private static func spoon(_ pose: PipPose, x: CGFloat, y: CGFloat, paw: CGFloat) -> PipPose {
-        pose.stance().holding(.bowl).reach(.left, x: 300, y: 362, paw: 180).reach(.right, x: x, y: y, paw: paw)
+    private static func spoon(_ beat: PipBeat, x: CGFloat, y: CGFloat, paw: CGFloat) -> PipBeat {
+        beat.holding(.bowl).reach(.left, x: 292, y: 366, paw: 180).reach(.right, x: x, y: y, paw: paw)
     }
 
-    private static func sip(_ pose: PipPose, x: CGFloat, y: CGFloat, paw: CGFloat) -> PipPose {
-        pose.stance().holding(.cup).reach(.right, x: x, y: y, paw: paw).reach(.left, x: 318, y: 334, paw: 120)
+    private static func sip(_ beat: PipBeat, x: CGFloat, y: CGFloat, paw: CGFloat) -> PipBeat {
+        beat.holding(.cup).reach(.right, x: x, y: y, paw: paw).reach(.left, x: 300, y: 340, paw: 120)
     }
 
-    private static func treeLeg(_ pose: PipPose, wobble: CGFloat) -> PipPose {
-        pose.stance(drop: 4, lean: wobble, sway: -12).leg(.right, x: 322, y: 436, foot: -32)
-            .reach(.left, x: 298, y: 330, paw: 150).reach(.right, x: 334, y: 330, paw: -150).turn(0.2)
+    private static func belly(_ beat: PipBeat, y: CGFloat) -> PipBeat {
+        beat.reach(.left, x: 304, y: y, paw: 90).reach(.right, x: 330, y: y + 6, paw: -90)
     }
 
     /// Stands (or seats) Pip back up: the wake ends in the surface's resting body set.

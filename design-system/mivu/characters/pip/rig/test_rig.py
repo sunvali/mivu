@@ -129,8 +129,20 @@ class RigTests(unittest.TestCase):
                         parent = "body"  # Coach peeks over the composer: the paws rest on the bar, off the legs
                     if body_set == "upright" and child.startswith("foot-"):
                         parent = child.replace("foot", "shin")  # the only set with a knee, for squats
+                    if body_set == "upright" and child in ("arm-l", "arm-r", "scarf-knot"):
+                        parent = "torso"  # the only set with a waist: the upper body bends over the hips
                     self.assertEqual(by_id[set_id(child, body_set)]["parent"], set_id(parent, body_set),
                                      (body_set, child))
+
+    def test_upright_waist_cannot_open_a_gap(self):
+        # Both halves share a circle round the waist pivot, so the silhouette stays closed however far the torso bends.
+        by_id = {p["id"]: p for p in self.parts}
+        x, y = by_id["torso@upright"]["pivot"]
+        self.assertEqual(by_id["torso@upright"]["parent"], "body@upright")
+        self.assertIn("mount", by_id["torso@upright"])
+        xs, ys = points(by_id["body@upright"]["path"])
+        self.assertAlmostEqual(max(ys[i] for i in range(len(xs)) if abs(xs[i] - x) < 1 and ys[i] < y), 292, delta=1)
+        self.assertAlmostEqual(y - 292, max(xs) - x, delta=1)
 
     def test_feet_on_ground(self):
         for body_set in SETS:
