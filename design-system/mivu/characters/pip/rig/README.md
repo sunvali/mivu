@@ -43,7 +43,9 @@ rewrites the fallback images named in each imageset's `Contents.json`: `PipResti
 ## Head views
 
 Pip's head exists in three views so he can turn. Each view provides the same
-named parts and face shapes, so the runtime swaps a whole view at once.
+named parts and face shapes, so the runtime morphs each shape into its twin: keep
+names matched across views. Art only one view has (`head.light`, `head.shade`)
+melts in and out against the head.
 
 | View | Source | Notes |
 |---|---|---|

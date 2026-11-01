@@ -16,6 +16,10 @@ final class PipRigView: UIView {
     private var irisReach: [String: CGSize] = [:]
     /// Glint part id -> its iris; the glint counter-shifts so the light seems fixed.
     private var glintIris: [String: String] = [:]
+    /// Eye-white part id -> the mask that clips its iris, which has to turn with the white.
+    private var whiteMasks: [String: CAShapeLayer] = [:]
+    /// Matched outlines by "part id<old view", so only the first turn between two views does the work.
+    private var morphs: [String: (from: CGPath, to: CGPath)] = [:]
     private var playback: Playback?
     private var lookFollow: DispatchWorkItem?
     private var playbackTick = 0
@@ -123,7 +127,13 @@ final class PipRigView: UIView {
     private func mountHead(on set: PipPose.BodySet) {
         let carrier = asset.parts.first { $0.mount != nil && $0.set == set.rawValue }
         let host = carrier.flatMap { containers[$0.id] } ?? root
-        if headMount.superlayer !== host { host.addSublayer(headMount) }
+        if headMount.superlayer !== host {
+            // Even in an animated apply: moving a sublayer would otherwise fade the whole body by default.
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            host.addSublayer(headMount)
+            CATransaction.commit()
+        }
         let m = carrier?.mount ?? [1, 0, 0]
         headMount.setAffineTransform(CGAffineTransform(a: m[0], b: 0, c: 0, d: m[0], tx: m[1], ty: m[2]))
     }
@@ -226,6 +236,7 @@ final class PipRigView: UIView {
                 mask.frame = root.bounds
                 mask.path = shapes[white.id]?.path
                 wrapper.mask = mask
+                whiteMasks[white.id] = mask
                 wrapper.addSublayer(containers[part.id]!)
                 parent.addSublayer(wrapper)
                 irisReach[part.id] = CGSize(width: 0.3 * box.width, height: 0.4 * box.height) // enough to read as looking down at the text
@@ -290,9 +301,10 @@ extension PipRigView {
                 frame.set = beat.grounded ? resting : .upright
                 return frame
             }
-            show(frames[0])
+            // Tracks go on first: they read the old head view's twins, and a turn's morph must land on top of any bend.
             track(frames, loops: gesture.loops, run: run)
             trackCurls(frames, loops: gesture.loops, run: run)
+            show(frames[0])
             scheduleLooks(of: frames, loops: gesture.loops, run: run)
         }
     }
@@ -308,20 +320,111 @@ extension PipRigView {
             var rotations = joints.map(\.rotation)
             for i in rotations.indices.dropFirst() { rotations[i] = rotations[i - 1] + PipUpright.wrapped(rotations[i] - rotations[i - 1]) }
             let values = [rotations, joints.map(\.offset.x), joints.map(\.offset.y), joints.map(\.scale.width), joints.map(\.scale.height)]
-            let live = container.presentation() ?? container
+            let twin = part.view.flatMap { $0 == Self.view(for: pose.headTurn).0 ? nil : containers["\(part.name)@\(Self.view(for: pose.headTurn).0)"] }
+            let live = (twin ?? container).presentation() ?? twin ?? container
             for (component, track) in zip(Self.components, values) {
                 let animation = CAKeyframeAnimation(keyPath: component.path)
-                // A loop starts on the plain upright pose; a one-shot may be cutting in on anything, even a rep stopped halfway.
-                let now = (live.value(forKeyPath: component.path) as? NSNumber).map { CGFloat($0.floatValue) }
-                animation.values = loops ? track : now.map { PipBake.easedIn(track, from: $0) } ?? track
+                animation.values = track
                 animation.duration = Double(frames.count - 1) / PipBake.rate
                 animation.repeatCount = loops ? .infinity : 1
                 animation.fillMode = .forwards
                 animation.isRemovedOnCompletion = false
                 container.add(animation, forKey: component.key)
+                // Whatever Pip was doing fades out on top of the track, so a gesture never pops on arrival, even mid-rep.
+                let now = CGFloat((live.value(forKeyPath: component.path) as? NSNumber)?.floatValue ?? Float(track[0]))
+                let gap = component.key == "pip.rotation" ? PipUpright.wrapped(now - track[0]) : now - track[0]
+                if abs(gap) > 0.0005 {
+                    let arrival = CABasicAnimation(keyPath: component.path)
+                    arrival.isAdditive = true
+                    arrival.fromValue = gap
+                    arrival.toValue = 0
+                    arrival.duration = 0.22
+                    arrival.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    container.add(arrival, forKey: component.key + ".arrival")
+                }
             }
             run.tracked.append(container)
         }
+    }
+
+    /// How long a head turn takes to flow from one view to the next.
+    static let turnDuration: TimeInterval = 0.3
+
+    /// Turns the head instead of cutting between views: the new view's shapes start on the old view's outlines and flow to
+    /// their own. The head dips through the middle of the turn, so it swings on an arc, and the ears drag behind it.
+    private func morphHead(from old: String, to new: String, leftward: Bool) {
+        // Adding a sublayer would otherwise fade the whole head in by default.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        let ease = CAMediaTimingFunction(controlPoints: 0.45, 0, 0.2, 1)
+        for part in asset.parts where part.view == new {
+            guard let shape = shapes[part.id], let path = shape.path, containers[part.id]?.isHidden == false else { continue }
+            // Shading only this view has grows from the old head's outline as it washes in.
+            let twin = shapes["\(part.name)@\(old)"]?.path ?? shapes["head@\(old)"]?.path
+            if shapes["\(part.name)@\(old)"] == nil {
+                let wash = CABasicAnimation(keyPath: "opacity")
+                wash.fromValue = 0
+                wash.toValue = 1
+                wash.duration = Self.turnDuration
+                wash.timingFunction = ease
+                shape.add(wash, forKey: "pip.morph.wash")
+            }
+            guard let twin else { continue }
+            let key = "\(part.id)<\(old)"
+            guard let match = morphs[key] ?? PipMorph.matched(twin, path) else { continue }
+            morphs[key] = match
+            let morph = CABasicAnimation(keyPath: "path")
+            morph.fromValue = match.from
+            morph.toValue = match.to
+            morph.duration = Self.turnDuration
+            morph.timingFunction = ease
+            shape.add(morph, forKey: "pip.morph")
+            whiteMasks[part.id]?.add(morph, forKey: "pip.morph")
+        }
+        // Shading only the old view has cannot stay behind in a hidden layer: a stand-in melts into the new head instead.
+        for part in asset.parts where part.view == old && shapes["\(part.name)@\(new)"] == nil {
+            guard let shape = shapes[part.id], let path = shape.path, let head = shapes["head@\(new)"], let host = containers["head@\(new)"],
+                  let match = PipMorph.matched(path, head.path ?? path) else { continue }
+            let melt = CAShapeLayer()
+            melt.frame = shape.frame
+            melt.fillColor = shape.fillColor
+            melt.path = match.to
+            melt.opacity = 0
+            melt.zPosition = head.zPosition + 0.5
+            host.addSublayer(melt)
+            let flow = CABasicAnimation(keyPath: "path")
+            flow.fromValue = match.from
+            flow.toValue = match.to
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 1
+            fade.toValue = 0
+            let group = CAAnimationGroup()
+            group.animations = [flow, fade]
+            group.duration = Self.turnDuration
+            group.timingFunction = ease
+            CATransaction.begin()
+            CATransaction.setCompletionBlock {
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                melt.removeFromSuperlayer()
+                CATransaction.commit()
+            }
+            melt.add(group, forKey: "pip.morph")
+            CATransaction.commit()
+        }
+        func swing(_ id: String, _ path: String, _ values: [CGFloat], key: String) {
+            let swing = CAKeyframeAnimation(keyPath: path)
+            swing.isAdditive = true
+            swing.values = values
+            swing.duration = Self.turnDuration * 1.5
+            swing.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            containers[id]?.add(swing, forKey: key)
+        }
+        swing("head@\(new)", "transform.translation.y", [0, 7, 0], key: "pip.turn.dip")
+        let drag: CGFloat = (leftward ? 1 : -1) * 7 * .pi / 180
+        swing("ear-l@\(new)", "transform.rotation.z", [0, drag, -drag * 0.4, 0], key: "pip.turn.drag")
+        swing("ear-r@\(new)", "transform.rotation.z", [0, drag * 0.8, drag, -drag * 0.3, 0], key: "pip.turn.drag")
     }
 
     /// Parts that bend instead of turning rigidly. The ears, scarf and tail tip are held at the root and curl toward the tip;
@@ -417,7 +520,10 @@ extension PipRigView {
         CATransaction.setDisableActions(true)
         for layer in run.tracked {
             layer.transform = (layer.presentation() ?? layer).transform
-            Self.components.forEach { layer.removeAnimation(forKey: $0.key) }
+            Self.components.forEach {
+                layer.removeAnimation(forKey: $0.key)
+                layer.removeAnimation(forKey: $0.key + ".arrival")
+            }
         }
         // shortcut: a cut-short gesture lets a bent ear spring straight in one frame, ease it if a real interruption shows it.
         run.curled.forEach { $0.removeAnimation(forKey: "pip.curl") }
@@ -554,21 +660,27 @@ extension PipRigView {
         var model: [String: [Float]] = [:]
         // A layer that was hidden has no meaningful presentation value: it snaps to its pose instead of springing.
         let wasHidden = Set(containers.filter { $0.value.isHidden }.keys)
+        let oldView = Self.view(for: pose.headTurn).0, newView = Self.view(for: target.headTurn).0
         for (id, container) in containers {
             let live = container.presentation() ?? container
             before[id] = Self.components.map { Float((live.value(forKeyPath: $0.path) as? NSNumber)?.floatValue ?? 0) } + [live.opacity]
             model[id] = Self.components.map { Float((container.value(forKeyPath: $0.path) as? NSNumber)?.floatValue ?? 0) } + [container.opacity]
         }
+        let leftward = target.headTurn < pose.headTurn
         apply(target, animated: false)
+        if newView != oldView { morphHead(from: oldView, to: newView, leftward: leftward) }
         for part in asset.parts {
-            guard let container = containers[part.id], !container.isHidden, !wasHidden.contains(part.id), let from = before[part.id] else { continue }
+            // A part of the new head view carries on from its twin in the old one, so nothing snaps across the turn.
+            let source = part.view == newView && newView != oldView ? "\(part.name)@\(oldView)" : part.id
+            guard let container = containers[part.id], !container.isHidden, source != part.id || !wasHidden.contains(part.id),
+                  let from = before[source] else { continue }
             // Lower legs and paws trail the upper leg, like ears, tail and scarf trail the body (overlapping action).
             let follower = ["ear-", "tail-2", "tail-3", "tail-4", "scarf-end-", "forearm-", "paw-"].contains { part.name.hasPrefix($0) }
             let gazePart = irisReach[part.id] != nil || pupilReach[part.id] != nil || glintIris[part.id] != nil
             for (i, component) in Self.components.enumerated() where springs {
                 let to = Float((container.value(forKeyPath: component.path) as? NSNumber)?.floatValue ?? 0)
                 // Only a changed target springs; a running spring, and the additive breath on top of it, are left alone.
-                guard let old = model[part.id]?[i], abs(old - to) > 0.0005 else { continue }
+                guard let old = model[source]?[i], abs(old - to) > 0.0005 else { continue }
                 guard abs(from[i] - to) > 0.0005 else { container.removeAnimation(forKey: component.key); continue }
                 container.add(spring(from: from[i], to: to, period: period, follower: follower, saccade: gazePart, on: container, path: component.path), forKey: component.key)
             }

@@ -262,6 +262,19 @@ import UIKit
         #expect(finished == false && torso.animation(forKey: "pip.rotation") == nil)
     }
 
+    /// A turn flows the new view's shapes from the old view's outlines; the swap is instant, the drawing is not.
+    @Test func aHeadTurnMorphsTheNewViewFromTheOld() throws {
+        let view = try rig(.rest)
+        // A key too short for the eyes to lead turns at once, so the check runs before a layer with no window drops its animations.
+        view.play(PipGesture("turn") { $0.at(0.05) { $0.turn(0) }; $0.at(0.4) { $0.turn(0) } }) { _ in }
+        #expect(view.visibleViews == ["front"])
+        let head = try #require(view.layer(named: "head@front"))
+        let shape = try #require(head.sublayers?.compactMap { $0 as? CAShapeLayer }.first)
+        #expect(shape.animation(forKey: "pip.morph") is CABasicAnimation)
+        #expect(head.animation(forKey: "pip.turn.dip") != nil)
+        view.removeAllMotion()
+    }
+
     /// Only the held food shows, and each bite uncovers one more bite mark; the Progress chart card never follows a pose.
     @Test func foodPropsFollowThePose() throws {
         var pose = PipPose.rest.holding(.apple, bites: 1)

@@ -175,9 +175,9 @@ struct PipBeat {
 enum PipBake {
     static let rate = 60.0
 
-    /// Curves through the beats.
+    /// Curves through the beats. `headTurn` is not one: it steps at its beat and the rig's morph makes the turn.
     private static var curved: [WritableKeyPath<PipBeat, CGFloat>] {
-        [\.drop, \.spread, \.lean, \.sway, \.lift, \.squash, \.bend, \.stretch, \.nod, \.chewing, \.headTurn, \.ears, \.tail, \.scarf,
+        [\.drop, \.spread, \.lean, \.sway, \.lift, \.squash, \.bend, \.stretch, \.nod, \.chewing, \.ears, \.tail, \.scarf,
          \.left.angle, \.left.length, \.left.paw, \.right.angle, \.right.length, \.right.paw,
          \.tuckX, \.tuckY, \.tuckFoot, \.heartDrift, \.brow]
     }
@@ -309,16 +309,6 @@ enum PipBake {
             }
         }
         return bent
-    }
-
-    /// Starts a joint's track from `now` and joins the authored motion within 0.2 s, so a gesture never pops on arrival.
-    static func easedIn(_ track: [CGFloat], from now: CGFloat) -> [CGFloat] {
-        let span = min(Int(rate * 0.2), track.count - 1), gap = now - track[0]
-        return track.enumerated().map { i, value in
-            guard i < span else { return value }
-            let t = CGFloat(i) / CGFloat(span)
-            return value + gap * (1 - t * t * (3 - 2 * t))
-        }
     }
 
     private static func prepared(_ beats: [PipBeat]) -> [PipBeat] {

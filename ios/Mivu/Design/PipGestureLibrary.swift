@@ -259,9 +259,9 @@ enum PipGestureLibrary {
         PipGesture(beats: "eat-yum") {
             $0.at(0)
             $0.at(0.30) { belly($0, y: 366).spine(bend: 3).stance(drop: 3, sway: 2).eyes(.closedHappy).mouth(.smallOpen).earPerk(8) }
-            $0.at(0.50) { belly($0, y: 356).spine(bend: -3).stance(drop: 0, sway: -2).eyes(.closedHappy).blushing().hearts(1).tailWag(14) }
-            $0.at(0.70) { belly($0, y: 366).spine(bend: 3).stance(drop: 3, sway: 2).eyes(.closedHappy).blushing().hearts(1, drift: 12).tailWag(-14) }
-            $0.at(0.90) { belly($0, y: 356).spine(bend: -3).stance(drop: 0, sway: -2).eyes(.closedHappy).blushing().hearts(1, drift: 24).tailWag(14) }
+            $0.at(0.50) { belly($0, y: 356).spine(bend: -3).stance(drop: 0, sway: -2).turn(0).eyes(.closedHappy).blushing().hearts(1).tailWag(14) }
+            $0.at(0.70) { belly($0, y: 366).spine(bend: 3).stance(drop: 3, sway: 2).turn(0).eyes(.closedHappy).blushing().hearts(1, drift: 12).tailWag(-14) }
+            $0.at(0.90) { belly($0, y: 356).spine(bend: -3).stance(drop: 0, sway: -2).turn(0).eyes(.closedHappy).blushing().hearts(1, drift: 24).tailWag(14) }
             $0.at(1.08) { belly($0, y: 364).spine(bend: 1).stance(drop: 2).eyes(.closedHappy).blushing().hearts(1, drift: 34) }
             $0.settle(at: 1.40)
         },

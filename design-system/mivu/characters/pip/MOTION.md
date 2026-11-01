@@ -62,6 +62,8 @@ Durations come from `MivuMotion` and the gesture library.
 | Tap | 0.8 s | Rotating giggle, ear wiggle, wink, tail flick; rapid taps escalate once to a shake-off; light haptic |
 | Pat (long press) | 1.3 s | Leans into the hand, closed eyes, blush, tail wag, a heart drifts up |
 
+A head turn between views is a morph, on every body set: the new view's shapes start on the old view's outlines (`PipMorph`) and flow to their own over 0.3 s, while joints carry on from their twins in the old view, the head dips through the middle and the ears drag. The usual blink still lands inside it.
+
 Upright gestures are authored but not yet tied to an app moment; review them with the preview's **Food and workouts** button.
 Each plays between `rise-up` (0.70 s) and `drop-down` (0.80 s), which swap to the two-legged `upright` body inside a crouch, tipped so the head stays where it was.
 They are not sprung key to key: beats describe hips, spine, head and wrists, `PipBake` draws one 60 fps curve through them and solves the limbs on every frame, and the render server plays it. Feet stay planted, paws swing on arcs around the shoulder, and head, ears, tail, scarf and chest fluff are damped springs trailing the hips, so their lag, overshoot and the squash and stretch come from the motion itself. Author anticipation and overshoot in the beats; never key follow-through by hand.

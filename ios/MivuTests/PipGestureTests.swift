@@ -268,11 +268,26 @@ import Testing
         #expect((raised.joints["arm-r"]?.offset.y ?? 0) < -5 && down.joints["arm-r"]?.offset.y == 0)
     }
 
-    @Test func aGestureEasesInFromWhereverPipIs() {
-        let track = (0..<30).map { CGFloat($0) }
-        let eased = PipBake.easedIn(track, from: 40)
-        #expect(eased[0] == 40 && Array(eased[12...]) == Array(track[12...]))
-        #expect(zip(eased, eased.dropFirst()).allSatisfy { abs($1 - $0) < 8 }, "No jump on the way in")
+    /// Two drawings with different point counts still blend, because both are redrawn with the same points in the same order.
+    @Test func matchedOutlinesHaveTheSameShapeOfElements() throws {
+        let square = CGPath(rect: CGRect(x: 0, y: 0, width: 100, height: 100), transform: nil)
+        let circle = CGPath(ellipseIn: CGRect(x: 40, y: 20, width: 80, height: 80), transform: nil)
+        let match = try #require(PipMorph.matched(square, circle))
+        let start = PipMorph.contours(of: match.from), end = PipMorph.contours(of: match.to)
+        #expect(start.count == 1 && end.count == 1 && start[0].count == PipMorph.samples && end[0].count == PipMorph.samples)
+        #expect(match.from.boundingBox.insetBy(dx: -1, dy: -1).contains(square.boundingBox.insetBy(dx: 1, dy: 1)))
+        #expect(abs(match.to.boundingBox.midX - circle.boundingBox.midX) < 2)
+    }
+
+    /// A shape drawn in two pieces in one view and one in the other keeps its largest piece through the turn.
+    @Test func outlinesPairOffBySize() throws {
+        let two = CGMutablePath()
+        two.addRect(CGRect(x: 0, y: 0, width: 4, height: 4))
+        two.addRect(CGRect(x: 50, y: 50, width: 60, height: 60))
+        let one = CGPath(rect: CGRect(x: 50, y: 50, width: 50, height: 50), transform: nil)
+        let match = try #require(PipMorph.matched(two, one))
+        #expect(PipMorph.contours(of: match.from).count == 1)
+        #expect(match.from.boundingBox.minX >= 49, "The small piece sits the turn out")
     }
 
     /// The head views are drawn rolled for the four-legged body; on a straight spine Pip's head sits level, and it stays

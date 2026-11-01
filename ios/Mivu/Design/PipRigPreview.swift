@@ -31,6 +31,7 @@ struct PipRigPreview: View {
                     button("Blink") { driver.rigs.forEach { $0.blink() } }
                     button("Double blink") { driver.rigs.forEach { $0.blink(double: true) } }
                     button("Eyes lead turn") { await eyesLeadTurn() }
+                    button("Head turns") { await headTurns() }
                     ForEach(PipGestureLibrary.all, id: \.name) { gesture in
                         button(gesture.name) { await play(gesture) }
                     }
@@ -38,7 +39,10 @@ struct PipRigPreview: View {
             }
         }
         .onChange(of: set) { stopIdle() }
-        .task { if ProcessInfo.processInfo.arguments.contains("-PipRigPreviewUpright") { await playUpright() } }
+        .task {
+            if ProcessInfo.processInfo.arguments.contains("-PipRigPreviewTurns") { await headTurns() }
+            if ProcessInfo.processInfo.arguments.contains("-PipRigPreviewUpright") { await playUpright() }
+        }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
@@ -136,8 +140,16 @@ struct PipRigPreview: View {
         }
     }
 
+    private func headTurns() async {
+        caption = "head turns"
+        for turn in [CGFloat(0), -1, 0, 1, 0, 1] {
+            await play(PipGesture("turn") { $0.at(0.3) { $0.turn(turn) }; $0.at(1) { $0.turn(turn) } })
+        }
+        caption = "done"
+    }
+
     private func playUpright() async {
-        for gesture in PipGestureLibrary.all where gesture.stance == .upright { await play(gesture) }
+        for gesture in PipGestureLibrary.all where gesture.stance == .upright && gesture.endSet == nil { await play(gesture) }
         caption = "done"
     }
 
