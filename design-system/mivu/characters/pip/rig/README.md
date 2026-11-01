@@ -100,6 +100,10 @@ The body exists as three sets, each traced from its painting like the head:
   silhouette stays closed through a bend, and the torso's cream overlaps the belly's so no seam shows. `PipUpright` in `PipGesture.swift` repeats its limb
   pivots for the arm and leg solvers (`uprightLimbsMatchTheRig` keeps them equal). Its arms draw over the head so held food stays in
   front; overhead arms therefore go wide, never across the face.
+- Upright limbs follow the four-legged art: tapered orange thigh and arm, then a dark stocking with a fur edge (`forearm-*.sock`, the
+  thigh's jagged hem over `shin-*`). The chest is a warm belly under a pale bib (`chest`, `chest-fluff`).
+- `fx-crumb-1…4`, `fx-drop-1…4` and `fx-dust-1…4` are root-level upright parts drawn at (256, 256), hidden until a gesture throws
+  them. Dust sits behind the legs; crumbs and drops sit in front of everything.
 - Food lives in the upright paws, hidden until a pose holds it: `prop-apple` (with `bite-1…2`), `prop-cup`, `prop-bowl` (far paw) and
   `prop-bowl-spoon` (near paw). Each is drawn for a paw pointing straight up, `reach(…, paw: 180)`.
 - The body faces right; facing left is a runtime mirror of the whole character.

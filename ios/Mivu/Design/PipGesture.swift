@@ -114,8 +114,8 @@ enum PipUpright {
     static func level(turn: CGFloat) -> CGFloat { 5.5 + 3.5 * max(0, min(1, turn)) }
     static func arm(_ side: PipPose.Side) -> Chain {
         side == .left
-            ? Chain(root: CGPoint(x: 274, y: 292), joint: CGPoint(x: 258, y: 340), end: CGPoint(x: 260, y: 384))
-            : Chain(root: CGPoint(x: 358, y: 292), joint: CGPoint(x: 374, y: 340), end: CGPoint(x: 372, y: 384))
+            ? Chain(root: CGPoint(x: 274, y: 298), joint: CGPoint(x: 258, y: 340), end: CGPoint(x: 260, y: 384))
+            : Chain(root: CGPoint(x: 358, y: 298), joint: CGPoint(x: 374, y: 340), end: CGPoint(x: 372, y: 384))
     }
     static func leg(_ side: PipPose.Side) -> Chain {
         side == .left
@@ -193,10 +193,14 @@ extension PipPose {
 
     /// Puts the wrist on (`x`, `y`) in the torso's own artboard space, elbow outward. `paw` is the paw's angle in that
     /// space in degrees: 0 hangs, 180 points up (the pose food is drawn for); nil leaves it following the forearm.
-    func reach(_ side: Side, x: CGFloat, y: CGFloat, paw: CGFloat? = nil) -> PipPose {
+    /// `shoulder` moves the top of the arm first, the way a shoulder lifts with a raised paw.
+    func reach(_ side: Side, x: CGFloat, y: CGFloat, paw: CGFloat? = nil, shoulder: CGVector = .zero) -> PipPose {
         let s = side == .left ? "l" : "r"
-        let arm = PipUpright.arm(side).solve(to: CGPoint(x: x, y: y), bend: side == .left ? 1 : -1)
-        var copy = edited(["arm-\(s)"]) { $0.rotation = arm.upper }.edited(["forearm-\(s)"]) { $0.rotation = arm.lower }
+        let rest = PipUpright.arm(side)
+        let moved = [rest.root, rest.joint, rest.end].map { CGPoint(x: $0.x + shoulder.dx, y: $0.y + shoulder.dy) }
+        let arm = PipUpright.Chain(root: moved[0], joint: moved[1], end: moved[2]).solve(to: CGPoint(x: x, y: y), bend: side == .left ? 1 : -1)
+        var copy = edited(["arm-\(s)"]) { $0.rotation = arm.upper; $0.offset = CGPoint(x: shoulder.dx, y: shoulder.dy) }
+            .edited(["forearm-\(s)"]) { $0.rotation = arm.lower }
         if let paw { copy = copy.edited(["paw-\(s)"]) { $0.rotation = PipUpright.wrapped(Self.radians(paw) - arm.upper - arm.lower) } }
         return copy
     }

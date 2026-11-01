@@ -213,7 +213,7 @@ import Testing
             let frames = PipBake.frames(of: gesture.beats, loops: gesture.loops)
             for (a, b) in zip(frames, frames.dropFirst()) where a.grounded == b.grounded {
                 let before = a.pose, after = b.pose
-                for (name, joint) in after.joints {
+                for (name, joint) in after.joints where !name.hasPrefix("fx-") {
                     let turn = abs(PipUpright.wrapped(joint.rotation - (before.joints[name]?.rotation ?? 0)))
                     #expect(turn < (name.hasPrefix("paw-") ? 0.5 : 0.3), "\(gesture.name): \(name) turns \(turn) in a frame")
                 }
@@ -235,6 +235,37 @@ import Testing
                 #expect(last.grounded == (gesture.name == "drop-down"), "\(gesture.name)")
             }
         }
+    }
+
+    /// A soft part's root stays put, its tip turns the full angle, and no element is lost, or the render server could not blend bends.
+    @Test func curlingBendsAPathWithoutChangingItsShapeOfElements() {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: 0, y: 50))
+        path.addCurve(to: CGPoint(x: 0, y: 100), control1: CGPoint(x: 10, y: 60), control2: CGPoint(x: 10, y: 90))
+        let bent = PipBake.curled(path, root: .zero, tip: CGPoint(x: 0, y: 100), angle: .pi / 2) { $0 * $0 }
+        var points: [CGPoint] = []
+        bent.applyWithBlock { element in
+            points.append(element.pointee.points[element.pointee.type == .addCurveToPoint ? 2 : 0])
+        }
+        #expect(points.count == 3 && points[0] == .zero)
+        #expect(abs(points[2].x + 100) < 0.001 && abs(points[2].y) < 0.001, "The tip takes the whole turn")
+        #expect(abs(points[1].x + 50 * sin(.pi / 8)) < 0.001, "The middle takes a quarter of it")
+    }
+
+    /// A burst hides on every frame it is not flying, so a loop never leaves a crumb hanging in the air.
+    @Test func burstsFlyOnceAndHideBetweenThrows() throws {
+        let gesture = PipGestureLibrary.named("eat-apple")
+        let frames = PipBake.frames(of: gesture.beats, loops: false)
+        let joints = try frames.map { try #require($0.effects["fx-crumb-1@upright"]) }
+        #expect(joints.first?.scale == .zero && joints.last?.scale == .zero)
+        #expect(joints.contains { $0.scale.width > 0.8 }, "It shows")
+        #expect(Set(joints.filter { $0.scale.width > 0 }.map(\.offset.y)).count > 10, "It flies")
+    }
+
+    @Test func aRaisedPawLiftsItsShoulder() {
+        let raised = PipBeat().reach(.right, x: 406, y: 216, paw: -145).pose, down = PipBeat().pose
+        #expect((raised.joints["arm-r"]?.offset.y ?? 0) < -5 && down.joints["arm-r"]?.offset.y == 0)
     }
 
     @Test func aGestureEasesInFromWhereverPipIs() {

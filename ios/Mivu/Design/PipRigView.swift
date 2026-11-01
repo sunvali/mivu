@@ -29,6 +29,7 @@ final class PipRigView: UIView {
         var work: [DispatchWorkItem] = []
         /// Layers carrying a baked track, frozen where they are if the gesture is cut short.
         var tracked: [CALayer] = []
+        var curled: [CAShapeLayer] = []
         init(token: Int, completion: @escaping (Bool) -> Void) { self.token = token; self.completion = completion }
     }
 
@@ -157,6 +158,7 @@ final class PipRigView: UIView {
     /// Blush and hearts fade in and out instead of popping; the chart card and glasses follow `showsProgressProps`.
     private func opacity(of part: PipRigAsset.Part, in pose: PipPose) -> Float? {
         if part.name.hasPrefix("cheek-blush") { return pose.blush ? 1 : 0 }
+        if part.name.hasPrefix("fx-") { return pose.joints[part.id] != nil ? 1 : 0 }
         if part.name.hasPrefix("heart-"), let n = Int(part.name.dropFirst(6)) { return n <= pose.hearts ? 1 : 0 }
         if part.name.hasPrefix("prop-"), !Self.isProgressProp(part) {
             guard let prop = pose.prop, part.name.hasPrefix("prop-\(prop.rawValue)") else { return 0 }
@@ -290,6 +292,7 @@ extension PipRigView {
             }
             show(frames[0])
             track(frames, loops: gesture.loops, run: run)
+            trackCurls(frames, loops: gesture.loops, run: run)
             scheduleLooks(of: frames, loops: gesture.loops, run: run)
         }
     }
@@ -319,6 +322,59 @@ extension PipRigView {
             }
             run.tracked.append(container)
         }
+    }
+
+    /// Parts that bend instead of turning rigidly. The ears, scarf and tail tip are held at the root and curl toward the tip;
+    /// the torso's art is held at the top, where shoulders and head ride it, and curls back to meet the hips.
+    private func softParts(of root: PipRigAsset.Part) -> [PipRigAsset.Part] {
+        let byID = Dictionary(uniqueKeysWithValues: asset.parts.map { ($0.id, $0) })
+        func rides(_ part: PipRigAsset.Part) -> Bool {
+            var ancestor: PipRigAsset.Part? = part
+            while let current = ancestor {
+                if current.id == root.id { return true }
+                ancestor = current.parent.flatMap { byID[$0] }
+            }
+            return false
+        }
+        return asset.parts.filter { rides($0) && (root.name != "torso" || $0.name.hasPrefix("torso") || $0.name.hasPrefix("chest")) }
+    }
+
+    private func trackCurls(_ frames: [PipPose], loops: Bool, run: Playback) {
+        let views = Set(frames.map { Self.view(for: $0.headTurn).0 }), sets = Set(frames.map(\.set.rawValue))
+        let keys = Array(stride(from: 0, to: frames.count - 1, by: 2)) + [frames.count - 1]
+        for root in asset.parts where ["ear-l", "ear-r", "scarf-end-l", "scarf-end-r", "tail-4", "torso"].contains(root.name) {
+            guard root.view.map(views.contains) ?? true, root.set.map(sets.contains) ?? true else { continue }
+            let curls = keys.map { joint(of: root, in: frames[$0], slide: 0).curl }
+            guard curls.contains(where: { abs($0) > 0.002 }) else { continue }
+            let pivot = CGPoint(x: root.pivot[0], y: root.pivot[1])
+            let family = softParts(of: root)
+            // The art's far end, so the bend needs no authoring: an ear's tip, the top of the torso.
+            let tip = family.compactMap { shapes[$0.id]?.path }.flatMap(Self.points).max { hypot($0.x - pivot.x, $0.y - pivot.y) < hypot($1.x - pivot.x, $1.y - pivot.y) } ?? pivot
+            let weight: (CGFloat) -> CGFloat = root.name == "torso" ? { (1 - $0) * (1 - $0) } : { $0 * $0 }
+            for part in family {
+                guard let shape = shapes[part.id], let path = shape.path else { continue }
+                let animation = CAKeyframeAnimation(keyPath: "path")
+                animation.values = curls.map { PipBake.curled(path, root: pivot, tip: tip, angle: $0, weight: weight) }
+                animation.keyTimes = keys.map { NSNumber(value: Double($0) / Double(frames.count - 1)) }
+                animation.duration = Double(frames.count - 1) / PipBake.rate
+                animation.repeatCount = loops ? .infinity : 1
+                shape.add(animation, forKey: "pip.curl")
+                run.curled.append(shape)
+            }
+        }
+    }
+
+    private static func points(of path: CGPath) -> [CGPoint] {
+        var points: [CGPoint] = []
+        path.applyWithBlock { element in
+            switch element.pointee.type {
+            case .addCurveToPoint: points.append(element.pointee.points[2])
+            case .addQuadCurveToPoint: points.append(element.pointee.points[1])
+            case .moveToPoint, .addLineToPoint: points.append(element.pointee.points[0])
+            default: break
+            }
+        }
+        return points
     }
 
     /// Eyes, mouth, props, the head view and the body set change in steps along the curve; the tracks own the joints.
@@ -363,8 +419,11 @@ extension PipRigView {
             layer.transform = (layer.presentation() ?? layer).transform
             Self.components.forEach { layer.removeAnimation(forKey: $0.key) }
         }
+        // shortcut: a cut-short gesture lets a bent ear spring straight in one frame, ease it if a real interruption shows it.
+        run.curled.forEach { $0.removeAnimation(forKey: "pip.curl") }
         CATransaction.commit()
         run.tracked.removeAll()
+        run.curled.removeAll()
     }
 
     private func schedule(_ gesture: PipGesture, run: Playback) {

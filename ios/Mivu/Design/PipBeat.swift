@@ -1,6 +1,38 @@
 import CoreGraphics
 import Foundation
 
+/// Small things thrown off by a move. Each is a few rig parts (`fx-crumb-1`...) flying on a baked arc; nothing keeps running.
+enum PipBurst {
+    case crumbs, drops, dust
+
+    struct Particle {
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var vx: CGFloat
+        var vy: CGFloat
+        var life: TimeInterval
+        var spin: CGFloat = 0
+    }
+
+    var part: String { self == .crumbs ? "fx-crumb" : self == .drops ? "fx-drop" : "fx-dust" }
+    var gravity: CGFloat { self == .dust ? -40 : 900 }
+    /// Dust grows as it thins out; the rest stays its size and shrinks away at the end.
+    var swells: Bool { self == .dust }
+    var particles: [Particle] {
+        switch self {
+        case .crumbs:
+            [Particle(vx: 110, vy: -150, life: 0.5, spin: 9), Particle(vx: 60, vy: -210, life: 0.56, spin: -7),
+             Particle(vx: 165, vy: -90, life: 0.44, spin: 6), Particle(vx: 25, vy: -120, life: 0.46, spin: -10)]
+        case .drops:
+            [Particle(vx: -130, vy: -170, life: 0.46, spin: -2), Particle(x: 40, y: -6, vx: 150, vy: -190, life: 0.5, spin: 2),
+             Particle(x: -10, vx: -60, vy: -240, life: 0.54, spin: -1), Particle(x: 28, vx: 80, vy: -120, life: 0.4, spin: 1)]
+        case .dust:
+            [Particle(x: -56, vx: -70, vy: -14, life: 0.42), Particle(x: -34, vx: -30, vy: -26, life: 0.34),
+             Particle(x: 56, vx: 70, vy: -14, life: 0.42), Particle(x: 34, vx: 30, vy: -26, life: 0.34)]
+        }
+    }
+}
+
 /// One upright pose in the numbers an animator moves: hips, spine, head and wrists, not joint angles. All of them
 /// blend, so `PipBake` can draw a curve through a gesture's beats and solve the limbs again on every frame, which
 /// keeps feet planted and swings paws on arcs. Chain the helpers: `$0.stance(drop: 30).spine(bend: 4).nod(6)`.
@@ -37,6 +69,8 @@ struct PipBeat {
     var squash: CGFloat = 0
     var bend: CGFloat = 0, stretch: CGFloat = 0
     var nod: CGFloat = 0, chewing: CGFloat = 0, headTurn: CGFloat = 1
+    /// Eyebrows: up for surprise and wind-ups, down and in for effort.
+    var brow: CGFloat = 0
     var ears: CGFloat = 0, tail: CGFloat = 0, scarf: CGFloat = 0
     var left = Wrist(.left, x: PipUpright.arm(.left).end.x, y: PipUpright.arm(.left).end.y, paw: 0)
     var right = Wrist(.right, x: PipUpright.arm(.right).end.x, y: PipUpright.arm(.right).end.y, paw: 0)
@@ -48,12 +82,17 @@ struct PipBeat {
     var eyes = PipPose.EyeShape.open, mouth = PipPose.MouthShape.closedSmile
     var gazeX: CGFloat = 0, gazeY: CGFloat = 0
     var blush = false, hearts = 0, prop: PipPose.Prop?, bites = 0
+    /// Thrown once, as this beat lands, from (`x`, `y`) on the artboard.
+    var burst: (kind: PipBurst, x: CGFloat, y: CGFloat)?
 
     /// Follow-through `PipBake` works out from the motion above; never authored.
     var earLeft: CGFloat = 0, earRight: CGFloat = 0
     var tail1: CGFloat = 0, tail2: CGFloat = 0, tail3: CGFloat = 0, tail4: CGFloat = 0
     var scarfLeft: CGFloat = 0, scarfRight: CGFloat = 0
     var headSink: CGFloat = 0, fluff: CGFloat = 0
+    var earCurlLeft: CGFloat = 0, earCurlRight: CGFloat = 0, tailCurl: CGFloat = 0
+    var scarfCurlLeft: CGFloat = 0, scarfCurlRight: CGFloat = 0
+    var effects: [String: PipPose.Joint] = [:]
 
     private func with(_ change: (inout PipBeat) -> Void) -> PipBeat { var copy = self; change(&copy); return copy }
 
@@ -81,6 +120,14 @@ struct PipBeat {
     func blushing() -> PipBeat { with { $0.blush = true } }
     func hearts(_ count: Int, drift: CGFloat = 0) -> PipBeat { with { $0.hearts = count; $0.heartDrift = drift } }
     func holding(_ prop: PipPose.Prop?, bites: Int = 0) -> PipBeat { with { $0.prop = prop; $0.bites = bites } }
+    func brow(_ amount: CGFloat) -> PipBeat { with { $0.brow = amount } }
+    func burst(_ kind: PipBurst, x: CGFloat, y: CGFloat) -> PipBeat { with { $0.burst = (kind, x, y) } }
+
+    /// Lifting a paw past the shoulder takes the shoulder with it.
+    private static func shoulder(_ wrist: Wrist, out: CGFloat) -> CGVector {
+        let raised = max(0, -cos(wrist.angle))
+        return CGVector(dx: out * 4 * raised, dy: -10 * raised)
+    }
 
     var pose: PipPose {
         var pose = PipPose.rest
@@ -90,9 +137,10 @@ struct PipBeat {
             let leftWrist = left.point(from: PipUpright.arm(.left).root), rightWrist = right.point(from: PipUpright.arm(.right).root)
             pose = pose.stance(drop: drop, spread: spread, lean: lean, sway: sway, lift: lift, foot: lift * 0.5,
                                tuck: CGVector(dx: tuckX, dy: tuckY), tuckFoot: tuckFoot)
-                .reach(.left, x: leftWrist.x, y: leftWrist.y, paw: left.paw)
-                .reach(.right, x: rightWrist.x, y: rightWrist.y, paw: right.paw)
-            pose.joints["torso@upright"] = PipPose.Joint(rotation: bend * .pi / 180, scale: CGSize(width: 1 - stretch * 0.6, height: 1 + stretch))
+                .reach(.left, x: leftWrist.x, y: leftWrist.y, paw: left.paw, shoulder: Self.shoulder(left, out: -1))
+                .reach(.right, x: rightWrist.x, y: rightWrist.y, paw: right.paw, shoulder: Self.shoulder(right, out: 1))
+            // The torso turns as a whole and its art bends back to meet the hips, so the spine draws a curve, not a hinge.
+            pose.joints["torso@upright"] = PipPose.Joint(rotation: bend * .pi / 180, scale: CGSize(width: 1 - stretch * 0.6, height: 1 + stretch), curl: -bend * 0.9 * .pi / 180)
             pose.joints["chest-fluff@upright"] = PipPose.Joint(offset: CGPoint(x: 0, y: fluff))
             let shadow = 1 - lift / 350
             pose.joints["shadow"] = PipPose.Joint(offset: CGPoint(x: sway * 0.6, y: 0), scale: CGSize(width: shadow, height: shadow))
@@ -100,11 +148,17 @@ struct PipBeat {
         pose = pose.nod(nod).earPerk(earLeft, .left).earPerk(earRight, .right)
         pose.joints["head"]?.offset.y = headSink
         pose.joints["head"]?.scale = CGSize(width: 1 + chewing, height: 1 - chewing)
+        pose.joints["ear-l"]?.curl = earCurlLeft * .pi / 180
+        pose.joints["ear-r"]?.curl = earCurlRight * .pi / 180
+        // Brows lift straight up and tip inward as they drop; `-l` and `-r` tip opposite ways.
+        pose.joints["brow-l"] = PipPose.Joint(rotation: min(0, brow) * -0.02, offset: CGPoint(x: 0, y: -brow))
+        pose.joints["brow-r"] = PipPose.Joint(rotation: min(0, brow) * 0.02, offset: CGPoint(x: 0, y: -brow))
         for (n, angle) in [tail1, tail2, tail3, tail4].enumerated() {
-            pose.joints["tail-\(n + 1)"] = PipPose.Joint(rotation: angle * .pi / 180)
+            pose.joints["tail-\(n + 1)"] = PipPose.Joint(rotation: angle * .pi / 180, curl: n == 3 ? tailCurl * .pi / 180 : 0)
         }
-        pose.joints["scarf-end-l"] = PipPose.Joint(rotation: scarfLeft * .pi / 180)
-        pose.joints["scarf-end-r"] = PipPose.Joint(rotation: scarfRight * .pi / 180)
+        pose.joints["scarf-end-l"] = PipPose.Joint(rotation: scarfLeft * .pi / 180, curl: scarfCurlLeft * .pi / 180)
+        pose.joints["scarf-end-r"] = PipPose.Joint(rotation: scarfRight * .pi / 180, curl: scarfCurlRight * .pi / 180)
+        pose.joints.merge(effects) { _, effect in effect }
         pose = pose.hearts(hearts, drift: heartDrift).holding(prop, bites: bites)
         pose.eyes = eyes
         pose.mouth = mouth
@@ -125,11 +179,12 @@ enum PipBake {
     private static var curved: [WritableKeyPath<PipBeat, CGFloat>] {
         [\.drop, \.spread, \.lean, \.sway, \.lift, \.squash, \.bend, \.stretch, \.nod, \.chewing, \.headTurn, \.ears, \.tail, \.scarf,
          \.left.angle, \.left.length, \.left.paw, \.right.angle, \.right.length, \.right.paw,
-         \.tuckX, \.tuckY, \.tuckFoot, \.heartDrift]
+         \.tuckX, \.tuckY, \.tuckFoot, \.heartDrift, \.brow]
     }
     /// What the follow-through writes, on top of `curved`: a one-shot lands exactly on its last beat through all of these.
     private static var settled: [WritableKeyPath<PipBeat, CGFloat>] {
-        curved + [\.earLeft, \.earRight, \.tail1, \.tail2, \.tail3, \.tail4, \.scarfLeft, \.scarfRight, \.headSink, \.fluff, \.gazeX, \.gazeY]
+        curved + [\.earLeft, \.earRight, \.tail1, \.tail2, \.tail3, \.tail4, \.scarfLeft, \.scarfRight, \.headSink, \.fluff, \.gazeX, \.gazeY,
+                  \.earCurlLeft, \.earCurlRight, \.tailCurl, \.scarfCurlLeft, \.scarfCurlRight]
     }
 
     static func frames(of beats: [PipBeat], loops: Bool) -> [PipBeat] {
@@ -165,16 +220,28 @@ enum PipBake {
         put(\.headSink, sink.map { max(-9, min(9, $0 * 0.3)) })
         put(\.fluff, trail(sink, 13, 0.3).map { max(-7, min(7, $0 * 0.35)) })
 
-        let earDrive = plus(plus(read(\.ears), sink, by: 1.5), swing, by: 0.7)
-        put(\.earLeft, trail(earDrive, 16, 0.3))
-        put(\.earRight, trail(earDrive, 13, 0.28))
+        // Capped: past this an ear stops reading as a stiff fox ear and turns to cloth.
+        let earDrive = plus(plus(read(\.ears), sink, by: 0.9), swing, by: 0.5).map { max(-26, min(26, $0)) }
+        let earLeft = trail(earDrive, 16, 0.3), earRight = trail(earDrive, 13, 0.28)
+        put(\.earLeft, earLeft)
+        put(\.earRight, earRight)
+        // A soft part's tip trails its own base, so it bends as it swings and whips straight as it stops.
+        func curl(_ base: [CGFloat], gain: CGFloat, limit: CGFloat) -> [CGFloat] {
+            zip(trail(base, 9, 0.34), base).map { max(-limit, min(limit, ($0 - $1) * gain)) }
+        }
+        put(\.earCurlLeft, curl(earLeft, gain: 0.6, limit: 14))
+        put(\.earCurlRight, curl(earRight, gain: 0.6, limit: 14))
         // The wave runs down the tail: each segment follows the one before it.
         let tail1 = trail(plus(plus(read(\.tail), swing, by: 1.4), sink, by: -0.4).map { $0 / 4 }, 10, 0.42)
         let tail2 = trail(tail1, 12, 0.42), tail3 = trail(tail2, 12, 0.42), tail4 = trail(tail3, 12, 0.42)
         put(\.tail1, tail1); put(\.tail2, tail2); put(\.tail3, tail3); put(\.tail4, tail4)
+        put(\.tailCurl, curl(tail4, gain: 4, limit: 30))
         let scarfDrive = plus(plus(read(\.scarf), swing, by: 0.9), sink, by: 0.5)
-        put(\.scarfLeft, trail(scarfDrive, 12, 0.28))
-        put(\.scarfRight, trail(scarfDrive, 10, 0.26))
+        let scarfLeft = trail(scarfDrive, 12, 0.28), scarfRight = trail(scarfDrive, 10, 0.26)
+        put(\.scarfLeft, scarfLeft)
+        put(\.scarfRight, scarfRight)
+        put(\.scarfCurlLeft, curl(scarfLeft, gain: 1.4, limit: 30))
+        put(\.scarfCurlRight, curl(scarfRight, gain: 1.4, limit: 30))
 
         for (angle, length, paw) in [(\PipBeat.left.angle, \PipBeat.left.length, \PipBeat.left.paw), (\.right.angle, \.right.length, \.right.paw)] {
             put(angle, trail(read(angle), 25, 0.6))
@@ -184,13 +251,64 @@ enum PipBake {
         // Eyes jump to a new look, they do not drift.
         put(\.gazeX, trail(read(\.gazeX), 55, 0.7))
         put(\.gazeY, trail(read(\.gazeY), 55, 0.7))
+        put(\.brow, trail(read(\.brow), 24, 0.5))
 
         if !loops { landOn(beats[beats.count - 1], &frames) }
         for i in frames.indices {
             frames[i].left.paw += frames[i].left.forearm(.left)
             frames[i].right.paw += frames[i].right.forearm(.right)
         }
+        throwBursts(beats, into: &frames, times: times, loops: loops)
         return frames
+    }
+
+    /// Flies each burst on a simple arc. A part is parked at zero scale on every other frame, so it never shows between throws.
+    private static func throwBursts(_ beats: [PipBeat], into frames: inout [PipBeat], times: [Double], loops: Bool) {
+        let length = times[times.count - 1]
+        for beat in beats {
+            guard let burst = beat.burst else { continue }
+            for (n, particle) in burst.kind.particles.enumerated() {
+                let name = "\(burst.kind.part)-\(n + 1)@upright"
+                for i in frames.indices {
+                    var age = times[i] - beat.at
+                    if loops && age < 0 { age += length }
+                    guard age >= 0, age < particle.life else {
+                        if frames[i].effects[name] == nil { frames[i].effects[name] = PipPose.Joint(scale: CGSize.zero) }
+                        continue
+                    }
+                    let t = CGFloat(age), progress = t / CGFloat(particle.life)
+                    let x = burst.x + particle.x + particle.vx * t
+                    let y = burst.y + particle.y + particle.vy * t + burst.kind.gravity * t * t / 2
+                    let size = burst.kind.swells ? min(1, t / 0.06) * (0.7 + progress) * (1 - progress * progress * progress)
+                                                 : min(1, t / 0.04) * (1 - progress * progress * progress * progress)
+                    frames[i].effects[name] = PipPose.Joint(rotation: particle.spin * t, offset: CGPoint(x: x - 256, y: y - 256), scale: CGSize(width: size, height: size))
+                }
+            }
+        }
+    }
+
+    /// Bends `path` along the line from `root` to `tip`: each point turns round `root` by `angle` times `weight` of how far
+    /// along the line it lies. The element count never changes, so the render server can blend one bend into the next.
+    static func curled(_ path: CGPath, root: CGPoint, tip: CGPoint, angle: CGFloat, weight: (CGFloat) -> CGFloat) -> CGPath {
+        let axis = CGPoint(x: tip.x - root.x, y: tip.y - root.y), reach = axis.x * axis.x + axis.y * axis.y
+        func move(_ point: CGPoint) -> CGPoint {
+            let along = max(0, min(1, ((point.x - root.x) * axis.x + (point.y - root.y) * axis.y) / max(reach, 1)))
+            let turn = angle * weight(along), dx = point.x - root.x, dy = point.y - root.y
+            return CGPoint(x: root.x + dx * cos(turn) - dy * sin(turn), y: root.y + dx * sin(turn) + dy * cos(turn))
+        }
+        let bent = CGMutablePath()
+        path.applyWithBlock { element in
+            let points = element.pointee.points
+            switch element.pointee.type {
+            case .moveToPoint: bent.move(to: move(points[0]))
+            case .addLineToPoint: bent.addLine(to: move(points[0]))
+            case .addQuadCurveToPoint: bent.addQuadCurve(to: move(points[1]), control: move(points[0]))
+            case .addCurveToPoint: bent.addCurve(to: move(points[2]), control1: move(points[0]), control2: move(points[1]))
+            case .closeSubpath: bent.closeSubpath()
+            @unknown default: break
+            }
+        }
+        return bent
     }
 
     /// Starts a joint's track from `now` and joins the authored motion within 0.2 s, so a gesture never pops on arrival.

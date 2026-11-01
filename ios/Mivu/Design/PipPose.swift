@@ -6,6 +6,8 @@ struct PipPose: Equatable {
         var rotation: CGFloat = 0
         var offset: CGPoint = .zero
         var scale = CGSize(width: 1, height: 1)
+        /// Soft parts only (`PipRigView.softParts`): bends the art along its length, in radians, on top of the rigid transform.
+        var curl: CGFloat = 0
     }
 
     enum EyeShape: String { case open, half, closedHappy, closedSleepy, wide, heart }

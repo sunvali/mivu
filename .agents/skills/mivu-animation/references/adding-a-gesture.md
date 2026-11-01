@@ -25,6 +25,7 @@ arrives at by `at` seconds; unlisted joints rest. Build keys with the builder in
   anticipation and overshoot, and leave ears, tail and scarf to the physics. Keep wrists short of full reach and keep some
   `drop` under a wide `spread`: a straight limb's middle joint snaps. A loop starts and ends on the plain upright pose.
   `bakedMotionNeverJumps` and `feetStayPlantedOnEveryBakedFrame` check the result.
+  Use `brow` for effort and surprise, and `burst(.crumbs/.drops/.dust, x:, y:)` on the beat that throws something.
   Upright gestures stay out of `fixtures/pip/gestures.json` until Android has the set.
 
 ## Worked example: a "proud" gesture after a correction is reviewed twice
