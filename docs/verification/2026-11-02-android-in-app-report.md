@@ -4,8 +4,8 @@ Recorded 2026-11-02. Why: Google Play's AI-generated content policy (read live 2
 report offensive AI output "to developers without needing to exit the app". The earlier flow saved the report on the
 phone and opened an email draft, which leaves the app.
 
-- Tested source: `53d69bd08bede27035ff0cbf8887cc6cd9c1b5f6` on branch `fix/coach-report-in-app`, from `main` at
-  `72e05279`. The instrumented run used the same Android sources before the commit; only docs changed after it.
+- Tested source: `51922ebcda9901342976b6ae0de2800b55c0c96f` on branch `fix/coach-report-in-app`, from `main` at
+  `72e05279`. Every run below used this commit; the record's own commit changes docs only.
 - Environment: macOS 27.0, Android Studio JBR, Gradle via `./gradlew`; emulator-5554 (`Medium_Phone_API_37.0`, API 37).
 - Commands: `./gradlew :app:testDebugUnitTest :app:lintDebug`, and `:app:connectedDebugAndroidTest` with
   `-Pandroid.testInstrumentationRunnerArguments.class=com.yakov103.mivu.ui.coach.CoachReplyActionsTest`. No full connected
