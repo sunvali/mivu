@@ -185,7 +185,7 @@ clipboard item). Install the release build the way Play will deliver it:
 | P11 | Notifications | Share a text into Mivu and leave it; turn on the morning reminder for a minute ahead. | The Coach reply notification and the morning notification arrive with the Pip small icon, and a tap opens Coach / Today | blocked |
 | P12 | API 31–32 clipboard toast | On Android 12/12L, long-press a reply › Copy. | A "Copied" toast appears once (Android 13+ shows the system clipboard preview instead), and the text pastes | blocked |
 | P13 | Restore time | Export the diary to Drive and to Downloads; Backup & export › Restore from diary archive from each. Time from picking the file to the confirmation. | Note the seconds for each; under about 2 s is fine, 4–8 s means the restore-flow trace is needed | blocked |
-| P14 | Report a reply | Long-press a Pip reply › Report reply › reason › Report, with an email app installed. | The email draft opens to support@mivuapp.com with the reply text | blocked |
+| P14 | Report a reply | Long-press a Pip reply › Report reply › reason › Report, once online and once in airplane mode with an email app installed. | Online: "Report sent" and the email reaches the owner's inbox. Offline: the email draft opens to support@mivuapp.com with the reply text | blocked |
 
 Device-to-device restore (two phones) is optional.
 

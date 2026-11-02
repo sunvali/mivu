@@ -40,7 +40,10 @@ import com.yakov103.mivu.R
 import com.yakov103.mivu.ui.settings.MivuLinks
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.RandomAccessFile
+import java.net.HttpURLConnection
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
@@ -82,7 +85,31 @@ object CoachReports {
         FileOutputStream(temp).use { out -> out.write(kept.joinToString("") { "$it\n" }.toByteArray()); out.fd.sync() }
         Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
     }
+
+    /** What leaves the phone: the reply's text, the reason, the person's note and the app version; nothing from the diary. */
+    fun body(reply: String, reason: String, note: String, app: String): JSONObject =
+        JSONObject().put("reply", reply).put("reason", reason).put("note", note.trim()).put("app", app)
+
+    /** Posts [body] to Mivu's report inbox; false when it was not accepted, so the dialog can fall back to email. */
+    fun send(body: JSONObject, url: String = MivuLinks.REPORT_URL): Boolean = try {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+            conn.responseCode in 200..299
+        } finally {
+            conn.disconnect()
+        }
+    } catch (_: IOException) {
+        false
+    }
 }
+
+@VisibleForTesting internal var sendReportForTest: ((JSONObject) -> Boolean)? = null
 
 /** An email draft to Mivu with the reason, the person's note and only the reply's text; the person sends it. */
 fun reportIntent(reply: String, reason: String, note: String): Intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
@@ -97,8 +124,9 @@ fun reportShareIntent(reply: String, reason: String, note: String): Intent =
 @VisibleForTesting internal var startEmailForTest: ((Intent) -> Unit)? = null
 
 /**
- * Report reply: pick a reason, optionally add a note, then Report saves the report on this phone before opening an
- * email draft. Without an email app the saved report stays and the dialog offers the address to copy or a share sheet.
+ * Report reply: pick a reason, optionally add a note, then Report saves the report on this phone and sends it to Mivu
+ * without leaving the app (Play's AI-generated content policy). If it can't be sent, an email draft opens instead;
+ * without an email app the saved report stays and the dialog offers the address to copy or a share sheet.
  */
 @Composable
 fun ReportReplyDialog(turnID: UUID, reply: String, onDismiss: () -> Unit) {
@@ -108,6 +136,7 @@ fun ReportReplyDialog(turnID: UUID, reply: String, onDismiss: () -> Unit) {
     var reason by rememberSaveable { mutableStateOf<String?>(null) }
     var note by rememberSaveable { mutableStateOf("") }
     var noEmailApp by rememberSaveable { mutableStateOf(false) }
+    var sent by rememberSaveable { mutableStateOf(false) }
     var failed by rememberSaveable { mutableStateOf(false) }
     var saving by rememberSaveable { mutableStateOf(false) }
     val report = report@{
@@ -120,9 +149,13 @@ fun ReportReplyDialog(turnID: UUID, reply: String, onDismiss: () -> Unit) {
             } catch (_: Exception) {
                 false
             }
-            saving = false
             failed = !saved
-            if (!saved) return@launch
+            if (!saved) { saving = false; return@launch }
+            val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            val body = CoachReports.body(reply, chosen, note, "Android $version")
+            sent = withContext(Dispatchers.IO) { sendReportForTest?.invoke(body) ?: CoachReports.send(body) }
+            saving = false
+            if (sent) return@launch
             val intent = reportIntent(reply, chosen, note)
             try {
                 startEmailForTest?.invoke(intent) ?: context.startActivity(intent)
@@ -133,10 +166,15 @@ fun ReportReplyDialog(turnID: UUID, reply: String, onDismiss: () -> Unit) {
         }
         Unit
     }
-    if (noEmailApp) AlertDialog(
+    if (sent) AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Report sent") },
+        text = { Text("Thanks for telling us.") },
+        confirmButton = { TextButton(onDismiss, Modifier.heightIn(min = 48.dp)) { Text("Done") } },
+    ) else if (noEmailApp) AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Report saved") },
-        text = { Text("Report saved on this phone. No email app was found, so send it to ${MivuLinks.REPORT_EMAIL}.") },
+        text = { Text("Report saved on this phone, but it couldn't be sent and no email app was found. Send it to ${MivuLinks.REPORT_EMAIL}.") },
         confirmButton = { TextButton(onDismiss, Modifier.heightIn(min = 48.dp)) { Text("Done") } },
         dismissButton = {
             TextButton({ scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Mivu address", MivuLinks.REPORT_EMAIL))) } },
@@ -150,7 +188,7 @@ fun ReportReplyDialog(turnID: UUID, reply: String, onDismiss: () -> Unit) {
         title = { Text("Report this reply?") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Mivu opens your email app with this reply so you can send it to us. Nothing else from your diary is included.")
+                Text("Mivu sends this reply to us so we can review it. Nothing else from your diary is included.")
                 Column(Modifier.selectableGroup()) {
                     REPORT_REASONS.forEach { option ->
                         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(option == reason, role = Role.RadioButton) { reason = option },
@@ -164,7 +202,7 @@ fun ReportReplyDialog(turnID: UUID, reply: String, onDismiss: () -> Unit) {
                 if (failed) Text("Couldn't save this report. Try again.", color = MaterialTheme.colorScheme.error)
             }
         },
-        confirmButton = { TextButton(report, Modifier.heightIn(min = 48.dp), enabled = reason != null && !saving) { Text("Report") } },
+        confirmButton = { TextButton(report, Modifier.heightIn(min = 48.dp), enabled = reason != null && !saving) { Text(if (saving) "Sending…" else "Report") } },
         dismissButton = { TextButton(onDismiss, Modifier.heightIn(min = 48.dp)) { Text("Cancel") } },
     )
 }
