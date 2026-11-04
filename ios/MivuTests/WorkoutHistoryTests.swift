@@ -68,6 +68,20 @@ struct WorkoutHistoryTests {
         #expect(WorkoutHistory.isNewBest(set(72, 1), measure: .weightReps, before: [set(70, 3, .failure)]))
     }
 
+    @Test func untickedSetsDoNotRaiseTheBar() {
+        let before = [set(60, 8), set(80, 5, done: false)]
+        #expect(WorkoutHistory.isNewBest(set(62.5, 1), measure: .weightReps, before: before))
+        #expect(!WorkoutHistory.isNewBest(set(62.5, 1), measure: .weightReps, before: [set(80, 5, done: false)]))
+    }
+
+    @Test func moreRepsAtTheHeaviestWeightIsBest() {
+        #expect(WorkoutHistory.isNewBest(set(60, 9), measure: .weightReps, before: [set(60, 8)]))
+    }
+
+    @Test func distanceTimeHasNoBest() {
+        #expect(!WorkoutHistory.isNewBest(set(nil, 0, seconds: 99), measure: .distanceTime, before: [set(nil, 0, seconds: 1)]))
+    }
+
     @Test func bodyweightMostReps() {
         #expect(WorkoutHistory.isNewBest(set(nil, 11), measure: .reps, before: [set(nil, 10)]))
         #expect(!WorkoutHistory.isNewBest(set(nil, 10), measure: .reps, before: [set(nil, 10)]))

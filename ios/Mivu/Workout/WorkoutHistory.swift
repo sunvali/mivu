@@ -29,7 +29,7 @@ enum WorkoutHistory {
     }
 
     static func isNewBest(_ set: WorkoutSet, measure: ExerciseMeasure, before: [WorkoutSet]) -> Bool {
-        let before = before.filter { $0.type != .warmup }
+        let before = before.filter { $0.type != .warmup && $0.done != false }
         guard set.type != .warmup, !before.isEmpty else { return false }
         switch measure {
         case .weightReps:
