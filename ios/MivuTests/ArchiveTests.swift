@@ -125,12 +125,15 @@ struct ArchiveTests {
             performedAt: nil, expectedProfileID: initial.profile.id)
         try await store.deleteWeight(id: weight.id, expectedRevision: weight.revision, expectedProfileID: initial.profile.id)
         try await store.deleteWorkout(id: workout.id, expectedRevision: workout.revision, expectedProfileID: initial.profile.id)
+        let routine = try await store.saveRoutine(WorkoutRoutine(name: "Synthetic routine", exercises: []), expectedRevision: nil, expectedProfileID: initial.profile.id)
+        try await store.deleteRoutine(id: routine.id, expectedRevision: routine.revision, expectedProfileID: initial.profile.id)
         let current = try await store.snapshotForExport()
         var forged = current
         forged.revision += 1
         forged.lineage = (current.lineage ?? []) + [UUID()]
         forged.weights = [weight]; forged.workouts = [workout]
-        forged.deletedWeightIDs = []; forged.deletedWorkoutIDs = []
+        forged.routines = [routine]
+        forged.deletedWeightIDs = []; forged.deletedWorkoutIDs = []; forged.deletedRoutineIDs = []
         await #expect(throws: DiaryError.staleArchive) { try await store.restore(forged) }
         #expect(try await store.snapshotForExport() == current)
     }

@@ -67,13 +67,22 @@ import Testing
 
     @Test func profileMigratedBeforeRoutinesGainsThemOnOpen() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        // A pre-routine profile: no tables or counts, and a meta encoding without the two new snapshot keys.
         let old = try DiaryDatabase(url: root.appending(path: profile.id.uuidString + ".sqlite/diary.sqlite"))
-        for statement in ["DROP TABLE routine", "DROP TABLE routine_tombstone", "DELETE FROM storage_row_count WHERE tableName LIKE 'routine%'"] { try old.execute(statement) }
+        let newKeys = Data(#","routines":[],"deletedRoutineIDs":[]"#.utf8).count
+        for statement in ["DROP TABLE routine", "DROP TABLE routine_tombstone", "DELETE FROM storage_row_count WHERE tableName LIKE 'routine%'",
+                          "UPDATE storage_contribution SET encodedBytes = encodedBytes - \(newKeys) WHERE tableName = 'meta'",
+                          "UPDATE storage_quota SET portableBytes = portableBytes - \(newKeys)"] { try old.execute(statement) }
         let upgraded = DiaryStore(directory: root)
         _ = try await upgraded.selectProfile(profile.id)
+        // Export and restore work before any write.
+        let before = try await upgraded.snapshotForExport()
+        var next = before; next.revision += 1; next.lineage = (before.lineage ?? []) + [UUID()]
+        try await upgraded.restore(next)
         let saved = try await upgraded.saveRoutine(routine("Legs"), expectedRevision: nil, expectedProfileID: profile.id)
         try await upgraded.deleteRoutine(id: saved.id, expectedRevision: 1, expectedProfileID: profile.id)
         let snapshot = try await upgraded.snapshotForExport()
         #expect(snapshot.routines.isEmpty && snapshot.deletedRoutineIDs == [saved.id])
+        _ = try DiaryArchive.decode(DiaryArchive.encode(snapshot))
     }
 }

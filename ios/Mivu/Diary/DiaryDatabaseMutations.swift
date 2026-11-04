@@ -378,6 +378,10 @@ final class DiaryTransaction {
         changed = true
     }
 
+    func refreshMetaContribution() throws {
+        try contribution(table: "meta", rowID: head.profile.id.uuidString, encodedBytes: JSONEncoder().encode(PortableMetadata(head)).count)
+    }
+
     func finish(maximumBytes: Int) throws {
         guard changed || head != originalHead else { return }
         guard head.profile.id == originalHead.profile.id, head.timelineGeneration == originalHead.timelineGeneration,
@@ -396,7 +400,7 @@ final class DiaryTransaction {
              head.activeDayID.map { .text($0.uuidString) } ?? .null, head.previousDayConfirmedAt.map { .real($0.timeIntervalSinceReferenceDate) } ?? .null,
              head.activeConversationSegmentID.map { .text($0.uuidString) } ?? .null, .integer(previousRevision)])
         guard sqlite3_changes(database.connection) == 1 else { throw DiaryError.staleRevision }
-        try contribution(table: "meta", rowID: head.profile.id.uuidString, encodedBytes: JSONEncoder().encode(PortableMetadata(head)).count)
+        try refreshMetaContribution()
         guard maximumBytes > 0,
               try database.mutationInteger("SELECT portableBytes FROM storage_quota WHERE id = 1") <= maximumBytes,
               try database.mutationInteger("SELECT originalPhotoBytes FROM storage_quota WHERE id = 1") <= 250_000_000 else { throw DiaryError.invalidData }
