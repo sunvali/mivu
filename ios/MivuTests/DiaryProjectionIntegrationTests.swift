@@ -597,7 +597,7 @@ import Testing
                 let offset = (index * 17) % 65
                 let date = calendar.date(byAdding: .day, value: offset, to: clock)!
                 let value = GoalRecord(effectiveLocalDate: ProgressDate.label(date, zone: source.profile.timeZoneID),
-                    timeZoneID: source.profile.timeZoneID, targets: NutritionValues(kcal: Double(1800 + index)), goalWeightKg: nil, exerciseCreditEnabled: false)
+                    timeZoneID: source.profile.timeZoneID, targets: NutritionValues(kcal: Double(1800 + index)), goalWeightKg: nil, exerciseCreditPercent: 0)
                 expected.append((value.id, Double(offset), index)); return value
             }
         }

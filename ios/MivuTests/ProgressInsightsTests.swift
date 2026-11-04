@@ -29,7 +29,7 @@ import Testing
     private func point(_ label: String, _ trend: Double) -> TrendPoint { TrendPoint(localDate: label, raw: trend, trend: trend) }
     private func day(_ label: String, kcal: Double?, target: Double? = 2100, protein: Double? = nil, proteinTarget: Double? = nil) -> DailyProgress {
         let goal = GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: "UTC",
-                              targets: NutritionValues(kcal: target, protein: proteinTarget), goalWeightKg: nil, exerciseCreditEnabled: false)
+                              targets: NutritionValues(kcal: target, protein: proteinTarget), goalWeightKg: nil, exerciseCreditPercent: 0)
         return DailyProgress(localDate: label, status: kcal == nil ? nil : .closed,
                              foodTotals: kcal.map { NutritionTotals(kcal: $0, carbs: nil, protein: protein, fat: nil, unknownItemCount: 0) },
                              goal: goal, remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil)
@@ -200,7 +200,7 @@ import Testing
     }
 
     @Test func weekEvidenceQuotesTheSameWindowAsTheVerdict() {
-        let goal = GoalRecord(effectiveLocalDate: label(0), timeZoneID: "UTC", targets: NutritionValues(kcal: 2100), goalWeightKg: 75, exerciseCreditEnabled: false)
+        let goal = GoalRecord(effectiveLocalDate: label(0), timeZoneID: "UTC", targets: NutritionValues(kcal: 2100), goalWeightKg: 75, exerciseCreditPercent: 0)
         let days = loggedDays(30).map { DailyProgress(localDate: $0.localDate, status: .closed, foodTotals: $0.foodTotals, goal: goal,
                                                       remainingFromRecorded: NutritionValues(), workoutCount: 0, estimatedBurnKcal: nil, exerciseAdjustedKcalRemaining: nil) }
         // Down over the month, up a little in the last week.

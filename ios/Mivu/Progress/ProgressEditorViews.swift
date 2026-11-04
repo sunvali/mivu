@@ -50,7 +50,7 @@ struct GoalEditorValues: Equatable {
     var protein: String
     var fat: String
     var weight: String
-    var exerciseCredit: Bool
+    var exerciseCreditPercent: Int
 
     var expectedRevision: Int? { original?.revision }
 
@@ -66,7 +66,7 @@ struct GoalEditorValues: Equatable {
         protein = original?.targets.protein.map { String($0) } ?? ""
         fat = original?.targets.fat.map { String($0) } ?? ""
         weight = original?.goalWeightKg.map { String($0) } ?? ""
-        exerciseCredit = original?.exerciseCreditEnabled ?? false
+        exerciseCreditPercent = original?.exerciseCreditPercent ?? 0
     }
 
     var valid: Bool {
@@ -79,14 +79,14 @@ struct GoalEditorValues: Equatable {
             || protein != (original?.targets.protein.map { String($0) } ?? "")
             || fat != (original?.targets.fat.map { String($0) } ?? "")
             || weight != (original?.goalWeightKg.map { String($0) } ?? "")
-            || exerciseCredit != (original?.exerciseCreditEnabled ?? false)
+            || exerciseCreditPercent != (original?.exerciseCreditPercent ?? 0)
     }
 
     func record(zone: String) -> GoalRecord {
         GoalRecord(id: original?.id ?? UUID(), effectiveLocalDate: localDate, timeZoneID: zone,
                    targets: NutritionValues(kcal: ProgressDate.number(kcal), carbs: ProgressDate.number(carbs),
                                             protein: ProgressDate.number(protein), fat: ProgressDate.number(fat)),
-                   goalWeightKg: ProgressDate.number(weight), exerciseCreditEnabled: exerciseCredit)
+                   goalWeightKg: ProgressDate.number(weight), exerciseCreditPercent: exerciseCreditPercent)
     }
 }
 
@@ -191,9 +191,12 @@ struct GoalEditorView: View {
                 }
                 Section("Optional weight goal") { field("Weight (kg)", text: $values.weight, id: "goalWeight") }
                 Section("Exercise") {
-                    Toggle("Include estimated workout energy in an adjusted remaining figure", isOn: $values.exerciseCredit)
-                        .disabled(!goalLoaded)
-                        .accessibilityIdentifier("exerciseCreditEnabled")
+                    Picker("Add burn to food budget", selection: $values.exerciseCreditPercent) {
+                        Text("Off").tag(0); Text("50%").tag(50); Text("100%").tag(100)
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(!goalLoaded)
+                    .accessibilityIdentifier("exerciseCreditPercent")
                     Text("Recorded food, remaining from recorded food, and estimated burn are always shown separately.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
@@ -281,7 +284,7 @@ struct GoalEditorView: View {
         var parts = targets.compactMap { name, value, unit in
             value.map { "\(name) \($0.formatted(.number.precision(.fractionLength(0...1)))) \(unit)" }
         }
-        if goal.exerciseCreditEnabled { parts.append("Exercise adjustment enabled") }
+        if goal.exerciseCreditPercent > 0 { parts.append("Burn adds \(goal.exerciseCreditPercent)% to budget") }
         return parts.isEmpty ? "No targets set" : parts.joined(separator: " · ")
     }
 

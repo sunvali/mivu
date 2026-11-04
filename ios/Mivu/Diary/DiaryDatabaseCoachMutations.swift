@@ -428,11 +428,11 @@ extension DiaryTransaction {
             receipt.dayID = try mealRecord(id: id).dayID; receipt.mealID = id; receipt.resultJSON = try coachJSON(Queued(turnID: selectedID))
         case .goals(let date, let targets, let weight, let clear, let credit, _):
             let exact = try exactGoal(on: date)
-            var value = try exact ?? goal(on: date) ?? GoalRecord(effectiveLocalDate: date, timeZoneID: turn.captureTimeZoneID, targets: NutritionValues(), goalWeightKg: nil, exerciseCreditEnabled: false)
+            var value = try exact ?? goal(on: date) ?? GoalRecord(effectiveLocalDate: date, timeZoneID: turn.captureTimeZoneID, targets: NutritionValues(), goalWeightKg: nil, exerciseCreditPercent: 0)
             if exact == nil { value.id = UUID(); value.effectiveLocalDate = date; value.timeZoneID = turn.captureTimeZoneID }
             for target in targets { value.targets.set(target) }
             if clear { value.goalWeightKg = nil } else if let weight { value.goalWeightKg = weight }
-            if let credit { value.exerciseCreditEnabled = credit }
+            if let credit { value.exerciseCreditPercent = credit }
             let saved = try setGoal(value, revision: exact?.revision); receipt.goalID = saved.id; receipt.resultJSON = try coachJSON(saved)
         case .preferences(let zone, let text, _):
             var profile = head.profile; if let zone { profile.timeZoneID = zone }; if let text { profile.preferences = text }

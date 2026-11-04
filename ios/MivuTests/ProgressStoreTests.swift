@@ -17,7 +17,7 @@ import Testing
     private func goal(_ date: String, kcal: Double = 2_000) -> GoalRecord {
         GoalRecord(effectiveLocalDate: date, timeZoneID: "Asia/Jerusalem",
                    targets: NutritionValues(kcal: kcal, protein: 100), goalWeightKg: 70,
-                   exerciseCreditEnabled: false)
+                   exerciseCreditPercent: 0)
     }
 
     @Test func datedGoalsSelectLatestCompleteSettingAndGuardEdits() async throws {

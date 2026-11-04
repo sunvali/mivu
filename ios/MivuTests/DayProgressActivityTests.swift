@@ -14,7 +14,7 @@ import Testing
                                                items: ([$0] + also).map { FoodItem(name: "Synthetic bowl", nutrition: $0) },
                                                submissions: [], photos: [], sourceTurnID: nil)] } ?? []
         let goal = target.map { GoalRecord(effectiveLocalDate: "2026-10-01", timeZoneID: "Asia/Jerusalem", targets: $0,
-                                           goalWeightKg: nil, exerciseCreditEnabled: false) }
+                                           goalWeightKg: nil, exerciseCreditPercent: 0) }
         let head = DiaryHead(profile: DiaryProfile(name: "Synthetic island", timeZoneID: "Asia/Jerusalem"), revision: 1,
                              lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
         let model = DiaryReadModel(head: head, activeDay: day, meals: meals, weight: nil, workouts: [], activeGoal: goal,

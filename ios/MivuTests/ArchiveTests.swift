@@ -64,7 +64,7 @@ struct ArchiveTests {
         snapshot.coachTurns = [CoachTurn(capturedAt: snapshot.days[0].startAt, text: "Synthetic pending turn",
                                          photos: [photo], captureTimeZoneID: snapshot.profile.timeZoneID, photoIDs: [photo.id])]
         snapshot.goals = [GoalRecord(effectiveLocalDate: "2026-10-12", timeZoneID: "Asia/Jerusalem",
-                                     targets: NutritionValues(kcal: 2_000), goalWeightKg: 70, exerciseCreditEnabled: false)]
+                                     targets: NutritionValues(kcal: 2_000), goalWeightKg: 70, exerciseCreditPercent: 0)]
         snapshot.weights = [WeightEntry(dayID: snapshot.days[0].id, measuredAt: snapshot.days[0].startAt,
                                         value: 70, revision: 2, timePrecision: .dateOnly)]
         snapshot.workouts = [WorkoutSession(dayID: snapshot.days[0].id, performedAt: snapshot.days[0].startAt,

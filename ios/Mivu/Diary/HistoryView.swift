@@ -258,7 +258,7 @@ private struct DaySections: View {
     }
 
     private func coverage(_ snapshot: DiaryDayReadModel) -> some View {
-        let status = ProgressAnalytics.status(days: [snapshot.day], hasFood: snapshot.meals.contains(where: \.isSaved), activeDayID: snapshot.head.activeDayID) ?? .open
+        let status = ProgressAnalytics.status(days: [snapshot.day], hasFood: snapshot.meals.contains(where: \.isSaved), hasWorkouts: !snapshot.workouts.isEmpty, activeDayID: snapshot.head.activeDayID) ?? .open
         return DayStatusChip(status: status, isMarkedSkipped: snapshot.day.completeness == .untracked) { skip in
             // Counting again stores `unknown`, which reads as open or closed like any unmarked day.
             Task { await model.change { try await model.store.setCompleteness(dayID: dayID, skip ? .untracked : .unknown, expectedProfileID: snapshot.head.profile.id) } }

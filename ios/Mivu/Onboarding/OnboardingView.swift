@@ -421,7 +421,7 @@ struct OnboardingView: View {
         }
         let existing = try await store.goal(on: today, exact: true, expectedProfileID: profile.id)
         let goal = GoalRecord(id: existing?.id ?? UUID(), effectiveLocalDate: today, timeZoneID: profile.timeZoneID, targets: targets,
-                              goalWeightKg: (answers.targetKg * 10).rounded() / 10, exerciseCreditEnabled: existing?.exerciseCreditEnabled ?? false)
+                              goalWeightKg: (answers.targetKg * 10).rounded() / 10, exerciseCreditPercent: existing?.exerciseCreditPercent ?? 0)
         _ = try await store.setGoals(goal, expectedRevision: existing?.revision, expectedProfileID: profile.id)
     }
 

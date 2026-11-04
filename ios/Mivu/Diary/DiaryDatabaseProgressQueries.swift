@@ -46,7 +46,7 @@ extension DiaryDatabase {
             for label in horizon {
                 let rows = try transaction.records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(label)])
                 let tracked = try rows.map { row in let day = try decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day }
-                var totals: [NutritionTotals] = [], dailyWorkoutCount = 0, burn: Double? = 0
+                var totals: [NutritionTotals] = [], dailyWorkoutCount = 0, burn: Double?
                 for day in tracked {
                     let summary = try transaction.daySummary(day)
                     if summary.savedMealCount > 0 { savedFoodDates.insert(label) }
@@ -55,10 +55,10 @@ extension DiaryDatabase {
                         let weight = try decode(WeightEntry.self, row); try validateWeightFields(weight)
                         weights.append((row.ordinal, CoachWeightReference(localDate: label, record: weight)))
                     }
-                    let statement = try domainStatement("SELECT COUNT(*), CASE WHEN COUNT(*) = COUNT(json_extract(CAST(payload AS TEXT), '$.estimatedBurnKcal')) THEN COALESCE(SUM(json_extract(CAST(payload AS TEXT), '$.estimatedBurnKcal')), 0) END FROM workout WHERE parent = ?", [.text(day.id.uuidString)])
+                    let statement = try domainStatement("SELECT COUNT(*), SUM(CASE WHEN json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active' THEN json_extract(CAST(payload AS TEXT), '$.estimatedBurnKcal') END) FROM workout WHERE parent = ?", [.text(day.id.uuidString)])
                     defer { sqlite3_finalize(statement) }; guard try mutationStep(statement) else { throw DiaryError.invalidData }
                     let count = Int(sqlite3_column_int64(statement, 0)); dailyWorkoutCount += count
-                    if sqlite3_column_type(statement, 1) == SQLITE_NULL { burn = nil } else if let previous = burn { burn = previous + sqlite3_column_double(statement, 1) }
+                    if sqlite3_column_type(statement, 1) != SQLITE_NULL { burn = (burn ?? 0) + sqlite3_column_double(statement, 1) }
                     if label >= horizon[horizon.count - days] {
                         workoutCount += count
                         let selected = try domainStatement("SELECT id, ordinal, json_extract(CAST(payload AS TEXT), '$.revision'), json_extract(CAST(payload AS TEXT), '$.kind'), json_extract(CAST(payload AS TEXT), '$.durationMinutes') FROM workout WHERE parent = ? ORDER BY ordinal DESC, id DESC LIMIT 100", [.text(day.id.uuidString)])

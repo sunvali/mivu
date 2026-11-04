@@ -1059,6 +1059,17 @@
               "null"
             ]
           },
+          "exercise_credit_percent" : {
+            "enum" : [
+              0,
+              50,
+              100
+            ],
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
           "expected_revision" : {
             "type" : [
               "integer",
@@ -1104,6 +1115,7 @@
           "clear_goal_weight",
           "effective_local_date",
           "exercise_credit_enabled",
+          "exercise_credit_percent",
           "expected_revision",
           "goal_weight_kg",
           "targets"

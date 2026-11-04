@@ -875,7 +875,7 @@ struct TodayView: View {
                         .accessibilityLabel("Recorded intake toward your goal")
                         .accessibilityValue("\(recorded.formatted(.number.precision(.fractionLength(0)))) of \(target.formatted(.number.precision(.fractionLength(0)))) kilocalories")
                 }
-                if report.goal?.exerciseCreditEnabled == true, let adjusted = report.exerciseAdjustedKcalRemaining {
+                if (report.goal?.exerciseCreditPercent ?? 0) > 0, let adjusted = report.exerciseAdjustedKcalRemaining {
                     Text("Exercise-adjusted remaining: \(adjusted.formatted(.number.precision(.fractionLength(0)))) kcal")
                         .font(.caption).foregroundStyle(Color.diarySecondary)
                 }

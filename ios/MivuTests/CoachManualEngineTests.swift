@@ -306,12 +306,12 @@ private actor RevisionCoachReplies {
         let (store, profile, _, root) = try await fixture(startDay: false); defer { try? FileManager.default.removeItem(at: root) }
         let seeded = GoalRecord(effectiveLocalDate: "2027-01-14", timeZoneID: profile.timeZoneID,
             targets: NutritionValues(kcal: 2000, carbs: 220, protein: 110, fat: 70),
-            goalWeightKg: 72, exerciseCreditEnabled: true)
+            goalWeightKg: 72, exerciseCreditPercent: 100)
         _ = try await store.setGoals(seeded, expectedRevision: nil, expectedProfileID: profile.id)
         let turn = try await capturedTurn(store, text: "Clear carbs and set calories", photos: [], at: now, expectedProfileID: profile.id)
         let read = try call("get_goals", ["local_date": "2027-01-15"])
         let patch = try call("set_goals", ["effective_local_date": "2027-01-15", "expected_revision": NSNull(),
-            "targets": [["nutrient": "carbs", "value": NSNull()], ["nutrient": "kcal", "value": 2100]]])
+            "targets": [["nutrient": "carbs", "value": NSNull()], ["nutrient": "kcal", "value": 2100]], "exercise_credit_percent": 50])
         let replies = ManualCoachReplies([result([read]), result([patch]), result()])
         _ = try await CoachEngine(store: store, infer: { try await replies.next($0, $1) })
             .run(turnID: turn.id, expectedProfileID: profile.id)
@@ -321,7 +321,7 @@ private actor RevisionCoachReplies {
         #expect(earlier.targets.carbs == 220 && earlier.targets.kcal == 2000)
         #expect(later.targets.kcal == 2100 && later.targets.carbs == nil)
         #expect(later.targets.protein == 110 && later.targets.fat == 70)
-        #expect(later.goalWeightKg == 72 && later.exerciseCreditEnabled)
+        #expect(later.goalWeightKg == 72 && later.exerciseCreditPercent == 50 && earlier.exerciseCreditPercent == 100)
         #expect(snapshot.days.isEmpty && snapshot.activeDayID == nil)
     }
 

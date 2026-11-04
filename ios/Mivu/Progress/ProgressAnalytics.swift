@@ -51,7 +51,7 @@ struct WeightProgress: Codable, Equatable, Sendable {
 
 enum ProgressAnalytics {
     static func daily(readModel: DiaryReadModel) -> DailyProgress {
-        let burn = readModel.workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? readModel.workouts.reduce(0) { $0 + ($1.estimatedBurnKcal ?? 0) } : nil
+        let burn = dayBurn(readModel.workouts)
         return daily(localDate: readModel.activeDay?.localDate ?? dateLabel(Date(), zone: readModel.profile.timeZoneID),
             days: readModel.activeDay.map { [$0] } ?? [], subtotals: readModel.activeDay == nil ? [] : [readModel.totals],
             hasFood: readModel.meals.contains(where: \.isSaved), activeDayID: readModel.activeDayID,
@@ -61,18 +61,26 @@ enum ProgressAnalytics {
         let days = snapshot.days.filter { $0.localDate == localDate }
         let dayIDs = Set(days.map(\.id))
         let workouts = snapshot.workouts.filter { dayIDs.contains($0.dayID) }
-        let burn = workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? workouts.reduce(0) { $0 + $1.estimatedBurnKcal! } : nil
+        let burn = dayBurn(workouts)
         return daily(localDate: localDate, days: days, subtotals: days.map { snapshot.totals(dayID: $0.id) },
             hasFood: snapshot.meals.contains { dayIDs.contains($0.dayID) && $0.isSaved }, activeDayID: snapshot.activeDayID,
             goal: snapshot.goal(on: localDate), workoutCount: workouts.count, estimatedBurnKcal: burn)
     }
 
-    static func status(days: [TrackingDay], hasFood: Bool, activeDayID: UUID?) -> DayStatus? {
+    /// Known burns of finished workouts; workouts without a burn add nothing, and nil means none is known.
+    static func dayBurn(_ workouts: [WorkoutSession]) -> Double? {
+        let known = workouts.filter(\.isFinished).compactMap(\.estimatedBurnKcal)
+        return known.isEmpty ? nil : known.reduce(0, +)
+    }
+
+    static func status(days: [TrackingDay], hasFood: Bool, hasWorkouts: Bool = false, activeDayID: UUID?) -> DayStatus? {
         if days.isEmpty { return nil }
         // Stored coverage only records the user's skip; older complete/partial/unknown values read as closed.
         if days.allSatisfy({ $0.completeness == .untracked }) { return .skipped }
         if days.contains(where: { $0.id == activeDayID }) { return .open }
-        return hasFood ? .closed : .skipped
+        if hasFood { return .closed }
+        // A day with only workouts is not a skipped food day.
+        return hasWorkouts ? nil : .skipped
     }
 
     static func daily(localDate: String, days: [TrackingDay], subtotals: [NutritionTotals], hasFood: Bool, activeDayID: UUID?,
@@ -90,8 +98,9 @@ enum ProgressAnalytics {
             protein: remaining(goal?.targets.protein, totals?.protein),
             fat: remaining(goal?.targets.fat, totals?.fat)
         )
-        let adjusted = goal?.exerciseCreditEnabled == true ? remaining.kcal.flatMap { kcal in burn.map { kcal + $0 } } : nil
-        return DailyProgress(localDate: localDate, status: status(days: days, hasFood: hasFood, activeDayID: activeDayID),
+        let percent = Double(goal?.exerciseCreditPercent ?? 0)
+        let adjusted = percent > 0 ? remaining.kcal.flatMap { kcal in burn.map { kcal + $0 * percent / 100 } } : nil
+        return DailyProgress(localDate: localDate, status: status(days: days, hasFood: hasFood, hasWorkouts: workoutCount > 0, activeDayID: activeDayID),
                              foodTotals: totals, goal: goal, remainingFromRecorded: remaining,
                              workoutCount: workoutCount, estimatedBurnKcal: burn,
                              exerciseAdjustedKcalRemaining: adjusted)

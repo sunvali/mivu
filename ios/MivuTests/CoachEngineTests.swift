@@ -607,7 +607,7 @@ private actor CoachInputFixture {
 
     @Test func progressQuestionKeepsGroundedProse() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic meal", nutrition: NutritionValues(kcal: 500), provenance: .estimate, reference: "Fixture")], expectedProfileID: profile.id)
         let query = try await capturedTurn(store, text: "How am I doing?", photos: [], at: now, expectedProfileID: profile.id)
         let prose = "You're at **500** kcal, so about 1,500 left. A protein-rich dinner fits well."
@@ -626,7 +626,7 @@ private actor CoachInputFixture {
 
     @Test func mealProseMayStateTheDaysNewTotal() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         let earlier = try await capturedTurn(store, text: "Synthetic breakfast", photos: [], at: now, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: earlier.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic breakfast", nutrition: NutritionValues(kcal: 500), provenance: .estimate)], expectedProfileID: profile.id)
         let food = #"{"target_local_date":"2027-01-15","items":[{"name":"Synthetic eggs","quantity":2,"unit":"egg","kcal":140,"carbs":1,"protein":12,"fat":10}]}"#
@@ -650,7 +650,7 @@ private actor CoachInputFixture {
 
     @Test func progressAnswerUsesRequestedActualBudget() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic meal", nutrition: NutritionValues(kcal: 500), provenance: .estimate, reference: "Fixture")], expectedProfileID: profile.id)
         let query = try await capturedTurn(store, text: "What is my remaining budget?", photos: [], at: now, expectedProfileID: profile.id)
         let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: "9999 remaining")])
@@ -693,7 +693,7 @@ private actor CoachInputFixture {
 
     @Test func requestedProgressRereadsFactsAfterSuspendedInference() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        let goal = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        let goal = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic", nutrition: NutritionValues(kcal: 500), provenance: .estimate)], expectedProfileID: profile.id)
         let query = try await capturedTurn(store, text: "Current progress", photos: [], at: now, expectedProfileID: profile.id)
         let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")])]), suspended = CoachSuspension()
@@ -753,7 +753,7 @@ private actor CoachInputFixture {
         try await store.updateProfile(preferences, expectedProfileID: profile.id)
         _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID,
             targets: NutritionValues(kcal: 2000, carbs: 200, protein: 100, fat: 70), goalWeightKg: 68,
-            exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+            exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.recordWeight(value: 70, at: now, expectedProfileID: profile.id)
         let workout = try await store.createWorkout(localDate: "2027-01-15",
             draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 120,

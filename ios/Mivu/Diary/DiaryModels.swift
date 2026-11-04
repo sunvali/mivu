@@ -166,7 +166,26 @@ struct GoalRecord: Codable, Equatable, Sendable, Identifiable {
     var revision = 1
     var targets: NutritionValues
     var goalWeightKg: Double?
-    var exerciseCreditEnabled: Bool
+    /// Share of estimated workout burn added back to the food budget: 0, 50 or 100.
+    var exerciseCreditPercent: Int
+}
+
+extension GoalRecord {
+    enum CodingKeys: String, CodingKey { case id, effectiveLocalDate, timeZoneID, revision, targets, goalWeightKg, exerciseCreditPercent }
+    private enum LegacyKeys: String, CodingKey { case exerciseCreditEnabled }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        effectiveLocalDate = try c.decode(String.self, forKey: .effectiveLocalDate)
+        timeZoneID = try c.decode(String.self, forKey: .timeZoneID)
+        revision = try c.decode(Int.self, forKey: .revision)
+        targets = try c.decode(NutritionValues.self, forKey: .targets)
+        goalWeightKg = try c.decodeIfPresent(Double.self, forKey: .goalWeightKg)
+        // Archives before the percent choice stored an on/off switch.
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self).decodeIfPresent(Bool.self, forKey: .exerciseCreditEnabled)
+        exerciseCreditPercent = try c.decodeIfPresent(Int.self, forKey: .exerciseCreditPercent) ?? (legacy == true ? 100 : 0)
+    }
 }
 
 enum WorkoutKind: String, Codable, Sendable { case strength, cardio, other }

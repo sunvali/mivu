@@ -18,7 +18,7 @@ enum CoachManualEdit: Sendable {
     case attach(mealID: UUID, photoIDs: [UUID], role: PhotoRole, revision: Int)
     case deletePhoto(mealID: UUID, photoID: UUID, revision: Int)
     case retry(mealID: UUID, revision: Int)
-    case goals(date: String, targets: [CoachNutrientEdit], weight: Double?, clearWeight: Bool, exerciseCredit: Bool?, revision: Int?)
+    case goals(date: String, targets: [CoachNutrientEdit], weight: Double?, clearWeight: Bool, exerciseCreditPercent: Int?, revision: Int?)
     case preferences(timezone: String?, text: String?, revision: Int)
     case startDay(revision: Int)
     case coverage(date: String, completeness: DayCompleteness)
@@ -78,7 +78,7 @@ extension CoachTools {
             ("retry_meal", "Requeue an existing paused meal capture without creating a new meal or food record. Uses original saved input. Only the later successful analysis can confirm food saved.", mealObject([:], required: [])),
             ("get_goals", "Read exact dated goal settings and the goal effective on local_date (yyyy-MM-dd), plus diary revision. Exact goal null means use null expected_revision to create a setting for that date.", object(["local_date": string], required: ["local_date"])),
             ("get_preferences", "Read complete saved dietary preferences and timezone plus diary revision before editing. Context preferences may be truncated; do not replace omitted text.", object([:], required: [])),
-            ("set_goals", "Apply only explicit user-requested target changes, never an inferred prescription. First get_goals for this effective_local_date. targets is a patch: omitted nutrients remain; null value unsets a target. Null goal_weight_kg keeps it; clear_goal_weight true unsets it. Unspecified exercise credit remains unchanged. Existing exact date requires expected_revision; new date uses null. Returns saved settings; creates no intake day.", object(["effective_local_date": string, "expected_revision": integer, "targets": nutrients, "goal_weight_kg": number, "clear_goal_weight": boolean, "exercise_credit_enabled": boolean], required: ["effective_local_date", "targets"])),
+            ("set_goals", "Apply only explicit user-requested target changes, never an inferred prescription. First get_goals for this effective_local_date. targets is a patch: omitted nutrients remain; null value unsets a target. Null goal_weight_kg keeps it; clear_goal_weight true unsets it. Unspecified exercise credit remains unchanged. Existing exact date requires expected_revision; new date uses null. Returns saved settings; creates no intake day.", object(["effective_local_date": string, "expected_revision": integer, "targets": nutrients, "goal_weight_kg": number, "clear_goal_weight": boolean, "exercise_credit_enabled": boolean, "exercise_credit_percent": ["type": "integer", "enum": [0, 50, 100]]], required: ["effective_local_date", "targets"])),
             ("update_preferences", "Update explicitly requested preferences/timezone after reading complete get_preferences. Null fields preserve saved values; empty preferences clears them. expected_diary_revision protects unseen concurrent changes. Does not change historical day labels, credentials, or language.", object(["expected_diary_revision": integer, "timezone": string, "preferences": string], required: ["expected_diary_revision"])),
             ("start_day", "Explicitly start the current waking day from the persisted capture clock. Read fresh context for expected_diary_revision. Delayed captures cannot reverse a newer waking-day choice.", object(["expected_diary_revision": integer], required: ["expected_diary_revision"])),
             ("set_day_coverage", "Mark a local date skipped so it stays out of statistics, or count it again. Days close on their own at the waking-day rollover; this never closes or activates a day.", object(["local_date": string, "skipped": boolean], required: ["local_date", "skipped"])),
@@ -183,13 +183,18 @@ extension CoachTools {
             try keys(mealFields.union(["photo_id"]), mealFields.union(["photo_id"]))
             write = .deletePhoto(mealID: try id("meal_id"), photoID: try id("photo_id"), revision: try revision(allowZero: true))
         case "set_goals":
-            try keys(["effective_local_date", "expected_revision", "targets", "goal_weight_kg", "clear_goal_weight", "exercise_credit_enabled"], ["effective_local_date", "targets"])
+            try keys(["effective_local_date", "expected_revision", "targets", "goal_weight_kg", "clear_goal_weight", "exercise_credit_enabled", "exercise_credit_percent"], ["effective_local_date", "targets"])
             let targets = try edits("targets"), clear = try bool("clear_goal_weight") ?? false
             var weight: Double?
             if optional("goal_weight_kg") { guard let value = number(args["goal_weight_kg"]), value > 0, value <= 10_000_000, !clear else { throw CoachError.invalidArguments }; weight = value }
-            let credit = try bool("exercise_credit_enabled")
+            // The old boolean stays accepted: true adds all burn, false none.
+            var credit = try bool("exercise_credit_enabled").map { $0 ? 100 : 0 }
+            if optional("exercise_credit_percent") {
+                guard credit == nil, let value = number(args["exercise_credit_percent"]), [0, 50, 100].contains(value) else { throw CoachError.invalidArguments }
+                credit = Int(value)
+            }
             guard !targets.isEmpty || weight != nil || clear || credit != nil else { throw CoachError.invalidArguments }
-            write = .goals(date: try date("effective_local_date"), targets: targets, weight: weight, clearWeight: clear, exerciseCredit: credit, revision: optional("expected_revision") ? try revision() : nil)
+            write = .goals(date: try date("effective_local_date"), targets: targets, weight: weight, clearWeight: clear, exerciseCreditPercent: credit, revision: optional("expected_revision") ? try revision() : nil)
         case "update_preferences":
             try keys(["expected_diary_revision", "timezone", "preferences"], ["expected_diary_revision"])
             let timezone = optional("timezone") ? try string("timezone") : nil

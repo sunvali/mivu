@@ -22,16 +22,16 @@ import Testing
                                                                                            protein: protein, fat: fat))])
     }
 
-    private func goal(_ label: String, kcal: Double = 100, credit: Bool = false) -> GoalRecord {
+    private func goal(_ label: String, kcal: Double = 100, percent: Int = 0) -> GoalRecord {
         GoalRecord(effectiveLocalDate: label, timeZoneID: "UTC",
                    targets: NutritionValues(kcal: kcal, carbs: 20, protein: 10, fat: 5),
-                   goalWeightKg: nil, exerciseCreditEnabled: credit)
+                   goalWeightKg: nil, exerciseCreditPercent: percent)
     }
 
-    private func workout(_ day: TrackingDay, burn: Double?) -> WorkoutSession {
+    private func workout(_ day: TrackingDay, burn: Double?, state: WorkoutState? = nil) -> WorkoutSession {
         WorkoutSession(dayID: day.id, performedAt: day.startAt, timePrecision: .dateOnly,
                        revision: 1, kind: .cardio, durationMinutes: 30, exercises: [],
-                       estimatedBurnKcal: burn, burnSource: burn == nil ? nil : .userEstimate)
+                       estimatedBurnKcal: burn, burnSource: burn == nil ? nil : .userEstimate, state: state)
     }
 
     private func weight(_ day: TrackingDay, value: Double, unit: String = "kg", hour: String = "12:00:00") -> WeightEntry {
@@ -125,7 +125,7 @@ import Testing
         data.workouts = [workout(tracked, burn: 40)]
         data.goals = [goal("2026-01-01")]
         #expect(ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate).exerciseAdjustedKcalRemaining == nil)
-        data.goals = [goal("2026-01-01", credit: true)]
+        data.goals = [goal("2026-01-01", percent: 100)]
         let credited = ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate)
         #expect(credited.remainingFromRecorded.kcal == 20)
         #expect(credited.estimatedBurnKcal == 40)
@@ -133,8 +133,48 @@ import Testing
         data.workouts.append(workout(tracked, burn: nil))
         let unknown = ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate)
         #expect(unknown.workoutCount == 2)
-        #expect(unknown.estimatedBurnKcal == nil)
-        #expect(unknown.exerciseAdjustedKcalRemaining == nil)
+        #expect(unknown.estimatedBurnKcal == 40)
+        #expect(unknown.exerciseAdjustedKcalRemaining == 60)
+    }
+
+    @Test func legacyCreditDecodes() throws {
+        func decode(_ credit: String) throws -> GoalRecord {
+            let json = #"{"id":"00000000-0000-0000-0000-000000000001","effectiveLocalDate":"2026-01-01","timeZoneID":"UTC","revision":1,"targets":{},"exerciseCreditEnabled":\#(credit)}"#
+            return try JSONDecoder().decode(GoalRecord.self, from: Data(json.utf8))
+        }
+        #expect(try decode("true").exerciseCreditPercent == 100)
+        #expect(try decode("false").exerciseCreditPercent == 0)
+        let encoded = String(decoding: try JSONEncoder().encode(goal("2026-01-01", percent: 50)), as: UTF8.self)
+        #expect(encoded.contains("\"exerciseCreditPercent\":50") && !encoded.contains("exerciseCreditEnabled"))
+    }
+
+    @Test func adjustedUsesPercent() {
+        var data = snapshot()
+        let tracked = day("2026-01-07", .complete)
+        data.days = [tracked]
+        data.meals = [meal(tracked, kcal: 1500)]
+        data.workouts = [workout(tracked, burn: 400)]
+        for (percent, expected) in [(0, nil), (50, 700), (100, 900)] as [(Int, Double?)] {
+            data.goals = [goal("2026-01-01", kcal: 2000, percent: percent)]
+            #expect(ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate).exerciseAdjustedKcalRemaining == expected)
+        }
+    }
+
+    @Test func burnSumsKnownOnly() {
+        let tracked = day("2026-01-07", .complete)
+        #expect(ProgressAnalytics.dayBurn([workout(tracked, burn: 300), workout(tracked, burn: nil), workout(tracked, burn: 100)]) == 400)
+        #expect(ProgressAnalytics.dayBurn([workout(tracked, burn: nil)]) == nil)
+        #expect(ProgressAnalytics.dayBurn([workout(tracked, burn: 300), workout(tracked, burn: 999, state: .active)]) == 300)
+    }
+
+    @Test func workoutOnlyDayIsNotSkipped() {
+        var data = snapshot()
+        let tracked = day("2026-01-07", .complete)
+        data.days = [tracked]
+        data.workouts = [workout(tracked, burn: 200)]
+        data.goals = [goal("2026-01-01")]
+        #expect(ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate).status == nil)
+        #expect(ProgressAnalytics.period(snapshot: data, endingOn: tracked.localDate, days: 7).skippedDayCount == 0)
     }
 
     @Test func sameStoredDateAcrossTravelCombinesAllDayIDs() {
