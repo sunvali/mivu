@@ -135,6 +135,12 @@ struct ArchiveTests {
         forged.routines = [routine]
         forged.deletedWeightIDs = []; forged.deletedWorkoutIDs = []; forged.deletedRoutineIDs = []
         await #expect(throws: DiaryError.staleArchive) { try await store.restore(forged) }
+        // Only the routine comes back; the weight and workout tombstones stay, so just the routine guard can reject it.
+        var routineOnly = current
+        routineOnly.revision += 1
+        routineOnly.lineage = (current.lineage ?? []) + [UUID()]
+        routineOnly.routines = [routine]; routineOnly.deletedRoutineIDs = []
+        await #expect(throws: DiaryError.staleArchive) { try await store.restore(routineOnly) }
         #expect(try await store.snapshotForExport() == current)
     }
 
