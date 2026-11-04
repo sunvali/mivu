@@ -68,6 +68,8 @@ struct DiaryReadModel: Equatable, Sendable {
     var workouts: [WorkoutSession]
     var activeGoal: GoalRecord?
     var pendingAnalysisCount: Int
+    /// The running live workout on any day; it is never in `workouts`.
+    var activeWorkout: WorkoutSession? = nil
 }
 
 struct DiaryDayReadModel: Equatable, Sendable {

@@ -36,6 +36,8 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private let preferences: UserDefaults?
     let backup: FolderBackup?
     private(set) var readModel: DiaryReadModel?
+    /// The running live workout; refreshed with `readModel` on every change.
+    var activeWorkout: WorkoutSession? { readModel?.activeWorkout }
     private(set) var selection: DiarySelectionOwnership?
     private(set) var workStatus = CoachWorkStatus()
     private(set) var photoLoader: DiaryPhotoLoader?

@@ -60,7 +60,7 @@ enum ProgressAnalytics {
     static func daily(snapshot: DiarySnapshot, localDate: String) -> DailyProgress {
         let days = snapshot.days.filter { $0.localDate == localDate }
         let dayIDs = Set(days.map(\.id))
-        let workouts = snapshot.workouts.filter { dayIDs.contains($0.dayID) }
+        let workouts = snapshot.workouts.filter { dayIDs.contains($0.dayID) && $0.isFinished }
         let burn = dayBurn(workouts)
         return daily(localDate: localDate, days: days, subtotals: days.map { snapshot.totals(dayID: $0.id) },
             hasFood: snapshot.meals.contains { dayIDs.contains($0.dayID) && $0.isSaved }, activeDayID: snapshot.activeDayID,

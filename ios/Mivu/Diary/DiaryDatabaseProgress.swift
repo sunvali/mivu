@@ -19,14 +19,7 @@ extension DiaryDatabase {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.createWorkout(dayID: dayID, draft: draft) }
     }
     func updateWorkout(_ session: WorkoutSession, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<WorkoutSession> {
-        try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
-            let previous = try transaction.workout(id: session.id), day = try trackingDay(id: session.dayID)
-            guard previous.revision == expectedRevision else { throw DiaryError.staleRevision }
-            guard session.dayID == previous.dayID, diaryDateLabel(session.performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
-            var saved = session; saved.revision = previous.revision + 1
-            if saved.durationSeconds == previous.durationSeconds, saved.durationMinutes != previous.durationMinutes { saved.durationSeconds = nil } // minutes edit wins over stale seconds
-            return try transaction.saveWorkout(saved)
-        }
+        try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.updateWorkout(session, expectedRevision: expectedRevision) }
     }
     func deleteWorkout(id: UUID, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.deleteWorkout(id: id, revision: expectedRevision) }
@@ -39,6 +32,21 @@ extension DiaryDatabase {
     }
     func deleteRoutine(id: UUID, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.deleteRoutine(id: id, revision: expectedRevision) }
+    }
+    /// Finished workouts holding the exercise, newest first, at most `limit` (history and bests).
+    func finishedWorkouts(containing key: ExerciseKey, limit: Int, expectedProfileID: UUID) throws -> [WorkoutSession] {
+        try domainRead(expectedProfileID: expectedProfileID) { _ in
+            // SQL matches catalog IDs; own names are folded in Swift, so SQL only narrows to exercises without an ID.
+            let catalog = !key.raw.hasPrefix("own:")
+            let statement = try domainStatement("SELECT id, ordinal, payload FROM workout WHERE json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active' AND EXISTS (SELECT 1 FROM json_each(CAST(payload AS TEXT), '$.exercises') WHERE json_extract(value, '$.exerciseID') \(catalog ? "= ?" : "IS NULL")) ORDER BY json_extract(CAST(payload AS TEXT), '$.performedAt') DESC, ordinal DESC, id DESC", catalog ? [.text(key.raw)] : [])
+            defer { sqlite3_finalize(statement) }; var result: [WorkoutSession] = []
+            while result.count < limit, try mutationStep(statement) {
+                let value = try decode(WorkoutSession.self, Record(id: try mutationText(statement, 0), ordinal: Int(sqlite3_column_int64(statement, 1)), payload: try mutationBlob(statement, 2)))
+                try validateWorkoutFields(value)
+                if value.exercises.contains(where: { ExerciseKey($0) == key }) { result.append(value) }
+            }
+            return result
+        }
     }
     func routines(expectedProfileID: UUID) throws -> [WorkoutRoutine] {
         try domainRead(expectedProfileID: expectedProfileID) { _ in
@@ -77,6 +85,78 @@ extension DiaryTransaction {
         if let id = weight.dayID { _ = try database.trackingDay(id: id) }
         try saveProgress(weight, table: "weight", id: weight.id, dayID: weight.dayID)
         changes.weightIDs.insert(weight.id); if let id = weight.dayID { changes.dayIDs.insert(id) }
+    }
+    func updateWorkout(_ session: WorkoutSession, expectedRevision: Int) throws -> WorkoutSession {
+        let previous = try workout(id: session.id), day = try database.trackingDay(id: session.dayID)
+        guard previous.revision == expectedRevision else { throw DiaryError.staleRevision }
+        guard session.dayID == previous.dayID, diaryDateLabel(session.performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+        var saved = session; saved.revision = previous.revision + 1
+        if saved.durationSeconds == previous.durationSeconds, saved.durationMinutes != previous.durationMinutes { saved.durationSeconds = nil } // minutes edit wins over stale seconds
+        return try saveWorkout(saved)
+    }
+    /// The running live workout, if any. shortcut: scans workout payloads; add an expression index if rows reach many thousands.
+    func activeWorkout() throws -> WorkoutSession? {
+        try records("workout", clause: "json_extract(CAST(payload AS TEXT), '$.state') = 'active'", values: [], limit: 1).first.map { row in
+            let value = try database.decode(WorkoutSession.self, row); try validateWorkoutFields(value); return value
+        }
+    }
+    func startWorkout(_ draft: WorkoutDraft, at: Date) throws -> WorkoutSession {
+        guard try activeWorkout() == nil else { throw DiaryError.conflict }
+        let zone = head.profile.timeZoneID, date = diaryDateLabel(at, zone: zone)
+        let day = try resolveDay(localDate: date, timeZoneID: zone, at: diaryDateOnlyInstant(date, zone: zone))
+        var live = draft; live.state = .active; live.source = .live
+        return try createWorkout(dayID: day.id, draft: live, performedAt: at)
+    }
+    func saveActive(_ session: WorkoutSession, expectedRevision: Int, at: Date) throws -> WorkoutSession {
+        guard session.state == .active, try workout(id: session.id).state == .active else { throw DiaryError.invalidData }
+        var saved = session; saved.updatedAt = at
+        return try updateWorkout(saved, expectedRevision: expectedRevision)
+    }
+    /// Keeps ticked sets, takes the duration from the start and estimates burn unless the user typed one.
+    func finishWorkout(id: UUID, effort: Int?, at: Date, expectedRevision: Int) throws -> WorkoutSession {
+        var session = try workout(id: id)
+        guard session.revision == expectedRevision else { throw DiaryError.staleRevision }
+        session.exercises = session.exercises.compactMap { exercise in
+            var ticked = exercise; ticked.sets = exercise.sets.filter { $0.done == true }
+            return ticked.sets.isEmpty ? nil : ticked
+        }
+        // No ticked sets: the caller asks to discard instead.
+        guard session.state == .active, !session.exercises.isEmpty, at.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
+        let day = try database.trackingDay(id: session.dayID)
+        // Clamped so a workout left running for days can still be finished, then corrected.
+        let seconds = min(max(Int(at.timeIntervalSince(session.performedAt)), 1), 86_400)
+        session.state = .finished; session.durationSeconds = seconds; session.effort = effort ?? session.effort; session.updatedAt = at
+        if session.burnSource != .userEstimate {
+            // Live workouts are gym sessions.
+            session.estimatedBurnKcal = WorkoutBurn.estimate(activity: session.activity ?? "strength", seconds: seconds,
+                distanceMeters: session.distanceMeters.flatMap { $0 > 0 ? $0 : nil }, effort: session.effort, bodyKg: try bodyKg(on: day.localDate, zone: day.timeZoneID))
+            session.burnSource = nil
+        }
+        session.revision += 1
+        return try saveWorkout(session)
+    }
+    func discardWorkout(id: UUID, expectedRevision: Int) throws {
+        guard try workout(id: id).state == .active else { throw DiaryError.invalidData }
+        try deleteWorkout(id: id, revision: expectedRevision)
+    }
+    /// Latest weigh-in on or before `localDate`: a logged one counts on its diary day (as Progress shows it), a dayless one on its `measuredAt` date.
+    func bodyKg(on localDate: String, zone: String) throws -> Double? {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone)!
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: try diaryDateOnlyInstant(localDate, zone: zone)))!
+        let date = "json_extract(CAST(d.payload AS TEXT), '$.localDate')", measured = "json_extract(CAST(w.payload AS TEXT), '$.measuredAt')"
+        let statement = try database.domainStatement("SELECT * FROM (SELECT w.payload, \(date) FROM weight w JOIN day d ON d.id = w.parent WHERE \(date) <= ? ORDER BY \(date) DESC, \(measured) DESC LIMIT 1) UNION ALL SELECT * FROM (SELECT w.payload, NULL FROM weight w WHERE w.parent IS NULL AND \(measured) < ? ORDER BY \(measured) DESC LIMIT 1)",
+            [.text(localDate), .real(end.timeIntervalSinceReferenceDate)])
+        defer { sqlite3_finalize(statement) }; var weights: [WeightEntry] = []
+        while try database.mutationStep(statement) {
+            var weight = try JSONDecoder().decode(WeightEntry.self, from: database.mutationBlob(statement, 0)); try validateWeightFields(weight)
+            if sqlite3_column_type(statement, 1) != SQLITE_NULL {
+                let day = try database.mutationText(statement, 1)
+                if diaryDateLabel(weight.measuredAt, zone: zone) != day { weight.measuredAt = try diaryDateOnlyInstant(day, zone: zone) }
+            }
+            weights.append(weight)
+        }
+        // Onboarding saves its weight as the first weigh-in, so it is already a candidate here.
+        return WorkoutBurn.bodyKg(on: localDate, weights: weights, onboardingKg: nil, zone: zone)
     }
     @discardableResult func saveWorkout(_ record: WorkoutSession) throws -> WorkoutSession {
         let workout = record.syncedMinutes

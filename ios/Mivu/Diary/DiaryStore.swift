@@ -461,6 +461,34 @@ actor DiaryStore {
         return try pagedMutation(expectedProfileID) { try $0.deleteWorkout(id: id, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
     }
 
+    /// Starts a live workout, stored as active from the first tap; one per profile.
+    func startWorkout(_ draft: WorkoutDraft, at: Date, expectedProfileID: UUID) throws -> WorkoutSession {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.startWorkout(draft, at: at) } }
+    }
+
+    func activeWorkout(expectedProfileID: UUID) throws -> WorkoutSession? {
+        let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+        return try database.domainRead(expectedProfileID: expectedProfileID) { try DiaryTransaction(database: database, head: $0).activeWorkout() }
+    }
+
+    /// Saves one live change (a tick, edit, add or delete) in its own transaction.
+    func saveActive(_ session: WorkoutSession, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        let now = currentTime()
+        return try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.saveActive(session, expectedRevision: expectedRevision, at: now) } }
+    }
+
+    func finishWorkout(id: UUID, effort: Int?, at: Date, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.finishWorkout(id: id, effort: effort, at: at, expectedRevision: expectedRevision) } }
+    }
+
+    func discardWorkout(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.discardWorkout(id: id, expectedRevision: expectedRevision) } }
+    }
+
+    func finishedWorkouts(containing key: ExerciseKey, limit: Int, expectedProfileID: UUID) throws -> [WorkoutSession] {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.finishedWorkouts(containing: key, limit: limit, expectedProfileID: expectedProfileID)
+    }
+
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile? = nil, expectedProfileID: UUID? = nil) throws {
         return try pagedMutation(expectedProfileID) { try $0.updateProfile(profile, expectedProfile: expectedProfile, expected: $1, maximumBytes: maximumFileBytes) }
     }
@@ -571,6 +599,7 @@ actor DiaryStore {
         let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
         return try database.domainRead(expectedProfileID: expectedProfileID) { head in
             let workout = try DiaryTransaction(database: database, head: head).workout(id: id)
+            guard workout.isFinished else { throw DiaryError.notFound } // a running workout is not in the diary yet
             guard try JSONEncoder().encode(workout).count <= 48_000 else { throw CoachError.limitExceeded }; return workout
         }
 

@@ -31,7 +31,7 @@ enum SubmissionState: String, Codable, Sendable { case captured, waitingForConne
 enum DayAssignment: Equatable, Sendable { case existing(UUID), newDay }
 
 enum DiaryError: Error, Equatable, LocalizedError {
-    case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, undoExpired, notFound, emptyCapture, ambiguousDay, staleArchive
+    case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, undoExpired, notFound, emptyCapture, ambiguousDay, staleArchive, conflict
     var errorDescription: String? {
         switch self {
         case .noProfile: "Choose a local profile first."
@@ -45,6 +45,7 @@ enum DiaryError: Error, Equatable, LocalizedError {
         case .emptyCapture: "Add a photo or a meal description."
         case .ambiguousDay: "Your day just changed. Save again to add this to the new day."
         case .staleArchive: "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover."
+        case .conflict: "A workout is already running. Finish or discard it first."
         }
     }
 }
@@ -259,11 +260,16 @@ struct WorkoutSession: Codable, Equatable, Sendable, Identifiable {
     var routineID: UUID?
     var source: WorkoutSource?
     var externalID: String?
+    /// Last live-workout save; nil means unchanged since `performedAt`.
+    var updatedAt: Date?
 }
 
 extension WorkoutSession {
     /// Records saved before live workouts have no state and count as finished.
     var isFinished: Bool { state != .active }
+
+    /// A running workout untouched for 12 hours; the banner then asks to finish or discard.
+    func isStale(now: Date) -> Bool { now.timeIntervalSince(max(performedAt, updatedAt ?? performedAt)) >= 12 * 3_600 }
 
     /// Copies a draft onto this record; fields the draft leaves unset keep their current value.
     mutating func apply(_ draft: WorkoutDraft) {
@@ -581,7 +587,7 @@ func validateGoalFields(_ goal: GoalRecord) throws {
 }
 
 func validateWorkoutFields(_ workout: WorkoutSession) throws {
-    guard workout.performedAt.timeIntervalSince1970.isFinite, workout.revision > 0, workout.revision < 1_000_000,
+    guard workout.performedAt.timeIntervalSince1970.isFinite, workout.updatedAt?.timeIntervalSince1970.isFinite != false, workout.revision > 0, workout.revision < 1_000_000,
           ((workout.state == .active ? 0 : 1)...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
           (workout.title?.count ?? 0) <= 200, (workout.activity?.count ?? 0) <= 200, (workout.externalID?.count ?? 0) <= 200, (workout.note?.count ?? 0) <= 2_000,
           workout.effort == nil || (1...10).contains(workout.effort!), workout.avgHeartRate == nil || (20...250).contains(workout.avgHeartRate!),

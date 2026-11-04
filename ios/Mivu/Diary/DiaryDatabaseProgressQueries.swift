@@ -55,13 +55,13 @@ extension DiaryDatabase {
                         let weight = try decode(WeightEntry.self, row); try validateWeightFields(weight)
                         weights.append((row.ordinal, CoachWeightReference(localDate: label, record: weight)))
                     }
-                    let statement = try domainStatement("SELECT COUNT(*), SUM(CASE WHEN json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active' THEN json_extract(CAST(payload AS TEXT), '$.estimatedBurnKcal') END) FROM workout WHERE parent = ?", [.text(day.id.uuidString)])
+                    let statement = try domainStatement("SELECT COUNT(*), SUM(json_extract(CAST(payload AS TEXT), '$.estimatedBurnKcal')) FROM workout WHERE parent = ? AND json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active'", [.text(day.id.uuidString)])
                     defer { sqlite3_finalize(statement) }; guard try mutationStep(statement) else { throw DiaryError.invalidData }
                     let count = Int(sqlite3_column_int64(statement, 0)); dailyWorkoutCount += count
                     if sqlite3_column_type(statement, 1) != SQLITE_NULL { burn = (burn ?? 0) + sqlite3_column_double(statement, 1) }
                     if label >= horizon[horizon.count - days] {
                         workoutCount += count
-                        let selected = try domainStatement("SELECT id, ordinal, json_extract(CAST(payload AS TEXT), '$.revision'), json_extract(CAST(payload AS TEXT), '$.kind'), json_extract(CAST(payload AS TEXT), '$.durationMinutes') FROM workout WHERE parent = ? ORDER BY ordinal DESC, id DESC LIMIT 100", [.text(day.id.uuidString)])
+                        let selected = try domainStatement("SELECT id, ordinal, json_extract(CAST(payload AS TEXT), '$.revision'), json_extract(CAST(payload AS TEXT), '$.kind'), json_extract(CAST(payload AS TEXT), '$.durationMinutes') FROM workout WHERE parent = ? AND json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active' ORDER BY ordinal DESC, id DESC LIMIT 100", [.text(day.id.uuidString)])
                         defer { sqlite3_finalize(selected) }
                         while try mutationStep(selected) {
                             guard let id = try mutationOptionalUUID(selected, 0), let kind = WorkoutKind(rawValue: try mutationText(selected, 3)) else { throw DiaryError.invalidData }
@@ -104,7 +104,7 @@ extension DiaryDatabase {
                 dailyReports: includeDailyReports ? labels.compactMap { reports[$0] } : nil,
                 displayWeights: includeDailyReports ? labels.compactMap { label in latest[label].map { CoachWeightReference(localDate: label, record: $0) } } : nil,
                 latestWeight: newestWeight,
-                workoutTotal: includeDailyReports ? try mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = 'workout'") : nil,
+                workoutTotal: includeDailyReports ? try mutationInteger("SELECT COUNT(*) FROM workout WHERE json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active'") : nil,
                 savedFoodDates: includeDailyReports ? labels.filter { savedFoodDates.contains($0) } : nil)
         }
     }

@@ -10,7 +10,7 @@ extension DiaryDatabase {
             let pending = try mutationInteger("SELECT COUNT(*) FROM submission WHERE json_extract(CAST(payload AS TEXT), '$.state') IN ('captured','waitingForConnection','analyzing','needsRetry')")
                 + mutationInteger("SELECT COUNT(*) FROM coach_index WHERE pendingMealID IS NULL AND state IN ('captured','analyzing','waitingForConnection','waitingForNetwork','needsRetry','needsClarification')")
             return DiaryReadModel(head: head, activeDay: day, meals: projection?.meals ?? [], weight: projection?.weight,
-                workouts: projection?.workouts ?? [], activeGoal: try transaction.goal(on: day?.localDate ?? diaryDateLabel(Date(), zone: head.profile.timeZoneID)), pendingAnalysisCount: pending)
+                workouts: projection?.workouts ?? [], activeGoal: try transaction.goal(on: day?.localDate ?? diaryDateLabel(Date(), zone: head.profile.timeZoneID)), pendingAnalysisCount: pending, activeWorkout: try transaction.activeWorkout())
         }
     }
     func diaryDay(id: UUID, expectedProfileID: UUID) throws -> DiaryDayReadModel {
@@ -225,7 +225,7 @@ extension DiaryTransaction {
             guard let id = UUID(uuidString: row.id) else { throw DiaryError.invalidData }; return try mealProjection(id: id)
         }
         let weights = try records("weight", clause: "parent = ?", values: [.text(day.id.uuidString)]).map { try database.decode(WeightEntry.self, $0) }
-        let workouts = try records("workout", clause: "parent = ?", values: [.text(day.id.uuidString)]).map { try database.decode(WorkoutSession.self, $0) }
+        let workouts = try records("workout", clause: "parent = ? AND json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active'", values: [.text(day.id.uuidString)]).map { try database.decode(WorkoutSession.self, $0) }
         for weight in weights { try validateWeightFields(weight) }; for workout in workouts { try validateWorkoutFields(workout) }
         return DiaryDayReadModel(head: head, day: day, meals: meals, weight: weights.first, workouts: workouts, goal: try goal(on: day.localDate))
     }

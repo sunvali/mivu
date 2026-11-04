@@ -254,13 +254,13 @@ extension DiaryDatabase {
         let weights = try domainStatement("SELECT payload FROM weight ORDER BY ordinal DESC, id DESC LIMIT 41")
         defer { sqlite3_finalize(weights) }; var values: [WeightEntry] = []
         while try mutationStep(weights) { values.append(try JSONDecoder().decode(WeightEntry.self, from: mutationBlob(weights, 0))) }
-        let workouts = try domainStatement("SELECT w.id, w.parent, json_extract(CAST(w.payload AS TEXT), '$.revision'), json_extract(CAST(w.payload AS TEXT), '$.kind'), json_extract(CAST(w.payload AS TEXT), '$.durationMinutes') FROM workout w ORDER BY w.ordinal DESC, w.id DESC LIMIT 101")
+        let workouts = try domainStatement("SELECT w.id, w.parent, json_extract(CAST(w.payload AS TEXT), '$.revision'), json_extract(CAST(w.payload AS TEXT), '$.kind'), json_extract(CAST(w.payload AS TEXT), '$.durationMinutes') FROM workout w WHERE json_extract(CAST(w.payload AS TEXT), '$.state') IS NOT 'active' ORDER BY w.ordinal DESC, w.id DESC LIMIT 101")
         defer { sqlite3_finalize(workouts) }; var references: [WorkoutReference] = []
         while try mutationStep(workouts) {
             guard let id = try mutationOptionalUUID(workouts, 0), let dayID = try mutationOptionalUUID(workouts, 1), let kind = WorkoutKind(rawValue: try mutationText(workouts, 3)) else { throw DiaryError.invalidData }
             references.append(.init(id: id, dayID: dayID, localDate: try trackingDay(id: dayID).localDate, revision: Int(sqlite3_column_int64(workouts, 2)), kind: kind, durationMinutes: Int(sqlite3_column_int64(workouts, 4))))
         }
-        return (Array(values.prefix(40).reversed()), Array(references.prefix(100).reversed()), max(0, try mutationInteger("SELECT COUNT(*) FROM weight") - 40), max(0, try mutationInteger("SELECT COUNT(*) FROM workout") - 100))
+        return (Array(values.prefix(40).reversed()), Array(references.prefix(100).reversed()), max(0, try mutationInteger("SELECT COUNT(*) FROM weight") - 40), max(0, try mutationInteger("SELECT COUNT(*) FROM workout WHERE json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active'") - 100))
     }
 }
 
