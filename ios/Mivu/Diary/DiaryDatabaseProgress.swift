@@ -23,7 +23,7 @@ extension DiaryDatabase {
             let previous = try transaction.workout(id: session.id), day = try trackingDay(id: session.dayID)
             guard previous.revision == expectedRevision else { throw DiaryError.staleRevision }
             guard session.dayID == previous.dayID, diaryDateLabel(session.performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
-            var saved = session; saved.revision = previous.revision + 1; try transaction.saveWorkout(saved); return saved
+            var saved = session; saved.revision = previous.revision + 1; return try transaction.saveWorkout(saved)
         }
     }
     func deleteWorkout(id: UUID, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
@@ -59,10 +59,12 @@ extension DiaryTransaction {
         try saveProgress(weight, table: "weight", id: weight.id, dayID: weight.dayID)
         changes.weightIDs.insert(weight.id); if let id = weight.dayID { changes.dayIDs.insert(id) }
     }
-    func saveWorkout(_ workout: WorkoutSession) throws {
+    @discardableResult func saveWorkout(_ record: WorkoutSession) throws -> WorkoutSession {
+        let workout = record.syncedMinutes
         try validateWorkoutFields(workout); _ = try database.trackingDay(id: workout.dayID)
         try saveProgress(workout, table: "workout", id: workout.id, dayID: workout.dayID)
         changes.workoutIDs.insert(workout.id); changes.dayIDs.insert(workout.dayID)
+        return workout
     }
     private func saveProgress<Value: Encodable>(_ value: Value, table: String, id: UUID, dayID: UUID?) throws {
         guard try database.mutationInteger("SELECT COUNT(*) FROM \(table)_tombstone WHERE id = ?", [.text(id.uuidString)]) == 0 else { throw DiaryError.notFound }
@@ -84,9 +86,10 @@ extension DiaryTransaction {
     func createWorkout(dayID: UUID, draft: WorkoutDraft, performedAt: Date? = nil) throws -> WorkoutSession {
         let day = try database.trackingDay(id: dayID)
         if let performedAt { guard performedAt.timeIntervalSince1970.isFinite, diaryDateLabel(performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData } }
-        let value = WorkoutSession(dayID: dayID, performedAt: try performedAt ?? diaryDateOnlyInstant(day.localDate, zone: day.timeZoneID), timePrecision: performedAt == nil ? .dateOnly : .exact, revision: 1,
-            kind: draft.kind, durationMinutes: draft.durationMinutes, exercises: draft.exercises, estimatedBurnKcal: draft.estimatedBurnKcal, burnSource: draft.burnSource)
-        try saveWorkout(value); return value
+        var value = WorkoutSession(dayID: dayID, performedAt: try performedAt ?? diaryDateOnlyInstant(day.localDate, zone: day.timeZoneID), timePrecision: performedAt == nil ? .dateOnly : .exact, revision: 1,
+            kind: draft.kind, durationMinutes: draft.durationMinutes, exercises: draft.exercises)
+        value.apply(draft)
+        return try saveWorkout(value)
     }
     func exactGoal(on date: String) throws -> GoalRecord? {
         guard validLocalDate(date) else { throw DiaryError.invalidData }

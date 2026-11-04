@@ -172,14 +172,29 @@ struct GoalRecord: Codable, Equatable, Sendable, Identifiable {
 enum WorkoutKind: String, Codable, Sendable { case strength, cardio, other }
 enum WorkoutBurnSource: String, Codable, Sendable { case userEstimate, modelEstimate }
 
+enum WorkoutState: String, Codable, Sendable { case active, finished }
+enum WorkoutSource: String, Codable, Sendable { case manual, coach, live, importStrong = "import.strong", importHevy = "import.hevy" }
+enum WorkoutSetType: String, Codable, Sendable { case normal, warmup, drop, failure }
+enum ExerciseMeasure: String, Codable, Sendable { case weightReps, reps, time, distanceTime }
+
 struct WorkoutSet: Codable, Equatable, Sendable {
     var repetitions: Int
     var loadKg: Double?
+    var type: WorkoutSetType?
+    var effort: Int?
+    var seconds: Int?
+    var distanceMeters: Double?
+    var done: Bool?
 }
 
 struct WorkoutExercise: Codable, Equatable, Sendable {
     var name: String
     var sets: [WorkoutSet]
+    var exerciseID: String?
+    var measure: ExerciseMeasure?
+    var groupID: UUID?
+    var restSeconds: Int?
+    var note: String?
 }
 
 struct WorkoutDraft: Equatable, Sendable {
@@ -188,6 +203,18 @@ struct WorkoutDraft: Equatable, Sendable {
     var exercises: [WorkoutExercise]
     var estimatedBurnKcal: Double?
     var burnSource: WorkoutBurnSource?
+    var title: String?
+    var activity: String?
+    var state: WorkoutState?
+    var durationSeconds: Int?
+    var distanceMeters: Double?
+    var avgHeartRate: Int?
+    var effort: Int?
+    var indoor: Bool?
+    var note: String?
+    var routineID: UUID?
+    var source: WorkoutSource?
+    var externalID: String?
 }
 
 struct WorkoutSession: Codable, Equatable, Sendable, Identifiable {
@@ -201,6 +228,41 @@ struct WorkoutSession: Codable, Equatable, Sendable, Identifiable {
     var exercises: [WorkoutExercise]
     var estimatedBurnKcal: Double?
     var burnSource: WorkoutBurnSource?
+    var title: String?
+    var activity: String?
+    var state: WorkoutState?
+    var durationSeconds: Int?
+    var distanceMeters: Double?
+    var avgHeartRate: Int?
+    var effort: Int?
+    var indoor: Bool?
+    var note: String?
+    var routineID: UUID?
+    var source: WorkoutSource?
+    var externalID: String?
+}
+
+extension WorkoutSession {
+    /// Records saved before live workouts have no state and count as finished.
+    var isFinished: Bool { state != .active }
+
+    /// Copies a draft onto this record; fields the draft leaves unset keep their current value.
+    mutating func apply(_ draft: WorkoutDraft) {
+        kind = draft.kind; durationMinutes = draft.durationMinutes; exercises = draft.exercises
+        estimatedBurnKcal = draft.estimatedBurnKcal; burnSource = draft.burnSource
+        title = draft.title ?? title; activity = draft.activity ?? activity; state = draft.state ?? state
+        durationSeconds = draft.durationSeconds ?? durationSeconds; distanceMeters = draft.distanceMeters ?? distanceMeters
+        avgHeartRate = draft.avgHeartRate ?? avgHeartRate; effort = draft.effort ?? effort; indoor = draft.indoor ?? indoor
+        note = draft.note ?? note; routineID = draft.routineID ?? routineID; source = draft.source ?? source
+        externalID = draft.externalID ?? externalID
+    }
+
+    /// `durationSeconds` is the truth for new rows; minutes stay in sync for older readers.
+    var syncedMinutes: WorkoutSession {
+        var copy = self
+        if let seconds = durationSeconds { copy.durationMinutes = max(1, Int((Double(seconds) / 60).rounded())) }
+        return copy
+    }
 }
 
 struct AnalysisInput: Codable, Equatable, Sendable {
@@ -490,14 +552,21 @@ func validateGoalFields(_ goal: GoalRecord) throws {
 
 func validateWorkoutFields(_ workout: WorkoutSession) throws {
     guard workout.performedAt.timeIntervalSince1970.isFinite, workout.revision > 0, workout.revision < 1_000_000,
-          (1...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
+          ((workout.state == .active ? 0 : 1)...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
+          (workout.title?.count ?? 0) <= 200, (workout.activity?.count ?? 0) <= 200, (workout.externalID?.count ?? 0) <= 200, (workout.note?.count ?? 0) <= 2_000,
+          workout.effort == nil || (1...10).contains(workout.effort!), workout.avgHeartRate == nil || (20...250).contains(workout.avgHeartRate!),
+          workout.durationSeconds == nil || (1...86_400).contains(workout.durationSeconds!),
+          workout.distanceMeters == nil || (workout.distanceMeters!.isFinite && (0...1_000_000).contains(workout.distanceMeters!)),
           workout.estimatedBurnKcal == nil || (workout.estimatedBurnKcal!.isFinite && workout.estimatedBurnKcal! >= 0 && workout.estimatedBurnKcal! <= 100_000),
           workout.burnSource == nil || workout.estimatedBurnKcal != nil else { throw DiaryError.invalidData }
     for exercise in workout.exercises {
         guard !exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              exercise.name.count <= 200, exercise.sets.count <= 100 else { throw DiaryError.invalidData }
+              exercise.name.count <= 200, exercise.sets.count <= 100, (exercise.exerciseID?.count ?? 0) <= 200,
+              (exercise.note?.count ?? 0) <= 2_000, exercise.restSeconds == nil || (0...86_400).contains(exercise.restSeconds!) else { throw DiaryError.invalidData }
         for set in exercise.sets {
-            guard (1...10_000).contains(set.repetitions),
+            guard ((set.seconds != nil || set.distanceMeters != nil ? 0 : 1)...10_000).contains(set.repetitions),
+                  set.effort == nil || (1...10).contains(set.effort!), set.seconds == nil || (0...86_400).contains(set.seconds!),
+                  set.distanceMeters == nil || (set.distanceMeters!.isFinite && (0...1_000_000).contains(set.distanceMeters!)),
                   set.loadKg == nil || (set.loadKg!.isFinite && set.loadKg! >= 0 && set.loadKg! <= 100_000) else { throw DiaryError.invalidData }
         }
     }

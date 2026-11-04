@@ -146,7 +146,7 @@ extension DiaryTransaction {
             var record = try weight(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }; record.value = value; record.unit = unit; record.revision += 1; try validateWeightFields(record)
         case .editWorkout(let id, let draft, let revision):
             var record = try workout(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }
-            record.kind = draft.kind; record.durationMinutes = draft.durationMinutes; record.exercises = draft.exercises; record.estimatedBurnKcal = draft.estimatedBurnKcal; record.burnSource = draft.burnSource; record.revision += 1; try validateWorkoutFields(record)
+            record.apply(draft); record.revision += 1; try validateWorkoutFields(record.syncedMinutes)
         case .deleteWeight(let id, let revision): guard try weight(id: id).revision == revision else { throw DiaryError.staleRevision }
         case .deleteWorkout(let id, let revision): guard try workout(id: id).revision == revision else { throw DiaryError.staleRevision }
         case .manual(let edit, _):
@@ -292,7 +292,7 @@ extension DiaryTransaction {
             receipt.dayID = day.id; receipt.workoutID = saved.id; receipt.resultJSON = try coachJSON(saved)
             try addSource(kind: "workout", recordID: saved.id, turnID: turn.id, origin: true)
         case .editWorkout(let id, let draft, _):
-            var record = try workout(id: id); record.kind = draft.kind; record.durationMinutes = draft.durationMinutes; record.exercises = draft.exercises; record.estimatedBurnKcal = draft.estimatedBurnKcal; record.burnSource = draft.burnSource; record.revision += 1; try saveWorkout(record)
+            var record = try workout(id: id); record.apply(draft); record.revision += 1; record = try saveWorkout(record)
             receipt.dayID = record.dayID; receipt.workoutID = id; receipt.resultJSON = try coachJSON(record)
             try addSource(kind: "workout", recordID: id, turnID: turn.id, origin: false)
         case .deleteWeight(let id, let revision):
