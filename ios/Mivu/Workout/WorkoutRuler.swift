@@ -15,7 +15,7 @@ struct WorkoutRuler: View {
     @State private var scrolledIndex: Int?
     @State private var width: CGFloat = 0
     @State private var typing = false
-    @State private var typed: Double?
+    @State private var typed = ""
     @FocusState private var focused: Bool
     @ScaledMetric(relativeTo: .largeTitle) private var valueSize = 44.0
     private let spacing: CGFloat = 10
@@ -46,12 +46,18 @@ struct WorkoutRuler: View {
 
     @ViewBuilder private var number: some View {
         if typing {
-            TextField(label, value: $typed, format: .number)
+            // The placeholder shows the current value; typing replaces it and updates the value live, so Save never misses it.
+            TextField(format(value), text: $typed)
                 .keyboardType(.decimalPad).focused($focused)
+                .onChange(of: typed) { _, text in
+                    if let number = try? Double(text, format: .number), number.isFinite {
+                        value = snapped(Int(((number - range.lowerBound) / step).rounded()))
+                    }
+                }
                 .font(.system(size: valueSize, weight: .bold)).monospacedDigit().multilineTextAlignment(.center)
                 .frame(minHeight: 44)
                 .onAppear { focused = true }
-                .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
+                .onChange(of: focused) { _, isFocused in if !isFocused { typing = false } }
         } else {
             Button(action: startTyping) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -124,10 +130,6 @@ struct WorkoutRuler: View {
     /// Puts tick `index` under the needle; the inverse of the offset-to-index reading above.
     private func scroll(to index: Int) { position.scrollTo(x: CGFloat(index) * spacing - (width / 2 - spacing / 2)) }
 
-    private func startTyping() { typed = value; typing = true }
+    private func startTyping() { typed = ""; typing = true }
 
-    private func commit() {
-        if let typed, typed.isFinite { value = snapped(Int(((typed - range.lowerBound) / step).rounded())) }
-        typing = false
-    }
 }

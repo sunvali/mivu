@@ -48,7 +48,12 @@ struct WorkoutRow: View {
         return (miles ? meters / 1_609.344 : meters / 1_000).formatted(.number.precision(.fractionLength(0...1))) + (miles ? " mi" : " km")
     }
 
-    private var burn: String? { session.estimatedBurnKcal.map { $0.formatted(.number.precision(.fractionLength(0))) } }
+    /// "~310" for an estimate; a number the person typed shows as is.
+    nonisolated static func burn(_ session: WorkoutSession) -> String? {
+        session.estimatedBurnKcal.map { (session.burnSource == .userEstimate ? "" : "~") + $0.formatted(.number.precision(.fractionLength(0))) }
+    }
+
+    private var burn: String? { Self.burn(session) }
 
     var body: some View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(spacing: 12))
@@ -68,6 +73,6 @@ struct WorkoutRow: View {
         }
         .frame(minHeight: 44)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([Self.title(session), Self.detail(session), burn.map { "\($0) kilocalories burned" }].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityLabel([Self.title(session), Self.detail(session), burn.map { "\($0.replacingOccurrences(of: "~", with: "about ")) kilocalories burned" }].compactMap { $0 }.joined(separator: ", "))
     }
 }

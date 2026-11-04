@@ -57,11 +57,14 @@ struct CardioLogView: View {
     @Bindable var model: DiaryViewModel
     @State var state: CardioLogState
     let onClose: () -> Void
+    private let initial: CardioLogState
     @State private var bodyKg: Double?
     @State private var startEdited = false
     @State private var saving = false
     @State private var typingKcal = false
-    @State private var typedKcal: Double?
+    @State private var kcalText = ""
+    @State private var addingWeight = false
+    @State private var confirmingDiscard = false
     @Environment(\.dynamicTypeSize) private var typeSize
     private let unit = Locale.current.measurementSystem == .metric ? "km" : "mi"
     private static let efforts: [(String, Int)] = [("Easy", 3), ("Moderate", 5), ("Hard", 7), ("Max", 9)]
@@ -69,6 +72,11 @@ struct CardioLogView: View {
     private var zone: String { model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier }
     private var sport: WorkoutActivity? { WorkoutCatalog.activity(state.activity) }
     private var kcal: Double? { state.draft(bodyKg: bodyKg).estimatedBurnKcal }
+    private var changed: Bool { state != initial }
+
+    init(model: DiaryViewModel, state: CardioLogState, onClose: @escaping () -> Void) {
+        self.model = model; _state = State(initialValue: state); initial = state; self.onClose = onClose
+    }
 
     var body: some View {
         ScrollView {
@@ -92,7 +100,14 @@ struct CardioLogView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onClose).disabled(saving) }
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { if changed { confirmingDiscard = true } else { onClose() } }.disabled(saving)
+                    .accessibilityIdentifier("cancelCardio")
+                    .alert("Discard changes to this workout?", isPresented: $confirmingDiscard) {
+                        Button("Discard changes", role: .destructive, action: onClose)
+                        Button("Keep editing", role: .cancel) {}
+                    }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { Task { await save() } }.fontWeight(.semibold).disabled(saving).accessibilityIdentifier("saveCardio")
             }
@@ -101,17 +116,20 @@ struct CardioLogView: View {
                 Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             }
         }
+        .interactiveDismissDisabled(changed || saving)
         .sensoryFeedback(.selection, trigger: state.effort)
-        .task(id: diaryDateLabel(state.startedAt, zone: zone)) {
+        // Reloads after a weigh-in is saved from here, so the estimate appears.
+        .task(id: "\(diaryDateLabel(state.startedAt, zone: zone))\(model.changeGeneration)") {
             guard let owner = model.readModel?.profile.id else { return }
             bodyKg = try? await model.store.bodyKg(on: diaryDateLabel(state.startedAt, zone: zone), expectedProfileID: owner)
         }
         .alert("Calories burned", isPresented: $typingKcal) {
-            TextField("kcal", value: $typedKcal, format: .number).keyboardType(.numberPad)
-            Button("Save") { state.typedKcal = typedKcal.flatMap { (0...100_000).contains($0) ? $0.rounded() : nil } }
+            TextField("kcal", text: $kcalText).keyboardType(.numberPad)
+            Button("Save") { state.typedKcal = Double(kcalText).flatMap { (0...100_000).contains($0) ? $0.rounded() : nil } }
             if state.typedKcal != nil { Button("Use estimate") { state.typedKcal = nil } }
             Button("Cancel", role: .cancel) {}
         }
+        .sheet(isPresented: $addingWeight) { MorningWeightEditorView(model: model) }
     }
 
     /// Distance in the person's unit; pools in metres.
@@ -147,12 +165,19 @@ struct CardioLogView: View {
         HStack {
             if let pace = state.pace(unit: unit) { Text(pace).monospacedDigit() }
             Spacer(minLength: 12)
-            Button { typedKcal = state.typedKcal ?? kcal; typingKcal = true } label: {
-                Text(state.typedKcal.map { "\($0.formatted()) kcal" } ?? kcal.map { "~\($0.formatted()) kcal" } ?? "Add weight for kcal")
-                    .monospacedDigit().frame(minHeight: 44).contentShape(.rect)
+            if let shown = state.typedKcal.map({ "\($0.formatted()) kcal" }) ?? kcal.map({ "~\($0.formatted()) kcal" }) {
+                Button { kcalText = (state.typedKcal ?? kcal).map { $0.formatted(.number.grouping(.never)) } ?? ""; typingKcal = true } label: {
+                    Text(shown).monospacedDigit().foregroundStyle(Color.diaryWorkout).frame(minHeight: 44).contentShape(.rect)
+                }
+                .accessibilityLabel(shown.replacingOccurrences(of: "~", with: "About "))
+                .accessibilityIdentifier("cardioKcal")
+            } else {
+                // Without a body weight there is no estimate; a weigh-in brings it.
+                Button { addingWeight = true } label: {
+                    Text("Add weight for kcal").foregroundStyle(Color.diaryAccent).frame(minHeight: 44).contentShape(.rect)
+                }
+                .accessibilityIdentifier("cardioAddWeight")
             }
-            .tint(Color.diaryWorkout)
-            .accessibilityIdentifier("cardioKcal")
         }
         .font(.subheadline).foregroundStyle(Color.diarySecondary)
         .padding(.horizontal, 8)
@@ -171,7 +196,10 @@ struct CardioLogView: View {
                     .pickerStyle(.segmented).frame(minHeight: 44)
                 }
                 LabeledContent("Avg heart rate") {
-                    TextField("bpm", value: $state.avgHeartRate, format: .number).keyboardType(.numberPad)
+                    // Text, not a formatted value: it updates as typed, so Save never misses it.
+                    TextField("bpm", text: Binding(get: { state.avgHeartRate.map(String.init) ?? "" },
+                                                   set: { state.avgHeartRate = Int($0.filter(\.isNumber).prefix(3)) }))
+                        .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing).frame(minHeight: 44)
                 }
                 TextField("Note", text: $state.note, axis: .vertical).lineLimit(1...4).frame(minHeight: 44)

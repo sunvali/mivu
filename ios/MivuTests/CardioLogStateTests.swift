@@ -59,4 +59,13 @@ import Testing
         #expect(draft.activity == "run" && draft.title == "Run" && draft.distanceMeters == 5_000 && draft.effort == 5)
         #expect(draft.note == nil)
     }
+
+    @Test func rowMarksEstimatedBurn() {
+        var session = WorkoutSession(dayID: UUID(), performedAt: now, timePrecision: .exact, revision: 1, kind: .cardio, durationMinutes: 28, exercises: [])
+        #expect(WorkoutRow.burn(session) == nil)
+        session.estimatedBurnKcal = 310
+        #expect(WorkoutRow.burn(session) == "~310")
+        session.burnSource = .userEstimate
+        #expect(WorkoutRow.burn(session) == "310")
+    }
 }

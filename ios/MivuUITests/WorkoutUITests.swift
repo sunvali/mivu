@@ -27,6 +27,52 @@ import XCTest
         capture("Today", in: app)
     }
 
+    func testTypedMinutesSaveWithoutDone() {
+        let app = launch()
+        let time = openRun(app)
+        // The number sits at the top of the time card; tapping it types.
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: app.frame.midX, dy: time.frame.minY + 30)).tap()
+        app.typeText("45")
+        app.buttons["saveCardio"].tap()
+        let row = app.buttons["workoutRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.label.contains("45 min"), row.label)
+    }
+
+    func testCancelAsksBeforeDiscardingChanges() {
+        let app = launch()
+        _ = openRun(app)
+        app.buttons["cancelCardio"].tap()
+        XCTAssertTrue(app.buttons["startWorkout"].waitForExistence(timeout: 5), "an untouched log closes without asking")
+
+        _ = openRun(app)
+        app.buttons["Hard"].tap()
+        app.buttons["cancelCardio"].tap()
+        XCTAssertTrue(app.alerts["Discard changes to this workout?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Keep editing"].tap()
+        XCTAssertTrue(app.buttons["saveCardio"].exists)
+        app.buttons["cancelCardio"].tap()
+        app.alerts.buttons["Discard changes"].tap()
+        XCTAssertTrue(app.buttons["startWorkout"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["workoutRow"].exists)
+    }
+
+    func testAddWeightBringsTheEstimate() {
+        let app = launch()
+        _ = openRun(app)
+        let addWeight = app.buttons["cardioAddWeight"]
+        XCTAssertTrue(addWeight.waitForExistence(timeout: 5))
+        addWeight.tap()
+        let field = app.textFields["weightInput"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap(); field.typeText("70")
+        app.buttons["saveWeight"].tap()
+        let kcal = app.buttons["cardioKcal"]
+        XCTAssertTrue(kcal.waitForExistence(timeout: 10))
+        XCTAssertTrue(kcal.label.hasPrefix("About ") && kcal.label.hasSuffix("kcal"), kcal.label)
+        XCTAssertFalse(addWeight.exists)
+    }
+
     func testLargestTextKeepsCardioUsable() {
         let app = launch(["--proof-largest-text"])
         let start = app.buttons["startWorkout"]
@@ -43,6 +89,19 @@ import XCTest
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         reveal(row, in: app)
         capture("Today largest text", in: app)
+    }
+
+    /// Today → Start workout → Run; returns the time ruler.
+    private func openRun(_ app: XCUIApplication) -> XCUIElement {
+        let start = app.buttons["startWorkout"]
+        reveal(start, in: app)
+        start.tap()
+        let run = app.buttons["Run"]
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        run.tap()
+        let time = app.descendants(matching: .any)["timeRuler"]
+        XCTAssertTrue(time.waitForExistence(timeout: 5))
+        return time
     }
 
     private func launch(_ arguments: [String] = []) -> XCUIApplication {
