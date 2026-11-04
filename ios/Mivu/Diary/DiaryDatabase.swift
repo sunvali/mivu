@@ -57,6 +57,15 @@ final class DiaryDatabase {
             try execute("CREATE TABLE IF NOT EXISTS coach_undo (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, mealID TEXT NOT NULL, afterRevision INTEGER NOT NULL, afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
             // Held copies of Coach deletes; outside storage_quota, so Undo never blocks a delete.
             try execute("CREATE TABLE IF NOT EXISTS coach_undo_deleted (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, payload BLOB NOT NULL, createdAt REAL NOT NULL, restoredID TEXT, undone INTEGER NOT NULL DEFAULT 0)")
+            // Saved workouts: no day parent, like goal. Counts are seeded for profiles already migrated to paged storage.
+            let paged = try mutationInteger("SELECT COUNT(*) FROM sqlite_master WHERE name = 'storage_row_count'") == 1
+            for table in ["routine", "routine_tombstone"] {
+                try execute("CREATE TABLE IF NOT EXISTS \(table) (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
+                // Read first: an already-seeded profile must open without a write lock.
+                if paged, try mutationInteger("SELECT COUNT(*) FROM storage_row_count WHERE tableName = '\(table)'") == 0 {
+                    try execute("INSERT INTO storage_row_count(tableName, rowCount) VALUES ('\(table)', 0)")
+                }
+            }
         } catch {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData

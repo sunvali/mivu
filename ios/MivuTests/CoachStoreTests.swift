@@ -114,7 +114,7 @@ import Testing
         let current = try await store.snapshotForExport()
         let data = try DiaryArchive.encode(current)
         var envelope = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        #expect(envelope["version"] as? Int == 4)
+        #expect(envelope["version"] as? Int == 5)
         #expect(try DiaryArchive.decode(data) == current)
         envelope["version"] = 3
         #expect(try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope)) == current)

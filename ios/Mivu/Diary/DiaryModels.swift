@@ -323,15 +323,17 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     var deletedMealIDs: [UUID] = []
     var deletedWeightIDs: [UUID] = []
     var deletedWorkoutIDs: [UUID] = []
+    var routines: [WorkoutRoutine] = []
+    var deletedRoutineIDs: [UUID] = []
     var lineage: [UUID]? = nil
     var activeConversationSegmentID: UUID? = nil
-    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, goals, workouts, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, deletedWeightIDs, deletedWorkoutIDs, lineage, activeConversationSegmentID }
-    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], goals: [GoalRecord] = [], workouts: [WorkoutSession] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], deletedWeightIDs: [UUID] = [], deletedWorkoutIDs: [UUID] = [], lineage: [UUID]? = nil, activeConversationSegmentID: UUID? = nil) {
+    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, goals, workouts, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, deletedWeightIDs, deletedWorkoutIDs, routines, deletedRoutineIDs, lineage, activeConversationSegmentID }
+    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], goals: [GoalRecord] = [], workouts: [WorkoutSession] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], deletedWeightIDs: [UUID] = [], deletedWorkoutIDs: [UUID] = [], routines: [WorkoutRoutine] = [], deletedRoutineIDs: [UUID] = [], lineage: [UUID]? = nil, activeConversationSegmentID: UUID? = nil) {
         self.schemaVersion = schemaVersion; self.revision = revision; self.profile = profile
         self.days = days; self.meals = meals; self.weights = weights; self.goals = goals; self.workouts = workouts; self.coachTurns = coachTurns
         self.activeDayID = activeDayID; self.previousDayConfirmedAt = previousDayConfirmedAt
         self.deletedMealIDs = deletedMealIDs; self.deletedWeightIDs = deletedWeightIDs
-        self.deletedWorkoutIDs = deletedWorkoutIDs; self.lineage = lineage
+        self.deletedWorkoutIDs = deletedWorkoutIDs; self.routines = routines; self.deletedRoutineIDs = deletedRoutineIDs; self.lineage = lineage
         self.activeConversationSegmentID = activeConversationSegmentID
     }
     init(from decoder: Decoder) throws {
@@ -350,6 +352,8 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
         deletedMealIDs = try c.decode([UUID].self, forKey: .deletedMealIDs)
         deletedWeightIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedWeightIDs) ?? []
         deletedWorkoutIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedWorkoutIDs) ?? []
+        routines = try c.decodeIfPresent([WorkoutRoutine].self, forKey: .routines) ?? []
+        deletedRoutineIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedRoutineIDs) ?? []
         lineage = try c.decodeIfPresent([UUID].self, forKey: .lineage)
         activeConversationSegmentID = try c.decodeIfPresent(UUID.self, forKey: .activeConversationSegmentID)
     }
@@ -375,7 +379,7 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     func validate() throws {
         try validateDiaryMetadataFields(schemaVersion: schemaVersion, revision: revision, profile: profile,
             lineage: lineage, previousDayConfirmedAt: previousDayConfirmedAt)
-        try validateDiaryMetadataCollections(goals: goals, deletedWeightIDs: deletedWeightIDs, deletedWorkoutIDs: deletedWorkoutIDs)
+        try validateDiaryMetadataCollections(goals: goals, deletedWeightIDs: deletedWeightIDs, deletedWorkoutIDs: deletedWorkoutIDs, routines: routines, deletedRoutineIDs: deletedRoutineIDs)
         let linkedWeightDayIDs = weights.compactMap(\.dayID)
         guard days.count <= 10_000, meals.count <= 50_000, weights.count <= 10_000, workouts.count <= 50_000,
               deletedMealIDs.count <= 50_000,
@@ -384,7 +388,8 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
               activeDayID == nil || days.contains(where: { $0.id == activeDayID }),
               Set(meals.map(\.id)).isDisjoint(with: deletedMealIDs),
               Set(weights.map(\.id)).isDisjoint(with: deletedWeightIDs),
-              Set(workouts.map(\.id)).isDisjoint(with: deletedWorkoutIDs) else { throw DiaryError.invalidData }
+              Set(workouts.map(\.id)).isDisjoint(with: deletedWorkoutIDs),
+              Set(routines.map(\.id)).isDisjoint(with: deletedRoutineIDs) else { throw DiaryError.invalidData }
         var photoBytes = 0
         var submissionIDs = Set<UUID>()
         for day in days { try validateTrackingDayFields(day) }
@@ -496,12 +501,16 @@ private func validAbout(_ about: ProfileAbout) -> Bool {
         && about.dietTags.count <= 32 && about.dietTags.allSatisfy { !$0.isEmpty && $0.count <= 60 } && about.healthNotes.count <= 2_000
 }
 
-func validateDiaryMetadataCollections(goals: [GoalRecord], deletedWeightIDs: [UUID], deletedWorkoutIDs: [UUID]) throws {
+func validateDiaryMetadataCollections(goals: [GoalRecord], deletedWeightIDs: [UUID], deletedWorkoutIDs: [UUID],
+                                      routines: [WorkoutRoutine], deletedRoutineIDs: [UUID]) throws {
     guard goals.count <= 10_000, unique(goals.map(\.id)),
           Set(goals.map(\.effectiveLocalDate)).count == goals.count,
           deletedWeightIDs.count <= 10_000, unique(deletedWeightIDs),
-          deletedWorkoutIDs.count <= 50_000, unique(deletedWorkoutIDs) else { throw DiaryError.invalidData }
+          deletedWorkoutIDs.count <= 50_000, unique(deletedWorkoutIDs),
+          routines.count <= 1_000, unique(routines.map(\.id)),
+          deletedRoutineIDs.count <= 10_000, unique(deletedRoutineIDs) else { throw DiaryError.invalidData }
     for goal in goals { try validateGoalFields(goal) }
+    for routine in routines { try validateRoutineFields(routine) }
 }
 
 func validateTrackingDayFields(_ day: TrackingDay) throws {
@@ -580,7 +589,11 @@ func validateWorkoutFields(_ workout: WorkoutSession) throws {
           workout.distanceMeters == nil || (workout.distanceMeters!.isFinite && (0...1_000_000).contains(workout.distanceMeters!)),
           workout.estimatedBurnKcal == nil || (workout.estimatedBurnKcal!.isFinite && workout.estimatedBurnKcal! >= 0 && workout.estimatedBurnKcal! <= 100_000),
           workout.burnSource == nil || workout.estimatedBurnKcal != nil else { throw DiaryError.invalidData }
-    for exercise in workout.exercises {
+    try validateWorkoutExercises(workout.exercises)
+}
+
+func validateWorkoutExercises(_ exercises: [WorkoutExercise]) throws {
+    for exercise in exercises {
         guard !exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               exercise.name.count <= 200, exercise.sets.count <= 100, (exercise.exerciseID?.count ?? 0) <= 200,
               (exercise.note?.count ?? 0) <= 2_000, exercise.restSeconds == nil || (0...86_400).contains(exercise.restSeconds!) else { throw DiaryError.invalidData }

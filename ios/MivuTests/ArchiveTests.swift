@@ -27,11 +27,11 @@ struct ArchiveTests {
         return next
     }
 
-    @Test func version4RoundTripRetainsManualAcceptance() throws {
+    @Test func currentVersionRoundTripRetainsManualAcceptance() throws {
         let originalSnapshot = try ManualNutritionPayloadTests.snapshot()
         let data = try DiaryArchive.encode(originalSnapshot)
         let envelope = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(envelope["version"] as? Int == 4)
+        #expect(envelope["version"] as? Int == 5)
         let decoded = try DiaryArchive.decode(data)
         #expect(decoded == originalSnapshot)
     }
@@ -58,7 +58,7 @@ struct ArchiveTests {
         #expect(!json.contains("refreshToken"))
     }
 
-    @Test func versionFourRoundTripKeepsProgressAndPendingCoachMedia() throws {
+    @Test func currentVersionRoundTripKeepsProgressAndPendingCoachMedia() throws {
         var snapshot = fixture()
         let photo = MealPhoto(data: Data([5, 6, 7]), role: .before)
         snapshot.coachTurns = [CoachTurn(capturedAt: snapshot.days[0].startAt, text: "Synthetic pending turn",
@@ -72,7 +72,7 @@ struct ArchiveTests {
                                             durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil)]
         let data = try DiaryArchive.encode(snapshot)
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(json["version"] as? Int == 4)
+        #expect(json["version"] as? Int == 5)
         #expect(try DiaryArchive.decode(data) == snapshot)
     }
 
@@ -133,6 +133,45 @@ struct ArchiveTests {
         forged.deletedWeightIDs = []; forged.deletedWorkoutIDs = []
         await #expect(throws: DiaryError.staleArchive) { try await store.restore(forged) }
         #expect(try await store.snapshotForExport() == current)
+    }
+
+    @Test func archiveV5RoundTrip() async throws {
+        let root = URL.temporaryDirectory.appending(path: "ArchiveV5-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let profile = DiaryProfile(name: "Synthetic v5", timeZoneID: "Asia/Jerusalem")
+        let store = DiaryStore(directory: root)
+        _ = try await store.createProfile(profile)
+        let keep = try await store.saveRoutine(WorkoutRoutine(name: "Legs", exercises: [WorkoutExercise(name: "Squat", sets: [WorkoutSet(repetitions: 5, loadKg: 60)])], lastUsedAt: Date(timeIntervalSince1970: 100)), expectedRevision: nil, expectedProfileID: profile.id)
+        let gone = try await store.saveRoutine(WorkoutRoutine(name: "Old", exercises: []), expectedRevision: nil, expectedProfileID: profile.id)
+        try await store.deleteRoutine(id: gone.id, expectedRevision: 1, expectedProfileID: profile.id)
+        var draft = WorkoutDraft(kind: .strength, durationMinutes: 30, exercises: [WorkoutExercise(name: "Row", sets: [WorkoutSet(repetitions: 8, type: .drop, effort: 7, done: true)], restSeconds: 90)])
+        draft.title = "Back"; draft.effort = 6; draft.routineID = keep.id; draft.source = .live
+        let workout = try await store.createWorkout(localDate: "2026-11-04", draft: draft, performedAt: nil, expectedProfileID: profile.id)
+
+        let exported = try await store.snapshotForExport()
+        let data = try DiaryArchive.encode(exported)
+        #expect(try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])["version"] as? Int == 5)
+        let target = URL.temporaryDirectory.appending(path: "ArchiveV5-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: target) }
+        let restored = DiaryStore(directory: target)
+        _ = try await restored.importProfile(DiaryArchive.decode(data))
+        let again = try await restored.snapshotForExport()
+        #expect(again.routines == [keep] && again.deletedRoutineIDs == [gone.id] && again.workouts == [workout])
+        await #expect(throws: DiaryError.notFound) { try await restored.saveRoutine(gone, expectedRevision: nil, expectedProfileID: profile.id) }
+    }
+
+    @Test func archiveV4StillRestores() throws {
+        let snapshot = fixture()
+        var envelope = try #require(JSONSerialization.jsonObject(with: DiaryArchive.encode(snapshot)) as? [String: Any])
+        envelope["version"] = 4
+        var body = try #require(envelope["snapshot"] as? [String: Any])
+        for key in ["routines", "deletedRoutineIDs"] { body.removeValue(forKey: key) }
+        envelope["snapshot"] = body
+        #expect(try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope)) == snapshot)
+    }
+
+    @Test func archiveRejectsV6() throws {
+        var envelope = try #require(JSONSerialization.jsonObject(with: DiaryArchive.encode(fixture())) as? [String: Any])
+        envelope["version"] = 6
+        #expect(throws: DiaryError.invalidData) { try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope)) }
     }
 
     @Test func malformedVersionOwnerAndReferencesAreRejected() throws {

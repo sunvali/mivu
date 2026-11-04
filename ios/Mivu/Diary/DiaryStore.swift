@@ -424,6 +424,18 @@ actor DiaryStore {
         return try pagedMutation(expectedProfileID) { try $0.setGoals(goal, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
     }
 
+    func routines(expectedProfileID: UUID) throws -> [WorkoutRoutine] {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.routines(expectedProfileID: expectedProfileID)
+    }
+
+    func saveRoutine(_ routine: WorkoutRoutine, expectedRevision: Int?, expectedProfileID: UUID) throws -> WorkoutRoutine {
+        return try pagedMutation(expectedProfileID) { try $0.saveRoutine(routine, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+
+    func deleteRoutine(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
+        return try pagedMutation(expectedProfileID) { try $0.deleteRoutine(id: id, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+
     func updateWeight(id: UUID, value: Double, expectedRevision: Int, expectedProfileID: UUID) throws -> WeightEntry {
         return try pagedMutation(expectedProfileID) { try $0.updateWeight(id: id, value: value, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
     }

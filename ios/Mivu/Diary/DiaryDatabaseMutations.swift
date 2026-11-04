@@ -340,7 +340,7 @@ final class DiaryTransaction {
             let count = try database.mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = ?", [.text(table)])
             let limits = ["meta": 1, "day": 10_000, "meal": 50_000, "submission": 50_000_000, "item": 10_000_000,
                 "photo": 1_500_000, "weight": 10_000, "workout": 50_000, "tombstone": 50_000,
-                "coach_turn": 10_000, "coach_photo": 300_000, "goal": 10_000, "weight_tombstone": 10_000, "workout_tombstone": 50_000]
+                "coach_turn": 10_000, "coach_photo": 300_000, "goal": 10_000, "weight_tombstone": 10_000, "workout_tombstone": 50_000, "routine": 1_000, "routine_tombstone": 10_000]
             guard let limit = limits[table], count < limit else { throw DiaryError.invalidData }
             if table != "meta" {
                 let siblings = try parentID.map { parent in
@@ -418,6 +418,8 @@ final class DiaryTransaction {
         var deletedMealIDs: [UUID] = []
         var deletedWeightIDs: [UUID] = []
         var deletedWorkoutIDs: [UUID] = []
+        var routines: [WorkoutRoutine] = []
+        var deletedRoutineIDs: [UUID] = []
         var lineage: [UUID]?
         var activeConversationSegmentID: UUID?
         init(_ head: DiaryHead) {

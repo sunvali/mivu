@@ -34,6 +34,23 @@ extension DiaryDatabase {
     func setGoals(_ goal: GoalRecord, expectedRevision: Int?, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<GoalRecord> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.setGoal(goal, revision: expectedRevision) }
     }
+    func saveRoutine(_ routine: WorkoutRoutine, expectedRevision: Int?, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<WorkoutRoutine> {
+        try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.saveRoutine(routine, revision: expectedRevision) }
+    }
+    func deleteRoutine(id: UUID, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
+        try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.deleteRoutine(id: id, revision: expectedRevision) }
+    }
+    func routines(expectedProfileID: UUID) throws -> [WorkoutRoutine] {
+        try domainRead(expectedProfileID: expectedProfileID) { _ in
+            let statement = try domainStatement("SELECT id, ordinal, payload FROM routine ORDER BY ordinal, id")
+            defer { sqlite3_finalize(statement) }; var result: [WorkoutRoutine] = []
+            while try mutationStep(statement) {
+                let value = try decode(WorkoutRoutine.self, Record(id: try mutationText(statement, 0), ordinal: Int(sqlite3_column_int64(statement, 1)), payload: try mutationBlob(statement, 2)))
+                try validateRoutineFields(value); result.append(value)
+            }
+            return result.sorted { ($0.lastUsedAt ?? .distantPast, $1.name) > ($1.lastUsedAt ?? .distantPast, $0.name) }
+        }
+    }
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile?, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
         try transaction(expected: expected, maximumBytes: maximumBytes) { try $0.updateProfile(profile, expectedProfile: expectedProfile) }
     }
@@ -107,6 +124,25 @@ extension DiaryTransaction {
         try database.execute("INSERT INTO goal(id, ordinal, effectiveLocalDate, payload) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
             [.text(saved.id.uuidString), .integer(nextOrdinal("goal")), .text(saved.effectiveLocalDate), .blob(payload)])
         try contribution(table: "goal", rowID: saved.id.uuidString, encodedBytes: payload.count); return saved
+    }
+    func routine(id: UUID) throws -> WorkoutRoutine {
+        guard let row = try records("routine", clause: "id = ?", values: [.text(id.uuidString)], limit: 1).first else { throw DiaryError.notFound }
+        let value = try database.decode(WorkoutRoutine.self, row); try validateRoutineFields(value); return value
+    }
+    func saveRoutine(_ routine: WorkoutRoutine, revision: Int?) throws -> WorkoutRoutine {
+        guard try database.mutationInteger("SELECT COUNT(*) FROM routine_tombstone WHERE id = ?", [.text(routine.id.uuidString)]) == 0 else { throw DiaryError.notFound }
+        let previous: WorkoutRoutine?
+        do { previous = try self.routine(id: routine.id) } catch DiaryError.notFound { previous = nil }
+        guard previous?.revision == revision else { throw DiaryError.staleRevision }
+        var saved = routine; saved.revision = (previous?.revision ?? 0) + 1; try validateRoutineFields(saved)
+        let payload = try JSONEncoder().encode(saved)
+        try database.execute("INSERT INTO routine(id, ordinal, payload) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+            [.text(saved.id.uuidString), .integer(nextOrdinal("routine")), .blob(payload)])
+        try contribution(table: "routine", rowID: saved.id.uuidString, encodedBytes: payload.count); return saved
+    }
+    func deleteRoutine(id: UUID, revision: Int) throws {
+        guard try routine(id: id).revision == revision else { throw DiaryError.staleRevision }
+        try deleteProgress(id: id, table: "routine")
     }
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile?) throws {
         guard profile.id == head.profile.id else { throw DiaryError.wrongOwner }
