@@ -19,6 +19,15 @@ arrives at by `at` seconds; unlisted joints rest. Build keys with the builder in
   `mouth(.closedSmile/.smallOpen/.bigOpen/.o/.concerned/.yawn)`, `look(x, y)`,
   `turn`, `blushing()`, `hearts(count, drift:)`.
 - `PipGesture("name", loops: true) { ... }` repeats from its first key.
+- `PipGesture(beats: "name") { ... }` is authored on the two-legged body: play it between `riseUp` and
+  `dropDown(endingIn:)`. Beats chain `PipBeat` helpers (`stance`, `spine`, `reach`, `tuck`, `nod`, `holding`, `chew`) and
+  `PipBake` turns them into one continuous 60 fps curve, solves the limbs on every frame and adds all follow-through, so key
+  anticipation and overshoot, and leave ears, tail and scarf to the physics. Keep wrists short of full reach and keep some
+  `drop` under a wide `spread`: a straight limb's middle joint snaps. A loop starts and ends on the plain upright pose.
+  `bakedMotionNeverJumps` and `feetStayPlantedOnEveryBakedFrame` check the result.
+  `turn` steps at its beat and the rig morphs the head across views; give it a beat that lets 0.3 s of turn breathe.
+  Use `brow` for effort and surprise, and `burst(.crumbs/.drops/.dust, x:, y:)` on the beat that throws something.
+  Upright gestures stay out of `fixtures/pip/gestures.json` until Android has the set.
 
 ## Worked example: a "proud" gesture after a correction is reviewed twice
 

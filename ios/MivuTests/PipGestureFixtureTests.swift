@@ -32,7 +32,8 @@ struct PipGestureFixtureTests {
     }
 
     static func fixture() throws -> Data {
-        let gestures = PipGestureLibrary.all.map { gesture -> [String: Any] in
+        // shortcut: upright gestures stay out of the shared fixture until Android has the upright set and prop poses.
+        let gestures = PipGestureLibrary.all.filter { $0.stance == nil }.map { gesture -> [String: Any] in
             var entry: [String: Any] = [
                 "name": gesture.name, "loops": gesture.loops,
                 "keys": gesture.keys.map { ["at": $0.at, "pose": pose($0.pose)] as [String: Any] },

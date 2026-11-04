@@ -26,10 +26,12 @@ struct PipRigPreview: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)], spacing: 8) {
                     button("Play all") { await playAll() }
+                    button("Food and workouts") { await playUpright() }
                     button("Gaze sweep") { await gazeSweep() }
                     button("Blink") { driver.rigs.forEach { $0.blink() } }
                     button("Double blink") { driver.rigs.forEach { $0.blink(double: true) } }
                     button("Eyes lead turn") { await eyesLeadTurn() }
+                    button("Head turns") { await headTurns() }
                     ForEach(PipGestureLibrary.all, id: \.name) { gesture in
                         button(gesture.name) { await play(gesture) }
                     }
@@ -37,6 +39,10 @@ struct PipRigPreview: View {
             }
         }
         .onChange(of: set) { stopIdle() }
+        .task {
+            if ProcessInfo.processInfo.arguments.contains("-PipRigPreviewTurns") { await headTurns() }
+            if ProcessInfo.processInfo.arguments.contains("-PipRigPreviewUpright") { await playUpright() }
+        }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
@@ -51,12 +57,25 @@ struct PipRigPreview: View {
 
     private func play(_ gesture: PipGesture) async {
         caption = gesture.name
+        if gesture.stance == .upright, gesture.name != "rise-up", gesture.name != "drop-down" {
+            await playStep(PipGestureLibrary.riseUp, wait: PipGestureLibrary.riseUp.duration)
+            await playStep(gesture, wait: gesture.loops ? gesture.duration * 3 : gesture.duration + 0.2)
+            let down = PipGestureLibrary.dropDown(endingIn: set)
+            await playStep(down, wait: down.duration + 0.3)
+            return
+        }
         let wait = gesture.loops ? 2.8 : gesture.duration + 0.5
         await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
             driver.rigs.forEach { $0.play(gesture) { _ in } }
             DispatchQueue.main.asyncAfter(deadline: .now() + wait) { done.resume() }
         }
         driver.rigs.forEach { $0.removeAllMotion(); $0.apply(.rest.withSet(set), animated: true) }
+    }
+
+    /// Plays one key sequence on every rig and waits for it, for the steps around an upright gesture.
+    private func playStep(_ gesture: PipGesture, wait: TimeInterval) async {
+        driver.rigs.forEach { $0.play(gesture) { _ in } }
+        try? await Task.sleep(for: .seconds(wait))
     }
 
     /// Runs the scheduler live with breathing. The preview pretends Pip has been quiet for a while (80 s on Today,
@@ -119,6 +138,19 @@ struct PipRigPreview: View {
         for turn in [CGFloat(0.6), 1.4, 1] { // in-view turns, as gestures use them
             await play(PipGesture("turn") { $0.at(0.3) { $0.turn(turn) }; $0.at(0.8) { $0.turn(turn) } })
         }
+    }
+
+    private func headTurns() async {
+        caption = "head turns"
+        for turn in [CGFloat(0), -1, 0, 1, 0, 1] {
+            await play(PipGesture("turn") { $0.at(0.3) { $0.turn(turn) }; $0.at(1) { $0.turn(turn) } })
+        }
+        caption = "done"
+    }
+
+    private func playUpright() async {
+        for gesture in PipGestureLibrary.all where gesture.stance == .upright && gesture.endSet == nil { await play(gesture) }
+        caption = "done"
     }
 
     private func playAll() async {

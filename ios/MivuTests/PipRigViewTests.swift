@@ -248,6 +248,46 @@ import UIKit
                 "Hidden on every screen but Progress")
     }
 
+    /// Beats reach the render server as whole tracks; cutting one short leaves every layer where it is and hands the keys back.
+    @Test func beatsPlayAsTracksAndReleaseWhenCut() throws {
+        var pose = PipPose.rest
+        pose.set = .upright
+        let view = try rig(pose)
+        var finished: Bool?
+        view.play(PipGestureLibrary.named("workout-squat")) { finished = $0 }
+        let torso = try #require(view.layer(named: "torso@upright"))
+        #expect(torso.animation(forKey: "pip.rotation") is CAKeyframeAnimation)
+        #expect(view.layer(named: "head@front")?.superlayer?.superlayer === torso, "The head rides the upper body")
+        view.removeAllMotion()
+        #expect(finished == false && torso.animation(forKey: "pip.rotation") == nil)
+    }
+
+    /// A turn flows the new view's shapes from the old view's outlines; the swap is instant, the drawing is not.
+    @Test func aHeadTurnMorphsTheNewViewFromTheOld() throws {
+        let view = try rig(.rest)
+        // A key too short for the eyes to lead turns at once, so the check runs before a layer with no window drops its animations.
+        view.play(PipGesture("turn") { $0.at(0.05) { $0.turn(0) }; $0.at(0.4) { $0.turn(0) } }) { _ in }
+        #expect(view.visibleViews == ["front"])
+        let head = try #require(view.layer(named: "head@front"))
+        let shape = try #require(head.sublayers?.compactMap { $0 as? CAShapeLayer }.first)
+        #expect(shape.animation(forKey: "pip.morph") is CABasicAnimation)
+        #expect(head.animation(forKey: "pip.turn.dip") != nil)
+        view.removeAllMotion()
+    }
+
+    /// Only the held food shows, and each bite uncovers one more bite mark; the Progress chart card never follows a pose.
+    @Test func foodPropsFollowThePose() throws {
+        var pose = PipPose.rest.holding(.apple, bites: 1)
+        pose.set = .upright
+        let view = try rig(pose)
+        let opacity = { (id: String) in view.layer(named: "\(id)@upright")?.isHidden == false ? view.layer(named: "\(id)@upright")?.opacity : 0 }
+        #expect(opacity("prop-apple") == 1 && opacity("prop-apple.bite-1") == 1)
+        #expect(opacity("prop-apple.bite-2") == 0 && opacity("prop-cup") == 0 && opacity("prop-bowl") == 0)
+        #expect(view.layer(named: "prop-chart")?.isHidden == true)
+        view.apply(pose.holding(nil), animated: false)
+        #expect(opacity("prop-apple") == 0)
+    }
+
     @Test(arguments: [(PipPose.BodySet.seated, PipMoment.saved), (.curled, .earTwitch)])
     func gesturesKeepTheActiveBodySet(set: PipPose.BodySet, moment: PipMoment) async throws {
         let view = PipRigView(asset: try PipRigAsset.load(PipRigAssetTests.bundledData()), set: set)

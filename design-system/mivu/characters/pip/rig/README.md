@@ -43,7 +43,9 @@ rewrites the fallback images named in each imageset's `Contents.json`: `PipResti
 ## Head views
 
 Pip's head exists in three views so he can turn. Each view provides the same
-named parts and face shapes, so the runtime swaps a whole view at once.
+named parts and face shapes, so the runtime morphs each shape into its twin: keep
+names matched across views. Art only one view has (`head.light`, `head.shade`)
+melts in and out against the head.
 
 | View | Source | Notes |
 |---|---|---|
@@ -85,6 +87,7 @@ The body exists as three sets, each traced from its painting like the head:
 | `standing` (Today) | `../storyboard.png` row 1 col 1 | `body`, `tail-1`… |
 | `seated` (Coach) | dark seated Pip, `../reference.png` (the head's painting) | `body@seated`… |
 | `curled` | curled Pip, `../reference.png`, mirrored to face right | `body@curled`… |
+| `upright` | drawn by hand for two-legged acting, after the cheering Pip in `../storyboard.png` row 3 col 2 | `body@upright`… |
 
 - Every set has `body, chest, chest-fluff, arm-l/r → forearm → paw, leg-l/r → foot,
   tail-1 → tail-2 → tail-3 → tail-4, scarf-knot → scarf-end-l/r, shadow`. Pivots sit at the
@@ -93,6 +96,18 @@ The body exists as three sets, each traced from its painting like the head:
 - Fur is painted under the arms, the neck under the head, the tail base and behind the scarf,
   so joints can rotate without gaps. Parts the painting doesn't show (far hind legs, curled
   arms and scarf ends) sit fully behind the visible ones.
+- `upright` shares the head, scarf and tail placement of `standing`, so the swap between them barely moves him. It alone has a
+  knee: `leg → shin → foot`, and a waist: `body@upright` holds the hips, pivoting there for leans, and carries `torso@upright`, which
+  holds the arms, scarf and head mount (`data-mount` sits on it). The two halves share a circle round the waist pivot, so the
+  silhouette stays closed through a bend, and the torso's cream overlaps the belly's so no seam shows. `PipUpright` in `PipGesture.swift` repeats its limb
+  pivots for the arm and leg solvers (`uprightLimbsMatchTheRig` keeps them equal). Its arms draw over the head so held food stays in
+  front; overhead arms therefore go wide, never across the face.
+- Upright limbs follow the four-legged art: tapered orange thigh and arm, then a dark stocking with a fur edge (`forearm-*.sock`, the
+  thigh's jagged hem over `shin-*`). The chest is a warm belly under a pale bib (`chest`, `chest-fluff`).
+- `fx-crumb-1…4`, `fx-drop-1…4` and `fx-dust-1…4` are root-level upright parts drawn at (256, 256), hidden until a gesture throws
+  them. Dust sits behind the legs; crumbs and drops sit in front of everything.
+- Food lives in the upright paws, hidden until a pose holds it: `prop-apple` (with `bite-1…2`), `prop-cup`, `prop-bowl` (far paw) and
+  `prop-bowl-spoon` (near paw). Each is drawn for a paw pointing straight up, `reach(…, paw: 180)`.
 - The body faces right; facing left is a runtime mirror of the whole character.
 - Each set's `body` carries `data-mount="k tx ty"` (JSON `"mount"`): the shared parts
   parented to `body` (the head views, hearts) are drawn at `head point × k + t` on the

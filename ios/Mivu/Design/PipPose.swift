@@ -6,11 +6,15 @@ struct PipPose: Equatable {
         var rotation: CGFloat = 0
         var offset: CGPoint = .zero
         var scale = CGSize(width: 1, height: 1)
+        /// Soft parts only (`PipRigView.softParts`): bends the art along its length, in radians, on top of the rigid transform.
+        var curl: CGFloat = 0
     }
 
     enum EyeShape: String { case open, half, closedHappy, closedSleepy, wide, heart }
     enum MouthShape: String { case closedSmile, smallOpen, bigOpen, o, concerned, yawn }
-    enum BodySet: String { case standing, seated, curled }
+    enum BodySet: String { case standing, seated, curled, upright }
+    /// Food held on the upright body; the raw value prefixes the rig parts (`prop-apple`, `prop-bowl-spoon`).
+    enum Prop: String { case apple, cup, bowl }
 
     var joints: [String: Joint] = [:]
     var eyes = EyeShape.open
@@ -20,6 +24,9 @@ struct PipPose: Equatable {
     var blush = false
     /// How many of the rig's `heart-1…3` parts are visible.
     var hearts = 0
+    var prop: Prop?
+    /// How many of the prop's `bite-1…2` marks show.
+    var bites = 0
     /// Today rests standing; Coach chooses `.seated` explicitly.
     var set = BodySet.standing
     /// -1 left, 0 front, +1 right. Small moves around a view slide features; larger ones swap views.

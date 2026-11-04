@@ -16,7 +16,7 @@ HEAD_IDS = (
 MOUTHS = "closedSmile smallOpen bigOpen o concerned yawn".split()
 EYES = "open half closedHappy closedSleepy wide heart".split()
 VIEWS = ("right", "front", "left")
-SETS = ("standing", "seated", "curled")
+SETS = ("standing", "seated", "curled", "upright")
 BODY_IDS = (
     "body chest chest-fluff arm-l forearm-l paw-l arm-r forearm-r paw-r leg-l leg-r foot-l foot-r "
     "tail-1 tail-2 tail-3 tail-4 scarf-knot scarf-end-l scarf-end-r shadow"
@@ -127,8 +127,22 @@ class RigTests(unittest.TestCase):
                 for parent, child in zip(chain, chain[1:]):
                     if body_set == "seated" and child.startswith("paw-"):
                         parent = "body"  # Coach peeks over the composer: the paws rest on the bar, off the legs
+                    if body_set == "upright" and child.startswith("foot-"):
+                        parent = child.replace("foot", "shin")  # the only set with a knee, for squats
+                    if body_set == "upright" and child in ("arm-l", "arm-r", "scarf-knot"):
+                        parent = "torso"  # the only set with a waist: the upper body bends over the hips
                     self.assertEqual(by_id[set_id(child, body_set)]["parent"], set_id(parent, body_set),
                                      (body_set, child))
+
+    def test_upright_waist_cannot_open_a_gap(self):
+        # Both halves share a circle round the waist pivot, so the silhouette stays closed however far the torso bends.
+        by_id = {p["id"]: p for p in self.parts}
+        x, y = by_id["torso@upright"]["pivot"]
+        self.assertEqual(by_id["torso@upright"]["parent"], "body@upright")
+        self.assertIn("mount", by_id["torso@upright"])
+        xs, ys = points(by_id["body@upright"]["path"])
+        self.assertAlmostEqual(max(ys[i] for i in range(len(xs)) if abs(xs[i] - x) < 1 and ys[i] < y), 292, delta=1)
+        self.assertAlmostEqual(y - 292, max(xs) - x, delta=1)
 
     def test_feet_on_ground(self):
         for body_set in SETS:
@@ -153,6 +167,12 @@ class RigTests(unittest.TestCase):
         x, y, w, h = self.rig["frames"]["today"]
         x0, y0, x1, y1 = set_bounds(self.parts, "standing")
         self.assertTrue(x <= x0 and y <= y0 and x1 <= x + w and y1 <= y + h)
+
+    def test_food_props_hide_at_rest(self):
+        by_id = {p["id"]: p for p in self.parts}
+        for prop, paw in (("prop-apple", "r"), ("prop-cup", "r"), ("prop-bowl-spoon", "r"), ("prop-bowl", "l")):
+            self.assertFalse(by_id[f"{prop}@upright"]["visible"], prop)
+            self.assertEqual(by_id[f"{prop}@upright"]["parent"], f"paw-{paw}@upright", prop)
 
     def test_pivots_inside_artboard(self):
         for p in self.parts:

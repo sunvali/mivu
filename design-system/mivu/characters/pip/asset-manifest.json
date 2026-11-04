@@ -34,8 +34,8 @@
   ],
   "runtimeAsset": {
     "path": "ios/Mivu/Resources/Characters/pip/pip-rig.json",
-    "sha256": "91eaf13f016c10a7f60f1da6a810c0144f4355a49cb4911257200b80be29422a",
-    "bytes": 314202,
+    "sha256": "0058a17594b7fedd9078c9e0ad0af359b4fd04e74c28defd7184a0e3e8704698",
+    "bytes": 354595,
     "formatVersion": 2,
     "canvas": [
       512,
@@ -52,7 +52,7 @@
     "tests": "design-system/mivu/characters/pip/rig/test_rig.py",
     "instructions": "design-system/mivu/characters/pip/rig/README.md"
   },
-  "targetRuntime": "Native Core Animation (CAShapeLayer rig, CASpringAnimation); no third-party runtime",
+  "targetRuntime": "Native Core Animation (CAShapeLayer rig, CASpringAnimation, baked CAKeyframeAnimation tracks); no third-party runtime",
   "fallbacks": [
     {
       "name": "PipResting",
@@ -110,26 +110,26 @@
   "authoringSources": [
     {
       "path": "design-system/mivu/characters/pip/rig/pip.svg",
-      "sha256": "e3d464e1b2c165b6e46c6265606114a78a7e30812a9e73f50b369e4c14c3ba83",
-      "bytes": 223466,
+      "sha256": "c04659d7b1b7dc63f495dc19326d06ece433cc6e080b69d8ffa5bdea4f1c053b",
+      "bytes": 252599,
       "role": "Editable layered vector Pip"
     },
     {
       "path": "design-system/mivu/characters/pip/rig/build.py",
-      "sha256": "57c991568afffd935c7d1f33b67f82fb1c215d0272e96c83e95079a57daa94d4",
-      "bytes": 10915,
+      "sha256": "8c456318385944ab13a0a2261a4ab9a37085b1c15227ad77cf7db409306bb9f1",
+      "bytes": 11222,
       "role": "SVG to pip-rig.json converter; --png renders fallbacks"
     },
     {
       "path": "design-system/mivu/characters/pip/rig/test_rig.py",
-      "sha256": "8833a561c7d5c6aeda6f500aa075cc476f84bdeab396e1a0592352456cb42c1d",
-      "bytes": 8617,
+      "sha256": "b7ee9bcfc8bcbfa8b2300dabb1e3ab2719faf4a556e347f5d031c157695db10a",
+      "bytes": 9179,
       "role": "Rig asset regression checks"
     },
     {
       "path": "design-system/mivu/characters/pip/rig/README.md",
-      "sha256": "b7f3cb96da359dafc797faddbbef43c34b0632ea569961b40b4236e29aa03ea0",
-      "bytes": 6843,
+      "sha256": "17197aa698d0dd8acb1160d376336a6782f59537f6233c01e6f36aaa4a3d4eec",
+      "bytes": 7725,
       "role": "Rig authoring and conventions"
     }
   ],
