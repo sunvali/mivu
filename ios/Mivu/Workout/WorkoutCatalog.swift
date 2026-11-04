@@ -1,6 +1,7 @@
 import Foundation
 
 /// A bundled activity; `met` is light, moderate, vigorous (2024 Compendium) and `healthKitType` is an `HKWorkoutActivityType` raw value.
+/// `speedMET` (running and cycling only) lists [km/h, MET] rows ascending by speed from the Compendium speed table.
 struct WorkoutActivity: Codable, Sendable, Identifiable {
     let id: String
     let name: String
@@ -8,6 +9,7 @@ struct WorkoutActivity: Codable, Sendable, Identifiable {
     let hasDistance: Bool
     let indoorOutdoor: Bool
     let met: [Double]
+    let speedMET: [[Double]]?
     let healthKitType: UInt
 }
 
