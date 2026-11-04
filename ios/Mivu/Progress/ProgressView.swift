@@ -646,7 +646,7 @@ struct WorkoutDetailView: View {
 
 }
 
-private extension WorkoutKind {
+extension WorkoutKind {
     var title: String {
         switch self {
         case .strength: "Strength"

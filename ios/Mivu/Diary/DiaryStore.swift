@@ -485,6 +485,12 @@ actor DiaryStore {
         try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.discardWorkout(id: id, expectedRevision: expectedRevision) } }
     }
 
+    /// The body weight a burn estimate uses on `localDate`, as `finishWorkout` reads it.
+    func bodyKg(on localDate: String, expectedProfileID: UUID) throws -> Double? {
+        let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+        return try database.domainRead(expectedProfileID: expectedProfileID) { try DiaryTransaction(database: database, head: $0).bodyKg(on: localDate, zone: $0.profile.timeZoneID) }
+    }
+
     func finishedWorkouts(containing key: ExerciseKey, limit: Int, expectedProfileID: UUID) throws -> [WorkoutSession] {
         try pagedConnection(expectedProfileID: expectedProfileID).database.finishedWorkouts(containing: key, limit: limit, expectedProfileID: expectedProfileID)
     }

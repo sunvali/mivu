@@ -24,8 +24,8 @@ struct DiarySummaryCardStyle: ViewModifier {
 }
 
 extension View {
-    func diarySummaryCard() -> some View {
-        modifier(DiarySummaryCardStyle())
+    func diarySummaryCard(fill: Color = .diarySurface) -> some View {
+        modifier(DiarySummaryCardStyle(fill: fill))
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
