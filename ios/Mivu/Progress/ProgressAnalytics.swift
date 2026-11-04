@@ -73,7 +73,7 @@ enum ProgressAnalytics {
         return known.isEmpty ? nil : known.reduce(0, +)
     }
 
-    static func status(days: [TrackingDay], hasFood: Bool, hasWorkouts: Bool = false, activeDayID: UUID?) -> DayStatus? {
+    static func status(days: [TrackingDay], hasFood: Bool, hasWorkouts: Bool, activeDayID: UUID?) -> DayStatus? {
         if days.isEmpty { return nil }
         // Stored coverage only records the user's skip; older complete/partial/unknown values read as closed.
         if days.allSatisfy({ $0.completeness == .untracked }) { return .skipped }

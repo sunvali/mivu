@@ -566,7 +566,7 @@ func validateWeightFields(_ weight: WeightEntry) throws {
 
 func validateGoalFields(_ goal: GoalRecord) throws {
     guard validLocalDate(goal.effectiveLocalDate), TimeZone(identifier: goal.timeZoneID) != nil,
-          goal.revision > 0, goal.revision < 1_000_000,
+          goal.revision > 0, goal.revision < 1_000_000, [0, 50, 100].contains(goal.exerciseCreditPercent),
           [goal.targets.kcal, goal.targets.carbs, goal.targets.protein, goal.targets.fat, goal.goalWeightKg]
             .allSatisfy({ $0 == nil || ($0!.isFinite && $0! > 0 && $0! <= 10_000_000) }) else { throw DiaryError.invalidData }
 }

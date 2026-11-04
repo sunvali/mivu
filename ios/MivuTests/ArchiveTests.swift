@@ -156,6 +156,15 @@ struct ArchiveTests {
         #expect(throws: DiaryError.wrongOwner) { try DiaryArchive.decode(JSONSerialization.data(withJSONObject: object)) }
     }
 
+    @Test func goalCreditOutsideTheThreeChoicesIsRejected() throws {
+        var snapshot = fixture()
+        snapshot.goals = [GoalRecord(effectiveLocalDate: "2026-10-12", timeZoneID: "Asia/Jerusalem",
+                                     targets: NutritionValues(kcal: 2_000), goalWeightKg: 70, exerciseCreditPercent: 50)]
+        _ = try DiaryArchive.encode(snapshot)
+        snapshot.goals[0].exerciseCreditPercent = 1_000
+        #expect(throws: DiaryError.invalidData) { try DiaryArchive.encode(snapshot) }
+    }
+
     @Test func invalidNutritionAndInputBoundsAreRejected() throws {
         var snapshot = fixture()
         snapshot.meals[0].revision = 1

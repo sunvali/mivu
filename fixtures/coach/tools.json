@@ -1039,7 +1039,7 @@
       "type" : "function"
     },
     {
-      "description" : "Apply only explicit user-requested target changes, never an inferred prescription. First get_goals for this effective_local_date. targets is a patch: omitted nutrients remain; null value unsets a target. Null goal_weight_kg keeps it; clear_goal_weight true unsets it. Unspecified exercise credit remains unchanged. Existing exact date requires expected_revision; new date uses null. Returns saved settings; creates no intake day.",
+      "description" : "Apply only explicit user-requested target changes, never an inferred prescription. First get_goals for this effective_local_date. targets is a patch: omitted nutrients remain; null value unsets a target. Null goal_weight_kg keeps it; clear_goal_weight true unsets it. Unspecified exercise credit remains unchanged; exercise_credit_percent 0, 50 or 100 sets how much workout burn adds to the food budget; omit to keep it. Existing exact date requires expected_revision; new date uses null. Returns saved settings; creates no intake day.",
       "name" : "set_goals",
       "parameters" : {
         "additionalProperties" : false,
@@ -1063,7 +1063,8 @@
             "enum" : [
               0,
               50,
-              100
+              100,
+              null
             ],
             "type" : [
               "integer",

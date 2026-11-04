@@ -196,6 +196,22 @@ import Testing
         #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).workouts.count == 2)
     }
 
+    @Test func workoutOnlyDayHasNoFoodStatusInWeekStripOrHistory() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let finished = WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate)
+        let ran = try await store.createWorkout(localDate: "2027-01-13", draft: finished, performedAt: nil, expectedProfileID: profile.id)
+        var running = finished; running.state = .active
+        _ = try await store.createWorkout(localDate: "2027-01-14", draft: running, performedAt: nil, expectedProfileID: profile.id)
+        let week = try await store.diaryWeek(from: "2027-01-11", through: "2027-01-17", expectedProfileID: profile.id)
+        let done = try #require(week.days.first { $0.day.localDate == "2027-01-13" })
+        let live = try #require(week.days.first { $0.day.localDate == "2027-01-14" })
+        #expect(done.workoutCount == 1 && live.workoutCount == 0)
+        #expect(DiaryWeek.status([done], activeDayID: nil) == nil)
+        #expect(DiaryWeek.status([live], activeDayID: nil) == .skipped)
+        let day = try await store.diaryDay(id: ran.dayID, expectedProfileID: profile.id)
+        #expect(DaySections.foodStatus(day) == nil)
+    }
+
     @Test func workoutEditAndDeleteRequireCurrentRevisionAndLeaveTombstone() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let draft = WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate)

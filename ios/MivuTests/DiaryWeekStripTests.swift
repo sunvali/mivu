@@ -26,6 +26,15 @@ struct DiaryWeekStripTests {
         #expect(DiaryWeek.weekStarts(earliest: "2026-10-14", selected: "2026-10-21", today: "2026-10-21", calendar: calendar) == ["2026-10-12", "2026-10-19"])
     }
 
+    @Test func workoutOnlySummaryIsNotSkipped() {
+        let day = TrackingDay(localDate: "2027-01-12", timeZoneID: "UTC", startAt: Date(), completeness: .unknown)
+        var summary = DiaryDaySummary(mealCount: 0, day: day, totals: nutritionTotals([]), savedMealCount: 0, pendingMealCount: 0)
+        #expect(DiaryWeek.status([summary], activeDayID: nil) == .skipped)
+        summary.workoutCount = 1
+        #expect(DiaryWeek.status([summary], activeDayID: nil) == nil)
+        #expect(DiaryWeek.pillLabel("2027-01-12", summaries: [summary]) == "Tuesday 12 January, workout logged")
+    }
+
     @Test func pillLabelDescribesStatusAndMeals() {
         let day = TrackingDay(localDate: "2027-01-12", timeZoneID: "UTC", startAt: Date(), completeness: .partial)
         let summary = DiaryDaySummary(mealCount: 3, day: day, totals: nutritionTotals([]), savedMealCount: 3, pendingMealCount: 0)

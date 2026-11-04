@@ -325,6 +325,19 @@ private actor RevisionCoachReplies {
         #expect(snapshot.days.isEmpty && snapshot.activeDayID == nil)
     }
 
+    @Test func nullCreditPercentKeepsTheStoredChoice() async throws {
+        let (store, profile, _, root) = try await fixture(startDay: false); defer { try? FileManager.default.removeItem(at: root) }
+        let seeded = GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID,
+            targets: NutritionValues(kcal: 2000), goalWeightKg: nil, exerciseCreditPercent: 50)
+        let saved = try await store.setGoals(seeded, expectedRevision: nil, expectedProfileID: profile.id)
+        let turn = try await capturedTurn(store, text: "Set calories", photos: [], at: now, expectedProfileID: profile.id)
+        let patch = try call("set_goals", ["effective_local_date": "2027-01-15", "expected_revision": saved.revision,
+            "targets": [["nutrient": "kcal", "value": 2100]], "exercise_credit_percent": NSNull()])
+        _ = try await run(store, profile, turn, [patch])
+        let goal = try #require(await store.snapshotForExport().goals.first)
+        #expect(goal.targets.kcal == 2100 && goal.exerciseCreditPercent == 50)
+    }
+
     @Test func nullItemNutrientClearsOnlyThatField() async throws {
         let (store, profile, possibleDay, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try #require(possibleDay), meal = try await savedMeal(store, profile, day)

@@ -236,7 +236,7 @@ extension DiaryTransaction {
         try validateGoalFields(value); return value
     }
     func daySummary(_ day: TrackingDay) throws -> DiaryDaySummary {
-        let statement = try database.domainStatement("SELECT COUNT(*), SUM(CASE WHEN json_extract(CAST(m.payload AS TEXT), '$.revision') > 0 THEN 1 ELSE 0 END), SUM(CASE WHEN (json_extract(CAST(m.payload AS TEXT), '$.revision') = 0 AND NOT EXISTS (SELECT 1 FROM submission s WHERE s.parent = m.id)) OR EXISTS (SELECT 1 FROM submission s WHERE s.parent = m.id AND json_extract(CAST(s.payload AS TEXT), '$.state') NOT IN ('saved','cancelled')) THEN 1 ELSE 0 END) FROM meal m WHERE m.parent = ?", [.text(day.id.uuidString)])
+        let statement = try database.domainStatement("SELECT COUNT(*), SUM(CASE WHEN json_extract(CAST(m.payload AS TEXT), '$.revision') > 0 THEN 1 ELSE 0 END), SUM(CASE WHEN (json_extract(CAST(m.payload AS TEXT), '$.revision') = 0 AND NOT EXISTS (SELECT 1 FROM submission s WHERE s.parent = m.id)) OR EXISTS (SELECT 1 FROM submission s WHERE s.parent = m.id AND json_extract(CAST(s.payload AS TEXT), '$.state') NOT IN ('saved','cancelled')) THEN 1 ELSE 0 END) , (SELECT COUNT(*) FROM workout w WHERE w.parent = ? AND json_extract(CAST(w.payload AS TEXT), '$.state') IS NOT 'active') FROM meal m WHERE m.parent = ?", [.text(day.id.uuidString), .text(day.id.uuidString)])
         defer { sqlite3_finalize(statement) }; guard try database.mutationStep(statement) else { throw DiaryError.invalidData }
         let saved = Int(sqlite3_column_int64(statement, 1)), pending = Int(sqlite3_column_int64(statement, 2))
         let fields = ["kcal", "carbs", "protein", "fat"]
@@ -246,7 +246,7 @@ extension DiaryTransaction {
         defer { sqlite3_finalize(totals) }; guard try database.mutationStep(totals) else { throw DiaryError.invalidData }
         let emptyComplete = sqlite3_column_int64(totals, 0) == 0 && day.completeness == .complete && pending == 0
         func value(_ column: Int32) -> Double? { emptyComplete ? 0 : (sqlite3_column_type(totals, column) == SQLITE_NULL ? nil : sqlite3_column_double(totals, column)) }
-        return DiaryDaySummary(mealCount: Int(sqlite3_column_int64(statement, 0)), day: day, totals: NutritionTotals(kcal: value(1), carbs: value(2), protein: value(3), fat: value(4), unknownItemCount: Int(sqlite3_column_int64(totals, 5))), savedMealCount: saved, pendingMealCount: pending)
+        return DiaryDaySummary(mealCount: Int(sqlite3_column_int64(statement, 0)), day: day, totals: NutritionTotals(kcal: value(1), carbs: value(2), protein: value(3), fat: value(4), unknownItemCount: Int(sqlite3_column_int64(totals, 5))), savedMealCount: saved, pendingMealCount: pending, workoutCount: Int(sqlite3_column_int64(statement, 3)))
     }
     func records(_ table: String, clause: String, values: [DiaryDatabase.Value], limit: Int? = nil) throws -> [DiaryDatabase.Record] {
         let hasParent = ["meal", "submission", "item", "photo", "weight", "workout", "coach_photo"].contains(table)

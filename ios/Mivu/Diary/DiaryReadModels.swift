@@ -133,6 +133,8 @@ struct DiaryDaySummary: Equatable, Sendable {
     var totals: NutritionTotals
     var savedMealCount: Int
     var pendingMealCount: Int
+    /// Finished workouts only; a running one does not make the day.
+    var workoutCount = 0
 }
 struct DiaryWeekPage: Equatable, Sendable {
     var days: [DiaryDaySummary]
