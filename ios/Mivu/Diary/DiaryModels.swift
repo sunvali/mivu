@@ -248,6 +248,8 @@ extension WorkoutSession {
 
     /// Copies a draft onto this record; fields the draft leaves unset keep their current value.
     mutating func apply(_ draft: WorkoutDraft) {
+        // Minutes edited without seconds: drop the stale seconds so the new minutes win.
+        if draft.durationSeconds == nil, draft.durationMinutes != durationMinutes { durationSeconds = nil }
         kind = draft.kind; durationMinutes = draft.durationMinutes; exercises = draft.exercises
         estimatedBurnKcal = draft.estimatedBurnKcal; burnSource = draft.burnSource
         title = draft.title ?? title; activity = draft.activity ?? activity; state = draft.state ?? state

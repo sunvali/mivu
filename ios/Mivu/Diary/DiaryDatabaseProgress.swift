@@ -23,7 +23,9 @@ extension DiaryDatabase {
             let previous = try transaction.workout(id: session.id), day = try trackingDay(id: session.dayID)
             guard previous.revision == expectedRevision else { throw DiaryError.staleRevision }
             guard session.dayID == previous.dayID, diaryDateLabel(session.performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
-            var saved = session; saved.revision = previous.revision + 1; return try transaction.saveWorkout(saved)
+            var saved = session; saved.revision = previous.revision + 1
+            if saved.durationSeconds == previous.durationSeconds, saved.durationMinutes != previous.durationMinutes { saved.durationSeconds = nil } // minutes edit wins over stale seconds
+            return try transaction.saveWorkout(saved)
         }
     }
     func deleteWorkout(id: UUID, expectedRevision: Int, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {

@@ -65,4 +65,33 @@ import Testing
         let updated = try await store.updateWorkout(created, expectedRevision: created.revision, expectedProfileID: profile.id)
         #expect(updated.durationMinutes == 90)
     }
+
+    @MainActor @Test func minuteEditWinsOverStoredSeconds() async throws {
+        let root = URL.temporaryDirectory.appending(path: "WorkoutModel-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let profile = DiaryProfile(name: "Synthetic workout", timeZoneID: "Asia/Jerusalem")
+        let store = DiaryStore(directory: root)
+        _ = try await store.createProfile(profile)
+        let day = try await store.startDay(at: Date(timeIntervalSince1970: 1_800_000_000), expectedProfileID: profile.id)
+        var draft = WorkoutDraft(kind: .cardio, durationMinutes: 50, exercises: [], estimatedBurnKcal: nil, burnSource: nil)
+        draft.durationSeconds = 3_000
+        var created = try await store.createWorkout(dayID: day.id, draft: draft, expectedProfileID: profile.id)
+        created.durationMinutes = 45
+        let edited = try await store.updateWorkout(created, expectedRevision: created.revision, expectedProfileID: profile.id)
+        #expect(edited.durationMinutes == 45 && edited.durationSeconds == nil)
+        var other = edited; other.note = "Easy"
+        let untouched = try await store.updateWorkout(other, expectedRevision: edited.revision, expectedProfileID: profile.id)
+        #expect(untouched.durationMinutes == 45 && untouched.note == "Easy")
+    }
+
+    @Test func applyKeepsUnsetFieldsAndLetsSecondsWin() {
+        var record = session { $0.title = "Legs"; $0.distanceMeters = 800; $0.durationSeconds = 1_800 }
+        var draft = WorkoutDraft(kind: .strength, durationMinutes: 30, exercises: record.exercises, estimatedBurnKcal: nil, burnSource: nil)
+        record.apply(draft)
+        #expect(record.title == "Legs" && record.distanceMeters == 800 && record.durationSeconds == 1_800)
+        draft.durationMinutes = 45; record.apply(draft)
+        #expect(record.durationSeconds == nil && record.durationMinutes == 45)
+        draft.durationMinutes = 10; draft.durationSeconds = 3_600; record.apply(draft)
+        #expect(record.durationSeconds == 3_600 && record.syncedMinutes.durationMinutes == 60)
+    }
 }

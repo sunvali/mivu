@@ -532,6 +532,22 @@ import Testing
         await #expect(throws: DiaryError.notFound) { try await store.applyCoachWrites([write], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
         #expect(receipts[0].workoutID == old.id)
     }
+    @Test func coachMinuteEditReplacesSecondsAndKeepsUnsetFields() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let create = try await capturedTurn(store, text: "Run", photos: [], at: now, expectedProfileID: profile.id)
+        var made = strength
+        made.durationMinutes = 50; made.durationSeconds = 3_000; made.title = "Evening run"; made.distanceMeters = 8_000
+        made.exercises[0].sets[0].type = .warmup
+        _ = try await store.applyCoachWrites([.workout(date: "2026-12-01", draft: made)], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let old = try #require(await store.snapshotForExport().workouts.first)
+        let turn = try await capturedTurn(store, text: "45 minutes", photos: [], at: now, expectedProfileID: profile.id)
+        var edit = strength; edit.durationMinutes = 45; edit.exercises = old.exercises
+        _ = try await store.applyCoachWrites([.editWorkout(id: old.id, draft: edit, revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let saved = try await store.coachWorkout(id: old.id, expectedProfileID: profile.id)
+        #expect(saved.durationMinutes == 45); #expect(saved.durationSeconds == nil)
+        #expect(saved.title == "Evening run"); #expect(saved.distanceMeters == 8_000)
+        #expect(saved.exercises[0].sets[0].type == .warmup)
+    }
     @Test func progressBatchRejectsDuplicatesStaleForeignAndCommitFailureWithoutMutation() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Synthetic batch", photos: [], at: now, expectedProfileID: profile.id)
