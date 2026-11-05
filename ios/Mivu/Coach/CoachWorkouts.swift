@@ -55,8 +55,12 @@ struct WorkoutPatch: Codable, Equatable, Sendable {
             let match = unused.contains(index) && key(stored[index].exerciseID, stored[index].name) == wanted
                 ? index : unused.first { key(stored[$0].exerciseID, stored[$0].name) == wanted }
             var exercise: WorkoutExercise
-            if let match { unused.removeAll { $0 == match }; exercise = stored[match] }
-            else if let catalog = row.exerciseID.flatMap(WorkoutCatalog.exercise) ?? WorkoutCatalog.resolve(row.name) {
+            let resolved = row.exerciseID.flatMap(WorkoutCatalog.exercise) ?? WorkoutCatalog.resolve(row.name)
+            if let match {
+                unused.removeAll { $0 == match }; exercise = stored[match]
+                // An older record named in words joins its catalog exercise, so its history no longer splits.
+                if exercise.exerciseID == nil, let catalog = resolved { exercise.name = catalog.name; exercise.exerciseID = catalog.id; exercise.measure = catalog.measure }
+            } else if let catalog = resolved {
                 exercise = WorkoutExercise(name: catalog.name, sets: [], exerciseID: catalog.id, measure: catalog.measure)
             } else { exercise = WorkoutExercise(name: row.name, sets: []) }
             let old = exercise.sets
@@ -86,16 +90,12 @@ struct WorkoutPatch: Codable, Equatable, Sendable {
 }
 
 extension WorkoutSet {
-    /// A listed set over the stored one at its position: reps replace, fields left out keep their value; normal clears the type.
+    /// A listed set is the whole set, so removing a warm-up never shifts its type onto the next one;
+    /// only the ticked state, which calls never carry, comes from the stored set at its position.
     func merged(onto stored: WorkoutSet?) -> WorkoutSet {
-        var result = stored ?? WorkoutSet(repetitions: repetitions)
-        result.repetitions = repetitions
-        if let loadKg { result.loadKg = loadKg }
-        if let type { result.type = type == .normal ? nil : type }
-        if let effort { result.effort = effort }
-        if let seconds { result.seconds = seconds }
-        if let distanceMeters { result.distanceMeters = distanceMeters }
-        if let done { result.done = done }
+        var result = self
+        if result.type == .normal { result.type = nil }
+        if result.done == nil { result.done = stored?.done }
         return result
     }
 }
@@ -118,7 +118,7 @@ extension CoachTools {
             ("get_workout", "Read a complete owned finished workout before editing it. Oversized records are refused; never replace unseen sets.", object(["workout_id": string], required: ["workout_id"])),
             ("log_workout", "Log one finished workout per turn/date; another session needs another turn. Exercise names resolve to the catalog; unknown names become the user's own exercises. Set activity. Pass estimated_burn_kcal only for a number the user said, with burn_source userEstimate; otherwise Mivu estimates burn. Timestamps are unconfirmed date-only. While context.activeWorkout exists, use add_to_workout for what the user is doing now.",
              object(workout.merging(["local_date": string]) { _, new in new }, required: ["local_date", "kind", "duration_minutes", "exercises"])),
-            ("edit_workout", "Edit a retrieved finished workout using its real ID/revision. Only listed fields change; null keeps the stored value; an empty title, note or exercise note clears it. local_date moves it to that date. exercises, when listed, is the complete new list in order, used to add, remove, move or replace exercises; a listed exercise keeps unlisted fields of the stored one with the same name, and a listed set keeps unlisted fields of the stored set at its position.",
+            ("edit_workout", "Edit a retrieved finished workout using its real ID/revision. Only listed fields change; null keeps the stored value; an empty title, note or exercise note clears it. local_date moves it to that date. exercises, when listed, is the complete new list in order, used to add, remove, move or replace exercises; a listed exercise keeps unlisted fields of the stored one with the same name. Each listed set is complete: send all its fields as retrieved, since null means none.",
              object(workout.merging(["workout_id": string, "expected_revision": integer, "local_date": string]) { _, new in new }, required: ["workout_id", "expected_revision"])),
             ("add_to_workout", "Add sets the user just did to the running workout in context.activeWorkout: they join that exercise, or the exercise is added. Empty sets adds a new exercise with last time's sets still to do. One call per exercise per turn.",
              object(["exercise": string, "sets": sets], required: ["exercise", "sets"])),

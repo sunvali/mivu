@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 @testable import Mivu
 
@@ -102,7 +103,7 @@ private actor WorkoutCoachReplies {
         let original = try await storedGymSession(store, profile)
         // Move a day back, change time, distance, effort and note, clear the title; reorder, ungroup,
         // retype and re-rate sets, change rest, clear a note and remove the rower.
-        let exercises = #"[{"name":"Barbell Row","group":"","sets":[{"repetitions":8,"load_kg":52.5}]},{"name":"Bench press","rest_seconds":120,"note":"","sets":[{"repetitions":10,"load_kg":null,"type":"normal"},{"repetitions":8,"load_kg":null,"effort":9}]}]"#
+        let exercises = #"[{"name":"Barbell Row","group":"","sets":[{"repetitions":8,"load_kg":52.5}]},{"name":"Bench press","rest_seconds":120,"note":"","sets":[{"repetitions":10,"load_kg":40,"type":"normal"},{"repetitions":8,"load_kg":60,"effort":9}]}]"#
         let args = #"{"workout_id":"\#(original.id)","expected_revision":1,"local_date":"2027-01-14","duration_seconds":3000,"distance_meters":500,"effort":7,"title":"","note":"Synthetic felt good","exercises":\#(exercises)}"#
         _ = try await apply(store, profile, turn, call("edit_workout", args), workouts: [original])
         let edited = try #require(try await store.snapshotForExport().workouts.first)
@@ -118,12 +119,30 @@ private actor WorkoutCoachReplies {
         #expect(edited.exercises[0].sets == [WorkoutSet(repetitions: 8, loadKg: 52.5)])
 
         // Group them again as a superset, and change the activity.
-        let regroup = #"{"workout_id":"\#(original.id)","expected_revision":2,"activity":"crossfit","exercises":[{"name":"Barbell Row","group":"s","sets":[{"repetitions":8,"load_kg":null}]},{"name":"Barbell Bench Press","group":"s","sets":[{"repetitions":10,"load_kg":null},{"repetitions":8,"load_kg":null}]}]}"#
+        let regroup = #"{"workout_id":"\#(original.id)","expected_revision":2,"activity":"crossfit","exercises":[{"name":"Barbell Row","group":"s","sets":[{"repetitions":8,"load_kg":52.5}]},{"name":"Barbell Bench Press","group":"s","sets":[{"repetitions":10,"load_kg":40},{"repetitions":8,"load_kg":60,"effort":9}]}]}"#
         _ = try await apply(store, profile, try await capturedTurn(store, text: "Synthetic regroup", photos: [], at: now, expectedProfileID: profile.id),
                             call("edit_workout", regroup), workouts: [edited])
         let grouped = try #require(try await store.snapshotForExport().workouts.first)
         #expect(grouped.exercises[0].groupID != nil && grouped.exercises[0].groupID == grouped.exercises[1].groupID)
         #expect(grouped.activity == "crossfit" && grouped.kind == .cardio && grouped.exercises[1].sets == bench.sets)
+    }
+
+    @Test func deleteWarmupSetDoesNotShiftType() throws {
+        let stored = [WorkoutExercise(name: "Barbell Bench Press", sets: [WorkoutSet(repetitions: 10, loadKg: 40, type: .warmup, done: true), WorkoutSet(repetitions: 8, loadKg: 60, effort: 8, done: true)],
+                                      exerciseID: "barbell-bench-press", measure: .weightReps)]
+        // The warm-up is gone: the working set keeps only what the call lists.
+        let deleted = try WorkoutPatch.merged([.init(name: "Bench", sets: [WorkoutSet(repetitions: 8, loadKg: 60, effort: 8)])], into: stored)
+        #expect(deleted[0].sets == [WorkoutSet(repetitions: 8, loadKg: 60, effort: 8, done: true)])
+        // A set inserted between them carries nothing over from the set that used to sit there.
+        let inserted = try WorkoutPatch.merged([.init(name: "Bench", sets: [WorkoutSet(repetitions: 10, loadKg: 40, type: .warmup), WorkoutSet(repetitions: 6, loadKg: 50), WorkoutSet(repetitions: 8, loadKg: 60, effort: 8)])], into: stored)
+        #expect(inserted[0].sets.map(\.type) == [.warmup, nil, nil] && inserted[0].sets.map(\.effort) == [nil, nil, 8])
+        #expect(inserted[0].sets.map(\.loadKg) == [40, 50, 60])
+    }
+
+    @Test func legacyNamedExerciseJoinsCatalogOnEdit() throws {
+        let stored = [WorkoutExercise(name: "Squat", sets: [WorkoutSet(repetitions: 8, loadKg: 40)])]
+        let merged = try WorkoutPatch.merged([.init(name: "Squat", sets: [WorkoutSet(repetitions: 8, loadKg: 45)])], into: stored)
+        #expect(merged[0].exerciseID == "barbell-back-squat" && merged[0].name == "Barbell Back Squat" && merged[0].measure == .weightReps)
     }
 
     @Test func addToRunningWorkout() async throws {
@@ -156,6 +175,75 @@ private actor WorkoutCoachReplies {
         #expect(model.saveError == nil && model.session == stored)
         #expect(stored.exercises.map(\.exerciseID) == ["barbell-bench-press", "barbell-row"])
         #expect(stored.exercises[0].sets[0].done == true && stored.exercises[1].sets == [WorkoutSet(repetitions: 10, loadKg: 50, done: true)])
+    }
+
+    @Test func doneAfterCoachAddKeepsBoth() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let bench = WorkoutExercise(name: "Barbell Bench Press", sets: [WorkoutSet(repetitions: 8, loadKg: 60, done: false)], exerciseID: "barbell-bench-press", measure: .weightReps)
+        let running = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [bench], activity: "strength"), at: now, expectedProfileID: profile.id)
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: running, unit: "kg", mode: .live)
+        await model.tick(exercise: 0, set: 0)
+        _ = try await apply(store, profile, turn, call("add_to_workout", #"{"exercise":"Barbell row","sets":[{"repetitions":10,"load_kg":50}]}"#))
+        // Done with no edit in between.
+        #expect(await model.finish(at: now.addingTimeInterval(1_800)))
+        let finished = try #require(try await store.snapshotForExport().workouts.first)
+        #expect(finished.isFinished && finished.exercises.map(\.exerciseID) == ["barbell-bench-press", "barbell-row"])
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id) == nil)
+    }
+
+    @Test func discardAfterCoachAddDiscards() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let running = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [], activity: "strength"), at: now, expectedProfileID: profile.id)
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: running, unit: "kg", mode: .live)
+        _ = try await apply(store, profile, turn, call("add_to_workout", #"{"exercise":"Barbell row","sets":[{"repetitions":10,"load_kg":50}]}"#))
+        #expect(await model.discard())
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id) == nil)
+    }
+
+    @Test func failedEditSurvivesCoachAddAndNextEdit() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let bench = WorkoutExercise(name: "Barbell Bench Press", sets: [WorkoutSet(repetitions: 8, loadKg: 60, done: false), WorkoutSet(repetitions: 8, loadKg: 60, done: false)],
+                                    exerciseID: "barbell-bench-press", measure: .weightReps)
+        let running = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [bench], activity: "strength"), at: now, expectedProfileID: profile.id)
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: running, unit: "kg", mode: .live)
+        let file = root.appendingPathComponent(profile.id.uuidString + ".sqlite").appendingPathComponent("diary.sqlite")
+        func sql(_ statement: String) throws {
+            var db: OpaquePointer?
+            guard sqlite3_open(file.path, &db) == SQLITE_OK else { throw DiaryError.persistenceFailed }
+            defer { sqlite3_close(db) }
+            guard sqlite3_exec(db, statement, nil, nil, nil) == SQLITE_OK else { throw DiaryError.persistenceFailed }
+        }
+        // The first tick fails to save and stays on screen with its error.
+        try sql("CREATE TRIGGER reject_live BEFORE UPDATE OF revision ON storage_head BEGIN SELECT RAISE(ABORT, 'synthetic'); END")
+        await model.tick(exercise: 0, set: 0)
+        #expect(model.saveError != nil && model.isTicked(exercise: 0, set: 0) == false)
+        try sql("DROP TRIGGER reject_live")
+        _ = try await apply(store, profile, turn, call("add_to_workout", #"{"exercise":"Barbell row","sets":[{"repetitions":10,"load_kg":50}]}"#))
+        // The next edit saves both screen edits onto Pip's copy.
+        await model.update(exercise: 0, set: 1, kg: 62.5, reps: nil, seconds: nil)
+        let stored = try #require(try await store.activeWorkout(expectedProfileID: profile.id))
+        #expect(model.saveError == nil && model.session == stored)
+        #expect(stored.exercises[0].sets[0].done == true && stored.exercises[0].sets[1].loadKg == 62.5)
+        #expect(stored.exercises.map(\.exerciseID) == ["barbell-bench-press", "barbell-row"])
+    }
+
+    @Test func addWithoutRunningWorkoutIsCorrectable() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        await #expect(throws: CoachError.invalidArguments) {
+            try await apply(store, profile, turn, call("add_to_workout", #"{"exercise":"Barbell row","sets":[{"repetitions":10,"load_kg":50}]}"#))
+        }
+    }
+
+    @Test func bigRunningWorkoutStaysInsideContext() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let long = String(repeating: "n", count: 2_000)
+        let exercises = (0..<100).map { WorkoutExercise(name: String(format: "Synthetic own lift %03d ", $0) + String(repeating: "x", count: 170), sets: [WorkoutSet(repetitions: 8, loadKg: 20)], note: long) }
+        let running = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: exercises, title: "Synthetic big day", activity: "strength", note: long),
+                                                   at: now, expectedProfileID: profile.id)
+        let context = try await store.coachContext(turnID: turn.id, expectedProfileID: profile.id)
+        let active = try #require(context.activeWorkout)
+        #expect(active.id == running.id && active.title == "Synthetic big day" && !active.exercises.isEmpty)
+        #expect(try JSONEncoder().encode(active).count <= 8192); #expect(context.truncated)
     }
 
     @Test func modelBurnIgnoredUnlessUser() async throws {

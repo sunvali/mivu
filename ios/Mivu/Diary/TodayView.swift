@@ -102,6 +102,8 @@ struct DiaryRootView: View {
     @State private var thermalState = ProcessInfo.processInfo.thermalState
     /// The live gym screen, over every tab; the banner opens it.
     @State private var liveWorkout: WorkoutSession?
+    /// Said once on the gym screen, e.g. when Coach's Start opened another running workout.
+    @State private var liveNotice: String?
     @State private var discardingWorkout = false
     private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -329,7 +331,7 @@ struct DiaryRootView: View {
             if let owner = model.readModel?.profile.id {
                 // The cover does not inherit the proof text size from the root, so it is applied again here.
                 LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past,
-                                onSaved: model.noteWorkoutSaved) { liveWorkout = nil }
+                                notice: liveNotice, onSaved: model.noteWorkoutSaved) { liveWorkout = nil; liveNotice = nil }
                     .proofTypeSize()
             }
         }
@@ -431,7 +433,10 @@ struct DiaryRootView: View {
     /// Coach's routine card: Start opens the live workout from it, or the one already running.
     private func startRoutine(_ id: UUID) {
         guard let owner = model.readModel?.profile.id else { return }
-        if let active = model.activeWorkout { liveWorkout = active; return }
+        if let active = model.activeWorkout {
+            if active.routineID != id { liveNotice = "\(WorkoutRow.title(active)) is already running" }
+            liveWorkout = active; return
+        }
         Task {
             await model.change {
                 guard let routine = try await model.store.routines(expectedProfileID: owner).first(where: { $0.id == id }) else { throw DiaryError.notFound }

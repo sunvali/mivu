@@ -691,7 +691,7 @@
       "type" : "function"
     },
     {
-      "description" : "Edit a retrieved finished workout using its real ID/revision. Only listed fields change; null keeps the stored value; an empty title, note or exercise note clears it. local_date moves it to that date. exercises, when listed, is the complete new list in order, used to add, remove, move or replace exercises; a listed exercise keeps unlisted fields of the stored one with the same name, and a listed set keeps unlisted fields of the stored set at its position.",
+      "description" : "Edit a retrieved finished workout using its real ID/revision. Only listed fields change; null keeps the stored value; an empty title, note or exercise note clears it. local_date moves it to that date. exercises, when listed, is the complete new list in order, used to add, remove, move or replace exercises; a listed exercise keeps unlisted fields of the stored one with the same name. Each listed set is complete: send all its fields as retrieved, since null means none.",
       "name" : "edit_workout",
       "parameters" : {
         "additionalProperties" : false,

@@ -351,11 +351,12 @@ extension DiaryTransaction {
     private struct Deleted: Encodable { var id: UUID; var deleted = true }
     /// The running workout with the sets joining its exercise, or the exercise added with them.
     private func runningWithAdded(_ name: String, _ sets: [WorkoutSet]) throws -> (session: WorkoutSession, added: WorkoutExercise) {
-        guard var session = try activeWorkout() else { throw DiaryError.notFound }
+        // Refused as a call Pip can correct (log_workout instead, or sets to add), never as a failed turn.
+        guard var session = try activeWorkout() else { throw CoachError.invalidArguments }
         var added = try WorkoutPatch.merged([.init(name: name, sets: sets)], into: [])[0]
         let key = ExerciseKey(added)
         if let index = session.exercises.lastIndex(where: { ExerciseKey($0) == key }) {
-            guard !sets.isEmpty else { throw DiaryError.invalidData } // already there, nothing to add
+            guard !sets.isEmpty else { throw CoachError.invalidArguments } // already there, nothing to add
             session.exercises[index].sets += added.sets
         } else {
             if sets.isEmpty {
@@ -373,8 +374,8 @@ extension DiaryTransaction {
         var bests: [String] = [], new: [String] = []
         for exercise in exercises {
             let key = ExerciseKey(exercise)
-            // shortcut: compares with the latest 1,000 sessions of the exercise, as the gym screen does.
-            let before = try finishedWorkouts(containing: key, limit: 1_000).filter { $0.id != id }
+            // shortcut: runs inside the write once per exercise, so it compares with the latest 100 sessions; raise it if bests look wrong.
+            let before = try finishedWorkouts(containing: key, limit: 101).filter { $0.id != id }
             if exercise.exerciseID == nil, before.isEmpty { new.append(exercise.name) }
             let sets = before.flatMap(\.exercises).filter { ExerciseKey($0) == key }.flatMap(\.sets)
             let measure = exercise.measure ?? exercise.exerciseID.flatMap { WorkoutCatalog.exercise($0)?.measure } ?? .weightReps

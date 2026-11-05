@@ -212,9 +212,13 @@ extension DiaryDatabase {
             let progress = try progressRangeInsideContext(transaction, date: diaryDateLabel(work.capturedAt, zone: work.captureTimeZoneID))
             context.weights = progress.weights; context.workouts = progress.workouts
             context.omittedWeightCount = progress.omittedWeights; context.omittedWorkoutCount = progress.omittedWorkouts
+            var activeTrimmed = false
             if var active = try transaction.activeWorkout() {
-                // A huge running workout keeps its exercises without their sets, inside the context cap.
-                if try JSONEncoder().encode(active).count > 8192 { active.exercises = active.exercises.map { var exercise = $0; exercise.sets = []; return exercise } }
+                // A big running workout keeps its ID, title and as many exercise names as fit in 8 KB.
+                if try JSONEncoder().encode(active).count > 8192 {
+                    active.note = nil; active.exercises = active.exercises.map { WorkoutExercise(name: $0.name, sets: [], exerciseID: $0.exerciseID) }
+                    while try JSONEncoder().encode(active).count > 8192, !active.exercises.isEmpty { active.exercises.removeLast(); activeTrimmed = true }
+                }
                 context.activeWorkout = active
             }
             let routines = try domainStatement("SELECT payload FROM routine ORDER BY ordinal DESC, id DESC LIMIT 20")
@@ -227,13 +231,14 @@ extension DiaryDatabase {
             let current = try coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID)
             try context.includeCommittedReceipts(current.receipts)
             context.replyTo = try current.reply.map { try coachReplyContext($0, transaction: transaction) }
-            context.truncated = recent.count < min(12, Int(work.sequence - 1)) || !context.omittedMeals.isEmpty || context.additionalMealCount > 0 || context.preferencesTruncated == true
+            context.truncated = activeTrimmed || recent.count < min(12, Int(work.sequence - 1)) || !context.omittedMeals.isEmpty || context.additionalMealCount > 0 || context.preferencesTruncated == true
             while try JSONEncoder().encode(context).count > 60_000, let meal = context.meals.first {
                 context.meals.removeFirst(); context.omittedMeals.append(.init(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count)); context.truncated = true
             }
             while try JSONEncoder().encode(context).count > 60_000, context.workouts?.isEmpty == false {
                 context.workouts!.removeFirst(); context.omittedWorkoutCount = (context.omittedWorkoutCount ?? 0) + 1; context.truncated = true
             }
+            if try JSONEncoder().encode(context).count > 60_000 { context.routines = nil; context.activeWorkout?.exercises = []; context.truncated = true }
             guard try JSONEncoder().encode(context).count <= 60_000 else { throw CoachError.limitExceeded }; return context
         }
     }
@@ -248,8 +253,11 @@ extension DiaryDatabase {
                 CoachExerciseHistory.Session(workoutID: session.id, localDate: try trackingDay(id: session.dayID).localDate,
                                              sets: session.exercises.filter { ExerciseKey($0) == key }.flatMap(\.sets))
             }
-            return CoachExerciseHistory(exercise: probe.name, sessions: sessions, totalSessions: all.count,
-                                        heaviestKg: bests.heaviestKg, mostReps: bests.mostReps, longestSeconds: bests.longestSeconds)
+            var history = CoachExerciseHistory(exercise: probe.name, sessions: sessions, totalSessions: all.count,
+                                               heaviestKg: bests.heaviestKg, mostReps: bests.mostReps, longestSeconds: bests.longestSeconds)
+            // Bounded like get_workout: the oldest sessions go first; totalSessions still says how many there are.
+            while try JSONEncoder().encode(history).count > 48_000, !history.sessions.isEmpty { history.sessions.removeLast() }
+            return history
         }
     }
     /// One bounded read of what the turn quotes; missing records are explicit, never guessed.

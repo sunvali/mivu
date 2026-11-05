@@ -742,7 +742,8 @@ struct CoachView: View {
                 CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt), undoState: coach.undoState(receipt),
                                  undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }
-                    else if case .workout(let workout, _) = coach.receiptTarget(receipt), !workout.isFinished { openWorkout(workout) }
+                    // The running workout opens as it is stored now, not as this card first read it.
+                    else if let active = coach.diary.activeWorkout, active.id == receipt.workoutID { openWorkout(active) }
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
                 }
             }

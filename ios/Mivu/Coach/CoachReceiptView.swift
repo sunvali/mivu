@@ -331,8 +331,9 @@ struct CoachRoutineCard: View {
         }
     }
     private var startButton: some View {
-        Button(action: start) { Text("Start").frame(minWidth: 44, minHeight: 44) }
-            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).tint(.diaryWorkout)
+        // Tinted, like the New best pill: a filled lavender button loses its white label in dark mode.
+        Button(action: start) { Text("Start").font(.headline).frame(minWidth: 44, minHeight: 44) }
+            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryWorkout)
             .accessibilityLabel("Start \(name)")
             .accessibilityIdentifier("coachRoutineStart")
     }

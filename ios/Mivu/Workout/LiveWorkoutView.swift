@@ -15,6 +15,7 @@ struct LiveWorkoutView: View {
     @State private var removing: Int?
     @State private var typingKcal = false
     @State private var kcalText = ""
+    @State private var notice: String?
     @AccessibilityFocusState private var focusedTick: String?
     private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -22,8 +23,9 @@ struct LiveWorkoutView: View {
 
     struct SetPosition: Identifiable { let exercise: Int, set: Int; var id: String { "\(exercise)-\(set)" } }
 
-    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, mode: LiveWorkoutMode, onSaved: @escaping (WorkoutSession, UUID) -> Void,
+    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, mode: LiveWorkoutMode, notice: String? = nil, onSaved: @escaping (WorkoutSession, UUID) -> Void,
          onClose: @escaping () -> Void) {
+        _notice = State(initialValue: notice)
         let unit = UserDefaults.standard.string(forKey: "weightUnit") ?? "kg"
         _model = State(initialValue: LiveWorkoutModel(store: store, profileID: profileID, session: session, unit: unit, mode: mode, rest: .shared,
                                                       onSaved: onSaved))
@@ -52,6 +54,17 @@ struct LiveWorkoutView: View {
                         TextField("Note", text: Binding(get: { model.session.note ?? "" }, set: { model.session.note = $0 }), axis: .vertical)
                             .lineLimit(1...4).frame(minHeight: 44)
                             .accessibilityIdentifier("editWorkoutNote")
+                    }
+                }
+                if let notice {
+                    Section {
+                        Label(notice, systemImage: "info.circle").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                            .frame(minHeight: 44, alignment: .leading).accessibilityIdentifier("liveWorkoutNotice")
+                    }
+                    .task {
+                        AccessibilityNotification.Announcement(notice).post()
+                        try? await Task.sleep(for: .seconds(4))
+                        withAnimation(reduceMotion ? nil : .snappy) { self.notice = nil }
                     }
                 }
                 if let error = model.saveError {

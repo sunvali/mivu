@@ -192,7 +192,14 @@ enum DiaryCaptureResult: Equatable, Sendable {
             if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 try await install(try await profileSelection(profile.id))
             } else if createDefaultProfile {
-                try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
+                var created = try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier))
+                #if DEBUG
+                if CoachWorkoutUITestFixture.isEnabled {
+                    try await CoachWorkoutUITestFixture.seed(store, profile: created.head.profile)
+                    created = try await profileSelection(created.head.profile.id)
+                }
+                #endif
+                try await install(created)
                 profiles = try await store.profiles()
             }
         } catch { await recoverProfileSelection(previous); presentUnlessLocked(error) }

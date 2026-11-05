@@ -71,6 +71,8 @@ enum WeightStep {
     private var saved: WorkoutSession
     @ObservationIgnored private var history: [ExerciseKey: [WorkoutSession]] = [:]
     @ObservationIgnored private var pending: Task<Void, Never>?
+    /// Edits not yet saved, in order, replayed onto the stored copy if Pip changed it meanwhile.
+    @ObservationIgnored private var unsaved: [(inout WorkoutSession) -> Void] = []
     @ObservationIgnored private let rest: RestTimer?
     /// Told once a live or past workout is saved finished, with its owner, for Pip.
     @ObservationIgnored private let onSaved: (WorkoutSession, UUID) -> Void
@@ -424,8 +426,13 @@ enum WeightStep {
             switch mode {
             case .live:
                 // Edits that failed to save are saved first, so Done never drops a tick.
-                if saveError != nil { session = try await store.saveActive(session, expectedRevision: session.revision, expectedProfileID: profileID) }
-                session = try await store.finishWorkout(id: session.id, effort: effort, at: now, expectedRevision: session.revision, expectedProfileID: profileID)
+                if saveError != nil { session = try await saveRecovering(session); saved = session }
+                do { session = try await store.finishWorkout(id: session.id, effort: effort, at: now, expectedRevision: session.revision, expectedProfileID: profileID) }
+                catch DiaryError.staleRevision {
+                    // Pip added to it meanwhile; every screen change is saved, so the stored copy holds both.
+                    let stored = try await storedActive()
+                    session = try await store.finishWorkout(id: stored.id, effort: effort, at: now, expectedRevision: stored.revision, expectedProfileID: profileID)
+                }
                 onSaved(session, profileID)
             case .past:
                 let date = try await workoutDate()
@@ -471,8 +478,11 @@ enum WeightStep {
     func discard() async -> Bool {
         await pending?.value
         guard mode == .live else { return true }
-        do { try await store.discardWorkout(id: session.id, expectedRevision: session.revision, expectedProfileID: profileID); return true }
-        catch { saveError = error.localizedDescription; return false }
+        do {
+            do { try await store.discardWorkout(id: session.id, expectedRevision: session.revision, expectedProfileID: profileID) }
+            catch DiaryError.staleRevision { try await store.discardWorkout(id: session.id, expectedRevision: try await storedActive().revision, expectedProfileID: profileID) }
+            return true
+        } catch { saveError = error.localizedDescription; return false }
     }
 
     /// Applies one edit after the previous one is saved, so quick taps never save over each other.
@@ -482,14 +492,9 @@ enum WeightStep {
             await previous?.value
             var next = session; edit(&next)
             guard mode == .live else { session = next; refreshBests(); return }
+            unsaved.append(edit)
             do {
-                do { session = try await store.saveActive(next, expectedRevision: next.revision, expectedProfileID: profileID) }
-                catch DiaryError.staleRevision {
-                    // Pip changed the running workout meanwhile: this edit goes onto the stored copy, so both stay.
-                    guard var stored = try await store.activeWorkout(expectedProfileID: profileID), stored.id == next.id else { throw DiaryError.staleRevision }
-                    edit(&stored)
-                    session = try await store.saveActive(stored, expectedRevision: stored.revision, expectedProfileID: profileID)
-                }
+                session = try await saveRecovering(next)
                 saved = session; saveError = nil
             } catch {
                 // The values stay on screen, unsaved ticks shown undone; Retry saves them again.
@@ -499,6 +504,25 @@ enum WeightStep {
         }
         pending = task
         await task.value
+    }
+
+    /// Saves the screen's copy. If Pip changed the running workout meanwhile, every unsaved edit is
+    /// replayed in order onto the stored copy, so Pip's change and the screen's all stay.
+    private func saveRecovering(_ next: WorkoutSession) async throws -> WorkoutSession {
+        let result: WorkoutSession
+        do { result = try await store.saveActive(next, expectedRevision: next.revision, expectedProfileID: profileID) }
+        catch DiaryError.staleRevision {
+            var stored = try await storedActive()
+            for edit in unsaved { edit(&stored) }
+            result = try await store.saveActive(stored, expectedRevision: stored.revision, expectedProfileID: profileID)
+        }
+        unsaved = []
+        return result
+    }
+
+    private func storedActive() async throws -> WorkoutSession {
+        guard let stored = try await store.activeWorkout(expectedProfileID: profileID), stored.id == session.id else { throw DiaryError.staleRevision }
+        return stored
     }
 
     /// An edit to one exercise or set; skipped if an earlier queued edit removed it.

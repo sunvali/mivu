@@ -49,9 +49,11 @@ that target.
 null keeps its stored value; an empty `title`, `note` or exercise `note` clears
 it. `exercises`, when listed, is the complete new list in order. Each listed
 exercise keeps unlisted fields of the stored exercise with the same catalog ID
-or name (at its position, else the first unused match), and each listed set
-keeps unlisted fields of the stored set at its position. Names resolve to the
-catalog on every write, so history never splits between a catalog ID and a free
+or name (at its position, else the first unused match). Each listed set is the
+complete set (null means none), so deleting a warm-up never shifts its type or
+effort onto the next set; only the ticked state comes from the stored set at its
+position. Names resolve to the catalog on every write, and an older word-named
+exercise joins its catalog exercise when an edit lists it, so history never splits between a catalog ID and a free
 name; unknown names become own exercises and the card says "New exercise". Burn
 is Mivu's estimate unless the user said a number (`burn_source: userEstimate`);
 an edit re-estimates only when activity, time, distance, effort or day changed.
@@ -66,7 +68,7 @@ an edit re-estimates only when activity, time, distance, effort or day changed.
 | Add, remove, move or replace an exercise; add or delete a set | the complete `exercises` list |
 | Exercise rest and note | `rest_seconds`, `note` |
 | Superset, group and ungroup | the same `group` label on neighbours; a retrieved `groupID` keeps one; empty leaves it. A split superset is refused |
-| Running workout: another set, add an exercise | `add_to_workout`; the open gym screen reloads the stored copy and reapplies its own change |
+| Running workout: another set, add an exercise | `add_to_workout`; the open gym screen reloads the stored copy and replays its unsaved changes, and Done and Discard do the same |
 | Delete, Undo | `delete_workout`, `undo_change` |
 | Routines, own exercise rename/merge, workout settings | `open_settings` `workouts` (no Coach write tools) |
 | Burn in the food budget | `set_goals` `exercise_credit_percent` |

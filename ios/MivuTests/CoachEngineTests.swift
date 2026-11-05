@@ -721,7 +721,8 @@ private actor CoachInputFixture {
         let receipt = try #require(completed.receipts.first)
         let returned = try JSONDecoder().decode(WorkoutSession.self, from: Data(receipt.resultJSON.utf8))
         #expect(returned.id == original.id); #expect(returned.revision == 2)
-        #expect(returned.durationMinutes == 45); #expect(returned.exercises == original.exercises)
+        // The older word-named "Squat" joins its catalog exercise on edit; its sets stay as they were.
+        #expect(returned.durationMinutes == 45); #expect(returned.exercises.map(\.exerciseID) == ["barbell-back-squat"] && returned.exercises[0].sets == original.exercises[0].sets)
         #expect(returned.performedAt == original.performedAt); #expect(returned.dayID == original.dayID)
         #expect(completed.assistantText == "Workout saved: strength, 45 minutes.")
     }
@@ -821,7 +822,8 @@ private actor CoachInputFixture {
         let parsed = try CoachTools.parse(call("edit_workout", arguments), meals: [], evidence: [:], receipts: [], workouts: [fresh])
         guard case .write(let write) = parsed else { throw CoachError.invalidArguments }
         let receipts = try await store.applyCoachWrites([write], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
-        #expect(try await store.snapshotForExport().workouts[0].exercises == [squat, deadlift])
+        let edited = try await store.snapshotForExport().workouts[0].exercises
+        #expect(edited.map(\.exerciseID) == ["barbell-back-squat", "deadlift"] && edited.map(\.sets) == [squat.sets, deadlift.sets])
         #expect(receipts[0].workoutID == original.id)
     }
 
