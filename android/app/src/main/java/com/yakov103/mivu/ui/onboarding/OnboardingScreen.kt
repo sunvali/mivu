@@ -159,7 +159,6 @@ private const val MIN_AGE = 18
  * Setup's answers and step, kept in [savedState] so they survive process death; numbers stay as typed, in the chosen
  * unit, and are read as metric. [inference] binds one request to the connection current now (`ChatGPTConnection.inference`).
  */
-
 class OnboardingViewModel(
     private val repository: DiaryRepository,
     private val profileID: UUID,
