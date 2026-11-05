@@ -295,7 +295,7 @@ struct GoalEditorView: View {
         do {
             let goal = try await model.store.goal(on: label, exact: true, expectedProfileID: ownerID)
             // A new date's record keeps the burn choice in force, which is set in Settings › Workouts.
-            let credit = try await goal == nil ? model.store.goal(on: label, expectedProfileID: ownerID)?.exerciseCreditPercent : nil
+            let credit = try await goal == nil ? model.store.goal(on: label, expectedProfileID: ownerID)?.exerciseCreditPercent ?? GoalRecord.waitingCredit(ownerID) : nil
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation,
                   goalRequest == request, values == draft, ProgressDate.label(date, zone: zone) == label else { return }
             var loaded = GoalEditorValues(goal: goal, localDate: label)
@@ -332,6 +332,8 @@ struct GoalEditorView: View {
         Task {
             guard model.selection == ownership, ownership != nil else { saving = false; return }
             let success = await model.change { _ = try await model.store.setGoals(goal, expectedRevision: expectedRevision, expectedProfileID: ownerID) }
+            // A goal now exists, so a burn choice waiting for the first one is used up.
+            if success { GoalRecord.clearWaitingCredit(ownerID) }
             saving = false
             if success && model.selection == ownership && ownership != nil { dismiss() }
             else if model.selection == ownership && ownership != nil {

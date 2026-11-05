@@ -278,7 +278,7 @@ struct LiveWorkoutView: View {
     private var blocks: [Range<Int>] {
         var result: [Range<Int>] = [], index = 0
         while index < model.session.exercises.count {
-            let block = LiveWorkoutModel.block(of: index, in: model.session.exercises)
+            let block = WorkoutSession.block(of: index, in: model.session.exercises)
             result.append(block); index = block.upperBound
         }
         return result
@@ -286,7 +286,7 @@ struct LiveWorkoutView: View {
 
     private func isGrouped(_ exercise: Int?) -> Bool {
         guard let exercise, model.session.exercises.indices.contains(exercise) else { return false }
-        return LiveWorkoutModel.block(of: exercise, in: model.session.exercises).count > 1
+        return WorkoutSession.block(of: exercise, in: model.session.exercises).count > 1
     }
 
     /// "Superset · Round 2 of 3", or "Circuit" for three or more.
@@ -301,7 +301,7 @@ struct LiveWorkoutView: View {
 
     /// The exercise ⋯ menu: superset, rest, replace, move, note, remove.
     private func exerciseMenu(_ index: Int) -> some View {
-        let exercises = model.session.exercises, block = LiveWorkoutModel.block(of: index, in: exercises)
+        let exercises = model.session.exercises, block = WorkoutSession.block(of: index, in: exercises)
         let others = exercises.indices.filter { !block.contains($0) }
         let ticked = exercises[index].sets.contains { $0.done == true }
         return Menu {

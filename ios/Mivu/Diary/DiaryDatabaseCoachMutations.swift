@@ -2,7 +2,8 @@ import Foundation
 import SQLite3
 
 extension DiaryDatabase {
-    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, mode: CoachWriteMode = .uninterrupted,
+    /// `waitingCredit` is a burn choice from Settings made before any goal existed; a first goal without its own choice takes it.
+    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, mode: CoachWriteMode = .uninterrupted, waitingCredit: Int? = nil,
                           at: Date, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<[CoachReceipt]> {
         guard at.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
         return try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
@@ -13,7 +14,7 @@ extension DiaryDatabase {
                 let key = "\(turnID)/\(write.target)"
                 if let prior = turn.receipts.first(where: { $0.operationKey == key }) { results.append(prior); continue }
                 let before = try transaction.undoSnapshot(write, turn: turn), held = try transaction.deletedSnapshot(write)
-                var receipt = try transaction.applyCoachWrite(write, turn: turn, at: at)
+                var receipt = try transaction.applyCoachWrite(write, turn: turn, at: at, waitingCredit: waitingCredit)
                 receipt.operationKey = key; receipt.commandFingerprint = try write.commandFingerprint()
                 if let before, let mealID = receipt.mealID { try transaction.saveUndo(key: key, turnID: turnID, mealID: mealID, before: before) }
                 if let held {
@@ -221,7 +222,7 @@ extension DiaryTransaction {
         let meal = try mealProjection(id: id)
         return CoachContext.Meal(id: meal.id, dayID: meal.dayID, revision: meal.revision, eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: meal.items, state: meal.state)
     }
-    fileprivate func applyCoachWrite(_ write: CoachWrite, turn: CoachTurn, at: Date) throws -> CoachReceipt {
+    fileprivate func applyCoachWrite(_ write: CoachWrite, turn: CoachTurn, at: Date, waitingCredit: Int?) throws -> CoachReceipt {
         var receipt = CoachReceipt(operationKey: "\(turn.id)/\(write.target)", turnID: turn.id, dayID: nil, committedRevision: head.revision + 1, resultJSON: "{}")
         switch write {
         case .food(let date, let items, _, let review):
@@ -301,7 +302,7 @@ extension DiaryTransaction {
         case .deleteWorkout(let id, let revision):
             receipt.dayID = try workout(id: id).dayID; receipt.workoutID = id
             try deleteWorkout(id: id, revision: revision); receipt.resultJSON = try coachJSON(Deleted(id: id))
-        case .manual(let edit, _): try applyManual(edit, turn: turn, at: at, receipt: &receipt)
+        case .manual(let edit, _): try applyManual(edit, turn: turn, at: at, waitingCredit: waitingCredit, receipt: &receipt)
         }
         return receipt
     }
@@ -376,7 +377,7 @@ extension DiaryTransaction {
         let date = diaryDateLabel(weight.measuredAt, zone: head.profile.timeZoneID)
         return try resolveDay(localDate: date, timeZoneID: head.profile.timeZoneID, at: diaryDateOnlyInstant(date, zone: head.profile.timeZoneID))
     }
-    private func applyManual(_ edit: CoachManualEdit, turn: CoachTurn, at: Date, receipt: inout CoachReceipt) throws {
+    private func applyManual(_ edit: CoachManualEdit, turn: CoachTurn, at: Date, waitingCredit: Int?, receipt: inout CoachReceipt) throws {
         switch edit {
         case .item(let id, let item, _, let submissionID, let explicitNutrients, _):
             try editItem(mealID: id, item: item, explicitNutrients: explicitNutrients, reviewSubmissionID: submissionID, expectedRevision: nil)
@@ -433,6 +434,7 @@ extension DiaryTransaction {
             for target in targets { value.targets.set(target) }
             if clear { value.goalWeightKg = nil } else if let weight { value.goalWeightKg = weight }
             if let credit { value.exerciseCreditPercent = credit }
+            else if let waitingCredit, try database.mutationInteger("SELECT COUNT(*) FROM goal", []) == 0 { value.exerciseCreditPercent = waitingCredit }
             let saved = try setGoal(value, revision: exact?.revision); receipt.goalID = saved.id; receipt.resultJSON = try coachJSON(saved)
         case .preferences(let zone, let text, _):
             var profile = head.profile; if let zone { profile.timeZoneID = zone }; if let text { profile.preferences = text }

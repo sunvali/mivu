@@ -112,36 +112,21 @@ enum WeightStep {
         let next = nextFocus(after: (exercise, set))
         focus = next
         // In a superset the rest waits for the last exercise of the round.
-        let block = Self.block(of: exercise, in: session.exercises)
+        let block = WorkoutSession.block(of: exercise, in: session.exercises)
         if block.count > 1, block.contains(next.exercise), next.set == set, next != (exercise, set) { return }
         guard let rest else { return }
-        let label = next == (exercise, set) ? "" : "\(session.exercises[next.exercise].name) · set \(next.set + 1)"
+        let label = next == (exercise, set) ? "" : WorkoutSession.setLabel(name: session.exercises[next.exercise].name, set: next.set + 1)
         await rest.start(seconds: rest.seconds(for: session.exercises[exercise]), next: label, workout: session)
     }
 
     /// The first unticked set after this one in lifting order (a superset round by round), else the first unticked anywhere.
     func nextFocus(after current: (exercise: Int, set: Int)) -> (exercise: Int, set: Int) {
-        var order: [(exercise: Int, set: Int)] = [], index = 0
-        while index < session.exercises.count {
-            let block = Self.block(of: index, in: session.exercises)
-            for round in 0..<(block.map { session.exercises[$0].sets.count }.max() ?? 0) {
-                for member in block where session.exercises[member].sets.indices.contains(round) { order.append((member, round)) }
-            }
-            index = block.upperBound
-        }
+        let order = session.liftingOrder
         let open = { (position: (exercise: Int, set: Int)) in position != current && !self.isTicked(exercise: position.exercise, set: position.set) }
         let after = (order.firstIndex { $0 == current } ?? -1) + 1
         return order[after...].first(where: open) ?? order.first(where: open) ?? current
     }
 
-    /// The exercises of this one's superset (neighbours sharing its group), or just itself.
-    static func block(of index: Int, in exercises: [WorkoutExercise]) -> Range<Int> {
-        guard let group = exercises[index].groupID else { return index..<index + 1 }
-        var lower = index, upper = index + 1
-        while lower > 0, exercises[lower - 1].groupID == group { lower -= 1 }
-        while upper < exercises.count, exercises[upper].groupID == group { upper += 1 }
-        return lower..<upper
-    }
 
     /// "Round 2 of 3": the first round with an unticked set, and the most sets any member has.
     func round(of block: Range<Int>) -> (current: Int, total: Int) {
@@ -169,7 +154,7 @@ enum WeightStep {
     func ungroup(exercise: Int) async {
         var order: [Int]?
         await change(exercise) { session in
-            let block = Self.block(of: exercise, in: session.exercises), indices = Array(session.exercises.indices)
+            let block = WorkoutSession.block(of: exercise, in: session.exercises), indices = Array(session.exercises.indices)
             session.exercises[exercise].groupID = nil
             order = indices[..<block.lowerBound] + block.filter { $0 != exercise } + [exercise] + indices[block.upperBound...]
             Self.reorder(&session, order!)
@@ -182,14 +167,14 @@ enum WeightStep {
     func moveExercise(_ index: Int, up: Bool) async {
         var moved: [Int]?
         await change(index) { session in
-            let block = Self.block(of: index, in: session.exercises)
+            let block = WorkoutSession.block(of: index, in: session.exercises)
             var order = Array(session.exercises.indices)
             if block.count > 1 {
                 if up ? index > block.lowerBound : index < block.upperBound - 1 { order.swapAt(index, up ? index - 1 : index + 1) }
                 else { session.exercises[index].groupID = nil }
             } else {
                 guard up ? index > 0 : index < session.exercises.count - 1 else { return }
-                let neighbour = Self.block(of: up ? index - 1 : index + 1, in: session.exercises)
+                let neighbour = WorkoutSession.block(of: up ? index - 1 : index + 1, in: session.exercises)
                 order.remove(at: index)
                 order.insert(index, at: up ? neighbour.lowerBound : neighbour.upperBound - 1)
             }
@@ -236,7 +221,7 @@ enum WeightStep {
     /// The rest after this exercise, shared by its whole superset; nil uses the default.
     func setRest(_ seconds: Int?, exercise: Int) async {
         await change(exercise) { session in
-            for member in Self.block(of: exercise, in: session.exercises) { session.exercises[member].restSeconds = seconds }
+            for member in WorkoutSession.block(of: exercise, in: session.exercises) { session.exercises[member].restSeconds = seconds }
         }
     }
 
@@ -262,7 +247,7 @@ enum WeightStep {
     private static func normalizeGroups(_ exercises: inout [WorkoutExercise]) {
         var seen = Set<UUID>(), index = 0
         while index < exercises.count {
-            let run = block(of: index, in: exercises)
+            let run = WorkoutSession.block(of: index, in: exercises)
             if let id = exercises[index].groupID {
                 if run.count == 1 { exercises[index].groupID = nil }
                 else if !seen.insert(id).inserted { let fresh = UUID(); for member in run { exercises[member].groupID = fresh } }

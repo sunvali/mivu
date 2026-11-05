@@ -173,7 +173,14 @@ struct GoalRecord: Codable, Equatable, Sendable, Identifiable {
 
 extension GoalRecord {
     /// Settings › Workouts with no goal yet: the burn choice waits under this key (per profile) for the first goal.
+    /// The callers that create goals (goal editor, onboarding, Coach) apply it when nothing else chose; the store never reads it.
     static func pendingCreditKey(_ profileID: UUID) -> String { "workoutCreditPending-" + profileID.uuidString }
+
+    static func waitingCredit(_ profileID: UUID) -> Int? {
+        (UserDefaults.standard.object(forKey: pendingCreditKey(profileID)) as? Int).flatMap { [0, 50, 100].contains($0) ? $0 : nil }
+    }
+
+    static func clearWaitingCredit(_ profileID: UUID) { UserDefaults.standard.removeObject(forKey: pendingCreditKey(profileID)) }
 
     enum CodingKeys: String, CodingKey { case id, effectiveLocalDate, timeZoneID, revision, targets, goalWeightKg, exerciseCreditPercent }
     private enum LegacyKeys: String, CodingKey { case exerciseCreditEnabled }
@@ -279,16 +286,37 @@ extension WorkoutSession {
 
     var hasTickedSets: Bool { exercises.contains { $0.sets.contains { $0.done == true } } }
 
-    /// The first set not yet ticked: its exercise and set number.
-    var nextSet: (name: String, set: Int)? {
-        for exercise in exercises {
-            if let index = exercise.sets.firstIndex(where: { $0.done != true }) { return (exercise.name, index + 1) }
-        }
-        return nil
+    /// The exercises of this one's superset (neighbours sharing its group), or just itself.
+    static func block(of index: Int, in exercises: [WorkoutExercise]) -> Range<Int> {
+        guard let group = exercises[index].groupID else { return index..<index + 1 }
+        var lower = index, upper = index + 1
+        while lower > 0, exercises[lower - 1].groupID == group { lower -= 1 }
+        while upper < exercises.count, exercises[upper].groupID == group { upper += 1 }
+        return lower..<upper
     }
 
-    /// "Bench press · set 3".
-    var nextSetLabel: String? { nextSet.map { "\($0.name) · set \($0.set)" } }
+    /// Every set in lifting order: a superset round by round, other exercises set by set.
+    var liftingOrder: [(exercise: Int, set: Int)] {
+        var order: [(exercise: Int, set: Int)] = [], index = 0
+        while index < exercises.count {
+            let block = Self.block(of: index, in: exercises)
+            for round in 0..<(block.map { exercises[$0].sets.count }.max() ?? 0) {
+                for member in block where exercises[member].sets.indices.contains(round) { order.append((member, round)) }
+            }
+            index = block.upperBound
+        }
+        return order
+    }
+
+    /// The first set not yet ticked, in lifting order: its exercise and set number.
+    var nextSet: (name: String, set: Int)? {
+        liftingOrder.first { exercises[$0.exercise].sets[$0.set].done != true }.map { (exercises[$0.exercise].name, $0.set + 1) }
+    }
+
+    /// "Bench press · set 3": the banner, lock screen and rest notification all name the next set this way.
+    static func setLabel(name: String, set: Int) -> String { "\(name) · set \(set)" }
+
+    var nextSetLabel: String? { nextSet.map { Self.setLabel(name: $0.name, set: $0.set) } }
 
     /// Copies a draft onto this record; fields the draft leaves unset keep their current value.
     mutating func apply(_ draft: WorkoutDraft) {

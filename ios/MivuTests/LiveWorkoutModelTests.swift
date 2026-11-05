@@ -345,7 +345,7 @@ import Testing
         #expect(model.session.exercises.map(\.name) == ["A", "B", "C", "F", "D", "E"])
         #expect(groups.allSatisfy { $0 != nil } && groups[0] == groups[1] && groups[2] == groups[3] && groups[4] == groups[5])
         #expect(Set(groups).count == 3)
-        #expect(LiveWorkoutModel.block(of: 4, in: model.session.exercises) == 4..<6)
+        #expect(WorkoutSession.block(of: 4, in: model.session.exercises) == 4..<6)
         #expect(try await store.activeWorkout(expectedProfileID: profile.id) == model.session)
 
         // A circuit X Y Z with W after it: taking Y out leaves X and Z alone, not one group in two places.
@@ -364,6 +364,7 @@ import Testing
         #expect(model.round(of: 0..<2) == (1, 3))
         await model.tick(exercise: 0, set: 0)
         #expect(rest.endsAt == nil && model.focus.map { [$0.exercise, $0.set] } == [1, 0])
+        #expect(model.session.nextSetLabel == "Fly · set 1", "the banner names the next set in lifting order too")
         await model.tick(exercise: 1, set: 0)
         #expect(rest.endsAt != nil && rest.next == "Row · set 2", "the rest names the next set in lifting order")
         rest.skip()

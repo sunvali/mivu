@@ -634,10 +634,11 @@ actor DiaryStore {
 
     }
 
-    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID, mode: CoachWriteMode = .uninterrupted) throws -> [CoachReceipt] {
+    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID, mode: CoachWriteMode = .uninterrupted,
+                          waitingCredit: Int? = nil) throws -> [CoachReceipt] {
         try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
         try refreshCoachHead(expectedProfileID: expectedProfileID)
-        return try pagedMutation(expectedProfileID) { try $0.applyCoachWrites(writes, turnID: turnID, mode: mode, at: currentTime(), expected: $1, maximumBytes: maximumFileBytes) }
+        return try pagedMutation(expectedProfileID) { try $0.applyCoachWrites(writes, turnID: turnID, mode: mode, waitingCredit: waitingCredit, at: currentTime(), expected: $1, maximumBytes: maximumFileBytes) }
 
     }
 

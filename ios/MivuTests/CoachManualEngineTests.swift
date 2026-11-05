@@ -325,6 +325,21 @@ private actor RevisionCoachReplies {
         #expect(snapshot.days.isEmpty && snapshot.activeDayID == nil)
     }
 
+    @Test func waitingBurnChoiceFillsOnlyAFirstGoalWithoutOne() async throws {
+        for (credit, expected) in [(nil, 50), (0, 0)] as [(Int?, Int)] {
+            let (store, profile, _, root) = try await fixture(startDay: false); defer { try? FileManager.default.removeItem(at: root) }
+            // Chosen in Settings before any goal existed.
+            UserDefaults.standard.set(50, forKey: GoalRecord.pendingCreditKey(profile.id)); defer { GoalRecord.clearWaitingCredit(profile.id) }
+            let turn = try await capturedTurn(store, text: "Set calories", photos: [], at: now, expectedProfileID: profile.id)
+            var arguments: [String: Any] = ["effective_local_date": "2027-01-15", "targets": [["nutrient": "kcal", "value": 2100]]]
+            if let credit { arguments["exercise_credit_percent"] = credit }
+            _ = try await run(store, profile, turn, [try call("set_goals", arguments)])
+            let goal = try #require(await store.snapshotForExport().goals.first)
+            #expect(goal.exerciseCreditPercent == expected, "an explicit Off from Coach wins over the waiting choice")
+            #expect(GoalRecord.waitingCredit(profile.id) == nil, "used up once a goal exists")
+        }
+    }
+
     @Test func nullCreditPercentKeepsTheStoredChoice() async throws {
         let (store, profile, _, root) = try await fixture(startDay: false); defer { try? FileManager.default.removeItem(at: root) }
         let seeded = GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID,

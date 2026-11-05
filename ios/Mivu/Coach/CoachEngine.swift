@@ -193,7 +193,10 @@ struct CoachEngine: Sendable {
                 }
                 try Task.checkCancellation()
                 if !writes.isEmpty { await onActivity(.saving) }
-                let receipts = try await store.applyCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID, mode: mode)
+                let receipts = try await store.applyCoachWrites(writes, turnID: turnID, epoch: epoch, expectedProfileID: expectedProfileID, mode: mode,
+                                                                waitingCredit: GoalRecord.waitingCredit(expectedProfileID))
+                // A goal now exists, so a burn choice waiting for the first one is used up.
+                if receipts.contains(where: { $0.goalID != nil }) { GoalRecord.clearWaitingCredit(expectedProfileID) }
                 for id in Set(receipts.compactMap(\.mealID)) {
                     // Receipt results can omit a review that changed without a food revision.
                     do {

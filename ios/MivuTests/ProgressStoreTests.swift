@@ -27,12 +27,11 @@ import Testing
         #expect(try await store.setExerciseCredit(50, on: "2027-01-01", expectedProfileID: profile.id) == nil)
         #expect(try await store.snapshotForExport().goals.isEmpty)
         #expect(try await store.goal(on: "2027-01-01", expectedProfileID: profile.id) == nil)
-        // The choice Settings kept waits for the first goal, whoever creates it.
+        // The store never reads the choice Settings keeps waiting; the callers creating a first goal apply it.
         UserDefaults.standard.set(50, forKey: pendingKey)
         let earlier = try await store.setGoals(goal("2027-01-05"), expectedRevision: nil, expectedProfileID: profile.id)
-        #expect(earlier.exerciseCreditPercent == 50)
+        #expect(earlier.exerciseCreditPercent == 0)
         let later = try await store.setGoals(goal("2027-02-01"), expectedRevision: nil, expectedProfileID: profile.id)
-        #expect(later.exerciseCreditPercent == 0, "only the first goal takes the waiting choice")
 
         // A day without its own record copies the goal in force; earlier days keep their numbers, later goals follow.
         let today = try #require(try await store.setExerciseCredit(100, on: "2027-01-10", expectedProfileID: profile.id))
