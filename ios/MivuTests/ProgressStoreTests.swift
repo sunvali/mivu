@@ -269,6 +269,27 @@ import Testing
         #expect(snapshot.workouts.map(\.id) == [restored.id] && snapshot.deletedWorkoutIDs.contains(first.id))
     }
 
+    @Test func undoKeepsTheDeletedWorkoutUntilItIsRestored() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
+        let draft = WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate)
+        let workout = try await store.createWorkout(localDate: "2027-01-15", draft: draft, performedAt: morning, expectedProfileID: profile.id)
+        try await store.deleteWorkout(id: workout.id, expectedRevision: 1, expectedProfileID: profile.id)
+
+        // Its day is gone, so the restore fails: Undo stays offered.
+        var orphan = workout; orphan.dayID = UUID()
+        model.deletedWorkout = .init(session: orphan, owner: profile.id)
+        await model.undoWorkoutDeletion()
+        #expect(model.deletedWorkout?.session == orphan)
+        #expect(try await store.workoutHistory(expectedProfileID: profile.id).values.isEmpty)
+
+        model.deletedWorkout = .init(session: workout, owner: profile.id)
+        await model.undoWorkoutDeletion()
+        #expect(model.deletedWorkout == nil)
+        await model.undoWorkoutDeletion()
+        #expect(try await store.workoutHistory(expectedProfileID: profile.id).values.count == 1, "a second tap restores nothing more")
+    }
+
     @Test func invalidNumbersAndForeignDayLeaveSnapshotUnchanged() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let before = try await store.snapshotForExport()

@@ -13,6 +13,8 @@ struct LiveWorkoutView: View {
     @State private var noting: Int?
     @State private var noteText = ""
     @State private var removing: Int?
+    @State private var typingKcal = false
+    @State private var kcalText = ""
     @AccessibilityFocusState private var focusedTick: String?
     private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -37,12 +39,19 @@ struct LiveWorkoutView: View {
         NavigationStack {
             List {
                 if model.mode == .edit {
-                    // Editing a saved workout: when it started and how long it took.
+                    // Editing a saved workout: when it started, how long it took, how it felt, its burn and note.
                     Section {
                         WorkoutStartPicker(start: Binding(get: { model.session.performedAt }, set: { if let date = $0 { model.session.performedAt = date } }))
+                        // A stored time under a minute reads "1 min", as its row does, and stays as it was unless dragged.
                         WorkoutRuler(value: $model.pastMinutes, range: 1...600, step: 1, majorEvery: 5, unit: "min",
-                                     format: { $0.formatted(.number.precision(.fractionLength(0))) }, label: "Time")
+                                     format: { max($0, 1).formatted(.number.precision(.fractionLength(0))) }, label: "Time")
                             .accessibilityIdentifier("editTimeRuler")
+                        EffortChips(title: "How did it feel?", effort: Binding(get: { model.session.effort }, set: { model.session.effort = $0 }))
+                            .padding(.vertical, 4)
+                        editKcal
+                        TextField("Note", text: Binding(get: { model.session.note ?? "" }, set: { model.session.note = $0 }), axis: .vertical)
+                            .lineLimit(1...4).frame(minHeight: 44)
+                            .accessibilityIdentifier("editWorkoutNote")
                     }
                 }
                 if let error = model.saveError {
@@ -96,6 +105,12 @@ struct LiveWorkoutView: View {
                 picking = false
                 Task { if let replaced { await model.replaceExercise(replaced, with: exercise) } else { await model.addExercise(exercise) } }
             }
+        }
+        .alert("Calories burned", isPresented: $typingKcal) {
+            TextField("kcal", text: $kcalText).keyboardType(.numberPad)
+            Button("Save") { model.typedKcal = Double(kcalText).flatMap { (0...100_000).contains($0) ? $0.rounded() : nil } }
+            if model.typedKcal != nil { Button("Use estimate") { model.typedKcal = nil } }
+            Button("Cancel", role: .cancel) {}
         }
         .alert("Note", isPresented: Binding(get: { noting != nil }, set: { if !$0 { noting = nil } })) {
             TextField("Note", text: $noteText)
@@ -165,6 +180,24 @@ struct LiveWorkoutView: View {
             .fontWeight(.semibold)
             .accessibilityIdentifier("finishWorkout")
         }
+    }
+
+    /// The burn an edit saves: "~310 kcal" estimated or "310 kcal" typed; tap to type your own, as on the cardio screen.
+    private var editKcal: some View {
+        let kcal = model.editKcal
+        let shown = kcal.map { (model.typedKcal == nil ? "~" : "") + "\($0.formatted()) kcal" } ?? String(localized: "Type kcal")
+        return Button { kcalText = kcal.map { $0.formatted(.number.grouping(.never)) } ?? ""; typingKcal = true } label: {
+            HStack {
+                Text("Burn").foregroundStyle(Color.diaryText)
+                Spacer(minLength: 8)
+                Text(shown).monospacedDigit().foregroundStyle(Color.diaryWorkout)
+            }
+            .frame(minHeight: 44).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Burn")
+        .accessibilityValue(kcal == nil ? String(localized: "Not estimated") : shown.replacingOccurrences(of: "~", with: "About "))
+        .accessibilityIdentifier("editKcal")
     }
 
     // MARK: Exercise cards

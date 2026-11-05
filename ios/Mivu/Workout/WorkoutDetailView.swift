@@ -68,7 +68,7 @@ struct WorkoutDetailView: View {
                     // Lifting opens the gym screen; cardio and sports their rulers.
                     if session.kind == .strength || !session.exercises.isEmpty { editingGym = session } else { editingCardio = session }
                 }
-                .disabled(currentSession == nil)
+                .disabled(currentSession == nil || deleting)
                 .accessibilityIdentifier("editWorkout")
             }
         }
@@ -201,14 +201,19 @@ struct WorkoutDetailView: View {
 struct WorkoutDeletedToast: ViewModifier {
     @Bindable var model: DiaryViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottom) {
             if let deleted = model.deletedWorkout, model.selection?.identity.profileID == deleted.owner {
-                HStack(spacing: 12) {
-                    Image(systemName: "trash").foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
-                    Text("Workout deleted").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
-                    Spacer(minLength: 8)
+                // At accessibility sizes Undo goes under the message, so neither breaks mid-word.
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 12))) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "trash").foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
+                        Text("Workout deleted").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
                     Button { Task { await model.undoWorkoutDeletion() } } label: {
                         Text("Undo").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
                             .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
@@ -217,8 +222,8 @@ struct WorkoutDeletedToast: ViewModifier {
                 }
                 .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 6)
                 // Solid, not glass, like the logged-meal toast: it sits over busy rows.
-                .background(Color.diarySurface, in: .capsule)
-                .overlay(Capsule().strokeBorder(Color.diaryRule))
+                .background(Color.diarySurface, in: .rect(cornerRadius: 24))
+                .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule))
                 .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
                 .padding(.horizontal, 16).padding(.bottom, 8)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))

@@ -6,28 +6,37 @@ struct ExerciseDetailView: View {
     let key: ExerciseKey
     let name: String
     @State private var sessions: [WorkoutSession]?
+    @State private var loadError: String?
+    @State private var retries = 0
     @AppStorage("weightUnit") private var unit = "kg"
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         List {
-            if let sessions {
-                let bests = WorkoutHistory.bests(for: key, in: sessions)
+            if let loadError {
                 Section {
-                    (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(alignment: .top, spacing: 8))) {
-                        if let kg = bests.heaviestKg, kg > 0 {
-                            best(WeightStep.display(kg: kg, unit: unit).formatted(.number.precision(.fractionLength(0...2))) + " \(unit)", "Heaviest", id: "bestHeaviest")
+                    Text(loadError).foregroundStyle(Color.diarySecondary)
+                    Button("Retry") { retries += 1 }.frame(minHeight: 44)
+                }
+            } else if let sessions {
+                let bests = WorkoutHistory.bests(for: key, in: sessions)
+                if (bests.heaviestKg ?? 0) > 0 || (bests.mostReps ?? 0) > 0 || (bests.longestSeconds ?? 0) > 0 {
+                    Section {
+                        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(alignment: .top, spacing: 8))) {
+                            if let kg = bests.heaviestKg, kg > 0 {
+                                best(WeightStep.display(kg: kg, unit: unit).formatted(.number.precision(.fractionLength(0...2))) + " \(unit)", "Heaviest", id: "bestHeaviest")
+                            }
+                            if let reps = bests.mostReps, reps > 0 { best("\(reps)", "Most reps", id: "bestReps") }
+                            if let seconds = bests.longestSeconds, seconds > 0 { best(LiveWorkoutView.clock(seconds), "Longest", id: "bestTime") }
                         }
-                        if let reps = bests.mostReps, reps > 0 { best("\(reps)", "Most reps", id: "bestReps") }
-                        if let seconds = bests.longestSeconds, seconds > 0 { best(LiveWorkoutView.clock(seconds), "Longest", id: "bestTime") }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
                 }
                 Section {
                     if sessions.isEmpty { Text("No saved workouts with this exercise yet.").foregroundStyle(Color.diarySecondary) }
                     ForEach(sessions.prefix(20)) { row($0) }
                 } header: {
-                    Text("Last 20 sessions").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary).textCase(nil)
+                    Text("Recent").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary).textCase(nil)
                 }
             } else {
                 ProgressView().frame(maxWidth: .infinity, minHeight: 120)
@@ -38,10 +47,12 @@ struct ExerciseDetailView: View {
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .task(id: model.changeGeneration) {
+        .task(id: "\(model.changeGeneration)-\(retries)") {
             guard let owner = model.selection?.identity.profileID else { return }
+            loadError = nil
             // shortcut: bests read the latest 1,000 workouts with this exercise, as the gym screen does; store bests if someone logs more.
-            sessions = (try? await model.store.finishedWorkouts(containing: key, limit: 1_000, expectedProfileID: owner)) ?? []
+            do { sessions = try await model.store.finishedWorkouts(containing: key, limit: 1_000, expectedProfileID: owner) }
+            catch { if !Task.isCancelled { loadError = "Could not load this exercise's workouts. Your diary is preserved." } }
         }
     }
 

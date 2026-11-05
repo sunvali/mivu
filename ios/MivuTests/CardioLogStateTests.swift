@@ -113,5 +113,9 @@ import Testing
         moved.startedAt = now.addingTimeInterval(-3_600)
         #expect(moved.edited(run, bodyKg: 70).timePrecision == .exact)
         #expect(CardioLogState(editing: run).edited(run, bodyKg: 70).timePrecision == .dateOnly)
+
+        // An older "other" workout stays "other".
+        run.kind = .other
+        #expect(CardioLogState(editing: run).edited(run, bodyKg: 70).kind == .other)
     }
 }

@@ -43,6 +43,7 @@ struct CardioLogState: Hashable {
         if draft.estimatedBurnKcal == nil { draft.estimatedBurnKcal = session.estimatedBurnKcal }
         var edited = session
         edited.apply(draft)
+        edited.kind = session.kind // an older "other" workout stays what it was
         if startedAt != session.performedAt { edited.performedAt = startedAt; edited.timePrecision = .exact }
         return edited
     }

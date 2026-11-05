@@ -440,6 +440,7 @@ import XCTest
         let when = app.buttons["workoutStart"]
         XCTAssertTrue(when.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["Minimize"].exists, "editing runs no clock")
+        capture("Gym edit", in: app)
         when.tap()
         let day = app.pickerWheels.firstMatch
         XCTAssertTrue(day.waitForExistence(timeout: 5))

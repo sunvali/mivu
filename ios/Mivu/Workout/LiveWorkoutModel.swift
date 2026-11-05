@@ -62,6 +62,8 @@ enum WeightStep {
     /// When Done was tapped: a live workout ends there, not when Save is tapped.
     var endedAt = Date()
     private var typedMinutes: Double?
+    /// Editing: a burn the person typed; nil uses the estimate.
+    var typedKcal: Double?
     private var bodyKg: Double?
     @ObservationIgnored private let store: DiaryStore
     @ObservationIgnored private let profileID: UUID
@@ -87,7 +89,10 @@ enum WeightStep {
         // The first exercise with an unticked set, else the last one.
         expandedExercise = session.exercises.firstIndex { $0.sets.contains { $0.done != true } } ?? max(session.exercises.count - 1, 0)
         // An edit's time starts at the stored one.
-        if mode == .edit { typedMinutes = Double(session.durationSeconds ?? session.durationMinutes * 60) / 60 }
+        if mode == .edit {
+            typedMinutes = Double(session.durationSeconds ?? session.durationMinutes * 60) / 60
+            typedKcal = session.burnSource == .userEstimate ? session.estimatedBurnKcal : nil
+        }
     }
 
     /// Live only for a start left at now (or within five minutes of it); anything earlier is logged afterwards.
@@ -339,7 +344,26 @@ enum WeightStep {
     var hasTicked: Bool { session.hasTickedSets }
 
     /// An edit differs from the saved workout.
-    var editChanged: Bool { session != saved || seconds != saved.durationSeconds ?? saved.durationMinutes * 60 }
+    var editChanged: Bool {
+        session != saved || seconds != storedSeconds || typedKcal != (saved.burnSource == .userEstimate ? saved.estimatedBurnKcal : nil)
+    }
+
+    private var storedSeconds: Int { saved.durationSeconds ?? saved.durationMinutes * 60 }
+    /// What an edit stores: an untouched time as it was (even under a minute), a changed one at least a minute.
+    private var editSeconds: Int { seconds == storedSeconds ? seconds : max(seconds, 60) }
+
+    /// The burn an edit saves: a typed number; else a fresh estimate once the time, effort or day changed or a typed
+    /// number was cleared (the old number when there is no body weight to estimate with); else the stored one.
+    func editBurn(bodyKg: Double?, dayChanged: Bool) -> Double? {
+        if let typedKcal { return typedKcal }
+        let wasTyped = saved.burnSource == .userEstimate
+        guard wasTyped || editSeconds != storedSeconds || session.effort != saved.effort || dayChanged else { return saved.estimatedBurnKcal }
+        return WorkoutBurn.estimate(activity: session.activity ?? "strength", seconds: editSeconds, distanceMeters: nil, effort: session.effort, bodyKg: bodyKg)
+            ?? (wasTyped ? nil : saved.estimatedBurnKcal)
+    }
+
+    /// The burn the edit screen shows, as Save will store it on this day.
+    var editKcal: Double? { editBurn(bodyKg: bodyKg, dayChanged: session.performedAt != saved.performedAt) }
 
     /// A past log has no clock: three minutes a set until the person corrects it.
     var pastMinutes: Double {
@@ -349,7 +373,7 @@ enum WeightStep {
 
     /// How long the workout took, as Save will store it.
     var seconds: Int {
-        mode == .live ? min(max(Int(endedAt.timeIntervalSince(session.performedAt)), 1), 86_400) : Int(pastMinutes * 60)
+        mode == .live ? min(max(Int(endedAt.timeIntervalSince(session.performedAt)), 1), 86_400) : Int((pastMinutes * 60).rounded())
     }
 
     /// The Done screen's three numbers; kcal is estimated as Save will store it.
@@ -417,19 +441,20 @@ enum WeightStep {
             case .edit:
                 var edited = session
                 edited.exercises = tickedExercises
-                edited.durationSeconds = max(seconds, 60)
-                let before = saved.durationSeconds ?? saved.durationMinutes * 60
-                // An estimate follows a corrected time; a number the person typed stays.
-                if edited.burnSource != .userEstimate, edited.durationSeconds != before,
-                   let kcal = WorkoutBurn.estimate(activity: edited.activity ?? "strength", seconds: edited.durationSeconds!, distanceMeters: nil, effort: edited.effort, bodyKg: bodyKg) {
-                    edited.estimatedBurnKcal = kcal
-                }
-                // A moved start is an exact time and files the workout under that start's waking day, as a past log does.
-                var date: String?
+                edited.durationSeconds = editSeconds
+                let note = String((edited.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(2_000))
+                edited.note = note.isEmpty ? nil : note
+                // A moved start is an exact time and files the workout under that start's waking day, as a past log does;
+                // its burn is estimated with that day's body weight.
+                var date: String?, dayKg = bodyKg
                 if edited.performedAt != saved.performedAt {
                     edited.timePrecision = .exact
-                    date = wakingDateLabel(edited.performedAt, zone: try await store.diaryHead(expectedProfileID: profileID).profile.timeZoneID)
+                    let moved = wakingDateLabel(edited.performedAt, zone: try await store.diaryHead(expectedProfileID: profileID).profile.timeZoneID)
+                    date = moved
+                    dayKg = try await store.bodyKg(on: moved, expectedProfileID: profileID)
                 }
+                edited.estimatedBurnKcal = editBurn(bodyKg: dayKg, dayChanged: date != nil)
+                edited.burnSource = edited.estimatedBurnKcal == nil ? nil : typedKcal != nil ? .userEstimate : saved.burnSource == .userEstimate ? nil : saved.burnSource
                 session = try await store.updateWorkout(edited, onDate: date, expectedRevision: session.revision, expectedProfileID: profileID)
             }
             saveError = nil

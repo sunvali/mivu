@@ -282,11 +282,17 @@ enum DiaryCaptureResult: Equatable, Sendable {
         companionWorkoutEvent = CompanionEvent(profileID: owner, operationID: workout.id,
                                                kind: .workoutSaved(activity: workout.activity ?? workout.kind.rawValue), committedAt: Date())
     }
+    /// Brings the deleted workout back. Undo stays offered until the restore itself is saved; after that a failed
+    /// refresh cannot make a second tap restore it twice.
     func undoWorkoutDeletion() async {
-        guard let deleted = deletedWorkout, selection?.identity.profileID == deleted.owner else { return }
-        deletedWorkout = nil
-        await change { _ = try await store.restoreWorkout(deleted.session, expectedProfileID: deleted.owner) }
+        guard let deleted = deletedWorkout, selection?.identity.profileID == deleted.owner, !restoringWorkout else { return }
+        restoringWorkout = true; defer { restoringWorkout = false }
+        await change {
+            _ = try await store.restoreWorkout(deleted.session, expectedProfileID: deleted.owner)
+            if deletedWorkout == deleted { deletedWorkout = nil }
+        }
     }
+    private var restoringWorkout = false
     /// The banner's Finish for a forgotten workout: it ends at its last change, and Pip plays the finish.
     @discardableResult func finishStaleWorkout(_ session: WorkoutSession) async -> Bool {
         guard let owner = selection?.identity.profileID else { return false }

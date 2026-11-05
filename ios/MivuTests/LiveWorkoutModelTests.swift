@@ -300,6 +300,34 @@ import Testing
         #expect(edited.exercises[0].sets.count == 1, "a set unticked while editing is removed, as on Done")
     }
 
+    @Test func editSavesEffortNoteAndBurn() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await store.setWeight(dayLocalDate: "2027-03-09", value: 80, unit: "kg", measuredAt: nil, expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.setWeight(dayLocalDate: "2027-03-10", value: 60, unit: "kg", measuredAt: nil, expectedRevision: nil, expectedProfileID: profile.id)
+        let created = try await store.createWorkout(localDate: "2027-03-10", draft: WorkoutDraft(kind: .strength, durationMinutes: 1,
+            exercises: [benchWith(WorkoutSet(repetitions: 8, loadKg: 60))], estimatedBurnKcal: 5, activity: "strength", durationSeconds: 45, effort: 5),
+            performedAt: start, expectedProfileID: profile.id)
+        func edit(_ session: WorkoutSession, _ change: (LiveWorkoutModel) -> Void) async throws -> WorkoutSession {
+            let model = LiveWorkoutModel(store: store, profileID: profile.id, session: session, unit: "kg", mode: .edit)
+            await model.load(); change(model)
+            #expect(await model.finish())
+            return try await store.coachWorkout(id: session.id, expectedProfileID: profile.id)
+        }
+
+        let untouched = try await edit(created) { #expect(!$0.editChanged) }
+        #expect(untouched.durationSeconds == 45 && untouched.estimatedBurnKcal == 5, "an untouched short workout keeps its time and burn")
+
+        // Moved a day back and felt harder: estimated with that day's body weight; the note is trimmed.
+        let moved = try await edit(untouched) { $0.session.performedAt = start.addingTimeInterval(-86_400); $0.session.effort = 7; $0.session.note = "  Synthetic  " }
+        #expect(moved.estimatedBurnKcal == WorkoutBurn.estimate(activity: "strength", seconds: 45, distanceMeters: nil, effort: 7, bodyKg: 80))
+        #expect(moved.effort == 7 && moved.note == "Synthetic" && moved.burnSource == nil)
+
+        let typed = try await edit(moved) { $0.typedKcal = 250 }
+        #expect(typed.estimatedBurnKcal == 250 && typed.burnSource == .userEstimate)
+        let cleared = try await edit(typed) { #expect($0.typedKcal == 250); $0.typedKcal = nil }
+        #expect(cleared.estimatedBurnKcal == moved.estimatedBurnKcal && cleared.burnSource == nil, "clearing a typed burn returns to the estimate")
+    }
+
     private func restModel(_ store: DiaryStore, _ profile: DiaryProfile, _ exercises: WorkoutExercise...) async throws -> (LiveWorkoutModel, RestTimer) {
         let rest = RestTimer(center: FakeNotificationCenter(), defaults: UserDefaults(suiteName: "Rest-" + UUID().uuidString)!, now: { Date(timeIntervalSinceReferenceDate: 820_000_000) })
         let session = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: exercises, activity: "strength"),
