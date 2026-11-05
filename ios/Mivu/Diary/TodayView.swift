@@ -614,6 +614,7 @@ struct TodayView: View {
     @State private var startingWorkout = false
     @State private var cardioPath: [CardioLogState] = []
     @State private var liveWorkout: WorkoutSession?
+    @State private var workoutStart: Date?
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @Environment(\.isWideLayout) private var isWide
     // Sideways on the Duo, the summary and the meals sit in two columns; otherwise one list, unchanged order.
@@ -693,7 +694,7 @@ struct TodayView: View {
                         .diarySummaryCard()
                         .accessibilityIdentifier("workoutRow")
                 }
-                Button { cardioPath = []; startingWorkout = true } label: {
+                Button { cardioPath = []; workoutStart = nil; startingWorkout = true } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "play.fill").font(.body.weight(.semibold))
                             .frame(width: 40, height: 40).background(Color.diaryActionText.opacity(0.18), in: .circle)
@@ -710,16 +711,20 @@ struct TodayView: View {
         }
     }
     /// Starts a live gym workout; a workout already running opens instead of a second one.
+    /// A start on an earlier day logs a past workout instead, saved only on Done.
     private func startGym(_ draft: WorkoutDraft?) {
         startingWorkout = false
-        if let active = model.activeWorkout { liveWorkout = active; return }
-        guard let owner = model.readModel?.profile.id else { return }
-        Task {
-            await model.change {
-                liveWorkout = try await model.store.startWorkout(draft ?? WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [], activity: "strength"),
-                                                                 at: Date(), expectedProfileID: owner)
-            }
+        guard let profile = model.readModel?.profile else { return }
+        let draft = draft ?? WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [], activity: "strength")
+        let start = workoutStart ?? Date()
+        if diaryDateLabel(start, zone: profile.timeZoneID) != diaryDateLabel(Date(), zone: profile.timeZoneID) {
+            var past = WorkoutSession(dayID: UUID(), performedAt: start, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0, exercises: [])
+            past.apply(draft)
+            liveWorkout = past
+            return
         }
+        if let active = model.activeWorkout { liveWorkout = active; return }
+        Task { await model.change { liveWorkout = try await model.store.startWorkout(draft, at: start, expectedProfileID: profile.id) } }
     }
     @ViewBuilder private var trailingSections: some View {
         if let snapshot = model.readModel {
@@ -811,14 +816,23 @@ struct TodayView: View {
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .sheet(isPresented: $startingWorkout) {
             NavigationStack(path: $cardioPath) {
-                StartWorkoutSheet(model: model, onGym: startGym) { cardioPath.append(CardioLogState(activity: $0, last: $1, now: Date())) }
+                StartWorkoutSheet(model: model, start: $workoutStart, onGym: startGym) {
+                    var state = CardioLogState(activity: $0, last: $1, now: Date())
+                    if let start = workoutStart { state.startedAt = start; state.startEdited = true }
+                    cardioPath.append(state)
+                }
                     .navigationDestination(for: CardioLogState.self) { CardioLogView(model: model, state: $0) { startingWorkout = false } }
             }
             .tint(.diaryAccent)
         }
+        .fullScreenCover(item: $liveWorkout) { session in
+            if let owner = model.readModel?.profile.id {
+                LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past) { liveWorkout = nil }
+            }
+        }
         .onAppear { surfaceVisible = true; reportCompanionContext() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
-        .onChange(of: [companionVisible, showComposer, showManualNutrition, showWeight, showGoals, showingDetail, startingWorkout]) { _, _ in reportCompanionContext() }
+        .onChange(of: [companionVisible, showComposer, showManualNutrition, showWeight, showGoals, showingDetail, startingWorkout, liveWorkout != nil]) { _, _ in reportCompanionContext() }
     }
 
     /// A meal logged after midnight that counts for the waking day before: before the cutoff, or because Coach judged it late-night food.
@@ -834,7 +848,7 @@ struct TodayView: View {
             try await model.store.moveMeal(meal.id, to: day.id, expectedRevision: meal.revision, expectedDayID: meal.dayID, expectedProfileID: owner)
         }
     }
-    private var covered: Bool { showComposer || showManualNutrition || showWeight || showGoals || showingDetail || startingWorkout }
+    private var covered: Bool { showComposer || showManualNutrition || showWeight || showGoals || showingDetail || startingWorkout || liveWorkout != nil }
     private func reportCompanionContext() {
         // Foreground capture is covered by its sheet. Background persistence is not a character action.
         onCompanionContextChanged(CompanionContext(surface: .today, isTyping: false,

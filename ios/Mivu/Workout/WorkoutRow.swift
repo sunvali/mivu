@@ -29,7 +29,7 @@ struct WorkoutRow: View {
 
     static func detail(_ session: WorkoutSession) -> String {
         let seconds = session.durationSeconds ?? session.durationMinutes * 60
-        let sets = session.exercises.reduce(0) { $0 + $1.sets.count }
+        let sets = session.exercises.reduce(0) { $0 + $1.sets.filter { $0.done != false }.count } // older sets have no tick and count
         return [session.distanceMeters.flatMap { $0 > 0 ? distance($0, activity: session.activity) : nil },
                 minutes(seconds),
                 sets > 0 ? "\(sets) \(sets == 1 ? "set" : "sets")" : nil].compactMap { $0 }.joined(separator: " · ")

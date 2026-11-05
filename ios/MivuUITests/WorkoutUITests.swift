@@ -91,6 +91,114 @@ import XCTest
         capture("Today largest text", in: app)
     }
 
+    func testGymTickThreeSets() {
+        let app = launch()
+        let start = app.buttons["startWorkout"]
+        reveal(start, in: app)
+        start.tap()
+        let gym = app.buttons["startGym"]
+        XCTAssertTrue(gym.waitForExistence(timeout: 5))
+        gym.tap()
+
+        let addExercise = app.buttons["addExercise"]
+        XCTAssertTrue(addExercise.waitForExistence(timeout: 10))
+        addExercise.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Bench press")
+        let bench = app.buttons["Barbell Bench Press"].firstMatch
+        XCTAssertTrue(bench.waitForExistence(timeout: 5))
+        bench.tap()
+
+        // Tap a number: the wheels open; Done there also ticks the set.
+        let weight = app.buttons["setWeight"].firstMatch
+        XCTAssertTrue(weight.waitForExistence(timeout: 5))
+        weight.tap()
+        let wheelDone = app.buttons["wheelDone"]
+        XCTAssertTrue(wheelDone.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Set 1"].exists)
+        capture("Gym wheels", in: app)
+        // Tapping the centred number types it.
+        app.descendants(matching: .any)["wheelWeight"].firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let typed = app.alerts["Weight"]
+        XCTAssertTrue(typed.waitForExistence(timeout: 5))
+        typed.textFields.firstMatch.typeText("40")
+        typed.buttons["OK"].tap()
+        wheelDone.tap()
+        XCTAssertTrue(wheelDone.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(weight.value as? String, "40 kg")
+
+        let addSet = app.buttons["addSet"]
+        for _ in 0..<2 { addSet.tap() }
+        let ticks = app.buttons.matching(identifier: "tickSet")
+        XCTAssertTrue(ticks.element(boundBy: 2).waitForExistence(timeout: 5))
+
+        // Swiping a number up changes it without opening the wheels.
+        let reps = app.buttons.matching(identifier: "setReps").element(boundBy: 2)
+        let before = reps.value as? String
+        let grip = reps.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        grip.press(forDuration: 0.05, thenDragTo: grip.withOffset(CGVector(dx: 0, dy: -60)), withVelocity: .slow, thenHoldForDuration: 0.2)
+        XCTAssertNotEqual(reps.value as? String, before)
+        XCTAssertFalse(wheelDone.exists)
+
+        ticks.element(boundBy: 1).tap()
+        ticks.element(boundBy: 2).tap()
+        let ticked = ticks.matching(NSPredicate(format: "selected == true"))
+        XCTAssertTrue(ticked.element(boundBy: 2).waitForExistence(timeout: 5))
+        XCTAssertEqual(ticked.count, 3)
+        capture("Gym", in: app)
+
+        // Next time the sets come back filled in, and a heavier one is a new best.
+        app.buttons["finishWorkout"].tap()
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        reveal(start, in: app)
+        start.tap()
+        XCTAssertTrue(gym.waitForExistence(timeout: 5))
+        gym.tap()
+        // Wait for the full-screen cover to settle; a tap while it slides in is lost.
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: addExercise)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 10), .completed)
+        addExercise.tap()
+        XCTAssertTrue(app.staticTexts["Recent"].waitForExistence(timeout: 5))
+        capture("Exercise picker", in: app)
+        bench.tap()
+        XCTAssertTrue(app.staticTexts["Last time 40 kg × 10"].waitForExistence(timeout: 5))
+        XCTAssertEqual(ticks.count, 3)
+        let firstWeight = app.buttons["setWeight"].firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        firstWeight.press(forDuration: 0.05, thenDragTo: firstWeight.withOffset(CGVector(dx: 0, dy: -60)), withVelocity: .slow, thenHoldForDuration: 0.2)
+        ticks.element(boundBy: 0).tap()
+        XCTAssertTrue(app.staticTexts["New best"].waitForExistence(timeout: 5))
+        capture("Gym last time", in: app)
+    }
+
+    func testPastGymHasNoClock() {
+        let app = launch()
+        let start = app.buttons["startWorkout"]
+        reveal(start, in: app)
+        start.tap()
+        let when = app.buttons["workoutStart"]
+        XCTAssertTrue(when.waitForExistence(timeout: 5))
+        XCTAssertEqual(when.value as? String, "Today, now")
+        when.tap()
+        // The first wheel is the day; one notch back is yesterday.
+        let day = app.pickerWheels.firstMatch
+        XCTAssertTrue(day.waitForExistence(timeout: 5))
+        day.adjust(toPickerWheelValue: day.value as? String == "Today" ? Self.yesterdayWheelValue() : "Today")
+        XCTAssertNotEqual(when.value as? String, "Today, now")
+        app.buttons["startGym"].tap()
+
+        XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars.staticTexts["Yesterday"].exists)
+        XCTAssertFalse(app.buttons["Minimize"].exists, "a past workout has no running clock to keep")
+    }
+
+    /// The date wheel's accessibility values name earlier days like "Nov 4".
+    private static func yesterdayWheelValue() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "MMM d"
+        return formatter.string(from: Calendar.current.date(byAdding: .day, value: -1, to: Date())!)
+    }
+
     /// Today → Start workout → Run; returns the time ruler.
     private func openRun(_ app: XCUIApplication) -> XCUIElement {
         let start = app.buttons["startWorkout"]

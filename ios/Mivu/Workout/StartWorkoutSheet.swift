@@ -1,13 +1,17 @@
 import SwiftUI
 
-/// Gym on top, the most-used sports, then "Again" for routines and recent workouts.
+/// When it starts ("Today, now" unless changed), gym on top, the most-used sports, then "Again" for routines and recent workouts.
 struct StartWorkoutSheet: View {
     @Bindable var model: DiaryViewModel
+    /// nil means now.
+    @Binding var start: Date?
     let onGym: (WorkoutDraft?) -> Void
     let onCardio: (String, WorkoutSession?) -> Void
     @State private var routines: [WorkoutRoutine] = []
     @State private var recent: [WorkoutSession] = []
+    @State private var choosingStart = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// At most three sports: the most used first, topped up with Run, Walk and Cycle.
     private var sports: [WorkoutActivity] {
@@ -25,6 +29,27 @@ struct StartWorkoutSheet: View {
 
     var body: some View {
         List {
+            Section {
+                Button { withAnimation(reduceMotion ? nil : .snappy) { choosingStart.toggle() } } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock").foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
+                        Text(start.map { "\(Self.day($0)), \($0.formatted(date: .omitted, time: .shortened))" } ?? String(localized: "Today, now"))
+                            .foregroundStyle(Color.diaryText)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(Color.diarySecondary)
+                            .rotationEffect(.degrees(choosingStart ? 180 : 0)).accessibilityHidden(true)
+                    }
+                    .frame(minHeight: 44).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Start")
+                .accessibilityValue(start.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? String(localized: "Today, now"))
+                .accessibilityIdentifier("workoutStart")
+                if choosingStart {
+                    DatePicker("Start", selection: Binding(get: { start ?? Date() }, set: { start = $0 }), in: ...Date())
+                        .datePickerStyle(.wheel).labelsHidden().frame(maxWidth: .infinity)
+                }
+            }
             Section {
                 Button { onGym(nil) } label: {
                     HStack(spacing: 12) {

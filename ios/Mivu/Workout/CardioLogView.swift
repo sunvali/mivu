@@ -11,6 +11,8 @@ struct CardioLogState: Hashable {
     var indoor: Bool?
     var note: String
     var typedKcal: Double?
+    /// Set when the person picked the start; otherwise the workout ends when it is saved.
+    var startEdited = false
 
     private static let typicalKm: [String: Double] = ["walk": 3, "cycle": 15, "swim": 1, "hike": 8, "cross-country-skiing": 10]
 
@@ -59,7 +61,6 @@ struct CardioLogView: View {
     let onClose: () -> Void
     private let initial: CardioLogState
     @State private var bodyKg: Double?
-    @State private var startEdited = false
     @State private var saving = false
     @State private var typingKcal = false
     @State private var kcalText = ""
@@ -186,7 +187,7 @@ struct CardioLogView: View {
     private var more: some View {
         DisclosureGroup("More") {
             VStack(alignment: .leading, spacing: 12) {
-                DatePicker("Start", selection: Binding(get: { state.startedAt }, set: { state.startedAt = $0; startEdited = true }), in: ...Date())
+                DatePicker("Start", selection: Binding(get: { state.startedAt }, set: { state.startedAt = $0; state.startEdited = true }), in: ...Date())
                     .frame(minHeight: 44)
                 if sport?.indoorOutdoor == true {
                     Picker("Where", selection: $state.indoor) {
@@ -213,14 +214,14 @@ struct CardioLogView: View {
         guard let owner = model.readModel?.profile.id else { return }
         var log = state
         // Logged right after finishing: it ended now and counts on the day Today shows.
-        if !startEdited { log.startedAt = Date().addingTimeInterval(-log.minutes * 60) }
+        if !log.startEdited { log.startedAt = Date().addingTimeInterval(-log.minutes * 60) }
         if let rate = log.avgHeartRate, !(20...250).contains(rate) { log.avgHeartRate = nil }
         let draft = log.draft(bodyKg: bodyKg), activeDate = model.activeDay?.localDate
         saving = true
         let saved = await model.change {
             // With no open day, logging opens one so the workout shows on Today, as a weigh-in does.
             let date: String
-            if startEdited { date = diaryDateLabel(log.startedAt, zone: zone) }
+            if log.startEdited { date = diaryDateLabel(log.startedAt, zone: zone) }
             else if let activeDate { date = activeDate }
             else { date = try await model.store.startDay(expectedProfileID: owner).localDate }
             _ = try await model.store.createWorkout(localDate: date, draft: draft,
