@@ -92,7 +92,8 @@ struct ArchiveFixtureTests {
         receipts[2].weightID = weights[1].id
         receipts[3].workoutID = workouts[0].id
         receipts[4].dayID = nil; receipts[4].goalID = goal.id
-        receipts += CoachDestination.allCases.map { destination in
+        // The v1–v4 and Android fixtures predate the workouts destination, which arrived with archive v5.
+        receipts += CoachDestination.allCases.filter { $0 != .workouts }.map { destination in
             var value = receipt("open/\(destination.rawValue)", revision: 12); value.dayID = nil; value.destination = destination; return value
         }
         let main = CoachTurn(id: id(110), capturedAt: context.capturedAt, text: text, photos: [coachPhoto], state: .completed,

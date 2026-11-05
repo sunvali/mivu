@@ -155,6 +155,9 @@ struct ArchiveTests {
         var draft = WorkoutDraft(kind: .strength, durationMinutes: 30, exercises: [WorkoutExercise(name: "Row", sets: [WorkoutSet(repetitions: 8, type: .drop, effort: 7, done: true)], restSeconds: 90)])
         draft.title = "Back"; draft.effort = 6; draft.routineID = keep.id; draft.source = .live
         let workout = try await store.createWorkout(localDate: "2026-11-04", draft: draft, performedAt: nil, expectedProfileID: profile.id)
+        // Starting from the routine marks it used, so its stored copy has moved on from `keep`.
+        let used = try #require(try await store.routines(expectedProfileID: profile.id).first { $0.id == keep.id })
+        #expect(used.revision == 2 && used.lastUsedAt == workout.performedAt)
 
         let exported = try await store.snapshotForExport()
         let data = try DiaryArchive.encode(exported)
@@ -163,7 +166,7 @@ struct ArchiveTests {
         let restored = DiaryStore(directory: target)
         _ = try await restored.importProfile(DiaryArchive.decode(data))
         let again = try await restored.snapshotForExport()
-        #expect(again.routines == [keep] && again.deletedRoutineIDs == [gone.id] && again.workouts == [workout])
+        #expect(again.routines == [used] && again.deletedRoutineIDs == [gone.id] && again.workouts == [workout])
         await #expect(throws: DiaryError.notFound) { try await restored.saveRoutine(gone, expectedRevision: nil, expectedProfileID: profile.id) }
     }
 
