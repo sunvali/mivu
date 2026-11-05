@@ -15,6 +15,11 @@ struct WorkoutDoneView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var title: String { WorkoutRow.title(model.session) }
+    /// The screen is on top while it shows, so only Reduce Motion and heat hold Pip still.
+    private var playback: MotionPolicy.Playback {
+        MotionPolicy.playback(reduceMotion: reduceMotion, thermalState: ProcessInfo.processInfo.thermalState,
+                              sceneActive: true, selected: true, visible: true, covered: false)
+    }
 
     /// The chosen (or pre-filled) effort when Done opens: 7 and up was hard; none counts as easy.
     static func pipPose(effort: Int?) -> CompanionPose { (effort ?? 0) >= 7 ? .workoutDoneHard : .workoutDone }
@@ -23,7 +28,7 @@ struct WorkoutDoneView: View {
         let summary = model.summary
         ScrollView {
             VStack(spacing: 12) {
-                CompanionView(presentation: CompanionOutput(pose: .resting, playback: reduceMotion ? .staticPose : .animated, reactionID: nil, nextDeadline: nil),
+                CompanionView(presentation: CompanionOutput(pose: .resting, playback: playback, reactionID: nil, nextDeadline: nil),
                               darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize ? 96 : 140, runtime: runtime)
                     .accessibilityHidden(true)
                 VStack(spacing: 4) {
@@ -77,7 +82,7 @@ struct WorkoutDoneView: View {
         .task {
             await runtime.select(CharacterCatalog.bundled.resolve("pip"))
             await runtime.attach(eligible: true)
-            await runtime.apply(CompanionOutput(pose: Self.pipPose(effort: model.effort), playback: reduceMotion ? .staticPose : .animated,
+            await runtime.apply(CompanionOutput(pose: Self.pipPose(effort: model.effort), playback: playback,
                                                 reactionID: UUID(), nextDeadline: nil), darkMode: colorScheme == .dark)
         }
         .onDisappear { runtime.stop() }

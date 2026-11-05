@@ -4,7 +4,7 @@ import SwiftUI
 /// Debug screen for judging Pip's motion at shipping sizes; launch with `-PipRigPreview`.
 /// Every `PipGestureLibrary.all` entry gets a button, so a new gesture is reviewable immediately.
 struct PipRigPreview: View {
-    @State private var set = PipPose.BodySet.standing
+    @State private var set = ProcessInfo.processInfo.arguments.contains("-PipRigPreviewCoach") ? PipPose.BodySet.seated : .standing
     @State private var driver = Driver()
     @State private var caption = " "
     @State private var idle: Task<Void, Never>?
@@ -165,8 +165,7 @@ struct PipRigPreview: View {
                                               ("done hard", .workoutDone(hard: true)), ("done easy", .workoutDone(hard: false))]
         for (title, moment) in moments {
             caption = title
-            var gesture = PipGestureLibrary.gesture(for: moment)
-            gesture.endSet = set
+            let gesture = PipGestureLibrary.gesture(for: moment, seated: set == .seated)
             await playStep(gesture, wait: gesture.duration + 0.6)
         }
         caption = "done"

@@ -14,7 +14,7 @@ struct LiveWorkoutView: View {
 
     struct SetPosition: Identifiable { let exercise: Int, set: Int; var id: String { "\(exercise)-\(set)" } }
 
-    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, mode: LiveWorkoutMode, onSaved: @escaping (WorkoutSession) -> Void,
+    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, mode: LiveWorkoutMode, onSaved: @escaping (WorkoutSession, UUID) -> Void,
          onClose: @escaping () -> Void) {
         let unit = UserDefaults.standard.string(forKey: "weightUnit") ?? "kg"
         _model = State(initialValue: LiveWorkoutModel(store: store, profileID: profileID, session: session, unit: unit, mode: mode, rest: .shared,

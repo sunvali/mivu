@@ -139,9 +139,8 @@ import UIKit
             if freshReaction && (oneShot || pose == .resting) { triggerCount += 1 }
             if pose != .resting || freshReaction { lastInput = clock() }
             if let moment = Self.moment(for: pose, tapLevel: output.tapLevel, hour: Calendar.current.component(.hour, from: clock()), activity: output.activity) {
-                var gesture = PipGestureLibrary.loop(for: moment) ?? PipGestureLibrary.gesture(for: moment)
+                var gesture = PipGestureLibrary.loop(for: moment) ?? PipGestureLibrary.gesture(for: moment, seated: surface == .coach)
                 if let typingGaze { gesture = Self.looking(gesture, at: typingGaze) }
-                if gesture.stance == .upright { gesture.endSet = restPose(surface).set } // drops back onto this surface's body
                 play(gesture) { [weak self] _ in
                     guard let self, token == self.playbackGeneration else { return }
                     if oneShot { self.displayedPose = .resting }

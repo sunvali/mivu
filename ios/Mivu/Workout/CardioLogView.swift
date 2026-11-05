@@ -214,7 +214,7 @@ struct CardioLogView: View {
                 performedAt: [diaryDateLabel(log.startedAt, zone: zone), log.day(zone: zone)].contains(date) ? log.startedAt : nil, expectedProfileID: owner)
         }
         saving = false
-        if saved, let created { model.noteWorkoutSaved(created) }
+        if saved, let created { model.noteWorkoutSaved(created, owner: owner) }
         if saved { onClose() }
     }
 }

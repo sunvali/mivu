@@ -58,7 +58,10 @@ private actor WorkoutReplies {
                                                 performedAt: nil, expectedProfileID: profile.id)
         })
         #expect(model.companionWorkoutEvent == nil, "only a reported save signals")
-        model.noteWorkoutSaved(try #require(run))
+        let saved = try #require(run)
+        model.noteWorkoutSaved(saved, owner: UUID())
+        #expect(model.companionWorkoutEvent == nil, "a save for another profile never plays here")
+        model.noteWorkoutSaved(saved, owner: profile.id)
         let event = try #require(model.companionWorkoutEvent)
         #expect(event.profileID == profile.id && event.operationID == run?.id)
         #expect(try played(event) == "workout-jumping-jack")
@@ -85,8 +88,20 @@ private actor WorkoutReplies {
         await live.update(exercise: 0, set: 1, kg: 62.5, reps: 6, seconds: nil)
         #expect(model.companionWorkoutEvent == nil, "an active workout's changes are not a saved workout")
         // Done on an active workout that is not finished yet never signals either.
-        model.noteWorkoutSaved(live.session)
+        model.noteWorkoutSaved(live.session, owner: profile.id)
         #expect(model.companionWorkoutEvent == nil)
+    }
+
+    /// Finishing a forgotten workout from the banner is a finish too.
+    @Test func staleFinishPlaysSquat() async throws {
+        let (path, store, profile, model) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: path) }
+        let live = try await gym(store, profile, model)
+        await live.tick(exercise: 0, set: 0)
+        #expect(await model.finishStaleWorkout(live.session))
+        let finished = try #require(try await store.workoutHistory(expectedProfileID: profile.id).values.first)
+        #expect(finished.isFinished && model.companionWorkoutEvent?.operationID == finished.id)
+        #expect(try played(model.companionWorkoutEvent) == "workout-squat")
     }
 
     @Test func doneHardPlaysBreather() throws {

@@ -167,6 +167,27 @@ func animationKeys(in layer: CALayer) -> [String] {
         #expect(moment(.workoutDoneHard, 0, 9) == .workoutDone(hard: true) && moment(.workoutDone, 0, 9) == .workoutDone(hard: false))
     }
 
+    /// Coach seats Pip behind the bar, where an upright head would stand far right of his seated one: there the moment
+    /// plays seated, with the move's face, and the upright body never shows.
+    @Test func workoutMomentOnCoachStaysSeated() async throws {
+        let runtime = await ready()
+        let rig = try #require(runtime.rig)
+        let window = try mount(rig)
+        defer { runtime.stop(); window.isHidden = true }
+        await runtime.apply(output(), darkMode: false, surface: .coach)
+        var saved = output(.workoutSaved, reaction: UUID())
+        saved.activity = "run"
+        await runtime.apply(saved, darkMode: false, surface: .coach)
+        #expect(runtime.lastGestureName == "workout-jumping-jack")
+        for _ in 0..<30 {
+            #expect(rig.layer(named: "body@upright")?.isHidden != false, "the upright body never shows on Coach")
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let seated = PipGestureLibrary.gesture(for: .workoutSaved(activity: "run"), seated: true)
+        #expect(seated.beats.isEmpty && seated.stance == nil && seated.keys.last?.pose == .rest && seated.duration <= 2)
+        #expect(await eventually(4) { runtime.displayedPose == .resting })
+    }
+
     /// Workout moments play once, upright move and all, then Pip is back at rest and breathing.
     @Test func workoutMomentsAreOneShots() async throws {
         let runtime = await ready()

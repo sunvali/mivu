@@ -515,8 +515,8 @@ private final class CoachNavigationReadFence: Sendable {
                         // Pip's workout moment for a session this pass logged, never for a receipt an earlier pass committed.
                         if let id = result.receipts.last(where: { receipt in receipt.operationKey.hasPrefix("\(turn.id)/workout/")
                                && !turn.receipts.contains { $0.operationKey == receipt.operationKey } })?.workoutID,
-                           let workout = try? await diary.store.coachWorkout(id: id, expectedProfileID: owner), diary.selection == selected {
-                            diary.noteWorkoutSaved(workout)
+                           let workout = try? await diary.store.coachWorkout(id: id, expectedProfileID: owner) {
+                            diary.noteWorkoutSaved(workout, owner: owner)
                         }
                         if let mealID = turn.pendingMealID {
                             await diary.loadMeal(mealID)

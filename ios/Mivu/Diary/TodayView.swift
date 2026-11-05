@@ -437,13 +437,8 @@ struct DiaryRootView: View {
         syncWorkoutActivity(model.activeWorkout, restEndsAt: rest.endsAt)
     }
     private func finishStaleWorkout(_ session: WorkoutSession) {
-        guard session.hasTickedSets, let owner = model.readModel?.profile.id else { discardingWorkout = true; return }
-        Task {
-            await model.change {
-                _ = try await model.store.finishWorkout(id: session.id, effort: nil, at: session.staleFinishDate,
-                                                        expectedRevision: session.revision, expectedProfileID: owner)
-            }
-        }
+        guard session.hasTickedSets, model.readModel != nil else { discardingWorkout = true; return }
+        Task { await model.finishStaleWorkout(session) }
     }
     private func discardActiveWorkout() async {
         guard let session = model.activeWorkout, let owner = model.readModel?.profile.id else { return }

@@ -72,7 +72,9 @@ Workout saved plays only after a finished workout is durably saved (cardio Save,
 a Coach `log_workout` receipt), never for an active workout's ticks. It is a fresh success like Saved: behind a gym
 cover it waits for Today, within the 10 s lifetime. The Done screen plays its moment once as it opens. Each is one
 baked one-shot (`PipGestureLibrary.gesture(for:)`): `rise-up`, the move (a loop twice) and `drop-down`, every part
-starting on a 60 fps frame. A still Pip holds the move's middle face on the resting body.
+starting on a 60 fps frame. A still Pip holds the move's middle face on the resting body. On Coach Pip stays seated
+(1.45 s, the move's face): the rig seats his head 94 pt left of an upright one, which would stand at the crop's edge
+behind the bar. Gym, cardio, past, banner Finish of a forgotten workout and Coach all signal; edits do not.
 
 A head turn between views is a morph, on every body set: the new view's shapes start on the old view's outlines (`PipMorph`) and flow to their own over 0.3 s, while joints carry on from their twins in the old view, the head dips through the middle and the ears drag. The usual blink still lands inside it.
 

@@ -562,9 +562,18 @@ enum PipGestureLibrary {
         for _ in 0..<(move.loops ? 2 : 1) { append(move.beats) }
         append(named("drop-down").beats)
         var gesture = PipGesture(name: name, keys: [(0, .rest), (held, move.beats[move.beats.count / 2].down().pose), (beats.last!.at, .rest)],
-                                 stance: .upright)
+                                 endSet: .standing, stance: .upright)
         gesture.beats = beats
         return gesture
+    }
+
+    /// The moment where Pip sits (Coach). The rig seats his head 94 pt left of an upright one, which would stand at the
+    /// crop's right edge with the bar hiding the rest, so he reacts in place with the move's face instead of rising.
+    static func gesture(for moment: PipMoment, seated: Bool) -> PipGesture {
+        let gesture = gesture(for: moment)
+        guard seated, gesture.stance == .upright else { return gesture }
+        let face = gesture.keys[1].pose
+        return PipGesture(name: gesture.name, keys: [(0.22, face.squash(0.04)), (0.40, face), (1.10, face), (1.45, .rest)])
     }
 
     static func loop(for moment: PipMoment) -> PipGesture? {

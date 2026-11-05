@@ -272,11 +272,23 @@ enum DiaryCaptureResult: Equatable, Sendable {
         if saved { companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: UUID(), kind: .saved, committedAt: Date()) }
         return saved
     }
-    /// Pip's workout moment. Callers report a workout only once it is durably saved; an active one never signals.
-    func noteWorkoutSaved(_ workout: WorkoutSession) {
-        guard workout.isFinished, let owner = selection?.identity.profileID else { return }
+    /// Pip's workout moment. Callers report a workout only once it is durably saved; an active one, or one saved for a
+    /// profile that is no longer selected, never signals.
+    func noteWorkoutSaved(_ workout: WorkoutSession, owner: UUID) {
+        guard workout.isFinished, selection?.identity.profileID == owner else { return }
         companionWorkoutEvent = CompanionEvent(profileID: owner, operationID: workout.id,
                                                kind: .workoutSaved(activity: workout.activity ?? workout.kind.rawValue), committedAt: Date())
+    }
+    /// The banner's Finish for a forgotten workout: it ends at its last change, and Pip plays the finish.
+    @discardableResult func finishStaleWorkout(_ session: WorkoutSession) async -> Bool {
+        guard let owner = selection?.identity.profileID else { return false }
+        var finished: WorkoutSession?
+        let saved = await change {
+            finished = try await store.finishWorkout(id: session.id, effort: nil, at: session.staleFinishDate,
+                                                     expectedRevision: session.revision, expectedProfileID: owner)
+        }
+        if saved, let finished { noteWorkoutSaved(finished, owner: owner) }
+        return saved
     }
     @discardableResult func change(_ operation: () async throws -> Void) async -> Bool {
         guard !isChangingProfile, let token = selection else { return false }
