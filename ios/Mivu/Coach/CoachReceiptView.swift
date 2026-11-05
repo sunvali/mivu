@@ -158,6 +158,21 @@ struct CoachReceiptPresentation: Equatable {
         switch target { case .meal, .workout: true; default: false }
     }
     private static func energy(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0))) + " kcal" }
+
+    /// What a workout card says it saved: one line per exercise ("Barbell Bench Press 3 × 8 · 62.5 kg"),
+    /// or for cardio its activity and detail ("Run · 5 km · 28 min").
+    @MainActor static func workoutLines(_ session: WorkoutSession, unit: String) -> [String] {
+        guard !session.exercises.isEmpty else { return [WorkoutRow.title(session) + " · " + WorkoutRow.detail(session)] }
+        return session.exercises.map { exercise in
+            let sets = exercise.sets.filter { $0.done != false }
+            guard let first = sets.first else { return exercise.name }
+            if first.repetitions > 0, first.seconds == nil, sets.allSatisfy({ $0.repetitions == first.repetitions && $0.loadKg == first.loadKg && $0.seconds == nil }) {
+                let load = (first.loadKg ?? 0) > 0 ? " · " + WeightStep.display(kg: first.loadKg!, unit: unit).formatted(.number.precision(.fractionLength(0...2))) + " \(unit)" : ""
+                return "\(exercise.name) \(sets.count) × \(first.repetitions)" + load
+            }
+            return "\(exercise.name) · \(sets.count) \(sets.count == 1 ? "set" : "sets")"
+        }
+    }
 }
 
 struct CoachReceiptView: View {
@@ -167,6 +182,7 @@ struct CoachReceiptView: View {
     var undo: () -> Void = {}
     let open: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @AppStorage("weightUnit") private var unit = "kg"
     private var presentation: CoachReceiptPresentation { CoachReceiptPresentation(receipt: receipt, target: target) }
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -174,6 +190,10 @@ struct CoachReceiptView: View {
                 VStack(alignment: .leading, spacing: 4) { receiptStatus; committedDate }
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) { receiptStatus; Spacer(minLength: 0); committedDate }
+            }
+            if case let .workout(session, _) = target, !presentation.isRemoval {
+                ForEach(CoachReceiptPresentation.workoutLines(session, unit: unit).prefix(4), id: \.self) { Text($0).foregroundStyle(Color.diarySecondary) }
+                    .accessibilityIdentifier("coachReceiptWorkoutLine")
             }
             if receipt.workoutNewBest == true {
                 Label("New best", systemImage: "trophy.fill").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryWorkout)
