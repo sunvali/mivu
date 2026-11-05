@@ -9,23 +9,25 @@ struct WorkoutSettingsSection: View {
     @State private var credit: Int?
     @State private var routineCount: Int?
     @State private var ownCount: Int?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private static let restChoices = [30, 45, 60, 90, 120, 150, 180, 240, 300]
 
     var body: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Add burn to food budget").accessibilityHidden(true)
-                Picker("Add burn to food budget", selection: Binding(get: { credit ?? 0 }, set: setCredit)) {
-                    Text("Off").tag(0); Text("50%").tag(50); Text("100%").tag(100)
+            // Segment titles keep their size, so accessibility sizes get one row per choice instead.
+            if typeSize.isAccessibilitySize {
+                creditPicker.pickerStyle(.inline)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Add burn to food budget").accessibilityHidden(true)
+                    // Segments at the 44-point minimum.
+                    creditPicker.pickerStyle(.segmented).controlSize(.extraLarge)
                 }
-                .pickerStyle(.segmented).labelsHidden()
-                // Segments at the 44-point minimum.
-                .controlSize(.extraLarge)
-                .disabled(credit == nil)
-                .accessibilityIdentifier("exerciseCreditPercent")
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
+        } header: {
+            if typeSize.isAccessibilitySize { Text("Add burn to food budget") }
         } footer: {
             Text("Estimates often run high. Changes count from today; earlier days keep their numbers.")
         }
@@ -50,6 +52,15 @@ struct WorkoutSettingsSection: View {
         .task(id: model.changeGeneration) { await load() }
     }
 
+    private var creditPicker: some View {
+        Picker("Add burn to food budget", selection: Binding(get: { credit ?? 0 }, set: setCredit)) {
+            Text("Off").tag(0); Text("50%").tag(50); Text("100%").tag(100)
+        }
+        .labelsHidden()
+        .disabled(credit == nil)
+        .accessibilityIdentifier("exerciseCreditPercent")
+    }
+
     private func row(_ title: LocalizedStringKey, count: Int?) -> some View {
         LabeledContent(title) { if let count { Text("\(count)") } }.frame(minHeight: 44)
     }
@@ -59,15 +70,23 @@ struct WorkoutSettingsSection: View {
     private func load() async {
         guard let owner else { return }
         let today = ProgressDate.label(Date(), zone: owner.zone)
-        do { credit = try await model.store.goal(on: today, expectedProfileID: owner.id)?.exerciseCreditPercent ?? 0 } catch { credit = nil }
+        let pending = GoalRecord.pendingCreditKey(owner.id)
+        do {
+            if let goal = try await model.store.goal(on: today, expectedProfileID: owner.id) {
+                credit = goal.exerciseCreditPercent
+                UserDefaults.standard.removeObject(forKey: pending)
+            } else { credit = UserDefaults.standard.object(forKey: pending) as? Int ?? 0 }
+        } catch { credit = nil }
         routineCount = try? await model.store.routines(expectedProfileID: owner.id).count
         ownCount = try? await model.store.ownExerciseNames(expectedProfileID: owner.id).count
     }
 
-    /// Writes today's goal revision; the menu shows the new choice once it is saved.
+    /// Writes today's goal revision (and later ones); the control shows the new choice once it is saved.
+    /// Kept for the first goal too: with no goal yet nothing else stores it, and with one it is cleared on the next read.
     private func setCredit(_ percent: Int) {
         guard let owner else { return }
         let today = ProgressDate.label(Date(), zone: owner.zone)
+        UserDefaults.standard.set(percent, forKey: GoalRecord.pendingCreditKey(owner.id))
         Task {
             if await model.change({ _ = try await model.store.setExerciseCredit(percent, on: today, expectedProfileID: owner.id) }) { credit = percent }
         }
@@ -81,7 +100,6 @@ struct BarAndPlatesView: View {
     @AppStorage(WeightStep.platesKgKey) private var platesKg = ""
     @AppStorage(WeightStep.platesLbKey) private var platesLb = ""
 
-    private var bars: [Double] { unit == "lb" ? [45, 35, 25] : [20, 15, 10] }
     private var choices: [Double] { unit == "lb" ? [55, 45, 35, 25, 15, 10, 5, 2.5, 1.25] : [25, 20, 15, 10, 5, 2.5, 2, 1.25, 1, 0.5] }
     // Read through WeightStep so a bad stored value shows the defaults the wheel uses; the AppStorage above redraws on change.
     private var mine: [Double] { _ = platesKg + platesLb; return WeightStep.plates(unit: unit) }
@@ -90,7 +108,7 @@ struct BarAndPlatesView: View {
         Form {
             Section("Bar") {
                 Picker("Bar", selection: Binding(get: { WeightStep.bar(unit: unit) }, set: { barKg = WeightStep.kg(fromDisplay: $0, unit: unit) })) {
-                    ForEach(bars, id: \.self) { Text("\(PlateCalculatorView.number($0)) \(unit)").tag($0) }
+                    ForEach(WeightStep.bars(unit: unit), id: \.self) { Text("\(PlateCalculatorView.number($0)) \(unit)").tag($0) }
                 }
                 .pickerStyle(.inline).labelsHidden()
             }

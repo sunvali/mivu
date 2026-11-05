@@ -243,7 +243,11 @@ import XCTest
         typed.textFields.firstMatch.typeText("62.5")
         typed.buttons["OK"].tap()
         XCTAssertTrue(typed.waitForNonExistence(timeout: 5))
-        app.buttons["platesLink"].tap()
+        // The wheel sheet re-fits after the alert; tap once it has settled.
+        let platesLink = app.buttons["platesLink"]
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: platesLink)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 5), .completed)
+        platesLink.tap()
         let perSide = app.staticTexts["platesPerSide"]
         XCTAssertTrue(perSide.waitForExistence(timeout: 5))
         XCTAssertEqual(perSide.label, "20 + 1.25")

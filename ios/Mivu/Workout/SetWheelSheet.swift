@@ -77,7 +77,8 @@ struct SetWheelSheet: View {
         }
         // The sheet fits its content's ideal height at every text size.
         .fixedSize(horizontal: false, vertical: true)
-        .onGeometryChange(for: CGFloat.self, of: \.size.height) { height = $0 }
+        // Not while the plates sheet is over it: resizing the detent under a presented sheet can keep layout busy.
+        .onGeometryChange(for: CGFloat.self, of: \.size.height) { if !showingPlates { height = $0 } }
         .presentationDetents([.height(height)])
         .presentationBackground(Color.diarySurface)
         .sheet(isPresented: $showingPlates) { PlateCalculatorView(target: weight, unit: unit) }

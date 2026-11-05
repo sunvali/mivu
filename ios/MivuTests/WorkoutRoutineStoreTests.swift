@@ -147,4 +147,13 @@ import Testing
         // Only a bundled exercise can absorb one.
         await #expect(throws: DiaryError.invalidData) { try await store.mergeOwnExercise("Dips", into: ExerciseKey(own("Row")), expectedProfileID: profile.id) }
     }
+
+    @MainActor @Test func renameThatJoinsAnotherAsksAsAMerge() {
+        let own = ["Band twist", "My Row"]
+        #expect(MyExercisesView.mergeTarget(renaming: "My Row", to: "Garage row", own: own) == nil)
+        #expect(MyExercisesView.mergeTarget(renaming: "My Row", to: "my rows", own: own) == nil, "the same exercise, only spelled differently")
+        #expect(MyExercisesView.mergeTarget(renaming: "My Row", to: "band twists", own: own)?.name == "Band twist")
+        let catalog = MyExercisesView.mergeTarget(renaming: "My Row", to: " bench press ", own: own)
+        #expect(catalog?.exerciseID == "barbell-bench-press" && catalog?.name == "Barbell Bench Press")
+    }
 }

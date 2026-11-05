@@ -22,17 +22,28 @@ import Testing
 
     @Test func burnCreditWritesTodaysRevision() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        // No goal yet: the choice is kept on an empty record for today, ready for the next goal.
-        let empty = try await store.setExerciseCredit(50, on: "2027-01-01", expectedProfileID: profile.id)
-        #expect(empty.exerciseCreditPercent == 50 && empty.targets == NutritionValues() && empty.timeZoneID == "Asia/Jerusalem")
+        let pendingKey = GoalRecord.pendingCreditKey(profile.id); defer { UserDefaults.standard.removeObject(forKey: pendingKey) }
+        // No goal yet: nothing is written, so Today and Progress still show no goal.
+        #expect(try await store.setExerciseCredit(50, on: "2027-01-01", expectedProfileID: profile.id) == nil)
+        #expect(try await store.snapshotForExport().goals.isEmpty)
+        #expect(try await store.goal(on: "2027-01-01", expectedProfileID: profile.id) == nil)
+        // The choice Settings kept waits for the first goal, whoever creates it.
+        UserDefaults.standard.set(50, forKey: pendingKey)
         let earlier = try await store.setGoals(goal("2027-01-05"), expectedRevision: nil, expectedProfileID: profile.id)
-        // A later day copies the goal in force, so earlier days keep their numbers.
-        let today = try await store.setExerciseCredit(100, on: "2027-01-10", expectedProfileID: profile.id)
+        #expect(earlier.exerciseCreditPercent == 50)
+        let later = try await store.setGoals(goal("2027-02-01"), expectedRevision: nil, expectedProfileID: profile.id)
+        #expect(later.exerciseCreditPercent == 0, "only the first goal takes the waiting choice")
+
+        // A day without its own record copies the goal in force; earlier days keep their numbers, later goals follow.
+        let today = try #require(try await store.setExerciseCredit(100, on: "2027-01-10", expectedProfileID: profile.id))
         #expect(today.effectiveLocalDate == "2027-01-10" && today.id != earlier.id && today.targets == earlier.targets && today.goalWeightKg == 70)
         #expect(try await store.goal(on: "2027-01-07", expectedProfileID: profile.id) == earlier)
+        let movedOn = try #require(try await store.goal(on: "2027-02-01", exact: true, expectedProfileID: profile.id))
+        #expect(movedOn.exerciseCreditPercent == 100 && movedOn.revision == later.revision + 1 && movedOn.targets == later.targets)
         // Today's own record is updated in place.
-        let again = try await store.setExerciseCredit(0, on: "2027-01-10", expectedProfileID: profile.id)
+        let again = try #require(try await store.setExerciseCredit(0, on: "2027-01-10", expectedProfileID: profile.id))
         #expect(again.id == today.id && again.revision == today.revision + 1 && again.exerciseCreditPercent == 0)
+        #expect(try await store.goal(on: "2027-02-01", expectedProfileID: profile.id)?.exerciseCreditPercent == 0)
         await #expect(throws: DiaryError.invalidData) { try await store.setExerciseCredit(30, on: "2027-01-10", expectedProfileID: profile.id) }
     }
 

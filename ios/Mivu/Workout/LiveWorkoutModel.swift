@@ -19,11 +19,15 @@ enum WeightStep {
         return stored
     }
 
-    /// The person's bar in the shown unit, else 20 kg / 45 lb.
+    /// The bars Settings offers in each unit.
+    static func bars(unit: String) -> [Double] { unit == "lb" ? [45, 35, 25] : [20, 15, 10] }
+
+    /// The person's bar in the shown unit, else 20 kg / 45 lb. Snapped to the unit's nearest bar,
+    /// so a 45 lb bar reads 20 kg after switching units, not 20.41.
     static func bar(unit: String, defaults: UserDefaults = .standard) -> Double {
-        let kg = defaults.double(forKey: barKey)
-        guard kg.isFinite, kg > 0 else { return unit == "lb" ? 45 : 20 }
-        return display(kg: kg, unit: unit)
+        let kg = defaults.double(forKey: barKey), shown = display(kg: kg, unit: unit)
+        guard kg.isFinite, kg > 0 else { return bars(unit: unit)[0] }
+        return bars(unit: unit).min { abs($0 - shown) < abs($1 - shown) }!
     }
 
     /// The smallest jump a loaded bar can make: the smallest plate on each side.
@@ -111,7 +115,8 @@ enum WeightStep {
         let block = Self.block(of: exercise, in: session.exercises)
         if block.count > 1, block.contains(next.exercise), next.set == set, next != (exercise, set) { return }
         guard let rest else { return }
-        await rest.start(seconds: rest.seconds(for: session.exercises[exercise]), next: session.nextSetLabel ?? "", workout: session)
+        let label = next == (exercise, set) ? "" : "\(session.exercises[next.exercise].name) · set \(next.set + 1)"
+        await rest.start(seconds: rest.seconds(for: session.exercises[exercise]), next: label, workout: session)
     }
 
     /// The first unticked set after this one in lifting order (a superset round by round), else the first unticked anywhere.
@@ -148,30 +153,35 @@ enum WeightStep {
     /// One superset (a circuit from three) joining the first exercise's group if it has one; members move next to it.
     func group(_ exercises: [Int]) async {
         guard let first = exercises.first else { return }
-        await change(first) { [self] session in
+        var order: [Int]?
+        await change(first) { session in
             guard exercises.allSatisfy(session.exercises.indices.contains) else { return }
             let id = session.exercises[first].groupID ?? UUID()
             for index in exercises { session.exercises[index].groupID = id }
             let members = session.exercises.indices.filter { session.exercises[$0].groupID == id }, others = session.exercises.indices.filter { !members.contains($0) }
-            reorder(&session, others.filter { $0 < members[0] } + members + others.filter { $0 > members[0] })
+            order = others.filter { $0 < members[0] } + members + others.filter { $0 > members[0] }
+            Self.reorder(&session, order!)
         }
-        focus = nil
+        follow(order)
     }
 
     /// Takes the exercise out of its superset and puts it just after the others.
     func ungroup(exercise: Int) async {
-        await change(exercise) { [self] session in
+        var order: [Int]?
+        await change(exercise) { session in
             let block = Self.block(of: exercise, in: session.exercises), indices = Array(session.exercises.indices)
             session.exercises[exercise].groupID = nil
-            reorder(&session, indices[..<block.lowerBound] + block.filter { $0 != exercise } + [exercise] + indices[block.upperBound...])
+            order = indices[..<block.lowerBound] + block.filter { $0 != exercise } + [exercise] + indices[block.upperBound...]
+            Self.reorder(&session, order!)
         }
-        focus = nil
+        follow(order)
     }
 
     /// One place up or down. Inside a superset it swaps with a neighbour or, at the edge, steps out of it;
     /// otherwise it moves past the whole neighbouring superset.
     func moveExercise(_ index: Int, up: Bool) async {
-        await change(index) { [self] session in
+        var moved: [Int]?
+        await change(index) { session in
             let block = Self.block(of: index, in: session.exercises)
             var order = Array(session.exercises.indices)
             if block.count > 1 {
@@ -183,9 +193,10 @@ enum WeightStep {
                 order.remove(at: index)
                 order.insert(index, at: up ? neighbour.lowerBound : neighbour.upperBound - 1)
             }
-            reorder(&session, order)
+            Self.reorder(&session, order)
+            moved = order
         }
-        focus = nil
+        follow(moved)
     }
 
     /// Swaps an exercise with nothing ticked for another, filled like a new one; it keeps its superset and rest.
@@ -201,11 +212,14 @@ enum WeightStep {
     }
 
     func removeExercise(_ index: Int) async {
-        await change(index) { [self] session in
+        var removed = false
+        await change(index) { session in
             session.exercises.remove(at: index)
-            Self.dissolveSingles(&session.exercises)
-            if expandedExercise > index || expandedExercise == session.exercises.count { expandedExercise = max(expandedExercise - 1, 0) }
+            Self.normalizeGroups(&session.exercises)
+            removed = true
         }
+        // Applied once the removal is on screen: the open card stays on its exercise, or hands over to the one above at the end.
+        if removed, expandedExercise > index || expandedExercise == session.exercises.count { expandedExercise = max(expandedExercise - 1, 0) }
         focus = nil
     }
 
@@ -231,16 +245,30 @@ enum WeightStep {
         await change(exercise) { $0.exercises[exercise].note = trimmed.isEmpty ? nil : trimmed }
     }
 
-    /// Applies a new order of exercises; the open card follows its exercise, and a superset left with one exercise ends.
-    private func reorder(_ session: inout WorkoutSession, _ order: [Int]) {
+    /// Applies a new order of exercises and keeps every superset whole.
+    private static func reorder(_ session: inout WorkoutSession, _ order: [Int]) {
         session.exercises = order.map { session.exercises[$0] }
-        expandedExercise = order.firstIndex(of: expandedExercise) ?? expandedExercise
-        Self.dissolveSingles(&session.exercises)
+        normalizeGroups(&session.exercises)
     }
 
-    private static func dissolveSingles(_ exercises: inout [WorkoutExercise]) {
-        let counts = Dictionary(exercises.compactMap(\.groupID).map { ($0, 1) }, uniquingKeysWith: +)
-        for index in exercises.indices where exercises[index].groupID.map({ counts[$0] == 1 }) == true { exercises[index].groupID = nil }
+    /// After an edit has been applied (and saved, when live), the open card follows its exercise and focus resets.
+    private func follow(_ order: [Int]?) {
+        if let order { expandedExercise = order.firstIndex(of: expandedExercise) ?? expandedExercise }
+        focus = nil
+    }
+
+    /// A superset is a run of neighbours sharing a group: a run of one is no superset, and a run split
+    /// off from an earlier one (an exercise taken from its middle) becomes its own superset.
+    private static func normalizeGroups(_ exercises: inout [WorkoutExercise]) {
+        var seen = Set<UUID>(), index = 0
+        while index < exercises.count {
+            let run = block(of: index, in: exercises)
+            if let id = exercises[index].groupID {
+                if run.count == 1 { exercises[index].groupID = nil }
+                else if !seen.insert(id).inserted { let fresh = UUID(); for member in run { exercises[member].groupID = fresh } }
+            }
+            index = run.upperBound
+        }
     }
 
     /// Copies the row above, else last time's set at this position, else a starting set.

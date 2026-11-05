@@ -230,7 +230,13 @@ extension DiaryTransaction {
         let previous = try exactGoal(on: goal.effectiveLocalDate)
         guard previous?.revision == revision, previous == nil || previous?.id == goal.id else { throw DiaryError.staleRevision }
         if previous == nil { guard try database.mutationInteger("SELECT COUNT(*) FROM goal WHERE id = ?", [.text(goal.id.uuidString)]) == 0 else { throw DiaryError.invalidData } }
-        var saved = goal; saved.revision = (previous?.revision ?? 0) + 1; try validateGoalFields(saved)
+        var saved = goal; saved.revision = (previous?.revision ?? 0) + 1
+        // shortcut: the first goal takes a burn choice made in Settings before any goal existed; the store reads app defaults here.
+        if previous == nil, saved.exerciseCreditPercent == 0, try database.mutationInteger("SELECT COUNT(*) FROM goal", []) == 0,
+           let pending = UserDefaults.standard.object(forKey: GoalRecord.pendingCreditKey(head.profile.id)) as? Int, [50, 100].contains(pending) {
+            saved.exerciseCreditPercent = pending
+        }
+        try validateGoalFields(saved)
         let payload = try JSONEncoder().encode(saved)
         try database.execute("INSERT INTO goal(id, ordinal, effectiveLocalDate, payload) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
             [.text(saved.id.uuidString), .integer(nextOrdinal("goal")), .text(saved.effectiveLocalDate), .blob(payload)])

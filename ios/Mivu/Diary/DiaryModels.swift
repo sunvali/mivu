@@ -172,6 +172,9 @@ struct GoalRecord: Codable, Equatable, Sendable, Identifiable {
 }
 
 extension GoalRecord {
+    /// Settings › Workouts with no goal yet: the burn choice waits under this key (per profile) for the first goal.
+    static func pendingCreditKey(_ profileID: UUID) -> String { "workoutCreditPending-" + profileID.uuidString }
+
     enum CodingKeys: String, CodingKey { case id, effectiveLocalDate, timeZoneID, revision, targets, goalWeightKg, exerciseCreditPercent }
     private enum LegacyKeys: String, CodingKey { case exerciseCreditEnabled }
 

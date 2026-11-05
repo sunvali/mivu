@@ -335,6 +335,61 @@ import Testing
         #expect(rest.endsAt != nil)
     }
 
+    @Test func groupingFromTheMiddleKeepsSupersetsWhole() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (model, _) = try await restModel(store, profile, lift("A", sets: 1), lift("B", sets: 1), lift("C", sets: 1), lift("D", sets: 1), lift("E", sets: 1), lift("F", sets: 1))
+        await model.group([0, 1]); await model.group([0, 2]); await model.group([0, 3]); await model.group([0, 4])
+        // From F, superset with C, the middle of the A–E circuit: A B | C F | D E, three separate supersets.
+        await model.group([5, 2])
+        let groups = model.session.exercises.map(\.groupID)
+        #expect(model.session.exercises.map(\.name) == ["A", "B", "C", "F", "D", "E"])
+        #expect(groups.allSatisfy { $0 != nil } && groups[0] == groups[1] && groups[2] == groups[3] && groups[4] == groups[5])
+        #expect(Set(groups).count == 3)
+        #expect(LiveWorkoutModel.block(of: 4, in: model.session.exercises) == 4..<6)
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id) == model.session)
+
+        // A circuit X Y Z with W after it: taking Y out leaves X and Z alone, not one group in two places.
+        #expect(await model.discard(), "one running workout per profile")
+        let (other, _) = try await restModel(store, profile, lift("V", sets: 1), lift("X", sets: 1), lift("Y", sets: 1), lift("Z", sets: 1), lift("U", sets: 1), lift("W", sets: 1))
+        await other.group([1, 2]); await other.group([1, 3])
+        await other.group([5, 2])
+        #expect(other.session.exercises.map(\.name) == ["V", "X", "Y", "W", "Z", "U"])
+        #expect(other.session.exercises.map { $0.groupID != nil } == [false, false, true, true, false, false])
+    }
+
+    @Test func unevenSupersetRounds() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (model, rest) = try await restModel(store, profile, lift("Row", sets: 3), lift("Fly", sets: 2))
+        await model.group([0, 1])
+        #expect(model.round(of: 0..<2) == (1, 3))
+        await model.tick(exercise: 0, set: 0)
+        #expect(rest.endsAt == nil && model.focus.map { [$0.exercise, $0.set] } == [1, 0])
+        await model.tick(exercise: 1, set: 0)
+        #expect(rest.endsAt != nil && rest.next == "Row · set 2", "the rest names the next set in lifting order")
+        rest.skip()
+        await model.tick(exercise: 0, set: 1)
+        await model.tick(exercise: 1, set: 1)
+        #expect(rest.next == "Row · set 3" && model.round(of: 0..<2) == (3, 3))
+        rest.skip()
+        // The third round has only Row, so it rests after it.
+        await model.tick(exercise: 0, set: 2)
+        #expect(rest.endsAt != nil)
+    }
+
+    @Test func removingFromASuperset() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (model, _) = try await restModel(store, profile, lift("A", sets: 1), lift("B", sets: 1), lift("C", sets: 1), lift("D", sets: 1))
+        await model.group([0, 1]); await model.group([0, 2])
+        model.expandedExercise = 3
+        await model.removeExercise(1)
+        #expect(model.session.exercises.map(\.name) == ["A", "C", "D"] && model.expandedExercise == 2, "the open card stays on D")
+        #expect(model.session.exercises[0].groupID != nil && model.session.exercises[0].groupID == model.session.exercises[1].groupID)
+        await model.removeExercise(0)
+        #expect(model.session.exercises.allSatisfy { $0.groupID == nil }, "one exercise left is no superset")
+        #expect(model.expandedExercise == 1)
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id) == model.session)
+    }
+
     @Test func exerciseMenuEdits() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let (model, _) = try await restModel(store, profile, lift("Row", sets: 2), lift("Curl", sets: 1), lift("Dip", sets: 1))

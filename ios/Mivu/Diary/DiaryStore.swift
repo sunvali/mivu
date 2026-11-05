@@ -495,14 +495,22 @@ actor DiaryStore {
         try pagedConnection(expectedProfileID: expectedProfileID).database.finishedWorkouts(containing: key, limit: limit, expectedProfileID: expectedProfileID)
     }
 
-    /// Settings › Workouts: today's goal record carries the choice, so earlier days keep their numbers.
-    /// A day without its own record starts from the goal in force (or no targets, kept for the next goal).
-    func setExerciseCredit(_ percent: Int, on date: String, expectedProfileID: UUID) throws -> GoalRecord {
-        try pagedMutation(expectedProfileID) { database, head in
+    /// Settings › Workouts: the choice counts from `date` on. Today's goal record carries it (a day without its own
+    /// record starts from the goal in force), and goals dated later take it too, so earlier days keep their numbers.
+    /// With no goal in force nothing is written and nil comes back; the caller keeps the choice for the first goal.
+    func setExerciseCredit(_ percent: Int, on date: String, expectedProfileID: UUID) throws -> GoalRecord? {
+        guard [0, 50, 100].contains(percent) else { throw DiaryError.invalidData }
+        return try pagedMutation(expectedProfileID) { database, head in
             try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
-                let exact = try transaction.exactGoal(on: date), base = try exact ?? transaction.goal(on: date)
-                var goal = exact ?? GoalRecord(effectiveLocalDate: date, timeZoneID: head.profile.timeZoneID, targets: base?.targets ?? NutritionValues(),
-                                               goalWeightKg: base?.goalWeightKg, exerciseCreditPercent: 0)
+                for row in try transaction.records("goal", clause: "effectiveLocalDate > ?", values: [.text(date)]) {
+                    var later = try database.decode(GoalRecord.self, row); try validateGoalFields(later)
+                    guard later.exerciseCreditPercent != percent else { continue }
+                    later.exerciseCreditPercent = percent
+                    _ = try transaction.setGoal(later, revision: later.revision)
+                }
+                let exact = try transaction.exactGoal(on: date)
+                guard var goal = try exact ?? transaction.goal(on: date) else { return nil }
+                if exact == nil { goal.id = UUID(); goal.effectiveLocalDate = date; goal.timeZoneID = head.profile.timeZoneID }
                 goal.exerciseCreditPercent = percent
                 return try transaction.setGoal(goal, revision: exact?.revision)
             }

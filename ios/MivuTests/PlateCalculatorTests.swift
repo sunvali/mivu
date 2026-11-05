@@ -40,4 +40,15 @@ import Testing
         defaults.set(0.0, forKey: WeightStep.barKey)
         #expect(WeightStep.bar(unit: "kg", defaults: defaults) == 20)
     }
+
+    @Test func barSnapsToTheUnit() throws {
+        let defaults = try #require(UserDefaults(suiteName: "Bar-" + UUID().uuidString))
+        // Chosen as 45 lb, then the unit switched to kg: the 20 kg bar, which the picker can show as chosen.
+        defaults.set(WeightStep.kg(fromDisplay: 45, unit: "lb"), forKey: WeightStep.barKey)
+        #expect(WeightStep.bar(unit: "lb", defaults: defaults) == 45)
+        #expect(WeightStep.bar(unit: "kg", defaults: defaults) == 20)
+        defaults.set(15.0, forKey: WeightStep.barKey)
+        #expect(WeightStep.bar(unit: "lb", defaults: defaults) == 35)
+        #expect(WeightStep.bars(unit: "kg").contains(WeightStep.bar(unit: "kg", defaults: defaults)))
+    }
 }
