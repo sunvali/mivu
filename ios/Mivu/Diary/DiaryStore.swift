@@ -453,6 +453,28 @@ actor DiaryStore {
         }
     }
 
+    /// Imports in one transaction, each on its waking day (opened if needed, never made active). A workout with the
+    /// same source, start and title already stored is skipped, so importing the same file again adds nothing.
+    func importWorkouts(_ rows: [ImportedWorkout], source: WorkoutSource, expectedProfileID: UUID) throws -> (added: Int, duplicates: Int) {
+        return try pagedMutation(expectedProfileID) { database, head in
+        try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+            let zone = head.profile.timeZoneID
+            var added = 0, duplicates = 0
+            for row in rows {
+                var draft = row.draft; draft.source = source
+                let stored = try transaction.records("workout", clause: "json_extract(CAST(payload AS TEXT), '$.source') = ? AND json_extract(CAST(payload AS TEXT), '$.title') IS ?",
+                                                     values: [.text(source.rawValue), draft.title.map(DiaryDatabase.Value.text) ?? .null])
+                if try stored.contains(where: { try database.decode(WorkoutSession.self, $0).performedAt == row.startedAt }) { duplicates += 1; continue }
+                let date = wakingDateLabel(row.startedAt, zone: zone)
+                let day = try transaction.resolveDay(localDate: date, timeZoneID: zone, at: diaryDateOnlyInstant(date, zone: zone))
+                _ = try transaction.createWorkout(dayID: day.id, draft: draft, performedAt: row.startedAt)
+                added += 1
+            }
+            return (added, duplicates)
+        }
+        }
+    }
+
     /// With `localDate`, the workout moves to that diary date (opened if needed); its start must fall on it.
     func updateWorkout(_ session: WorkoutSession, onDate localDate: String? = nil, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
         return try pagedMutation(expectedProfileID) { database, head in

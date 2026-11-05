@@ -9,6 +9,8 @@ struct WorkoutSettingsSection: View {
     @State private var credit: Int?
     @State private var routineCount: Int?
     @State private var ownCount: Int?
+    /// The CSV written for "Export workouts", shown in the share sheet.
+    @State private var exportFile: URL?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private static let restChoices = [30, 45, 60, 90, 120, 150, 180, 240, 300]
@@ -48,6 +50,15 @@ struct WorkoutSettingsSection: View {
                 .accessibilityIdentifier("workoutRoutines")
             NavigationLink { MyExercisesView(model: model) } label: { row("My exercises", count: ownCount) }
                 .accessibilityIdentifier("myExercises")
+        }
+        Section {
+            NavigationLink { WorkoutImportView(model: model) } label: { Text("Import from Strong or Hevy").frame(minHeight: 44) }
+                .accessibilityIdentifier("importWorkoutsRow")
+            Button { Task { exportFile = try? await WorkoutExport.file(model: model) } } label: { Text("Export workouts").frame(minHeight: 44) }
+                .accessibilityIdentifier("exportWorkouts")
+                .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) {
+                    if let exportFile { ActivitySheet(items: [exportFile]) }
+                }
         }
         .task(id: model.changeGeneration) { await load() }
     }

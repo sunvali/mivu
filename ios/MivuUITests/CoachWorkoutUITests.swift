@@ -54,6 +54,13 @@ import XCTest
         reveal(link, in: app)
         link.tap()
         XCTAssertTrue(app.navigationBars["Workouts"].waitForExistence(timeout: 10))
+        // Import and export sit at the bottom of Workouts.
+        let importRow = app.buttons["importWorkoutsRow"].firstMatch
+        reveal(importRow, in: app)
+        XCTAssertTrue(app.buttons["exportWorkouts"].exists)
+        importRow.tap()
+        XCTAssertTrue(app.buttons["chooseWorkoutCSV"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Import workouts"].exists)
     }
 
     // The routine card and the New best pill, light and dark, at the default and the largest accessibility size.
