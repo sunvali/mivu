@@ -7,6 +7,7 @@ struct LiveWorkoutView: View {
     @State private var picking = false
     @State private var editing: SetPosition?
     @State private var askingDiscard = false
+    private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -14,7 +15,7 @@ struct LiveWorkoutView: View {
 
     init(store: DiaryStore, profileID: UUID, session: WorkoutSession, mode: LiveWorkoutMode, onClose: @escaping () -> Void) {
         let unit = UserDefaults.standard.string(forKey: "weightUnit") ?? "kg"
-        _model = State(initialValue: LiveWorkoutModel(store: store, profileID: profileID, session: session, unit: unit, mode: mode))
+        _model = State(initialValue: LiveWorkoutModel(store: store, profileID: profileID, session: session, unit: unit, mode: mode, rest: .shared))
         self.onClose = onClose
     }
 
@@ -55,6 +56,9 @@ struct LiveWorkoutView: View {
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
+            .safeAreaInset(edge: .bottom) {
+                if model.mode == .live, let end = rest.endsAt { RestBar(rest: rest, endsAt: end).padding(.horizontal, 16).padding(.bottom, 8) }
+            }
             .animation(reduceMotion ? nil : .snappy, value: model.expandedExercise)
             .sensoryFeedback(trigger: tickedCount) { old, new in new > old ? .success : nil }
         }
@@ -284,6 +288,40 @@ private struct SetNumber: View {
             let next = unset ? value : clamped(value + (direction == .increment ? step : -step))
             if next != value || unset { onCommit(next) }
         }
+    }
+}
+
+/// Mockup 3: the rest countdown and Skip; tapping the time offers 15 seconds less or more.
+private struct RestBar: View {
+    let rest: RestTimer
+    let endsAt: Date
+    @State private var adjusting = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button { adjusting.toggle() } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "timer").font(.body.weight(.semibold)).accessibilityHidden(true)
+                    Text(timerInterval: Date.now...max(endsAt, .now), countsDown: true).font(.title3.weight(.bold)).monospacedDigit()
+                        // No digit animation: a clock that animates every second never lets the screen settle.
+                        .contentTransition(.identity).transaction { $0.animation = nil }
+                    Text("rest").font(.subheadline).opacity(0.7)
+                }
+                .frame(minHeight: 44).contentShape(.rect)
+            }
+            .accessibilityHint("Shows 15 seconds less or more.")
+            Spacer(minLength: 4)
+            if adjusting {
+                Button("−15") { Task { await rest.adjust(by: -15) } }.accessibilityLabel("15 seconds less").frame(minWidth: 44, minHeight: 44)
+                Button("+15") { Task { await rest.adjust(by: 15) } }.accessibilityLabel("15 seconds more").frame(minWidth: 44, minHeight: 44)
+            }
+            Button("Skip") { rest.skip() }.fontWeight(.semibold).frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel("Skip rest").accessibilityIdentifier("skipRest")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.diaryCanvas)
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .background(Color.diaryText, in: .rect(cornerRadius: 20))
     }
 }
 

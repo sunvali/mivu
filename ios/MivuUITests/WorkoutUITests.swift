@@ -191,6 +191,59 @@ import XCTest
         XCTAssertTrue(ticks.element(boundBy: 0).isSelected)
     }
 
+    func testBannerOnEveryTab() {
+        let app = launch()
+        XCTAssertFalse(app.buttons["workoutBanner"].exists, "no banner without a running workout")
+        openGym(app)
+        app.buttons["Minimize"].tap()
+        let banner = app.buttons["workoutBanner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 10))
+        XCTAssertTrue(banner.label.hasPrefix("Strength training running, "), banner.label)
+        capture("Banner Today", in: app)
+        for tab in ["Diary", "Progress", "Coach"] {
+            app.tabBars.buttons[tab].tap()
+            XCTAssertTrue(banner.waitForExistence(timeout: 5), "banner on \(tab)")
+        }
+        capture("Banner Coach", in: app)
+        banner.tap()
+        XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10))
+        XCTAssertFalse(banner.exists, "the banner hides while the workout is open")
+    }
+
+    func testGymThreeSetsSurviveRelaunch() {
+        let app = launch()
+        openGym(app)
+        let addExercise = app.buttons["addExercise"]
+        addExercise.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Bench press")
+        let bench = app.buttons["Barbell Bench Press"].firstMatch
+        XCTAssertTrue(bench.waitForExistence(timeout: 5))
+        bench.tap()
+        let addSet = app.buttons["addSet"]
+        XCTAssertTrue(addSet.waitForExistence(timeout: 5))
+        for _ in 0..<2 { addSet.tap() }
+        let ticks = app.buttons.matching(identifier: "tickSet")
+        XCTAssertTrue(ticks.element(boundBy: 2).waitForExistence(timeout: 5))
+        for index in 0..<3 { ticks.element(boundBy: index).tap() }
+        let ticked = ticks.matching(NSPredicate(format: "selected == true"))
+        XCTAssertTrue(ticked.element(boundBy: 2).waitForExistence(timeout: 5))
+        // Each ✓ starts the rest countdown at the bottom.
+        XCTAssertTrue(app.buttons["skipRest"].waitForExistence(timeout: 5))
+        capture("Rest bar", in: app)
+
+        app.terminate()
+        app.launch()
+        let banner = app.buttons["workoutBanner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 15), "an active workout comes back as the banner, not a full screen")
+        XCTAssertFalse(app.buttons["addExercise"].exists)
+        capture("Banner after relaunch", in: app)
+        banner.tap()
+        XCTAssertTrue(ticked.element(boundBy: 2).waitForExistence(timeout: 10))
+        XCTAssertEqual(ticked.count, 3)
+    }
+
     func testPastGymHasNoClock() {
         let app = launch()
         let start = app.buttons["startWorkout"]
@@ -217,6 +270,18 @@ import XCTest
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "MMM d"
         return formatter.string(from: Calendar.current.date(byAdding: .day, value: -1, to: Date())!)
+    }
+
+    /// Today → Start workout → Gym, waiting until the live screen has settled.
+    private func openGym(_ app: XCUIApplication) {
+        let start = app.buttons["startWorkout"]
+        reveal(start, in: app)
+        start.tap()
+        let gym = app.buttons["startGym"]
+        XCTAssertTrue(gym.waitForExistence(timeout: 5))
+        gym.tap()
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["addExercise"])
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 10), .completed)
     }
 
     /// Today → Start workout → Run; returns the time ruler.

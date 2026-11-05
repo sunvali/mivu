@@ -30,8 +30,9 @@ enum DayProgressSync: Equatable {
     /// iOS ends an activity by itself after eight hours but keeps its outdated card for up to four more.
     static func lingers(_ state: ActivityState) -> Bool { state == .ended }
 
-    static func decide(enabled: Bool, authorized: Bool, hasDiary: Bool, running: Int) -> DayProgressSync {
-        guard enabled, authorized, hasDiary else { return .endAll }
+    /// A running workout has its own activity; the day's waits until it ends.
+    static func decide(enabled: Bool, authorized: Bool, hasDiary: Bool, running: Int, workoutRunning: Bool) -> DayProgressSync {
+        guard enabled, authorized, hasDiary, !workoutRunning else { return .endAll }
         return running == 0 ? .start : .update(endingExtra: running - 1)
     }
 }
@@ -63,11 +64,12 @@ private let liveActivityLog = Logger(subsystem: "com.yakov103.mivu", category: "
     }
     #endif
     let authorized = ActivityAuthorizationInfo().areActivitiesEnabled
+    let workoutRunning = readModel?.activeWorkout != nil
     // Each sync waits for the previous one, so a burst of diary changes lands in order.
     let previous = DayProgressSync.lastSync
     DayProgressSync.lastSync = Task.detached {
         await previous?.value
-        await applyDayProgress(enabled: enabled, authorized: authorized, content: content)
+        await applyDayProgress(enabled: enabled, authorized: authorized, workoutRunning: workoutRunning, content: content)
     }
 }
 
@@ -75,7 +77,7 @@ extension DayProgressSync {
     @MainActor static var lastSync: Task<Void, Never>?
 }
 
-private func applyDayProgress(enabled: Bool, authorized: Bool,
+private func applyDayProgress(enabled: Bool, authorized: Bool, workoutRunning: Bool,
                               content: ActivityContent<DayProgressAttributes.ContentState>?) async {
     let activities = Activity<DayProgressAttributes>.activities
     // Otherwise a fresh activity would sit beside the old card with yesterday's or this morning's numbers.
@@ -83,7 +85,7 @@ private func applyDayProgress(enabled: Bool, authorized: Bool,
         await activity.end(nil, dismissalPolicy: .immediate)
     }
     let running = activities.filter { DayProgressSync.isLive($0.activityState) }
-    switch DayProgressSync.decide(enabled: enabled, authorized: authorized, hasDiary: content != nil, running: running.count) {
+    switch DayProgressSync.decide(enabled: enabled, authorized: authorized, hasDiary: content != nil, running: running.count, workoutRunning: workoutRunning) {
     case .endAll:
         for activity in running { await activity.end(nil, dismissalPolicy: .immediate) }
     case .start:
@@ -95,4 +97,33 @@ private func applyDayProgress(enabled: Bool, authorized: Bool,
         await first.update(content)
         for activity in running.dropFirst().prefix(extra) { await activity.end(nil, dismissalPolicy: .immediate) }
     }
+}
+
+/// Starts, refreshes or ends the running workout's Live Activity. It runs even when the day's activity is off.
+@MainActor func syncWorkoutActivity(_ session: WorkoutSession?, restEndsAt: Date?) {
+    guard !DiaryLaunch.isUITest || ProcessInfo.processInfo.arguments.contains("--live-activity") else { return }
+    let hide = UserDefaults.standard.object(forKey: DayProgressSync.hideWhenLockedKey) as? Bool ?? true
+    let title = session.map(WorkoutRow.title)
+    let content = session.map { session in
+        let next = session.nextSet
+        return ActivityContent(state: WorkoutActivityAttributes.ContentState(
+            startedAt: session.performedAt, restEndsAt: restEndsAt, exercise: next?.name ?? session.exercises.last?.name,
+            nextSet: next.map { "set \($0.set)" }, hideWhenLocked: hide), staleDate: nil)
+    }
+    let previous = WorkoutActivitySync.last
+    WorkoutActivitySync.last = Task.detached {
+        await previous?.value
+        let running = Activity<WorkoutActivityAttributes>.activities.filter { DayProgressSync.isLive($0.activityState) }
+        // A renamed or different workout gets a fresh activity; its title is fixed when it starts.
+        let current = running.first { $0.attributes.title == title }
+        for activity in running where activity.id != current?.id { await activity.end(nil, dismissalPolicy: .immediate) }
+        guard let content, let title else { return }
+        if let current { await current.update(content); return }
+        do { _ = try Activity.request(attributes: WorkoutActivityAttributes(title: title), content: content, pushType: nil) }
+        catch { liveActivityLog.error("Workout Live Activity request failed: \(error.localizedDescription, privacy: .public)") }
+    }
+}
+
+enum WorkoutActivitySync {
+    @MainActor static var last: Task<Void, Never>?
 }

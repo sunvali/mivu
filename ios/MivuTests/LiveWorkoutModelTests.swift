@@ -62,6 +62,26 @@ import Testing
         #expect(restored.exercises[0].sets[0].done == true && restored == model.session)
     }
 
+    @Test func savedTickStartsRest() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let now = Date(timeIntervalSinceReferenceDate: 820_000_000)
+        let rest = RestTimer(center: FakeNotificationCenter(), defaults: UserDefaults(suiteName: "Rest-" + UUID().uuidString)!, now: { now })
+        var lift = benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: false), WorkoutSet(repetitions: 8, loadKg: 60, done: false))
+        lift.restSeconds = 120
+        let started = try await live(store, profile, lift)
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: started.session, unit: "kg", mode: .live, rest: rest)
+        await model.tick(exercise: 0, set: 0)
+        #expect(rest.endsAt == now.addingTimeInterval(120), "the exercise's own rest wins over the default")
+        #expect(rest.next == "Barbell Bench Press · set 2")
+
+        rest.skip()
+        // Another profile selected underneath: the tick fails to save, so no rest starts.
+        let other = DiaryProfile(name: "Synthetic other", timeZoneID: "Asia/Jerusalem")
+        _ = try await store.createProfile(other); _ = try await store.selectProfile(other.id)
+        await model.tick(exercise: 0, set: 1)
+        #expect(model.saveError != nil && rest.endsAt == nil)
+    }
+
     @Test func tickMarksNewBest() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         try await finished(store, profile, on: "2027-03-08", benchWith(WorkoutSet(repetitions: 8, loadKg: 60)))

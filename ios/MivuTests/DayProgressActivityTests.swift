@@ -68,12 +68,19 @@ import Testing
         #expect(try state(eaten: full, target: targets).hideWhenLocked)
     }
 
-    @Test func disabledEndsAll() { #expect(DayProgressSync.decide(enabled: false, authorized: true, hasDiary: true, running: 1) == .endAll) }
-    @Test func unauthorizedEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: false, hasDiary: true, running: 1) == .endAll) }
-    @Test func noDiaryEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: false, running: 1) == .endAll) }
-    @Test func noneRunningStarts() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 0) == .start) }
-    @Test func oneRunningUpdates() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1) == .update(endingExtra: 0)) }
-    @Test func extrasEnd() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 3) == .update(endingExtra: 2)) }
+    @Test func disabledEndsAll() { #expect(DayProgressSync.decide(enabled: false, authorized: true, hasDiary: true, running: 1, workoutRunning: false) == .endAll) }
+    @Test func unauthorizedEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: false, hasDiary: true, running: 1, workoutRunning: false) == .endAll) }
+    @Test func noDiaryEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: false, running: 1, workoutRunning: false) == .endAll) }
+    @Test func noneRunningStarts() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 0, workoutRunning: false) == .start) }
+    @Test func oneRunningUpdates() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1, workoutRunning: false) == .update(endingExtra: 0)) }
+    @Test func extrasEnd() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 3, workoutRunning: false) == .update(endingExtra: 2)) }
+
+    @Test func workoutPausesDayActivity() {
+        #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1, workoutRunning: true) == .endAll)
+        // After the workout it comes back only for someone who had it on.
+        #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 0, workoutRunning: false) == .start)
+        #expect(DayProgressSync.decide(enabled: false, authorized: true, hasDiary: true, running: 0, workoutRunning: false) == .endAll)
+    }
 
     @Test func unknownMacroIsNeverZero() {
         #expect(State.macroLabel("P", nil, 120) == "P –/120g")

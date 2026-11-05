@@ -39,9 +39,11 @@ enum WeightStep {
     private var saved: WorkoutSession
     @ObservationIgnored private var history: [ExerciseKey: [WorkoutSession]] = [:]
     @ObservationIgnored private var pending: Task<Void, Never>?
+    @ObservationIgnored private let rest: RestTimer?
 
-    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, unit: String, mode: LiveWorkoutMode) {
+    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, unit: String, mode: LiveWorkoutMode, rest: RestTimer? = nil) {
         self.store = store; self.profileID = profileID; self.session = session; self.saved = session; self.unit = unit; self.mode = mode
+        self.rest = mode == .live ? rest : nil
         // The first exercise with an unticked set, else the last one.
         expandedExercise = session.exercises.firstIndex { $0.sets.contains { $0.done != true } } ?? max(session.exercises.count - 1, 0)
     }
@@ -69,6 +71,9 @@ enum WeightStep {
         // Toggles what the screen shows: a tick still unsaved after a failure is ticked again, not cleared.
         let done = !isTicked(exercise: exercise, set: set)
         await change(exercise, set) { $0.exercises[exercise].sets[set].done = done }
+        // Rest starts only once the tick is saved; a failed one shows undone and starts nothing.
+        guard done, let rest, isTicked(exercise: exercise, set: set) else { return }
+        await rest.start(seconds: rest.seconds(for: session.exercises[exercise]), next: session.nextSet.map { "\($0.name) · set \($0.set)" } ?? "", workout: session)
     }
 
     /// Copies the row above, else last time's set at this position, else a starting set.
