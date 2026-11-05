@@ -75,11 +75,19 @@ enum WeightStep {
 
     init(store: DiaryStore, profileID: UUID, session: WorkoutSession, unit: String, mode: LiveWorkoutMode, rest: RestTimer? = nil,
          onSaved: @escaping (WorkoutSession, UUID) -> Void = { _, _ in }) {
-        self.store = store; self.profileID = profileID; self.session = session; self.saved = session; self.unit = unit; self.mode = mode
+        self.store = store; self.profileID = profileID; self.unit = unit; self.mode = mode
         self.onSaved = onSaved
         self.rest = mode == .live ? rest : nil
+        var session = session
+        if mode == .edit {
+            // A saved set was lifted: older ones without a tick show ticked.
+            for e in session.exercises.indices { for s in session.exercises[e].sets.indices where session.exercises[e].sets[s].done == nil { session.exercises[e].sets[s].done = true } }
+        }
+        self.session = session; saved = session
         // The first exercise with an unticked set, else the last one.
         expandedExercise = session.exercises.firstIndex { $0.sets.contains { $0.done != true } } ?? max(session.exercises.count - 1, 0)
+        // An edit's time starts at the stored one.
+        if mode == .edit { typedMinutes = Double(session.durationSeconds ?? session.durationMinutes * 60) / 60 }
     }
 
     /// Live only for a start left at now (or within five minutes of it); anything earlier is logged afterwards.
@@ -330,6 +338,9 @@ enum WeightStep {
 
     var hasTicked: Bool { session.hasTickedSets }
 
+    /// An edit differs from the saved workout.
+    var editChanged: Bool { session != saved || seconds != saved.durationSeconds ?? saved.durationMinutes * 60 }
+
     /// A past log has no clock: three minutes a set until the person corrects it.
     var pastMinutes: Double {
         get { typedMinutes ?? Double(max(session.exercises.reduce(0) { $0 + $1.sets.filter { $0.done == true }.count }, 1) * 3) }
@@ -338,7 +349,7 @@ enum WeightStep {
 
     /// How long the workout took, as Save will store it.
     var seconds: Int {
-        mode == .past ? Int(pastMinutes * 60) : min(max(Int(endedAt.timeIntervalSince(session.performedAt)), 1), 86_400)
+        mode == .live ? min(max(Int(endedAt.timeIntervalSince(session.performedAt)), 1), 86_400) : Int(pastMinutes * 60)
     }
 
     /// The Done screen's three numbers; kcal is estimated as Save will store it.
@@ -394,9 +405,7 @@ enum WeightStep {
                 onSaved(session, profileID)
             case .past:
                 let date = try await workoutDate()
-                let exercises = session.exercises.compactMap { exercise in
-                    var ticked = exercise; ticked.sets = exercise.sets.filter { $0.done == true }; return ticked.sets.isEmpty ? nil : ticked
-                }
+                let exercises = tickedExercises
                 let seconds = max(seconds, 60)
                 let bodyKg = try await store.bodyKg(on: date, expectedProfileID: profileID)
                 let draft = WorkoutDraft(kind: .strength, durationMinutes: seconds / 60, exercises: exercises,
@@ -406,11 +415,32 @@ enum WeightStep {
                 session = try await store.createWorkout(localDate: date, draft: draft, performedAt: session.performedAt, expectedProfileID: profileID)
                 onSaved(session, profileID)
             case .edit:
-                session = try await store.updateWorkout(session, expectedRevision: session.revision, expectedProfileID: profileID)
+                var edited = session
+                edited.exercises = tickedExercises
+                edited.durationSeconds = max(seconds, 60)
+                let before = saved.durationSeconds ?? saved.durationMinutes * 60
+                // An estimate follows a corrected time; a number the person typed stays.
+                if edited.burnSource != .userEstimate, edited.durationSeconds != before,
+                   let kcal = WorkoutBurn.estimate(activity: edited.activity ?? "strength", seconds: edited.durationSeconds!, distanceMeters: nil, effort: edited.effort, bodyKg: bodyKg) {
+                    edited.estimatedBurnKcal = kcal
+                }
+                // A moved start is an exact time and files the workout under that start's waking day, as a past log does.
+                var date: String?
+                if edited.performedAt != saved.performedAt {
+                    edited.timePrecision = .exact
+                    date = wakingDateLabel(edited.performedAt, zone: try await store.diaryHead(expectedProfileID: profileID).profile.timeZoneID)
+                }
+                session = try await store.updateWorkout(edited, onDate: date, expectedRevision: session.revision, expectedProfileID: profileID)
             }
             saveError = nil
             return true
         } catch { saveError = error.localizedDescription; return false }
+    }
+
+    private var tickedExercises: [WorkoutExercise] {
+        session.exercises.compactMap { exercise in
+            var ticked = exercise; ticked.sets = exercise.sets.filter { $0.done == true }; return ticked.sets.isEmpty ? nil : ticked
+        }
     }
 
     func discard() async -> Bool {

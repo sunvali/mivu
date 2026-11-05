@@ -86,4 +86,32 @@ import Testing
         session.burnSource = .userEstimate
         #expect(WorkoutRow.burn(session) == "310")
     }
+
+    @Test func editPrefillsAndKeepsTheRecord() {
+        var run = WorkoutSession(dayID: UUID(), performedAt: now, timePrecision: .exact, revision: 3, kind: .cardio, durationMinutes: 28, exercises: [])
+        run.activity = "run"; run.title = "Morning run"; run.durationSeconds = 1_680; run.distanceMeters = 5_000; run.effort = 7
+        run.avgHeartRate = 150; run.note = "Synthetic"; run.estimatedBurnKcal = 400; run.burnSource = .userEstimate; run.source = .importStrong
+        var state = CardioLogState(editing: run)
+        #expect(state.startedAt == now && state.startEdited && state.minutes == 28 && state.km == 5)
+        #expect(state.avgHeartRate == 150 && state.note == "Synthetic" && state.typedKcal == 400)
+        state.minutes = 40
+        let edited = state.edited(run, bodyKg: 70)
+        #expect(edited.id == run.id && edited.revision == 3 && edited.performedAt == now)
+        #expect(edited.title == "Morning run" && edited.source == .importStrong, "an edit keeps its own title and origin")
+        #expect(edited.durationSeconds == 2_400 && edited.estimatedBurnKcal == 400 && edited.burnSource == .userEstimate)
+
+        // An estimate follows the new time; without a body weight the old number stays.
+        run.burnSource = nil; run.estimatedBurnKcal = 300
+        var estimated = CardioLogState(editing: run)
+        estimated.minutes = 40
+        #expect(estimated.edited(run, bodyKg: 70).estimatedBurnKcal == WorkoutBurn.estimate(activity: "run", seconds: 2_400, distanceMeters: 5_000, effort: 7, bodyKg: 70))
+        #expect(estimated.edited(run, bodyKg: nil).estimatedBurnKcal == 300)
+
+        // A moved start is an exact time.
+        run.timePrecision = .dateOnly
+        var moved = CardioLogState(editing: run)
+        moved.startedAt = now.addingTimeInterval(-3_600)
+        #expect(moved.edited(run, bodyKg: 70).timePrecision == .exact)
+        #expect(CardioLogState(editing: run).edited(run, bodyKg: 70).timePrecision == .dateOnly)
+    }
 }

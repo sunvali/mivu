@@ -105,7 +105,8 @@ extension DiaryTransaction {
     func updateWorkout(_ session: WorkoutSession, expectedRevision: Int) throws -> WorkoutSession {
         let previous = try workout(id: session.id), day = try database.trackingDay(id: session.dayID)
         guard previous.revision == expectedRevision else { throw DiaryError.staleRevision }
-        guard session.dayID == previous.dayID, workoutFits(session.performedAt, day: day) else { throw DiaryError.invalidData }
+        guard session.isFinished || session.dayID == previous.dayID, workoutFits(session.performedAt, day: day) else { throw DiaryError.invalidData }
+        changes.dayIDs.insert(previous.dayID) // a moved workout leaves its old day too
         var saved = session; saved.revision = previous.revision + 1
         if saved.durationSeconds == previous.durationSeconds, saved.durationMinutes != previous.durationMinutes { saved.durationSeconds = nil } // minutes edit wins over stale seconds
         return try saveWorkout(saved)

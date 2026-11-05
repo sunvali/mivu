@@ -36,6 +36,15 @@ struct LiveWorkoutView: View {
     var body: some View {
         NavigationStack {
             List {
+                if model.mode == .edit {
+                    // Editing a saved workout: when it started and how long it took.
+                    Section {
+                        WorkoutStartPicker(start: Binding(get: { model.session.performedAt }, set: { if let date = $0 { model.session.performedAt = date } }))
+                        WorkoutRuler(value: $model.pastMinutes, range: 1...600, step: 1, majorEvery: 5, unit: "min",
+                                     format: { $0.formatted(.number.precision(.fractionLength(0))) }, label: "Time")
+                            .accessibilityIdentifier("editTimeRuler")
+                    }
+                }
                 if let error = model.saveError {
                     Section {
                         HStack {
@@ -116,7 +125,7 @@ struct LiveWorkoutView: View {
                 }
             }
         }
-        .alert(model.hasTicked ? "Discard this workout?" : "Discard empty workout?", isPresented: $askingDiscard) {
+        .alert(model.mode == .edit ? "Discard changes?" : model.hasTicked ? "Discard this workout?" : "Discard empty workout?", isPresented: $askingDiscard) {
             Button("Discard", role: .destructive) { Task { if await model.discard() { onClose() } } }
             Button("Cancel", role: .cancel) {}
         }
@@ -128,7 +137,7 @@ struct LiveWorkoutView: View {
                 // Keeps the workout running.
                 Button(action: onClose) { Image(systemName: "chevron.down") }.accessibilityLabel("Minimize")
             } else {
-                Button(role: .close) { if model.hasTicked { askingDiscard = true } else { onClose() } }
+                Button(role: .close) { if model.mode == .edit ? model.editChanged : model.hasTicked { askingDiscard = true } else { onClose() } }
             }
         }
         ToolbarItem(placement: .principal) {
@@ -145,8 +154,9 @@ struct LiveWorkoutView: View {
         .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .confirmationAction) {
             Button("Done") {
-                if !model.hasTicked { askingDiscard = true; return }
+                // An edit saves as it is: an older workout may have no sets at all, only its time.
                 guard model.mode != .edit else { Task { if await model.finish() { onClose() } }; return }
+                if !model.hasTicked { askingDiscard = true; return }
                 // The workout ends now; the Done screen saves it.
                 model.endedAt = .now
                 if model.effort == nil { model.effort = model.feel }
@@ -356,7 +366,7 @@ struct LiveWorkoutView: View {
         Button("Delete", systemImage: "trash", role: .destructive) { Task { await model.deleteSet(exercise: exercise, set: index) } }
     }
 
-    private static func typeName(_ type: WorkoutSetType) -> String? {
+    static func typeName(_ type: WorkoutSetType) -> String? {
         switch type {
         case .normal: nil
         case .warmup: String(localized: "Warm-up")
@@ -383,7 +393,7 @@ struct LiveWorkoutView: View {
         }
     }
 
-    static func clock(_ seconds: Int) -> String { "\(seconds / 60):" + String(format: "%02d", seconds % 60) }
+    nonisolated static func clock(_ seconds: Int) -> String { "\(seconds / 60):" + String(format: "%02d", seconds % 60) }
 }
 
 /// A number in a set row: swipe it up or down one step per notch, or tap it for the wheels.

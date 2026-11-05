@@ -28,6 +28,25 @@ struct CardioLogState: Hashable {
         note = ""
     }
 
+    /// Editing a saved workout: its own numbers and start.
+    init(editing session: WorkoutSession) {
+        self.init(activity: session.activity ?? "other", last: session, now: session.performedAt)
+        startedAt = session.performedAt; startEdited = true
+        avgHeartRate = session.avgHeartRate; note = session.note ?? ""
+        typedKcal = session.burnSource == .userEstimate ? session.estimatedBurnKcal : nil
+    }
+
+    /// The saved workout with these numbers; it keeps its title and origin, and an estimate it cannot redo keeps its number.
+    func edited(_ session: WorkoutSession, bodyKg: Double?) -> WorkoutSession {
+        var draft = draft(bodyKg: bodyKg)
+        draft.title = nil; draft.source = nil
+        if draft.estimatedBurnKcal == nil { draft.estimatedBurnKcal = session.estimatedBurnKcal }
+        var edited = session
+        edited.apply(draft)
+        if startedAt != session.performedAt { edited.performedAt = startedAt; edited.timePrecision = .exact }
+        return edited
+    }
+
     var title: String { WorkoutCatalog.activity(activity)?.name ?? activity }
 
     /// The diary day the start counts on: after midnight, before the cutoff, it is still the previous waking day, as for meals and gym.
@@ -61,6 +80,8 @@ struct CardioLogState: Hashable {
 struct CardioLogView: View {
     @Bindable var model: DiaryViewModel
     @State var state: CardioLogState
+    /// The saved workout being edited; Save then updates it instead of logging a new one.
+    var editing: WorkoutSession?
     let onClose: () -> Void
     private let initial: CardioLogState
     @State private var bodyKg: Double?
@@ -78,8 +99,8 @@ struct CardioLogView: View {
     /// The day Save files the log on, so the estimate reads that day's body weight: an edited start's waking day, else the open day.
     private var logDay: String { state.startEdited ? state.day(zone: zone) : model.activeDay?.localDate ?? state.day(zone: zone) }
 
-    init(model: DiaryViewModel, state: CardioLogState, onClose: @escaping () -> Void) {
-        self.model = model; _state = State(initialValue: state); initial = state; self.onClose = onClose
+    init(model: DiaryViewModel, state: CardioLogState, editing: WorkoutSession? = nil, onClose: @escaping () -> Void) {
+        self.model = model; _state = State(initialValue: state); initial = state; self.editing = editing; self.onClose = onClose
     }
 
     var body: some View {
@@ -201,6 +222,18 @@ struct CardioLogView: View {
         // Logged right after finishing: it ended now and counts on the day Today shows.
         if !log.startEdited { log.startedAt = Date().addingTimeInterval(-log.minutes * 60) }
         if let rate = log.avgHeartRate, !(20...250).contains(rate) { log.avgHeartRate = nil }
+        if let editing {
+            let updated = log.edited(editing, bodyKg: bodyKg)
+            saving = true
+            // A moved start moves the workout to that start's waking day.
+            let saved = await model.change {
+                _ = try await model.store.updateWorkout(updated, onDate: updated.performedAt != editing.performedAt ? log.day(zone: zone) : nil,
+                                                        expectedRevision: editing.revision, expectedProfileID: owner)
+            }
+            saving = false
+            if saved { onClose() }
+            return
+        }
         let draft = log.draft(bodyKg: bodyKg), activeDate = model.activeDay?.localDate
         saving = true
         var created: WorkoutSession?

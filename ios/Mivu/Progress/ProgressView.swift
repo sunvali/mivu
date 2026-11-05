@@ -4,6 +4,8 @@ import SwiftUI
 struct DiaryProgressView: View {
     @Bindable var model: DiaryViewModel
     let openDiary: () -> Void
+    /// Opens the gym screen, which the root shows over every tab.
+    var openWorkout: (WorkoutSession) -> Void = { _ in }
     @Environment(\.isWideLayout) private var isWide
     @Environment(\.duoPosture) private var posture
     @State private var range = ProgressRange.week
@@ -166,7 +168,6 @@ struct DiaryProgressView: View {
         }
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .navigationTitle("Progress")
-        .sheet(isPresented: $showWorkout) { WorkoutEditorView(model: model, localDate: today) }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(item: $editingWeight) { WeightCorrectionView(model: model, entry: $0, localDate: weightDate($0)) }
@@ -373,7 +374,7 @@ struct DiaryProgressView: View {
     private var workoutList: some View {
         List {
                 Section {
-                    Button("Add workout manually") { showWorkout = true }
+                    Button("Add workout manually", systemImage: "plus") { showWorkout = true }
                         .frame(minHeight: 44).accessibilityIdentifier("logWorkout")
                     if let workoutError {
                         Text(workoutError).foregroundStyle(Color.diaryError)
@@ -382,16 +383,15 @@ struct DiaryProgressView: View {
                     else if visibleWorkouts.isEmpty {
                         Text("No workouts recorded yet.").foregroundStyle(Color.diarySecondary)
                     }
-                    ForEach(visibleWorkouts.sorted { $0.performedAt > $1.performedAt }) { session in
+                    ForEach(visibleWorkouts.filter(\.isFinished).sorted { $0.performedAt > $1.performedAt }) { session in
                         NavigationLink {
                             WorkoutDetailView(model: model, sessionID: session.id)
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(session.kind.title).font(.headline)
-                                Text("\(workoutDate(session)) · \(session.durationMinutes) minutes")
-                                    .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(DiaryWeek.format(workoutDate(session), "EEE d MMM")).font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary)
+                                WorkoutRow(session: session)
                             }
-                            .frame(minHeight: 44, alignment: .leading)
+                            .accessibilityElement(children: .combine)
                         }
                         .accessibilityIdentifier("workoutRow")
                         .contextMenu { askPipButton("askPipWorkout", workoutPrompt(session)) }
@@ -414,6 +414,7 @@ struct DiaryProgressView: View {
         .navigationTitle("Workouts").navigationBarTitleDisplayMode(.inline)
         .task(id: workoutRequest) { await loadWorkouts() }
         .toolbar(.hidden, for: .tabBar)
+        .modifier(StartWorkoutFlow(model: model, isPresented: $showWorkout, openWorkout: openWorkout))
     }
 
     private func weightDate(_ entry: WeightEntry) -> String {
@@ -438,7 +439,7 @@ struct DiaryProgressView: View {
         return { askPip(.weight(weightID: entry.id), text, day: entry.dayID) }
     }
     private func workoutPrompt(_ session: WorkoutSession) -> () -> Void {
-        let text = "\(session.kind.title) · \(session.durationMinutes) min · \(DiaryWeek.format(workoutDate(session), "EEE d MMM"))"
+        let text = "\(WorkoutRow.title(session)) · \(session.durationMinutes) min · \(DiaryWeek.format(workoutDate(session), "EEE d MMM"))"
         return { askPip(.workout(workoutID: session.id), text, day: session.dayID) }
     }
     private func askPip(_ target: CoachReply.Target, _ excerpt: String, day: UUID?) {
@@ -513,137 +514,6 @@ struct DiaryProgressView: View {
             workoutError = "Could not load workouts. Your diary is preserved."
         }
     }
-}
-
-struct WorkoutDetailView: View {
-    @Bindable var model: DiaryViewModel
-    let sessionID: UUID
-    private struct WorkoutEdit: Identifiable {
-        let session: WorkoutSession
-        let localDate: String
-        var id: UUID { session.id }
-    }
-    @State private var editingWorkout: WorkoutEdit?
-    @State private var pendingDeletion: WorkoutSession?
-    @State private var ownership: DiarySelectionOwnership?
-    @State private var session: WorkoutSession?
-    @State private var day: TrackingDay?
-    @State private var loadedGeneration: UInt64?
-    @State private var requestID = UUID()
-    @State private var loadError: String?
-    @State private var loading = true
-    @State private var deleting = false
-    @Environment(\.dismiss) private var dismiss
-
-    init(model: DiaryViewModel, sessionID: UUID) {
-        self.model = model; self.sessionID = sessionID
-        _ownership = State(initialValue: model.selection)
-    }
-
-    private var currentSession: WorkoutSession? {
-        model.selection == ownership && loadedGeneration == model.changeGeneration ? session : nil
-    }
-
-    var body: some View {
-        List {
-            if let session = currentSession {
-                Section {
-                    Text(session.kind.title).font(.title2.weight(.semibold))
-                    Text("\(session.durationMinutes) minutes")
-                    Text(session.timePrecision == .dateOnly ? "Time unspecified" : session.performedAt.formatted(date: .omitted, time: .shortened))
-                    Text(session.estimatedBurnKcal.map { "Estimated burn: \($0.formatted()) kcal" } ?? "Estimated burn: unknown")
-                }
-                Section {
-                    if session.exercises.isEmpty { Text("No exercise details recorded.") }
-                    ForEach(session.exercises.indices, id: \.self) { exerciseIndex in
-                        let exercise = session.exercises[exerciseIndex]
-                        VStack(alignment: .leading) {
-                            Text(exercise.name).font(.headline)
-                            ForEach(exercise.sets.indices, id: \.self) { index in
-                                let set = exercise.sets[index]
-                                Text("Set \(index + 1): \(set.repetitions) repetitions · \(set.loadKg.map { "\($0.formatted()) kg" } ?? "bodyweight")")
-                            }
-                        }
-                    }
-                } header: {
-                    Label { Text("Exercises") } icon: { Image(systemName: "dumbbell").foregroundStyle(Color.diaryWorkout) }
-                }
-                Section {
-                    Button("Edit workout") {
-                        guard let day else { return }
-                        editingWorkout = WorkoutEdit(session: session, localDate: day.localDate)
-                    }.frame(minHeight: 44)
-                        .accessibilityIdentifier("editWorkout")
-                    Button("Delete workout", role: .destructive) {
-                        pendingDeletion = session
-                    }.frame(minHeight: 44).accessibilityIdentifier("deleteWorkout")
-                }
-                if let message = model.errorMessage {
-                    Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
-                }
-            } else if loading { ProgressView("Loading workout…") }
-            else {
-                ContentUnavailableView(loadError ?? "Workout unavailable", systemImage: "figure.run")
-                Button("Reload workout") { Task { await loadSession() } }.frame(minHeight: 44)
-            }
-        }
-        .disabled(deleting)
-        .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .listStyle(.plain)
-        .navigationTitle("Workout")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
-        .alert(deletionTitle, isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }), presenting: pendingDeletion) { session in
-            Button("Delete workout", role: .destructive) {
-                guard let ownership, model.selection == ownership, !deleting else { return }
-                let owner = ownership.identity.profileID
-                deleting = true
-                Task {
-                    guard model.selection == ownership else { deleting = false; return }
-                    let success = await model.change {
-                        try await model.store.deleteWorkout(id: session.id, expectedRevision: session.revision, expectedProfileID: owner)
-                    }
-                    deleting = false
-                    if success && model.selection == ownership { dismiss() }
-                }
-            }
-            Button("Cancel", role: .cancel) { pendingDeletion = nil }
-        } message: { _ in
-            Text("This removes only this workout and its exercise details. Meals, weights and other workouts are preserved.")
-        }
-        .task(id: model.changeGeneration) { await loadSession() }
-        .onChange(of: model.selection) { _, selected in
-            pendingDeletion = nil; editingWorkout = nil
-            if selected != ownership { dismiss() }
-        }
-        .sheet(item: $editingWorkout) { edit in
-            WorkoutEditorView(model: model, localDate: edit.localDate, session: edit.session)
-        }
-    }
-
-    private var deletionTitle: String {
-        guard let session = pendingDeletion else { return "Delete workout?" }
-        let date = day?.localDate ?? "its recorded day"
-        return "Delete \(session.kind.title.lowercased()) workout on \(date)?"
-    }
-
-    private func loadSession() async {
-        guard let ownership, model.selection == ownership else { return }
-        let generation = model.changeGeneration, request = UUID()
-        requestID = request; loading = true; loadError = nil
-        do {
-            let value = try await model.store.coachWorkout(id: sessionID, expectedProfileID: ownership.identity.profileID)
-            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
-            let recordedDay = try await model.store.trackingDay(id: value.dayID, expectedProfileID: ownership.identity.profileID)
-            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
-            session = value; day = recordedDay; loadedGeneration = generation; loading = false
-        } catch {
-            guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
-            session = nil; day = nil; loading = false
-            loadError = "Could not load this workout. It may have been removed."
-        }
-    }
-
 }
 
 extension WorkoutKind {

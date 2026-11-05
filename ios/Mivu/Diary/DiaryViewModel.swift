@@ -72,6 +72,9 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var companionReviewEvent: CompanionEvent?
     private(set) var companionHabitEvent: CompanionEvent?
     private(set) var companionWorkoutEvent: CompanionEvent?
+    /// A workout just deleted from its detail, while its Undo shows; only its owner can bring it back.
+    struct DeletedWorkout: Equatable { let session: WorkoutSession; let owner: UUID }
+    var deletedWorkout: DeletedWorkout?
     private var companionReviewSubmissions: [UUID: Set<UUID>] = [:]
     var restoreGeneration = 0
     var backupStatus = FolderBackupStatus()
@@ -278,6 +281,11 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard workout.isFinished, selection?.identity.profileID == owner else { return }
         companionWorkoutEvent = CompanionEvent(profileID: owner, operationID: workout.id,
                                                kind: .workoutSaved(activity: workout.activity ?? workout.kind.rawValue), committedAt: Date())
+    }
+    func undoWorkoutDeletion() async {
+        guard let deleted = deletedWorkout, selection?.identity.profileID == deleted.owner else { return }
+        deletedWorkout = nil
+        await change { _ = try await store.restoreWorkout(deleted.session, expectedProfileID: deleted.owner) }
     }
     /// The banner's Finish for a forgotten workout: it ends at its last change, and Pip plays the finish.
     @discardableResult func finishStaleWorkout(_ session: WorkoutSession) async -> Bool {

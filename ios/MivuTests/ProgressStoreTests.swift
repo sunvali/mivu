@@ -252,6 +252,23 @@ import Testing
         #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id) == snapshot)
     }
 
+    @Test func editedWorkoutMovesDayAndUndoRestoresADeletedOne() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let draft = WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate)
+        let first = try await store.createWorkout(localDate: "2027-01-15", draft: draft, performedAt: morning, expectedProfileID: profile.id)
+        var edit = first; edit.performedAt = morning.addingTimeInterval(-86_400)
+        let moved = try await store.updateWorkout(edit, onDate: "2027-01-14", expectedRevision: 1, expectedProfileID: profile.id)
+        #expect(try await store.trackingDay(id: moved.dayID, expectedProfileID: profile.id).localDate == "2027-01-14" && moved.revision == 2)
+        await #expect(throws: DiaryError.invalidData) { try await store.updateWorkout(moved, onDate: "2027-01-16", expectedRevision: 2, expectedProfileID: profile.id) }
+
+        try await store.deleteWorkout(id: first.id, expectedRevision: 2, expectedProfileID: profile.id)
+        let restored = try await store.restoreWorkout(moved, expectedProfileID: profile.id)
+        var expected = moved; expected.id = restored.id; expected.revision = 1
+        #expect(restored == expected && restored.id != first.id, "the same workout comes back; the deleted ID stays deleted")
+        let snapshot = try await store.snapshotForExport()
+        #expect(snapshot.workouts.map(\.id) == [restored.id] && snapshot.deletedWorkoutIDs.contains(first.id))
+    }
+
     @Test func invalidNumbersAndForeignDayLeaveSnapshotUnchanged() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let before = try await store.snapshotForExport()

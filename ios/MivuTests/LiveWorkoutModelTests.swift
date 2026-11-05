@@ -283,6 +283,23 @@ import Testing
         #expect(saved.durationSeconds == 3_000 && saved.performedAt == late)
     }
 
+    @Test func editMovesDateAndSavesDuration() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let saved = try await store.createWorkout(localDate: "2027-03-10", draft: WorkoutDraft(kind: .strength, durationMinutes: 40,
+            exercises: [benchWith(WorkoutSet(repetitions: 8, loadKg: 60), WorkoutSet(repetitions: 6, loadKg: 60))], activity: "strength"),
+            performedAt: start, expectedProfileID: profile.id)
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: saved, unit: "kg", mode: .edit)
+        #expect(model.hasTicked && model.pastMinutes == 40, "older sets count as done; the time starts at the stored one")
+        await model.tick(exercise: 0, set: 1)
+        model.session.performedAt = start.addingTimeInterval(-86_400)
+        model.pastMinutes = 55
+        #expect(await model.finish())
+        let edited = try await store.coachWorkout(id: saved.id, expectedProfileID: profile.id)
+        #expect(try await store.trackingDay(id: edited.dayID, expectedProfileID: profile.id).localDate == "2027-03-09")
+        #expect(edited.durationSeconds == 3_300 && edited.revision == 2 && edited.performedAt == start.addingTimeInterval(-86_400))
+        #expect(edited.exercises[0].sets.count == 1, "a set unticked while editing is removed, as on Done")
+    }
+
     private func restModel(_ store: DiaryStore, _ profile: DiaryProfile, _ exercises: WorkoutExercise...) async throws -> (LiveWorkoutModel, RestTimer) {
         let rest = RestTimer(center: FakeNotificationCenter(), defaults: UserDefaults(suiteName: "Rest-" + UUID().uuidString)!, now: { Date(timeIntervalSinceReferenceDate: 820_000_000) })
         let session = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: exercises, activity: "strength"),

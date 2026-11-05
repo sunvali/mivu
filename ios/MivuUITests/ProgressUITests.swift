@@ -38,21 +38,15 @@ import XCTest
         app.buttons["saveWeightCorrection"].tap()
         app.navigationBars.buttons["Progress"].tap()
         open("openWorkouts", in: app)
-        logWorkout(in: app)
-        app.buttons["workoutStrength"].tap()
-        replace(app.textFields["workoutDuration"], with: "30")
-        replace(app.textFields["workoutExercise"], with: "Squat")
-        replace(app.textFields["workoutRepetitions"], with: "8")
-        app.buttons["saveWorkout"].tap()
+        logRun(minutes: "30", in: app)
         let session = app.buttons["workoutRow"].firstMatch
         reveal(session, in: app)
         session.tap()
-        XCTAssertTrue(app.staticTexts["Squat"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["30 minutes"].exists)
+        XCTAssertTrue(label(beginningWith: "30 min", in: app).waitForExistence(timeout: 5))
         app.buttons["editWorkout"].tap()
-        replace(app.textFields["workoutDuration"], with: "35")
-        app.buttons["saveWorkout"].tap()
-        XCTAssertTrue(app.staticTexts["35 minutes"].waitForExistence(timeout: 5))
+        typeMinutes("35", in: app)
+        app.buttons["saveCardio"].tap()
+        XCTAssertTrue(label(beginningWith: "35 min", in: app).waitForExistence(timeout: 5))
 
         app.terminate()
         app.launch()
@@ -70,7 +64,7 @@ import XCTest
         let savedWorkout = app.buttons["workoutRow"].firstMatch
         reveal(savedWorkout, in: app)
         XCTAssertTrue(savedWorkout.exists)
-        XCTAssertTrue(savedWorkout.label.contains("35 minutes"))
+        XCTAssertTrue(savedWorkout.label.contains("35 min"), savedWorkout.label)
         app.navigationBars.buttons["Progress"].tap()
 
         for range in ["Week", "Month"] {
@@ -134,7 +128,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["weightChartSummary"].label.contains("insufficient data"))
     }
 
-    func testSavedWorkoutSetsAndNoGoalReport() {
+    func testDeletedWorkoutKeepsFoodAndWeight() {
         let app = launchDiary()
         app.buttons["logMeal"].tap()
         replace(app.textFields["mealText"], with: "Synthetic apple")
@@ -142,18 +136,7 @@ import XCTest
         logWeight("70", in: app)
         app.tabBars.buttons["Progress"].tap()
         open("openWorkouts", in: app)
-        logWorkout(in: app)
-        replace(app.textFields["workoutDuration"], with: "30")
-        XCTAssertTrue(app.staticTexts["Duration in minutes"].exists, "Filled workout input keeps its visible name and unit")
-        replace(app.textFields["workoutExercise"], with: "Squat")
-        replace(app.textFields["workoutRepetitions"], with: "8")
-        XCTAssertTrue(app.staticTexts["Repetitions"].exists, "Filled workout input keeps its visible name and unit")
-        replace(app.textFields["workoutLoad"], with: "40")
-        XCTAssertTrue(app.staticTexts["Load (kg, blank for bodyweight)"].exists, "Filled workout input keeps its visible name and unit")
-        replace(app.textFields["workoutBurn"], with: "120")
-        XCTAssertTrue(app.staticTexts["Estimated burn (kcal)"].exists, "Filled workout input keeps its visible name and unit")
-        attachScreenshot("Synthetic filled workout fields retain visible units", from: app)
-        app.buttons["saveWorkout"].tap()
+        logRun(minutes: "30", in: app)
         app.navigationBars.buttons["Progress"].tap()
         XCTAssertTrue(calorieSummary(in: app).contains("95 kcal"))
         scrollToTop(in: app)
@@ -161,31 +144,11 @@ import XCTest
         let row = app.buttons["workoutRow"].firstMatch
         reveal(row, in: app)
         row.tap()
-        XCTAssertTrue(app.staticTexts["Set 1: 8 repetitions · 40 kg"].waitForExistence(timeout: 5))
-        app.buttons["editWorkout"].tap()
-        app.buttons["addWorkoutSet"].tap()
-        reveal(app.textFields["workoutRepetitions1"], in: app)
-        replace(app.textFields["workoutRepetitions1"], with: "10")
-        reveal(app.textFields["workoutLoad1"], in: app)
-        replace(app.textFields["workoutLoad1"], with: "45")
-        app.buttons["saveWorkout"].tap()
-        XCTAssertTrue(app.staticTexts["Set 2: 10 repetitions · 45 kg"].waitForExistence(timeout: 5))
-        app.buttons["editWorkout"].tap()
-        reveal(app.buttons["removeWorkoutExercise0"], in: app)
-        app.buttons["removeWorkoutExercise0"].tap()
-        app.buttons["saveWorkout"].tap()
-        XCTAssertTrue(app.staticTexts["No exercise details recorded."].waitForExistence(timeout: 5))
         let delete = app.buttons["deleteWorkout"]
         reveal(delete, in: app)
         delete.tap()
-        let confirmation = app.alerts.firstMatch
-        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
-        XCTAssertTrue(confirmation.label.contains("strength workout"))
-        confirmation.buttons["Cancel"].tap()
-        XCTAssertTrue(app.staticTexts["No exercise details recorded."].exists, "Cancel preserves the selected workout")
-        delete.tap()
-        app.alerts.buttons["Delete workout"].tap()
         XCTAssertTrue(app.navigationBars["Workouts"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["undoWorkoutDelete"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["workoutRow"].exists)
         app.navigationBars.buttons["Progress"].tap()
         XCTAssertTrue(calorieSummary(in: app).contains("95 kcal"), "Deleting a workout preserves recorded food")
@@ -249,9 +212,7 @@ import XCTest
         let app = launchDiary(extra: ["--coach-inference-fixture"])
         app.tabBars.buttons["Progress"].tap()
         open("openWorkouts", in: app)
-        logWorkout(in: app)
-        replace(app.textFields["workoutDuration"], with: "30")
-        app.buttons["saveWorkout"].tap()
+        logRun(minutes: "30", in: app)
         askPip("workoutRow", expecting: "30 min", in: app)
     }
 
@@ -355,7 +316,27 @@ import XCTest
         app.buttons["saveWeight"].tap()
     }
 
-    private func logWorkout(in app: XCUIApplication) { open("logWorkout", in: app) }
+    /// Workouts › Add workout manually › Run, typed to `minutes`, saved.
+    private func logRun(minutes: String, in app: XCUIApplication) {
+        open("logWorkout", in: app)
+        let run = app.buttons["Run"]
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        run.tap()
+        typeMinutes(minutes, in: app)
+        app.buttons["saveCardio"].tap()
+    }
+
+    /// Taps the time ruler's number and types minutes over it.
+    private func typeMinutes(_ minutes: String, in app: XCUIApplication) {
+        let time = app.descendants(matching: .any)["timeRuler"]
+        XCTAssertTrue(time.waitForExistence(timeout: 5))
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: app.frame.midX, dy: time.frame.minY + 30)).tap()
+        app.typeText(minutes)
+    }
+
+    private func label(beginningWith text: String, in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", text)).firstMatch
+    }
 
     private func attachScreenshot(_ name: String, from app: XCUIApplication) {
         let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -365,11 +346,9 @@ import XCTest
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        let workoutForm = app.collectionViews["workoutForm"]
         let progress = app.scrollViews["progressList"]
-        let scroller = workoutForm.exists && workoutForm.isHittable ? workoutForm
-            : (progress.exists && progress.isHittable && !app.navigationBars["Settings"].exists ? progress  // a sheet over Progress scrolls itself
-               : app.collectionViews.allElementsBoundByIndex.first(where: \.isHittable) ?? app.collectionViews.firstMatch)
+        let scroller = progress.exists && progress.isHittable && !app.navigationBars["Settings"].exists ? progress  // a sheet over Progress scrolls itself
+            : app.collectionViews.allElementsBoundByIndex.first(where: \.isHittable) ?? app.collectionViews.firstMatch
         for _ in 0..<8 {
             if readyToUse(element, in: app, scroller: scroller) { break }
             scroller.swipeUp()

@@ -386,6 +386,7 @@ struct DiaryRootView: View {
                         .modifier(WorkoutInset(shown: bannerShown) { workoutBanner })
                 }
                 .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
+                .modifier(WorkoutDeletedToast(model: model))
                 .task(id: loggedMealID) {
                     guard loggedMealID != nil else { return }
                     try? await Task.sleep(for: .seconds(UIAccessibility.isVoiceOverRunning ? 10 : 5))
@@ -393,10 +394,12 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true).modifier(WorkoutInset(shown: bannerShown) { workoutBanner }) }
+                NavigationStack { HistoryView(model: model, openWorkout: { liveWorkout = $0 }).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true).modifier(WorkoutInset(shown: bannerShown) { workoutBanner }) }
+                    .modifier(WorkoutDeletedToast(model: model))
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
-                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth().modifier(WorkoutInset(shown: bannerShown) { workoutBanner }) }
+                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }, openWorkout: { liveWorkout = $0 }).toolbar { profileControl }.duoReadableWidth().modifier(WorkoutInset(shown: bannerShown) { workoutBanner }) }
+                    .modifier(WorkoutDeletedToast(model: model))
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                 DuoBeside {
@@ -411,6 +414,7 @@ struct DiaryRootView: View {
                             routes.route = SettingsRoute(destination: destination)
                         }.toolbar { profileControl }.duoReadableWidth().modifier(WorkoutInset(shown: bannerShown) { workoutBanner })
                     }
+                    .modifier(WorkoutDeletedToast(model: model))
                 } secondary: {
                     // The day Coach is changing, beside the chat; Pip stays a still image so the rig mounts once.
                     NavigationStack {
@@ -657,11 +661,6 @@ struct TodayView: View {
     @State private var showGoals = false
     @State private var savedMealID: UUID?
     @State private var startingWorkout = false
-    @State private var cardioPath: [CardioLogState] = []
-    @State private var workoutStart: Date?
-    /// The gym screen waits for the start sheet to finish closing; presenting during that slide can leave a transition hanging.
-    @State private var startSheetOpen = false
-    @State private var openAfterSheet: WorkoutSession?
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @Environment(\.isWideLayout) private var isWide
     // Sideways on the Duo, the summary and the meals sit in two columns; otherwise one list, unchanged order.
@@ -741,7 +740,7 @@ struct TodayView: View {
                         .diarySummaryCard()
                         .accessibilityIdentifier("workoutRow")
                 }
-                Button { cardioPath = []; workoutStart = nil; startSheetOpen = true; startingWorkout = true } label: {
+                Button { startingWorkout = true } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "play.fill").font(.body.weight(.semibold))
                             .frame(width: 40, height: 40).background(Color.diaryActionText.opacity(0.18), in: .circle)
@@ -756,24 +755,6 @@ struct TodayView: View {
                 .accessibilityIdentifier("startWorkout")
             } header: { DiarySectionHeader(title: "Workouts") }
         }
-    }
-    /// Starts a live gym workout; a workout already running opens instead of a second one.
-    /// A start moved more than five minutes back logs a past workout instead, saved only on Done.
-    private func startGym(_ draft: WorkoutDraft?) {
-        startingWorkout = false
-        guard let profile = model.readModel?.profile else { return }
-        let draft = draft ?? WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [], activity: "strength")
-        let now = Date(), start = workoutStart ?? now
-        if LiveWorkoutModel.mode(start: workoutStart, now: now) == .past {
-            var past = WorkoutSession(dayID: UUID(), performedAt: start, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0, exercises: [])
-            past.apply(draft)
-            return present(past)
-        }
-        if let active = model.activeWorkout { return present(active) }
-        Task { await model.change { present(try await model.store.startWorkout(draft, at: start, expectedProfileID: profile.id)) } }
-    }
-    private func present(_ session: WorkoutSession) {
-        if startSheetOpen { openAfterSheet = session } else { openWorkout(session) }
     }
     @ViewBuilder private var trailingSections: some View {
         if let snapshot = model.readModel {
@@ -863,20 +844,7 @@ struct TodayView: View {
         .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
-        .sheet(isPresented: $startingWorkout, onDismiss: {
-            startSheetOpen = false
-            if let session = openAfterSheet { openAfterSheet = nil; openWorkout(session) }
-        }) {
-            NavigationStack(path: $cardioPath) {
-                StartWorkoutSheet(model: model, start: $workoutStart, onGym: startGym) {
-                    var state = CardioLogState(activity: $0, last: $1, now: Date())
-                    if let start = workoutStart { state.startedAt = start; state.startEdited = true }
-                    cardioPath.append(state)
-                }
-                    .navigationDestination(for: CardioLogState.self) { CardioLogView(model: model, state: $0) { startingWorkout = false } }
-            }
-            .tint(.diaryAccent)
-        }
+        .modifier(StartWorkoutFlow(model: model, isPresented: $startingWorkout, openWorkout: openWorkout))
         .onAppear { surfaceVisible = true; reportCompanionContext() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
         .onChange(of: [companionVisible, showComposer, showManualNutrition, showWeight, showGoals, showingDetail, startingWorkout]) { _, _ in reportCompanionContext() }
@@ -1050,7 +1018,7 @@ private struct WorkoutInset<Banner: View>: ViewModifier {
     }
 }
 
-private extension View {
+extension View {
     /// Launch-argument text sizes for UI proofs.
     func proofTypeSize() -> some View {
         transformEnvironment(\.dynamicTypeSize) {

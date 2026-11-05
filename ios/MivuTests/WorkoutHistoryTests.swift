@@ -98,4 +98,13 @@ struct WorkoutHistoryTests {
         #expect(WorkoutHistory.bests(for: bench, in: past) == ExerciseBests(heaviestKg: 62.5, mostReps: 8, longestSeconds: 45))
         #expect(WorkoutHistory.bests(for: bench, in: []) == ExerciseBests())
     }
+
+    @Test func setsDescribeWhatTheyHold() {
+        #expect(WorkoutRow.describe(WorkoutSet(repetitions: 8, loadKg: 60), measure: .weightReps, unit: "kg") == "60 kg × 8")
+        #expect(WorkoutRow.describe(WorkoutSet(repetitions: 5, loadKg: 100), measure: .weightReps, unit: "lb") == "220.46 lb × 5")
+        #expect(WorkoutRow.describe(WorkoutSet(repetitions: 12, loadKg: 10), measure: .reps, unit: "kg") == "+10 kg × 12")
+        // Merged into a weight exercise, an own exercise's timed or rep-only sets keep their fields and read as such.
+        #expect(WorkoutRow.describe(WorkoutSet(repetitions: 0, seconds: 90), measure: .weightReps, unit: "kg") == "1:30")
+        #expect(WorkoutRow.describe(WorkoutSet(repetitions: 12), measure: .weightReps, unit: "kg") == "12 reps")
+    }
 }

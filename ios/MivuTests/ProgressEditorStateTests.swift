@@ -90,36 +90,7 @@ import Testing
         #expect(!DiaryProgressView.shows(loaded: week, for: DiaryProgressView.ReportRequest(ownership: owner, generation: 1, date: "2026-10-24", range: .week)))
     }
 
-    @Test func savedWorkoutBoundsRemainEditable() {
-        let savedSet = WorkoutSet(repetitions: 5_000, loadKg: 0)
-        var fields = WorkoutEditorView.SetFields(savedSet)
-        #expect(fields.valid)
-        #expect(fields.record?.repetitions == 5_000)
-        #expect(fields.record?.loadKg == 0)
-
-        fields.repetitions = "10001"
-        #expect(!fields.valid)
-        fields.repetitions = "10000"
-        #expect(fields.valid)
-        fields.repetitions = "0"
-        #expect(!fields.valid)
-        fields.repetitions = "5000"
-        fields.load = "100000"
-        #expect(fields.valid)
-        fields.load = "100000.1"
-        #expect(!fields.valid)
-        fields.load = "-1"
-        #expect(!fields.valid)
-        fields.load = ""
-        #expect(fields.valid)
-        #expect(fields.record?.loadKg == nil)
-
-        #expect(ProgressDate.validOptionalNonnegative("0"))
-        #expect(ProgressDate.validOptionalNonnegative("100000"))
-        #expect(ProgressDate.validOptionalNonnegative(""))
-        #expect(!ProgressDate.validOptionalNonnegative("-0.1"))
-        #expect(!ProgressDate.validOptionalNonnegative("100000.1"))
-        #expect(!ProgressDate.validOptionalNonnegative("inf"))
+    @Test func optionalNumbersRejectZero() {
         #expect(!ProgressDate.validOptional("0"))
     }
 

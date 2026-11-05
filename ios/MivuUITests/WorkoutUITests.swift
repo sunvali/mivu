@@ -432,6 +432,96 @@ import XCTest
         XCTAssertTrue(app.buttons["workoutRow"].firstMatch.waitForExistence(timeout: 10))
     }
 
+    func testEditPastWorkoutDate() {
+        let app = launch()
+        saveBenchWorkout(app)
+        openWorkoutRow(app)
+        app.buttons["editWorkout"].tap()
+        let when = app.buttons["workoutStart"]
+        XCTAssertTrue(when.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Minimize"].exists, "editing runs no clock")
+        when.tap()
+        let day = app.pickerWheels.firstMatch
+        XCTAssertTrue(day.waitForExistence(timeout: 5))
+        day.adjust(toPickerWheelValue: Self.yesterdayWheelValue())
+        XCTAssertTrue(app.navigationBars.staticTexts["Yesterday"].waitForExistence(timeout: 5))
+        app.buttons["finishWorkout"].tap()
+
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Yesterday'")).firstMatch.waitForExistence(timeout: 10))
+        app.navigationBars.buttons["Today"].tap()
+        XCTAssertTrue(app.buttons["workoutRow"].waitForNonExistence(timeout: 10), "it left today")
+        app.tabBars.buttons["Diary"].tap()
+        let yesterday = XCUIApplication.diaryLabel(Calendar.current.date(byAdding: .day, value: -1, to: Date())!, zone: TimeZone.current.identifier)
+        XCTAssertTrue(app.selectDiaryDate(yesterday))
+        let moved = app.buttons["workoutRow"].firstMatch
+        scroll(to: moved, in: app)
+        XCTAssertTrue(moved.label.hasPrefix("Strength training"), moved.label)
+        capture("Diary day with workout", in: app)
+    }
+
+    func testDeleteWithUndo() {
+        let app = launch()
+        _ = openRun(app)
+        app.buttons["saveCardio"].tap()
+        openWorkoutRow(app)
+        let delete = app.buttons["deleteWorkout"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        let undo = app.buttons["undoWorkoutDelete"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["workoutRow"].exists, "deleted at once")
+        capture("Deleted with Undo", in: app)
+        undo.tap()
+        let back = app.buttons["workoutRow"].firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10))
+        XCTAssertTrue(back.label.hasPrefix("Run"), back.label)
+        XCTAssertTrue(undo.waitForNonExistence(timeout: 5))
+    }
+
+    func testExerciseDetailShowsBest() {
+        let app = launch()
+        saveBenchWorkout(app)
+        openWorkoutRow(app)
+        let exercise = app.buttons["exerciseName"].firstMatch
+        XCTAssertTrue(exercise.waitForExistence(timeout: 10))
+        XCTAssertTrue(exercise.label.hasPrefix("Barbell Bench Press"), exercise.label)
+        scroll(to: app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Set 1, 20 kg × 10'")).firstMatch, in: app)
+        capture("Workout detail", in: app)
+        exercise.tap()
+        let heaviest = app.descendants(matching: .any)["bestHeaviest"]
+        XCTAssertTrue(heaviest.waitForExistence(timeout: 10))
+        XCTAssertTrue(heaviest.label.contains("20 kg"), heaviest.label)
+        let sessions = app.descendants(matching: .any).matching(identifier: "exerciseSession")
+        XCTAssertEqual(sessions.count, 1)
+        XCTAssertTrue(sessions.firstMatch.label.contains("20 kg × 10"), sessions.firstMatch.label)
+        capture("Exercise detail", in: app)
+    }
+
+    /// Today → gym → Barbell Bench Press, one set ticked → Done → Save.
+    private func saveBenchWorkout(_ app: XCUIApplication) {
+        openGym(app)
+        addBenchAndTickFirstSet(app)
+        app.buttons["finishWorkout"].tap()
+        let save = app.buttons["saveWorkout"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+    }
+
+    /// Scrolls the list until the element is on screen; at the largest text it starts below the fold.
+    private func scroll(to element: XCUIElement, in app: XCUIApplication) {
+        _ = element.waitForExistence(timeout: 5)
+        for _ in 0..<8 where !(element.exists && element.isHittable) { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
+        XCTAssertTrue(element.exists && element.isHittable)
+    }
+
+    /// Opens the first workout on Today.
+    private func openWorkoutRow(_ app: XCUIApplication) {
+        let row = app.buttons["workoutRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        reveal(row, in: app)
+        row.tap()
+    }
+
     /// Adds Barbell Bench Press (one set at the bar) and ticks it.
     private func addBenchAndTickFirstSet(_ app: XCUIApplication) {
         app.buttons["addExercise"].tap()

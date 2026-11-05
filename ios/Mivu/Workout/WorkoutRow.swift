@@ -53,6 +53,15 @@ struct WorkoutRow: View {
         session.estimatedBurnKcal.map { (session.burnSource == .userEstimate ? "" : "~") + $0.formatted(.number.precision(.fractionLength(0))) }
     }
 
+    /// What the set holds: "60 kg × 8", "+10 kg × 12" (added to body weight), "12 reps" or "1:30". Read from the set itself,
+    /// not the exercise's measure: an own exercise merged into a catalog one keeps its timed or rep-only sets.
+    nonisolated static func describe(_ set: WorkoutSet, measure: ExerciseMeasure, unit: String) -> String {
+        let load = (set.loadKg ?? 0) > 0 ? WeightStep.display(kg: set.loadKg!, unit: unit).formatted(.number.precision(.fractionLength(0...2))) + " \(unit)" : nil
+        if let seconds = set.seconds, set.repetitions == 0 { return [load, LiveWorkoutView.clock(seconds)].compactMap { $0 }.joined(separator: " · ") }
+        if let load { return (measure == .reps ? "+" : "") + "\(load) × \(set.repetitions)" }
+        return "\(set.repetitions) reps"
+    }
+
     private var burn: String? { Self.burn(session) }
 
     var body: some View {

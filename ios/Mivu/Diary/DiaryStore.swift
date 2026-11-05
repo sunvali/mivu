@@ -453,8 +453,25 @@ actor DiaryStore {
         }
     }
 
-    func updateWorkout(_ session: WorkoutSession, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
-        return try pagedMutation(expectedProfileID) { try $0.updateWorkout(session, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    /// With `localDate`, the workout moves to that diary date (opened if needed); its start must fall on it.
+    func updateWorkout(_ session: WorkoutSession, onDate localDate: String? = nil, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        return try pagedMutation(expectedProfileID) { database, head in
+        try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+            var moved = session
+            if let localDate {
+                moved.dayID = try transaction.resolveDay(localDate: localDate, timeZoneID: head.profile.timeZoneID, at: diaryDateOnlyInstant(localDate, zone: head.profile.timeZoneID)).id
+            }
+            return try transaction.updateWorkout(moved, expectedRevision: expectedRevision)
+        }
+        }
+    }
+
+    /// Undo for a deleted workout: the same record again under a new ID, since the old one stays deleted.
+    func restoreWorkout(_ session: WorkoutSession, expectedProfileID: UUID) throws -> WorkoutSession {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { transaction in
+            var copy = session; copy.id = UUID(); copy.revision = 1
+            return try transaction.saveWorkout(copy)
+        } }
     }
 
     func deleteWorkout(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
