@@ -16,6 +16,11 @@ struct LiveWorkoutView: View {
     @State private var typingKcal = false
     @State private var kcalText = ""
     @State private var notice: String?
+    /// "Which one?" for a machine photo's guess with several uses.
+    @State private var choosingGuess = false
+    /// The exercise a one-use machine photo just added, offered for Undo.
+    @State private var guessedName: String?
+    @Environment(ChatGPTConnection.self) private var connection: ChatGPTConnection?
     @AccessibilityFocusState private var focusedTick: String?
     private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -33,6 +38,11 @@ struct LiveWorkoutView: View {
     }
 
     private var step: Double { WeightStep.step(unit: model.unit, plates: WeightStep.plates(unit: model.unit)) }
+    private var recognizer: MachineRecognizer? {
+        guard let connection, MachineRecognizer.offered(provider: connection.provider, connected: connection.planAuthorized),
+              let infer = try? connection.inference() else { return nil }
+        return MachineRecognizer(infer: infer)
+    }
     private var tickedCount: Int {
         model.session.exercises.indices.reduce(0) { total, e in total + model.session.exercises[e].sets.indices.filter { model.isTicked(exercise: e, set: $0) }.count }
     }
@@ -101,7 +111,11 @@ struct LiveWorkoutView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
             .safeAreaInset(edge: .bottom) {
-                if model.mode == .live, let end = rest.endsAt { RestBar(rest: rest, endsAt: end).padding(.horizontal, 16).padding(.bottom, 8) }
+                VStack(spacing: 8) {
+                    if let guessedName { guessToast(guessedName) }
+                    if model.mode == .live, let end = rest.endsAt { RestBar(rest: rest, endsAt: end) }
+                }
+                .padding(.horizontal, 16).padding(.bottom, 8)
             }
             .animation(reduceMotion ? nil : .snappy, value: model.expandedExercise)
             .animation(reduceMotion ? nil : .snappy, value: model.session.exercises.map(\.groupID))
@@ -113,11 +127,29 @@ struct LiveWorkoutView: View {
         .tint(.diaryAccent)
         .task { await model.load() }
         .sheet(isPresented: $picking, onDismiss: { replacing = nil }) {
-            ExercisePicker(recent: model.recent) { exercise in
+            ExercisePicker(recent: model.recent, recognizer: replacing == nil ? recognizer : nil, onGuess: { guess in
+                picking = false
+                Task {
+                    await model.addGuess(guess)
+                    if model.pendingGuess != nil { choosingGuess = true } else { guessedName = model.session.exercises.last?.name }
+                }
+            }) { exercise in
                 let replaced = replacing
                 picking = false
                 Task { if let replaced { await model.replaceExercise(replaced, with: exercise) } else { await model.addExercise(exercise) } }
             }
+        }
+        .sheet(isPresented: $choosingGuess) {
+            if let guess = model.pendingGuess {
+                MachineChoiceSheet(options: guess.options, current: model.session.exercises.indices.contains(guess.exercise) ? model.session.exercises[guess.exercise].exerciseID : nil) { id in
+                    Task { await model.chooseGuess(id) }
+                }
+            }
+        }
+        .task(id: guessedName) {
+            guard guessedName != nil else { return }
+            try? await Task.sleep(for: .seconds(UIAccessibility.isVoiceOverRunning ? 10 : 4))
+            if !Task.isCancelled { withAnimation(reduceMotion ? nil : .snappy) { guessedName = nil } }
         }
         .alert("Calories burned", isPresented: $typingKcal) {
             TextField("kcal", text: $kcalText).keyboardType(.numberPad)
@@ -213,6 +245,22 @@ struct LiveWorkoutView: View {
         .accessibilityIdentifier("editKcal")
     }
 
+    /// A one-use machine photo's exercise was added; Undo takes it out again.
+    private func guessToast(_ name: String) -> some View {
+        HStack(spacing: 12) {
+            Text(name).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
+            Button("Undo") {
+                guessedName = nil
+                if let last = model.session.exercises.indices.last, model.session.exercises[last].name == name { Task { await model.removeExercise(last) } }
+            }
+            .font(.body.weight(.semibold)).foregroundStyle(Color.diaryAccent).frame(minWidth: 44, minHeight: 44)
+            .accessibilityIdentifier("undoGuess")
+        }
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .background(Color.diarySurface, in: .rect(cornerRadius: 20))
+        .accessibilityElement(children: .contain)
+    }
+
     // MARK: Exercise cards
 
     @ViewBuilder private func expanded(_ index: Int) -> some View {
@@ -231,6 +279,12 @@ struct LiveWorkoutView: View {
                 Text("Last time \(describe(last, exercise))").font(.subheadline).foregroundStyle(Color.diarySecondary)
             }
             if let note = exercise.note { Text(note).font(.subheadline).foregroundStyle(Color.diarySecondary) }
+            if model.pendingGuess?.exercise == index {
+                Button("Change") { choosingGuess = true }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent).buttonStyle(.plain).frame(minHeight: 44)
+                    .accessibilityLabel("Change exercise")
+                    .accessibilityIdentifier("changeGuess")
+            }
         }
         .padding(.bottom, 4)
         ForEach(exercise.sets.indices, id: \.self) { set in

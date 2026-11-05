@@ -55,6 +55,8 @@ enum WeightStep {
     var saveError: String?
     /// Recent distinct exercises, newest first, for the exercise picker.
     var recent: [WorkoutExercise] = []
+    /// A machine photo's guess still open to change: the exercise it added and what else that machine is for.
+    var pendingGuess: (exercise: Int, options: [String])?
     /// The routine this workout started from, if it still exists.
     var routine: WorkoutRoutine?
     /// The Done screen's answer to "How did it feel?".
@@ -119,6 +121,7 @@ enum WeightStep {
     }
 
     func tick(exercise: Int, set: Int) async {
+        if pendingGuess?.exercise == exercise { pendingGuess = nil }
         // Toggles what the screen shows: a tick still unsaved after a failure is ticked again, not cleared.
         let done = !isTicked(exercise: exercise, set: set)
         await change(exercise, set) { $0.exercises[exercise].sets[set].done = done }
@@ -220,6 +223,7 @@ enum WeightStep {
         }
         // Applied once the removal is on screen: the open card stays on its exercise, or hands over to the one above at the end.
         if removed, expandedExercise > index || expandedExercise == session.exercises.count { expandedExercise = max(expandedExercise - 1, 0) }
+        if removed, let guess = pendingGuess { pendingGuess = guess.exercise == index ? nil : (guess.exercise > index ? guess.exercise - 1 : guess.exercise, guess.options) }
         focus = nil
     }
 
@@ -254,6 +258,7 @@ enum WeightStep {
     /// After an edit has been applied (and saved, when live), the open card follows its exercise and focus resets.
     private func follow(_ order: [Int]?) {
         if let order { expandedExercise = order.firstIndex(of: expandedExercise) ?? expandedExercise }
+        if let order, let guess = pendingGuess { pendingGuess = order.firstIndex(of: guess.exercise).map { ($0, guess.options) } }
         focus = nil
     }
 
@@ -287,6 +292,22 @@ enum WeightStep {
         let added = prefilled(exercise)
         await change { $0.exercises.append(added) }
         expandedExercise = session.exercises.count - 1
+    }
+
+    /// Adds a machine photo's best guess at once, so closing the choice without picking keeps it.
+    func addGuess(_ guess: MachineGuess) async {
+        guard let catalog = WorkoutCatalog.exercise(guess.best) else { return }
+        await addExercise(WorkoutExercise(name: catalog.name, sets: [], exerciseID: catalog.id, measure: catalog.measure))
+        pendingGuess = guess.options.count > 1 ? (session.exercises.count - 1, guess.options) : nil
+    }
+
+    /// Swaps the guessed exercise for the one the person picked; the guess is then settled.
+    func chooseGuess(_ id: String) async {
+        guard let guess = pendingGuess else { return }
+        pendingGuess = nil
+        guard session.exercises.indices.contains(guess.exercise), session.exercises[guess.exercise].exerciseID != id,
+              let catalog = WorkoutCatalog.exercise(id) else { return }
+        await replaceExercise(guess.exercise, with: WorkoutExercise(name: catalog.name, sets: [], exerciseID: catalog.id, measure: catalog.measure))
     }
 
     private func prefilled(_ exercise: WorkoutExercise) -> WorkoutExercise {

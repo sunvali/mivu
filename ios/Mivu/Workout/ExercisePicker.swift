@@ -1,11 +1,19 @@
 import SwiftUI
+import AVFoundation
 
-/// Search the built-in exercises (names and aliases), pick a recent one, filter by muscle, or add your own by name.
+/// Search the built-in exercises (names and aliases), pick a recent one, filter by muscle, add your own by name,
+/// or photograph a machine to name it.
 struct ExercisePicker: View {
     let recent: [WorkoutExercise]
+    var recognizer: MachineRecognizer? = nil
+    var onGuess: (MachineGuess) -> Void = { _ in }
     let onPick: (WorkoutExercise) -> Void
     @State private var search = ""
     @State private var muscle: String?
+    @State private var showingCamera = false
+    @State private var looking = false
+    @State private var preparation = PhotoPreparation()
+    @FocusState private var searching: Bool
     @Environment(\.dismiss) private var dismiss
 
     private static let muscles = Array(Set(WorkoutCatalog.exercises.map(\.muscle))).sorted()
@@ -46,11 +54,25 @@ struct ExercisePicker: View {
                 }
             }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
+            .overlay { if looking { ProgressView("Looking…").padding(24).background(.regularMaterial, in: .rect(cornerRadius: 20)) } }
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
+            .searchFocused($searching)
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraCapture(preparation: preparation, onPhoto: { jpeg in Task { await recognize(jpeg) } }, onFailure: { searching = true })
+                    .ignoresSafeArea()
+            }
             .navigationTitle("Exercise")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(role: .close) { dismiss() } }
+                if recognizer != nil {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { Task { await openCamera() } } label: { Image(systemName: "camera") }
+                            .disabled(looking)
+                            .accessibilityLabel("Photo of a machine")
+                            .accessibilityIdentifier("machinePhoto")
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Picker("Muscle", selection: $muscle) {
@@ -66,6 +88,25 @@ struct ExercisePicker: View {
             }
         }
         .tint(.diaryAccent)
+    }
+
+    /// Camera access is asked the usual way; denied or unavailable falls back to typing, with no error screen.
+    private func openCamera() async {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { searching = true; return }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: showingCamera = true
+        case .notDetermined: if await AVCaptureDevice.requestAccess(for: .video) { showingCamera = true } else { searching = true }
+        default: searching = true
+        }
+    }
+
+    /// A recognized machine goes back to the workout; nothing recognized (or offline) opens the search instead.
+    private func recognize(_ jpeg: Data) async {
+        guard let recognizer else { return }
+        looking = true
+        let guess = await recognizer.recognize(jpeg: jpeg)
+        looking = false
+        if let guess { onGuess(guess) } else { searching = true }
     }
 
     private func row(_ name: String, detail: String?, action: @escaping () -> Void) -> some View {
