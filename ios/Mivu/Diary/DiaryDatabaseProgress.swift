@@ -56,7 +56,10 @@ extension DiaryDatabase {
                 let value = try decode(WorkoutRoutine.self, Record(id: try mutationText(statement, 0), ordinal: Int(sqlite3_column_int64(statement, 1)), payload: try mutationBlob(statement, 2)))
                 try validateRoutineFields(value); result.append(value)
             }
-            return result.sorted { ($0.lastUsedAt ?? .distantPast, $1.name) > ($1.lastUsedAt ?? .distantPast, $0.name) }
+            return result.sorted { left, right in
+                let (a, b) = (left.lastUsedAt ?? .distantPast, right.lastUsedAt ?? .distantPast)
+                return a != b ? a > b : left.name.localizedStandardCompare(right.name) == .orderedAscending
+            }
         }
     }
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile?, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<Void> {
@@ -192,6 +195,13 @@ extension DiaryTransaction {
         var value = WorkoutSession(dayID: dayID, performedAt: try performedAt ?? diaryDateOnlyInstant(day.localDate, zone: day.timeZoneID), timePrecision: performedAt == nil ? .dateOnly : .exact, revision: 1,
             kind: draft.kind, durationMinutes: draft.durationMinutes, exercises: draft.exercises)
         value.apply(draft)
+        // Starting from a routine is using it; a deleted routine is simply not touched.
+        if let id = draft.routineID {
+            do {
+                var routine = try self.routine(id: id)
+                if value.performedAt > routine.lastUsedAt ?? .distantPast { routine.lastUsedAt = value.performedAt; _ = try saveRoutine(routine, revision: routine.revision) }
+            } catch DiaryError.notFound {}
+        }
         return try saveWorkout(value)
     }
     /// A workout's start falls on its day's date, or after midnight before the cutoff on the waking day, as late meals do.
@@ -222,7 +232,8 @@ extension DiaryTransaction {
         let previous: WorkoutRoutine?
         do { previous = try self.routine(id: routine.id) } catch DiaryError.notFound { previous = nil }
         guard previous?.revision == revision else { throw DiaryError.staleRevision }
-        var saved = routine; saved.revision = (previous?.revision ?? 0) + 1; try validateRoutineFields(saved)
+        var saved = routine; saved.revision = (previous?.revision ?? 0) + 1
+        saved.name = routine.name.trimmingCharacters(in: .whitespacesAndNewlines); try validateRoutineFields(saved)
         let payload = try JSONEncoder().encode(saved)
         try database.execute("INSERT INTO routine(id, ordinal, payload) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
             [.text(saved.id.uuidString), .integer(nextOrdinal("routine")), .blob(payload)])

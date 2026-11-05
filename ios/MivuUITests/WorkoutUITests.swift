@@ -150,6 +150,9 @@ import XCTest
 
         // Next time the sets come back filled in, and a heavier one is a new best.
         app.buttons["finishWorkout"].tap()
+        let save = app.buttons["saveWorkout"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
         XCTAssertTrue(start.waitForExistence(timeout: 10))
         reveal(start, in: app)
         start.tap()
@@ -263,6 +266,85 @@ import XCTest
         XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.navigationBars.staticTexts["Yesterday"].exists)
         XCTAssertFalse(app.buttons["Minimize"].exists, "a past workout has no running clock to keep")
+    }
+
+    func testDoneSavesAndRoutineStartsAgain() {
+        let app = launch()
+        openGym(app)
+        addBenchAndTickFirstSet(app)
+        app.buttons["finishWorkout"].tap()
+        XCTAssertTrue(app.staticTexts["Nice work"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["How did it feel?"].exists)
+        XCTAssertTrue(app.buttons["saveRoutine"].exists, "a workout not from a routine offers to become one")
+        app.buttons["Hard"].tap()
+        XCTAssertTrue(app.buttons["Hard"].isSelected)
+        capture("Done", in: app)
+        app.buttons["saveWorkout"].tap()
+        let row = app.buttons["workoutRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.label.hasPrefix("Strength training") && row.label.contains("1 set"), row.label)
+
+        // Save as routine: named, then listed under "Again" and starting pre-filled.
+        openGym(app)
+        addBenchAndTickFirstSet(app)
+        app.buttons["finishWorkout"].tap()
+        let saveRoutine = app.buttons["saveRoutine"]
+        XCTAssertTrue(saveRoutine.waitForExistence(timeout: 5))
+        saveRoutine.tap()
+        let prompt = app.alerts["Save as routine"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        let name = prompt.textFields.firstMatch
+        XCTAssertEqual(name.value as? String, "Strength training", "the name starts as the workout's title")
+        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 17) + "Push day")
+        // A tap within a moment of the last keystroke is lost while the keyboard settles; a person is never that fast.
+        sleep(1)
+        prompt.buttons["Save"].tap()
+        XCTAssertTrue(prompt.waitForNonExistence(timeout: 5), "one tap saves, even straight after typing")
+        let start = app.buttons["startWorkout"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        reveal(start, in: app)
+        start.tap()
+        let routine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Push day'")).firstMatch
+        XCTAssertTrue(routine.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Again"].exists)
+        capture("Again with routine", in: app)
+        routine.tap()
+        let weight = app.buttons["setWeight"].firstMatch
+        XCTAssertTrue(weight.waitForExistence(timeout: 10))
+        XCTAssertEqual(weight.value as? String, "20 kg")
+        XCTAssertEqual(app.buttons.matching(identifier: "tickSet").count, 1, "the routine's one set, ready to tick")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier == 'tickSet' AND selected == true")).count, 0)
+    }
+
+    func testDoneLargestText() {
+        let app = launch(["--proof-largest-text"])
+        openGym(app)
+        addBenchAndTickFirstSet(app)
+        app.buttons["finishWorkout"].tap()
+        XCTAssertTrue(app.staticTexts["Nice work"].waitForExistence(timeout: 5))
+        capture("Done largest text", in: app)
+        let save = app.buttons["saveWorkout"]
+        for _ in 0..<6 where !save.isHittable { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(save.isHittable)
+        capture("Done largest text bottom", in: app)
+        save.tap()
+        XCTAssertTrue(app.buttons["workoutRow"].firstMatch.waitForExistence(timeout: 10))
+    }
+
+    /// Adds Barbell Bench Press (one set at the bar) and ticks it.
+    private func addBenchAndTickFirstSet(_ app: XCUIApplication) {
+        app.buttons["addExercise"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Bench press")
+        let bench = app.buttons["Barbell Bench Press"].firstMatch
+        XCTAssertTrue(bench.waitForExistence(timeout: 5))
+        bench.tap()
+        let tick = app.buttons["tickSet"].firstMatch
+        XCTAssertTrue(tick.waitForExistence(timeout: 5))
+        XCTAssertFalse(tick.isSelected, "an unticked set is not announced as done")
+        tick.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'tickSet' AND selected == true")).firstMatch.waitForExistence(timeout: 5))
     }
 
     /// The date wheel's accessibility values name earlier days like "Nov 4".

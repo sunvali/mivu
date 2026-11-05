@@ -177,6 +177,112 @@ import Testing
         #expect(WorkoutRow.detail(session) == "40 min · 2 sets", "an unticked set does not count; an older set without a tick does")
     }
 
+    @Test func summaryCounts() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        try await finished(store, profile, on: "2027-03-08", benchWith(WorkoutSet(repetitions: 8, loadKg: 60)))
+        _ = try await store.setWeight(dayLocalDate: "2027-03-10", value: 80, unit: "kg", measuredAt: nil, expectedRevision: nil, expectedProfileID: profile.id)
+        let model = try await live(store, profile, benchWith(WorkoutSet(repetitions: 8, loadKg: 62.5, done: false), WorkoutSet(repetitions: 8, loadKg: 60, done: false),
+                                                            WorkoutSet(repetitions: 8, loadKg: 60, done: false)))
+        await model.load()
+        await model.tick(exercise: 0, set: 0)
+        await model.tick(exercise: 0, set: 1)
+        model.endedAt = start.addingTimeInterval(45 * 60)
+        model.effort = 7
+        let summary = model.summary
+        #expect(summary.sets == 2 && summary.newBests == 1)
+        #expect(summary.kcal == WorkoutBurn.estimate(activity: "strength", seconds: 45 * 60, distanceMeters: nil, effort: 7, bodyKg: 80))
+
+        #expect(await model.finish(at: model.endedAt))
+        let saved = try #require(try await store.workoutHistory(expectedProfileID: profile.id).values.first { $0.id == model.session.id })
+        #expect(saved.effort == 7 && saved.estimatedBurnKcal == summary.kcal, "Save stores what the Done screen showed")
+    }
+
+    @Test func feelPrefillFromSetEfforts() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        var session = WorkoutSession(dayID: UUID(), performedAt: start, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0, exercises: [])
+        // Ticked efforts average 7.4; an unticked set's effort does not count.
+        let sets: [WorkoutSet] = [7, 8, 7, 8, 7].map { WorkoutSet(repetitions: 8, effort: $0, done: true) }
+        session.exercises = [WorkoutExercise(name: "Row", sets: sets + [WorkoutSet(repetitions: 8, effort: 3, done: false)])]
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: session, unit: "kg", mode: .past)
+        #expect(model.feel == 7)
+        #expect(EffortChips.efforts.first { $0.1 == model.feel }?.0 == "Hard")
+        session.exercises[0].sets = [WorkoutSet(repetitions: 8, done: true)]
+        #expect(LiveWorkoutModel(store: store, profileID: profile.id, session: session, unit: "kg", mode: .past).feel == nil, "no efforts, nothing chosen")
+    }
+
+    @Test func routineFromSession() {
+        var session = WorkoutSession(dayID: UUID(), performedAt: start, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 40, exercises: [])
+        session.exercises = [benchWith(WorkoutSet(repetitions: 8, loadKg: 60, effort: 8, done: true), WorkoutSet(repetitions: 8, loadKg: 60, done: false)),
+                             WorkoutExercise(name: "Squat", sets: [WorkoutSet(repetitions: 5, loadKg: 100, done: false)])]
+        let routine = WorkoutRoutine(from: session, name: "Push day")
+        #expect(routine.name == "Push day" && routine.lastUsedAt == start)
+        #expect(routine.exercises == [benchWith(WorkoutSet(repetitions: 8, loadKg: 60))], "targets are the ticked sets, with done and effort cleared")
+    }
+
+    @Test func routineChangedDetectsAddedExercise() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let routine = try await store.saveRoutine(WorkoutRoutine(name: "Push day", exercises: [benchWith(WorkoutSet(repetitions: 8, loadKg: 60))]),
+                                                  expectedRevision: nil, expectedProfileID: profile.id)
+        let session = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: routine.exercises, title: routine.name,
+                                                                activity: "strength", routineID: routine.id), at: start, expectedProfileID: profile.id)
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: session, unit: "kg", mode: .live)
+        await model.load()
+        #expect(model.routine?.id == routine.id)
+        await model.tick(exercise: 0, set: 0)
+        #expect(!model.routineChanged, "heavier or lighter sets alone are not a change")
+        await model.addExercise(WorkoutExercise(name: "Dumbbell Curl", sets: [WorkoutSet(repetitions: 10, loadKg: 12, done: false)], exerciseID: "dumbbell-curl"))
+        await model.tick(exercise: 1, set: 0)
+        #expect(model.routineChanged)
+
+        #expect(await model.finish(at: start.addingTimeInterval(1_800)))
+        #expect(await model.updateRoutine())
+        let updated = try #require(try await store.routines(expectedProfileID: profile.id).first)
+        #expect(updated.id == routine.id && updated.name == "Push day" && updated.exercises.map(\.name) == ["Barbell Bench Press", "Dumbbell Curl"])
+    }
+
+    @Test func doneSavesNewRoutine() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let model = try await live(store, profile, benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: false)))
+        await model.load()
+        #expect(model.routine == nil && !model.routineChanged)
+        await model.tick(exercise: 0, set: 0)
+        #expect(await model.finish(at: start.addingTimeInterval(1_800)))
+        #expect(await model.saveRoutine(name: "  Push day "))
+        let saved = try await store.routines(expectedProfileID: profile.id)
+        #expect(saved.map(\.name) == ["Push day"] && saved[0].exercises == [benchWith(WorkoutSet(repetitions: 8, loadKg: 60))])
+    }
+
+    @Test func startingRoutineSetsLastUsed() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let routine = try await store.saveRoutine(WorkoutRoutine(name: "Push day", exercises: [benchWith(WorkoutSet(repetitions: 8, loadKg: 60))]),
+                                                  expectedRevision: nil, expectedProfileID: profile.id)
+        let session = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: routine.exercises, title: routine.name,
+                                                                activity: "strength", routineID: routine.id), at: start, expectedProfileID: profile.id)
+        #expect(session.routineID == routine.id && session.exercises == routine.exercises)
+        #expect(try await store.routines(expectedProfileID: profile.id).first?.lastUsedAt == start)
+
+        // Logged afterwards for an earlier time: the routine keeps its latest use.
+        var past = WorkoutSession(dayID: UUID(), performedAt: start.addingTimeInterval(-86_400), timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0, exercises: [])
+        past.apply(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: true))], routineID: routine.id))
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: past, unit: "kg", mode: .past)
+        #expect(await model.finish())
+        #expect(try await store.routines(expectedProfileID: profile.id).first?.lastUsedAt == start)
+    }
+
+    @Test func pastAfterMidnightCountsForWakingDay() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let late = ISO8601DateFormatter().date(from: "2027-03-10T01:30:00+02:00")!
+        var past = WorkoutSession(dayID: UUID(), performedAt: late, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0, exercises: [])
+        past.exercises = [benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: true), WorkoutSet(repetitions: 8, loadKg: 60, done: true))]
+        let model = LiveWorkoutModel(store: store, profileID: profile.id, session: past, unit: "kg", mode: .past)
+        #expect(model.summary.sets == 2 && model.pastMinutes == 6, "three minutes a set until corrected")
+        model.pastMinutes = 50
+        #expect(await model.finish())
+        let saved = try #require(try await store.workoutHistory(expectedProfileID: profile.id).values.first)
+        #expect(try await store.trackingDay(id: saved.dayID, expectedProfileID: profile.id).localDate == "2027-03-09")
+        #expect(saved.durationSeconds == 3_000 && saved.performedAt == late)
+    }
+
     @Test func lbRoundTrip() throws {
         for shown in [135.0, 132.5, 225, 2.5] {
             let kg = WeightStep.kg(fromDisplay: shown, unit: "lb")

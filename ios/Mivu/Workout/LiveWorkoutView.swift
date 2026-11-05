@@ -7,6 +7,7 @@ struct LiveWorkoutView: View {
     @State private var picking = false
     @State private var editing: SetPosition?
     @State private var askingDiscard = false
+    @State private var showingDone = false
     private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -61,6 +62,7 @@ struct LiveWorkoutView: View {
             }
             .animation(reduceMotion ? nil : .snappy, value: model.expandedExercise)
             .sensoryFeedback(trigger: tickedCount) { old, new in new > old ? .success : nil }
+            .navigationDestination(isPresented: $showingDone) { WorkoutDoneView(model: model, onClose: onClose) }
         }
         .tint(.diaryAccent)
         .task { await model.load() }
@@ -118,7 +120,11 @@ struct LiveWorkoutView: View {
         ToolbarItem(placement: .confirmationAction) {
             Button("Done") {
                 if !model.hasTicked { askingDiscard = true; return }
-                Task { if await model.finish() { onClose() } }
+                guard model.mode != .edit else { Task { if await model.finish() { onClose() } }; return }
+                // The workout ends now; the Done screen saves it.
+                model.endedAt = .now
+                if model.effort == nil { model.effort = model.feel }
+                showingDone = true
             }
             .fontWeight(.semibold)
             .accessibilityIdentifier("finishWorkout")
@@ -218,6 +224,8 @@ struct LiveWorkoutView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Set \(index + 1) done")
             .accessibilityAddTraits(done ? .isSelected : [])
+            // Removed explicitly: inside a List row the button otherwise reads as selected before it is ticked.
+            .accessibilityRemoveTraits(done ? [] : .isSelected)
             .accessibilityIdentifier("tickSet")
         }
         .animation(reduceMotion ? nil : .snappy, value: done)
@@ -258,6 +266,7 @@ private struct SetNumber: View {
     let onTap: () -> Void
     @State private var steps = 0
     @ScaledMetric(relativeTo: .title3) private var width = 64.0
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private func clamped(_ value: Double) -> Double { min(max(value, range.lowerBound), range.upperBound) }
     private var shown: Double { clamped(value + Double(steps) * step) }
@@ -275,10 +284,10 @@ private struct SetNumber: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        // One step per 24 points; saved once, when the finger lifts.
+        // One step per 24 points; saved once, when the finger lifts. Off at accessibility sizes, where rows scroll more than they swipe.
         .highPriorityGesture(DragGesture(minimumDistance: 8)
             .onChanged { steps = Int(-$0.translation.height / 24) }
-            .onEnded { _ in if steps != 0, shown != value || unset { onCommit(shown) } else { steps = 0 } })
+            .onEnded { _ in if steps != 0, shown != value || unset { onCommit(shown) } else { steps = 0 } }, isEnabled: !typeSize.isAccessibilitySize)
         .onChange(of: value) { steps = 0 }
         .sensoryFeedback(.selection, trigger: steps)
         .accessibilityLabel(Text(label))

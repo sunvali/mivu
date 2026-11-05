@@ -57,6 +57,14 @@ import Testing
         #expect(try await store.routines(expectedProfileID: profile.id).count == 2)
     }
 
+    @Test func routineNamesTrimmedAndSortedNaturally() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let saved = try await store.saveRoutine(routine("  Day 10 \n"), expectedRevision: nil, expectedProfileID: profile.id)
+        #expect(saved.name == "Day 10")
+        for name in ["day 2", "Day 1"] { _ = try await store.saveRoutine(routine(name), expectedRevision: nil, expectedProfileID: profile.id) }
+        #expect(try await store.routines(expectedProfileID: profile.id).map(\.name) == ["Day 1", "day 2", "Day 10"])
+    }
+
     @Test func routinesSurviveReopen() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let saved = try await store.saveRoutine(routine("Legs"), expectedRevision: nil, expectedProfileID: profile.id)

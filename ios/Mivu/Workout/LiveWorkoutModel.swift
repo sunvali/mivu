@@ -33,6 +33,14 @@ enum WeightStep {
     var saveError: String?
     /// Recent distinct exercises, newest first, for the exercise picker.
     var recent: [WorkoutExercise] = []
+    /// The routine this workout started from, if it still exists.
+    var routine: WorkoutRoutine?
+    /// The Done screen's answer to "How did it feel?".
+    var effort: Int?
+    /// When Done was tapped: a live workout ends there, not when Save is tapped.
+    var endedAt = Date()
+    private var typedMinutes: Double?
+    private var bodyKg: Double?
     @ObservationIgnored private let store: DiaryStore
     @ObservationIgnored private let profileID: UUID
     /// The last copy the store holds; while a save fails, ticks it lacks are not shown done.
@@ -65,6 +73,8 @@ enum WeightStep {
         var seen = Set<ExerciseKey>()
         let workouts = (try? await store.workoutHistory(expectedProfileID: profileID).values) ?? []
         recent = workouts.flatMap(\.exercises).filter { seen.insert(ExerciseKey($0)).inserted }.prefix(8).map { var exercise = $0; exercise.sets = []; return exercise }
+        if let id = session.routineID { routine = (try? await store.routines(expectedProfileID: profileID))?.first { $0.id == id } }
+        bodyKg = try? await store.bodyKg(on: workoutDate(), expectedProfileID: profileID)
     }
 
     func tick(exercise: Int, set: Int) async {
@@ -144,6 +154,58 @@ enum WeightStep {
 
     var hasTicked: Bool { session.hasTickedSets }
 
+    /// A past log has no clock: three minutes a set until the person corrects it.
+    var pastMinutes: Double {
+        get { typedMinutes ?? Double(max(session.exercises.reduce(0) { $0 + $1.sets.filter { $0.done == true }.count }, 1) * 3) }
+        set { typedMinutes = newValue }
+    }
+
+    /// How long the workout took, as Save will store it.
+    var seconds: Int {
+        mode == .past ? Int(pastMinutes * 60) : min(max(Int(endedAt.timeIntervalSince(session.performedAt)), 1), 86_400)
+    }
+
+    /// The Done screen's three numbers; kcal is estimated as Save will store it.
+    var summary: (sets: Int, kcal: Double?, newBests: Int) {
+        let sets = session.exercises.indices.reduce(0) { total, e in total + session.exercises[e].sets.indices.filter { isTicked(exercise: e, set: $0) }.count }
+        let kcal = session.burnSource == .userEstimate ? session.estimatedBurnKcal
+            : WorkoutBurn.estimate(activity: session.activity ?? "strength", seconds: seconds, distanceMeters: nil, effort: effort, bodyKg: bodyKg)
+        return (sets, kcal, newBests.count)
+    }
+
+    /// The "How did it feel?" chip closest to the ticked sets' average effort, if any were rated.
+    var feel: Int? {
+        let efforts = session.exercises.flatMap(\.sets).filter { $0.done == true }.compactMap(\.effort)
+        guard !efforts.isEmpty else { return nil }
+        let average = Double(efforts.reduce(0, +)) / Double(efforts.count)
+        return EffortChips.efforts.map(\.1).min { abs(Double($0) - average) < abs(Double($1) - average) }
+    }
+
+    /// The ticked exercises or their set counts differ from the routine it started from.
+    var routineChanged: Bool {
+        guard let routine else { return false }
+        func shape(_ exercises: [WorkoutExercise]) -> [[ExerciseKey]] { exercises.map { Array(repeating: ExerciseKey($0), count: $0.sets.count) } }
+        return shape(routine.exercises) != shape(WorkoutRoutine(from: session, name: routine.name).exercises)
+    }
+
+    func saveRoutine(name: String) async -> Bool {
+        do { routine = try await store.saveRoutine(WorkoutRoutine(from: session, name: name), expectedRevision: nil, expectedProfileID: profileID); return true }
+        catch { saveError = error.localizedDescription; return false }
+    }
+
+    /// Replaces the routine's targets with this workout's ticked sets.
+    func updateRoutine() async -> Bool {
+        guard let id = routine?.id else { return false }
+        do {
+            // Read again: saving the workout moved the routine's last use on.
+            guard let current = try await store.routines(expectedProfileID: profileID).first(where: { $0.id == id }) else { throw DiaryError.notFound }
+            var updated = WorkoutRoutine(from: session, name: current.name)
+            updated.id = id; updated.revision = current.revision; updated.lastUsedAt = max(current.lastUsedAt ?? .distantPast, session.performedAt)
+            routine = try await store.saveRoutine(updated, expectedRevision: current.revision, expectedProfileID: profileID)
+            return true
+        } catch { saveError = error.localizedDescription; return false }
+    }
+
     /// Saves the workout as finished; false when it could not be saved.
     func finish(at now: Date = Date()) async -> Bool {
         await pending?.value
@@ -152,20 +214,18 @@ enum WeightStep {
             case .live:
                 // Edits that failed to save are saved first, so Done never drops a tick.
                 if saveError != nil { session = try await store.saveActive(session, expectedRevision: session.revision, expectedProfileID: profileID) }
-                session = try await store.finishWorkout(id: session.id, effort: nil, at: now, expectedRevision: session.revision, expectedProfileID: profileID)
+                session = try await store.finishWorkout(id: session.id, effort: effort, at: now, expectedRevision: session.revision, expectedProfileID: profileID)
             case .past:
-                let zone = try await store.diaryHead(expectedProfileID: profileID).profile.timeZoneID
-                let date = diaryDateLabel(session.performedAt, zone: zone)
+                let date = try await workoutDate()
                 let exercises = session.exercises.compactMap { exercise in
                     var ticked = exercise; ticked.sets = exercise.sets.filter { $0.done == true }; return ticked.sets.isEmpty ? nil : ticked
                 }
-                // shortcut: a past log has no clock, so it counts three minutes a set; the Done screen can let people correct it.
-                let seconds = max(exercises.reduce(0) { $0 + $1.sets.count }, 1) * 180
+                let seconds = max(seconds, 60)
                 let bodyKg = try await store.bodyKg(on: date, expectedProfileID: profileID)
                 let draft = WorkoutDraft(kind: .strength, durationMinutes: seconds / 60, exercises: exercises,
-                    estimatedBurnKcal: WorkoutBurn.estimate(activity: session.activity ?? "strength", seconds: seconds, distanceMeters: nil, effort: nil, bodyKg: bodyKg),
+                    estimatedBurnKcal: WorkoutBurn.estimate(activity: session.activity ?? "strength", seconds: seconds, distanceMeters: nil, effort: effort, bodyKg: bodyKg),
                     title: session.title, activity: session.activity ?? "strength", state: .finished, durationSeconds: seconds,
-                    routineID: session.routineID, source: .manual)
+                    effort: effort, routineID: session.routineID, source: .manual)
                 session = try await store.createWorkout(localDate: date, draft: draft, performedAt: session.performedAt, expectedProfileID: profileID)
             case .edit:
                 session = try await store.updateWorkout(session, expectedRevision: session.revision, expectedProfileID: profileID)
@@ -208,6 +268,12 @@ enum WeightStep {
             guard session.exercises.indices.contains(exercise), set.map(session.exercises[exercise].sets.indices.contains) ?? true else { return }
             edit(&session)
         }
+    }
+
+    /// The diary date the workout counts on; a past log after midnight counts for the waking day, as meals do.
+    private func workoutDate() async throws -> String {
+        if mode == .past { return wakingDateLabel(session.performedAt, zone: try await store.diaryHead(expectedProfileID: profileID).profile.timeZoneID) }
+        return try await store.trackingDay(id: session.dayID, expectedProfileID: profileID).localDate
     }
 
     private func loadHistory(_ exercise: WorkoutExercise) async {

@@ -66,9 +66,7 @@ struct CardioLogView: View {
     @State private var kcalText = ""
     @State private var addingWeight = false
     @State private var confirmingDiscard = false
-    @Environment(\.dynamicTypeSize) private var typeSize
     private let unit = Locale.current.measurementSystem == .metric ? "km" : "mi"
-    private static let efforts: [(String, Int)] = [("Easy", 3), ("Moderate", 5), ("Hard", 7), ("Max", 9)]
 
     private var zone: String { model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier }
     private var sport: WorkoutActivity? { WorkoutCatalog.activity(state.activity) }
@@ -86,7 +84,7 @@ struct CardioLogView: View {
                              format: { $0.formatted(.number.precision(.fractionLength(0))) }, label: "Time")
                     .accessibilityIdentifier("timeRuler").card()
                 if state.km != nil { distance.card() }
-                effort.card()
+                EffortChips(title: "How hard?", effort: Binding(get: { state.effort }, set: { state.effort = $0 ?? state.effort })).card()
                 summary
                 more.card()
                 if let message = model.errorMessage {
@@ -142,24 +140,6 @@ struct CardioLogView: View {
                             majorEvery: swim ? 4 : cycle ? 10 : 5, unit: swim ? "m" : unit,
                             format: { $0.formatted(.number.precision(.fractionLength(swim || cycle ? 0...1 : 1...1))) }, label: "Distance")
             .accessibilityIdentifier("distanceRuler")
-    }
-
-    private var effort: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("How hard?").font(.headline)
-            let chips = ForEach(Self.efforts, id: \.1) { name, value in
-                let selected = state.effort == value
-                Button { state.effort = value } label: {
-                    Text(name).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(selected ? Color.diaryActionText : Color.diaryText)
-                        .background(selected ? Color.diaryWorkout : Color.diaryCanvas, in: .rect(cornerRadius: 14))
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selected ? .isSelected : [])
-            }
-            if typeSize.isAccessibilitySize { VStack(spacing: 8) { chips } } else { HStack(spacing: 8) { chips } }
-        }
     }
 
     private var summary: some View {
@@ -232,6 +212,32 @@ struct CardioLogView: View {
     }
 }
 
-private extension View {
+/// The four effort chips, shared by the cardio screen's "How hard?" and the Done screen's "How did it feel?".
+struct EffortChips: View {
+    static let efforts: [(String, Int)] = [("Easy", 3), ("Moderate", 5), ("Hard", 7), ("Max", 9)]
+    let title: LocalizedStringKey
+    @Binding var effort: Int?
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.headline)
+            let chips = ForEach(Self.efforts, id: \.1) { name, value in
+                let selected = effort == value
+                Button { effort = value } label: {
+                    Text(name).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(selected ? Color.diaryActionText : Color.diaryText)
+                        .background(selected ? Color.diaryWorkout : Color.diaryCanvas, in: .rect(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+            if typeSize.isAccessibilitySize { VStack(spacing: 8) { chips } } else { HStack(spacing: 8) { chips } }
+        }
+    }
+}
+
+extension View {
     func card() -> some View { modifier(DiarySummaryCardStyle(padding: 16)) }
 }
