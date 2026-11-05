@@ -24,7 +24,7 @@ struct SettingsView: View {
     private var hasUnsavedChanges: Bool { fields.isDirty || !nutritionDraft.text.isEmpty }
 
     private enum SettingsSection: Hashable {
-        case profiles, preferences, backup, connection, nutritionSource
+        case profiles, preferences, workouts, backup, connection, nutritionSource
     }
     var body: some View {
         List {
@@ -49,6 +49,8 @@ struct SettingsView: View {
                     Button { showOnboarding = true } label: { settingsRow("Redo setup with Pip", symbol: "pawprint", color: .diaryProtein) }
                         .accessibilityIdentifier("redoOnboarding")
                     NavigationLink(value: SettingsSection.preferences) { settingsRow("Diary preferences", symbol: "list.bullet.rectangle", color: .diaryCarbs) }
+                    NavigationLink(value: SettingsSection.workouts) { settingsRow("Workouts", symbol: "dumbbell", color: .diaryWorkout) }
+                        .accessibilityIdentifier("workoutSettings")
                     NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
                         settingsRow("Coach AI", symbol: "sparkles", color: .diaryFat,
@@ -200,6 +202,8 @@ struct SettingsView: View {
                         Text("English is supported for this version. Your stored profile language is preserved.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }
                 }
+            case .workouts:
+                WorkoutSettingsSection(model: model)
             case .backup:
                 Section("Backup and portability") { DiaryBackupSettings(model: model) }
                 if model.readModel != nil { Section("Share a report") { DiaryReportSettings(model: model) } }
@@ -319,6 +323,7 @@ struct SettingsView: View {
         switch section {
         case .profiles: "Local profiles"
         case .preferences: "Diary preferences"
+        case .workouts: "Workouts"
         case .backup: "Backup & export"
         case .connection: "Coach AI"
         case .nutritionSource: "Nutrition source"

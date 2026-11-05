@@ -7,6 +7,8 @@ struct SetWheelSheet: View {
     let measure: ExerciseMeasure
     let unit: String
     let step: Double
+    /// A barbell lift offers the plate calculator.
+    let barbell: Bool
     /// Only the values that changed: weight in the shown unit, reps, seconds.
     let onDone: (Double?, Int?, Int?) -> Void
     private let initial: (weight: Double, reps: Int, seconds: Int)
@@ -22,12 +24,14 @@ struct SetWheelSheet: View {
     @State private var typedPrompt = ""
     @State private var wheelHeight: CGFloat = 216
     @State private var height: CGFloat = 360
+    @State private var showingPlates = false
 
     enum Field: String { case weight = "Weight", reps = "Reps", minutes = "Minutes", seconds = "Seconds" }
 
     /// `startingWeight` centres the weight wheel when the set has no weight yet.
-    init(number: Int, set: WorkoutSet, measure: ExerciseMeasure, unit: String, step: Double, startingWeight: Double, onDone: @escaping (Double?, Int?, Int?) -> Void) {
-        self.number = number; self.measure = measure; self.unit = unit; self.step = step; self.onDone = onDone
+    init(number: Int, set: WorkoutSet, measure: ExerciseMeasure, unit: String, step: Double, barbell: Bool = false, startingWeight: Double,
+         onDone: @escaping (Double?, Int?, Int?) -> Void) {
+        self.number = number; self.measure = measure; self.unit = unit; self.step = step; self.barbell = barbell; self.onDone = onDone
         let weight = set.loadKg.map { WeightStep.display(kg: $0, unit: unit) } ?? startingWeight, total = set.seconds ?? 0
         initial = (weight, max(set.repetitions, 1), total); weightUnset = measure == .weightReps && set.loadKg == nil
         _weight = State(initialValue: weight); _reps = State(initialValue: max(set.repetitions, 1))
@@ -55,6 +59,12 @@ struct SetWheelSheet: View {
                     wheel(.reps, selection: $reps, values: Array(1...100), unit: "reps") { "\($0)" }
                 }
             }
+            if barbell && !timed {
+                Button("Plates") { showingPlates = true }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent).frame(minWidth: 44, minHeight: 44)
+                    .accessibilityHint("Shows the plates for each side of the bar.")
+                    .accessibilityIdentifier("platesLink")
+            }
             Button {
                 let total = minutes * 60 + seconds
                 onDone(timed || (weight == initial.weight && !weightUnset) ? nil : weight, reps == initial.reps ? nil : reps, !timed || total == initial.seconds ? nil : total)
@@ -70,6 +80,7 @@ struct SetWheelSheet: View {
         .onGeometryChange(for: CGFloat.self, of: \.size.height) { height = $0 }
         .presentationDetents([.height(height)])
         .presentationBackground(Color.diarySurface)
+        .sheet(isPresented: $showingPlates) { PlateCalculatorView(target: weight, unit: unit) }
         .alert(typing.map { LocalizedStringKey($0.rawValue) } ?? "", isPresented: Binding(get: { typing != nil }, set: { if !$0 { typing = nil } })) {
             TextField(typedPrompt, text: $typed).keyboardType(typing == .weight ? .decimalPad : .numberPad)
             Button("OK", action: applyTyped)

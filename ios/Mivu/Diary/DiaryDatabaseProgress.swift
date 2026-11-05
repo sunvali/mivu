@@ -48,6 +48,19 @@ extension DiaryDatabase {
             return result
         }
     }
+    func ownExerciseNames(expectedProfileID: UUID) throws -> [String] {
+        try domainRead(expectedProfileID: expectedProfileID) { _ in
+            let own = "json_extract(e.value, '$.exerciseID') IS NULL"
+            let statement = try domainStatement("SELECT json_extract(e.value, '$.name') FROM workout w, json_each(CAST(w.payload AS TEXT), '$.exercises') e WHERE \(own) AND json_extract(CAST(w.payload AS TEXT), '$.state') IS NOT 'active' UNION ALL SELECT json_extract(e.value, '$.name') FROM routine r, json_each(CAST(r.payload AS TEXT), '$.exercises') e WHERE \(own)")
+            defer { sqlite3_finalize(statement) }
+            var seen = Set<String>(), names: [String] = []
+            while try mutationStep(statement) {
+                let name = try mutationText(statement, 0)
+                if seen.insert(ExerciseKey(WorkoutExercise(name: name, sets: [])).raw).inserted { names.append(name) }
+            }
+            return names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        }
+    }
     func routines(expectedProfileID: UUID) throws -> [WorkoutRoutine] {
         try domainRead(expectedProfileID: expectedProfileID) { _ in
             let statement = try domainStatement("SELECT id, ordinal, payload FROM routine ORDER BY ordinal, id")
@@ -242,6 +255,28 @@ extension DiaryTransaction {
     func deleteRoutine(id: UUID, revision: Int) throws {
         guard try routine(id: id).revision == revision else { throw DiaryError.staleRevision }
         try deleteProgress(id: id, table: "routine")
+    }
+    /// Edits the own exercise in every finished workout and routine; returns how many records changed.
+    /// A running workout is skipped: its open screen would save its own copy over the change.
+    func rewriteOwnExercise(_ key: ExerciseKey, _ edit: (inout WorkoutExercise) -> Void) throws -> Int {
+        let own = "EXISTS (SELECT 1 FROM json_each(CAST(payload AS TEXT), '$.exercises') WHERE json_extract(value, '$.exerciseID') IS NULL)"
+        func rewrite(_ exercises: inout [WorkoutExercise]) -> Bool {
+            let matches = exercises.indices.filter { ExerciseKey(exercises[$0]) == key }
+            for index in matches { edit(&exercises[index]) }
+            return !matches.isEmpty
+        }
+        var count = 0
+        for row in try records("workout", clause: own + " AND json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active'", values: []) {
+            var workout = try database.decode(WorkoutSession.self, row); try validateWorkoutFields(workout)
+            guard rewrite(&workout.exercises) else { continue }
+            workout.revision += 1; try saveWorkout(workout); count += 1
+        }
+        for row in try records("routine", clause: own, values: []) {
+            var routine = try database.decode(WorkoutRoutine.self, row); try validateRoutineFields(routine)
+            guard rewrite(&routine.exercises) else { continue }
+            _ = try saveRoutine(routine, revision: routine.revision); count += 1
+        }
+        return count
     }
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile?) throws {
         guard profile.id == head.profile.id else { throw DiaryError.wrongOwner }

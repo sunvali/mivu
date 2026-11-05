@@ -495,6 +495,42 @@ actor DiaryStore {
         try pagedConnection(expectedProfileID: expectedProfileID).database.finishedWorkouts(containing: key, limit: limit, expectedProfileID: expectedProfileID)
     }
 
+    /// Settings › Workouts: today's goal record carries the choice, so earlier days keep their numbers.
+    /// A day without its own record starts from the goal in force (or no targets, kept for the next goal).
+    func setExerciseCredit(_ percent: Int, on date: String, expectedProfileID: UUID) throws -> GoalRecord {
+        try pagedMutation(expectedProfileID) { database, head in
+            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+                let exact = try transaction.exactGoal(on: date), base = try exact ?? transaction.goal(on: date)
+                var goal = exact ?? GoalRecord(effectiveLocalDate: date, timeZoneID: head.profile.timeZoneID, targets: base?.targets ?? NutritionValues(),
+                                               goalWeightKg: base?.goalWeightKg, exerciseCreditPercent: 0)
+                goal.exerciseCreditPercent = percent
+                return try transaction.setGoal(goal, revision: exact?.revision)
+            }
+        }
+    }
+
+    /// The person's own exercise names (not from the catalog), one per exercise, in finished workouts and routines.
+    func ownExerciseNames(expectedProfileID: UUID) throws -> [String] {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.ownExerciseNames(expectedProfileID: expectedProfileID)
+    }
+
+    /// Renames an own exercise in every finished workout and routine in one transaction; returns how many records changed.
+    func renameOwnExercise(from name: String, to newName: String, expectedProfileID: UUID) throws -> Int {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 200 else { throw DiaryError.invalidData }
+        return try rewriteOwnExercise(name, expectedProfileID) { $0.name = trimmed }
+    }
+
+    /// Makes an own exercise the bundled one, so its history and bests join it; returns how many records changed.
+    func mergeOwnExercise(_ name: String, into key: ExerciseKey, expectedProfileID: UUID) throws -> Int {
+        guard let target = WorkoutCatalog.exercise(key.raw) else { throw DiaryError.invalidData }
+        return try rewriteOwnExercise(name, expectedProfileID) { $0.name = target.name; $0.exerciseID = target.id; $0.measure = target.measure }
+    }
+
+    private func rewriteOwnExercise(_ name: String, _ owner: UUID, _ edit: @escaping (inout WorkoutExercise) -> Void) throws -> Int {
+        try pagedMutation(owner) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.rewriteOwnExercise(ExerciseKey(WorkoutExercise(name: name, sets: [])), edit) } }
+    }
+
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile? = nil, expectedProfileID: UUID? = nil) throws {
         return try pagedMutation(expectedProfileID) { try $0.updateProfile(profile, expectedProfile: expectedProfile, expected: $1, maximumBytes: maximumFileBytes) }
     }

@@ -79,7 +79,6 @@ struct GoalEditorValues: Equatable {
             || protein != (original?.targets.protein.map { String($0) } ?? "")
             || fat != (original?.targets.fat.map { String($0) } ?? "")
             || weight != (original?.goalWeightKg.map { String($0) } ?? "")
-            || exerciseCreditPercent != (original?.exerciseCreditPercent ?? 0)
     }
 
     func record(zone: String) -> GoalRecord {
@@ -191,13 +190,8 @@ struct GoalEditorView: View {
                 }
                 Section("Optional weight goal") { field("Weight (kg)", text: $values.weight, id: "goalWeight") }
                 Section("Exercise") {
-                    Picker("Add burn to food budget", selection: $values.exerciseCreditPercent) {
-                        Text("Off").tag(0); Text("50%").tag(50); Text("100%").tag(100)
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(!goalLoaded)
-                    .accessibilityIdentifier("exerciseCreditPercent")
-                    Text("Recorded food, remaining from recorded food, and estimated burn are always shown separately.")
+                    // One control for the choice: Settings › Workouts writes it on today's goal.
+                    Text("Adding burn to your food budget is in Settings › Workouts. Recorded food, remaining from recorded food, and estimated burn are always shown separately.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
             }
@@ -300,9 +294,12 @@ struct GoalEditorView: View {
         loading = true; goalLoaded = false
         do {
             let goal = try await model.store.goal(on: label, exact: true, expectedProfileID: ownerID)
+            // A new date's record keeps the burn choice in force, which is set in Settings › Workouts.
+            let credit = try await goal == nil ? model.store.goal(on: label, expectedProfileID: ownerID)?.exerciseCreditPercent : nil
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation,
                   goalRequest == request, values == draft, ProgressDate.label(date, zone: zone) == label else { return }
-            let loaded = GoalEditorValues(goal: goal, localDate: label)
+            var loaded = GoalEditorValues(goal: goal, localDate: label)
+            if let credit { loaded.exerciseCreditPercent = credit }
             values = loaded; originalValues = loaded; goalLoaded = true; loading = false; saveError = nil
         } catch {
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, goalRequest == request else { return }

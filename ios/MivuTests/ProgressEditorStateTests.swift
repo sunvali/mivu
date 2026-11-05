@@ -135,8 +135,9 @@ import Testing
         blank.protein = "100"
         #expect(blank.hasEditedTargets)
         blank.protein = ""
+        // The burn choice is set in Settings, not typed here, so it is not a draft to protect.
         blank.exerciseCreditPercent = 50
-        #expect(blank.hasEditedTargets)
+        #expect(!blank.hasEditedTargets)
         #expect(saved.kcal == "1900" && saved.localDate == "2026-01-01")
     }
 

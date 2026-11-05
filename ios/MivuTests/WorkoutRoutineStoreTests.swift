@@ -93,4 +93,58 @@ import Testing
         #expect(snapshot.routines.isEmpty && snapshot.deletedRoutineIDs == [saved.id])
         _ = try DiaryArchive.decode(DiaryArchive.encode(snapshot))
     }
+
+    private func own(_ name: String) -> WorkoutExercise { WorkoutExercise(name: name, sets: [WorkoutSet(repetitions: 8, loadKg: 30)], measure: .reps) }
+
+    private func workout(_ store: DiaryStore, _ profile: DiaryProfile, _ exercises: [WorkoutExercise]) async throws -> WorkoutSession {
+        try await store.createWorkout(localDate: "2027-03-08", draft: WorkoutDraft(kind: .strength, durationMinutes: 30, exercises: exercises),
+                                      performedAt: nil, expectedProfileID: profile.id)
+    }
+
+    @Test func renameOwnExerciseRewritesAll() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let bench = WorkoutExercise(name: "Barbell Bench Press", sets: [WorkoutSet(repetitions: 5, loadKg: 60)], exerciseID: "barbell-bench-press")
+        let first = try await workout(store, profile, [own("My Row"), bench])
+        let second = try await workout(store, profile, [own("my rows"), own("Cable fly")])
+        var plan = routine("Pull"); plan.exercises = [own("MY ROW")]
+        let saved = try await store.saveRoutine(plan, expectedRevision: nil, expectedProfileID: profile.id)
+        // A running workout is left alone: its screen saves its own copy.
+        let running = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [own("My Row")], activity: "strength"),
+                                                   at: Date(), expectedProfileID: profile.id)
+        #expect(try await store.ownExerciseNames(expectedProfileID: profile.id) == ["Cable fly", "My Row"])
+
+        #expect(try await store.renameOwnExercise(from: "my row", to: "  Seated row ", expectedProfileID: profile.id) == 3)
+        let history = try await store.workoutHistory(expectedProfileID: profile.id).values
+        let renamedFirst = try #require(history.first { $0.id == first.id }), renamedSecond = try #require(history.first { $0.id == second.id })
+        #expect(renamedFirst.exercises.map(\.name) == ["Seated row", "Barbell Bench Press"] && renamedFirst.revision == first.revision + 1)
+        #expect(renamedSecond.exercises.map(\.name) == ["Seated row", "Cable fly"])
+        #expect(renamedFirst.exercises[0].sets == own("x").sets && renamedFirst.exercises[0].measure == .reps)
+        let routines = try await store.routines(expectedProfileID: profile.id)
+        #expect(routines.map(\.exercises[0].name) == ["Seated row"] && routines[0].revision == saved.revision + 1)
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id) == running)
+        #expect(try await store.ownExerciseNames(expectedProfileID: profile.id) == ["Cable fly", "Seated row"])
+
+        await #expect(throws: DiaryError.invalidData) { try await store.renameOwnExercise(from: "Seated row", to: " ", expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.wrongOwner) { try await store.renameOwnExercise(from: "Seated row", to: "Row", expectedProfileID: UUID()) }
+        #expect(try await store.renameOwnExercise(from: "Nothing", to: "Row", expectedProfileID: profile.id) == 0)
+    }
+
+    @Test func mergeIntoCatalog() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        _ = try await workout(store, profile, [own("bench"), own("Dips")])
+        var plan = routine("Push"); plan.exercises = [own("Bench")]
+        _ = try await store.saveRoutine(plan, expectedRevision: nil, expectedProfileID: profile.id)
+        let key = ExerciseKey(WorkoutExercise(name: "Barbell Bench Press", sets: [], exerciseID: "barbell-bench-press"))
+
+        #expect(try await store.mergeOwnExercise("Bench", into: key, expectedProfileID: profile.id) == 2)
+        let merged = try #require(try await store.workoutHistory(expectedProfileID: profile.id).values.first)
+        #expect(merged.exercises[0] == WorkoutExercise(name: "Barbell Bench Press", sets: own("x").sets, exerciseID: "barbell-bench-press", measure: .weightReps))
+        #expect(merged.exercises[1].name == "Dips" && merged.exercises[1].exerciseID == nil)
+        #expect(try await store.routines(expectedProfileID: profile.id)[0].exercises[0].exerciseID == "barbell-bench-press")
+        #expect(try await store.finishedWorkouts(containing: key, limit: 10, expectedProfileID: profile.id).count == 1)
+        #expect(try await store.ownExerciseNames(expectedProfileID: profile.id) == ["Dips"])
+
+        // Only a bundled exercise can absorb one.
+        await #expect(throws: DiaryError.invalidData) { try await store.mergeOwnExercise("Dips", into: ExerciseKey(own("Row")), expectedProfileID: profile.id) }
+    }
 }

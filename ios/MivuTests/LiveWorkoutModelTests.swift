@@ -283,6 +283,96 @@ import Testing
         #expect(saved.durationSeconds == 3_000 && saved.performedAt == late)
     }
 
+    private func restModel(_ store: DiaryStore, _ profile: DiaryProfile, _ exercises: WorkoutExercise...) async throws -> (LiveWorkoutModel, RestTimer) {
+        let rest = RestTimer(center: FakeNotificationCenter(), defaults: UserDefaults(suiteName: "Rest-" + UUID().uuidString)!, now: { Date(timeIntervalSinceReferenceDate: 820_000_000) })
+        let session = try await store.startWorkout(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: exercises, activity: "strength"),
+                                                   at: start, expectedProfileID: profile.id)
+        return (LiveWorkoutModel(store: store, profileID: profile.id, session: session, unit: "kg", mode: .live, rest: rest), rest)
+    }
+
+    private func lift(_ name: String, sets: Int) -> WorkoutExercise {
+        WorkoutExercise(name: name, sets: Array(repeating: WorkoutSet(repetitions: 10, loadKg: 40, done: false), count: sets), measure: .weightReps)
+    }
+
+    @Test func supersetFocusOrder() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (model, rest) = try await restModel(store, profile, lift("Row", sets: 2), lift("Curl", sets: 1), lift("Face pull", sets: 2))
+        await model.group([0, 2])
+        // Grouping brings the partner next to the first exercise and is saved.
+        #expect(model.session.exercises.map(\.name) == ["Row", "Face pull", "Curl"])
+        #expect(model.session.exercises[0].groupID != nil && model.session.exercises[0].groupID == model.session.exercises[1].groupID)
+        #expect(model.session.exercises[2].groupID == nil)
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id) == model.session)
+
+        #expect(model.nextFocus(after: (0, 0)) == (1, 0))
+        await model.tick(exercise: 0, set: 0)
+        #expect(model.focus.map { [$0.exercise, $0.set] } == [1, 0], "A1 → B1")
+        #expect(rest.endsAt == nil, "no rest between the exercises of a round")
+        await model.tick(exercise: 1, set: 0)
+        #expect(model.focus.map { [$0.exercise, $0.set] } == [0, 1], "B1 → A2")
+        #expect(rest.endsAt != nil, "rest after the round")
+        #expect(model.nextFocus(after: (0, 1)) == (1, 1))
+        // After the last round, focus moves on to the next exercise.
+        #expect(model.nextFocus(after: (1, 1)) == (2, 0))
+    }
+
+    @Test func restOnlyAfterRound() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (model, rest) = try await restModel(store, profile, lift("Squat", sets: 2), lift("Row", sets: 2), lift("Dip", sets: 2), lift("Plank", sets: 1))
+        await model.group([1, 2])
+        await model.group([1, 0])
+        #expect(model.session.exercises.map(\.name) == ["Squat", "Row", "Dip", "Plank"], "three exercises make one circuit")
+        #expect(Set(model.session.exercises.prefix(3).map(\.groupID)).count == 1)
+        // Out of order: B before A still waits for the rest of the round.
+        await model.tick(exercise: 1, set: 0)
+        await model.tick(exercise: 0, set: 0)
+        #expect(rest.endsAt == nil)
+        await model.tick(exercise: 2, set: 0)
+        #expect(rest.endsAt != nil)
+        rest.skip()
+        // An exercise on its own rests after every set.
+        await model.tick(exercise: 3, set: 0)
+        #expect(rest.endsAt != nil)
+    }
+
+    @Test func exerciseMenuEdits() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (model, _) = try await restModel(store, profile, lift("Row", sets: 2), lift("Curl", sets: 1), lift("Dip", sets: 1))
+        await model.setType(.warmup, exercise: 0, set: 0)
+        await model.setEffort(8, exercise: 0, set: 1)
+        await model.setNote("Seat 4", exercise: 1)
+        #expect(model.session.exercises[0].sets.map(\.type) == [.warmup, nil] && model.session.exercises[0].sets[1].effort == 8)
+        await model.setType(.normal, exercise: 0, set: 0)
+        await model.setEffort(nil, exercise: 0, set: 1)
+        #expect(model.session.exercises[0].sets.map(\.type) == [nil, nil] && model.session.exercises[0].sets[1].effort == nil)
+
+        // A shared rest for the whole superset.
+        await model.group([0, 1])
+        await model.setRest(60, exercise: 1)
+        #expect(model.session.exercises.prefix(2).map(\.restSeconds) == [60, 60] && model.session.exercises[2].restSeconds == nil)
+        // Moving down from the bottom of a superset leaves it; a lone member is no longer a superset.
+        model.expandedExercise = 1
+        await model.moveExercise(1, up: false)
+        #expect(model.session.exercises.map(\.name) == ["Row", "Curl", "Dip"] && model.session.exercises.allSatisfy { $0.groupID == nil })
+        #expect(model.expandedExercise == 1)
+        await model.moveExercise(1, up: false)
+        #expect(model.session.exercises.map(\.name) == ["Row", "Dip", "Curl"] && model.expandedExercise == 2)
+        #expect(model.session.exercises[2].note == "Seat 4")
+        // A single exercise jumps over a whole superset.
+        await model.group([0, 1])
+        await model.moveExercise(2, up: true)
+        #expect(model.session.exercises.map(\.name) == ["Curl", "Row", "Dip"])
+        // Leaving a superset puts the exercise after the others.
+        await model.ungroup(exercise: 1)
+        #expect(model.session.exercises.map(\.name) == ["Curl", "Dip", "Row"] && model.session.exercises.allSatisfy { $0.groupID == nil })
+
+        await model.replaceExercise(0, with: WorkoutExercise(name: "Hammer curl", sets: [], measure: .weightReps))
+        #expect(model.session.exercises[0].name == "Hammer curl" && model.session.exercises[0].sets.count == 1)
+        await model.removeExercise(0)
+        #expect(model.session.exercises.map(\.name) == ["Dip", "Row"])
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id) == model.session)
+    }
+
     @Test func lbRoundTrip() throws {
         for shown in [135.0, 132.5, 225, 2.5] {
             let kg = WeightStep.kg(fromDisplay: shown, unit: "lb")

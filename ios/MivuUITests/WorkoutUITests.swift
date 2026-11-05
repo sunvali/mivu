@@ -194,6 +194,90 @@ import XCTest
         XCTAssertTrue(ticks.element(boundBy: 0).isSelected)
     }
 
+    func testSupersetRestsAfterRoundAndPlates() {
+        let app = launch()
+        openGym(app)
+        for (query, name) in [("Bench press", "Barbell Bench Press"), ("Barbell row", "Barbell Row")] {
+            let addExercise = app.buttons["addExercise"]
+            for _ in 0..<4 where !addExercise.isHittable { app.swipeUp(velocity: .slow) }
+            addExercise.tap()
+            let search = app.searchFields.firstMatch
+            XCTAssertTrue(search.waitForExistence(timeout: 5))
+            search.tap(); search.typeText(query)
+            let row = app.buttons[name].firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 5))
+            row.tap()
+            XCTAssertTrue(search.waitForNonExistence(timeout: 5))
+        }
+        // Group them from the open card's ⋯ menu.
+        app.buttons["exerciseMenu"].firstMatch.tap()
+        let supersetWith = app.buttons["Superset with…"]
+        XCTAssertTrue(supersetWith.waitForExistence(timeout: 5))
+        supersetWith.tap()
+        let partner = app.buttons["Barbell Bench Press"]
+        XCTAssertTrue(partner.waitForExistence(timeout: 5))
+        partner.tap()
+        let header = app.staticTexts["supersetHeader"]
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        XCTAssertEqual(header.label, "Superset · Round 1 of 1")
+
+        // Ticking A moves to B with no rest; the rest starts after B.
+        let ticks = app.buttons.matching(identifier: "tickSet")
+        XCTAssertEqual(ticks.count, 2)
+        ticks.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'tickSet' AND selected == true")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(ticks.element(boundBy: 1).value as? String, "Up next")
+        XCTAssertFalse(app.buttons["skipRest"].exists, "no rest between the exercises of a round")
+        capture("Superset", in: app)
+        ticks.element(boundBy: 1).tap()
+        XCTAssertTrue(app.buttons["skipRest"].waitForExistence(timeout: 5))
+        app.buttons["skipRest"].tap()
+
+        // 62.5 kg on the wheel: 20 + 1.25 on each side of a 20 kg bar.
+        app.buttons["setWeight"].firstMatch.tap()
+        let wheelDone = app.buttons["wheelDone"]
+        XCTAssertTrue(wheelDone.waitForExistence(timeout: 5))
+        app.descendants(matching: .any)["wheelWeight"].firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let typed = app.alerts["Weight"]
+        XCTAssertTrue(typed.waitForExistence(timeout: 5))
+        typed.textFields.firstMatch.typeText("62.5")
+        typed.buttons["OK"].tap()
+        XCTAssertTrue(typed.waitForNonExistence(timeout: 5))
+        app.buttons["platesLink"].tap()
+        let perSide = app.staticTexts["platesPerSide"]
+        XCTAssertTrue(perSide.waitForExistence(timeout: 5))
+        XCTAssertEqual(perSide.label, "20 + 1.25")
+        capture("Plates", in: app)
+        app.buttons["No bar"].tap()
+        XCTAssertEqual(perSide.label, "25 + 5 + 1.25")
+    }
+
+    func testWorkoutSettings() {
+        let app = launch()
+        if !app.buttons["profileSettings"].isHittable, app.buttons["OverflowBarButtonItem"].exists { app.buttons["OverflowBarButtonItem"].tap() }
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        // Below the fold: the list builds the row once it scrolls in.
+        let workouts = app.buttons["workoutSettings"]
+        for _ in 0..<6 where !workouts.exists || !workouts.isHittable { app.swipeUp(velocity: .slow) }
+        workouts.tap()
+        let credit = app.segmentedControls["exerciseCreditPercent"]
+        XCTAssertTrue(credit.waitForExistence(timeout: 5))
+        for choice in ["Off", "50%", "100%"] { XCTAssertGreaterThanOrEqual(credit.buttons[choice].frame.height, 44, choice) }
+        // VoiceOver reads each choice and which one is on.
+        let off = credit.buttons["Off"], half = credit.buttons["50%"]
+        XCTAssertTrue(off.waitForSelected(), "no goal yet reads as Off")
+        half.tap()
+        XCTAssertTrue(half.waitForSelected())
+        XCTAssertFalse(off.isSelected)
+        capture("Workout settings", in: app)
+        for id in ["restTimerDefault", "weightUnit", "barAndPlates", "workoutRoutines", "myExercises"] {
+            for _ in 0..<4 where !app.buttons[id].exists { app.swipeUp(velocity: .slow) }
+            XCTAssertTrue(app.buttons[id].exists, id)
+        }
+        capture("Workout settings rows", in: app)
+    }
+
     func testBannerOnEveryTab() {
         let app = launch()
         XCTAssertFalse(app.buttons["workoutBanner"].exists, "no banner without a running workout")
@@ -413,5 +497,11 @@ import XCTest
     private func capture(_ name: String, in app: XCUIApplication) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+}
+
+private extension XCUIElement {
+    func waitForSelected(timeout: TimeInterval = 5) -> Bool {
+        XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: self)], timeout: timeout) == .completed
     }
 }

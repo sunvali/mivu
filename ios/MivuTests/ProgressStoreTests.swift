@@ -20,6 +20,22 @@ import Testing
                    exerciseCreditPercent: 0)
     }
 
+    @Test func burnCreditWritesTodaysRevision() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        // No goal yet: the choice is kept on an empty record for today, ready for the next goal.
+        let empty = try await store.setExerciseCredit(50, on: "2027-01-01", expectedProfileID: profile.id)
+        #expect(empty.exerciseCreditPercent == 50 && empty.targets == NutritionValues() && empty.timeZoneID == "Asia/Jerusalem")
+        let earlier = try await store.setGoals(goal("2027-01-05"), expectedRevision: nil, expectedProfileID: profile.id)
+        // A later day copies the goal in force, so earlier days keep their numbers.
+        let today = try await store.setExerciseCredit(100, on: "2027-01-10", expectedProfileID: profile.id)
+        #expect(today.effectiveLocalDate == "2027-01-10" && today.id != earlier.id && today.targets == earlier.targets && today.goalWeightKg == 70)
+        #expect(try await store.goal(on: "2027-01-07", expectedProfileID: profile.id) == earlier)
+        // Today's own record is updated in place.
+        let again = try await store.setExerciseCredit(0, on: "2027-01-10", expectedProfileID: profile.id)
+        #expect(again.id == today.id && again.revision == today.revision + 1 && again.exerciseCreditPercent == 0)
+        await #expect(throws: DiaryError.invalidData) { try await store.setExerciseCredit(30, on: "2027-01-10", expectedProfileID: profile.id) }
+    }
+
     @Test func datedGoalsSelectLatestCompleteSettingAndGuardEdits() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let first = try await store.setGoals(goal("2027-01-01"), expectedRevision: nil, expectedProfileID: profile.id)

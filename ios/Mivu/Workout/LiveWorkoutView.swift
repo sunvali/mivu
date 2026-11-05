@@ -8,6 +8,12 @@ struct LiveWorkoutView: View {
     @State private var editing: SetPosition?
     @State private var askingDiscard = false
     @State private var showingDone = false
+    /// The exercise "Replace" swaps out, while the picker is open for it.
+    @State private var replacing: Int?
+    @State private var noting: Int?
+    @State private var noteText = ""
+    @State private var removing: Int?
+    @AccessibilityFocusState private var focusedTick: String?
     private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -22,9 +28,7 @@ struct LiveWorkoutView: View {
         self.onClose = onClose
     }
 
-    private var step: Double {
-        WeightStep.step(unit: model.unit, plates: model.unit == "lb" ? WeightStep.defaultPlatesLb : WeightStep.defaultPlatesKg)
-    }
+    private var step: Double { WeightStep.step(unit: model.unit, plates: WeightStep.plates(unit: model.unit)) }
     private var tickedCount: Int {
         model.session.exercises.indices.reduce(0) { total, e in total + model.session.exercises[e].sets.indices.filter { model.isTicked(exercise: e, set: $0) }.count }
     }
@@ -41,9 +45,15 @@ struct LiveWorkoutView: View {
                         }
                     }
                 }
-                ForEach(model.session.exercises.indices, id: \.self) { index in
+                ForEach(blocks, id: \.self) { block in
                     Section {
-                        if index == model.expandedExercise { expanded(index) } else { collapsed(index) }
+                        ForEach(block, id: \.self) { index in
+                            if block.contains(model.expandedExercise) { expanded(index) } else { collapsed(index) }
+                        }
+                        // A superset's cards share a bar down their left edge.
+                        .listRowBackground(block.count > 1 ? Color.diarySurface.overlay(alignment: .leading) { Color.diaryWorkout.frame(width: 4) } : nil)
+                    } header: {
+                        if block.count > 1 { supersetHeader(block) }
                     }
                 }
                 Section {
@@ -63,23 +73,37 @@ struct LiveWorkoutView: View {
                 if model.mode == .live, let end = rest.endsAt { RestBar(rest: rest, endsAt: end).padding(.horizontal, 16).padding(.bottom, 8) }
             }
             .animation(reduceMotion ? nil : .snappy, value: model.expandedExercise)
+            .animation(reduceMotion ? nil : .snappy, value: model.session.exercises.map(\.groupID))
+            // VoiceOver follows a superset to its next exercise.
+            .onChange(of: model.focus.map { "\($0.exercise)-\($0.set)" }) { _, id in if let id, isGrouped(model.focus?.exercise) { focusedTick = id } }
             .sensoryFeedback(trigger: tickedCount) { old, new in new > old ? .success : nil }
             .navigationDestination(isPresented: $showingDone) { WorkoutDoneView(model: model, onClose: onClose) }
         }
         .tint(.diaryAccent)
         .task { await model.load() }
-        .sheet(isPresented: $picking) {
+        .sheet(isPresented: $picking, onDismiss: { replacing = nil }) {
             ExercisePicker(recent: model.recent) { exercise in
+                let replaced = replacing
                 picking = false
-                Task { await model.addExercise(exercise) }
+                Task { if let replaced { await model.replaceExercise(replaced, with: exercise) } else { await model.addExercise(exercise) } }
             }
         }
+        .alert("Note", isPresented: Binding(get: { noting != nil }, set: { if !$0 { noting = nil } })) {
+            TextField("Note", text: $noteText)
+            Button("Save") { if let index = noting { Task { await model.setNote(noteText, exercise: index) } } }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(removing.map { model.session.exercises.indices.contains($0) ? "Remove \(model.session.exercises[$0].name)?" : "" } ?? "",
+                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { if let index = removing { Task { await model.removeExercise(index) } } }
+        } message: { Text("Its ticked sets are removed too.") }
         .sheet(item: $editing) { position in
             // A set deleted while its sheet opens shows nothing.
             if let exercise = model.session.exercises.indices.contains(position.exercise) ? model.session.exercises[position.exercise] : nil,
                exercise.sets.indices.contains(position.set) {
                 let measure = LiveWorkoutModel.measure(exercise)
                 SetWheelSheet(number: position.set + 1, set: exercise.sets[position.set], measure: measure, unit: model.unit, step: step,
+                              barbell: exercise.exerciseID.flatMap { WorkoutCatalog.exercise($0)?.barbell } == true,
                               startingWeight: measure == .reps ? 0 : model.startingWeight(exercise: position.exercise)) { weight, reps, seconds in
                     editing = nil
                     Task {
@@ -138,19 +162,24 @@ struct LiveWorkoutView: View {
     @ViewBuilder private func expanded(_ index: Int) -> some View {
         let exercise = model.session.exercises[index]
         VStack(alignment: .leading, spacing: 2) {
-            // At accessibility sizes the pill sits under the name instead of squeezing beside it.
-            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
-                Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
-                if model.newBests.contains(index) { NewBestPill() }
+            HStack(spacing: 4) {
+                // At accessibility sizes the pill sits under the name instead of squeezing beside it.
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
+                    Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
+                    if model.newBests.contains(index) { NewBestPill() }
+                }
+                exerciseMenu(index)
             }
             let next = exercise.sets.firstIndex { $0.done != true } ?? 0
             if !exercise.sets.isEmpty, let last = model.lastTime(exercise: index, set: next) {
                 Text("Last time \(describe(last, exercise))").font(.subheadline).foregroundStyle(Color.diarySecondary)
             }
+            if let note = exercise.note { Text(note).font(.subheadline).foregroundStyle(Color.diarySecondary) }
         }
-        .padding(.vertical, 4)
+        .padding(.bottom, 4)
         ForEach(exercise.sets.indices, id: \.self) { set in
             setRow(index, set)
+                .contextMenu { setMenu(index, set) }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) { Task { await model.deleteSet(exercise: index, set: set) } } label: { Label("Delete", systemImage: "trash") }
                 }
@@ -190,7 +219,11 @@ struct LiveWorkoutView: View {
             Task { await model.update(exercise: exercise, set: index, kg: kg, reps: reps, seconds: seconds) }
         }
         let open = { editing = SetPosition(exercise: exercise, set: index) }
-        return HStack(spacing: 8) {
+        // In a superset the set to lift next is ringed in the workout colour.
+        let next = !done && isGrouped(exercise) && model.focus.map { $0 == (exercise, index) } == true
+        let caption = [set.type.flatMap(Self.typeName), set.effort.map { String(localized: "How hard: \($0)") }].compactMap { $0 }.joined(separator: " · ")
+        return VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 8) {
             Text("\(index + 1)").font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diarySecondary)
                 .frame(minWidth: 20, alignment: .leading).accessibilityHidden(true)
             switch measure {
@@ -217,10 +250,10 @@ struct LiveWorkoutView: View {
             Button { if model.needsWeight(exercise: exercise, set: index) { open() } else { Task { await model.tick(exercise: exercise, set: index) } } } label: {
                 // Fixed size: the glyph sits in a fixed circle; the label carries the text for VoiceOver.
                 Image(systemName: "checkmark").font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(done ? Color.diaryActionText : Color.diaryRule)
+                    .foregroundStyle(done ? Color.diaryActionText : next ? Color.diaryWorkout : Color.diaryRule)
                     .frame(width: 36, height: 36)
                     .background(done ? Color.diarySuccess : .clear, in: .circle)
-                    .overlay { Circle().strokeBorder(done ? Color.diarySuccess : Color.diaryRule, lineWidth: 2) }
+                    .overlay { Circle().strokeBorder(done ? Color.diarySuccess : next ? Color.diaryWorkout : Color.diaryRule, lineWidth: 2) }
                     .frame(width: 44, height: 44).contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -228,9 +261,108 @@ struct LiveWorkoutView: View {
             .accessibilityAddTraits(done ? .isSelected : [])
             // Removed explicitly: inside a List row the button otherwise reads as selected before it is ticked.
             .accessibilityRemoveTraits(done ? [] : .isSelected)
+            .accessibilityValue(next ? String(localized: "Up next") : "")
+            .accessibilityFocused($focusedTick, equals: "\(exercise)-\(index)")
             .accessibilityIdentifier("tickSet")
         }
+        if !caption.isEmpty {
+            Text(caption).font(.caption).foregroundStyle(Color.diarySecondary).padding(.leading, 28).padding(.bottom, 4)
+        }
+        }
         .animation(reduceMotion ? nil : .snappy, value: done)
+    }
+
+    // MARK: Hidden one level down
+
+    /// Consecutive exercises sharing a group form one superset card; others stand alone.
+    private var blocks: [Range<Int>] {
+        var result: [Range<Int>] = [], index = 0
+        while index < model.session.exercises.count {
+            let block = LiveWorkoutModel.block(of: index, in: model.session.exercises)
+            result.append(block); index = block.upperBound
+        }
+        return result
+    }
+
+    private func isGrouped(_ exercise: Int?) -> Bool {
+        guard let exercise, model.session.exercises.indices.contains(exercise) else { return false }
+        return LiveWorkoutModel.block(of: exercise, in: model.session.exercises).count > 1
+    }
+
+    /// "Superset · Round 2 of 3", or "Circuit" for three or more.
+    private func supersetHeader(_ block: Range<Int>) -> some View {
+        let round = model.round(of: block)
+        return Text("\(block.count == 2 ? String(localized: "Superset") : String(localized: "Circuit")) · Round \(round.current) of \(round.total)")
+            .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryWorkout).textCase(nil)
+            .accessibilityIdentifier("supersetHeader")
+    }
+
+    private static let restChoices = [30, 45, 60, 90, 120, 150, 180, 240, 300]
+
+    /// The exercise ⋯ menu: superset, rest, replace, move, note, remove.
+    private func exerciseMenu(_ index: Int) -> some View {
+        let exercises = model.session.exercises, block = LiveWorkoutModel.block(of: index, in: exercises)
+        let others = exercises.indices.filter { !block.contains($0) }
+        let ticked = exercises[index].sets.contains { $0.done == true }
+        return Menu {
+            Menu {
+                ForEach(others, id: \.self) { other in
+                    Button(exercises[other].name) { Task { await model.group([index, other]) } }
+                }
+                if block.count > 1 {
+                    Button("Take out of superset", systemImage: "minus.circle") { Task { await model.ungroup(exercise: index) } }
+                }
+            } label: { Label("Superset with…", systemImage: "link") }
+            .disabled(others.isEmpty && block.count < 2)
+            Picker(selection: Binding(get: { exercises[index].restSeconds }, set: { seconds in Task { await model.setRest(seconds, exercise: index) } })) {
+                Text("Default").tag(Int?.none)
+                ForEach(Self.restChoices, id: \.self) { Text(Self.clock($0)).tag(Int?.some($0)) }
+            } label: { Label("Rest time", systemImage: "timer") }
+            .pickerStyle(.menu)
+            Button("Replace", systemImage: "arrow.left.arrow.right") { replacing = index; picking = true }.disabled(ticked)
+            Menu {
+                Button("Up", systemImage: "arrow.up") { Task { await model.moveExercise(index, up: true) } }.disabled(index == 0)
+                Button("Down", systemImage: "arrow.down") { Task { await model.moveExercise(index, up: false) } }.disabled(index == exercises.count - 1)
+            } label: { Label("Move", systemImage: "arrow.up.arrow.down") }
+            Button("Note", systemImage: "note.text") { noteText = exercises[index].note ?? ""; noting = index }
+            Button("Remove", systemImage: "trash", role: .destructive) {
+                if ticked { removing = index } else { Task { await model.removeExercise(index) } }
+            }
+        } label: {
+            Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Color.diarySecondary)
+                .frame(width: 44, height: 44).contentShape(.rect)
+        }
+        .accessibilityLabel("\(exercises[index].name) options")
+        .accessibilityIdentifier("exerciseMenu")
+    }
+
+    /// Long-press a set: its kind, how hard it was, or delete it.
+    @ViewBuilder private func setMenu(_ exercise: Int, _ index: Int) -> some View {
+        let set = model.session.exercises[exercise].sets[index], type = set.type ?? .normal
+        ForEach([WorkoutSetType.warmup, .drop, .failure], id: \.self) { option in
+            Toggle(Self.typeName(option) ?? "", isOn: Binding(get: { type == option }, set: { on in
+                Task { await model.setType(on ? option : .normal, exercise: exercise, set: index) }
+            }))
+        }
+        Menu {
+            Picker("How hard?", selection: Binding(get: { set.effort }, set: { effort in Task { await model.setEffort(effort, exercise: exercise, set: index) } })) {
+                ForEach(1...10, id: \.self) { level in
+                    Text(EffortChips.efforts.first { $0.1 == level }.map { "\(level) · \($0.0)" } ?? "\(level)").tag(Int?.some(level))
+                }
+            }
+            .pickerStyle(.inline)
+            if set.effort != nil { Button("Clear") { Task { await model.setEffort(nil, exercise: exercise, set: index) } } }
+        } label: { Label("How hard?", systemImage: "gauge.with.dots.needle.67percent") }
+        Button("Delete", systemImage: "trash", role: .destructive) { Task { await model.deleteSet(exercise: exercise, set: index) } }
+    }
+
+    private static func typeName(_ type: WorkoutSetType) -> String? {
+        switch type {
+        case .normal: nil
+        case .warmup: String(localized: "Warm-up")
+        case .drop: String(localized: "Drop set")
+        case .failure: String(localized: "To failure")
+        }
     }
 
     private func reps(_ set: WorkoutSet, number: Int, done: Bool, commit: @escaping (Double?, Int?, Int?) -> Void, open: @escaping () -> Void) -> some View {
