@@ -168,11 +168,7 @@ struct DiaryRootView: View {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: { Text(LocalizedStringKey(model.errorMessage ?? "")) }
         .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--proof-dark") ? .dark : ProcessInfo.processInfo.arguments.contains("--proof-light") ? .light : nil)
-        .transformEnvironment(\.dynamicTypeSize) {
-            let arguments = ProcessInfo.processInfo.arguments
-            if arguments.contains("--proof-largest-text") { $0 = .accessibility5 }
-            else if arguments.contains("--proof-large-text") { $0 = .accessibility3 }
-        }
+        .proofTypeSize()
     }
     private var lifecycleView: some View {
         companionView
@@ -330,7 +326,9 @@ struct DiaryRootView: View {
         }
         .fullScreenCover(item: $liveWorkout) { session in
             if let owner = model.readModel?.profile.id {
+                // The cover does not inherit the proof text size from the root, so it is applied again here.
                 LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past) { liveWorkout = nil }
+                    .proofTypeSize()
             }
         }
         .alert(model.activeWorkout?.hasTickedSets == true ? "Discard this workout?" : "Discard empty workout?",
@@ -1050,6 +1048,17 @@ private struct WorkoutInset<Banner: View>: ViewModifier {
             content.safeAreaInset(edge: .bottom) {
                 if shown { banner().frame(height: min(height, 88)).clipShape(.capsule).padding(.horizontal, 16).padding(.bottom, 8) }
             }
+        }
+    }
+}
+
+private extension View {
+    /// Launch-argument text sizes for UI proofs.
+    func proofTypeSize() -> some View {
+        transformEnvironment(\.dynamicTypeSize) {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--proof-largest-text") { $0 = .accessibility5 }
+            else if arguments.contains("--proof-large-text") { $0 = .accessibility3 }
         }
     }
 }

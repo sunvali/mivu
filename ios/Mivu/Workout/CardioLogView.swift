@@ -30,6 +30,9 @@ struct CardioLogState: Hashable {
 
     var title: String { WorkoutCatalog.activity(activity)?.name ?? activity }
 
+    /// The diary day the start counts on: after midnight, before the cutoff, it is still the previous waking day, as for meals and gym.
+    func day(zone: String) -> String { wakingDateLabel(startedAt, zone: zone) }
+
     /// "5:36 /km" for foot sports, "2:00 /100 m" for swimming, else speed such as "20 km/h". `unit` is "km" or "mi".
     func pace(unit: String) -> String? {
         guard let km, km > 0, minutes > 0 else { return nil }
@@ -72,6 +75,8 @@ struct CardioLogView: View {
     private var sport: WorkoutActivity? { WorkoutCatalog.activity(state.activity) }
     private var kcal: Double? { state.draft(bodyKg: bodyKg).estimatedBurnKcal }
     private var changed: Bool { state != initial }
+    /// The day Save files the log on, so the estimate reads that day's body weight: an edited start's waking day, else the open day.
+    private var logDay: String { state.startEdited ? state.day(zone: zone) : model.activeDay?.localDate ?? state.day(zone: zone) }
 
     init(model: DiaryViewModel, state: CardioLogState, onClose: @escaping () -> Void) {
         self.model = model; _state = State(initialValue: state); initial = state; self.onClose = onClose
@@ -118,9 +123,9 @@ struct CardioLogView: View {
         .interactiveDismissDisabled(changed || saving)
         .sensoryFeedback(.selection, trigger: state.effort)
         // Reloads after a weigh-in is saved from here, so the estimate appears.
-        .task(id: "\(diaryDateLabel(state.startedAt, zone: zone))\(model.changeGeneration)") {
+        .task(id: "\(logDay)\(model.changeGeneration)") {
             guard let owner = model.readModel?.profile.id else { return }
-            bodyKg = try? await model.store.bodyKg(on: diaryDateLabel(state.startedAt, zone: zone), expectedProfileID: owner)
+            bodyKg = try? await model.store.bodyKg(on: logDay, expectedProfileID: owner)
         }
         .alert("Calories burned", isPresented: $typingKcal) {
             TextField("kcal", text: $kcalText).keyboardType(.numberPad)
@@ -201,11 +206,11 @@ struct CardioLogView: View {
         let saved = await model.change {
             // With no open day, logging opens one so the workout shows on Today, as a weigh-in does.
             let date: String
-            if log.startEdited { date = diaryDateLabel(log.startedAt, zone: zone) }
+            if log.startEdited { date = log.day(zone: zone) }
             else if let activeDate { date = activeDate }
             else { date = try await model.store.startDay(expectedProfileID: owner).localDate }
             _ = try await model.store.createWorkout(localDate: date, draft: draft,
-                performedAt: diaryDateLabel(log.startedAt, zone: zone) == date ? log.startedAt : nil, expectedProfileID: owner)
+                performedAt: [diaryDateLabel(log.startedAt, zone: zone), log.day(zone: zone)].contains(date) ? log.startedAt : nil, expectedProfileID: owner)
         }
         saving = false
         if saved { onClose() }

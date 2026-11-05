@@ -296,8 +296,8 @@ import XCTest
         let name = prompt.textFields.firstMatch
         XCTAssertEqual(name.value as? String, "Strength training", "the name starts as the workout's title")
         name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 17) + "Push day")
-        // A tap within a moment of the last keystroke is lost while the keyboard settles; a person is never that fast.
-        sleep(1)
+        let typed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 'Push day'"), object: name)
+        XCTAssertEqual(XCTWaiter.wait(for: [typed], timeout: 5), .completed)
         prompt.buttons["Save"].tap()
         XCTAssertTrue(prompt.waitForNonExistence(timeout: 5), "one tap saves, even straight after typing")
         let start = app.buttons["startWorkout"]
@@ -320,6 +320,19 @@ import XCTest
         let app = launch(["--proof-largest-text"])
         openGym(app)
         addBenchAndTickFirstSet(app)
+        // The proof size reaches the cover: the ✓ row's name sits at its accessibility size.
+        let weight = app.buttons["setWeight"].firstMatch
+        XCTAssertGreaterThan(app.staticTexts["Barbell Bench Press"].firstMatch.frame.height, 40)
+        // Ruling 17: at the largest size a vertical swipe on a weight does not change it; a tap opens the wheels.
+        let before = weight.value as? String
+        let grip = weight.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        grip.press(forDuration: 0.05, thenDragTo: grip.withOffset(CGVector(dx: 0, dy: -60)), withVelocity: .slow, thenHoldForDuration: 0.2)
+        XCTAssertEqual(weight.value as? String, before)
+        weight.tap()
+        let wheelDone = app.buttons["wheelDone"]
+        XCTAssertTrue(wheelDone.waitForExistence(timeout: 5))
+        wheelDone.tap()
+        XCTAssertTrue(wheelDone.waitForNonExistence(timeout: 5))
         app.buttons["finishWorkout"].tap()
         XCTAssertTrue(app.staticTexts["Nice work"].waitForExistence(timeout: 5))
         capture("Done largest text", in: app)

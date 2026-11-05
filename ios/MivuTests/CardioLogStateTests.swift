@@ -11,6 +11,24 @@ import Testing
         return state
     }
 
+    @Test func editedStartAfterMidnightCountsForWakingDay() async throws {
+        var state = log("run", km: 5, minutes: 30)
+        state.startedAt = ISO8601DateFormatter().date(from: "2027-03-10T01:30:00+02:00")!; state.startEdited = true
+        #expect(state.day(zone: "Asia/Jerusalem") == "2027-03-09", "before the cutoff it is still the previous waking day, as meals are")
+        state.startedAt = ISO8601DateFormatter().date(from: "2027-03-10T07:00:00+02:00")!
+        #expect(state.day(zone: "Asia/Jerusalem") == "2027-03-10")
+
+        // Stored there with its exact start kept.
+        state.startedAt = ISO8601DateFormatter().date(from: "2027-03-10T01:30:00+02:00")!
+        let root = URL.temporaryDirectory.appending(path: "CardioDay-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let profile = DiaryProfile(name: "Synthetic runner", timeZoneID: "Asia/Jerusalem"), store = DiaryStore(directory: root)
+        _ = try await store.createProfile(profile)
+        let saved = try await store.createWorkout(localDate: state.day(zone: profile.timeZoneID), draft: state.draft(bodyKg: nil),
+                                                  performedAt: state.startedAt, expectedProfileID: profile.id)
+        #expect(try await store.trackingDay(id: saved.dayID, expectedProfileID: profile.id).localDate == "2027-03-09")
+        #expect(saved.performedAt == state.startedAt && saved.timePrecision == .exact)
+    }
+
     @Test func paceRun() {
         let run = log("run", km: 5, minutes: 28)
         #expect(run.pace(unit: "km") == "5:36 /km")

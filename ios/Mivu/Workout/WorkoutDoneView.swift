@@ -33,7 +33,12 @@ struct WorkoutDoneView: View {
                 .padding(.bottom, 8)
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 8))) {
                     stat("\(summary.sets)", summary.sets == 1 ? "set" : "sets")
-                    stat(summary.kcal.map { $0.formatted() } ?? "–", "kcal", color: .diaryWorkout)
+                    if let kcal = summary.kcal {
+                        stat(kcal.formatted(), "kcal", color: .diaryWorkout)
+                    } else {
+                        // Without a body weight there is no estimate; a dash would be read out as "dash".
+                        stat("–", "kcal", color: .diaryWorkout).accessibilityLabel("kcal not estimated")
+                    }
                     stat("\(summary.newBests)", summary.newBests == 1 ? "new best" : "new bests")
                 }
                 .card()
@@ -58,8 +63,10 @@ struct WorkoutDoneView: View {
         .alert("Save as routine", isPresented: $naming) {
             TextField("Name", text: $name)
             // An alert button's disabled state does not follow typing, so an emptied name falls back to the title.
+            // Capped at the store's 100 characters rather than failing with a generic error.
             Button("Save") {
-                let chosen = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? title : name
+                let typed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                let chosen = String((typed.isEmpty ? title : typed).prefix(100))
                 Task { await save { await model.saveRoutine(name: chosen) } }
             }
             Button("Cancel", role: .cancel) {}
@@ -95,7 +102,8 @@ struct WorkoutDoneView: View {
                     .accessibilityIdentifier("updateRoutine")
             }
         } else {
-            Button("Save as routine") { name = title; naming = true }
+            // A retry keeps what was typed.
+            Button("Save as routine") { if name.isEmpty { name = title }; naming = true }
                 .font(.subheadline.weight(.semibold)).frame(minHeight: 44).disabled(saving)
                 .accessibilityIdentifier("saveRoutine")
         }
