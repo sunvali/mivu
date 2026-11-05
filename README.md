@@ -22,6 +22,9 @@ and no tracking.
 
 - **Log the way you talk.** "Two eggs, toast and a coffee with milk" becomes a
   meal in your diary. Weight and workouts go in the same conversation.
+- **Log workouts.** Gym sets come filled in from last time, so most take one tap;
+  cardio takes two moves. A rest timer shows on the lock screen, and you can
+  bring your history from Strong or Hevy.
 - **Fix anything by asking.** Tell Coach to change an amount or a food, or edit
   it by hand.
 - **See your day.** Track calories and macros against your targets, with a full
