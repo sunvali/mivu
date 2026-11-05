@@ -36,6 +36,24 @@ import Testing
         await #expect(throws: DiaryError.staleRevision) { try await reopened.saveActive(active, expectedRevision: 1, expectedProfileID: profile.id) }
     }
 
+    @Test func startAfterMidnightStaysOnWakingDay() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let day = try await store.startDay(at: start, expectedProfileID: profile.id)
+        // 01:30 the next calendar day, before the 04:00 cutoff: still the open day, as a meal captured now.
+        let night = ISO8601DateFormatter().date(from: "2027-03-11T01:30:00+02:00")!
+        var active = try await store.startWorkout(gym(true), at: night, expectedProfileID: profile.id)
+        #expect(active.dayID == day.id && active.performedAt == night)
+        active = try await store.saveActive(active, expectedRevision: active.revision, expectedProfileID: profile.id)
+        let finished = try await store.finishWorkout(id: active.id, effort: nil, at: night.addingTimeInterval(1_800), expectedRevision: active.revision, expectedProfileID: profile.id)
+        #expect(finished.dayID == day.id)
+        #expect(try await store.diaryReadModel(expectedProfileID: profile.id).workouts.map(\.id) == [finished.id])
+
+        // After the cutoff a new day starts, as for meals.
+        let morning = ISO8601DateFormatter().date(from: "2027-03-11T09:00:00+02:00")!
+        let next = try await store.startWorkout(gym(), at: morning, expectedProfileID: profile.id)
+        #expect(next.dayID != day.id)
+    }
+
     @Test func onlyOneActive() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let first = try await store.startWorkout(gym(), at: start, expectedProfileID: profile.id)

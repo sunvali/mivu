@@ -89,7 +89,7 @@ extension DiaryTransaction {
     func updateWorkout(_ session: WorkoutSession, expectedRevision: Int) throws -> WorkoutSession {
         let previous = try workout(id: session.id), day = try database.trackingDay(id: session.dayID)
         guard previous.revision == expectedRevision else { throw DiaryError.staleRevision }
-        guard session.dayID == previous.dayID, diaryDateLabel(session.performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+        guard session.dayID == previous.dayID, workoutFits(session.performedAt, day: day) else { throw DiaryError.invalidData }
         var saved = session; saved.revision = previous.revision + 1
         if saved.durationSeconds == previous.durationSeconds, saved.durationMinutes != previous.durationMinutes { saved.durationSeconds = nil } // minutes edit wins over stale seconds
         return try saveWorkout(saved)
@@ -102,8 +102,12 @@ extension DiaryTransaction {
     }
     func startWorkout(_ draft: WorkoutDraft, at: Date) throws -> WorkoutSession {
         guard try activeWorkout() == nil else { throw DiaryError.conflict }
-        let zone = head.profile.timeZoneID, date = diaryDateLabel(at, zone: zone)
-        let day = try resolveDay(localDate: date, timeZoneID: zone, at: diaryDateOnlyInstant(date, zone: zone))
+        // The day a meal captured now would go to: the open waking day until the cutoff passes.
+        let day: TrackingDay
+        switch try dayAssignment(at: at) {
+        case .existing(let id): day = try database.trackingDay(id: id)
+        case .newDay: day = try startDay(at: at)
+        }
         var live = draft; live.state = .active; live.source = .live
         return try createWorkout(dayID: day.id, draft: live, performedAt: at)
     }
@@ -184,11 +188,15 @@ extension DiaryTransaction {
     }
     func createWorkout(dayID: UUID, draft: WorkoutDraft, performedAt: Date? = nil) throws -> WorkoutSession {
         let day = try database.trackingDay(id: dayID)
-        if let performedAt { guard performedAt.timeIntervalSince1970.isFinite, diaryDateLabel(performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData } }
+        if let performedAt { guard performedAt.timeIntervalSince1970.isFinite, workoutFits(performedAt, day: day) else { throw DiaryError.invalidData } }
         var value = WorkoutSession(dayID: dayID, performedAt: try performedAt ?? diaryDateOnlyInstant(day.localDate, zone: day.timeZoneID), timePrecision: performedAt == nil ? .dateOnly : .exact, revision: 1,
             kind: draft.kind, durationMinutes: draft.durationMinutes, exercises: draft.exercises)
         value.apply(draft)
         return try saveWorkout(value)
+    }
+    /// A workout's start falls on its day's date, or after midnight before the cutoff on the waking day, as late meals do.
+    private func workoutFits(_ at: Date, day: TrackingDay) -> Bool {
+        diaryDateLabel(at, zone: day.timeZoneID) == day.localDate || wakingDateLabel(at, zone: day.timeZoneID) == day.localDate
     }
     func exactGoal(on date: String) throws -> GoalRecord? {
         guard validLocalDate(date) else { throw DiaryError.invalidData }

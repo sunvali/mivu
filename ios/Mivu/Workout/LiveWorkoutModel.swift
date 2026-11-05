@@ -7,11 +7,12 @@ enum LiveWorkoutMode: Equatable { case live, past, edit }
 /// Lifting shows in the person's unit; storage is always kg.
 enum WeightStep {
     // shortcut: the spec's default plates until Settings › Bar and plates stores the person's own.
-    static let defaultPlatesKg: [Double] = [25, 20, 15, 10, 5, 2.5]
-    static let defaultPlatesLb: [Double] = [45, 35, 25, 10, 5]
+    static let defaultPlatesKg: [Double] = [25, 20, 15, 10, 5, 2.5, 1.25]
+    static let defaultPlatesLb: [Double] = [45, 35, 25, 10, 5, 2.5]
 
+    /// The smallest jump a loaded bar can make: the smallest plate on each side.
     static func step(unit: String, plates: [Double]) -> Double {
-        unit == "lb" ? (plates.contains(2.5) ? 2.5 : 5) : (plates.contains(1.25) ? 1.25 : 2.5)
+        plates.min().map { $0 * 2 } ?? (unit == "lb" ? 5 : 2.5)
     }
 
     /// Rounded to hundredths so a weight entered in lb reads back exactly (135, not 134.99).
@@ -34,13 +35,21 @@ enum WeightStep {
     var recent: [WorkoutExercise] = []
     @ObservationIgnored private let store: DiaryStore
     @ObservationIgnored private let profileID: UUID
+    /// The last copy the store holds; while a save fails, ticks it lacks are not shown done.
+    private var saved: WorkoutSession
     @ObservationIgnored private var history: [ExerciseKey: [WorkoutSession]] = [:]
     @ObservationIgnored private var pending: Task<Void, Never>?
 
     init(store: DiaryStore, profileID: UUID, session: WorkoutSession, unit: String, mode: LiveWorkoutMode) {
-        self.store = store; self.profileID = profileID; self.session = session; self.unit = unit; self.mode = mode
+        self.store = store; self.profileID = profileID; self.session = session; self.saved = session; self.unit = unit; self.mode = mode
         // The first exercise with an unticked set, else the last one.
         expandedExercise = session.exercises.firstIndex { $0.sets.contains { $0.done != true } } ?? max(session.exercises.count - 1, 0)
+    }
+
+    /// Live only for a start left at now (or within five minutes of it); anything earlier is logged afterwards.
+    static func mode(start: Date?, now: Date) -> LiveWorkoutMode {
+        guard let start, now.timeIntervalSince(start) > 300 else { return .live }
+        return .past
     }
 
     static func measure(_ exercise: WorkoutExercise) -> ExerciseMeasure {
@@ -57,15 +66,16 @@ enum WeightStep {
     }
 
     func tick(exercise: Int, set: Int) async {
-        await change(exercise, set) { $0.exercises[exercise].sets[set].done = $0.exercises[exercise].sets[set].done != true }
-        refreshBests()
+        // Toggles what the screen shows: a tick still unsaved after a failure is ticked again, not cleared.
+        let done = !isTicked(exercise: exercise, set: set)
+        await change(exercise, set) { $0.exercises[exercise].sets[set].done = done }
     }
 
     /// Copies the row above, else last time's set at this position, else a starting set.
     func addSet(exercise: Int) async {
         await change(exercise) { [self] session in
             let current = session.exercises[exercise]
-            var next = current.sets.last ?? lastTime(of: current, position: 1, type: .normal) ?? Self.starter(Self.measure(current))
+            var next = current.sets.last ?? lastTime(of: current, position: 1, type: .normal) ?? starter(current)
             next.done = false; next.effort = nil
             session.exercises[exercise].sets.append(next)
         }
@@ -78,7 +88,7 @@ enum WeightStep {
         if added.sets.isEmpty {
             let last = history[ExerciseKey(exercise)]?.first?.exercises.filter { ExerciseKey($0) == ExerciseKey(exercise) }
                 .flatMap(\.sets).filter { $0.done != false } ?? []
-            added.sets = last.isEmpty ? [Self.starter(Self.measure(exercise))] : last.map { var set = $0; set.done = false; set.effort = nil; return set }
+            added.sets = last.isEmpty ? [starter(exercise)] : last.map { var set = $0; set.done = false; set.effort = nil; return set }
         }
         await change { $0.exercises.append(added) }
         expandedExercise = session.exercises.count - 1
@@ -91,12 +101,10 @@ enum WeightStep {
             if let reps { session.exercises[exercise].sets[set].repetitions = reps }
             if let seconds { session.exercises[exercise].sets[set].seconds = seconds }
         }
-        refreshBests()
     }
 
     func deleteSet(exercise: Int, set: Int) async {
         await change(exercise, set) { $0.exercises[exercise].sets.remove(at: set) }
-        refreshBests()
     }
 
     /// Saves the screen as it is again, after a failed save.
@@ -108,6 +116,27 @@ enum WeightStep {
         return lastTime(of: current, position: current.sets[...set].filter { ($0.type ?? .normal) == type }.count, type: type)
     }
 
+    /// Shown done: ticked and, while a save is failing, already stored ticked.
+    func isTicked(exercise: Int, set: Int) -> Bool {
+        guard session.exercises.indices.contains(exercise), session.exercises[exercise].sets.indices.contains(set),
+              session.exercises[exercise].sets[set].done == true else { return false }
+        guard saveError != nil else { return true }
+        // shortcut: matched by position, so a set deleted during a failed save can shift this; Retry clears it.
+        let stored = saved.exercises.indices.contains(exercise) ? saved.exercises[exercise].sets : []
+        return stored.indices.contains(set) && stored[set].done == true
+    }
+
+    /// A weight exercise whose weight was never chosen: ✓ opens the wheels instead.
+    func needsWeight(exercise: Int, set: Int) -> Bool {
+        Self.measure(session.exercises[exercise]) == .weightReps && session.exercises[exercise].sets[set].loadKg == nil
+    }
+
+    /// Where the weight wheel starts for an unset weight, in the shown unit: the bar, else a light dumbbell.
+    func startingWeight(exercise: Int) -> Double {
+        let barbell = session.exercises[exercise].exerciseID.flatMap { WorkoutCatalog.exercise($0)?.barbell } == true
+        return unit == "lb" ? (barbell ? 45 : 20) : (barbell ? 20 : 10)
+    }
+
     var hasTicked: Bool { session.exercises.contains { $0.sets.contains { $0.done == true } } }
 
     /// Saves the workout as finished; false when it could not be saved.
@@ -116,6 +145,8 @@ enum WeightStep {
         do {
             switch mode {
             case .live:
+                // Edits that failed to save are saved first, so Done never drops a tick.
+                if saveError != nil { session = try await store.saveActive(session, expectedRevision: session.revision, expectedProfileID: profileID) }
                 session = try await store.finishWorkout(id: session.id, effort: nil, at: now, expectedRevision: session.revision, expectedProfileID: profileID)
             case .past:
                 let zone = try await store.diaryHead(expectedProfileID: profileID).profile.timeZoneID
@@ -152,14 +183,15 @@ enum WeightStep {
         let task = Task { [self] in
             await previous?.value
             var next = session; edit(&next)
-            guard mode == .live else { session = next; return }
+            guard mode == .live else { session = next; refreshBests(); return }
             do {
                 session = try await store.saveActive(next, expectedRevision: next.revision, expectedProfileID: profileID)
-                saveError = nil
+                saved = session; saveError = nil
             } catch {
-                // The values stay on screen; Retry saves them again.
+                // The values stay on screen, unsaved ticks shown undone; Retry saves them again.
                 session = next; saveError = error.localizedDescription
             }
+            refreshBests()
         }
         pending = task
         await task.value
@@ -188,15 +220,18 @@ enum WeightStep {
         newBests = Set(session.exercises.indices.filter { index in
             let exercise = session.exercises[index], key = ExerciseKey(exercise)
             let before = (history[key] ?? []).flatMap(\.exercises).filter { ExerciseKey($0) == key }.flatMap(\.sets)
-            return exercise.sets.contains { $0.done == true && WorkoutHistory.isNewBest($0, measure: Self.measure(exercise), before: before) }
+            return exercise.sets.indices.contains { isTicked(exercise: index, set: $0) && WorkoutHistory.isNewBest(exercise.sets[$0], measure: Self.measure(exercise), before: before) }
         })
     }
 
-    private static func starter(_ measure: ExerciseMeasure) -> WorkoutSet {
-        switch measure {
-        case .time, .distanceTime: WorkoutSet(repetitions: 0, seconds: 60, done: false)
-        case .weightReps: WorkoutSet(repetitions: 10, loadKg: 0, done: false)
-        case .reps: WorkoutSet(repetitions: 10, done: false)
+    /// A first set with nothing to copy: a barbell at the bar, other weights unset ("–").
+    private func starter(_ exercise: WorkoutExercise) -> WorkoutSet {
+        switch Self.measure(exercise) {
+        case .time, .distanceTime: return WorkoutSet(repetitions: 0, seconds: 60, done: false)
+        case .reps: return WorkoutSet(repetitions: 10, done: false)
+        case .weightReps:
+            let barbell = exercise.exerciseID.flatMap { WorkoutCatalog.exercise($0)?.barbell } == true
+            return WorkoutSet(repetitions: 10, loadKg: barbell ? WeightStep.kg(fromDisplay: unit == "lb" ? 45 : 20, unit: unit) : nil, done: false)
         }
     }
 }

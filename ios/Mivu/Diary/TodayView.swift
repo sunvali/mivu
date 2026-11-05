@@ -615,6 +615,9 @@ struct TodayView: View {
     @State private var cardioPath: [CardioLogState] = []
     @State private var liveWorkout: WorkoutSession?
     @State private var workoutStart: Date?
+    /// The gym screen waits for the start sheet to finish closing; presenting during that slide can leave a transition hanging.
+    @State private var startSheetOpen = false
+    @State private var openAfterSheet: WorkoutSession?
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @Environment(\.isWideLayout) private var isWide
     // Sideways on the Duo, the summary and the meals sit in two columns; otherwise one list, unchanged order.
@@ -694,7 +697,7 @@ struct TodayView: View {
                         .diarySummaryCard()
                         .accessibilityIdentifier("workoutRow")
                 }
-                Button { cardioPath = []; workoutStart = nil; startingWorkout = true } label: {
+                Button { cardioPath = []; workoutStart = nil; startSheetOpen = true; startingWorkout = true } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "play.fill").font(.body.weight(.semibold))
                             .frame(width: 40, height: 40).background(Color.diaryActionText.opacity(0.18), in: .circle)
@@ -711,20 +714,22 @@ struct TodayView: View {
         }
     }
     /// Starts a live gym workout; a workout already running opens instead of a second one.
-    /// A start on an earlier day logs a past workout instead, saved only on Done.
+    /// A start moved more than five minutes back logs a past workout instead, saved only on Done.
     private func startGym(_ draft: WorkoutDraft?) {
         startingWorkout = false
         guard let profile = model.readModel?.profile else { return }
         let draft = draft ?? WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [], activity: "strength")
-        let start = workoutStart ?? Date()
-        if diaryDateLabel(start, zone: profile.timeZoneID) != diaryDateLabel(Date(), zone: profile.timeZoneID) {
+        let now = Date(), start = workoutStart ?? now
+        if LiveWorkoutModel.mode(start: workoutStart, now: now) == .past {
             var past = WorkoutSession(dayID: UUID(), performedAt: start, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0, exercises: [])
             past.apply(draft)
-            liveWorkout = past
-            return
+            return present(past)
         }
-        if let active = model.activeWorkout { liveWorkout = active; return }
-        Task { await model.change { liveWorkout = try await model.store.startWorkout(draft, at: start, expectedProfileID: profile.id) } }
+        if let active = model.activeWorkout { return present(active) }
+        Task { await model.change { present(try await model.store.startWorkout(draft, at: start, expectedProfileID: profile.id)) } }
+    }
+    private func present(_ session: WorkoutSession) {
+        if startSheetOpen { openAfterSheet = session } else { liveWorkout = session }
     }
     @ViewBuilder private var trailingSections: some View {
         if let snapshot = model.readModel {
@@ -814,7 +819,10 @@ struct TodayView: View {
         .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
-        .sheet(isPresented: $startingWorkout) {
+        .sheet(isPresented: $startingWorkout, onDismiss: {
+            startSheetOpen = false
+            if let session = openAfterSheet { openAfterSheet = nil; liveWorkout = session }
+        }) {
             NavigationStack(path: $cardioPath) {
                 StartWorkoutSheet(model: model, start: $workoutStart, onGym: startGym) {
                     var state = CardioLogState(activity: $0, last: $1, now: Date())

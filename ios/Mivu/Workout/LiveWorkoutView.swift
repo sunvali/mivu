@@ -8,6 +8,7 @@ struct LiveWorkoutView: View {
     @State private var editing: SetPosition?
     @State private var askingDiscard = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     struct SetPosition: Identifiable { let exercise: Int, set: Int; var id: String { "\(exercise)-\(set)" } }
 
@@ -20,7 +21,9 @@ struct LiveWorkoutView: View {
     private var step: Double {
         WeightStep.step(unit: model.unit, plates: model.unit == "lb" ? WeightStep.defaultPlatesLb : WeightStep.defaultPlatesKg)
     }
-    private var tickedCount: Int { model.session.exercises.reduce(0) { $0 + $1.sets.filter { $0.done == true }.count } }
+    private var tickedCount: Int {
+        model.session.exercises.indices.reduce(0) { total, e in total + model.session.exercises[e].sets.indices.filter { model.isTicked(exercise: e, set: $0) }.count }
+    }
 
     var body: some View {
         NavigationStack {
@@ -67,15 +70,16 @@ struct LiveWorkoutView: View {
             // A set deleted while its sheet opens shows nothing.
             if let exercise = model.session.exercises.indices.contains(position.exercise) ? model.session.exercises[position.exercise] : nil,
                exercise.sets.indices.contains(position.set) {
-                SetWheelSheet(number: position.set + 1, set: exercise.sets[position.set], measure: LiveWorkoutModel.measure(exercise),
-                              unit: model.unit, step: step) { weight, reps, seconds in
+                let measure = LiveWorkoutModel.measure(exercise)
+                SetWheelSheet(number: position.set + 1, set: exercise.sets[position.set], measure: measure, unit: model.unit, step: step,
+                              startingWeight: measure == .reps ? 0 : model.startingWeight(exercise: position.exercise)) { weight, reps, seconds in
                     editing = nil
                     Task {
                         if weight != nil || reps != nil || seconds != nil {
                             await model.update(exercise: position.exercise, set: position.set,
                                                kg: weight.map { WeightStep.kg(fromDisplay: $0, unit: model.unit) }, reps: reps, seconds: seconds)
                         }
-                        if model.session.exercises[position.exercise].sets[position.set].done != true { await model.tick(exercise: position.exercise, set: position.set) }
+                        if !model.isTicked(exercise: position.exercise, set: position.set) { await model.tick(exercise: position.exercise, set: position.set) }
                     }
                 }
             }
@@ -97,8 +101,10 @@ struct LiveWorkoutView: View {
         }
         ToolbarItem(placement: .principal) {
             if model.mode == .live {
+                // No digit animation: a clock that animates every second never lets the screen settle.
                 Text(timerInterval: model.session.performedAt...Date.distantFuture, countsDown: false)
                     .font(.headline).monospacedDigit()
+                    .contentTransition(.identity).transaction { $0.animation = nil }
             } else {
                 Text(StartWorkoutSheet.day(model.session.performedAt)).font(.headline)
             }
@@ -120,9 +126,9 @@ struct LiveWorkoutView: View {
     @ViewBuilder private func expanded(_ index: Int) -> some View {
         let exercise = model.session.exercises[index]
         VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText)
-                Spacer(minLength: 8)
+            // At accessibility sizes the pill sits under the name instead of squeezing beside it.
+            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
+                Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
                 if model.newBests.contains(index) { NewBestPill() }
             }
             let next = exercise.sets.firstIndex { $0.done != true } ?? 0
@@ -154,9 +160,10 @@ struct LiveWorkoutView: View {
                     Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText)
                     Text(["\(count) \(count == 1 ? "set" : "sets")", last].compactMap { $0 }.joined(separator: " · "))
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    if typeSize.isAccessibilitySize, model.newBests.contains(index) { NewBestPill() }
                 }
                 Spacer(minLength: 8)
-                if model.newBests.contains(index) { NewBestPill() }
+                if !typeSize.isAccessibilitySize, model.newBests.contains(index) { NewBestPill() }
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
             }
             .frame(minHeight: 44).contentShape(.rect)
@@ -165,7 +172,7 @@ struct LiveWorkoutView: View {
     }
 
     private func setRow(_ exercise: Int, _ index: Int) -> some View {
-        let current = model.session.exercises[exercise], set = current.sets[index], done = set.done == true
+        let current = model.session.exercises[exercise], set = current.sets[index], done = model.isTicked(exercise: exercise, set: index)
         let measure = LiveWorkoutModel.measure(current)
         let commit = { (kg: Double?, reps: Int?, seconds: Int?) -> Void in
             Task { await model.update(exercise: exercise, set: index, kg: kg, reps: reps, seconds: seconds) }
@@ -176,23 +183,26 @@ struct LiveWorkoutView: View {
                 .frame(minWidth: 20, alignment: .leading).accessibilityHidden(true)
             switch measure {
             case .time, .distanceTime:
-                SetNumber(value: Double(set.seconds ?? 0), step: 5, range: 0...86_400, unit: nil, label: "Time", done: done,
+                SetNumber(value: Double(set.seconds ?? 0), step: 5, range: 0...86_400, unit: nil, label: "Set \(index + 1) time", done: done,
                           text: { Self.clock(Int($0)) }, onCommit: { commit(nil, nil, Int($0)) }, onTap: open)
                     .accessibilityIdentifier("setTime")
             case .reps:
                 if (set.loadKg ?? 0) > 0 {
                     Text("+\(weight(kg: set.loadKg ?? 0)) \(model.unit)").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
-                reps(set, done: done, commit: commit, open: open)
+                reps(set, number: index + 1, done: done, commit: commit, open: open)
             case .weightReps:
-                SetNumber(value: WeightStep.display(kg: set.loadKg ?? 0, unit: model.unit), step: step, range: 0...(model.unit == "lb" ? 1_100 : 500),
-                          unit: model.unit, label: "Weight", done: done, text: number, onCommit: { commit(WeightStep.kg(fromDisplay: $0, unit: model.unit), nil, nil) }, onTap: open)
+                // An unset weight shows "–"; a swipe starts from the bar or a light dumbbell.
+                SetNumber(value: set.loadKg.map { WeightStep.display(kg: $0, unit: model.unit) } ?? model.startingWeight(exercise: exercise),
+                          step: step, range: 0...(model.unit == "lb" ? 1_100 : 500), unit: model.unit, label: "Set \(index + 1) weight", done: done,
+                          unset: set.loadKg == nil, text: number, onCommit: { commit(WeightStep.kg(fromDisplay: $0, unit: model.unit), nil, nil) }, onTap: open)
                     .accessibilityIdentifier("setWeight")
                 Text("×").foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
-                reps(set, done: done, commit: commit, open: open)
+                reps(set, number: index + 1, done: done, commit: commit, open: open)
             }
             Spacer(minLength: 4)
-            Button { Task { await model.tick(exercise: exercise, set: index) } } label: {
+            // A weight never chosen is chosen first: ✓ opens the wheels, whose Done ticks.
+            Button { if model.needsWeight(exercise: exercise, set: index) { open() } else { Task { await model.tick(exercise: exercise, set: index) } } } label: {
                 // Fixed size: the glyph sits in a fixed circle; the label carries the text for VoiceOver.
                 Image(systemName: "checkmark").font(.system(size: 16, weight: .bold))
                     .foregroundStyle(done ? Color.diaryActionText : Color.diaryRule)
@@ -209,8 +219,8 @@ struct LiveWorkoutView: View {
         .animation(reduceMotion ? nil : .snappy, value: done)
     }
 
-    private func reps(_ set: WorkoutSet, done: Bool, commit: @escaping (Double?, Int?, Int?) -> Void, open: @escaping () -> Void) -> some View {
-        SetNumber(value: Double(set.repetitions), step: 1, range: 1...100, unit: nil, label: "Reps", done: done,
+    private func reps(_ set: WorkoutSet, number: Int, done: Bool, commit: @escaping (Double?, Int?, Int?) -> Void, open: @escaping () -> Void) -> some View {
+        SetNumber(value: Double(set.repetitions), step: 1, range: 1...100, unit: nil, label: "Set \(number) reps", done: done,
                   text: { "\(Int($0))" }, onCommit: { commit(nil, Int($0), nil) }, onTap: open)
             .accessibilityIdentifier("setReps")
     }
@@ -223,7 +233,7 @@ struct LiveWorkoutView: View {
         switch LiveWorkoutModel.measure(exercise) {
         case .time, .distanceTime: return Self.clock(set.seconds ?? 0)
         case .reps: return (set.loadKg ?? 0) > 0 ? "+\(weight(kg: set.loadKg!)) \(model.unit) × \(set.repetitions)" : "\(set.repetitions) reps"
-        case .weightReps: return "\(weight(kg: set.loadKg ?? 0)) \(model.unit) × \(set.repetitions)"
+        case .weightReps: return set.loadKg.map { "\(weight(kg: $0)) \(model.unit) × \(set.repetitions)" } ?? "\(set.repetitions) reps"
         }
     }
 
@@ -238,6 +248,7 @@ private struct SetNumber: View {
     let unit: String?
     let label: String
     let done: Bool
+    var unset = false
     let text: (Double) -> String
     let onCommit: (Double) -> Void
     let onTap: () -> Void
@@ -250,7 +261,7 @@ private struct SetNumber: View {
     var body: some View {
         Button(action: onTap) {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(text(shown)).font(.title3.weight(.bold)).monospacedDigit().foregroundStyle(Color.diaryText)
+                Text(unset && steps == 0 ? "–" : text(shown)).font(.title3.weight(.bold)).monospacedDigit().foregroundStyle(Color.diaryText)
                 if let unit { Text(unit).font(.caption.weight(.medium)).foregroundStyle(Color.diarySecondary) }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
@@ -263,14 +274,15 @@ private struct SetNumber: View {
         // One step per 24 points; saved once, when the finger lifts.
         .highPriorityGesture(DragGesture(minimumDistance: 8)
             .onChanged { steps = Int(-$0.translation.height / 24) }
-            .onEnded { _ in if shown != value { onCommit(shown) } else { steps = 0 } })
+            .onEnded { _ in if steps != 0, shown != value || unset { onCommit(shown) } else { steps = 0 } })
         .onChange(of: value) { steps = 0 }
         .sensoryFeedback(.selection, trigger: steps)
-        .accessibilityLabel(LocalizedStringKey(label))
-        .accessibilityValue(text(shown) + (unit.map { " \($0)" } ?? ""))
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(unset ? String(localized: "Not set") : text(shown) + (unit.map { " \($0)" } ?? ""))
         .accessibilityAdjustableAction { direction in
-            let next = clamped(value + (direction == .increment ? step : -step))
-            if next != value { onCommit(next) }
+            // An unset weight is set to its starting value first.
+            let next = unset ? value : clamped(value + (direction == .increment ? step : -step))
+            if next != value || unset { onCommit(next) }
         }
     }
 }
@@ -278,7 +290,7 @@ private struct SetNumber: View {
 /// "New best" on an exercise when a ticked set beats every earlier one.
 struct NewBestPill: View {
     var body: some View {
-        Text("New best").font(.caption.weight(.semibold)).foregroundStyle(Color.diaryCarbs)
+        Text("New best").font(.caption.weight(.semibold)).foregroundStyle(Color.diaryCarbs).lineLimit(1).fixedSize()
             .padding(.horizontal, 9).padding(.vertical, 3)
             .background(Color.diaryTintFoods, in: .capsule)
     }

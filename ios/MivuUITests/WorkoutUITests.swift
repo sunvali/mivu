@@ -169,6 +169,26 @@ import XCTest
         ticks.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["New best"].waitForExistence(timeout: 5))
         capture("Gym last time", in: app)
+
+        // A dumbbell lift starts with no weight; ✓ asks for one on the wheels, and their Done ticks it.
+        // Below the fold at large text; scroll from the margin, since a swipe on a number changes it.
+        let margin = app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.8))
+        for _ in 0..<6 where !addExercise.isHittable { margin.press(forDuration: 0.05, thenDragTo: margin.withOffset(CGVector(dx: 0, dy: -400))) }
+        addExercise.tap()
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Dumbbell curl")
+        let curl = app.buttons["Dumbbell Curl"].firstMatch
+        XCTAssertTrue(curl.waitForExistence(timeout: 5))
+        curl.tap()
+        let curlWeight = app.buttons.matching(identifier: "setWeight").element(boundBy: 0)
+        XCTAssertTrue(curlWeight.waitForExistence(timeout: 5))
+        XCTAssertEqual(curlWeight.value as? String, "Not set")
+        ticks.element(boundBy: 0).tap()
+        XCTAssertTrue(wheelDone.waitForExistence(timeout: 5))
+        wheelDone.tap()
+        XCTAssertTrue(wheelDone.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(curlWeight.value as? String, "10 kg")
+        XCTAssertTrue(ticks.element(boundBy: 0).isSelected)
     }
 
     func testPastGymHasNoClock() {

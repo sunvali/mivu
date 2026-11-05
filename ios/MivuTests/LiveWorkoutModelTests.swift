@@ -81,8 +81,48 @@ import Testing
         // Removed behind the screen's back, so the next save fails.
         try await store.discardWorkout(id: model.session.id, expectedRevision: model.session.revision, expectedProfileID: profile.id)
         await model.update(exercise: 0, set: 0, kg: 70, reps: 6, seconds: nil)
-        #expect(model.session.exercises[0].sets[0] == WorkoutSet(repetitions: 6, loadKg: 70, done: false))
+        #expect(model.session.exercises[0].sets[0].loadKg == 70 && model.session.exercises[0].sets[0].repetitions == 6)
         #expect(model.saveError != nil)
+    }
+
+    @Test func failedTickIsNotShownDoneAndDoneSavesIt() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        try await finished(store, profile, on: "2027-03-08", benchWith(WorkoutSet(repetitions: 8, loadKg: 60)))
+        let model = try await live(store, profile, benchWith(WorkoutSet(repetitions: 8, loadKg: 70, done: false)))
+        await model.load()
+        // Another profile selected underneath: saves fail until it is selected again.
+        let other = DiaryProfile(name: "Synthetic other", timeZoneID: "Asia/Jerusalem")
+        _ = try await store.createProfile(other); _ = try await store.selectProfile(other.id)
+        await model.tick(exercise: 0, set: 0)
+        #expect(model.saveError != nil)
+        #expect(!model.isTicked(exercise: 0, set: 0) && model.newBests.isEmpty, "an unsaved tick is not shown done or as a best")
+
+        _ = try await store.selectProfile(profile.id)
+        #expect(await model.finish(at: start.addingTimeInterval(900)))
+        let saved = try #require(try await store.workoutHistory(expectedProfileID: profile.id).values.first { $0.id == model.session.id })
+        #expect(saved.exercises[0].sets == [WorkoutSet(repetitions: 8, loadKg: 70, done: true)])
+    }
+
+    @Test func newLiftsStartSensibly() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let model = try await live(store, profile)
+        await model.addExercise(bench)
+        #expect(model.session.exercises[0].sets[0].loadKg == 20, "a barbell starts at the bar")
+        await model.addExercise(WorkoutExercise(name: "Dumbbell Curl", sets: [], exerciseID: "dumbbell-curl", measure: .weightReps))
+        #expect(model.session.exercises[1].sets[0].loadKg == nil && model.needsWeight(exercise: 1, set: 0))
+        #expect(!model.needsWeight(exercise: 0, set: 0))
+        #expect(model.startingWeight(exercise: 0) == 20 && model.startingWeight(exercise: 1) == 10)
+
+        let pounds = LiveWorkoutModel(store: store, profileID: profile.id, session: model.session, unit: "lb", mode: .live)
+        await pounds.addExercise(WorkoutExercise(name: "Barbell Row", sets: [], exerciseID: "barbell-row", measure: .weightReps))
+        #expect(WeightStep.display(kg: pounds.session.exercises[2].sets[0].loadKg!, unit: "lb") == 45)
+        #expect(pounds.startingWeight(exercise: 1) == 20)
+    }
+
+    @Test func startChangedOverFiveMinutesIsPast() {
+        #expect(LiveWorkoutModel.mode(start: nil, now: start) == .live)
+        #expect(LiveWorkoutModel.mode(start: start.addingTimeInterval(-240), now: start) == .live)
+        #expect(LiveWorkoutModel.mode(start: start.addingTimeInterval(-360), now: start) == .past)
     }
 
     @Test func pastSavesFinishedOnDone() async throws {
@@ -127,9 +167,10 @@ import Testing
     }
 
     @Test func stepFollowsPlates() {
-        #expect(WeightStep.step(unit: "kg", plates: [20, 10, 5, 2.5, 1.25]) == 1.25)
-        #expect(WeightStep.step(unit: "kg", plates: [20, 10, 5, 2.5]) == 2.5)
-        #expect(WeightStep.step(unit: "lb", plates: [45, 25, 10, 5, 2.5]) == 2.5)
-        #expect(WeightStep.step(unit: "lb", plates: [45, 25, 10, 5]) == 5)
+        // Two of the smallest plate, one per side.
+        #expect(WeightStep.step(unit: "kg", plates: WeightStep.defaultPlatesKg) == 2.5)
+        #expect(WeightStep.step(unit: "lb", plates: WeightStep.defaultPlatesLb) == 5)
+        #expect(WeightStep.step(unit: "kg", plates: [20, 10, 5, 2.5, 0.5]) == 1)
+        #expect(WeightStep.step(unit: "lb", plates: [45, 25, 10, 5]) == 10)
     }
 }
