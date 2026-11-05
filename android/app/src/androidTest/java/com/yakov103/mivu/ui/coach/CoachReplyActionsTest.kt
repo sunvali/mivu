@@ -53,6 +53,7 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -78,6 +79,7 @@ class CoachReplyActionsTest {
 
     @After fun close() {
         startEmailForTest = null
+        sendReportForTest = null
         CoachReports.file(context).delete()
         repository.database(profileID).close()
         TodayFixture.wipe(context)
@@ -222,13 +224,39 @@ class CoachReplyActionsTest {
         compose.onNodeWithText("Report reply").assertDoesNotExist()
     }
 
-    @Test fun reportSavesThenOpensEmail() {
+    @Test fun reportSavesAndSendsWithoutLeavingTheApp() {
         val turn = seed().last()
+        var sent: JSONObject? = null
+        sendReportForTest = { sent = it; true }
         launch()
         openReport()
-        compose.onNodeWithText("Mivu opens your email app with this reply so you can send it to us. " +
+        compose.onNodeWithText("Mivu sends this reply to us so we can review it. " +
             "Nothing else from your diary is included.").assertIsDisplayed()
         compose.onNode(hasText("Report") and hasClickAction()).assertIsNotEnabled() // a reason comes first
+        compose.onNodeWithText("Offensive or inappropriate").performClick()
+        compose.onNodeWithTag("reportNote").performTextReplacement("Synthetic note")
+        Intents.init()
+        try {
+            compose.onNode(hasText("Report") and hasClickAction()).performClick()
+            compose.waitUntil(5_000) { compose.onAllNodes(hasText("Report sent")).fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(0, Intents.getIntents().size)
+        } finally {
+            Intents.release()
+        }
+        assertEquals(pipReply, sent!!.getString("reply"))
+        assertEquals("Offensive or inappropriate", sent!!.getString("reason"))
+        assertEquals("Synthetic note", sent!!.getString("note"))
+        assert(sent!!.getString("app").startsWith("Android "))
+        assertEquals(turn.id.toString(), reports().single().getString("turnID"))
+        compose.onNodeWithText("Done").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Report sent")).fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test fun reportFallsBackToEmailWhenItCannotBeSent() {
+        val turn = seed().last()
+        sendReportForTest = { false }
+        launch()
+        openReport()
         compose.onNodeWithText("Wrong or misleading").performClick()
         compose.onNodeWithTag("reportNote").performTextReplacement("Synthetic note")
         Intents.init()
@@ -268,13 +296,14 @@ class CoachReplyActionsTest {
 
     @Test fun noEmailAppKeepsTheReportAndShowsTheAddress() {
         val turn = seed().last()
+        sendReportForTest = { false }
         startEmailForTest = { throw ActivityNotFoundException() }
         launch()
         openReport()
         compose.onNodeWithText("Something else").performClick()
         compose.onNode(hasText("Report") and hasClickAction()).performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Copy address")).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Report saved on this phone. No email app was found, so send it to support@mivuapp.com.").assertIsDisplayed()
+        compose.onNodeWithText("Report saved on this phone, but it couldn't be sent and no email app was found. Send it to support@mivuapp.com.").assertIsDisplayed()
         assertEquals(turn.id.toString(), reports().single().getString("turnID"))
         assertEquals("", reports().single().getString("note"))
         compose.onNodeWithText("Copy address").performClick()
@@ -284,6 +313,7 @@ class CoachReplyActionsTest {
 
     @Test fun noEmailAppOffersAShareSheetWithTheSameReport() {
         seed()
+        sendReportForTest = { false }
         startEmailForTest = { throw ActivityNotFoundException() }
         launch()
         openReport()

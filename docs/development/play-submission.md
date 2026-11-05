@@ -36,8 +36,11 @@ iOS counterpart is [app-store-submission.md](app-store-submission.md).
   (`ReleaseSmokeTest.releaseShipsNoDebugComponents`).
 - **Report a Coach reply.** Long-press a Pip reply (or the TalkBack action) ›
   "Report reply" › pick a reason › Report. The report is saved on the phone and
-  an email draft opens to `support@mivuapp.com`; without an email app the
-  dialog offers "Copy address" and "Share" (`CoachReplyActionsTest`).
+  sent in the app to `https://reports.mivuapp.com/` (the mivu-infra worker,
+  which emails it to the owner), so the person never leaves Mivu. If it cannot
+  be sent, an email draft to `support@mivuapp.com` opens instead; without an
+  email app the dialog offers "Copy address" and "Share"
+  (`CoachReplyActionsTest`, `CoachReportsTest`).
 - **Target API 37**, compile SDK 37. Play requires API 36 for new apps from
   31 August 2026.
 - **minSdk 31 (Android 12).** apilevels.com (read 2026-10-25) puts Android 12
@@ -54,7 +57,7 @@ Copy follows [the App Store listing](../app-store/listing.md), with the iPhone
 parts swapped for their Android counterparts. Recount after edits.
 
 - **App name (30):** Mivu – Food Diary & Coach
-- **Short description (80):** Log meals by photo or voice. Your food diary stays on your phone.
+- **Short description (80):** Log meals by photo or voice. Your diary stays on your phone, not our servers.
 - **Category:** Health & Fitness (**owner to confirm**; Food & Drink is the
   alternative).
 - **Contact email:** support@mivuapp.com (**Owner:** create the mailbox).
@@ -93,7 +96,7 @@ parts swapped for their Android counterparts. Recount after edits.
 >
 > PRIVATE BY DESIGN
 > • No Mivu account. Your diary and photos are stored on your phone.
-> • No ads, no tracking, no analytics.
+> • No ads and no tracking.
 > • Export your diary and photos to a file at any time.
 >
 > AI THAT USES YOUR OWN PLAN
@@ -101,8 +104,10 @@ parts swapped for their Android counterparts. Recount after edits.
 > Requests use your ChatGPT plan, and you can manage usage or disconnect in
 > Settings. Mivu asks before anything is shared with OpenAI.
 >
-> Nutrition figures are estimates, not medical advice. Talk to a health
-> professional before making medical or dietary decisions.
+> Nutrition figures are estimates, not medical advice. Mivu is not a medical
+> device and does not diagnose, treat, cure, or prevent any medical condition.
+> Consult a healthcare professional for medical advice, diagnosis, or
+> treatment.
 
 **Release notes (500):** First release.
 
@@ -186,9 +191,12 @@ transcribed text, which then goes into the message like typed text. The audio
 is handled by the phone's speech service, not by Mivu. **Owner to confirm**
 that Audio › Voice or sound recordings is "not collected".
 
-**Coach reply reports** are saved on the phone and sent only when the person
-sends the email draft themselves; they go to Mivu's own mailbox, not a third
-party.
+**Coach reply reports**: when the person reports a reply, its text, the
+reason, their note and the app version go to Mivu's own inbox through the
+reports worker (Cloudflare, a service provider). Declare App activity › Other
+user-generated content as collected, not shared, optional, for App
+functionality (**owner to confirm** the purpose against the live form). The
+email fallback is sent by the person, from their own email app.
 
 ## Health apps declaration (draft)
 
@@ -207,8 +215,9 @@ party.
   ChatGPT account. The owner ruled the AI-generated content policy applies.
 - In-app reporting: long-press a Pip reply (or use the TalkBack action) ›
   "Report reply" › reason and optional note › Report. The report is saved on the
-  phone and an email draft opens to support@mivuapp.com. **Owner:** create that
-  mailbox and read it before release.
+  phone and sent to Mivu without leaving the app, as the policy requires; an
+  email draft is only the fallback when sending fails. **Owner:** apply the
+  reports worker in mivu-infra and read the inbox before release.
 - Coach's instructions treat user text and retrieved content as data, keep
   replies short, and never state numbers it did not read.
 
