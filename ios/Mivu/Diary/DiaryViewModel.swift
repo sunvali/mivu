@@ -71,6 +71,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var companionCaptureEvent: CompanionEvent?
     private(set) var companionReviewEvent: CompanionEvent?
     private(set) var companionHabitEvent: CompanionEvent?
+    private(set) var companionWorkoutEvent: CompanionEvent?
     private var companionReviewSubmissions: [UUID: Set<UUID>] = [:]
     var restoreGeneration = 0
     var backupStatus = FolderBackupStatus()
@@ -270,6 +271,12 @@ enum DiaryCaptureResult: Equatable, Sendable {
         let saved = await change { _ = try await store.recordWeight(value: (kg * 10).rounded() / 10, startNewDay: false, expectedProfileID: token.identity.profileID) }
         if saved { companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: UUID(), kind: .saved, committedAt: Date()) }
         return saved
+    }
+    /// Pip's workout moment. Callers report a workout only once it is durably saved; an active one never signals.
+    func noteWorkoutSaved(_ workout: WorkoutSession) {
+        guard workout.isFinished, let owner = selection?.identity.profileID else { return }
+        companionWorkoutEvent = CompanionEvent(profileID: owner, operationID: workout.id,
+                                               kind: .workoutSaved(activity: workout.activity ?? workout.kind.rawValue), committedAt: Date())
     }
     @discardableResult func change(_ operation: () async throws -> Void) async -> Bool {
         guard !isChangingProfile, let token = selection else { return false }

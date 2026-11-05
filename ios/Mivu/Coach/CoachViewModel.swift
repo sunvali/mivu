@@ -496,8 +496,9 @@ private final class CoachNavigationReadFence: Sendable {
                             }
                         }
                         let photoLimiter = diary.photoWorkLimiter
+                        let result: CoachTurnResult
                         do {
-                            _ = try await CoachEngine(store: diary.store, infer: resilient, lookup: lookup, prepareImages: { originals in
+                            result = try await CoachEngine(store: diary.store, infer: resilient, lookup: lookup, prepareImages: { originals in
                                 try await photoLimiter.withPermit { try PhotoImport.visionCopies(originals) }
                             }, onActivity: { phase in
                                 await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
@@ -511,6 +512,12 @@ private final class CoachNavigationReadFence: Sendable {
                         }
                         guard !Task.isCancelled, diary.selection == selected else { break }
                         try await diary.refresh(profileID: owner)
+                        // Pip's workout moment for a session this pass logged, never for a receipt an earlier pass committed.
+                        if let id = result.receipts.last(where: { receipt in receipt.operationKey.hasPrefix("\(turn.id)/workout/")
+                               && !turn.receipts.contains { $0.operationKey == receipt.operationKey } })?.workoutID,
+                           let workout = try? await diary.store.coachWorkout(id: id, expectedProfileID: owner), diary.selection == selected {
+                            diary.noteWorkoutSaved(workout)
+                        }
                         if let mealID = turn.pendingMealID {
                             await diary.loadMeal(mealID)
                             if let meal = diary.meal(mealID) { MealNotification.post(meal) }

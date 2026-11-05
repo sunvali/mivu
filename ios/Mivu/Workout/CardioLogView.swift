@@ -203,16 +203,18 @@ struct CardioLogView: View {
         if let rate = log.avgHeartRate, !(20...250).contains(rate) { log.avgHeartRate = nil }
         let draft = log.draft(bodyKg: bodyKg), activeDate = model.activeDay?.localDate
         saving = true
+        var created: WorkoutSession?
         let saved = await model.change {
             // With no open day, logging opens one so the workout shows on Today, as a weigh-in does.
             let date: String
             if log.startEdited { date = log.day(zone: zone) }
             else if let activeDate { date = activeDate }
             else { date = try await model.store.startDay(expectedProfileID: owner).localDate }
-            _ = try await model.store.createWorkout(localDate: date, draft: draft,
+            created = try await model.store.createWorkout(localDate: date, draft: draft,
                 performedAt: [diaryDateLabel(log.startedAt, zone: zone), log.day(zone: zone)].contains(date) ? log.startedAt : nil, expectedProfileID: owner)
         }
         saving = false
+        if saved, let created { model.noteWorkoutSaved(created) }
         if saved { onClose() }
     }
 }

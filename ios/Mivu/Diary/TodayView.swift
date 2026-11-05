@@ -264,6 +264,7 @@ struct DiaryRootView: View {
         .onChange(of: model.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: model.companionHabitEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: model.companionReviewEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: model.companionWorkoutEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionSubmission) { _, _ in receiveCompanionSubmission() }
         .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionPhotoEvent) { _, event in receiveCompanionEvent(event) }
@@ -327,7 +328,8 @@ struct DiaryRootView: View {
         .fullScreenCover(item: $liveWorkout) { session in
             if let owner = model.readModel?.profile.id {
                 // The cover does not inherit the proof text size from the root, so it is applied again here.
-                LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past) { liveWorkout = nil }
+                LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past,
+                                onSaved: model.noteWorkoutSaved) { liveWorkout = nil }
                     .proofTypeSize()
             }
         }
@@ -521,7 +523,8 @@ struct DiaryRootView: View {
         coachHistory = CoachHistoryPresentation(origin: origin, timeZoneID: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
     private var companionEvents: [CompanionEvent] {
-        [model.companionCaptureEvent, model.companionHabitEvent, model.companionReviewEvent, coach.companionCaptureEvent, coach.companionPhotoEvent].compactMap { $0 }
+        [model.companionCaptureEvent, model.companionHabitEvent, model.companionReviewEvent, model.companionWorkoutEvent,
+         coach.companionCaptureEvent, coach.companionPhotoEvent].compactMap { $0 }
     }
     private var companionSubmissions: [CompanionSubmission] { [coach.companionSubmission].compactMap { $0 } }
     private var selectedCompanionSurface: CompanionSurface? {

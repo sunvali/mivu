@@ -27,6 +27,7 @@ struct PipRigPreview: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)], spacing: 8) {
                     button("Play all") { await playAll() }
                     button("Food and workouts") { await playUpright() }
+                    button("Workout moments") { await playWorkoutMoments() }
                     button("Gaze sweep") { await gazeSweep() }
                     button("Blink") { driver.rigs.forEach { $0.blink() } }
                     button("Double blink") { driver.rigs.forEach { $0.blink(double: true) } }
@@ -42,6 +43,10 @@ struct PipRigPreview: View {
         .task {
             if ProcessInfo.processInfo.arguments.contains("-PipRigPreviewTurns") { await headTurns() }
             if ProcessInfo.processInfo.arguments.contains("-PipRigPreviewUpright") { await playUpright() }
+            if ProcessInfo.processInfo.arguments.contains("-PipRigPreviewWorkouts") {
+                try? await Task.sleep(for: .seconds(1)) // past the launch fade, so a recording sees the first rise
+                await playWorkoutMoments()
+            }
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -150,6 +155,20 @@ struct PipRigPreview: View {
 
     private func playUpright() async {
         for gesture in PipGestureLibrary.all where gesture.stance == .upright && gesture.endSet == nil { await play(gesture) }
+        caption = "done"
+    }
+
+    /// Each workout moment as the app plays it: rise, the move, drop back down, in one baked one-shot.
+    private func playWorkoutMoments() async {
+        let moments: [(String, PipMoment)] = [("saved strength", .workoutSaved(activity: "strength")), ("saved yoga", .workoutSaved(activity: "yoga")),
+                                              ("saved stretching", .workoutSaved(activity: "stretching")), ("saved run", .workoutSaved(activity: "run")),
+                                              ("done hard", .workoutDone(hard: true)), ("done easy", .workoutDone(hard: false))]
+        for (title, moment) in moments {
+            caption = title
+            var gesture = PipGestureLibrary.gesture(for: moment)
+            gesture.endSet = set
+            await playStep(gesture, wait: gesture.duration + 0.6)
+        }
         caption = "done"
     }
 

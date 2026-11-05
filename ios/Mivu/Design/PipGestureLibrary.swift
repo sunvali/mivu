@@ -535,7 +535,36 @@ enum PipGestureLibrary {
             let rotation = ["progress-tap-boing", "progress-tap-dizzy", "progress-tap-tail-chase",
                             "progress-tap-heart-eyes", "progress-tap-surprise", "progress-tap-sign-tap"]
             return named(rotation[max(level, 0) % rotation.count])
+        case .workoutSaved(let activity):
+            switch activity {
+            case "strength", "hiit", "crossfit": return onTwoLegs("workout-squat")
+            case "yoga", "pilates": return onTwoLegs("yoga-tree")
+            case "stretching", "mobility": return onTwoLegs("stretch-reach")
+            default: return onTwoLegs("workout-jumping-jack")
+            }
+        case .workoutDone(let hard): return onTwoLegs(hard ? "workout-breather" : "stretch-reach")
         }
+    }
+
+    /// An upright move as one moment: Pip rises, does the move (a loop twice) and drops back down, baked as one curve so
+    /// the follow-through carries across the joins. Each part starts on the pose the one before ended on.
+    /// Its keys are only for a still Pip: four legs cannot hold an upright pose, so it keeps the face from mid-move.
+    private static func onTwoLegs(_ name: String) -> PipGesture {
+        let move = named(name)
+        var beats: [PipBeat] = []
+        func append(_ part: [PipBeat]) {
+            // On a frame, so each part bakes on the same frames as alone: the drop's swap to four legs is 0.01 s wide.
+            let start = (((beats.popLast()?.at ?? 0) * PipBake.rate - 0.001).rounded(.up)) / PipBake.rate
+            beats += part.map { var beat = $0; beat.at += start; return beat }
+        }
+        append(riseUp.beats)
+        let held = beats.last!.at + move.beats[move.beats.count / 2].at
+        for _ in 0..<(move.loops ? 2 : 1) { append(move.beats) }
+        append(named("drop-down").beats)
+        var gesture = PipGesture(name: name, keys: [(0, .rest), (held, move.beats[move.beats.count / 2].down().pose), (beats.last!.at, .rest)],
+                                 stance: .upright)
+        gesture.beats = beats
+        return gesture
     }
 
     static func loop(for moment: PipMoment) -> PipGesture? {

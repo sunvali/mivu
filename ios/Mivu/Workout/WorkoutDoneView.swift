@@ -16,6 +16,9 @@ struct WorkoutDoneView: View {
 
     private var title: String { WorkoutRow.title(model.session) }
 
+    /// The chosen (or pre-filled) effort when Done opens: 7 and up was hard; none counts as easy.
+    static func pipPose(effort: Int?) -> CompanionPose { (effort ?? 0) >= 7 ? .workoutDoneHard : .workoutDone }
+
     var body: some View {
         let summary = model.summary
         ScrollView {
@@ -72,9 +75,10 @@ struct WorkoutDoneView: View {
             Button("Cancel", role: .cancel) {}
         }
         .task {
-            // Task 11b plays the workout moment here; until then Pip rests.
             await runtime.select(CharacterCatalog.bundled.resolve("pip"))
             await runtime.attach(eligible: true)
+            await runtime.apply(CompanionOutput(pose: Self.pipPose(effort: model.effort), playback: reduceMotion ? .staticPose : .animated,
+                                                reactionID: UUID(), nextDeadline: nil), darkMode: colorScheme == .dark)
         }
         .onDisappear { runtime.stop() }
     }

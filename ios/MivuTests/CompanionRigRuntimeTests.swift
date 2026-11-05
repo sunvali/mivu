@@ -155,7 +155,7 @@ func animationKeys(in layer: CALayer) -> [String] {
     }
 
     @Test func momentsMapFromPoseTapLevelAndHour() {
-        let moment = CompanionRuntime.moment
+        func moment(_ pose: CompanionPose, _ tapLevel: Int, _ hour: Int) -> PipMoment? { CompanionRuntime.moment(for: pose, tapLevel: tapLevel, hour: hour) }
         #expect(moment(.resting, 0, 9) == nil)
         #expect(moment(.tapped, 3, 9) == .tapped(level: 3))
         #expect(moment(.greeting, 0, 21) == .greeting(hour: 21))
@@ -163,6 +163,26 @@ func animationKeys(in layer: CALayer) -> [String] {
         #expect(moment(.firstMealToday, 0, 9) == .firstMealToday && moment(.dayComplete, 0, 9) == .dayComplete)
         #expect(moment(.curious, 0, 9) == .curious && moment(.submitted, 0, 9) == .submitted)
         for pose in CompanionPose.allCases where pose != .resting { #expect(moment(pose, 0, 9) != nil) }
+        #expect(CompanionRuntime.moment(for: .workoutSaved, tapLevel: 0, hour: 9, activity: "yoga") == .workoutSaved(activity: "yoga"))
+        #expect(moment(.workoutDoneHard, 0, 9) == .workoutDone(hard: true) && moment(.workoutDone, 0, 9) == .workoutDone(hard: false))
+    }
+
+    /// Workout moments play once, upright move and all, then Pip is back at rest and breathing.
+    @Test func workoutMomentsAreOneShots() async throws {
+        let runtime = await ready()
+        let rig = try #require(runtime.rig)
+        let window = try mount(rig)
+        defer { runtime.stop(); window.isHidden = true }
+        var saved = output(.workoutSaved, reaction: UUID())
+        saved.activity = "strength"
+        await runtime.apply(saved, darkMode: false)
+        #expect(runtime.lastGestureName == "workout-squat" && runtime.displayedPose == .workoutSaved)
+
+        await runtime.apply(output(.workoutDoneHard, reaction: UUID()), darkMode: false)
+        #expect(runtime.lastGestureName == "workout-breather" && runtime.displayedPose == .workoutDoneHard)
+        #expect(await eventually(6) { runtime.displayedPose == .resting }, "the one-shot ends")
+        #expect(animationKeys(in: rig.layer).contains("breath"))
+        #expect(runtime.triggerCount == 2)
     }
 
     @Test func attentiveEyesFollowTheGrowingText() async {

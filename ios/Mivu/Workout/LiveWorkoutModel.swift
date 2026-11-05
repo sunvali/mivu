@@ -48,9 +48,13 @@ enum WeightStep {
     @ObservationIgnored private var history: [ExerciseKey: [WorkoutSession]] = [:]
     @ObservationIgnored private var pending: Task<Void, Never>?
     @ObservationIgnored private let rest: RestTimer?
+    /// Told once a live or past workout is saved finished, for Pip.
+    @ObservationIgnored private let onSaved: (WorkoutSession) -> Void
 
-    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, unit: String, mode: LiveWorkoutMode, rest: RestTimer? = nil) {
+    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, unit: String, mode: LiveWorkoutMode, rest: RestTimer? = nil,
+         onSaved: @escaping (WorkoutSession) -> Void = { _ in }) {
         self.store = store; self.profileID = profileID; self.session = session; self.saved = session; self.unit = unit; self.mode = mode
+        self.onSaved = onSaved
         self.rest = mode == .live ? rest : nil
         // The first exercise with an unticked set, else the last one.
         expandedExercise = session.exercises.firstIndex { $0.sets.contains { $0.done != true } } ?? max(session.exercises.count - 1, 0)
@@ -215,6 +219,7 @@ enum WeightStep {
                 // Edits that failed to save are saved first, so Done never drops a tick.
                 if saveError != nil { session = try await store.saveActive(session, expectedRevision: session.revision, expectedProfileID: profileID) }
                 session = try await store.finishWorkout(id: session.id, effort: effort, at: now, expectedRevision: session.revision, expectedProfileID: profileID)
+                onSaved(session)
             case .past:
                 let date = try await workoutDate()
                 let exercises = session.exercises.compactMap { exercise in
@@ -227,6 +232,7 @@ enum WeightStep {
                     title: session.title, activity: session.activity ?? "strength", state: .finished, durationSeconds: seconds,
                     effort: effort, routineID: session.routineID, source: .manual)
                 session = try await store.createWorkout(localDate: date, draft: draft, performedAt: session.performedAt, expectedProfileID: profileID)
+                onSaved(session)
             case .edit:
                 session = try await store.updateWorkout(session, expectedRevision: session.revision, expectedProfileID: profileID)
             }

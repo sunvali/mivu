@@ -138,9 +138,10 @@ import UIKit
             rig.setBreathing(true)
             if freshReaction && (oneShot || pose == .resting) { triggerCount += 1 }
             if pose != .resting || freshReaction { lastInput = clock() }
-            if let moment = Self.moment(for: pose, tapLevel: output.tapLevel, hour: Calendar.current.component(.hour, from: clock())) {
+            if let moment = Self.moment(for: pose, tapLevel: output.tapLevel, hour: Calendar.current.component(.hour, from: clock()), activity: output.activity) {
                 var gesture = PipGestureLibrary.loop(for: moment) ?? PipGestureLibrary.gesture(for: moment)
                 if let typingGaze { gesture = Self.looking(gesture, at: typingGaze) }
+                if gesture.stance == .upright { gesture.endSet = restPose(surface).set } // drops back onto this surface's body
                 play(gesture) { [weak self] _ in
                     guard let self, token == self.playbackGeneration else { return }
                     if oneShot { self.displayedPose = .resting }
@@ -192,7 +193,7 @@ import UIKit
     }
 
     /// The one place app output becomes a moment. Resting has no moment.
-    static func moment(for pose: CompanionPose, tapLevel: Int, hour: Int) -> PipMoment? {
+    static func moment(for pose: CompanionPose, tapLevel: Int, hour: Int, activity: String = "") -> PipMoment? {
         switch pose {
         case .resting: nil
         case .attentive: .attentive
@@ -214,6 +215,9 @@ import UIKit
         case .progressEntranceCheer: .progressEntrance(cheer: true)
         case .progressRange: .progressRange
         case .progressTap: .progressTap(level: tapLevel)
+        case .workoutSaved: .workoutSaved(activity: activity)
+        case .workoutDone: .workoutDone(hard: false)
+        case .workoutDoneHard: .workoutDone(hard: true)
         }
     }
 
@@ -248,7 +252,7 @@ import UIKit
         guard let rig else { return }
         rig.isDark = latestDark
         let hour = Calendar.current.component(.hour, from: clock())
-        var pose = Self.moment(for: output.pose, tapLevel: output.tapLevel, hour: hour).map(PipGestureLibrary.stillPose(for:)) ?? .rest
+        var pose = Self.moment(for: output.pose, tapLevel: output.tapLevel, hour: hour, activity: output.activity).map(PipGestureLibrary.stillPose(for:)) ?? .rest
         pose.set = restPose(latestSurface).set
         if output.pose == .attentive { pose.gaze = Self.typingGaze(output.typingProgress) }
         rig.apply(pose, animated: false)
