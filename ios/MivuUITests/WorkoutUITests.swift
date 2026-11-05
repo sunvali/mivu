@@ -301,6 +301,16 @@ import XCTest
         XCTAssertFalse(banner.exists, "the banner hides while the workout is open")
     }
 
+    /// Starting another gym workout while one runs opens the running one and says so.
+    func testStartingAnotherOpensTheRunningOneWithANotice() {
+        let app = launch()
+        openGym(app)
+        app.buttons["Minimize"].tap()
+        XCTAssertTrue(app.buttons["workoutBanner"].waitForExistence(timeout: 10))
+        openGym(app)
+        XCTAssertTrue(app.staticTexts["Strength training is already running"].waitForExistence(timeout: 10), app.debugDescription)
+    }
+
     func testGymThreeSetsSurviveRelaunch() {
         let app = launch()
         openGym(app)

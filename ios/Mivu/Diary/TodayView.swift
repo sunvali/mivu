@@ -103,7 +103,6 @@ struct DiaryRootView: View {
     /// The live gym screen, over every tab; the banner opens it.
     @State private var liveWorkout: WorkoutSession?
     /// Said once on the gym screen, e.g. when Coach's Start opened another running workout.
-    @State private var liveNotice: String?
     @State private var discardingWorkout = false
     private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -331,7 +330,7 @@ struct DiaryRootView: View {
             if let owner = model.readModel?.profile.id {
                 // The cover does not inherit the proof text size from the root, so it is applied again here.
                 LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past,
-                                notice: liveNotice, onSaved: model.noteWorkoutSaved) { liveWorkout = nil; liveNotice = nil }
+                                notice: model.workoutNotice, onSaved: model.noteWorkoutSaved) { liveWorkout = nil; model.workoutNotice = nil }
                     .proofTypeSize()
             }
         }
@@ -434,7 +433,7 @@ struct DiaryRootView: View {
     private func startRoutine(_ id: UUID) {
         guard let owner = model.readModel?.profile.id else { return }
         if let active = model.activeWorkout {
-            if active.routineID != id { liveNotice = "\(WorkoutRow.title(active)) is already running" }
+            if active.routineID != id { model.workoutNotice = "\(WorkoutRow.title(active)) is already running" }
             liveWorkout = active; return
         }
         Task {

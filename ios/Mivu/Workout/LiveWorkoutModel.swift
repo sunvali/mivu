@@ -294,6 +294,13 @@ enum WeightStep {
         expandedExercise = session.exercises.count - 1
     }
 
+    /// When a live workout ends on Done: now, unless the last change was over half an hour ago (Done was forgotten),
+    /// so a workout left open never records the idle hours or their burn.
+    func doneTime(now: Date) -> Date {
+        let last = session.updatedAt ?? session.performedAt
+        return now.timeIntervalSince(last) > 30 * 60 ? last : now
+    }
+
     /// Adds a machine photo's best guess at once, so closing the choice without picking keeps it.
     func addGuess(_ guess: MachineGuess) async {
         guard let catalog = WorkoutCatalog.exercise(guess.best) else { return }

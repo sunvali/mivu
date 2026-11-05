@@ -491,3 +491,15 @@ import Testing
         #expect(WeightStep.step(unit: "lb", plates: [45, 25, 10, 5]) == 10)
     }
 }
+
+extension LiveWorkoutModelTests {
+    /// A Done tapped long after the last set ends the workout at that set, not hours later.
+    @Test func forgottenDoneEndsAtLastChange() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let model = try await live(store, profile, benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: false)))
+        await model.tick(exercise: 0, set: 0)
+        let last = try #require(model.session.updatedAt)
+        #expect(model.doneTime(now: last.addingTimeInterval(10 * 60)) == last.addingTimeInterval(10 * 60))
+        #expect(model.doneTime(now: last.addingTimeInterval(6 * 3600)) == last)
+    }
+}

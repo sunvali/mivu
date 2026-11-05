@@ -22,6 +22,8 @@ import UserNotifications
 
     private func timer(_ center: FakeNotificationCenter = FakeNotificationCenter(), now: Date? = nil) -> (RestTimer, FakeNotificationCenter) {
         let defaults = UserDefaults(suiteName: "RestTimerTests-" + UUID().uuidString)!
+        // These tests read the names in the notification, which "hide when locked" (on by default) leaves out.
+        defaults.set(false, forKey: DayProgressSync.hideWhenLockedKey)
         let clock = now ?? self.now
         return (RestTimer(center: center, defaults: defaults, now: { clock }), center)
     }
@@ -71,5 +73,17 @@ import UserNotifications
         let (late, _) = timer(center, now: now.addingTimeInterval(91))
         await late.restore()
         #expect(late.endsAt == nil, "a rest already over is not brought back")
+    }
+}
+
+extension RestTimerTests {
+    /// With "hide when locked", the rest notification names neither the workout nor the next exercise.
+    @Test func hiddenWhenLockedNotificationIsGeneric() async {
+        let center = FakeNotificationCenter(), defaults = UserDefaults(suiteName: "RestTimerTests-" + UUID().uuidString)!
+        defaults.set(true, forKey: DayProgressSync.hideWhenLockedKey)
+        let rest = RestTimer(center: center, defaults: defaults, now: { now })
+        await rest.start(seconds: 90, next: "Bench press · set 3", workout: workout)
+        let content = center.pending[RestTimer.requestID]?.content
+        #expect(content?.title == "Workout" && content?.body == "Rest done.")
     }
 }

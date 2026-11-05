@@ -6,7 +6,9 @@ enum WorkoutBurn {
     static func estimate(activity: String, seconds: Int, distanceMeters: Double?, effort: Int?, bodyKg: Double?) -> Double? {
         guard let bodyKg, let activity = WorkoutCatalog.activity(activity), activity.met.count == 3 else { return nil }
         let hours = Double(seconds) / 3600
-        var met = activity.met[effort.map { $0 <= 3 ? 0 : $0 <= 7 ? 1 : 2 } ?? 1]
+        // Gym is 3.5 for easy and moderate and 6.0 from Hard up; other sports reach vigorous only at Max.
+        let vigorousFrom = activity.id == "strength" ? 7 : 8
+        var met = activity.met[effort.map { $0 <= 3 ? 0 : $0 < vigorousFrom ? 1 : 2 } ?? 1]
         if let rows = activity.speedMET, let distanceMeters, hours > 0 {
             let kmh = distanceMeters / 1000 / hours
             met = (rows.last { $0[0] <= kmh } ?? rows[0])[1]

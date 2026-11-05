@@ -74,7 +74,12 @@ extension UNUserNotificationCenter: RestNotificationCenter {}
         // Skipped or moved while the prompt was up: the newer choice stands.
         guard endsAt == end else { return }
         let content = UNMutableNotificationContent()
-        content.title = title; content.body = next.isEmpty ? "Rest done." : "Rest done. Next: \(next)."
+        // "Hide when locked" (on unless turned off, as for the Live Activity) keeps workout and exercise names off the lock screen.
+        if defaults.object(forKey: DayProgressSync.hideWhenLockedKey) as? Bool ?? true {
+            content.title = "Workout"; content.body = "Rest done."
+        } else {
+            content.title = title; content.body = next.isEmpty ? "Rest done." : "Rest done. Next: \(next)."
+        }
         content.sound = .default; content.threadIdentifier = "workout"
         content.userInfo = ["endsAt": end.timeIntervalSince1970, "next": next]
         // Same identifier, so a moved end replaces the earlier one.

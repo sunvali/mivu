@@ -120,3 +120,34 @@ import Testing
         return (store, profile, root)
     }
 }
+
+extension WorkoutCSVTests {
+    /// A workout the diary would refuse is skipped and counted, not fatal to the whole file; empty template sets are dropped.
+    @Test func unsavableWorkoutSkippedNotFatal() throws {
+        let note = String(repeating: "x", count: 2_500)
+        let text = strong + "\n2027-03-04 09:00:00;Legs;40m;Squat (Barbell);1;0;0;0;0;;;"
+            + "\n2027-03-04 09:00:00;Legs;40m;Squat (Barbell);2;100;5;0;0;;;"
+            + "\n2027-03-05 09:00:00;Long note;40m;Squat (Barbell);1;100;5;0;0;;\(note);"
+        let result = try WorkoutCSV.parse(text, format: .strong, defaultUnit: "kg", zone: zone)
+        #expect(result.workouts.count == 3 && result.skipped == 1)
+        #expect(result.workouts[2].draft.exercises[0].sets == [WorkoutSet(repetitions: 5, loadKg: 100, done: true)])
+    }
+
+    /// The same workout twice in one file is stored once.
+    @Test func duplicatesInsideOneFileCounted() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let rows = try WorkoutCSV.parse(strong, format: .strong, defaultUnit: "kg", zone: zone).workouts
+        let result = try await store.importWorkouts(rows + rows, source: .importStrong, expectedProfileID: profile.id)
+        #expect(result.added == 2 && result.duplicates == 2)
+    }
+
+    /// Exporting a run keeps its distance and time, and reading it back gives a run again.
+    @Test func exportKeepsCardio() throws {
+        let run = WorkoutSession(dayID: UUID(), performedAt: Date(timeIntervalSince1970: 1_800_000_000), timePrecision: .exact, revision: 1,
+                                 kind: .cardio, durationMinutes: 28, exercises: [], activity: "run", durationSeconds: 1680, distanceMeters: 5000)
+        let csv = WorkoutCSV.export([run], zone: zone)
+        let back = try #require(try WorkoutCSV.parse(csv, format: .hevy, defaultUnit: "kg", zone: zone).workouts.first)
+        #expect(back.draft.activity == "run" && back.draft.kind == .cardio)
+        #expect(back.draft.distanceMeters == 5000 && back.draft.durationSeconds == 1680 && back.draft.exercises.isEmpty)
+    }
+}

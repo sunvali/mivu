@@ -53,3 +53,12 @@ struct WorkoutBurnTests {
         #expect(WorkoutBurn.bodyKg(on: "2026-11-04", weights: [], onboardingKg: nil, zone: "UTC") == nil)
     }
 }
+
+extension WorkoutBurnTests {
+    /// The spec's gym rule: resistance training 3.5 for easy and moderate, 6.0 for hard and max.
+    @Test func hardGymUsesVigorous() {
+        #expect(WorkoutBurn.estimate(activity: "strength", seconds: 3600, distanceMeters: nil, effort: 5, bodyKg: 80) == 200)
+        #expect(WorkoutBurn.estimate(activity: "strength", seconds: 3600, distanceMeters: nil, effort: 7, bodyKg: 80) == 400)
+        #expect(WorkoutBurn.estimate(activity: "strength", seconds: 3600, distanceMeters: nil, effort: 9, bodyKg: 80) == 400)
+    }
+}

@@ -119,3 +119,19 @@ import Testing
         #expect(CardioLogState(editing: run).edited(run, bodyKg: 70).kind == .other)
     }
 }
+
+extension CardioLogStateTests {
+    /// Editing only the note must not invent a distance or effort, round the time, or move the burn.
+    @Test func editKeepsWhatWasNotChanged() {
+        let run = WorkoutSession(dayID: UUID(), performedAt: now, timePrecision: .exact, revision: 1, kind: .cardio, durationMinutes: 31,
+                                 exercises: [], estimatedBurnKcal: 300, activity: "run", durationSeconds: 1834)
+        var state = CardioLogState(editing: run)
+        state.note = "Felt easy"
+        let edited = state.edited(run, bodyKg: 80)
+        #expect(edited.distanceMeters == nil && edited.effort == nil)
+        #expect(edited.durationSeconds == 1834 && edited.estimatedBurnKcal == 300 && edited.note == "Felt easy")
+        // Moving the time still re-estimates from the new numbers.
+        state.minutes = 40
+        #expect(state.edited(run, bodyKg: 80).estimatedBurnKcal != 300)
+    }
+}

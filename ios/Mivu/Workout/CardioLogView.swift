@@ -31,6 +31,9 @@ struct CardioLogState: Hashable {
     /// Editing a saved workout: its own numbers and start.
     init(editing session: WorkoutSession) {
         self.init(activity: session.activity ?? "other", last: session, now: session.performedAt)
+        // Its own numbers, not a new log's defaults: no distance reads 0, and the time is not rounded.
+        if km != nil { km = (session.distanceMeters ?? 0) / 1000 }
+        minutes = Double(session.durationSeconds ?? session.durationMinutes * 60) / 60
         startedAt = session.performedAt; startEdited = true
         avgHeartRate = session.avgHeartRate; note = session.note ?? ""
         typedKcal = session.burnSource == .userEstimate ? session.estimatedBurnKcal : nil
@@ -40,6 +43,14 @@ struct CardioLogState: Hashable {
     func edited(_ session: WorkoutSession, bodyKg: Double?) -> WorkoutSession {
         var draft = draft(bodyKg: bodyKg)
         draft.title = nil; draft.source = nil
+        // What the person did not touch stays as stored: the screen shows a starting effort it never had.
+        let before = CardioLogState(editing: session)
+        if minutes == before.minutes { draft.durationSeconds = session.durationSeconds; draft.durationMinutes = session.durationMinutes }
+        if effort == before.effort { draft.effort = session.effort }
+        if km == before.km { draft.distanceMeters = session.distanceMeters }
+        if activity == before.activity, minutes == before.minutes, effort == before.effort, km == before.km, typedKcal == before.typedKcal {
+            draft.estimatedBurnKcal = session.estimatedBurnKcal; draft.burnSource = session.burnSource
+        }
         if draft.estimatedBurnKcal == nil { draft.estimatedBurnKcal = session.estimatedBurnKcal }
         var edited = session
         edited.apply(draft)

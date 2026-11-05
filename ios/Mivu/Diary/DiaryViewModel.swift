@@ -38,6 +38,8 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var readModel: DiaryReadModel?
     /// The running live workout; refreshed with `readModel` on every change.
     var activeWorkout: WorkoutSession? { readModel?.activeWorkout }
+    /// Shown on the gym screen when a start opened the workout already running instead of a new one.
+    var workoutNotice: String?
     private(set) var selection: DiarySelectionOwnership?
     private(set) var workStatus = CoachWorkStatus()
     private(set) var photoLoader: DiaryPhotoLoader?

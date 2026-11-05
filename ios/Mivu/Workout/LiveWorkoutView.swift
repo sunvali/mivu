@@ -217,8 +217,8 @@ struct LiveWorkoutView: View {
                 // An edit saves as it is: an older workout may have no sets at all, only its time.
                 guard model.mode != .edit else { Task { if await model.finish() { onClose() } }; return }
                 if !model.hasTicked { askingDiscard = true; return }
-                // The workout ends now; the Done screen saves it.
-                model.endedAt = .now
+                // The workout ends now (or at its last change, if Done was forgotten); the Done screen saves it.
+                model.endedAt = model.doneTime(now: .now)
                 if model.effort == nil { model.effort = model.feel }
                 showingDone = true
             }

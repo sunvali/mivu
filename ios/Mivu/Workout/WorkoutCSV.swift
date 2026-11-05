@@ -55,7 +55,11 @@ enum WorkoutCSV {
             let head = [session.title ?? WorkoutCatalog.activity(session.activity ?? "")?.name ?? "Workout", start, end]
             let groups = session.exercises.compactMap(\.groupID).reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
             let note = session.note ?? ""
-            if session.exercises.isEmpty { lines.append(line(head + Array(repeating: "", count: 9) + [note])) }
+            // Cardio has no sets: its one row carries the workout's own distance, time and effort.
+            if session.exercises.isEmpty {
+                lines.append(line(head + ["", "", "", "", "", "", session.distanceMeters.map { "\($0 / 1000)" } ?? "",
+                                          String(session.durationSeconds ?? session.durationMinutes * 60), session.effort.map(String.init) ?? "", note]))
+            }
             for exercise in session.exercises {
                 let superset = exercise.groupID.flatMap { groups.firstIndex(of: $0) }.map { String($0 + 1) } ?? ""
                 for (index, set) in exercise.sets.enumerated() {
@@ -107,11 +111,16 @@ enum WorkoutCSV {
                 if format == .strong { seconds = try duration(value(first, "Duration")) }
                 else { seconds = Int(try date(value(first, "end_time")).timeIntervalSince(start)) }
                 var exercises: [WorkoutExercise] = [], groups: [String: UUID] = [:], note: String?, lastName = ""
+                var distance: Double?, effort: Int?
                 for row in rows {
                     let workoutNote = value(row, format == .strong ? "Workout Notes" : (column["description"] != nil ? "description" : "note"))
                     if note == nil, !workoutNote.isEmpty { note = workoutNote }
                     let name = value(row, format == .strong ? "Exercise Name" : "exercise_title")
-                    if name.isEmpty { continue }
+                    if name.isEmpty {
+                        // A row with no exercise is cardio (as Mivu exports it): the workout's distance and effort.
+                        let set = try workoutSet(row); distance = set.distanceMeters ?? distance; effort = set.effort ?? effort
+                        continue
+                    }
                     let set = try workoutSet(row)
                     // Consecutive rows of one exercise (by the file's own name) are its sets.
                     if exercises.isEmpty || name != lastName {
@@ -127,12 +136,22 @@ enum WorkoutCSV {
                     let exerciseNote = value(row, format == .strong ? "Notes" : "exercise_notes")
                     if exercises[exercises.count - 1].note == nil, !exerciseNote.isEmpty { exercises[exercises.count - 1].note = exerciseNote }
                 }
+                // Template rows with nothing in them (0 reps, no time or distance) are dropped, not stored.
+                for index in exercises.indices { exercises[index].sets.removeAll { $0.repetitions == 0 && $0.seconds == nil && $0.distanceMeters == nil } }
+                exercises.removeAll { $0.sets.isEmpty }
                 for index in exercises.indices where exercises[index].measure == nil { exercises[index].measure = measure(of: exercises[index].sets) }
                 let clamped = min(max(seconds, 60), 86_400)
-                let draft = WorkoutDraft(kind: .strength, durationMinutes: min(1440, max(1, Int((Double(clamped) / 60).rounded()))), exercises: exercises,
-                                         title: title.isEmpty ? nil : title, activity: "strength", durationSeconds: clamped, note: note,
+                // No exercises and a title that names a sport (Mivu's own "Run") reads back as that sport.
+                let sport = exercises.isEmpty ? WorkoutCatalog.activities.first { $0.id != "strength" && $0.name == title } : nil
+                let draft = WorkoutDraft(kind: sport == nil ? .strength : .cardio, durationMinutes: min(1440, max(1, Int((Double(clamped) / 60).rounded()))),
+                                         exercises: exercises, title: title.isEmpty || sport != nil ? nil : title, activity: sport?.id ?? "strength",
+                                         durationSeconds: clamped, distanceMeters: distance, effort: effort, note: note,
                                          source: format == .strong ? .importStrong : .importHevy,
                                          externalID: "\(format == .strong ? "strong" : "hevy")/\(Int(start.timeIntervalSince1970))/\(title)")
+                // The diary's own rules decide here, so a workout it would refuse is skipped instead of failing the whole import.
+                var check = WorkoutSession(dayID: UUID(), performedAt: start, timePrecision: .exact, revision: 1, kind: draft.kind, durationMinutes: 0, exercises: [])
+                check.apply(draft)
+                try validateWorkoutFields(check)
                 return ImportedWorkout(startedAt: start, draft: draft, externalID: draft.externalID!)
             } catch { return nil }
         }

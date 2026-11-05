@@ -166,7 +166,7 @@ struct StartWorkoutFlow: ViewModifier {
             past.apply(draft)
             return present(past)
         }
-        if let active = model.activeWorkout { return present(active) }
+        if let active = model.activeWorkout { model.workoutNotice = "\(WorkoutRow.title(active)) is already running"; return present(active) }
         Task { await model.change { present(try await model.store.startWorkout(draft, at: at, expectedProfileID: profile.id)) } }
     }
 
