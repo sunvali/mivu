@@ -271,6 +271,22 @@ extension WorkoutSession {
     /// A running workout untouched for 12 hours; the banner then asks to finish or discard.
     func isStale(now: Date) -> Bool { now.timeIntervalSince(max(performedAt, updatedAt ?? performedAt)) >= 12 * 3_600 }
 
+    /// Finishing a forgotten workout ends it at its last change, so it never records a day-long session or burn.
+    var staleFinishDate: Date { updatedAt ?? performedAt }
+
+    var hasTickedSets: Bool { exercises.contains { $0.sets.contains { $0.done == true } } }
+
+    /// The first set not yet ticked: its exercise and set number.
+    var nextSet: (name: String, set: Int)? {
+        for exercise in exercises {
+            if let index = exercise.sets.firstIndex(where: { $0.done != true }) { return (exercise.name, index + 1) }
+        }
+        return nil
+    }
+
+    /// "Bench press · set 3".
+    var nextSetLabel: String? { nextSet.map { "\($0.name) · set \($0.set)" } }
+
     /// Copies a draft onto this record; fields the draft leaves unset keep their current value.
     mutating func apply(_ draft: WorkoutDraft) {
         // Minutes edited without seconds: drop the stale seconds so the new minutes win.

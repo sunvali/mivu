@@ -7,6 +7,7 @@ import UserNotifications
     func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
     func add(_ request: UNNotificationRequest) async throws
     func removePendingNotificationRequests(withIdentifiers identifiers: [String])
+    func pendingNotificationRequests() async -> [UNNotificationRequest]
 }
 
 extension UNUserNotificationCenter: RestNotificationCenter {}
@@ -48,6 +49,16 @@ extension UNUserNotificationCenter: RestNotificationCenter {}
         if end > now() { await schedule(end) } else { skip() }
     }
 
+    /// After Mivu was closed mid-rest, the countdown comes back from the pending sound's own record of its end.
+    func restore() async {
+        guard endsAt == nil, let info = await center.pendingNotificationRequests().first(where: { $0.identifier == Self.requestID })?.content.userInfo,
+              let seconds = info["endsAt"] as? Double else { return }
+        let end = Date(timeIntervalSince1970: seconds)
+        guard end > now() else { return }
+        next = info["next"] as? String ?? ""; endsAt = end
+        expire(at: end)
+    }
+
     func skip() {
         endsAt = nil; expiry?.cancel()
         center.removePendingNotificationRequests(withIdentifiers: [Self.requestID])
@@ -65,9 +76,16 @@ extension UNUserNotificationCenter: RestNotificationCenter {}
         let content = UNMutableNotificationContent()
         content.title = title; content.body = next.isEmpty ? "Rest done." : "Rest done. Next: \(next)."
         content.sound = .default; content.threadIdentifier = "workout"
+        content.userInfo = ["endsAt": end.timeIntervalSince1970, "next": next]
         // Same identifier, so a moved end replaces the earlier one.
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(end.timeIntervalSince(now()), 1), repeats: false)
         try? await center.add(UNNotificationRequest(identifier: Self.requestID, content: content, trigger: trigger))
+        expire(at: end)
+    }
+
+    /// Clears the countdown at its end, so the bar and banner go back to the workout's clock.
+    private func expire(at end: Date) {
+        expiry?.cancel()
         let remaining = end.timeIntervalSince(now())
         expiry = Task { [weak self] in
             guard (try? await Task.sleep(for: .seconds(remaining))) != nil, self?.endsAt == end else { return }

@@ -8,10 +8,10 @@ private typealias WorkoutState = WorkoutActivityAttributes.ContentState
 struct WorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
-            LockScreenWorkout(title: context.attributes.title, state: context.state)
+            LockScreenWorkout(title: context.attributes.title, state: shown(context))
                 .widgetURL(URL(string: "mivu://today"))
         } dynamicIsland: { context in
-            let state = context.state
+            let state = shown(context)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) { WorkoutMark(size: 44).frame(maxHeight: .infinity) }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -34,6 +34,13 @@ struct WorkoutLiveActivity: Widget {
             .keylineTint(Color.diaryWorkout)
         }
     }
+}
+
+/// The activity goes stale when its rest ends, so the rest is over there even before Mivu wakes to say so.
+private func shown(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> WorkoutState {
+    var state = context.state
+    if context.isStale { state.restEndsAt = nil }
+    return state
 }
 
 /// Mockup 8: the workout tile, "Rest" with the next set (or the workout and its exercise), and the time.

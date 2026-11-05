@@ -129,6 +129,21 @@ import Testing
         #expect(active.isStale(now: touched.addingTimeInterval(12 * 3_600)))
     }
 
+    @Test func staleFinishEndsAtLastChange() async throws {
+        let touched = start.addingTimeInterval(40 * 60)
+        let (store, profile, root) = try await fixture(now: touched); defer { try? FileManager.default.removeItem(at: root) }
+        var active = try await store.startWorkout(gym(true, false), at: start, expectedProfileID: profile.id)
+        #expect(active.hasTickedSets && active.nextSetLabel == "Bench Press · set 2")
+        active.exercises[0].sets[1].done = true
+        active = try await store.saveActive(active, expectedRevision: active.revision, expectedProfileID: profile.id)
+        #expect(active.nextSetLabel == nil && active.staleFinishDate == touched)
+        // Forgotten for 13 hours: Finish on the banner ends it at the last tick, not now.
+        #expect(active.isStale(now: touched.addingTimeInterval(13 * 3_600)))
+        let finished = try await store.finishWorkout(id: active.id, effort: nil, at: active.staleFinishDate, expectedRevision: active.revision, expectedProfileID: profile.id)
+        #expect(finished.durationSeconds == 40 * 60)
+        #expect(!(try await store.startWorkout(gym(false), at: touched, expectedProfileID: profile.id)).hasTickedSets)
+    }
+
     @Test func finishedWorkoutsNewestFirstAndBounded() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         var own = bench; own.exerciseID = nil; own.name = "My Press"; own.sets = [WorkoutSet(repetitions: 8, loadKg: 40)]

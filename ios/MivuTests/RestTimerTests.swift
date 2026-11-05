@@ -12,6 +12,7 @@ import UserNotifications
     func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool { asked += 1; return true }
     func add(_ request: UNNotificationRequest) async throws { added.append(request); pending[request.identifier] = request }
     func removePendingNotificationRequests(withIdentifiers identifiers: [String]) { identifiers.forEach { pending[$0] = nil } }
+    func pendingNotificationRequests() async -> [UNNotificationRequest] { Array(pending.values) }
 }
 
 @MainActor @Suite struct RestTimerTests {
@@ -19,10 +20,10 @@ import UserNotifications
     private let workout = WorkoutSession(dayID: UUID(), performedAt: Date(timeIntervalSinceReferenceDate: 819_999_000), timePrecision: .exact,
                                          revision: 1, kind: .strength, durationMinutes: 0, exercises: [], title: "Push day")
 
-    private func timer() -> (RestTimer, FakeNotificationCenter) {
-        let center = FakeNotificationCenter()
+    private func timer(_ center: FakeNotificationCenter = FakeNotificationCenter(), now: Date? = nil) -> (RestTimer, FakeNotificationCenter) {
         let defaults = UserDefaults(suiteName: "RestTimerTests-" + UUID().uuidString)!
-        return (RestTimer(center: center, defaults: defaults, now: { [now] in now }), center)
+        let clock = now ?? self.now
+        return (RestTimer(center: center, defaults: defaults, now: { clock }), center)
     }
 
     private func interval(_ request: UNNotificationRequest?) -> TimeInterval? {
@@ -58,5 +59,17 @@ import UserNotifications
         await rest.start(seconds: 90, next: "Bench press · set 3", workout: workout)
         rest.skip()
         #expect(rest.endsAt == nil && center.pending.isEmpty)
+    }
+
+    @Test func restoresAfterRelaunch() async {
+        let (rest, center) = timer()
+        await rest.start(seconds: 90, next: "Bench press · set 3", workout: workout)
+        // Mivu killed mid-rest: a fresh timer finds the end in the pending sound.
+        let (relaunched, _) = timer(center, now: now.addingTimeInterval(30))
+        await relaunched.restore()
+        #expect(relaunched.endsAt == now.addingTimeInterval(90) && relaunched.next == "Bench press · set 3")
+        let (late, _) = timer(center, now: now.addingTimeInterval(91))
+        await late.restore()
+        #expect(late.endsAt == nil, "a rest already over is not brought back")
     }
 }

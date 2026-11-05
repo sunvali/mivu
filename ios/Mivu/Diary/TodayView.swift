@@ -181,6 +181,8 @@ struct DiaryRootView: View {
             let hadSiriPrompts = !services.inbox.entries().isEmpty
             let createDefaultProfile = (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test")
             await services.loadDiary(createDefaultProfile: createDefaultProfile)
+            // A rest running when Mivu was closed comes back with its workout.
+            if model.activeWorkout != nil { await rest.restore() }
             hasLoaded = true
             if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
@@ -190,14 +192,14 @@ struct DiaryRootView: View {
         }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
         .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel); syncDayProgressActivity(readModel) }
-        .onChange(of: model.activeWorkout, initial: true) { _, session in syncWorkoutActivity(session, restEndsAt: rest.endsAt) }
-        .onChange(of: rest.endsAt) { _, end in syncWorkoutActivity(model.activeWorkout, restEndsAt: end) }
+        .onChange(of: model.activeWorkout) { _, _ in syncWorkout() }
+        .onChange(of: rest.endsAt) { _, _ in syncWorkout() }
         // Finished, discarded or another profile's diary: its rest and sound go too.
         .onChange(of: model.activeWorkout?.id) { _, id in if id == nil { rest.skip() } }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
         .onOpenURL { if $0.host == "today" { selectedTab = "today" } }
-        .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest(); openNotifiedMeal() }
+        .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest(); openNotifiedMeal(); syncWorkout() }
         .onChange(of: showOnboarding) { _, _ in openQuickLog() }
         .onChange(of: mealNotifications.openedMealID, initial: true) { _, _ in openNotifiedMeal() }
         .onChange(of: model.isChangingProfile) { _, changing in
@@ -223,7 +225,7 @@ struct DiaryRootView: View {
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
-            if value == .active { syncDayProgressActivity(model.readModel); syncWorkoutActivity(model.activeWorkout, restEndsAt: rest.endsAt) }
+            if value == .active { syncDayProgressActivity(model.readModel); syncWorkout() }
             if value != .active {
                 companionRuntime.stop()
                 if value == .background {
@@ -331,7 +333,7 @@ struct DiaryRootView: View {
                 LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past) { liveWorkout = nil }
             }
         }
-        .alert(model.activeWorkout?.exercises.contains { $0.sets.contains { $0.done == true } } == true ? "Discard this workout?" : "Discard empty workout?",
+        .alert(model.activeWorkout?.hasTickedSets == true ? "Discard this workout?" : "Discard empty workout?",
                isPresented: $discardingWorkout) {
             Button("Discard", role: .destructive) { Task { await discardActiveWorkout() } }
             Button("Cancel", role: .cancel) {}
@@ -381,6 +383,7 @@ struct DiaryRootView: View {
                     TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
                               onCompanionContextChanged: updateCompanionContext,
                               onCompanionTouch: touchCompanion, openWorkout: { liveWorkout = $0 }).toolbar { profileControl }.duoReadableWidth()
+                        .modifier(WorkoutInset(shown: bannerShown) { workoutBanner })
                 }
                 .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
                 .task(id: loggedMealID) {
@@ -390,10 +393,10 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true) }
+                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true).modifier(WorkoutInset(shown: bannerShown) { workoutBanner }) }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
-                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
+                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth().modifier(WorkoutInset(shown: bannerShown) { workoutBanner }) }
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                 DuoBeside {
@@ -406,7 +409,7 @@ struct DiaryRootView: View {
                                   openHistory: openCoachHistory, openToday: { selectedTab = "today" },
                                   openProgress: { selectedTab = "progress" }) { destination in
                             routes.route = SettingsRoute(destination: destination)
-                        }.toolbar { profileControl }.duoReadableWidth()
+                        }.toolbar { profileControl }.duoReadableWidth().modifier(WorkoutInset(shown: bannerShown) { workoutBanner })
                     }
                 } secondary: {
                     // The day Coach is changing, beside the chat; Pip stays a still image so the rig mounts once.
@@ -419,21 +422,25 @@ struct DiaryRootView: View {
             }
             .badge(coach.queuedSiri.count)
         }
-        .modifier(WorkoutAccessory(shown: model.activeWorkout != nil && liveWorkout == nil) {
-            if let session = model.activeWorkout {
-                WorkoutBanner(session: session, restEndsAt: rest.endsAt, onOpen: { liveWorkout = session },
-                              onFinish: { finishStaleWorkout(session) }, onDiscard: { discardingWorkout = true })
-            }
-        })
+        .modifier(WorkoutAccessory(shown: bannerShown) { workoutBanner })
     }
-    /// A forgotten workout ends at its last change, so it never records a day-long session or burn.
-    private func finishStaleWorkout(_ session: WorkoutSession) {
-        guard session.exercises.contains(where: { $0.sets.contains { $0.done == true } }), let owner = model.readModel?.profile.id else {
-            discardingWorkout = true; return
+    private var bannerShown: Bool { model.activeWorkout != nil && liveWorkout == nil }
+    @ViewBuilder private var workoutBanner: some View {
+        if let session = model.activeWorkout {
+            WorkoutBanner(session: session, restEndsAt: rest.endsAt, onOpen: { liveWorkout = session },
+                          onFinish: { finishStaleWorkout(session) }, onDiscard: { discardingWorkout = true })
         }
+    }
+    /// Before the diary loads there is no workout to judge by, so a sync then would end a running activity.
+    private func syncWorkout() {
+        guard hasLoaded else { return }
+        syncWorkoutActivity(model.activeWorkout, restEndsAt: rest.endsAt)
+    }
+    private func finishStaleWorkout(_ session: WorkoutSession) {
+        guard session.hasTickedSets, let owner = model.readModel?.profile.id else { discardingWorkout = true; return }
         Task {
             await model.change {
-                _ = try await model.store.finishWorkout(id: session.id, effort: nil, at: session.updatedAt ?? session.performedAt,
+                _ = try await model.store.finishWorkout(id: session.id, effort: nil, at: session.staleFinishDate,
                                                         expectedRevision: session.revision, expectedProfileID: owner)
             }
         }
@@ -1024,8 +1031,25 @@ private struct WorkoutAccessory<Banner: View>: ViewModifier {
         if #available(iOS 26.1, *) {
             content.tabViewBottomAccessory(isEnabled: shown, content: banner)
         } else {
-            // shortcut: iOS 26.0 cannot hide an accessory, so it gets none; the workout reopens from Today's Start workout. Drop at a 26.1 minimum.
+            content // iOS 26.0 cannot hide an accessory; each tab carries the banner instead (WorkoutInset).
+        }
+    }
+}
+
+/// iOS 26.0 only: the banner at the bottom of a tab's first screen, above the tab bar, since the accessory cannot be hidden there.
+/// Inside the NavigationStack: an inset outside it does not reach the screen's own bottom bars.
+private struct WorkoutInset<Banner: View>: ViewModifier {
+    let shown: Bool
+    @ViewBuilder let banner: () -> Banner
+    @ScaledMetric(relativeTo: .subheadline) private var height = 56.0
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
             content
+        } else {
+            content.safeAreaInset(edge: .bottom) {
+                if shown { banner().frame(height: min(height, 88)).clipShape(.capsule).padding(.horizontal, 16).padding(.bottom, 8) }
+            }
         }
     }
 }

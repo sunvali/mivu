@@ -73,7 +73,7 @@ enum WeightStep {
         await change(exercise, set) { $0.exercises[exercise].sets[set].done = done }
         // Rest starts only once the tick is saved; a failed one shows undone and starts nothing.
         guard done, let rest, isTicked(exercise: exercise, set: set) else { return }
-        await rest.start(seconds: rest.seconds(for: session.exercises[exercise]), next: session.nextSet.map { "\($0.name) · set \($0.set)" } ?? "", workout: session)
+        await rest.start(seconds: rest.seconds(for: session.exercises[exercise]), next: session.nextSetLabel ?? "", workout: session)
     }
 
     /// Copies the row above, else last time's set at this position, else a starting set.
@@ -142,7 +142,7 @@ enum WeightStep {
         return unit == "lb" ? (barbell ? 45 : 20) : (barbell ? 20 : 10)
     }
 
-    var hasTicked: Bool { session.exercises.contains { $0.sets.contains { $0.done == true } } }
+    var hasTicked: Bool { session.hasTickedSets }
 
     /// Saves the workout as finished; false when it could not be saved.
     func finish(at now: Date = Date()) async -> Bool {

@@ -104,12 +104,7 @@ private func applyDayProgress(enabled: Bool, authorized: Bool, workoutRunning: B
     guard !DiaryLaunch.isUITest || ProcessInfo.processInfo.arguments.contains("--live-activity") else { return }
     let hide = UserDefaults.standard.object(forKey: DayProgressSync.hideWhenLockedKey) as? Bool ?? true
     let title = session.map(WorkoutRow.title)
-    let content = session.map { session in
-        let next = session.nextSet
-        return ActivityContent(state: WorkoutActivityAttributes.ContentState(
-            startedAt: session.performedAt, restEndsAt: restEndsAt, exercise: next?.name ?? session.exercises.last?.name,
-            nextSet: next.map { "set \($0.set)" }, hideWhenLocked: hide), staleDate: nil)
-    }
+    let content = WorkoutActivitySync.content(session, restEndsAt: restEndsAt, hideWhenLocked: hide)
     let previous = WorkoutActivitySync.last
     WorkoutActivitySync.last = Task.detached {
         await previous?.value
@@ -126,4 +121,14 @@ private func applyDayProgress(enabled: Bool, authorized: Bool, workoutRunning: B
 
 enum WorkoutActivitySync {
     @MainActor static var last: Task<Void, Never>?
+
+    /// Stale when a rest ends, so a suspended Mivu's Lock Screen leaves "Rest" by itself; the next update makes it current again.
+    static func content(_ session: WorkoutSession?, restEndsAt: Date?, hideWhenLocked: Bool) -> ActivityContent<WorkoutActivityAttributes.ContentState>? {
+        session.map { session in
+            let next = session.nextSet
+            return ActivityContent(state: WorkoutActivityAttributes.ContentState(
+                startedAt: session.performedAt, restEndsAt: restEndsAt, exercise: next?.name ?? session.exercises.last?.name,
+                nextSet: next.map { "set \($0.set)" }, hideWhenLocked: hideWhenLocked), staleDate: restEndsAt)
+        }
+    }
 }

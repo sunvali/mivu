@@ -1,15 +1,5 @@
 import SwiftUI
 
-extension WorkoutSession {
-    /// The first set not yet ticked: its exercise and set number.
-    var nextSet: (name: String, set: Int)? {
-        for exercise in exercises {
-            if let index = exercise.sets.firstIndex(where: { $0.done != true }) { return (exercise.name, index + 1) }
-        }
-        return nil
-    }
-}
-
 /// Mockup 7: the running workout above the tab bar on every tab. Tap returns to it.
 /// Left untouched for 12 hours, it asks to finish or discard instead.
 struct WorkoutBanner: View {
@@ -45,7 +35,7 @@ struct WorkoutBanner: View {
                 Circle().fill(Color.diarySuccess.fixed(for: colorScheme == .dark ? .light : .dark)).frame(width: 8, height: 8)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title).fontWeight(.semibold)
-                    if let line = session.nextSet.map({ "\($0.name) · set \($0.set)" }) ?? session.exercises.last?.name {
+                    if let line = session.nextSetLabel ?? session.exercises.last?.name {
                         Text(line).font(.caption).opacity(0.85)
                     }
                 }

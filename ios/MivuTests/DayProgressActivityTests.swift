@@ -75,6 +75,19 @@ import Testing
     @Test func oneRunningUpdates() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1, workoutRunning: false) == .update(endingExtra: 0)) }
     @Test func extrasEnd() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 3, workoutRunning: false) == .update(endingExtra: 2)) }
 
+    @Test func workoutContentGoesStaleAtRestEnd() throws {
+        let start = Date(timeIntervalSinceReferenceDate: 820_000_000), end = start.addingTimeInterval(600)
+        let session = WorkoutSession(dayID: UUID(), performedAt: start, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0,
+                                     exercises: [WorkoutExercise(name: "Bench press", sets: [WorkoutSet(repetitions: 8, loadKg: 60, done: true),
+                                                                                             WorkoutSet(repetitions: 8, loadKg: 60, done: false)])])
+        // Stale at the rest's end, so a suspended Mivu's Lock Screen leaves "Rest" for the elapsed time on its own.
+        let resting = try #require(WorkoutActivitySync.content(session, restEndsAt: end, hideWhenLocked: true))
+        #expect(resting.staleDate == end && resting.state.restEndsAt == end && resting.state.startedAt == start)
+        #expect(resting.state.exercise == "Bench press" && resting.state.nextSet == "set 2" && resting.state.hideWhenLocked)
+        #expect(WorkoutActivitySync.content(session, restEndsAt: nil, hideWhenLocked: false)?.staleDate == nil)
+        #expect(WorkoutActivitySync.content(nil, restEndsAt: end, hideWhenLocked: false) == nil)
+    }
+
     @Test func workoutPausesDayActivity() {
         #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1, workoutRunning: true) == .endAll)
         // After the workout it comes back only for someone who had it on.
