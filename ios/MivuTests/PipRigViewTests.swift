@@ -256,10 +256,32 @@ import UIKit
         var finished: Bool?
         view.play(PipGestureLibrary.named("workout-squat")) { finished = $0 }
         let torso = try #require(view.layer(named: "torso@upright"))
-        #expect(torso.animation(forKey: "pip.rotation") is CAKeyframeAnimation)
+        #expect(torso.animation(forKey: "pip.scaleY") is CAKeyframeAnimation, "The spine stretches through the squat")
+        #expect(torso.animation(forKey: "pip.rotation") == nil, "A component that holds still gets no track")
         #expect(view.layer(named: "head@front")?.superlayer?.superlayer === torso, "The head rides the upper body")
         view.removeAllMotion()
-        #expect(finished == false && torso.animation(forKey: "pip.rotation") == nil)
+        #expect(finished == false && torso.animation(forKey: "pip.scaleY") == nil)
+    }
+
+    /// The face steps on the tracks' clock: a pass the main thread ends late does not push every later step back.
+    @Test func bakedLoopKeepsItsFaceOnTheTracksClock() async throws {
+        let view = try rig()
+        let loop = PipGesture(beats: "mouth-loop", loops: true) { $0.at(0); $0.at(0.4) { $0.mouth(.bigOpen) }; $0.at(1.0) }
+        let start = Date()
+        view.play(loop) { _ in }
+        usleep(1_600_000) // blocks the main thread, so the first pass ends 0.6 s late
+        try await Task.sleep(for: .seconds(max(0, 1.8 - Date().timeIntervalSince(start))))
+        #expect(view.layer(named: "mouth.bigOpen@right")?.isHidden == false, "the second pass opened at 1.4 s, not 2.0 s")
+        view.removeAllMotion()
+    }
+
+    @Test func zeroLengthBakedLoopPlaysOnce() throws {
+        let view = try rig()
+        var results: [Bool] = []
+        let still = PipGesture(beats: "still", loops: true) { $0.at(0) }
+        #expect(PipBake.frames(of: still.beats, loops: true).allSatisfy { $0.stretch.isFinite })
+        view.play(still) { results.append($0) }
+        #expect(results == [true])
     }
 
     /// A turn flows the new view's shapes from the old view's outlines; the swap is instant, the drawing is not.

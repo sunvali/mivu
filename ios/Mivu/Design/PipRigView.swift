@@ -305,7 +305,7 @@ extension PipRigView {
             track(frames, loops: gesture.loops, run: run)
             trackCurls(frames, loops: gesture.loops, run: run)
             show(frames[0])
-            scheduleLooks(of: frames, loops: gesture.loops, run: run)
+            scheduleLooks(of: frames, loops: gesture.loops, run: run, pass: CACurrentMediaTime())
         }
     }
 
@@ -323,13 +323,19 @@ extension PipRigView {
             let twin = part.view.flatMap { $0 == Self.view(for: pose.headTurn).0 ? nil : containers["\(part.name)@\(Self.view(for: pose.headTurn).0)"] }
             let live = (twin ?? container).presentation() ?? twin ?? container
             for (component, track) in zip(Self.components, values) {
-                let animation = CAKeyframeAnimation(keyPath: component.path)
-                animation.values = track
-                animation.duration = Double(frames.count - 1) / PipBake.rate
-                animation.repeatCount = loops ? .infinity : 1
-                animation.fillMode = .forwards
-                animation.isRemovedOnCompletion = false
-                container.add(animation, forKey: component.key)
+                // A component that holds still keeps its model value: most parts move on only a few, and a flat track
+                // still costs time at the start and on every frame.
+                if track.allSatisfy({ abs($0 - track[0]) < 0.0005 }) {
+                    container.removeAnimation(forKey: component.key)
+                } else {
+                    let animation = CAKeyframeAnimation(keyPath: component.path)
+                    animation.values = track
+                    animation.duration = Double(frames.count - 1) / PipBake.rate
+                    animation.repeatCount = loops ? .infinity : 1
+                    animation.fillMode = .forwards
+                    animation.isRemovedOnCompletion = false
+                    container.add(animation, forKey: component.key)
+                }
                 // Whatever Pip was doing fades out on top of the track, so a gesture never pops on arrival, even mid-rep.
                 let now = CGFloat((live.value(forKeyPath: component.path) as? NSNumber)?.floatValue ?? Float(track[0]))
                 let gap = component.key == "pip.rotation" ? PipUpright.wrapped(now - track[0]) : now - track[0]
@@ -481,20 +487,29 @@ extension PipRigView {
     }
 
     /// Eyes, mouth, props, the head view and the body set change in steps along the curve; the tracks own the joints.
-    private func scheduleLooks(of frames: [PipPose], loops: Bool, run: Playback) {
-        var shown = Self.look(of: frames[0])
-        for (i, frame) in frames.enumerated() where Self.look(of: frame) != shown {
-            shown = Self.look(of: frame)
-            after(Double(i) / PipBake.rate, run) { [unowned self] in show(frame) }
+    /// Main-queue timers fire about 5% late, so each step is timed from the start of its pass and only the next one
+    /// waits: the face stays on the tracks' clock instead of slipping further through a gesture and every rep of a loop.
+    private func scheduleLooks(of frames: [PipPose], loops: Bool, run: Playback, pass start: CFTimeInterval, after shown: Int = 0) {
+        let wait = { (frame: Int) in start + Double(frame) / PipBake.rate - CACurrentMediaTime() }
+        let current = Self.look(of: frames[shown])
+        if let next = frames.indices.dropFirst(shown + 1).first(where: { Self.look(of: frames[$0]) != current }) {
+            after(wait(next), run) { [unowned self] in
+                show(frames[next])
+                scheduleLooks(of: frames, loops: loops, run: run, pass: start, after: next)
+            }
+            return
         }
-        after(Double(frames.count - 1) / PipBake.rate, run) { [unowned self] in
+        after(wait(frames.count - 1), run) { [unowned self] in
             run.work.removeAll()
-            if loops {
-                scheduleLooks(of: frames, loops: true, run: run)
+            let length = Double(frames.count - 1) / PipBake.rate
+            if loops && length > 0 {
+                // Passes the main thread missed (in the background, say) are skipped, as the tracks skipped them.
+                let passes = max(1, ((CACurrentMediaTime() - start) / length).rounded(.down))
+                scheduleLooks(of: frames, loops: true, run: run, pass: start + passes * length)
                 return
             }
             show(frames[frames.count - 1])
-            releaseTracks(of: run)
+            releaseTracks(of: run, freezing: false)
             playback = nil
             run.completion(true)
         }
@@ -514,12 +529,13 @@ extension PipRigView {
         if turned { blink() } // the swap lands while the eyes are shut, as in `step`
     }
 
-    /// Leaves each tracked layer exactly where it is on screen, so whatever plays next starts from there.
-    private func releaseTracks(of run: Playback) {
+    /// Hands the tracked keys back. A gesture cut short leaves each layer where it is on screen, so whatever plays next
+    /// starts from there; one that played out already holds its last frame, and freezing would bake the breath into it.
+    private func releaseTracks(of run: Playback, freezing: Bool) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for layer in run.tracked {
-            layer.transform = (layer.presentation() ?? layer).transform
+            if freezing { layer.transform = (layer.presentation() ?? layer).transform }
             Self.components.forEach {
                 layer.removeAnimation(forKey: $0.key)
                 layer.removeAnimation(forKey: $0.key + ".arrival")
@@ -566,7 +582,7 @@ extension PipRigView {
         playback = nil
         run.work.forEach { $0.cancel() }
         run.work.removeAll()
-        releaseTracks(of: run)
+        releaseTracks(of: run, freezing: true)
         run.completion(false)
     }
 
