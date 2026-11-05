@@ -38,7 +38,7 @@
     },
     {
       "arguments" : "{\"workout_id\":\"00000000-0000-0000-0000-000000000090\",\"expected_revision\":2,\"kind\":\"cardio\",\"duration_minutes\":30,\"exercises\":[],\"estimated_burn_kcal\":null,\"burn_source\":null,\"performed_at\":null}",
-      "fingerprint" : "64fcb9e9ce16e2b5a6466cd7c90e8f8b0a0afc998109d90321335df10cf78b56",
+      "fingerprint" : "cf2a3e495970e87601ad4dc279682545a29b75d03cf93ac5abf33aae07a55840",
       "target" : "edit_workout/00000000-0000-0000-0000-000000000090",
       "tool" : "edit_workout"
     },

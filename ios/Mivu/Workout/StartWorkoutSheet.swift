@@ -60,8 +60,7 @@ struct StartWorkoutSheet: View {
                 Section {
                     ForEach(routines) { routine in
                         row(routine.name, symbol: "figure.strengthtraining.traditional", detail: routine.lastUsedAt.map(Self.day)) {
-                            onGym(WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: routine.exercises, title: routine.name,
-                                               activity: "strength", routineID: routine.id))
+                            onGym(routine.draft)
                         }
                     }
                     ForEach(again) { session in

@@ -4,7 +4,7 @@ import CryptoKit
 enum CoachTurnState: String, Codable, Sendable { case captured, analyzing, waitingForConnection, waitingForNetwork, needsRetry, needsClarification, completed }
 enum MealTimePrecision: String, Codable, Sendable { case exact, dateOnly }
 enum CoachActivity: String, Sendable { case preparingPhotos, thinking, reading, saving }
-enum CoachDestination: String, Codable, CaseIterable, Sendable { case settings, profiles, connection, nutritionSource, backup }
+enum CoachDestination: String, Codable, CaseIterable, Sendable { case settings, profiles, connection, nutritionSource, backup, workouts }
 
 /// Engine acknowledgement contains no original photo payloads.
 struct CoachTurnResult: Equatable, Sendable {
@@ -90,6 +90,8 @@ struct CoachReceipt: Codable, Equatable, Sendable {
     var workoutID: UUID? = nil
     var goalID: UUID? = nil
     var destination: CoachDestination? = nil
+    /// A routine offered as a card to start; nothing changed.
+    var routineID: UUID? = nil
     var committedRevision: Int
     var resultJSON: String
     var commandFingerprint: String? = nil
@@ -232,6 +234,9 @@ struct CoachContext: Codable, Equatable, Sendable {
     var goal: GoalRecord? = nil
     var workouts: [WorkoutReference]? = nil
     var omittedWorkoutCount: Int? = nil
+    /// The live workout in progress; it is not in the diary until finished.
+    var activeWorkout: WorkoutSession? = nil
+    var routines: [CoachRoutineReference]? = nil
     var omittedWeightCount: Int? = nil
     var pendingMealID: UUID? = nil
     var pendingMealRevision: Int? = nil
@@ -290,6 +295,26 @@ struct WorkoutReference: Codable, Equatable, Sendable {
     var revision: Int
     var kind: WorkoutKind
     var durationMinutes: Int
+}
+
+struct CoachRoutineReference: Codable, Equatable, Sendable {
+    var id: UUID
+    var name: String
+}
+
+/// One exercise's recent finished sessions, newest first, and its bests across up to 1,000 of them.
+struct CoachExerciseHistory: Codable, Equatable, Sendable {
+    struct Session: Codable, Equatable, Sendable {
+        var workoutID: UUID
+        var localDate: String
+        var sets: [WorkoutSet]
+    }
+    var exercise: String
+    var sessions: [Session]
+    var totalSessions: Int
+    var heaviestKg: Double?
+    var mostReps: Int?
+    var longestSeconds: Int?
 }
 
 struct CoachWeightReference: Codable, Equatable, Sendable {

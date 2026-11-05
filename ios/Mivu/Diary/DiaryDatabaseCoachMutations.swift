@@ -145,11 +145,18 @@ extension DiaryTransaction {
             try validateWeightFields(WeightEntry(dayID: nil, measuredAt: turn.capturedAt, value: value, unit: unit))
         case .correctWeight(let id, let value, let unit, let revision):
             var record = try weight(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }; record.value = value; record.unit = unit; record.revision += 1; try validateWeightFields(record)
-        case .editWorkout(let id, let draft, let revision):
-            var record = try workout(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }
-            record.apply(draft); record.revision += 1; try validateWorkoutFields(record.syncedMinutes)
+        case .editWorkout(let id, let patch, let revision):
+            let record = try workout(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }
+            // The running workout changes only through add_to_workout, so its open screen keeps its own edits.
+            guard record.isFinished else { throw DiaryError.invalidData }
+            if let date = patch.localDate { _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID) }
+            var edited = try patch.applied(to: record); edited.revision += 1; try validateWorkoutFields(edited.syncedMinutes)
+        case .activeWorkoutSets(let name, let sets): _ = try runningWithAdded(name, sets)
+        case .routineCard(let id): _ = try routine(id: id)
         case .deleteWeight(let id, let revision): guard try weight(id: id).revision == revision else { throw DiaryError.staleRevision }
-        case .deleteWorkout(let id, let revision): guard try workout(id: id).revision == revision else { throw DiaryError.staleRevision }
+        case .deleteWorkout(let id, let revision):
+            let record = try workout(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }
+            guard record.isFinished else { throw DiaryError.invalidData } // the gym screen discards a running workout
         case .manual(let edit, _):
             switch edit {
             case .item(let id, let item, let revision, let submissionID, let explicitNutrients, let original):
@@ -288,14 +295,49 @@ extension DiaryTransaction {
             var record = try weight(id: id); record.value = value; record.unit = unit; record.revision += 1; try saveWeight(record)
             receipt.dayID = try weightReceiptDay(record).id; receipt.weightID = id; receipt.resultJSON = try coachJSON(record)
             try addSource(kind: "weight", recordID: id, turnID: turn.id, origin: false)
-        case .workout(let date, let draft):
-            let day = try coachDay(date, turn: turn), saved = try createWorkout(dayID: day.id, draft: draft)
-            receipt.dayID = day.id; receipt.workoutID = saved.id; receipt.resultJSON = try coachJSON(saved)
+        case .workout(let date, var draft):
+            let day = try coachDay(date, turn: turn)
+            if draft.activity == nil, draft.kind == .strength { draft.activity = "strength" }
+            if draft.burnSource != .userEstimate {
+                draft.estimatedBurnKcal = try estimatedBurn(activity: draft.activity, seconds: draft.durationSeconds ?? draft.durationMinutes * 60,
+                                                            distanceMeters: draft.distanceMeters, effort: draft.effort, day: day)
+                draft.burnSource = nil
+            }
+            let saved = try createWorkout(dayID: day.id, draft: draft)
+            receipt.dayID = day.id; receipt.workoutID = saved.id; receipt.resultJSON = try workoutResult(saved, extra: workoutFacts(saved.exercises, excluding: saved.id))
             try addSource(kind: "workout", recordID: saved.id, turnID: turn.id, origin: true)
-        case .editWorkout(let id, let draft, _):
-            var record = try workout(id: id); record.apply(draft); record.revision += 1; record = try saveWorkout(record)
-            receipt.dayID = record.dayID; receipt.workoutID = id; receipt.resultJSON = try coachJSON(record)
+        case .editWorkout(let id, let patch, _):
+            let record = try workout(id: id)
+            var edited = try patch.applied(to: record)
+            if let date = patch.localDate, try date != database.trackingDay(id: record.dayID).localDate {
+                let day = try coachDay(date, turn: turn, activateIfEmpty: false, exact: true)
+                // Same clock time on the new date; a date-only workout sits at noon like other date-only records.
+                var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: day.timeZoneID) ?? .current
+                let noon = try diaryDateOnlyInstant(day.localDate, zone: day.timeZoneID), time = calendar.dateComponents([.hour, .minute, .second], from: record.performedAt)
+                edited.dayID = day.id
+                edited.performedAt = record.timePrecision == .exact ? calendar.date(bySettingHour: time.hour ?? 12, minute: time.minute ?? 0, second: time.second ?? 0, of: noon) ?? noon : noon
+            }
+            func seconds(_ workout: WorkoutSession) -> Int { workout.durationSeconds ?? workout.durationMinutes * 60 }
+            if let burn = patch.userBurnKcal { edited.estimatedBurnKcal = burn; edited.burnSource = .userEstimate }
+            else if record.burnSource != .userEstimate,
+                    (edited.activity, edited.kind, seconds(edited), edited.distanceMeters, edited.effort, edited.dayID) != (record.activity, record.kind, seconds(record), record.distanceMeters, record.effort, record.dayID) {
+                edited.estimatedBurnKcal = try estimatedBurn(activity: edited.activity ?? (edited.kind == .strength ? "strength" : nil), seconds: seconds(edited),
+                                                             distanceMeters: edited.distanceMeters, effort: edited.effort, day: database.trackingDay(id: edited.dayID))
+                edited.burnSource = nil
+            }
+            let saved = try updateWorkout(edited, expectedRevision: record.revision)
+            receipt.dayID = saved.dayID; receipt.workoutID = id; receipt.resultJSON = try coachJSON(saved)
             try addSource(kind: "workout", recordID: id, turnID: turn.id, origin: false)
+        case .activeWorkoutSets(let name, let sets):
+            let (running, added) = try runningWithAdded(name, sets)
+            let saved = try saveActive(running, expectedRevision: running.revision, at: at)
+            var facts = try workoutFacts([added], excluding: saved.id)
+            facts["addedTo"] = saved.title ?? saved.activity.flatMap { WorkoutCatalog.activity($0)?.name } ?? "your workout"
+            receipt.dayID = saved.dayID; receipt.workoutID = saved.id; receipt.resultJSON = try workoutResult(saved, extra: facts)
+            try addSource(kind: "workout", recordID: saved.id, turnID: turn.id, origin: false)
+        case .routineCard(let id):
+            struct Card: Encodable { var routineID: UUID; var name: String; var started = false }
+            receipt.routineID = id; receipt.resultJSON = try coachJSON(Card(routineID: id, name: try routine(id: id).name))
         case .deleteWeight(let id, let revision):
             receipt.dayID = try weightReceiptDay(weight(id: id)).id; receipt.weightID = id
             try deleteWeight(id: id, revision: revision); receipt.resultJSON = try coachJSON(Deleted(id: id))
@@ -307,6 +349,46 @@ extension DiaryTransaction {
         return receipt
     }
     private struct Deleted: Encodable { var id: UUID; var deleted = true }
+    /// The running workout with the sets joining its exercise, or the exercise added with them.
+    private func runningWithAdded(_ name: String, _ sets: [WorkoutSet]) throws -> (session: WorkoutSession, added: WorkoutExercise) {
+        guard var session = try activeWorkout() else { throw DiaryError.notFound }
+        var added = try WorkoutPatch.merged([.init(name: name, sets: sets)], into: [])[0]
+        let key = ExerciseKey(added)
+        if let index = session.exercises.lastIndex(where: { ExerciseKey($0) == key }) {
+            guard !sets.isEmpty else { throw DiaryError.invalidData } // already there, nothing to add
+            session.exercises[index].sets += added.sets
+        } else {
+            if sets.isEmpty {
+                // Like adding it by hand: last time's sets, still to do.
+                added.sets = try finishedWorkouts(containing: key, limit: 1).first?.exercises.filter { ExerciseKey($0) == key }.flatMap(\.sets)
+                    .filter { $0.done != false }.map { var set = $0; set.done = false; set.effort = nil; return set } ?? []
+            }
+            session.exercises.append(added)
+        }
+        try validateWorkoutFields(session)
+        return (session, added)
+    }
+    /// Exercises with a set beating every earlier finished one, and own exercises never finished before, for the card.
+    private func workoutFacts(_ exercises: [WorkoutExercise], excluding id: UUID) throws -> [String: Any] {
+        var bests: [String] = [], new: [String] = []
+        for exercise in exercises {
+            let key = ExerciseKey(exercise)
+            // shortcut: compares with the latest 1,000 sessions of the exercise, as the gym screen does.
+            let before = try finishedWorkouts(containing: key, limit: 1_000).filter { $0.id != id }
+            if exercise.exerciseID == nil, before.isEmpty { new.append(exercise.name) }
+            let sets = before.flatMap(\.exercises).filter { ExerciseKey($0) == key }.flatMap(\.sets)
+            let measure = exercise.measure ?? exercise.exerciseID.flatMap { WorkoutCatalog.exercise($0)?.measure } ?? .weightReps
+            if exercise.sets.contains(where: { $0.done != false && WorkoutHistory.isNewBest($0, measure: measure, before: sets) }) { bests.append(exercise.name) }
+        }
+        return ["newBests": bests, "newExercises": new]
+    }
+    /// The saved workout for the model and the card, with any facts the card calls out.
+    private func workoutResult(_ session: WorkoutSession, extra: [String: Any]) throws -> String {
+        let json = try coachJSON(session), extra = extra.filter { ($0.value as? [String])?.isEmpty != true }
+        guard !extra.isEmpty, var result = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return json }
+        result.merge(extra) { _, new in new }
+        return String(decoding: try JSONSerialization.data(withJSONObject: result, options: .sortedKeys), as: UTF8.self)
+    }
     /// Food writes only: the meal's saved items before the change; empty for a new meal, whose undo deletes it.
     func undoSnapshot(_ write: CoachWrite, turn: CoachTurn) throws -> [FoodItem]? {
         switch write {

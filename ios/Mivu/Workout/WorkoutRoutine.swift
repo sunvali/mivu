@@ -20,6 +20,11 @@ extension WorkoutRoutine {
     }
 }
 
+extension WorkoutRoutine {
+    /// A live gym workout started from this routine.
+    var draft: WorkoutDraft { WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: exercises, title: name, activity: "strength", routineID: id) }
+}
+
 func validateRoutineFields(_ routine: WorkoutRoutine) throws {
     guard routine.revision > 0, routine.revision < 1_000_000,
           !routine.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, routine.name.count <= 100,

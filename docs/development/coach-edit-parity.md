@@ -21,7 +21,11 @@ and record types.
 | Read and change preferences or timezone | `get_preferences`, `update_preferences` |
 | Start the current waking day | `get_context`, `start_day` |
 | Record, correct, or remove a weight; inspect progress | `get_progress`, `log_weight`, `delete_weight` |
-| Record, inspect, edit, or remove a workout | `log_workout`, `get_workout`, `edit_workout`, `delete_workout` |
+| Record, inspect, edit, or remove a workout | `log_workout`, `get_workout`, `edit_workout`, `delete_workout`; see [Workouts](#workouts) |
+| Add sets or an exercise to the running workout | `add_to_workout` (the running workout is `activeWorkout` in the context) |
+| Ask about an exercise's history or bests | `get_exercise_history` (at most 10 sessions) |
+| Start a saved routine | `start_routine` shows a card; the user taps Start |
+| Manage routines, own exercises, rest default, bar, plates or unit | `open_settings` with `workouts` |
 | Continue an account, profile, secret, or backup action | `open_settings` creates a native Settings handoff; see below |
 
 Operations bind to the selected local profile in app code. Meal and progress
@@ -38,6 +42,40 @@ Editing a proposed review item requires its `review_submission_id` and does not
 accept it. `accept_review` is a separate explicit action. Goal targets follow
 the same patch rule: omitted targets stay as saved, while a null target clears
 that target.
+
+## Workouts
+
+`edit_workout` is a patch on a retrieved finished workout. A field left out or
+null keeps its stored value; an empty `title`, `note` or exercise `note` clears
+it. `exercises`, when listed, is the complete new list in order. Each listed
+exercise keeps unlisted fields of the stored exercise with the same catalog ID
+or name (at its position, else the first unused match), and each listed set
+keeps unlisted fields of the stored set at its position. Names resolve to the
+catalog on every write, so history never splits between a catalog ID and a free
+name; unknown names become own exercises and the card says "New exercise". Burn
+is Mivu's estimate unless the user said a number (`burn_source: userEstimate`);
+an edit re-estimates only when activity, time, distance, effort or day changed.
+
+| Manual workout edit | Coach path |
+| --- | --- |
+| Day (move) | `edit_workout` `local_date`; the clock time stays, a date-only workout sits at noon |
+| Start time | Not from chat: chat times are date-only, as for meals; change it on the workout screen |
+| Time, distance, How hard?, heart rate, indoor/outdoor, note, activity, title | `edit_workout` `duration_seconds`/`duration_minutes`, `distance_meters`, `effort`, `avg_heart_rate`, `indoor`, `note`, `activity`, `title` |
+| Burn typed by hand | `edit_workout` `estimated_burn_kcal` with `burn_source: userEstimate` |
+| Set reps, weight, time, distance, Warm-up/Drop set/To failure, How hard? | listed sets: `repetitions`, `load_kg`, `seconds`, `distance_meters`, `type` (`normal` clears), `effort` |
+| Add, remove, move or replace an exercise; add or delete a set | the complete `exercises` list |
+| Exercise rest and note | `rest_seconds`, `note` |
+| Superset, group and ungroup | the same `group` label on neighbours; a retrieved `groupID` keeps one; empty leaves it. A split superset is refused |
+| Running workout: another set, add an exercise | `add_to_workout`; the open gym screen reloads the stored copy and reapplies its own change |
+| Delete, Undo | `delete_workout`, `undo_change` |
+| Routines, own exercise rename/merge, workout settings | `open_settings` `workouts` (no Coach write tools) |
+| Burn in the food budget | `set_goals` `exercise_credit_percent` |
+
+Coach never edits the running workout through `edit_workout`, and only one
+workout can be running: saving a second active one is refused. Pip never
+suggests workouts, weights, sets or plans. A manual Undo of a deleted workout
+restores it under a new ID, so an older Coach card for it shows the record as
+unavailable.
 
 Coach writes use stable operation keys and persisted `CoachReceipt` records.
 `DiaryStore.applyCoachWrites` validates the full write set, stages record and

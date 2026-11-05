@@ -12,7 +12,12 @@ extension CoachWrite {
             try items.map { item in var result = try object(item); result.removeValue(forKey: "id"); result.removeValue(forKey: "estimatedBy"); return result }
         }
         func workout(_ draft: WorkoutDraft) throws -> [String: Any] {
-            ["kind": draft.kind.rawValue, "duration": draft.durationMinutes, "exercises": try draft.exercises.map(object), "burn": nullable(draft.estimatedBurnKcal), "source": nullable(draft.burnSource?.rawValue)]
+            var result: [String: Any] = ["kind": draft.kind.rawValue, "duration": draft.durationMinutes, "exercises": try draft.exercises.map(object), "burn": nullable(draft.estimatedBurnKcal), "source": nullable(draft.burnSource?.rawValue)]
+            // Later fields join only when set, so earlier commands keep their fingerprints.
+            let later: [String: Any?] = ["title": draft.title, "activity": draft.activity, "seconds": draft.durationSeconds, "distance": draft.distanceMeters,
+                                         "heartRate": draft.avgHeartRate, "effort": draft.effort, "indoor": draft.indoor, "note": draft.note]
+            for case let (key, value?) in later { result[key] = value }
+            return result
         }
         var payload: [String: Any] = ["domain": "mivu.coach.command.v1", "target": target]
         switch self {
@@ -24,7 +29,9 @@ extension CoachWrite {
         case .weight(_, let value, let unit, let revision): payload["arguments"] = ["value": value, "unit": unit, "revision": nullable(revision)]
         case .correctWeight(_, let value, let unit, let revision): payload["arguments"] = ["value": value, "unit": unit, "revision": revision]
         case .workout(_, let draft): payload["arguments"] = try workout(draft)
-        case .editWorkout(_, let draft, let revision): payload["arguments"] = ["workout": try workout(draft), "revision": revision]
+        case .editWorkout(_, let patch, let revision): payload["arguments"] = ["patch": try object(patch), "revision": revision]
+        case .activeWorkoutSets(let name, let sets): payload["arguments"] = ["exercise": name, "sets": try sets.map(object)]
+        case .routineCard: break
         case .deleteWeight(_, let revision), .deleteWorkout(_, let revision): payload["arguments"] = revision
         case .manual(let edit, let patchKey):
             var arguments: [String: Any] = [:]

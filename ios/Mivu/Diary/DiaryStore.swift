@@ -673,6 +673,10 @@ actor DiaryStore {
 
     }
 
+    func coachExerciseHistory(_ name: String, limit: Int, expectedProfileID: UUID) throws -> CoachExerciseHistory {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.coachExerciseHistory(name, limit: limit, expectedProfileID: expectedProfileID)
+    }
+
     func coachProgress(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, expectedProfileID: UUID) throws -> CoachProgress {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.progressRange(endingOn: endingOn, days: days, finalizingTurnID: finalizingTurnID, expectedProfileID: expectedProfileID)
     }

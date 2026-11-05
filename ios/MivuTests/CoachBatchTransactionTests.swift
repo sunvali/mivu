@@ -77,7 +77,7 @@ import Testing
         let original = try f.durableState()
         let bad: [(CoachWrite, DiaryError)] = [
             (.correctWeight(id: f.source.weights[0].id, value: 73, unit: "kg", revision: 1), .staleRevision),
-            (.editWorkout(id: UUID(), draft: f.draft, revision: 1), .notFound),
+            (.editWorkout(id: UUID(), patch: WorkoutPatch(), revision: 1), .notFound),
             (.manual(.goals(date: "2027-01-15", targets: [CoachNutrientEdit(nutrient: "kcal", value: 1800)], weight: nil, clearWeight: false, exerciseCreditPercent: nil, revision: 999)), .staleRevision),
             (.manual(.preferences(timezone: nil, text: "stale", revision: 0)), .staleRevision)
         ]

@@ -336,6 +336,7 @@ struct SettingsView: View {
         case .backup: linkedSection = .backup
         case .connection: linkedSection = .connection
         case .nutritionSource: linkedSection = .nutritionSource
+        case .workouts: linkedSection = .workouts
         case .settings, nil: break
         }
     }

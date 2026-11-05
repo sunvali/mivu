@@ -12,6 +12,9 @@ struct CoachView: View {
     var openHistory: () -> Void = {}
     var openToday: () -> Void = {}
     var openProgress: () -> Void = {}
+    /// Opens the gym screen for the running workout.
+    var openWorkout: (WorkoutSession) -> Void = { _ in }
+    var startRoutine: (UUID) -> Void = { _ in }
     let openDestination: (CoachDestination) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -739,8 +742,12 @@ struct CoachView: View {
                 CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt), undoState: coach.undoState(receipt),
                                  undo: { Task { await coach.undo(receipt) } }) {
                     if let id = receipt.mealID { selectedRecord = .meal(id) }
+                    else if case .workout(let workout, _) = coach.receiptTarget(receipt), !workout.isFinished { openWorkout(workout) }
                     else if let id = receipt.workoutID { selectedRecord = .workout(id) }
                 }
+            }
+            ForEach(turn.receipts.filter { $0.routineID != nil }, id: \.operationKey) { receipt in
+                CoachRoutineCard(name: receipt.routineName ?? "Routine") { if let id = receipt.routineID { startRoutine(id) } }
             }
             ForEach(turn.receipts.filter { $0.weightID != nil }, id: \.operationKey) { receipt in
                 if let label = CoachReceiptPresentation(receipt: receipt, target: .loading).weightLabel {
@@ -805,6 +812,7 @@ private extension CoachDestination {
         case .connection: "Open ChatGPT connection"
         case .nutritionSource: "Open nutrition source"
         case .backup: "Open backup and Files"
+        case .workouts: "Open workout settings"
         }
     }
 }

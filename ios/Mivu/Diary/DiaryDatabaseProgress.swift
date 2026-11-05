@@ -35,18 +35,7 @@ extension DiaryDatabase {
     }
     /// Finished workouts holding the exercise, newest first, at most `limit` (history and bests).
     func finishedWorkouts(containing key: ExerciseKey, limit: Int, expectedProfileID: UUID) throws -> [WorkoutSession] {
-        try domainRead(expectedProfileID: expectedProfileID) { _ in
-            // SQL matches catalog IDs; own names are folded in Swift, so SQL only narrows to exercises without an ID.
-            let catalog = !key.raw.hasPrefix("own:")
-            let statement = try domainStatement("SELECT id, ordinal, payload FROM workout WHERE json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active' AND EXISTS (SELECT 1 FROM json_each(CAST(payload AS TEXT), '$.exercises') WHERE json_extract(value, '$.exerciseID') \(catalog ? "= ?" : "IS NULL")) ORDER BY json_extract(CAST(payload AS TEXT), '$.performedAt') DESC, ordinal DESC, id DESC", catalog ? [.text(key.raw)] : [])
-            defer { sqlite3_finalize(statement) }; var result: [WorkoutSession] = []
-            while result.count < limit, try mutationStep(statement) {
-                let value = try decode(WorkoutSession.self, Record(id: try mutationText(statement, 0), ordinal: Int(sqlite3_column_int64(statement, 1)), payload: try mutationBlob(statement, 2)))
-                try validateWorkoutFields(value)
-                if value.exercises.contains(where: { ExerciseKey($0) == key }) { result.append(value) }
-            }
-            return result
-        }
+        try domainRead(expectedProfileID: expectedProfileID) { try DiaryTransaction(database: self, head: $0).finishedWorkouts(containing: key, limit: limit) }
     }
     func ownExerciseNames(expectedProfileID: UUID) throws -> [String] {
         try domainRead(expectedProfileID: expectedProfileID) { _ in
@@ -81,6 +70,18 @@ extension DiaryDatabase {
 }
 
 extension DiaryTransaction {
+    func finishedWorkouts(containing key: ExerciseKey, limit: Int) throws -> [WorkoutSession] {
+        // SQL matches catalog IDs; own names are folded in Swift, so SQL only narrows to exercises without an ID.
+        let catalog = !key.raw.hasPrefix("own:")
+        let statement = try database.domainStatement("SELECT id, ordinal, payload FROM workout WHERE json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active' AND EXISTS (SELECT 1 FROM json_each(CAST(payload AS TEXT), '$.exercises') WHERE json_extract(value, '$.exerciseID') \(catalog ? "= ?" : "IS NULL")) ORDER BY json_extract(CAST(payload AS TEXT), '$.performedAt') DESC, ordinal DESC, id DESC", catalog ? [.text(key.raw)] : [])
+        defer { sqlite3_finalize(statement) }; var result: [WorkoutSession] = []
+        while result.count < limit, try database.mutationStep(statement) {
+            let value = try database.decode(WorkoutSession.self, DiaryDatabase.Record(id: try database.mutationText(statement, 0), ordinal: Int(sqlite3_column_int64(statement, 1)), payload: try database.mutationBlob(statement, 2)))
+            try validateWorkoutFields(value)
+            if value.exercises.contains(where: { ExerciseKey($0) == key }) { result.append(value) }
+        }
+        return result
+    }
     func weight(id: UUID) throws -> WeightEntry {
         guard let row = try records("weight", clause: "id = ?", values: [.text(id.uuidString)], limit: 1).first else { throw DiaryError.notFound }
         let value = try database.decode(WeightEntry.self, row); try validateWeightFields(value)
@@ -149,8 +150,7 @@ extension DiaryTransaction {
         session.state = .finished; session.durationSeconds = seconds; session.effort = effort ?? session.effort; session.updatedAt = at
         if session.burnSource != .userEstimate {
             // Live workouts are gym sessions.
-            session.estimatedBurnKcal = WorkoutBurn.estimate(activity: session.activity ?? "strength", seconds: seconds,
-                distanceMeters: session.distanceMeters.flatMap { $0 > 0 ? $0 : nil }, effort: session.effort, bodyKg: try bodyKg(on: day.localDate, zone: day.timeZoneID))
+            session.estimatedBurnKcal = try estimatedBurn(activity: session.activity ?? "strength", seconds: seconds, distanceMeters: session.distanceMeters, effort: session.effort, day: day)
             session.burnSource = nil
         }
         session.revision += 1
@@ -159,6 +159,11 @@ extension DiaryTransaction {
     func discardWorkout(id: UUID, expectedRevision: Int) throws {
         guard try workout(id: id).state == .active else { throw DiaryError.invalidData }
         try deleteWorkout(id: id, revision: expectedRevision)
+    }
+    /// Mivu's burn estimate with the body weight on the workout's day; nil without a known activity or weight.
+    func estimatedBurn(activity: String?, seconds: Int, distanceMeters: Double?, effort: Int?, day: TrackingDay) throws -> Double? {
+        WorkoutBurn.estimate(activity: activity ?? "", seconds: seconds, distanceMeters: distanceMeters.flatMap { $0 > 0 ? $0 : nil }, effort: effort,
+                             bodyKg: try bodyKg(on: day.localDate, zone: day.timeZoneID))
     }
     /// Latest weigh-in on or before `localDate`: a logged one counts on its diary day (as Progress shows it), a dayless one on its `measuredAt` date.
     func bodyKg(on localDate: String, zone: String) throws -> Double? {
@@ -182,6 +187,8 @@ extension DiaryTransaction {
     @discardableResult func saveWorkout(_ record: WorkoutSession) throws -> WorkoutSession {
         let workout = record.syncedMinutes
         try validateWorkoutFields(workout); _ = try database.trackingDay(id: workout.dayID)
+        // One running workout per profile, whoever saves it.
+        if workout.state == .active, let running = try activeWorkout(), running.id != workout.id { throw DiaryError.conflict }
         try saveProgress(workout, table: "workout", id: workout.id, dayID: workout.dayID)
         changes.workoutIDs.insert(workout.id); changes.dayIDs.insert(workout.dayID)
         return workout

@@ -28,6 +28,8 @@ struct CoachReceiptPresentation: Equatable {
     var committedStatus: String {
         if isRemoval { return "Removed" }
         if Self.write(receipt.operationKey).hasPrefix("delete_photo/") { return "Photo removed" }
+        if let name = receipt.workoutAddedTo { return "Added to \(name)" }
+        if receipt.workoutID != nil { return Self.write(receipt.operationKey).hasPrefix("edit_workout/") ? "Workout updated" : "Workout saved" }
         return switch receipt.submissionState {
         case .saved: "Saved food"
         case .awaitingReview: "Estimate awaiting review"
@@ -173,6 +175,15 @@ struct CoachReceiptView: View {
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) { receiptStatus; Spacer(minLength: 0); committedDate }
             }
+            if receipt.workoutNewBest == true {
+                Label("New best", systemImage: "trophy.fill").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryWorkout)
+                    .padding(.horizontal, 10).padding(.vertical, 4).background(Color.diaryWorkout.opacity(0.12), in: Capsule())
+                    .accessibilityIdentifier("coachReceiptNewBest")
+            }
+            if let names = receipt.workoutNewExercises, !names.isEmpty {
+                Text((names.count == 1 ? "New exercise: " : "New exercises: ") + names.joined(separator: ", "))
+                    .foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptNewExercise")
+            }
             ForEach(Array(presentation.itemRows.enumerated()), id: \.offset) { _, row in
                 Group {
                     if dynamicTypeSize.isAccessibilitySize {
@@ -294,6 +305,36 @@ struct CoachReceiptView: View {
                 .disabled(!presentation.canOpenTarget)
                 .accessibilityIdentifier(receipt.mealID == nil ? "coachWorkoutLink" : "coachMealLink")
         }
+    }
+}
+
+/// A saved routine Pip offers; Start begins the live workout from it.
+struct CoachRoutineCard: View {
+    let name: String
+    let start: () -> Void
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { title; Spacer(minLength: 8); startButton }
+            VStack(alignment: .leading, spacing: 8) { title; startButton }
+        }
+        .modifier(DiarySummaryCardStyle(padding: 14))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("coachRoutineCard")
+    }
+    private var title: some View {
+        HStack(spacing: 12) {
+            WorkoutIcon(symbol: "figure.strengthtraining.traditional")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).font(.headline).fixedSize(horizontal: false, vertical: true)
+                Text("Routine").font(.subheadline).foregroundStyle(Color.diarySecondary)
+            }
+        }
+    }
+    private var startButton: some View {
+        Button(action: start) { Text("Start").frame(minWidth: 44, minHeight: 44) }
+            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).tint(.diaryWorkout)
+            .accessibilityLabel("Start \(name)")
+            .accessibilityIdentifier("coachRoutineStart")
     }
 }
 

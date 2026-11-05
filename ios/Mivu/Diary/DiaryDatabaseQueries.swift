@@ -298,8 +298,16 @@ extension DiaryDatabase {
         var item: FoodItem?
         var value: Double?
         var unit: String?
+        var name: String?
+    }
+    /// Read on its own: a workout's `state` is not a meal submission state.
+    private struct WorkoutFacts: Decodable {
+        var id: UUID
         var kind: String?
         var durationMinutes: Int?
+        var addedTo: String?
+        var newBests: [String]?
+        var newExercises: [String]?
     }
 
     static func coachCommittedReceipt(_ receipt: CoachReceipt) -> CoachCommittedReceipt {
@@ -311,6 +319,10 @@ extension DiaryDatabase {
             let date = String(receipt.operationKey.dropFirst(foodPrefix.count))
             if validLocalDate(date) { value.targetLocalDate = date }
         }
+        if let id = receipt.workoutID, let facts = try? JSONDecoder().decode(WorkoutFacts.self, from: Data(receipt.resultJSON.utf8)), facts.id == id {
+            value.workoutKind = facts.kind; value.workoutMinutes = facts.durationMinutes; value.workoutAddedTo = facts.addedTo
+            value.workoutNewBest = facts.newBests.map { !$0.isEmpty }; value.workoutNewExercises = facts.newExercises
+        }
         // Unrecognized legacy results remain replay authority without invented presentation facts.
         guard let facts = try? JSONDecoder().decode(ReceiptFacts.self, from: Data(receipt.resultJSON.utf8)) else { return value }
         if value.targetLocalDate == nil, let date = facts.targetLocalDate, validLocalDate(date) { value.targetLocalDate = date }
@@ -318,7 +330,7 @@ extension DiaryDatabase {
         if let id = receipt.goalID, facts.id == id, let date = facts.effectiveLocalDate, validLocalDate(date) { value.targetLocalDate = date }
         value.submissionState = facts.state
         if let id = receipt.weightID, facts.id == id { value.weightValue = facts.value; value.weightUnit = facts.unit }
-        if let id = receipt.workoutID, facts.id == id { value.workoutKind = facts.kind; value.workoutMinutes = facts.durationMinutes }
+        if let id = receipt.routineID { value.routineID = id; value.routineName = facts.name }
         var items: [FoodItem] = []
         if facts.state == .saved || facts.state == .awaitingReview {
             if let id = receipt.mealID, facts.id == id, facts.dayID == receipt.dayID { items = facts.items ?? [] }
@@ -446,13 +458,15 @@ extension DiaryDatabase {
                 } else if let id = receipt.workoutID {
                     do {
                         _ = try transaction.workout(id: id)
-                        if let kind = facts.workoutKind, let minutes = facts.workoutMinutes { summaries.append("Workout saved: \(kind), \(minutes) minutes.") }
+                        if let name = facts.workoutAddedTo { summaries.append("Added to \(name).") }
+                        else if let kind = facts.workoutKind, let minutes = facts.workoutMinutes { summaries.append("Workout saved: \(kind), \(minutes) minutes.") }
                         else { summaries.append("Workout saved.") }
                     } catch DiaryError.notFound { summaries.append("This workout was deleted.") }
                 } else if let id = receipt.goalID {
                     guard try transaction.records("goal", clause: "id = ?", values: [.text(id.uuidString)], limit: 1).first != nil else { throw DiaryError.notFound }
                     summaries.append("Your goals are updated.")
-                } else if receipt.destination != nil { summaries.append("Use the Settings link to continue.") }
+                } else if receipt.routineID != nil { summaries.append("\(facts.routineName ?? "Your routine") is ready. Tap Start when you are.") }
+                else if receipt.destination != nil { summaries.append("Use the Settings link to continue.") }
                 else if receipt.operationKey.contains("/update_preferences") { summaries.append("Your preferences are updated.") }
                 else if let id = receipt.dayID {
                     let day = try trackingDay(id: id)

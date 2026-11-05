@@ -324,10 +324,11 @@ extension WorkoutSession {
         if draft.durationSeconds == nil, draft.durationMinutes != durationMinutes { durationSeconds = nil }
         kind = draft.kind; durationMinutes = draft.durationMinutes; exercises = draft.exercises
         estimatedBurnKcal = draft.estimatedBurnKcal; burnSource = draft.burnSource
-        title = draft.title ?? title; activity = draft.activity ?? activity; state = draft.state ?? state
+        // An empty title or note clears it, so a Coach edit can remove one.
+        title = draft.title.map { $0.isEmpty ? nil : $0 } ?? title; activity = draft.activity ?? activity; state = draft.state ?? state
         durationSeconds = draft.durationSeconds ?? durationSeconds; distanceMeters = draft.distanceMeters ?? distanceMeters
         avgHeartRate = draft.avgHeartRate ?? avgHeartRate; effort = draft.effort ?? effort; indoor = draft.indoor ?? indoor
-        note = draft.note ?? note; routineID = draft.routineID ?? routineID; source = draft.source ?? source
+        note = draft.note.map { $0.isEmpty ? nil : $0 } ?? note; routineID = draft.routineID ?? routineID; source = draft.source ?? source
         externalID = draft.externalID ?? externalID
     }
 
@@ -615,7 +616,7 @@ func validateCoachReceiptFields(_ receipt: CoachReceipt, turnID: UUID, revision:
     }
     guard receipt.turnID == turnID, receipt.operationKey.utf8.count <= 500, !receipt.operationKey.isEmpty,
           receipt.committedRevision > 0, receipt.committedRevision <= revision, receipt.resultJSON.utf8.count <= 65_536,
-          receipt.dayID != nil || receipt.goalID != nil || receipt.destination != nil ||
+          receipt.dayID != nil || receipt.goalID != nil || receipt.destination != nil || receipt.routineID != nil ||
             receipt.operationKey == "\(turnID.uuidString)/update_preferences" || receipt.operationKey.hasPrefix("\(turnID.uuidString)/update_preferences/"),
           let data = receipt.resultJSON.data(using: .utf8),
           (try? JSONSerialization.jsonObject(with: data)) != nil else { throw DiaryError.invalidData }

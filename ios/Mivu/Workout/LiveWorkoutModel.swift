@@ -483,7 +483,13 @@ enum WeightStep {
             var next = session; edit(&next)
             guard mode == .live else { session = next; refreshBests(); return }
             do {
-                session = try await store.saveActive(next, expectedRevision: next.revision, expectedProfileID: profileID)
+                do { session = try await store.saveActive(next, expectedRevision: next.revision, expectedProfileID: profileID) }
+                catch DiaryError.staleRevision {
+                    // Pip changed the running workout meanwhile: this edit goes onto the stored copy, so both stay.
+                    guard var stored = try await store.activeWorkout(expectedProfileID: profileID), stored.id == next.id else { throw DiaryError.staleRevision }
+                    edit(&stored)
+                    session = try await store.saveActive(stored, expectedRevision: stored.revision, expectedProfileID: profileID)
+                }
                 saved = session; saveError = nil
             } catch {
                 // The values stay on screen, unsaved ticks shown undone; Retry saves them again.

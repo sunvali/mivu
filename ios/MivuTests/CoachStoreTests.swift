@@ -519,8 +519,7 @@ import Testing
         let receipts = try await store.applyCoachWrites([write], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         let old = try #require(await store.snapshotForExport().workouts.first)
         let turn = try await capturedTurn(store, text: "45 minutes", photos: [], at: now, expectedProfileID: profile.id)
-        var draft = strength; draft.durationMinutes = 45
-        let edited = try await store.applyCoachWrites([.editWorkout(id: old.id, draft: draft, revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let edited = try await store.applyCoachWrites([.editWorkout(id: old.id, patch: WorkoutPatch(durationMinutes: 45), revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         let saved = try await store.coachWorkout(id: old.id, expectedProfileID: profile.id)
         #expect(saved.id == old.id); #expect(saved.revision == 2); #expect(saved.performedAt == old.performedAt)
         #expect(saved.dayID == old.dayID); #expect(edited[0].workoutID == old.id)
@@ -541,8 +540,7 @@ import Testing
         _ = try await store.applyCoachWrites([.workout(date: "2026-12-01", draft: made)], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         let old = try #require(await store.snapshotForExport().workouts.first)
         let turn = try await capturedTurn(store, text: "45 minutes", photos: [], at: now, expectedProfileID: profile.id)
-        var edit = strength; edit.durationMinutes = 45; edit.exercises = old.exercises
-        _ = try await store.applyCoachWrites([.editWorkout(id: old.id, draft: edit, revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        _ = try await store.applyCoachWrites([.editWorkout(id: old.id, patch: WorkoutPatch(durationMinutes: 45), revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         let saved = try await store.coachWorkout(id: old.id, expectedProfileID: profile.id)
         #expect(saved.durationMinutes == 45); #expect(saved.durationSeconds == nil)
         #expect(saved.title == "Evening run"); #expect(saved.distanceMeters == 8_000)
@@ -619,7 +617,7 @@ import Testing
         let turn = try await capturedTurn(store, text: "Synthetic stale edit", photos: [], at: now, expectedProfileID: profile.id)
         let before = try await store.snapshotForExport()
         await #expect(throws: DiaryError.staleRevision) { try await store.applyCoachWrites([.workout(date: "2027-01-15", draft: strength), .correctWeight(id: weight.id, value: 71, unit: "kg", revision: 99)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
-        await #expect(throws: CoachError.invalidArguments) { try await store.applyCoachWrites([.editWorkout(id: workout.id, draft: strength, revision: 1), .deleteWorkout(id: workout.id, revision: 2)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        await #expect(throws: CoachError.invalidArguments) { try await store.applyCoachWrites([.editWorkout(id: workout.id, patch: WorkoutPatch(durationMinutes: strength.durationMinutes), revision: 1), .deleteWorkout(id: workout.id, revision: 2)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport() == before)
     }
     @Test func progressJSONDistinguishesUnknownFromCompleteZeroAndRoundTrips() async throws {

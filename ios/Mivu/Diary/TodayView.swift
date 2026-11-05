@@ -410,7 +410,7 @@ struct DiaryRootView: View {
                                   navigationRequest: coachRoutes.request,
                                   onNavigationConsumed: { coachRoutes.consume($0) },
                                   openHistory: openCoachHistory, openToday: { selectedTab = "today" },
-                                  openProgress: { selectedTab = "progress" }) { destination in
+                                  openProgress: { selectedTab = "progress" }, openWorkout: { liveWorkout = $0 }, startRoutine: startRoutine) { destination in
                             routes.route = SettingsRoute(destination: destination)
                         }.toolbar { profileControl }.duoReadableWidth().modifier(WorkoutInset(shown: bannerShown) { workoutBanner })
                     }
@@ -427,6 +427,17 @@ struct DiaryRootView: View {
             .badge(coach.queuedSiri.count)
         }
         .modifier(WorkoutAccessory(shown: bannerShown) { workoutBanner })
+    }
+    /// Coach's routine card: Start opens the live workout from it, or the one already running.
+    private func startRoutine(_ id: UUID) {
+        guard let owner = model.readModel?.profile.id else { return }
+        if let active = model.activeWorkout { liveWorkout = active; return }
+        Task {
+            await model.change {
+                guard let routine = try await model.store.routines(expectedProfileID: owner).first(where: { $0.id == id }) else { throw DiaryError.notFound }
+                liveWorkout = try await model.store.startWorkout(routine.draft, at: Date(), expectedProfileID: owner)
+            }
+        }
     }
     private var bannerShown: Bool { model.activeWorkout != nil && liveWorkout == nil }
     @ViewBuilder private var workoutBanner: some View {

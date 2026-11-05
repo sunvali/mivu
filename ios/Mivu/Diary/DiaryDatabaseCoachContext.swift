@@ -212,6 +212,18 @@ extension DiaryDatabase {
             let progress = try progressRangeInsideContext(transaction, date: diaryDateLabel(work.capturedAt, zone: work.captureTimeZoneID))
             context.weights = progress.weights; context.workouts = progress.workouts
             context.omittedWeightCount = progress.omittedWeights; context.omittedWorkoutCount = progress.omittedWorkouts
+            if var active = try transaction.activeWorkout() {
+                // A huge running workout keeps its exercises without their sets, inside the context cap.
+                if try JSONEncoder().encode(active).count > 8192 { active.exercises = active.exercises.map { var exercise = $0; exercise.sets = []; return exercise } }
+                context.activeWorkout = active
+            }
+            let routines = try domainStatement("SELECT payload FROM routine ORDER BY ordinal DESC, id DESC LIMIT 20")
+            defer { sqlite3_finalize(routines) }; var references: [CoachRoutineReference] = []
+            while try mutationStep(routines) {
+                let routine = try JSONDecoder().decode(WorkoutRoutine.self, from: mutationBlob(routines, 0)); try validateRoutineFields(routine)
+                references.append(.init(id: routine.id, name: routine.name))
+            }
+            if !references.isEmpty { context.routines = references }
             let current = try coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID)
             try context.includeCommittedReceipts(current.receipts)
             context.replyTo = try current.reply.map { try coachReplyContext($0, transaction: transaction) }
@@ -223,6 +235,21 @@ extension DiaryDatabase {
                 context.workouts!.removeFirst(); context.omittedWorkoutCount = (context.omittedWorkoutCount ?? 0) + 1; context.truncated = true
             }
             guard try JSONEncoder().encode(context).count <= 60_000 else { throw CoachError.limitExceeded }; return context
+        }
+    }
+    /// One exercise's latest `limit` finished sessions and its bests, for a question; the name resolves like a log.
+    func coachExerciseHistory(_ name: String, limit: Int, expectedProfileID: UUID) throws -> CoachExerciseHistory {
+        try domainRead(expectedProfileID: expectedProfileID) { head in
+            let catalog = WorkoutCatalog.resolve(name), probe = WorkoutExercise(name: catalog?.name ?? name, sets: [], exerciseID: catalog?.id)
+            let key = ExerciseKey(probe)
+            // shortcut: bests read the latest 1,000 sessions, as the gym screen does.
+            let all = try DiaryTransaction(database: self, head: head).finishedWorkouts(containing: key, limit: 1_000), bests = WorkoutHistory.bests(for: key, in: all)
+            let sessions = try all.prefix(min(limit, 10)).map { session in
+                CoachExerciseHistory.Session(workoutID: session.id, localDate: try trackingDay(id: session.dayID).localDate,
+                                             sets: session.exercises.filter { ExerciseKey($0) == key }.flatMap(\.sets))
+            }
+            return CoachExerciseHistory(exercise: probe.name, sessions: sessions, totalSessions: all.count,
+                                        heaviestKg: bests.heaviestKg, mostReps: bests.mostReps, longestSeconds: bests.longestSeconds)
         }
     }
     /// One bounded read of what the turn quotes; missing records are explicit, never guessed.
@@ -245,6 +272,7 @@ extension DiaryDatabase {
             case .weight(let id): value.weight = try transaction.weight(id: id)
             case .workout(let id):
                 let workout = try transaction.workout(id: id)
+                guard workout.isFinished else { throw DiaryError.notFound } // the running workout is context.activeWorkout
                 if try JSONEncoder().encode(workout).count <= 8192 { value.workout = workout } // else ids only
             }
         } catch DiaryError.notFound { value.unavailable = true }
