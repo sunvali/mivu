@@ -152,12 +152,13 @@ private fun tenth(value: Double) = (value * 10).roundToLong() / 10.0
 /** A one-shot Pip reaction; a fresh id replays the same pose. */
 data class PipReaction(val pose: CompanionPose, val id: UUID = UUID.randomUUID())
 
+// 18, not iOS's 13: Google's ML Kit GenAI terms (Gemini Nano) bar apps likely to be used by anyone under 18.
+private const val MIN_AGE = 18
+
 /**
  * Setup's answers and step, kept in [savedState] so they survive process death; numbers stay as typed, in the chosen
  * unit, and are read as metric. [inference] binds one request to the connection current now (`ChatGPTConnection.inference`).
  */
-// 18, not iOS's 13: Google's ML Kit GenAI terms (Gemini Nano) bar apps likely to be used by anyone under 18.
-private const val MIN_AGE = 18
 
 class OnboardingViewModel(
     private val repository: DiaryRepository,
