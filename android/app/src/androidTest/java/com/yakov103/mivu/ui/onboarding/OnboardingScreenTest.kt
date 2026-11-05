@@ -200,6 +200,21 @@ class OnboardingScreenTest {
         assertNull(db.head().profile.about)
     }
 
+    @Test fun underEighteenCannotContinue() {
+        host()
+        waitFor(heading("Hi, I'm Pip"))
+        next()
+        waitFor(heading("About you"))
+        compose.onNodeWithTag("onboardingHeight").performTextReplacement("170")
+        compose.onNodeWithTag("onboardingWeight").performTextReplacement("74")
+        val year = java.time.Year.now().value
+        compose.onNodeWithTag("onboardingBirthYear").performTextReplacement("${year - 17}")
+        waitForText("Mivu is for ages 18 and up")
+        compose.onNodeWithTag("onboardingNext").assertIsNotEnabled()
+        compose.onNodeWithTag("onboardingBirthYear").performTextReplacement("${year - 18}")
+        compose.onNodeWithTag("onboardingNext").assertIsEnabled()
+    }
+
     @Test fun unhealthyTargetBlocksContinue() {
         host()
         answer(heightCm = "165", weightKg = "55", targetKg = "48")

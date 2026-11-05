@@ -253,10 +253,11 @@ plan for it.
   profanity, drugs or gambling; users do not interact with each other; no
   location sharing; generated text from an AI chatbot (answer the AI question
   "yes"). **Owner to confirm** the rating the questionnaire returns.
-- **Target audience:** 18 and over. The ML Kit GenAI terms require users to be
-  18+, so the app may not be directed at under-18s. **Owner to confirm** the
-  18+ audience. Onboarding still refuses birth years under 13; whether to
-  raise that is a separate decision.
+- **Target audience:** 18 and over (owner ruling 2026-11-02: 18+ on Android,
+  13+ on iOS). The [ML Kit GenAI terms](https://developers.google.com/ml-kit/genai-terms)
+  bar apps "directed towards or likely to be accessed by individuals under the
+  age of 18". Android onboarding refuses birth years under 18 and says "Mivu is
+  for ages 18 and up" (`OnboardingScreenTest.underEighteenCannotContinue`).
 - **Ads:** no ads.
 - **News app:** no. **Government app:** no. **Financial features:** none.
 - **COVID-19 / health research:** no.

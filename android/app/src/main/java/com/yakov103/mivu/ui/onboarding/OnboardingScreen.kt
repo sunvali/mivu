@@ -152,6 +152,9 @@ private fun tenth(value: Double) = (value * 10).roundToLong() / 10.0
 /** A one-shot Pip reaction; a fresh id replays the same pose. */
 data class PipReaction(val pose: CompanionPose, val id: UUID = UUID.randomUUID())
 
+// 18, not iOS's 13: Google's ML Kit GenAI terms (Gemini Nano) bar apps likely to be used by anyone under 18.
+private const val MIN_AGE = 18
+
 /**
  * Setup's answers and step, kept in [savedState] so they survive process death; numbers stay as typed, in the chosen
  * unit, and are read as metric. [inference] binds one request to the connection current now (`ChatGPTConnection.inference`).
@@ -214,7 +217,8 @@ class OnboardingViewModel(
     val heightValid get() = heightCm?.let { it in 50.0..272.0 }
     val weightValid get() = weightKg?.let { it in 20.0..400.0 }
     val targetValid get() = targetKg?.let { it in 20.0..400.0 }
-    val birthYearValid get() = birthYear?.let { it in 1900..thisYear - 13 }
+    val birthYearValid get() = birthYear?.let { it in 1900..thisYear - MIN_AGE }
+    val tooYoung get() = birthYear?.let { it in thisYear - MIN_AGE + 1..thisYear } == true
 
     val answers: OnboardingAnswers? get() {
         val height = heightCm ?: return null
@@ -517,7 +521,8 @@ private fun Page(model: OnboardingViewModel, connection: ConnectionState, pip: S
                         UnitMenu(model.metricWeight, "kg", "lb", "lb", model::useMetricWeight)
                     }
                     HorizontalDivider(Modifier.padding(start = 16.dp))
-                    LedgerRow("Birth year", model.birthYearValid == false) {
+                    LedgerRow("Birth year", model.birthYearValid == false,
+                        if (model.tooYoung) "Mivu is for ages 18 and up" else "Check this value") {
                         NumberField(model.birthYearText, { text -> model.birthYearText = text.filter(Char::isDigit).take(4) }, "Birth year",
                             "onboardingBirthYear", Modifier.focusRequester(birthYear), keyboardType = KeyboardType.Number, onNext = null)
                     }
@@ -685,12 +690,12 @@ private fun Footnote(text: String) {
 
 /** A ledger row: label left, value and unit right, with a hint under the label when the value is out of range. */
 @Composable
-private fun LedgerRow(label: String, invalid: Boolean, value: @Composable RowScope.() -> Unit) {
+private fun LedgerRow(label: String, invalid: Boolean, error: String = "Check this value", value: @Composable RowScope.() -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
-            if (invalid) Text("Check this value", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            if (invalid) Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
         value()
     }
