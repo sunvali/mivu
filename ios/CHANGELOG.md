@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/sunvali/mivu/compare/ios-v1.2.1...ios-v1.3.0) (2026-11-06)
+
+
+### Features
+
+* **duo:** full iPhone Duo support with sideways, book and table layouts ([#90](https://github.com/sunvali/mivu/issues/90)) ([cd78de6](https://github.com/sunvali/mivu/commit/cd78de6046aee39259db2f67403037aeeb6beaa8))
+* **pip:** add upright stance with food and workout gestures ([#106](https://github.com/sunvali/mivu/issues/106)) ([e03d2fb](https://github.com/sunvali/mivu/commit/e03d2fba7c27a07851018fa9ef9fdfd998c66bde))
+
+
+### Bug Fixes
+
+* **pip:** keep baked faces on the track clock and skip still tracks ([#112](https://github.com/sunvali/mivu/issues/112)) ([73b063a](https://github.com/sunvali/mivu/commit/73b063a004f9a2dd107de4d9d47938e71711ced8))
+
 ## [1.2.1](https://github.com/sunvali/mivu/compare/ios-v1.2.0...ios-v1.2.1) (2026-10-31)
 
 
