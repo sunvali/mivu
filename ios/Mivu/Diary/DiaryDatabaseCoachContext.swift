@@ -26,6 +26,14 @@ extension DiaryDatabase {
                 dayID: day.id, timeZoneID: day.timeZoneID, photos: try transaction.photoReferences(owner: .meal(parent)).filter { ids.contains($0.photoID) })
         }
     }
+    /// The photo a text answer describes, so the model sees both together.
+    func coachAnsweredPhotos(turnID: UUID, expectedProfileID: UUID) throws -> [DiaryPhotoReference] {
+        try domainRead(expectedProfileID: expectedProfileID) { head in
+            let transaction = DiaryTransaction(database: self, head: head)
+            guard let turn = try transaction.turn(id: turnID), let mealID = try transaction.answeredPhotoMeal(turn) else { return [] }
+            return try transaction.photoReferences(owner: .meal(mealID))
+        }
+    }
     func coachWorkItem(turnID: UUID, expectedProfileID: UUID) throws -> CoachWorkItem {
         try domainRead(expectedProfileID: expectedProfileID) { try workerItem(turnID, head: $0) }
     }
