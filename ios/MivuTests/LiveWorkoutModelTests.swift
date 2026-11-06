@@ -105,6 +105,18 @@ import Testing
         #expect(model.saveError != nil)
     }
 
+    /// Done saves only ticked sets, but the screen under it keeps what it shows, so it never reads a dropped row.
+    @Test func finishKeepsTheShownExercises() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        var row = WorkoutExercise(name: "Barbell Row", sets: [WorkoutSet(repetitions: 8, loadKg: 40, done: false)], exerciseID: "barbell-row")
+        row.measure = .weightReps
+        let model = try await live(store, profile, benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: true), WorkoutSet(repetitions: 8, loadKg: 60, done: false)), row)
+        #expect(await model.finish(at: start.addingTimeInterval(900)))
+        #expect(model.session.exercises.count == 2 && model.session.exercises[0].sets.count == 2)
+        let saved = try #require(try await store.workoutHistory(expectedProfileID: profile.id).values.first { $0.id == model.session.id })
+        #expect(saved.exercises.count == 1 && saved.exercises[0].sets.count == 1 && model.session.revision == saved.revision)
+    }
+
     @Test func failedTickIsNotShownDoneAndDoneSavesIt() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         try await finished(store, profile, on: "2027-03-08", benchWith(WorkoutSet(repetitions: 8, loadKg: 60)))

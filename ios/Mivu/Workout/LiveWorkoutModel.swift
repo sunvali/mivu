@@ -455,13 +455,12 @@ enum WeightStep {
             case .live:
                 // Edits that failed to save are saved first, so Done never drops a tick.
                 if saveError != nil { session = try await saveRecovering(session); saved = session }
-                do { session = try await store.finishWorkout(id: session.id, effort: effort, at: now, expectedRevision: session.revision, expectedProfileID: profileID) }
+                do { adopt(try await store.finishWorkout(id: session.id, effort: effort, at: now, expectedRevision: session.revision, expectedProfileID: profileID)) }
                 catch DiaryError.staleRevision {
                     // Pip added to it meanwhile; every screen change is saved, so the stored copy holds both.
                     let stored = try await storedActive()
-                    session = try await store.finishWorkout(id: stored.id, effort: effort, at: now, expectedRevision: stored.revision, expectedProfileID: profileID)
+                    adopt(try await store.finishWorkout(id: stored.id, effort: effort, at: now, expectedRevision: stored.revision, expectedProfileID: profileID))
                 }
-                onSaved(session, profileID)
             case .past:
                 let date = try await workoutDate()
                 let exercises = tickedExercises
@@ -471,8 +470,7 @@ enum WeightStep {
                     estimatedBurnKcal: WorkoutBurn.estimate(activity: session.activity ?? "strength", seconds: seconds, distanceMeters: nil, effort: effort, bodyKg: bodyKg),
                     title: session.title, activity: session.activity ?? "strength", state: .finished, durationSeconds: seconds,
                     effort: effort, routineID: session.routineID, source: .manual)
-                session = try await store.createWorkout(localDate: date, draft: draft, performedAt: session.performedAt, expectedProfileID: profileID)
-                onSaved(session, profileID)
+                adopt(try await store.createWorkout(localDate: date, draft: draft, performedAt: session.performedAt, expectedProfileID: profileID))
             case .edit:
                 var edited = session
                 edited.exercises = tickedExercises
@@ -490,11 +488,19 @@ enum WeightStep {
                 }
                 edited.estimatedBurnKcal = editBurn(bodyKg: dayKg, dayChanged: date != nil)
                 edited.burnSource = edited.estimatedBurnKcal == nil ? nil : typedKcal != nil ? .userEstimate : saved.burnSource == .userEstimate ? nil : saved.burnSource
-                session = try await store.updateWorkout(edited, onDate: date, expectedRevision: session.revision, expectedProfileID: profileID)
+                adopt(try await store.updateWorkout(edited, onDate: date, expectedRevision: session.revision, expectedProfileID: profileID), notify: false)
             }
             saveError = nil
             return true
         } catch { saveError = error.localizedDescription; return false }
+    }
+
+    /// Takes the saved copy's identity, but the screen under Done keeps the sets it shows: the store drops unticked ones,
+    /// and a list redrawing behind Done must not read a row that is gone.
+    private func adopt(_ stored: WorkoutSession, notify: Bool = true) {
+        let shown = session.exercises
+        session = stored; session.exercises = shown
+        if notify { onSaved(stored, profileID) }
     }
 
     private var tickedExercises: [WorkoutExercise] {
