@@ -105,6 +105,12 @@ import Testing
         #expect(model.saveError != nil)
     }
 
+    @Test func roundOfAStaleBlockIgnoresRemovedMembers() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let model = try await live(store, profile, benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: true), WorkoutSet(repetitions: 8, loadKg: 60, done: false)))
+        #expect(model.round(of: 0..<3) == (2, 2), "members past the end are ignored, not read")
+    }
+
     /// Done saves only ticked sets, but the screen under it keeps what it shows, so it never reads a dropped row.
     @Test func finishKeepsTheShownExercises() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }

@@ -466,6 +466,144 @@ import XCTest
         XCTAssertEqual(app.state, .runningForeground)
     }
 
+    /// Rows are found by position; removing one in every way the screen offers must never read a row that is gone.
+    func testRemovingRowsNeverCrashes() {
+        let app = launch()
+        openGym(app)
+        addBenchAndTickFirstSet(app)
+        for (query, name) in [("Barbell row", "Barbell Row"), ("Dumbbell curl", "Dumbbell Curl")] { addExercise(query, name, in: app) }
+        // Curl is open; pair it with the row, then remove the open member of the superset.
+        app.buttons.matching(identifier: "exerciseMenu").element(boundBy: 0).tap()
+        app.buttons["Superset with…"].tap()
+        app.buttons["Barbell Row"].tap()
+        XCTAssertTrue(app.staticTexts["supersetHeader"].waitForExistence(timeout: 5))
+        removeOpenExercise(named: "Dumbbell Curl", in: app)
+        XCTAssertTrue(app.staticTexts["supersetHeader"].waitForNonExistence(timeout: 5))
+        // On the row, now the open card: one set swiped away, one deleted from its long-press menu.
+        let addSet = app.buttons["addSet"].firstMatch
+        addSet.tap(); addSet.tap()
+        let ticks = app.buttons.matching(identifier: "tickSet")
+        XCTAssertTrue(ticks.element(boundBy: 2).waitForExistence(timeout: 5))
+        app.cells.containing(.button, identifier: "tickSet").element(boundBy: 2).swipeLeft()
+        app.buttons["Delete"].firstMatch.tap()
+        XCTAssertTrue(ticks.element(boundBy: 2).waitForNonExistence(timeout: 5))
+        app.cells.containing(.button, identifier: "tickSet").element(boundBy: 1).press(forDuration: 1.2)
+        app.buttons["Delete"].firstMatch.tap()
+        XCTAssertTrue(ticks.element(boundBy: 1).waitForNonExistence(timeout: 5))
+        // The last exercise, then the ticked one (asks first), leaving an empty workout.
+        removeOpenExercise(named: "Barbell Row", in: app)
+        removeOpenExercise(named: "Barbell Bench Press", in: app)
+        XCTAssertTrue(app.staticTexts["Remove Barbell Bench Press?"].waitForExistence(timeout: 5))
+        app.buttons["Remove"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["tickSet"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["addExercise"].isHittable)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    /// Circuits, take-out, move, replace and removing a collapsed ticked exercise, then a relaunch: the list reshapes under
+    /// rows that were drawn for the old one, and none may read a row that moved or went.
+    func testReshapingRowsNeverCrashes() {
+        let app = launch()
+        openGym(app)
+        addBenchAndTickFirstSet(app)
+        for (query, name) in [("Barbell row", "Barbell Row"), ("Dumbbell curl", "Dumbbell Curl"), ("Back squat", "Barbell Back Squat")] { addExercise(query, name, in: app) }
+        menu("Barbell Back Squat", in: app, then: ["Superset with…", "Barbell Row"])
+        menu("Barbell Back Squat", in: app, then: ["Superset with…", "Dumbbell Curl"])
+        let header = app.staticTexts["supersetHeader"]
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        XCTAssertTrue(header.label.hasPrefix("Circuit"), header.label)
+        menu("Barbell Row", in: app, then: ["Remove"])
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        XCTAssertTrue(header.label.hasPrefix("Superset"), header.label)
+        menu("Dumbbell Curl", in: app, then: ["Superset with…", "Take out of superset"])
+        XCTAssertTrue(header.waitForNonExistence(timeout: 5))
+        menu("Dumbbell Curl", in: app, then: ["Move", "Up"])
+        menu("Dumbbell Curl", in: app, then: ["Replace"])
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Deadlift")
+        app.buttons["Deadlift"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Deadlift options"].waitForExistence(timeout: 5))
+        // The bench card is collapsed: open it, then remove it with its ticked set (asks first).
+        menu("Barbell Bench Press", in: app, then: ["Remove"])
+        XCTAssertTrue(app.staticTexts["Remove Barbell Bench Press?"].waitForExistence(timeout: 5))
+        app.buttons["Remove"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Barbell Bench Press options"].waitForNonExistence(timeout: 5))
+        XCTAssertEqual(app.state, .runningForeground)
+
+        // What is left comes back after a relaunch, in order.
+        app.terminate(); app.launch()
+        let banner = app.buttons["workoutBanner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 15))
+        banner.tap()
+        XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10))
+        let names = app.staticTexts.matching(NSPredicate(format: "label IN %@", ["Deadlift", "Barbell Back Squat"]))
+        XCTAssertEqual(names.count, 2, app.debugDescription)
+        XCTAssertFalse(app.staticTexts["Barbell Bench Press"].exists || app.staticTexts["Barbell Row"].exists || app.staticTexts["Dumbbell Curl"].exists)
+    }
+
+    /// Editing a saved workout: removing an exercise and saving must not crash the list or the detail behind it.
+    func testEditRemovesAnExercise() {
+        let app = launch()
+        openGym(app)
+        addBenchAndTickFirstSet(app)
+        addExercise("Barbell row", "Barbell Row", in: app)
+        app.buttons.matching(identifier: "tickSet").element(boundBy: 0).tap()
+        app.buttons["finishWorkout"].tap()
+        let save = app.buttons["saveWorkout"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        openWorkoutRow(app)
+        app.buttons["editWorkout"].tap()
+        XCTAssertTrue(app.buttons["finishWorkout"].waitForExistence(timeout: 10))
+        menu("Barbell Row", in: app, then: ["Remove"])
+        if app.staticTexts["Remove Barbell Row?"].waitForExistence(timeout: 3) { app.buttons["Remove"].firstMatch.tap() }
+        XCTAssertTrue(app.buttons["Barbell Row options"].waitForNonExistence(timeout: 5))
+        app.buttons["finishWorkout"].tap()
+        let names = app.buttons.matching(identifier: "exerciseName")
+        XCTAssertTrue(names.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(names.count, 1)
+        XCTAssertTrue(names.firstMatch.label.hasPrefix("Barbell Bench Press"), names.firstMatch.label)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    /// Opens the named card's ⋯ menu and taps through the given items.
+    private func menu(_ name: String, in app: XCUIApplication, then items: [String]) {
+        let button = app.buttons["\(name) options"]
+        // A collapsed card has no menu; tapping it opens it.
+        let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name + ",")).firstMatch
+        if !button.waitForExistence(timeout: 2), card.exists { card.tap() }
+        for _ in 0..<4 where !button.isHittable { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(button.waitForExistence(timeout: 5), name)
+        button.tap()
+        for item in items {
+            let element = app.buttons[item].firstMatch
+            XCTAssertTrue(element.waitForExistence(timeout: 5), item)
+            element.tap()
+        }
+    }
+
+    private func addExercise(_ query: String, _ name: String, in app: XCUIApplication) {
+        let addExercise = app.buttons["addExercise"]
+        for _ in 0..<4 where !addExercise.isHittable { app.swipeUp(velocity: .slow) }
+        addExercise.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText(query)
+        app.buttons[name].firstMatch.tap()
+        XCTAssertTrue(search.waitForNonExistence(timeout: 5))
+    }
+
+    /// Opens the ⋯ menu of the named open card and taps Remove.
+    private func removeOpenExercise(named name: String, in app: XCUIApplication) {
+        let menu = app.buttons["\(name) options"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5), name)
+        menu.tap()
+        let remove = app.buttons["Remove"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 5))
+        remove.tap()
+    }
+
     func testEditPastWorkoutDate() {
         let app = launch()
         saveBenchWorkout(app)

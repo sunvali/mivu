@@ -148,6 +148,8 @@ enum WeightStep {
 
     /// "Round 2 of 3": the first round with an unticked set, and the most sets any member has.
     func round(of block: Range<Int>) -> (current: Int, total: Int) {
+        // A header can redraw with its old range just after a member is removed.
+        let block = block.filter(session.exercises.indices.contains)
         let total = block.map { session.exercises[$0].sets.count }.max() ?? 0
         let open = (0..<total).first { round in block.contains { session.exercises[$0].sets.indices.contains(round) && !isTicked(exercise: $0, set: round) } }
         return ((open ?? total - 1) + 1, total)
