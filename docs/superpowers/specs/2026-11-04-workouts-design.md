@@ -57,7 +57,7 @@ quiet when the phone locks, streak guilt, clutter and lock-in.
 | Topic | Decision |
 |---|---|
 | Who it serves | Live gym sessions, after-the-fact gym logs and quick cardio, equally |
-| Entry | "Start workout" on Today in a new Workouts section under Meals |
+| Entry | A workout tab on Today's left edge: tap it, or swipe in from the edge (owner change, 2026-11-06) |
 | Running workout | A banner on every screen of the app; lock-screen timer while it runs |
 | Numbers | Gym: two up/down wheels (weight, reps). Cardio: a sideways ruler per number. Tap the big value to type |
 | Exercises | Built-in searchable list plus unlimited own exercises |
@@ -86,8 +86,12 @@ rarely a sentence. Every screen has one obvious next action.
 - Header card adds "320 burned" in `diaryWorkout` when today has burn. "Left"
   includes burn only per the budget setting.
 - New "Workouts" section under Meals: rows (icon, title, one detail line such as
-  "5 km · 28 min" or "52 min · 14 sets", burn), then a purple "Start workout" card.
-  The section, with just the Start card, shows even when no workout exists.
+  "5 km · 28 min" or "52 min · 14 sets", burn), shown when the day has a saved workout.
+- Starting: a purple tab on the left edge ("Start workout", or "Open workout" while
+  one runs). Tapping it, or swiping in from the left edge, slides Start workout (or
+  the running gym) in from the left, following the finger; let go early and it slides
+  back. Gym turns the panel into the gym in place; Minimize, Done and ✕ slide it out.
+  Reduce Motion fades it instead.
 - Bottom bar unchanged (Log with Pip, Add).
 - Tap a row: workout detail (edit, delete with Undo, Ask Pip), as meals today.
 

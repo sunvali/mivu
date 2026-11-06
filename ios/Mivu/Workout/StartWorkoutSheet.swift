@@ -7,6 +7,8 @@ struct StartWorkoutSheet: View {
     @Binding var start: Date?
     let onGym: (WorkoutDraft?) -> Void
     let onCardio: (String, WorkoutSession?) -> Void
+    /// Closes it where it is not a sheet (the panel Today's edge swipe opens).
+    var onClose: (() -> Void)? = nil
     @State private var routines: [WorkoutRoutine] = []
     @State private var recent: [WorkoutSession] = []
     @Environment(\.dismiss) private var dismiss
@@ -74,7 +76,7 @@ struct StartWorkoutSheet: View {
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .navigationTitle("Start workout")
         .toolbarTitleDisplayMode(.inlineLarge)
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(role: .close) { dismiss() } } }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(role: .close) { if let onClose { onClose() } else { dismiss() } } } }
         .task {
             guard let owner = model.readModel?.profile.id else { return }
             routines = (try? await model.store.routines(expectedProfileID: owner)) ?? []
@@ -158,16 +160,23 @@ struct StartWorkoutFlow: ViewModifier {
     /// A start moved more than five minutes back logs a past workout instead, saved only on Done.
     private func startGym(_ draft: WorkoutDraft?) {
         isPresented = false
-        guard let profile = model.readModel?.profile else { return }
+        Task { if let session = await Self.gymSession(model: model, draft: draft, start: start) { present(session) } }
+    }
+
+    /// The workout Gym opens, for the sheet and Today's edge panel alike.
+    static func gymSession(model: DiaryViewModel, draft: WorkoutDraft?, start: Date?) async -> WorkoutSession? {
+        guard let profile = model.readModel?.profile else { return nil }
         let draft = draft ?? WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [], activity: "strength")
         let now = Date(), at = start ?? now
         if LiveWorkoutModel.mode(start: start, now: now) == .past {
             var past = WorkoutSession(dayID: UUID(), performedAt: at, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0, exercises: [])
             past.apply(draft)
-            return present(past)
+            return past
         }
-        if let active = model.activeWorkout { model.workoutNotice = "\(WorkoutRow.title(active)) is already running"; return present(active) }
-        Task { await model.change { present(try await model.store.startWorkout(draft, at: at, expectedProfileID: profile.id)) } }
+        if let active = model.activeWorkout { model.workoutNotice = "\(WorkoutRow.title(active)) is already running"; return active }
+        var started: WorkoutSession?
+        await model.change { started = try await model.store.startWorkout(draft, at: at, expectedProfileID: profile.id) }
+        return started
     }
 
     private func present(_ session: WorkoutSession) {

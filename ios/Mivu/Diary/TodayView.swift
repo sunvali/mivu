@@ -104,6 +104,13 @@ struct DiaryRootView: View {
     @State private var thermalState = ProcessInfo.processInfo.thermalState
     /// The live gym screen, over every tab; the banner opens it.
     @State private var liveWorkout: WorkoutSession?
+    /// What Today's left-edge swipe opens, sliding in from the left with the finger.
+    @State private var edgePanel: EdgePanel?
+    @State private var edgeTravel: CGFloat = 0
+    @State private var edgeOpen = false
+    @State private var edgeStart: Date?
+    @State private var edgeCardio: [CardioLogState] = []
+    @State private var rootWidth: CGFloat = 400
     /// Said once on the gym screen, e.g. when Coach's Start opened another running workout.
     @State private var discardingWorkout = false
     private let rest = RestTimer.shared
@@ -386,9 +393,11 @@ struct DiaryRootView: View {
                 NavigationStack {
                     TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
                               onCompanionContextChanged: updateCompanionContext,
-                              onCompanionTouch: touchCompanion, openWorkout: { liveWorkout = $0 }).toolbar { profileControl }.duoReadableWidth()
+                              onCompanionTouch: touchCompanion).toolbar { profileControl }.duoReadableWidth()
                         .modifier(WorkoutInset(shown: bannerShown) { workoutBanner })
+                        .overlay(alignment: .leading) { WorkoutEdgeTab(running: model.activeWorkout != nil, action: openEdge) }
                 }
+                .gesture(LeadingEdgeSwipe(onChanged: edgeChanged, onEnded: edgeEnded))
                 .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
                 .modifier(WorkoutDeletedToast(model: model))
                 .task(id: loggedMealID) {
@@ -423,7 +432,7 @@ struct DiaryRootView: View {
                     // The day Coach is changing, beside the chat; Pip stays a still image so the rig mounts once.
                     NavigationStack {
                         TodayView(model: model, companionOutput: CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil),
-                                  companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, openWorkout: { liveWorkout = $0 }, isLiveDay: true)
+                                  companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, isLiveDay: true)
                     }
                     .accessibilityIdentifier("coachLiveDay")
                 }
@@ -431,6 +440,8 @@ struct DiaryRootView: View {
             .badge(coach.queuedSiri.count)
         }
         .modifier(WorkoutAccessory(shown: bannerShown) { workoutBanner })
+        .overlay { edgeOverlay }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rootWidth = max($0, 1) }
     }
     /// Coach's routine card: Start opens the live workout from it, or the one already running.
     private func startRoutine(_ id: UUID) {
@@ -447,6 +458,82 @@ struct DiaryRootView: View {
         }
     }
     private var bannerShown: Bool { model.activeWorkout != nil && liveWorkout == nil }
+
+    enum EdgePanel: Equatable { case start, live(WorkoutSession) }
+
+    /// 0 closed, 1 open; follows the finger while it moves.
+    private var edgeProgress: CGFloat { edgeOpen ? 1 : min(edgeTravel / rootWidth, 1) }
+
+    private func edgeChanged(_ travel: CGFloat) {
+        if edgePanel == nil { prepareEdge() }
+        edgeTravel = travel
+    }
+
+    private func prepareEdge() {
+        edgePanel = model.activeWorkout.map { .live($0) } ?? .start
+        edgeStart = nil; edgeCardio = []
+    }
+
+    /// The tab: the same panel, sliding in on its own.
+    private func openEdge() {
+        guard edgePanel == nil else { return }
+        prepareEdge()
+        // Laid out off screen first, so the next frame can slide it in.
+        Task { @MainActor in withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.35)) { edgeOpen = true } }
+    }
+
+    /// Past a third of the screen, or flicked, it settles open; otherwise it slides back.
+    private func edgeEnded(_ travel: CGFloat, _ velocity: CGFloat) {
+        guard edgePanel != nil else { return }
+        let open = travel > rootWidth / 3 || velocity > 500
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.32)) { edgeOpen = open; edgeTravel = 0 } completion: {
+            if !open { edgePanel = nil }
+        }
+    }
+
+    private func closeEdge() {
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.3)) { edgeOpen = false } completion: { edgePanel = nil }
+    }
+
+    @ViewBuilder private var edgeOverlay: some View {
+        if let edgePanel {
+            ZStack(alignment: .leading) {
+                Color.black.opacity(0.3 * edgeProgress).ignoresSafeArea().allowsHitTesting(false)
+                edgeContent(edgePanel)
+                    // The shadow sits on the plain background, so a drag never re-renders the screen's own shadow.
+                    .background(Color.diaryCanvas.shadow(color: .black.opacity(edgeOpen ? 0 : 0.18), radius: 16).ignoresSafeArea())
+                    // Reduce Motion fades it in place instead of sliding.
+                    .offset(x: reduceMotion ? 0 : -rootWidth * (1 - edgeProgress))
+                    .opacity(reduceMotion ? edgeProgress : 1)
+                    .accessibilityAddTraits(.isModal)
+            }
+        }
+    }
+
+    @ViewBuilder private func edgeContent(_ panel: EdgePanel) -> some View {
+        switch panel {
+        case .live(let session):
+            if let owner = model.readModel?.profile.id {
+                LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past,
+                                notice: model.workoutNotice, coach: coach, onSaved: model.noteWorkoutSaved) { closeEdge(); model.workoutNotice = nil }
+                    .proofTypeSize()
+                    .id(session.id)
+            }
+        case .start:
+            NavigationStack(path: $edgeCardio) {
+                StartWorkoutSheet(model: model, start: $edgeStart, onGym: { draft in
+                    // Gym turns the panel into the gym screen in place.
+                    Task { if let session = await StartWorkoutFlow.gymSession(model: model, draft: draft, start: edgeStart) { withAnimation(.smooth) { edgePanel = .live(session) } } }
+                }, onCardio: { activity, last in
+                    var state = CardioLogState(activity: activity, last: last, now: Date())
+                    if let edgeStart { state.startedAt = edgeStart; state.startEdited = true }
+                    edgeCardio.append(state)
+                }, onClose: closeEdge)
+                .navigationDestination(for: CardioLogState.self) { CardioLogView(model: model, state: $0) { closeEdge() } }
+            }
+            .tint(.diaryAccent)
+        }
+    }
     @ViewBuilder private var workoutBanner: some View {
         if let session = model.activeWorkout {
             WorkoutBanner(session: session, restEndsAt: rest.endsAt, onOpen: { liveWorkout = session },
@@ -661,7 +748,6 @@ struct TodayView: View {
     let onCompanionContextChanged: (CompanionContext) -> Void
     var onCompanionTouch: (CompanionTouch) -> Void = { _ in }
     /// Opens the gym screen, which the root shows over every tab.
-    var openWorkout: (WorkoutSession) -> Void = { _ in }
     /// Shown beside Coach: no capture bar, and the meal Coach just added or corrected lights up.
     var isLiveDay = false
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -678,7 +764,6 @@ struct TodayView: View {
     @State private var showWeight = false
     @State private var showGoals = false
     @State private var savedMealID: UUID?
-    @State private var startingWorkout = false
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @Environment(\.isWideLayout) private var isWide
     // Sideways on the Duo, the summary and the meals sit in two columns; otherwise one list, unchanged order.
@@ -746,8 +831,9 @@ struct TodayView: View {
             } header: { DiarySectionHeader(title: "Meals") }
         }
     }
+    /// The day's saved workouts; starting one is the left-edge tab or swipe.
     @ViewBuilder private var workoutSection: some View {
-        if let snapshot = model.readModel {
+        if let snapshot = model.readModel, snapshot.workouts.contains(where: \.isFinished) {
             Section {
                 ForEach(snapshot.workouts.filter(\.isFinished).sorted { $0.performedAt < $1.performedAt }) { session in
                     NavigationLink {
@@ -758,19 +844,6 @@ struct TodayView: View {
                         .diarySummaryCard()
                         .accessibilityIdentifier("workoutRow")
                 }
-                Button { startingWorkout = true } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "play.fill").font(.body.weight(.semibold))
-                            .frame(width: 40, height: 40).background(Color.diaryActionText.opacity(0.18), in: .circle)
-                            .accessibilityHidden(true)
-                        Text("Start workout").font(.headline)
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle(Color.diaryActionText).contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .diarySummaryCard(fill: .diaryWorkout)
-                .accessibilityIdentifier("startWorkout")
             } header: { DiarySectionHeader(title: "Workouts") }
         }
     }
@@ -862,12 +935,9 @@ struct TodayView: View {
         .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
-        .modifier(StartWorkoutFlow(model: model, isPresented: $startingWorkout, openWorkout: openWorkout))
-        // A swipe in from the left edge: the running workout, or Start workout.
-        .gesture(LeadingEdgeSwipe { if let active = model.activeWorkout { openWorkout(active) } else { startingWorkout = true } })
         .onAppear { surfaceVisible = true; reportCompanionContext() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
-        .onChange(of: [companionVisible, showComposer, showManualNutrition, showWeight, showGoals, showingDetail, startingWorkout]) { _, _ in reportCompanionContext() }
+        .onChange(of: [companionVisible, showComposer, showManualNutrition, showWeight, showGoals, showingDetail]) { _, _ in reportCompanionContext() }
     }
 
     /// A meal logged after midnight that counts for the waking day before: before the cutoff, or because Coach judged it late-night food.
@@ -883,7 +953,7 @@ struct TodayView: View {
             try await model.store.moveMeal(meal.id, to: day.id, expectedRevision: meal.revision, expectedDayID: meal.dayID, expectedProfileID: owner)
         }
     }
-    private var covered: Bool { showComposer || showManualNutrition || showWeight || showGoals || showingDetail || startingWorkout }
+    private var covered: Bool { showComposer || showManualNutrition || showWeight || showGoals || showingDetail }
     private func reportCompanionContext() {
         // Foreground capture is covered by its sheet. Background persistence is not a character action.
         onCompanionContextChanged(CompanionContext(surface: .today, isTyping: false,

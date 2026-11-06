@@ -85,8 +85,9 @@ import XCTest
         XCTAssertTrue(save.waitForExistence(timeout: 5) && save.isHittable)
         capture("Cardio largest text", in: app)
         save.tap()
+        // Today is back at its top; the saved row sits below the fold at this size.
+        XCTAssertTrue(save.waitForNonExistence(timeout: 10))
         let row = app.buttons["workoutRow"].firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10))
         reveal(row, in: app)
         capture("Today largest text", in: app)
     }
@@ -301,14 +302,17 @@ import XCTest
         XCTAssertFalse(banner.exists, "the banner hides while the workout is open")
     }
 
-    /// Starting another gym workout while one runs opens the running one and says so.
-    func testStartingAnotherOpensTheRunningOneWithANotice() {
+    /// While a workout runs, Today's tab opens it: never a second workout, never the Start screen.
+    func testTabOpensTheRunningWorkout() {
         let app = launch()
         openGym(app)
         app.buttons["Minimize"].tap()
         XCTAssertTrue(app.buttons["workoutBanner"].waitForExistence(timeout: 10))
-        openGym(app)
-        XCTAssertTrue(app.staticTexts["Strength training is already running"].waitForExistence(timeout: 10), app.debugDescription)
+        let tab = app.buttons["startWorkout"]
+        XCTAssertEqual(tab.label, "Open workout")
+        tab.tap()
+        XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["startGym"].exists)
     }
 
     func testGymThreeSetsSurviveRelaunch() {
@@ -451,7 +455,8 @@ import XCTest
         XCTAssertTrue(save.isHittable)
         capture("Done largest text bottom", in: app)
         save.tap()
-        XCTAssertTrue(app.buttons["workoutRow"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(save.waitForNonExistence(timeout: 10))
+        reveal(app.buttons["workoutRow"].firstMatch, in: app)
     }
 
     /// Done keeps only ticked sets; the live list underneath must not read the ones it dropped.
@@ -619,21 +624,29 @@ import XCTest
     /// Swiping in from the left edge on Today opens Start workout, or the running workout when there is one.
     func testEdgeSwipeOnTodayOpensTheWorkout() {
         let app = launch()
-        edgeSwipe(app)
         let gym = app.buttons["startGym"]
-        XCTAssertTrue(gym.waitForExistence(timeout: 5), "no workout running: Start workout opens")
+        // A short, slow swipe slides back: nothing stays open.
+        edgeSwipe(app, to: 0.15, velocity: .slow)
+        XCTAssertTrue(gym.waitForNonExistence(timeout: 5), "a short swipe slides back")
+        edgeSwipe(app, to: 0.7)
+        XCTAssertTrue(gym.waitForExistence(timeout: 5), "no workout running: Start workout slides in")
+        XCTAssertEqual(gym.frame.minX, app.windows.firstMatch.frame.minX + 16, accuracy: 30, "settled fully on screen from the left")
+        app.buttons["Close"].firstMatch.tap()
+        XCTAssertTrue(gym.waitForNonExistence(timeout: 5), "✕ slides it away")
+        edgeSwipe(app, to: 0.7)
+        XCTAssertTrue(gym.waitForExistence(timeout: 5))
         gym.tap()
-        XCTAssertTrue(app.buttons["Minimize"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Minimize"].waitForExistence(timeout: 10), "Gym turns the panel into the gym")
         app.buttons["Minimize"].tap()
         XCTAssertTrue(app.buttons["workoutBanner"].waitForExistence(timeout: 10))
-        edgeSwipe(app)
-        XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10), "a running workout opens straight away")
-        XCTAssertFalse(app.buttons["startGym"].exists)
+        edgeSwipe(app, to: 0.7)
+        XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10), "a running workout slides in straight away")
+        XCTAssertFalse(gym.exists)
     }
 
-    private func edgeSwipe(_ app: XCUIApplication) {
+    private func edgeSwipe(_ app: XCUIApplication, to x: CGFloat, velocity: XCUIGestureVelocity = .fast) {
         let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
-        edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0)
+        edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.5)), withVelocity: velocity, thenHoldForDuration: 0)
     }
 
     /// A workout saved today goes back to live from its detail, keeps its sets, and saves again with the new one.
