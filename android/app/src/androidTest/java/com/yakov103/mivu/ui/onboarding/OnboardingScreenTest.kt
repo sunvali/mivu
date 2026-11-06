@@ -186,6 +186,17 @@ class OnboardingScreenTest {
         assertTrue(!exists(heading("Hi, I'm Pip")))
     }
 
+    @Test fun backOnTheFirstStepPutsSetupOff() {
+        launchApp()
+        waitFor(heading("Hi, I'm Pip"))
+        Espresso.pressBack()
+        waitFor(heading("Today"))
+        launchApp()
+        waitFor(heading("Today"))
+        compose.waitForIdle()
+        assertTrue(!exists(heading("Hi, I'm Pip")))
+    }
+
     @Test fun setupStatusBarIconsFollowTheTheme() {
         launchApp()
         waitFor(heading("Hi, I'm Pip"))
