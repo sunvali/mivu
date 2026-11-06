@@ -262,14 +262,16 @@ class CoachHistoryScreenTest {
         TodayFixture.wipe(context)
         profileID = TodayFixture.seed(context, photo = false) // meals added by hand: no Coach turn, no chat that day
         repository = DiaryRepository(context)
+        val latest = visits(1).single() // chat on another day: the latest conversation
         launchApp(tab = null)
         waitFor(hasText("Overnight oats"))
         compose.onNodeWithText("Overnight oats").performClick()
         waitFor(hasTestTag("mealAskPip"))
         compose.onNodeWithTag("mealAskPip").performClick()
-        compose.waitUntil(10_000) { model().timeline.value.loaded }
+        compose.waitUntil(10_000) { model().timeline.value.exchanges.any { it.turn.id == latest.id } }
         runCatching { compose.waitUntil(3_000) { model().message.value != null } }
         assertEquals(null, model().message.value)
+        assertEquals(null, model().timeline.value.highlighted)
         assertTrue(model().draft.value.reply?.target is CoachReply.Target.Meal)
     }
 
