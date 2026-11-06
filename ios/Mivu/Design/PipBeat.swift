@@ -214,7 +214,8 @@ enum PipBake {
         put(\.nod, trail(level, 19, 0.55))
         // Automatic squash and stretch: long on the way up, short as the body lands.
         // A breath on top means no hold is ever dead still; a whole number of them, so a loop closes.
-        let length = beats[beats.count - 1].at, breaths = max(1, (length / 1.4).rounded())
+        // At least one frame long, so a single beat at 0 does not divide by zero.
+        let length = max(beats[beats.count - 1].at, 1 / rate), breaths = max(1, (length / 1.4).rounded())
         let breath = times.map { 0.006 * sin(2 * .pi * CGFloat($0 / length * breaths)) }
         put(\.stretch, plus(plus(read(\.stretch), sink.map { max(-0.09, min(0.11, -$0 * 0.0055)) }), breath))
         put(\.headSink, sink.map { max(-9, min(9, $0 * 0.3)) })

@@ -71,16 +71,16 @@ Ears, scarf ends, the tail tip and the torso also bend along their length (`Join
 
 | Gesture | Duration | Acting |
 | --- | ---: | --- |
-| `eat-apple` | 1.95 s | Two bites with chewing, then a content blush |
-| `eat-bowl` | 1.95 s | Bowl in the far paw, two spoonfuls |
-| `sip-water` | 1.85 s | Cup to the mouth, head back, a satisfied breath |
-| `eat-yum` | 1.25 s | Pats the belly, blush, one heart |
-| `workout-squat` | 1.3 s loop | Sinks with feet planted, paws to the chest |
-| `workout-jumping-jack` | 0.68 s loop | Hop out, arms up; hop in, arms down |
-| `workout-side-bend` | 2.0 s loop | Leans left, then right, the far arm high |
-| `workout-breather` | 1.65 s | Paws on knees, panting, wipes the brow |
-| `stretch-reach` | 1.9 s | Slow reach out and up, eyes closed |
-| `yoga-tree` | 1.9 s | One leg, sole to knee, paws at the heart, a small wobble |
+| `eat-apple` | 2.0 s | Two bites with chewing, then a content blush |
+| `eat-bowl` | 2.0 s | Bowl in the far paw, two spoonfuls |
+| `sip-water` | 1.9 s | Cup to the mouth, head back, a satisfied breath |
+| `eat-yum` | 1.4 s | Pats the belly, blush, one heart |
+| `workout-squat` | 1.7 s loop | Sinks with feet planted, paws to the chest |
+| `workout-jumping-jack` | 1.08 s loop | Hop out, arms up; hop in, arms down |
+| `workout-side-bend` | 2.8 s loop | Leans left, then right, the far arm high |
+| `workout-breather` | 1.8 s | Paws on knees, panting, wipes the brow |
+| `stretch-reach` | 1.98 s | Slow reach out and up, eyes closed |
+| `yoga-tree` | 1.92 s | One leg, sole to knee, paws at the heart, a small wobble |
 
 During recovery or processing a tap gives only an ear twitch. Surface changes use
 the native tab transition; the 350 ms native focus and keyboard sizing animation is
