@@ -36,12 +36,12 @@ enum DiaryWeek {
     }
 
     static func status(_ summaries: [DiaryDaySummary], activeDayID: UUID?) -> DayStatus? {
-        ProgressAnalytics.status(days: summaries.map(\.day), hasFood: summaries.contains { $0.savedMealCount > 0 }, activeDayID: activeDayID)
+        ProgressAnalytics.status(days: summaries.map(\.day), hasFood: summaries.contains { $0.savedMealCount > 0 }, hasWorkouts: summaries.contains { $0.workoutCount > 0 }, activeDayID: activeDayID)
     }
 
     static func pillLabel(_ localDate: String, summaries: [DiaryDaySummary], activeDayID: UUID? = nil) -> String {
         let name = format(localDate, "EEEE d MMMM")
-        guard let status = status(summaries, activeDayID: activeDayID) else { return "\(name), nothing logged" }
+        guard let status = status(summaries, activeDayID: activeDayID) else { return "\(name), \(summaries.contains { $0.workoutCount > 0 } ? "workout logged" : "nothing logged")" }
         let meals = summaries.reduce(0) { $0 + $1.mealCount }
         return "\(name), \(status.rawValue), \(meals) \(meals == 1 ? "meal" : "meals")"
     }

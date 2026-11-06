@@ -42,7 +42,7 @@ enum ChatHistoryFixture {
             photos: [MealPhoto(id: photoID, data: Data([255, 255, 255, 0]), createdAt: instant)])]
         snapshot.weights = [WeightEntry(id: generator.uuid(), dayID: first.id, measuredAt: instant, value: 70.125)]
         snapshot.goals = [GoalRecord(id: generator.uuid(), effectiveLocalDate: first.localDate, timeZoneID: first.timeZoneID,
-            targets: NutritionValues(kcal: 2000), goalWeightKg: nil, exerciseCreditEnabled: false)]
+            targets: NutritionValues(kcal: 2000), goalWeightKg: nil, exerciseCreditPercent: 0)]
         snapshot.workouts = [WorkoutSession(id: generator.uuid(), dayID: first.id, performedAt: instant, timePrecision: .dateOnly,
             revision: 1, kind: .other, durationMinutes: 1, exercises: [], estimatedBurnKcal: 0, burnSource: .userEstimate)]
         snapshot.coachTurns = (0..<exchanges).map { index in

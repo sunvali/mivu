@@ -14,7 +14,7 @@ import Testing
                                                items: ([$0] + also).map { FoodItem(name: "Synthetic bowl", nutrition: $0) },
                                                submissions: [], photos: [], sourceTurnID: nil)] } ?? []
         let goal = target.map { GoalRecord(effectiveLocalDate: "2026-10-01", timeZoneID: "Asia/Jerusalem", targets: $0,
-                                           goalWeightKg: nil, exerciseCreditEnabled: false) }
+                                           goalWeightKg: nil, exerciseCreditPercent: 0) }
         let head = DiaryHead(profile: DiaryProfile(name: "Synthetic island", timeZoneID: "Asia/Jerusalem"), revision: 1,
                              lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
         let model = DiaryReadModel(head: head, activeDay: day, meals: meals, weight: nil, workouts: [], activeGoal: goal,
@@ -68,12 +68,32 @@ import Testing
         #expect(try state(eaten: full, target: targets).hideWhenLocked)
     }
 
-    @Test func disabledEndsAll() { #expect(DayProgressSync.decide(enabled: false, authorized: true, hasDiary: true, running: 1) == .endAll) }
-    @Test func unauthorizedEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: false, hasDiary: true, running: 1) == .endAll) }
-    @Test func noDiaryEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: false, running: 1) == .endAll) }
-    @Test func noneRunningStarts() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 0) == .start) }
-    @Test func oneRunningUpdates() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1) == .update(endingExtra: 0)) }
-    @Test func extrasEnd() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 3) == .update(endingExtra: 2)) }
+    @Test func disabledEndsAll() { #expect(DayProgressSync.decide(enabled: false, authorized: true, hasDiary: true, running: 1, workoutRunning: false) == .endAll) }
+    @Test func unauthorizedEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: false, hasDiary: true, running: 1, workoutRunning: false) == .endAll) }
+    @Test func noDiaryEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: false, running: 1, workoutRunning: false) == .endAll) }
+    @Test func noneRunningStarts() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 0, workoutRunning: false) == .start) }
+    @Test func oneRunningUpdates() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1, workoutRunning: false) == .update(endingExtra: 0)) }
+    @Test func extrasEnd() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 3, workoutRunning: false) == .update(endingExtra: 2)) }
+
+    @Test func workoutContentGoesStaleAtRestEnd() throws {
+        let start = Date(timeIntervalSinceReferenceDate: 820_000_000), end = start.addingTimeInterval(600)
+        let session = WorkoutSession(dayID: UUID(), performedAt: start, timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 0,
+                                     exercises: [WorkoutExercise(name: "Bench press", sets: [WorkoutSet(repetitions: 8, loadKg: 60, done: true),
+                                                                                             WorkoutSet(repetitions: 8, loadKg: 60, done: false)])])
+        // Stale at the rest's end, so a suspended Mivu's Lock Screen leaves "Rest" for the elapsed time on its own.
+        let resting = try #require(WorkoutActivitySync.content(session, restEndsAt: end, hideWhenLocked: true))
+        #expect(resting.staleDate == end && resting.state.restEndsAt == end && resting.state.startedAt == start)
+        #expect(resting.state.exercise == "Bench press" && resting.state.nextSet == "set 2" && resting.state.hideWhenLocked)
+        #expect(WorkoutActivitySync.content(session, restEndsAt: nil, hideWhenLocked: false)?.staleDate == nil)
+        #expect(WorkoutActivitySync.content(nil, restEndsAt: end, hideWhenLocked: false) == nil)
+    }
+
+    @Test func workoutPausesDayActivity() {
+        #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 1, workoutRunning: true) == .endAll)
+        // After the workout it comes back only for someone who had it on.
+        #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: true, running: 0, workoutRunning: false) == .start)
+        #expect(DayProgressSync.decide(enabled: false, authorized: true, hasDiary: true, running: 0, workoutRunning: false) == .endAll)
+    }
 
     @Test func unknownMacroIsNeverZero() {
         #expect(State.macroLabel("P", nil, 120) == "P –/120g")

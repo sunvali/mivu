@@ -64,7 +64,7 @@ struct ArchiveFixtureTests {
             WeightEntry(id: id(81), dayID: days[1].id, measuredAt: at(86_410), value: 155, unit: "lb", revision: 3, timePrecision: .dateOnly),
         ]
         let goal = GoalRecord(id: id(85), effectiveLocalDate: days[0].localDate, timeZoneID: "Asia/Jerusalem", revision: 2,
-            targets: NutritionValues(kcal: 2000, protein: 120), goalWeightKg: 68, exerciseCreditEnabled: true)
+            targets: NutritionValues(kcal: 2000, protein: 120), goalWeightKg: 68, exerciseCreditPercent: 100)
         let workouts = [
             WorkoutSession(id: id(90), dayID: days[0].id, performedAt: at(500), timePrecision: .exact, revision: 1, kind: .strength,
                 durationMinutes: 45, exercises: [WorkoutExercise(name: "Synthetic squat", sets: [WorkoutSet(repetitions: 8, loadKg: 60.5),
@@ -92,7 +92,8 @@ struct ArchiveFixtureTests {
         receipts[2].weightID = weights[1].id
         receipts[3].workoutID = workouts[0].id
         receipts[4].dayID = nil; receipts[4].goalID = goal.id
-        receipts += CoachDestination.allCases.map { destination in
+        // The v1–v4 and Android fixtures predate the workouts destination, which arrived with archive v5.
+        receipts += CoachDestination.allCases.filter { $0 != .workouts }.map { destination in
             var value = receipt("open/\(destination.rawValue)", revision: 12); value.dayID = nil; value.destination = destination; return value
         }
         let main = CoachTurn(id: id(110), capturedAt: context.capturedAt, text: text, photos: [coachPhoto], state: .completed,

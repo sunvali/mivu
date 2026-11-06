@@ -607,7 +607,7 @@ private actor CoachInputFixture {
 
     @Test func progressQuestionKeepsGroundedProse() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic meal", nutrition: NutritionValues(kcal: 500), provenance: .estimate, reference: "Fixture")], expectedProfileID: profile.id)
         let query = try await capturedTurn(store, text: "How am I doing?", photos: [], at: now, expectedProfileID: profile.id)
         let prose = "You're at **500** kcal, so about 1,500 left. A protein-rich dinner fits well."
@@ -626,7 +626,7 @@ private actor CoachInputFixture {
 
     @Test func mealProseMayStateTheDaysNewTotal() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         let earlier = try await capturedTurn(store, text: "Synthetic breakfast", photos: [], at: now, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: earlier.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic breakfast", nutrition: NutritionValues(kcal: 500), provenance: .estimate)], expectedProfileID: profile.id)
         let food = #"{"target_local_date":"2027-01-15","items":[{"name":"Synthetic eggs","quantity":2,"unit":"egg","kcal":140,"carbs":1,"protein":12,"fat":10}]}"#
@@ -650,7 +650,7 @@ private actor CoachInputFixture {
 
     @Test func progressAnswerUsesRequestedActualBudget() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic meal", nutrition: NutritionValues(kcal: 500), provenance: .estimate, reference: "Fixture")], expectedProfileID: profile.id)
         let query = try await capturedTurn(store, text: "What is my remaining budget?", photos: [], at: now, expectedProfileID: profile.id)
         let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: "9999 remaining")])
@@ -693,7 +693,7 @@ private actor CoachInputFixture {
 
     @Test func requestedProgressRereadsFactsAfterSuspendedInference() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        let goal = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+        let goal = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: 2000), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [FoodItem(name: "Synthetic", nutrition: NutritionValues(kcal: 500), provenance: .estimate)], expectedProfileID: profile.id)
         let query = try await capturedTurn(store, text: "Current progress", photos: [], at: now, expectedProfileID: profile.id)
         let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")])]), suspended = CoachSuspension()
@@ -702,7 +702,9 @@ private actor CoachInputFixture {
             return try await replies.infer(input, tools)
         })
         let task = Task { try await engine.run(turnID: query.id, expectedProfileID: profile.id) }
-        for _ in 0..<1000 { if await suspended.started { break }; await Task.yield() }
+        // Bounded by time, not yields: the engine reads the diary on its actor before the second call.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !(await suspended.started), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
         try #require(await suspended.started)
         var revised = goal; revised.targets.kcal = 1800
         _ = try await store.setGoals(revised, expectedRevision: goal.revision, expectedProfileID: profile.id)
@@ -721,7 +723,8 @@ private actor CoachInputFixture {
         let receipt = try #require(completed.receipts.first)
         let returned = try JSONDecoder().decode(WorkoutSession.self, from: Data(receipt.resultJSON.utf8))
         #expect(returned.id == original.id); #expect(returned.revision == 2)
-        #expect(returned.durationMinutes == 45); #expect(returned.exercises == original.exercises)
+        // The older word-named "Squat" joins its catalog exercise on edit; its sets stay as they were.
+        #expect(returned.durationMinutes == 45); #expect(returned.exercises.map(\.exerciseID) == ["barbell-back-squat"] && returned.exercises[0].sets == original.exercises[0].sets)
         #expect(returned.performedAt == original.performedAt); #expect(returned.dayID == original.dayID)
         #expect(completed.assistantText == "Workout saved: strength, 45 minutes.")
     }
@@ -753,7 +756,7 @@ private actor CoachInputFixture {
         try await store.updateProfile(preferences, expectedProfileID: profile.id)
         _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID,
             targets: NutritionValues(kcal: 2000, carbs: 200, protein: 100, fat: 70), goalWeightKg: 68,
-            exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+            exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.recordWeight(value: 70, at: now, expectedProfileID: profile.id)
         let workout = try await store.createWorkout(localDate: "2027-01-15",
             draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 120,
@@ -821,7 +824,8 @@ private actor CoachInputFixture {
         let parsed = try CoachTools.parse(call("edit_workout", arguments), meals: [], evidence: [:], receipts: [], workouts: [fresh])
         guard case .write(let write) = parsed else { throw CoachError.invalidArguments }
         let receipts = try await store.applyCoachWrites([write], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
-        #expect(try await store.snapshotForExport().workouts[0].exercises == [squat, deadlift])
+        let edited = try await store.snapshotForExport().workouts[0].exercises
+        #expect(edited.map(\.exerciseID) == ["barbell-back-squat", "deadlift"] && edited.map(\.sets) == [squat.sets, deadlift.sets])
         #expect(receipts[0].workoutID == original.id)
     }
 

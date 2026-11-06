@@ -9,6 +9,8 @@ enum PipMoment: Hashable {
     case presenting(cheer: Bool)
     /// Progress one-shots: opening the tab (`cheer` on an on-track period), switching range, and taps on Pip (`level` picks the next silly one).
     case progressEntrance(cheer: Bool), progressRange, progressTap(level: Int)
+    /// After a workout is durably saved (`activity` picks the move), and on the gym Done screen (`hard` is effort 7 or more).
+    case workoutSaved(activity: String), workoutDone(hard: Bool)
 }
 
 /// Timed poses. Each key is the full pose Pip should *arrive at* by `at` seconds; the previous key's time is when

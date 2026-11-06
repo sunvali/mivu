@@ -263,10 +263,11 @@ import XCTest
         revealCoachLink(workout, in: app)
         XCTAssertGreaterThanOrEqual(workout.frame.height, 44); workout.tap()
         XCTAssertTrue(app.navigationBars["Workout"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Squat"].exists)
-        XCTAssertTrue(app.staticTexts["30 minutes"].exists)
-        XCTAssertTrue(app.staticTexts["Time unspecified"].exists)
-        XCTAssertTrue(app.staticTexts["Set 1: 8 repetitions · 40 kg"].exists)
+        XCTAssertTrue(app.buttons["exerciseName"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["exerciseName"].firstMatch.label, "Squat")
+        let any = app.descendants(matching: .any)
+        XCTAssertTrue(any.matching(NSPredicate(format: "label BEGINSWITH '30 min'")).firstMatch.exists)
+        XCTAssertTrue(any.matching(NSPredicate(format: "label == 'Set 1, 40 kg × 8'")).firstMatch.exists)
         let detail = XCTAttachment(screenshot: app.screenshot()); detail.name = "Synthetic Coach receipt opens actual workout"; detail.lifetime = .keepAlways; add(detail)
         app.navigationBars.buttons.firstMatch.tap()
         enter("What is my remaining budget?", in: app); app.buttons["coachSend"].tap()
@@ -294,8 +295,9 @@ import XCTest
         let savedWorkout = app.buttons["workoutRow"].firstMatch
         revealList(savedWorkout, in: app); savedWorkout.tap()
         XCTAssertTrue(app.navigationBars["Workout"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Squat"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["30 minutes"].exists)
+        XCTAssertTrue(app.buttons["exerciseName"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["exerciseName"].firstMatch.label, "Squat")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '30 min'")).firstMatch.exists)
         let persisted = XCTAttachment(screenshot: app.screenshot()); persisted.name = "Synthetic Coach workout persisted after relaunch"; persisted.lifetime = .keepAlways; add(persisted)
     }
 

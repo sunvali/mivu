@@ -11,7 +11,7 @@ import Testing
         let store = DiaryStore(directory: root, currentTime: { clock }); let profile = DiaryProfile(name: "Synthetic")
         _ = try await store.createProfile(profile); _ = try await store.startDay(at: now)
         if let goal {
-            _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: goal, protein: protein), exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+            _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: profile.timeZoneID, targets: NutritionValues(kcal: goal, protein: protein), exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         }
         if let food {
             let turn = try await capturedTurn(store, text: "Synthetic meal", photos: [], at: now, expectedProfileID: profile.id)
@@ -43,7 +43,7 @@ import Testing
     }
 
     @Test func goalLineIncludesProteinWhenSet() {
-        let goal = GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: "UTC", targets: NutritionValues(kcal: 1600, protein: 120), exerciseCreditEnabled: false)
+        let goal = GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: "UTC", targets: NutritionValues(kcal: 1600, protein: 120), exerciseCreditPercent: 0)
         #expect(CoachReplyLines.factLine(progress: [], goals: [goal], workouts: [], preferencesRead: false, today: "2027-01-15") == "Goal: 1,600 kcal a day, 120 g protein.")
     }
 
@@ -55,7 +55,7 @@ import Testing
     @Test func atMostTwoSentences() async throws {
         let (store, profile, root) = try await store(); defer { try? FileManager.default.removeItem(at: root) }
         let progress = try await store.coachProgress(endingOn: "2027-01-15", days: 1, expectedProfileID: profile.id)
-        let goal = GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: "UTC", targets: NutritionValues(kcal: 1600), exerciseCreditEnabled: false)
+        let goal = GoalRecord(effectiveLocalDate: "2027-01-15", timeZoneID: "UTC", targets: NutritionValues(kcal: 1600), exerciseCreditPercent: 0)
         let line = CoachReplyLines.factLine(progress: [progress], goals: [goal], workouts: [], preferencesRead: true, today: "2027-01-15")
         #expect(line == "Today: 1,142 of 1,600 kcal, about 460 left. Goal: 1,600 kcal a day.")
     }

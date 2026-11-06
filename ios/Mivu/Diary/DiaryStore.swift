@@ -424,6 +424,18 @@ actor DiaryStore {
         return try pagedMutation(expectedProfileID) { try $0.setGoals(goal, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
     }
 
+    func routines(expectedProfileID: UUID) throws -> [WorkoutRoutine] {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.routines(expectedProfileID: expectedProfileID)
+    }
+
+    func saveRoutine(_ routine: WorkoutRoutine, expectedRevision: Int?, expectedProfileID: UUID) throws -> WorkoutRoutine {
+        return try pagedMutation(expectedProfileID) { try $0.saveRoutine(routine, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+
+    func deleteRoutine(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
+        return try pagedMutation(expectedProfileID) { try $0.deleteRoutine(id: id, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+
     func updateWeight(id: UUID, value: Double, expectedRevision: Int, expectedProfileID: UUID) throws -> WeightEntry {
         return try pagedMutation(expectedProfileID) { try $0.updateWeight(id: id, value: value, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
     }
@@ -441,12 +453,134 @@ actor DiaryStore {
         }
     }
 
-    func updateWorkout(_ session: WorkoutSession, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
-        return try pagedMutation(expectedProfileID) { try $0.updateWorkout(session, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    /// Imports in one transaction, each on its waking day (opened if needed, never made active). A workout whose
+    /// import ID (source, start and title) is already stored, or appears twice in the file, is skipped, so importing
+    /// the same file again adds nothing. The stored IDs are read once, so a long history stays one quick pass.
+    func importWorkouts(_ rows: [ImportedWorkout], source: WorkoutSource, expectedProfileID: UUID) throws -> (added: Int, duplicates: Int) {
+        return try pagedMutation(expectedProfileID) { database, head in
+        try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+            let zone = head.profile.timeZoneID
+            var added = 0, duplicates = 0
+            var seen = Set(try transaction.records("workout", clause: "json_extract(CAST(payload AS TEXT), '$.source') = ?", values: [.text(source.rawValue)])
+                .compactMap { try database.decode(WorkoutSession.self, $0).externalID })
+            for row in rows {
+                var draft = row.draft; draft.source = source
+                guard seen.insert(row.externalID).inserted else { duplicates += 1; continue }
+                let date = wakingDateLabel(row.startedAt, zone: zone)
+                let day = try transaction.resolveDay(localDate: date, timeZoneID: zone, at: diaryDateOnlyInstant(date, zone: zone))
+                _ = try transaction.createWorkout(dayID: day.id, draft: draft, performedAt: row.startedAt)
+                added += 1
+            }
+            return (added, duplicates)
+        }
+        }
+    }
+
+    /// With `localDate`, the workout moves to that diary date (opened if needed); its start must fall on it.
+    func updateWorkout(_ session: WorkoutSession, onDate localDate: String? = nil, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        return try pagedMutation(expectedProfileID) { database, head in
+        try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+            var moved = session
+            if let localDate {
+                moved.dayID = try transaction.resolveDay(localDate: localDate, timeZoneID: head.profile.timeZoneID, at: diaryDateOnlyInstant(localDate, zone: head.profile.timeZoneID)).id
+            }
+            return try transaction.updateWorkout(moved, expectedRevision: expectedRevision)
+        }
+        }
+    }
+
+    /// Undo for a deleted workout: the same record again under a new ID, since the old one stays deleted.
+    func restoreWorkout(_ session: WorkoutSession, expectedProfileID: UUID) throws -> WorkoutSession {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { transaction in
+            var copy = session; copy.id = UUID(); copy.revision = 1
+            return try transaction.saveWorkout(copy)
+        } }
     }
 
     func deleteWorkout(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
         return try pagedMutation(expectedProfileID) { try $0.deleteWorkout(id: id, expectedRevision: expectedRevision, expected: $1, maximumBytes: maximumFileBytes) }
+    }
+
+    /// Starts a live workout, stored as active from the first tap; one per profile.
+    func startWorkout(_ draft: WorkoutDraft, at: Date, expectedProfileID: UUID) throws -> WorkoutSession {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.startWorkout(draft, at: at) } }
+    }
+
+    func activeWorkout(expectedProfileID: UUID) throws -> WorkoutSession? {
+        let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+        return try database.domainRead(expectedProfileID: expectedProfileID) { try DiaryTransaction(database: database, head: $0).activeWorkout() }
+    }
+
+    /// Saves one live change (a tick, edit, add or delete) in its own transaction.
+    func saveActive(_ session: WorkoutSession, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        let now = currentTime()
+        return try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.saveActive(session, expectedRevision: expectedRevision, at: now) } }
+    }
+
+    func finishWorkout(id: UUID, effort: Int?, at: Date, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.finishWorkout(id: id, effort: effort, at: at, expectedRevision: expectedRevision) } }
+    }
+
+    func resumeWorkout(id: UUID, at: Date, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.resumeWorkout(id: id, at: at, expectedRevision: expectedRevision) } }
+    }
+
+    func discardWorkout(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.discardWorkout(id: id, expectedRevision: expectedRevision) } }
+    }
+
+    /// The body weight a burn estimate uses on `localDate`, as `finishWorkout` reads it.
+    func bodyKg(on localDate: String, expectedProfileID: UUID) throws -> Double? {
+        let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
+        return try database.domainRead(expectedProfileID: expectedProfileID) { try DiaryTransaction(database: database, head: $0).bodyKg(on: localDate, zone: $0.profile.timeZoneID) }
+    }
+
+    func finishedWorkouts(containing key: ExerciseKey, limit: Int, expectedProfileID: UUID) throws -> [WorkoutSession] {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.finishedWorkouts(containing: key, limit: limit, expectedProfileID: expectedProfileID)
+    }
+
+    /// Settings › Workouts: the choice counts from `date` on. Today's goal record carries it (a day without its own
+    /// record starts from the goal in force), and goals dated later take it too, so earlier days keep their numbers.
+    /// With no goal in force nothing is written and nil comes back; the caller keeps the choice for the first goal.
+    func setExerciseCredit(_ percent: Int, on date: String, expectedProfileID: UUID) throws -> GoalRecord? {
+        guard [0, 50, 100].contains(percent) else { throw DiaryError.invalidData }
+        return try pagedMutation(expectedProfileID) { database, head in
+            try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
+                for row in try transaction.records("goal", clause: "effectiveLocalDate > ?", values: [.text(date)]) {
+                    var later = try database.decode(GoalRecord.self, row); try validateGoalFields(later)
+                    guard later.exerciseCreditPercent != percent else { continue }
+                    later.exerciseCreditPercent = percent
+                    _ = try transaction.setGoal(later, revision: later.revision)
+                }
+                let exact = try transaction.exactGoal(on: date)
+                guard var goal = try exact ?? transaction.goal(on: date) else { return nil }
+                if exact == nil { goal.id = UUID(); goal.effectiveLocalDate = date; goal.timeZoneID = head.profile.timeZoneID }
+                goal.exerciseCreditPercent = percent
+                return try transaction.setGoal(goal, revision: exact?.revision)
+            }
+        }
+    }
+
+    /// The person's own exercise names (not from the catalog), one per exercise, in finished workouts and routines.
+    func ownExerciseNames(expectedProfileID: UUID) throws -> [String] {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.ownExerciseNames(expectedProfileID: expectedProfileID)
+    }
+
+    /// Renames an own exercise in every finished workout and routine in one transaction; returns how many records changed.
+    func renameOwnExercise(from name: String, to newName: String, expectedProfileID: UUID) throws -> Int {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 200 else { throw DiaryError.invalidData }
+        return try rewriteOwnExercise(name, expectedProfileID) { $0.name = trimmed }
+    }
+
+    /// Makes an own exercise the bundled one, so its history and bests join it; returns how many records changed.
+    func mergeOwnExercise(_ name: String, into key: ExerciseKey, expectedProfileID: UUID) throws -> Int {
+        guard let target = WorkoutCatalog.exercise(key.raw) else { throw DiaryError.invalidData }
+        return try rewriteOwnExercise(name, expectedProfileID) { $0.name = target.name; $0.exerciseID = target.id; $0.measure = target.measure }
+    }
+
+    private func rewriteOwnExercise(_ name: String, _ owner: UUID, _ edit: @escaping (inout WorkoutExercise) -> Void) throws -> Int {
+        try pagedMutation(owner) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.rewriteOwnExercise(ExerciseKey(WorkoutExercise(name: name, sets: [])), edit) } }
     }
 
     func updateProfile(_ profile: DiaryProfile, expectedProfile: DiaryProfile? = nil, expectedProfileID: UUID? = nil) throws {
@@ -544,10 +678,11 @@ actor DiaryStore {
 
     }
 
-    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID, mode: CoachWriteMode = .uninterrupted) throws -> [CoachReceipt] {
+    func applyCoachWrites(_ writes: [CoachWrite], turnID: UUID, epoch: UInt64, expectedProfileID: UUID, mode: CoachWriteMode = .uninterrupted,
+                          waitingCredit: Int? = nil) throws -> [CoachReceipt] {
         try validateSelection(epoch: epoch, expectedProfileID: expectedProfileID)
         try refreshCoachHead(expectedProfileID: expectedProfileID)
-        return try pagedMutation(expectedProfileID) { try $0.applyCoachWrites(writes, turnID: turnID, mode: mode, at: currentTime(), expected: $1, maximumBytes: maximumFileBytes) }
+        return try pagedMutation(expectedProfileID) { try $0.applyCoachWrites(writes, turnID: turnID, mode: mode, waitingCredit: waitingCredit, at: currentTime(), expected: $1, maximumBytes: maximumFileBytes) }
 
     }
 
@@ -559,9 +694,14 @@ actor DiaryStore {
         let (database, _) = try pagedConnection(expectedProfileID: expectedProfileID)
         return try database.domainRead(expectedProfileID: expectedProfileID) { head in
             let workout = try DiaryTransaction(database: database, head: head).workout(id: id)
+            guard workout.isFinished else { throw DiaryError.notFound } // a running workout is not in the diary yet
             guard try JSONEncoder().encode(workout).count <= 48_000 else { throw CoachError.limitExceeded }; return workout
         }
 
+    }
+
+    func coachExerciseHistory(_ name: String, limit: Int, expectedProfileID: UUID) throws -> CoachExerciseHistory {
+        try pagedConnection(expectedProfileID: expectedProfileID).database.coachExerciseHistory(name, limit: limit, expectedProfileID: expectedProfileID)
     }
 
     func coachProgress(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, expectedProfileID: UUID) throws -> CoachProgress {

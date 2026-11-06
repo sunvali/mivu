@@ -22,8 +22,8 @@ struct DiaryReportTests {
                     meal(earlier, "2026-08-20T09:00:00Z", "Out of range", kcal: 400, protein: 20)],
             weights: [WeightEntry(dayID: monday.id, measuredAt: date("2026-09-01T07:00:00Z"), value: 82.4),
                       WeightEntry(dayID: tuesday.id, measuredAt: date("2026-09-02T07:00:00Z"), value: 81.8)],
-            goals: [GoalRecord(effectiveLocalDate: "2026-08-01", timeZoneID: "UTC", targets: NutritionValues(kcal: 1800, protein: 110), goalWeightKg: nil, exerciseCreditEnabled: false),
-                    GoalRecord(effectiveLocalDate: "2026-09-02", timeZoneID: "UTC", targets: NutritionValues(kcal: 1900, protein: 120), goalWeightKg: nil, exerciseCreditEnabled: false)])
+            goals: [GoalRecord(effectiveLocalDate: "2026-08-01", timeZoneID: "UTC", targets: NutritionValues(kcal: 1800, protein: 110), goalWeightKg: nil, exerciseCreditPercent: 0),
+                    GoalRecord(effectiveLocalDate: "2026-09-02", timeZoneID: "UTC", targets: NutritionValues(kcal: 1900, protein: 120), goalWeightKg: nil, exerciseCreditPercent: 0)])
     }
     static let range = DiaryReport(snapshot(), from: "2026-09-01", through: "2026-09-02")
 

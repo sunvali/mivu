@@ -65,4 +65,15 @@ import Testing
 
         #expect(try await store.diaryReadModel(expectedProfileID: profile.id).activeGoal?.targets == targets)
     }
+
+    @Test func firstGoalTakesTheWaitingBurnChoice() async throws {
+        let store = DiaryStore(directory: URL.temporaryDirectory.appending(path: "OnboardingCredit-" + UUID().uuidString))
+        let profile = DiaryProfile(name: "Synthetic setup", timeZoneID: "Asia/Jerusalem")
+        _ = try await store.createProfile(profile)
+        UserDefaults.standard.set(100, forKey: GoalRecord.pendingCreditKey(profile.id)); defer { GoalRecord.clearWaitingCredit(profile.id) }
+        let answers = OnboardingAnswers(about: ProfileAbout(heightCm: 165, birthYear: 1990, sex: .female, pace: .steady), weightKg: 70, targetKg: 62)
+        try await OnboardingView.saveSetup(answers, targets: NutritionValues(kcal: 1800), savedWeightKg: nil, profile: profile, store: store)
+        #expect(try await store.diaryReadModel(expectedProfileID: profile.id).activeGoal?.exerciseCreditPercent == 100)
+        #expect(GoalRecord.waitingCredit(profile.id) == nil)
+    }
 }

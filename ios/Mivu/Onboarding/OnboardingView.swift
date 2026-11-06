@@ -420,9 +420,14 @@ struct OnboardingView: View {
             _ = try await store.recordWeight(value: (answers.weightKg * 10).rounded() / 10, at: now, expectedProfileID: profile.id)
         }
         let existing = try await store.goal(on: today, exact: true, expectedProfileID: profile.id)
+        // The burn choice in force carries over; with no goal yet, one chosen in Settings while waiting for it.
+        var credit = existing
+        if credit == nil { credit = try await store.goal(on: today, expectedProfileID: profile.id) }
         let goal = GoalRecord(id: existing?.id ?? UUID(), effectiveLocalDate: today, timeZoneID: profile.timeZoneID, targets: targets,
-                              goalWeightKg: (answers.targetKg * 10).rounded() / 10, exerciseCreditEnabled: existing?.exerciseCreditEnabled ?? false)
+                              goalWeightKg: (answers.targetKg * 10).rounded() / 10,
+                              exerciseCreditPercent: credit?.exerciseCreditPercent ?? GoalRecord.waitingCredit(profile.id) ?? 0)
         _ = try await store.setGoals(goal, expectedRevision: existing?.revision, expectedProfileID: profile.id)
+        GoalRecord.clearWaitingCredit(profile.id)
     }
 
     private func react(_ pose: CompanionPose) {

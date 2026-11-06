@@ -148,7 +148,7 @@ extension DiaryDatabase {
         guard let metadata else { throw DiaryError.invalidData }
         try validateDiaryMetadataFields(schemaVersion: metadata.schemaVersion, revision: metadata.revision, profile: metadata.profile,
             lineage: metadata.lineage, previousDayConfirmedAt: metadata.previousDayConfirmedAt)
-        try validateDiaryMetadataCollections(goals: metadata.goals, deletedWeightIDs: metadata.deletedWeightIDs, deletedWorkoutIDs: metadata.deletedWorkoutIDs)
+        try validateDiaryMetadataCollections(goals: metadata.goals, deletedWeightIDs: metadata.deletedWeightIDs, deletedWorkoutIDs: metadata.deletedWorkoutIDs, routines: metadata.routines, deletedRoutineIDs: metadata.deletedRoutineIDs)
         guard metadata.activeConversationSegmentID == nil || metadata.activeDayID != nil else { throw DiaryError.invalidData }
         try execute("INSERT INTO storage_head(id, schemaVersion, profileID, profilePayload, revision, lineagePayload, activeDayID, previousDayConfirmedAt, timelineGeneration, nextSequence, activeConversationSegmentID) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
             [.integer(metadata.schemaVersion), .text(metadata.profile.id.uuidString), .blob(try JSONEncoder().encode(metadata.profile)),
@@ -161,7 +161,12 @@ extension DiaryDatabase {
             try execute("INSERT INTO goal(id, ordinal, effectiveLocalDate, payload) VALUES (?, ?, ?, ?)", [.text(goal.id.uuidString), .integer(ordinal), .text(goal.effectiveLocalDate), .blob(payload)])
             try contribution(table: "goal", row: Record(id: goal.id.uuidString, ordinal: ordinal, payload: payload), count: payload.count)
         }
-        for (table, ids) in [("weight_tombstone", metadata.deletedWeightIDs), ("workout_tombstone", metadata.deletedWorkoutIDs)] {
+        for (ordinal, routine) in metadata.routines.enumerated() {
+            let payload = try JSONEncoder().encode(routine)
+            try execute("INSERT INTO routine(id, ordinal, payload) VALUES (?, ?, ?)", [.text(routine.id.uuidString), .integer(ordinal), .blob(payload)])
+            try contribution(table: "routine", row: Record(id: routine.id.uuidString, ordinal: ordinal, payload: payload), count: payload.count)
+        }
+        for (table, ids) in [("weight_tombstone", metadata.deletedWeightIDs), ("workout_tombstone", metadata.deletedWorkoutIDs), ("routine_tombstone", metadata.deletedRoutineIDs)] {
             for (ordinal, id) in ids.enumerated() {
                 let payload = try JSONEncoder().encode(id)
                 try execute("INSERT INTO \(table)(id, ordinal, payload) VALUES (?, ?, ?)", [.text(id.uuidString), .integer(ordinal), .blob(payload)])
@@ -169,7 +174,7 @@ extension DiaryDatabase {
             }
         }
         // An encoding shell is used only for one-time interchange accounting, never as a read projection.
-        var shell = metadata; shell.goals = []; shell.deletedWeightIDs = []; shell.deletedWorkoutIDs = []
+        var shell = metadata; shell.goals = []; shell.deletedWeightIDs = []; shell.deletedWorkoutIDs = []; shell.routines = []; shell.deletedRoutineIDs = []
         try account(shell, table: "meta", row: Record(id: metadata.profile.id.uuidString, ordinal: 0, payload: Data()))
         return metadata
     }
@@ -376,7 +381,7 @@ extension DiaryDatabase {
     }
 
     private func finishPagedAccounting(maximumBytes: Int) throws {
-        for table in ["meta", "day", "meal", "submission", "item", "photo", "weight", "workout", "tombstone", "coach_turn", "coach_photo", "goal", "weight_tombstone", "workout_tombstone"] {
+        for table in ["meta", "day", "meal", "submission", "item", "photo", "weight", "workout", "tombstone", "coach_turn", "coach_photo", "goal", "weight_tombstone", "workout_tombstone", "routine", "routine_tombstone"] {
             let count = try storageInteger("SELECT COUNT(*) FROM \(table)")
             let statement = try prepare("SELECT COUNT(*) FROM storage_contribution WHERE tableName = ?"); defer { sqlite3_finalize(statement) }
             sqlite3_bind_text(statement, 1, table, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))

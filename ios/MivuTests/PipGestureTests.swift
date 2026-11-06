@@ -10,6 +10,8 @@ import Testing
         .patted, .earTwitch, .presenting(cheer: true), .presenting(cheer: false),
         .progressEntrance(cheer: true), .progressEntrance(cheer: false), .progressRange,
         .progressTap(level: 0), .progressTap(level: 1), .progressTap(level: 2), .progressTap(level: 3), .progressTap(level: 4), .progressTap(level: 5),
+        .workoutSaved(activity: "strength"), .workoutSaved(activity: "run"), .workoutSaved(activity: "yoga"), .workoutSaved(activity: "stretching"),
+        .workoutDone(hard: true), .workoutDone(hard: false),
     ]
 
     @Test func everyLibraryGestureEndsAtRestWithinTwoSeconds() {
@@ -209,7 +211,7 @@ import Testing
 
     /// Fluency, measured: no joint jumps between two frames. Only the frame that swaps bodies may, and that swap is masked.
     @Test func bakedMotionNeverJumps() {
-        for gesture in Self.upright {
+        for gesture in Self.upright + Self.workoutMoments.map({ PipGestureLibrary.gesture(for: $0.0) }) {
             let frames = PipBake.frames(of: gesture.beats, loops: gesture.loops)
             for (a, b) in zip(frames, frames.dropFirst()) where a.grounded == b.grounded {
                 let before = a.pose, after = b.pose
@@ -317,6 +319,27 @@ import Testing
         let wrist = end(of: PipUpright.arm(.right), arm, forearm)
         #expect(abs(wrist.x - 386) < 0.5 && abs(wrist.y - 292) < 0.5)
         #expect(abs(sin(arm + forearm + pose.joints["paw-r"]!.rotation)) < 0.001, "The paw points straight up")
+    }
+
+    private static let workoutMoments: [(PipMoment, String)] =
+        ["strength", "hiit", "crossfit"].map { (.workoutSaved(activity: $0), "workout-squat") }
+        + ["yoga", "pilates"].map { (.workoutSaved(activity: $0), "yoga-tree") }
+        + ["stretching", "mobility"].map { (.workoutSaved(activity: $0), "stretch-reach") }
+        + ["run", "walk", "cycle", "swim", ""].map { (.workoutSaved(activity: $0), "workout-jumping-jack") }
+        + [(.workoutDone(hard: true), "workout-breather"), (.workoutDone(hard: false), "stretch-reach")]
+
+    /// A workout moment stands Pip up, plays the move (a loop twice) and drops him back to rest, as one baked one-shot.
+    @Test func workoutMomentsRiseMoveAndDropBack() {
+        let rise = PipGestureLibrary.riseUp.duration, drop = PipGestureLibrary.dropDown(endingIn: .standing).duration
+        for (moment, name) in Self.workoutMoments {
+            let gesture = PipGestureLibrary.gesture(for: moment), move = PipGestureLibrary.named(name)
+            #expect(gesture.name == name, "\(moment)")
+            #expect(!gesture.loops && PipGestureLibrary.loop(for: moment) == nil, "\(moment) is a one-shot")
+            // Each of the (up to three) joins may wait for the next frame.
+            #expect(abs(gesture.duration - (rise + move.duration * (move.loops ? 2 : 1) + drop)) < 3 / PipBake.rate, "\(moment) lasts \(gesture.duration)")
+            #expect(gesture.keys.last?.pose == .rest && gesture.beats.first?.grounded == true && gesture.beats.last?.grounded == true, "\(moment)")
+            #expect(PipBake.frames(of: gesture.beats, loops: false).last?.grounded == true, "\(moment) ends on four legs")
+        }
     }
 
     @Test func recoveryIsNeverCheerful() {

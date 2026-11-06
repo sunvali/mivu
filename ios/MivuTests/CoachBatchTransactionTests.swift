@@ -77,8 +77,8 @@ import Testing
         let original = try f.durableState()
         let bad: [(CoachWrite, DiaryError)] = [
             (.correctWeight(id: f.source.weights[0].id, value: 73, unit: "kg", revision: 1), .staleRevision),
-            (.editWorkout(id: UUID(), draft: f.draft, revision: 1), .notFound),
-            (.manual(.goals(date: "2027-01-15", targets: [CoachNutrientEdit(nutrient: "kcal", value: 1800)], weight: nil, clearWeight: false, exerciseCredit: nil, revision: 999)), .staleRevision),
+            (.editWorkout(id: UUID(), patch: WorkoutPatch(), revision: 1), .notFound),
+            (.manual(.goals(date: "2027-01-15", targets: [CoachNutrientEdit(nutrient: "kcal", value: 1800)], weight: nil, clearWeight: false, exerciseCreditPercent: nil, revision: 999)), .staleRevision),
             (.manual(.preferences(timezone: nil, text: "stale", revision: 0)), .staleRevision)
         ]
         for (write, error) in bad {
@@ -241,7 +241,7 @@ import Testing
             if index < 28 { writes.append(.weight(date: date, value: 70 + Double(index) / 10, unit: "kg", revision: nil)) }
             let full = try ChatHistoryFixture.completeReference(databaseURL: f.url)
             let goal = full.goals.first { $0.effectiveLocalDate == date }
-            writes.append(.manual(.goals(date: date, targets: [CoachNutrientEdit(nutrient: "kcal", value: Double(1800 + index))], weight: nil, clearWeight: false, exerciseCredit: index.isMultiple(of: 2), revision: goal?.revision)))
+            writes.append(.manual(.goals(date: date, targets: [CoachNutrientEdit(nutrient: "kcal", value: Double(1800 + index))], weight: nil, clearWeight: false, exerciseCreditPercent: index.isMultiple(of: 2) ? 100 : 0, revision: goal?.revision)))
             let before = try f.durableState()
             if index.isMultiple(of: 6) {
                 #expect(throws: DiaryError.invalidData) { try f.batch(writes, turnID: turn, maximumBytes: 1) }
@@ -499,7 +499,7 @@ private struct BatchFixture {
     func correction(quantity: Double, revision: Int = 1) -> CoachWrite { var item = source.meals[0].items[0]; item.quantity = quantity; return .correction(mealID: mealID, item: item, revision: revision) }
     func mixedWrites(revision: Int) -> [CoachWrite] {
         [foodWrite(), .weight(date: "2027-01-13", value: 71, unit: "kg", revision: nil), .workout(date: "2027-01-14", draft: draft), .close(date: "2027-01-13", completeness: .complete),
-         .manual(.goals(date: "2027-01-16", targets: [CoachNutrientEdit(nutrient: "kcal", value: 1800)], weight: nil, clearWeight: false, exerciseCredit: true, revision: nil)),
+         .manual(.goals(date: "2027-01-16", targets: [CoachNutrientEdit(nutrient: "kcal", value: 1800)], weight: nil, clearWeight: false, exerciseCreditPercent: 100, revision: nil)),
          .manual(.preferences(timezone: nil, text: "Synthetic preferences", revision: revision))]
     }
     func batch(_ writes: [CoachWrite], turnID: UUID? = nil, mode: CoachWriteMode = .uninterrupted, maximumBytes: Int? = nil) throws -> DiaryCommit<[CoachReceipt]> {

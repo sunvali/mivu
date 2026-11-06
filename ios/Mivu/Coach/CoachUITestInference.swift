@@ -61,6 +61,15 @@ enum CoachUITestInference {
             arguments = ["local_date": localDate, "kind": "strength", "duration_minutes": 30,
                          "exercises": [["name": "Squat", "sets": [["repetitions": 8, "load_kg": 40]]]],
                          "estimated_burn_kcal": 200, "burn_source": "userEstimate"]
+        } else if text.contains("synthetic start"), let routine = context.routines?.first(where: { text.contains($0.name.lowercased()) }) {
+            name = "start_routine"; arguments = ["routine_id": routine.id.uuidString]
+        } else if text.contains("synthetic another bench set") {
+            name = "add_to_workout"; arguments = ["exercise": "Bench press", "sets": [["repetitions": 8, "load_kg": 62.5]]]
+        } else if text == "open workout settings" {
+            name = "open_settings"; arguments = ["destination": "workouts"]
+        } else if text.contains("synthetic heavy bench") {
+            name = "log_workout"
+            arguments = ["local_date": localDate, "kind": "strength", "duration_minutes": 30, "exercises": [["name": "Bench press", "sets": [["repetitions": 5, "load_kg": 80]]]]]
         } else if text.contains("remaining budget") || text.contains("weekly report") {
             name = "get_progress"; arguments = ["ending_on": localDate, "days": text.contains("weekly report") ? 7 : 1]
         } else if text.contains("half bread") {

@@ -38,6 +38,7 @@ struct CoachToolsFixtureTests {
             ("edit_workout", #"{"workout_id":"\#(w)","expected_revision":2,"kind":"cardio","duration_minutes":30,"exercises":[],"estimated_burn_kcal":null,"burn_source":null,"performed_at":null}"#),
             ("delete_weight", #"{"weight_id":"\#(weight)","expected_revision":2}"#),
             ("delete_workout", #"{"workout_id":"\#(w)","expected_revision":2}"#),
+            ("continue_workout", #"{"workout_id":"\#(w)","expected_revision":2}"#),
             ("edit_item", #"{"meal_id":"\#(m)","expected_revision":3,"item_id":"\#(id(41).uuidString)","review_submission_id":null,"name":"Synthetic oats/bran","quantity":null,"unit":null,"nutrients":[{"nutrient":"protein","value":6.5},{"nutrient":"kcal","value":null}]}"#),
             ("edit_item", #"{"meal_id":"\#(m)","expected_revision":3,"item_id":"\#(id(43).uuidString)","review_submission_id":"\#(id(50).uuidString)","quantity":2}"#),
             ("append_food", #"{"meal_id":"\#(m)","expected_revision":3,"items":[{"name":"Synthetic honey","quantity":1,"unit":"tbsp","kcal":64,"carbs":17.3,"protein":0.1,"fat":0}]}"#),

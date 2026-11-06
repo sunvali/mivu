@@ -56,6 +56,11 @@ final class MivuAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UN
         if CoachReplyNotification.turnID(from: userInfo) != nil { QuickLogRequest.shared.openCoach = true }
         completionHandler()
     }
+    // The rest timer's end sounds in Mivu too; other notifications stay quiet while it is open, as before.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler(notification.request.identifier == RestTimer.requestID ? [.sound] : [])
+    }
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         // A cold launch from the Home Screen quick action delivers the item here, not to the scene delegate.
