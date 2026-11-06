@@ -442,6 +442,30 @@ import XCTest
         XCTAssertTrue(app.buttons["workoutRow"].firstMatch.waitForExistence(timeout: 10))
     }
 
+    /// Done keeps only ticked sets; the live list underneath must not read the ones it dropped.
+    func testSaveDropsUntickedSetsAndExercises() {
+        let app = launch()
+        openGym(app)
+        addBenchAndTickFirstSet(app)
+        app.buttons["addSet"].tap()
+        let addExercise = app.buttons["addExercise"]
+        for _ in 0..<4 where !addExercise.isHittable { app.swipeUp(velocity: .slow) }
+        addExercise.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Barbell row")
+        app.buttons["Barbell Row"].firstMatch.tap()
+        XCTAssertTrue(search.waitForNonExistence(timeout: 5))
+        app.buttons["finishWorkout"].tap()
+        let save = app.buttons["saveWorkout"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        let row = app.buttons["workoutRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.label.contains("1 set"), row.label)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     func testEditPastWorkoutDate() {
         let app = launch()
         saveBenchWorkout(app)

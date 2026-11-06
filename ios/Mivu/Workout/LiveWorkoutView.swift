@@ -89,7 +89,10 @@ struct LiveWorkoutView: View {
                 ForEach(blocks, id: \.self) { block in
                     Section {
                         ForEach(block, id: \.self) { index in
-                            if block.contains(model.expandedExercise) { expanded(index) } else { collapsed(index) }
+                            // Rows are positions: a row can redraw after saving dropped its exercise, before the list does.
+                            if model.session.exercises.indices.contains(index) {
+                                if block.contains(model.expandedExercise) { expanded(index) } else { collapsed(index) }
+                            }
                         }
                         // A superset's cards share a bar down their left edge.
                         .listRowBackground(block.count > 1 ? Color.diarySurface.overlay(alignment: .leading) { Color.diaryWorkout.frame(width: 4) } : nil)
@@ -288,11 +291,13 @@ struct LiveWorkoutView: View {
         }
         .padding(.bottom, 4)
         ForEach(exercise.sets.indices, id: \.self) { set in
-            setRow(index, set)
-                .contextMenu { setMenu(index, set) }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) { Task { await model.deleteSet(exercise: index, set: set) } } label: { Label("Delete", systemImage: "trash") }
-                }
+            if model.session.exercises.indices.contains(index), model.session.exercises[index].sets.indices.contains(set) {
+                setRow(index, set)
+                    .contextMenu { setMenu(index, set) }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) { Task { await model.deleteSet(exercise: index, set: set) } } label: { Label("Delete", systemImage: "trash") }
+                    }
+            }
         }
         Button { Task { await model.addSet(exercise: index) } } label: {
             Label("Set", systemImage: "plus").font(.body.weight(.semibold)).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
