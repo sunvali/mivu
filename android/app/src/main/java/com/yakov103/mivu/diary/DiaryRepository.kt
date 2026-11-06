@@ -6,6 +6,7 @@ import androidx.core.content.edit
 import java.io.File
 import java.time.ZoneId
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -17,8 +18,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 sealed interface Bootstrap {
-    /** [created]: this launch made the diary, so setup with Pip opens once. */
-    data class Ready(val profileID: UUID, val created: Boolean = false) : Bootstrap
+    data class Ready(val profileID: UUID) : Bootstrap
     data object Failed : Bootstrap
     /** The stored diary is gone but others exist: the person picks one rather than the app guessing. */
     data class Choose(val profiles: List<DiaryProfile>) : Bootstrap
@@ -59,7 +59,10 @@ class DiaryRepository(
             .mapNotNull { dir -> runCatching { UUID.fromString(dir.name) }.getOrNull()?.let { it to dir } }
         val stored = preferences.getString(SELECTED_PROFILE, null)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         when {
-            diaries.isEmpty() -> open(createFirstDiary(), created = true)
+            diaries.isEmpty() -> createFirstDiary().let { id ->
+                preferences.edit(commit = true) { putBoolean(setupKey(id), true) }
+                open(id)
+            }
             diaries.any { it.first == stored } -> open(stored!!)
             // A device transfer brings files but not preferences: with no selection at all, take the latest diary.
             stored == null -> open(diaries.maxBy { File(it.second, DIARY_FILE).lastModified() }.first)
@@ -101,11 +104,16 @@ class DiaryRepository(
 
     private fun folder(id: UUID) = File(context.filesDir, "profiles/${id.toString().uppercase()}")
 
-    /** True once for a diary this launch created, so setup opens a single time even when the activity is recreated. */
-    fun takeCreated(): Boolean {
+    /**
+     * True while setup with Pip is pending for the diary this app created: until it is finished or put off with "Later",
+     * so a kill mid-setup brings it back. Once per launch, so a recreated activity does not open it twice.
+     */
+    fun takeSetup(): Boolean {
         val ready = _bootstrapState.value as? Bootstrap.Ready ?: return false
-        return ready.created && _bootstrapState.compareAndSet(ready, ready.copy(created = false))
+        return preferences.getBoolean(setupKey(ready.profileID), false) && setupOffered.compareAndSet(false, true)
     }
+
+    fun finishSetup(profileID: UUID) = preferences.edit { remove(setupKey(profileID)) }
 
     /** Opens [profileID] and stores it as the selection. */
     suspend fun choose(profileID: UUID): Bootstrap = publish { open(profileID) }
@@ -123,11 +131,15 @@ class DiaryRepository(
         result.also { _bootstrapState.value = it }
     }
 
-    private fun open(id: UUID, created: Boolean = false): Bootstrap {
+    private fun open(id: UUID): Bootstrap {
         database(id).head() // owner and schema check before showing or selecting the diary
         select(id)
-        return Bootstrap.Ready(id, created)
+        return Bootstrap.Ready(id)
     }
+
+    private val setupOffered = AtomicBoolean(false)
+
+    private fun setupKey(id: UUID) = "setupPending-$id"
 
     private fun watched(db: DiaryDatabase) = db.apply { onCommit = { _changes.tryEmit(Unit) } }
 

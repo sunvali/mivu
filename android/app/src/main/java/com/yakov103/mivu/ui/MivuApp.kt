@@ -185,7 +185,8 @@ private enum class Tab(val route: Route, val label: String, @DrawableRes val ico
  * The app root, as iOS `DiaryRootView`: diary setup until a diary is open, then the four tabs. [onMealCaptured] runs
  * after a capture is saved, with its profile, to start analysis outside the screen. [coach] connects the Coach tab to the
  * app's Coach worker. [connection] backs Settings' Coach AI screen; without it (tests) the screen shows a disconnected state.
- * [setupNewDiary] opens setup with Pip once over a diary this launch created (the activity passes true; tests opt in).
+ * [setupNewDiary] opens setup with Pip over a diary this app created until it is finished or put off (the activity passes
+ * true; tests opt in).
  * [quickRequest] is a shortcut, tile or widget request: it waits until a diary is open and setup is finished (iOS `openQuickLog`).
  */
 @Composable
@@ -251,7 +252,8 @@ private fun ChooseDiary(profiles: List<DiaryProfile>, onChoose: (UUID) -> Unit) 
 private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: (UUID) -> Unit, hooks: CoachHooks, connection: ChatGPTConnection?,
     appScope: CoroutineScope, setupNewDiary: Boolean, quickRequest: MutableStateFlow<QuickAction?>) {
     val navController = rememberNavController()
-    LaunchedEffect(profileID) { if (setupNewDiary && repository.takeCreated()) navController.navigate(Route.Onboarding) }
+    // Single top: after a system kill the restored back stack may already show setup.
+    LaunchedEffect(profileID) { if (setupNewDiary && repository.takeSetup()) navController.navigate(Route.Onboarding) { launchSingleTop = true } }
     // Coach keeps its window across tab switches: its view model belongs to the activity, not the Coach entry.
     val activityOwner = checkNotNull(LocalViewModelStoreOwner.current)
     val context = LocalContext.current.applicationContext
@@ -535,7 +537,7 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
                         { connection?.inference() ?: { _, _ -> throw SessionError.NoActiveSession } }, createSavedStateHandle())
                 }
                 OnboardingScreen(model, onAgree = { connection?.recordConsent() }, onConnect = connect,
-                    onFinish = { navController.popBackStack<Route.Onboarding>(inclusive = true) },
+                    onFinish = { repository.finishSetup(profileID); navController.popBackStack<Route.Onboarding>(inclusive = true) },
                     onChooseNano = { connection?.choose(CoachProvider.onDevice) }, onDownloadNano = { connection?.startNanoDownload() })
             }
             // Sample mode only: Today offers "Log meal" there. Analysis runs outside the screen, after it closes.
