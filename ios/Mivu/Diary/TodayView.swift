@@ -105,12 +105,12 @@ struct DiaryRootView: View {
     /// The live gym screen, over every tab; the banner opens it.
     @State private var liveWorkout: WorkoutSession?
     /// What Today's left-edge swipe opens, sliding in from the left with the finger.
+    /// What the edge panel shows while it is in; the finger's position lives in `edgeSlide`.
     @State private var edgePanel: EdgePanel?
-    @State private var edgeTravel: CGFloat = 0
-    @State private var edgeOpen = false
+    /// Read only by the slide itself, so a moving finger never redraws the screens.
+    @State private var edgeSlide = EdgeSlideState()
     @State private var edgeStart: Date?
     @State private var edgeCardio: [CardioLogState] = []
-    @State private var rootWidth: CGFloat = 400
     /// Said once on the gym screen, e.g. when Coach's Start opened another running workout.
     @State private var discardingWorkout = false
     private let rest = RestTimer.shared
@@ -441,7 +441,7 @@ struct DiaryRootView: View {
         }
         .modifier(WorkoutAccessory(shown: bannerShown) { workoutBanner })
         .overlay { edgeOverlay }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rootWidth = max($0, 1) }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { edgeSlide.width = max($0, 1) }
     }
     /// Coach's routine card: Start opens the live workout from it, or the one already running.
     private func startRoutine(_ id: UUID) {
@@ -461,14 +461,12 @@ struct DiaryRootView: View {
 
     enum EdgePanel: Equatable { case start, live(WorkoutSession) }
 
-    /// 0 closed, 1 open; follows the finger while it moves.
-    private var edgeProgress: CGFloat { edgeOpen ? 1 : min(edgeTravel / rootWidth, 1) }
-
     private func edgeChanged(_ travel: CGFloat) {
         if edgePanel == nil { prepareEdge() }
-        edgeTravel = travel
+        edgeSlide.travel = travel
     }
 
+    /// Made once as a swipe starts; after that only the slide moves.
     private func prepareEdge() {
         edgePanel = model.activeWorkout.map { .live($0) } ?? .start
         edgeStart = nil; edgeCardio = []
@@ -479,33 +477,36 @@ struct DiaryRootView: View {
         guard edgePanel == nil else { return }
         prepareEdge()
         // Laid out off screen first, so the next frame can slide it in.
-        Task { @MainActor in withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.35)) { edgeOpen = true } }
+        Task { @MainActor in settleEdge(open: true) }
     }
 
     /// Past a third of the screen, or flicked, it settles open; otherwise it slides back.
     private func edgeEnded(_ travel: CGFloat, _ velocity: CGFloat) {
         guard edgePanel != nil else { return }
-        let open = travel > rootWidth / 3 || velocity > 500
-        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.32)) { edgeOpen = open; edgeTravel = 0 } completion: {
-            if !open { edgePanel = nil }
-        }
+        let open = velocity < -300 ? false : travel > edgeSlide.width / 3 || velocity > 500
+        settleEdge(open: open, velocity: velocity) { if !open { edgePanel = nil } }
+    }
+
+    /// A spring that starts at the finger's speed, as the system's own swipes do, so letting go never jumps.
+    private func settleEdge(open: Bool, velocity: CGFloat = 0, then: @escaping () -> Void = {}) {
+        let slide = edgeSlide
+        let distance = (open ? 0 : -slide.width) - slide.offset
+        let relative = abs(distance) > 1 ? min(max(velocity / distance, -30), 30) : 0
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .interpolatingSpring(Spring(duration: 0.4, bounce: 0), initialVelocity: relative)) {
+            slide.open = open; slide.travel = 0
+        } completion: { then() }
     }
 
     private func closeEdge() {
-        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.3)) { edgeOpen = false } completion: { edgePanel = nil }
+        settleEdge(open: false) { edgePanel = nil }
     }
 
     @ViewBuilder private var edgeOverlay: some View {
         if let edgePanel {
             ZStack(alignment: .leading) {
-                Color.black.opacity(0.3 * edgeProgress).ignoresSafeArea().allowsHitTesting(false)
+                EdgeDim(slide: edgeSlide)
                 edgeContent(edgePanel)
-                    // The shadow sits on the plain background, so a drag never re-renders the screen's own shadow.
-                    .background(Color.diaryCanvas.shadow(color: .black.opacity(edgeOpen ? 0 : 0.18), radius: 16).ignoresSafeArea())
-                    // Reduce Motion fades it in place instead of sliding.
-                    .offset(x: reduceMotion ? 0 : -rootWidth * (1 - edgeProgress))
-                    .opacity(reduceMotion ? edgeProgress : 1)
-                    .accessibilityAddTraits(.isModal)
+                    .modifier(EdgeSlideEffect(slide: edgeSlide, reduceMotion: reduceMotion))
             }
         }
     }

@@ -24,22 +24,57 @@ struct LeadingEdgeSwipe: UIGestureRecognizerRepresentable {
     }
 }
 
-/// Today's way into a workout: a tab on the left edge. Tap it, or drag it (or the edge) to slide the workout in.
+/// Where Today's workout panel is: the finger's travel while it moves, or settled open.
+@Observable final class EdgeSlideState {
+    var travel: CGFloat = 0
+    var open = false
+    var width: CGFloat = 400
+    /// 0 closed, 1 open.
+    var progress: CGFloat { open ? 1 : min(travel / width, 1) }
+    var offset: CGFloat { -width * (1 - progress) }
+}
+
+/// Moves the panel. As a modifier its content is not redrawn when only the position changes.
+struct EdgeSlideEffect: ViewModifier {
+    let slide: EdgeSlideState
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            // The shadow sits on the plain background, so it never re-renders the screen inside.
+            .background(Color.diaryCanvas.shadow(color: .black.opacity(slide.open || slide.progress == 0 ? 0 : 0.18), radius: 16).ignoresSafeArea())
+            // Reduce Motion fades it in place instead of sliding.
+            .offset(x: reduceMotion ? 0 : slide.offset)
+            .opacity(reduceMotion ? slide.progress : 1)
+            // Taps and VoiceOver switch only once it settles, never mid-drag.
+            .allowsHitTesting(slide.open)
+            .accessibilityHidden(!slide.open)
+            .accessibilityAddTraits(slide.open ? .isModal : [])
+    }
+}
+
+/// Today dims as the panel comes in.
+struct EdgeDim: View {
+    let slide: EdgeSlideState
+    var body: some View { Color.black.opacity(0.3 * slide.progress).ignoresSafeArea().allowsHitTesting(false) }
+}
+
+/// Today's way into a workout: a slim handle on the left edge. Tap it, or drag it (or the edge) to slide the workout in.
 struct WorkoutEdgeTab: View {
     let running: Bool
     let action: () -> Void
-    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 15
 
     var body: some View {
         Button(action: action) {
             Image(systemName: running ? "figure.strengthtraining.traditional" : "dumbbell.fill")
-                .font(.system(size: min(glyph, 22), weight: .semibold))
-                .foregroundStyle(Color.diaryActionText)
-                .frame(width: 26, height: 64)
-                .background(Color.diaryWorkout, in: UnevenRoundedRectangle(bottomTrailingRadius: 13, topTrailingRadius: 13))
-                .shadow(color: .black.opacity(0.14), radius: 6, x: 2)
-                // The touch target reaches past the tab, as Apple's minimum asks.
-                .frame(width: 44, height: 72, alignment: .leading).contentShape(.rect)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.diaryWorkout)
+                .frame(width: 16, height: 44)
+                .background(Color.diarySurface, in: UnevenRoundedRectangle(bottomTrailingRadius: 8, topTrailingRadius: 8))
+                .overlay { UnevenRoundedRectangle(bottomTrailingRadius: 8, topTrailingRadius: 8).strokeBorder(Color.diaryRule, lineWidth: 0.5) }
+                .shadow(color: .black.opacity(0.08), radius: 4, x: 1)
+                // The touch target reaches past the handle, as Apple's minimum asks.
+                .frame(width: 44, height: 64, alignment: .leading).contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(running ? "Open workout" : "Start workout")
