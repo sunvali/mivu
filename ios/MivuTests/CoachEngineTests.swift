@@ -702,7 +702,9 @@ private actor CoachInputFixture {
             return try await replies.infer(input, tools)
         })
         let task = Task { try await engine.run(turnID: query.id, expectedProfileID: profile.id) }
-        for _ in 0..<1000 { if await suspended.started { break }; await Task.yield() }
+        // Bounded by time, not yields: the engine reads the diary on its actor before the second call.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !(await suspended.started), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
         try #require(await suspended.started)
         var revised = goal; revised.targets.kcal = 1800
         _ = try await store.setGoals(revised, expectedRevision: goal.revision, expectedProfileID: profile.id)
