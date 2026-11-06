@@ -37,6 +37,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.LocalTextStyle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -190,7 +193,10 @@ fun ProgressScreen(
                         onClick = { if (option != range) { model.select(option); pip.react(CompanionPose.ProgressRange) } },
                         shape = SegmentedButtonDefaults.itemShape(i, ProgressRange.entries.size),
                         modifier = Modifier.heightIn(min = 48.dp),
-                    ) { Text(option.title, maxLines = 1) }
+                    ) {
+                        // Four labels share the row: at 200% text they shrink to fit instead of clipping ("Mont").
+                        Text(option.title, maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = LocalTextStyle.current.fontSize))
+                    }
                 }
             }
         }

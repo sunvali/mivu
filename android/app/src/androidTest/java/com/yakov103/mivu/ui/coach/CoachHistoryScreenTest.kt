@@ -258,6 +258,21 @@ class CoachHistoryScreenTest {
         assertEquals(CoachReply.Target.Meal(mealID), model().draft.value.reply?.target) // the quote was taken first
     }
 
+    @Test fun mealAskPipWithoutChatOpensLatest() {
+        TodayFixture.wipe(context)
+        profileID = TodayFixture.seed(context, photo = false) // meals added by hand: no Coach turn, no chat that day
+        repository = DiaryRepository(context)
+        launchApp(tab = null)
+        waitFor(hasText("Overnight oats"))
+        compose.onNodeWithText("Overnight oats").performClick()
+        waitFor(hasTestTag("mealAskPip"))
+        compose.onNodeWithTag("mealAskPip").performClick()
+        compose.waitUntil(10_000) { model().timeline.value.loaded }
+        runCatching { compose.waitUntil(3_000) { model().message.value != null } }
+        assertEquals(null, model().message.value)
+        assertTrue(model().draft.value.reply?.target is CoachReply.Target.Meal)
+    }
+
     @Test fun seekWhilePagingStaysWithinWindow() {
         val turns = chat(120)
         launchApp()
