@@ -32,6 +32,11 @@ private const val COLUMNS = "segmentID, trackingDayID, displayLocalDate, display
 /** Every conversation, newest first, 30 at a time. */
 fun DiaryDatabase.coachDays(before: CoachDayCursor? = null): CoachDayPage = read { it.segmentPage(before, null) }
 
+/** Whether any conversation belongs to waking day [dayID]. */
+fun DiaryDatabase.hasCoachDay(dayID: UUID): Boolean = read { tx ->
+    tx.query("SELECT EXISTS(SELECT 1 FROM coach_segment WHERE trackingDayID = ?)", listOf(dayID.swift)) { it.moveToFirst(); it.getInt(0) == 1 }
+}
+
 /** The conversations shown under [displayLocalDate]; separate visits on one date stay separate. */
 fun DiaryDatabase.coachSegments(displayLocalDate: String, before: CoachDayCursor? = null): CoachDayPage {
     if (!validLocalDate(displayLocalDate)) throw DiaryError.InvalidData("date filter")
