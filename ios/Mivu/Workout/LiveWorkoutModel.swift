@@ -229,6 +229,23 @@ enum WeightStep {
         focus = nil
     }
 
+    /// Pip changed the running workout from the gym's bar: show the stored copy.
+    func reloadFromStore() async {
+        await pending?.value
+        guard let stored = try? await storedActive() else { return }
+        session = stored; saved = stored
+        expandedExercise = min(expandedExercise, max(session.exercises.count - 1, 0))
+        for exercise in session.exercises { await loadHistory(exercise) }
+        refreshBests()
+    }
+
+    /// Undo for a change Pip made from the bar: the exercises as they were before the message, saved like any edit.
+    func restoreExercises(_ exercises: [WorkoutExercise]) async {
+        await change { $0.exercises = exercises }
+        expandedExercise = min(expandedExercise, max(session.exercises.count - 1, 0))
+        refreshBests()
+    }
+
     /// Warm-up, drop set or to failure; `.normal` clears it.
     func setType(_ type: WorkoutSetType, exercise: Int, set: Int) async {
         await change(exercise, set) { $0.exercises[exercise].sets[set].type = type == .normal ? nil : type }
@@ -405,7 +422,7 @@ enum WeightStep {
 
     /// How long the workout took, as Save will store it.
     var seconds: Int {
-        mode == .live ? min(max(Int(endedAt.timeIntervalSince(session.performedAt)), 1), 86_400) : Int((pastMinutes * 60).rounded())
+        mode == .live ? min(max(Int(endedAt.timeIntervalSince(session.clockStart)), 1), 86_400) : Int((pastMinutes * 60).rounded())
     }
 
     /// The Done screen's three numbers; kcal is estimated as Save will store it.

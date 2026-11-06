@@ -112,3 +112,18 @@ struct WorkoutCatalogTests {
         "clean-and-jerk", "medicine-ball-slam", "wall-ball",
     ]
 }
+
+extension WorkoutCatalogTests {
+    /// A tile with a symbol iOS lacks shows blank, so every catalog exercise and the fallback must name a real one.
+    @Test func everyExerciseGlyphIsARealSymbol() {
+        for exercise in WorkoutCatalog.exercises {
+            let style = ExerciseGlyphStyle(exerciseID: exercise.id, name: exercise.name)
+            #expect(UIImage(systemName: style.symbol) != nil, "\(exercise.id): \(style.symbol)")
+            #expect(style.family != .other || exercise.muscle == "full body", "\(exercise.id) has no colour family")
+            #expect(style.subtitle == "\(exercise.muscle.capitalized) · \(exercise.equipment.capitalized)")
+        }
+        let own = ExerciseGlyphStyle(exerciseID: nil, name: "Synthetic own lift")
+        #expect(UIImage(systemName: own.symbol) != nil && own.family == .other && own.subtitle == nil)
+        #expect(ExerciseGlyphStyle(exerciseID: nil, name: "bench press").family == .chest, "a named catalog lift without an id still finds its tile")
+    }
+}

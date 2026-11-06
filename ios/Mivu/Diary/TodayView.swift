@@ -9,6 +9,8 @@ import Observation
 extension EnvironmentValues {
     @Entry var diarySettingsRoutes: DiarySettingsRouteOwner? = nil
     @Entry var diaryPhotoLimiter: PhotoWorkLimiter? = nil
+    /// Opens a workout in the live gym from anywhere below the root.
+    @Entry var openLiveWorkout: ((WorkoutSession) -> Void)? = nil
 }
 
 /// First launch never asks for a diary name: with no diaries one is created and Pip's setup opens;
@@ -315,6 +317,7 @@ struct DiaryRootView: View {
         .environment(\.diarySettingsRoutes, routes)
         .environment(\.diaryPhotoLimiter, model.photoWorkLimiter)
         .environment(\.openDiaryCoach, openCoachAction)
+        .environment(\.openLiveWorkout) { liveWorkout = $0 }
         .environment(connection)
         .sensoryFeedback(.success, trigger: model.captureReceipt)
         .sheet(item: $routes.route) { route in
@@ -330,7 +333,7 @@ struct DiaryRootView: View {
             if let owner = model.readModel?.profile.id {
                 // The cover does not inherit the proof text size from the root, so it is applied again here.
                 LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past,
-                                notice: model.workoutNotice, onSaved: model.noteWorkoutSaved) { liveWorkout = nil; model.workoutNotice = nil }
+                                notice: model.workoutNotice, coach: coach, onSaved: model.noteWorkoutSaved) { liveWorkout = nil; model.workoutNotice = nil }
                     .proofTypeSize()
             }
         }
@@ -860,6 +863,8 @@ struct TodayView: View {
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .modifier(StartWorkoutFlow(model: model, isPresented: $startingWorkout, openWorkout: openWorkout))
+        // A swipe in from the left edge: the running workout, or Start workout.
+        .gesture(LeadingEdgeSwipe { if let active = model.activeWorkout { openWorkout(active) } else { startingWorkout = true } })
         .onAppear { surfaceVisible = true; reportCompanionContext() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
         .onChange(of: [companionVisible, showComposer, showManualNutrition, showWeight, showGoals, showingDetail, startingWorkout]) { _, _ in reportCompanionContext() }

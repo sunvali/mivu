@@ -1052,6 +1052,28 @@
       "type" : "function"
     },
     {
+      "description" : "Put a strength workout from context.workouts that the user finished today back to live, when they want to keep going; its clock carries on from its recorded time. Only while context.activeWorkout is absent. Use its real ID/revision.",
+      "name" : "continue_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "workout_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "workout_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
       "description" : "Read the user's finished sessions of one exercise, newest first (limit 1-10), with bests across them. For questions; answer in one line.",
       "name" : "get_exercise_history",
       "parameters" : {

@@ -29,7 +29,10 @@ struct CoachReceiptPresentation: Equatable {
         if isRemoval { return "Removed" }
         if Self.write(receipt.operationKey).hasPrefix("delete_photo/") { return "Photo removed" }
         if let name = receipt.workoutAddedTo { return "Added to \(name)" }
-        if receipt.workoutID != nil { return Self.write(receipt.operationKey).hasPrefix("edit_workout/") ? "Workout updated" : "Workout saved" }
+        if receipt.workoutID != nil {
+            let write = Self.write(receipt.operationKey)
+            return write.hasPrefix("continue_workout/") ? "Workout continued" : write.hasPrefix("edit_workout/") ? "Workout updated" : "Workout saved"
+        }
         return switch receipt.submissionState {
         case .saved: "Saved food"
         case .awaitingReview: "Estimate awaiting review"

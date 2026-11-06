@@ -272,11 +272,16 @@ struct WorkoutSession: Codable, Equatable, Sendable, Identifiable {
     var externalID: String?
     /// Last live-workout save; nil means unchanged since `performedAt`.
     var updatedAt: Date?
+    /// When a finished workout went back to live; its recorded time carries on from here.
+    var resumedAt: Date?
 }
 
 extension WorkoutSession {
     /// Records saved before live workouts have no state and count as finished.
     var isFinished: Bool { state != .active }
+
+    /// Where the live clock counts from: the start, or for a continued workout a point that leaves out the break.
+    var clockStart: Date { resumedAt.map { $0.addingTimeInterval(-Double(durationSeconds ?? durationMinutes * 60)) } ?? performedAt }
 
     /// A running workout untouched for 12 hours; the banner then asks to finish or discard.
     func isStale(now: Date) -> Bool { now.timeIntervalSince(max(performedAt, updatedAt ?? performedAt)) >= 12 * 3_600 }
@@ -635,7 +640,7 @@ func validateGoalFields(_ goal: GoalRecord) throws {
 }
 
 func validateWorkoutFields(_ workout: WorkoutSession) throws {
-    guard workout.performedAt.timeIntervalSince1970.isFinite, workout.updatedAt?.timeIntervalSince1970.isFinite != false, workout.revision > 0, workout.revision < 1_000_000,
+    guard workout.performedAt.timeIntervalSince1970.isFinite, workout.updatedAt?.timeIntervalSince1970.isFinite != false, workout.resumedAt?.timeIntervalSince1970.isFinite != false, workout.revision > 0, workout.revision < 1_000_000,
           ((workout.state == .active ? 0 : 1)...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
           (workout.title?.count ?? 0) <= 200, (workout.activity?.count ?? 0) <= 200, (workout.externalID?.count ?? 0) <= 200, (workout.note?.count ?? 0) <= 2_000,
           workout.effort == nil || (1...10).contains(workout.effort!), workout.avgHeartRate == nil || (20...250).contains(workout.avgHeartRate!),

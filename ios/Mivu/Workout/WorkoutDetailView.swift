@@ -16,6 +16,7 @@ struct WorkoutDetailView: View {
     @AppStorage("weightUnit") private var unit = "kg"
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openDiaryCoach) private var openChat
+    @Environment(\.openLiveWorkout) private var openLiveWorkout
     @Environment(\.dynamicTypeSize) private var typeSize
 
     init(model: DiaryViewModel, sessionID: UUID) {
@@ -41,6 +42,10 @@ struct WorkoutDetailView: View {
                     }
                 }
                 Section {
+                    if canContinue(session) {
+                        Button("Continue workout", systemImage: "play.fill") { Task { await resume(session) } }
+                            .fontWeight(.semibold).frame(minHeight: 44).accessibilityIdentifier("continueWorkout")
+                    }
                     Button("Ask Pip", systemImage: "sparkles") { askPip(session) }
                         .frame(minHeight: 44).accessibilityIdentifier("askPipWorkout")
                     Button("Delete workout", systemImage: "trash", role: .destructive) { Task { await delete(session) } }
@@ -132,7 +137,15 @@ struct WorkoutDetailView: View {
         NavigationLink {
             ExerciseDetailView(model: model, key: ExerciseKey(exercise), name: exercise.name)
         } label: {
-            Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText).frame(minHeight: 44, alignment: .leading)
+            let glyph = ExerciseGlyphStyle(exerciseID: exercise.exerciseID, name: exercise.name)
+            HStack(spacing: 12) {
+                ExerciseGlyph(exerciseID: exercise.exerciseID, name: exercise.name)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText)
+                    if let subtitle = glyph.subtitle { Text(subtitle).font(.subheadline).foregroundStyle(glyph.family.ink) }
+                }
+            }
+            .frame(minHeight: 44, alignment: .leading)
         }
         .accessibilityIdentifier("exerciseName")
         if let note = exercise.note { Text(note).font(.subheadline).foregroundStyle(Color.diarySecondary) }
@@ -167,6 +180,22 @@ struct WorkoutDetailView: View {
         guard let selection = model.selection else { return }
         let text = "\(WorkoutRow.title(session)) · \(session.durationMinutes) min · \(session.performedAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))"
         openChat(.day(session.dayID), reply: CoachReply(target: .workout(workoutID: session.id), excerpt: String(text.prefix(280))), expectedSelection: selection)
+    }
+
+    /// Today's strength workout goes back to live while nothing else is running.
+    private func canContinue(_ session: WorkoutSession) -> Bool {
+        openLiveWorkout != nil && session.isFinished && session.kind == .strength && session.dayID == model.activeDay?.id && model.activeWorkout == nil
+    }
+
+    private func resume(_ session: WorkoutSession) async {
+        guard let ownership, model.selection == ownership, !deleting else { return }
+        var live: WorkoutSession?
+        let success = await model.change {
+            live = try await model.store.resumeWorkout(id: session.id, at: Date(), expectedRevision: session.revision, expectedProfileID: ownership.identity.profileID)
+        }
+        guard success, let live, model.selection == ownership else { return }
+        dismiss()
+        openLiveWorkout?(live)
     }
 
     /// Deleted at once; the screen it returns to offers Undo.

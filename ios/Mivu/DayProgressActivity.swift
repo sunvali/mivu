@@ -127,7 +127,7 @@ enum WorkoutActivitySync {
         session.map { session in
             let next = session.nextSet
             return ActivityContent(state: WorkoutActivityAttributes.ContentState(
-                startedAt: session.performedAt, restEndsAt: restEndsAt, exercise: next?.name ?? session.exercises.last?.name,
+                startedAt: session.clockStart, restEndsAt: restEndsAt, exercise: next?.name ?? session.exercises.last?.name,
                 nextSet: next.map { "set \($0.set)" }, hideWhenLocked: hideWhenLocked), staleDate: restEndsAt)
         }
     }

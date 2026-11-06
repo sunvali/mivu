@@ -458,7 +458,8 @@ extension DiaryDatabase {
                 } else if let id = receipt.workoutID {
                     do {
                         _ = try transaction.workout(id: id)
-                        if let name = facts.workoutAddedTo { summaries.append("Added to \(name).") }
+                        if receipt.operationKey.contains("/continue_workout/") { summaries.append("Workout continued.") }
+                        else if let name = facts.workoutAddedTo { summaries.append("Added to \(name).") }
                         else if let kind = facts.workoutKind, let minutes = facts.workoutMinutes { summaries.append("Workout saved: \(kind), \(minutes) minutes.") }
                         else { summaries.append("Workout saved.") }
                     } catch DiaryError.notFound { summaries.append("This workout was deleted.") }

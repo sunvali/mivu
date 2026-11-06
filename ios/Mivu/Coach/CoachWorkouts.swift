@@ -122,6 +122,8 @@ extension CoachTools {
              object(workout.merging(["workout_id": string, "expected_revision": integer, "local_date": string]) { _, new in new }, required: ["workout_id", "expected_revision"])),
             ("add_to_workout", "Add sets the user just did to the running workout in context.activeWorkout: they join that exercise, or the exercise is added. Empty sets adds a new exercise with last time's sets still to do. One call per exercise per turn.",
              object(["exercise": string, "sets": sets], required: ["exercise", "sets"])),
+            ("continue_workout", "Put a strength workout from context.workouts that the user finished today back to live, when they want to keep going; its clock carries on from its recorded time. Only while context.activeWorkout is absent. Use its real ID/revision.",
+             object(["workout_id": string, "expected_revision": integer], required: ["workout_id", "expected_revision"])),
             ("get_exercise_history", "Read the user's finished sessions of one exercise, newest first (limit 1-10), with bests across them. For questions; answer in one line.",
              object(["exercise": string, "limit": integer], required: ["exercise", "limit"])),
             ("start_routine", "Show one of context.routines as a card with a Start button; the user taps Start. It starts nothing itself.",

@@ -105,6 +105,21 @@ import Testing
         #expect(model.saveError != nil)
     }
 
+    /// Pip changes the running workout from the gym's bar: the screen shows it, and Undo puts the exercises back.
+    @Test func reloadShowsPipsChangeAndUndoRestores() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let model = try await live(store, profile, benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: true)))
+        let before = model.session.exercises
+        var stored = try #require(try await store.activeWorkout(expectedProfileID: profile.id))
+        stored.exercises[0].sets.append(WorkoutSet(repetitions: 8, loadKg: 62.5, done: true))
+        _ = try await store.saveActive(stored, expectedRevision: stored.revision, expectedProfileID: profile.id)
+        await model.reloadFromStore()
+        #expect(model.session.exercises[0].sets.count == 2 && model.isTicked(exercise: 0, set: 1))
+        await model.restoreExercises(before)
+        #expect(model.session.exercises == before && model.saveError == nil)
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id)?.exercises == before)
+    }
+
     @Test func roundOfAStaleBlockIgnoresRemovedMembers() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let model = try await live(store, profile, benchWith(WorkoutSet(repetitions: 8, loadKg: 60, done: true), WorkoutSet(repetitions: 8, loadKg: 60, done: false)))

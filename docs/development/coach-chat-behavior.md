@@ -207,6 +207,17 @@ table: [Coach edit parity](coach-edit-parity.md).
 - `add_to_workout` adds sets to the running workout ("another set 60 × 8"). An
   open gym screen keeps every unsaved edit and replays it onto the stored copy,
   so Pip's change and the screen's both stay, including through Done and Discard.
+- `continue_workout` puts a strength workout finished on today's day back to
+  live, as the workout's "Continue workout" button does; refused while another
+  runs. The clock carries on from its recorded time (`resumedAt`), so the break
+  is not counted in time or burn; finishing again saves the same workout.
+- The live gym has a "Tell Pip" bar (ChatGPT only; the on-device model reads food
+  alone). A message is an ordinary Coach turn through `captureExternal`, so it is
+  in the conversation afterwards. The gym waits up to a minute for the turn,
+  reloads the stored workout and shows Pip's reply above the bar. When the
+  workout changed, Undo restores the exercises from before the message as a gym
+  edit; the committed receipt stays as it was. The bar's camera is the machine
+  photo, with the picker's search as its fallback.
 - `get_exercise_history` reads at most 10 sessions of one exercise, byte-capped,
   for one-line answers. `start_routine` only returns a routine card; the person
   taps Start. Routines, own exercises and workout settings go through

@@ -152,6 +152,10 @@ extension DiaryTransaction {
             if let date = patch.localDate { _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID) }
             var edited = try patch.applied(to: record); edited.revision += 1; try validateWorkoutFields(edited.syncedMinutes)
         case .activeWorkoutSets(let name, let sets): _ = try runningWithAdded(name, sets)
+        case .continueWorkout(let id, let revision):
+            let record = try workout(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }
+            guard record.isFinished, record.kind == .strength else { throw DiaryError.invalidData }
+            guard try activeWorkout() == nil else { throw DiaryError.conflict }
         case .routineCard(let id): _ = try routine(id: id)
         case .deleteWeight(let id, let revision): guard try weight(id: id).revision == revision else { throw DiaryError.staleRevision }
         case .deleteWorkout(let id, let revision):
@@ -335,6 +339,10 @@ extension DiaryTransaction {
             facts["addedTo"] = saved.title ?? saved.activity.flatMap { WorkoutCatalog.activity($0)?.name } ?? "your workout"
             receipt.dayID = saved.dayID; receipt.workoutID = saved.id; receipt.resultJSON = try workoutResult(saved, extra: facts)
             try addSource(kind: "workout", recordID: saved.id, turnID: turn.id, origin: false)
+        case .continueWorkout(let id, let revision):
+            let saved = try resumeWorkout(id: id, at: at, expectedRevision: revision)
+            receipt.dayID = saved.dayID; receipt.workoutID = id; receipt.resultJSON = try workoutResult(saved, extra: [:])
+            try addSource(kind: "workout", recordID: id, turnID: turn.id, origin: false)
         case .routineCard(let id):
             struct Card: Encodable { var routineID: UUID; var name: String; var started = false }
             receipt.routineID = id; receipt.resultJSON = try coachJSON(Card(routineID: id, name: try routine(id: id).name))

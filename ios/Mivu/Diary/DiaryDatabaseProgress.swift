@@ -146,13 +146,25 @@ extension DiaryTransaction {
         guard session.state == .active, !session.exercises.isEmpty, at.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
         let day = try database.trackingDay(id: session.dayID)
         // Clamped so a workout left running for days can still be finished, then corrected.
-        let seconds = min(max(Int(at.timeIntervalSince(session.performedAt)), 1), 86_400)
-        session.state = .finished; session.durationSeconds = seconds; session.effort = effort ?? session.effort; session.updatedAt = at
+        let seconds = min(max(Int(at.timeIntervalSince(session.clockStart)), 1), 86_400)
+        session.state = .finished; session.durationSeconds = seconds; session.effort = effort ?? session.effort; session.updatedAt = at; session.resumedAt = nil
         if session.burnSource != .userEstimate {
             // Live workouts are gym sessions.
             session.estimatedBurnKcal = try estimatedBurn(activity: session.activity ?? "strength", seconds: seconds, distanceMeters: session.distanceMeters, effort: session.effort, day: day)
             session.burnSource = nil
         }
+        session.revision += 1
+        return try saveWorkout(session)
+    }
+    /// A strength workout finished on today's day goes back to live; its clock carries on from the time it had.
+    func resumeWorkout(id: UUID, at: Date, expectedRevision: Int) throws -> WorkoutSession {
+        var session = try workout(id: id)
+        guard session.revision == expectedRevision else { throw DiaryError.staleRevision }
+        guard try activeWorkout() == nil else { throw DiaryError.conflict }
+        guard session.isFinished, session.kind == .strength, at.timeIntervalSince1970.isFinite,
+              case .existing(let today) = try dayAssignment(at: at), today == session.dayID else { throw DiaryError.invalidData }
+        session.durationSeconds = session.durationSeconds ?? session.durationMinutes * 60
+        session.state = .active; session.resumedAt = at; session.updatedAt = at
         session.revision += 1
         return try saveWorkout(session)
     }

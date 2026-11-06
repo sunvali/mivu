@@ -318,3 +318,21 @@ private actor WorkoutCoachReplies {
         }
     }
 }
+
+extension CoachWorkoutTests {
+    /// "Continue my workout": Pip puts today's finished workout back to live, as the detail's button does.
+    @Test func continueWorkoutGoesBackToLive() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let draft = WorkoutDraft(kind: .strength, durationMinutes: 0, exercises: [WorkoutExercise(name: "Bench Press", sets: [WorkoutSet(repetitions: 8, loadKg: 60, done: true)], exerciseID: "barbell-bench-press")])
+        let active = try await store.startWorkout(draft, at: now.addingTimeInterval(-3_600), expectedProfileID: profile.id)
+        let done = try await store.finishWorkout(id: active.id, effort: nil, at: now.addingTimeInterval(-1_800), expectedRevision: active.revision, expectedProfileID: profile.id)
+        let args = #"{"workout_id":"\#(done.id.uuidString)","expected_revision":\#(done.revision)}"#
+        await #expect(throws: CoachError.invalidArguments, "only a workout from the context, at its real revision") {
+            _ = try await apply(store, profile, turn, call("continue_workout", args))
+        }
+        let receipts = try await apply(store, profile, turn, call("continue_workout", args), workouts: [done])
+        #expect(receipts.first?.workoutID == done.id)
+        let live = try #require(try await store.activeWorkout(expectedProfileID: profile.id))
+        #expect(live.id == done.id && live.resumedAt != nil && live.durationSeconds == 1_800)
+    }
+}

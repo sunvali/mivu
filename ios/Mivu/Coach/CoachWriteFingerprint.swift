@@ -32,7 +32,7 @@ extension CoachWrite {
         case .editWorkout(_, let patch, let revision): payload["arguments"] = ["patch": try object(patch), "revision": revision]
         case .activeWorkoutSets(let name, let sets): payload["arguments"] = ["exercise": name, "sets": try sets.map(object)]
         case .routineCard: break
-        case .deleteWeight(_, let revision), .deleteWorkout(_, let revision): payload["arguments"] = revision
+        case .deleteWeight(_, let revision), .deleteWorkout(_, let revision), .continueWorkout(_, let revision): payload["arguments"] = revision
         case .manual(let edit, let patchKey):
             var arguments: [String: Any] = [:]
             switch edit {

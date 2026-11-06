@@ -156,3 +156,44 @@ import Testing
         #expect(try await store.finishedWorkouts(containing: ExerciseKey(WorkoutExercise(name: "my press", sets: [])), limit: 5, expectedProfileID: profile.id) == [saved[1]])
     }
 }
+
+extension ActiveWorkoutTests {
+    /// A workout finished today goes back to live; the break before continuing is not counted.
+    @Test func continueTodaysWorkoutSkipsTheBreak() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let active = try await store.startWorkout(gym(true), at: start, expectedProfileID: profile.id)
+        let done = try await store.finishWorkout(id: active.id, effort: nil, at: start.addingTimeInterval(1_800), expectedRevision: active.revision, expectedProfileID: profile.id)
+        let back = start.addingTimeInterval(7_200)
+        let live = try await store.resumeWorkout(id: done.id, at: back, expectedRevision: done.revision, expectedProfileID: profile.id)
+        #expect(live.state == .active && live.resumedAt == back && live.performedAt == start)
+        #expect(live.clockStart == back.addingTimeInterval(-1_800), "the clock reads 30:00 the moment it continues")
+        #expect(try await store.activeWorkout(expectedProfileID: profile.id)?.id == done.id)
+        let again = try await store.finishWorkout(id: live.id, effort: nil, at: back.addingTimeInterval(600), expectedRevision: live.revision, expectedProfileID: profile.id)
+        #expect(again.durationSeconds == 2_400 && again.resumedAt == nil && again.isFinished, "30 + 10 minutes, not the 2-hour gap")
+    }
+
+    @Test func continueOnlyTodaysStrengthWithNothingRunning() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let first = try await store.startWorkout(gym(true), at: start, expectedProfileID: profile.id)
+        let done = try await store.finishWorkout(id: first.id, effort: nil, at: start.addingTimeInterval(1_800), expectedRevision: first.revision, expectedProfileID: profile.id)
+        let running = try await store.startWorkout(gym(), at: start.addingTimeInterval(3_600), expectedProfileID: profile.id)
+        await #expect(throws: DiaryError.conflict) {
+            try await store.resumeWorkout(id: done.id, at: start.addingTimeInterval(3_700), expectedRevision: done.revision, expectedProfileID: profile.id)
+        }
+        try await store.discardWorkout(id: running.id, expectedRevision: running.revision, expectedProfileID: profile.id)
+        await #expect(throws: DiaryError.invalidData, "a day later it is an edit, not a continue") {
+            try await store.resumeWorkout(id: done.id, at: start.addingTimeInterval(36 * 3_600), expectedRevision: done.revision, expectedProfileID: profile.id)
+        }
+        let run = try await store.createWorkout(localDate: done.dayLocalDate(in: store, profile: profile), draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], activity: "run"),
+                                                performedAt: start.addingTimeInterval(600), expectedProfileID: profile.id)
+        await #expect(throws: DiaryError.invalidData, "cardio has no live screen") {
+            try await store.resumeWorkout(id: run.id, at: start.addingTimeInterval(3_700), expectedRevision: run.revision, expectedProfileID: profile.id)
+        }
+    }
+}
+
+private extension WorkoutSession {
+    func dayLocalDate(in store: DiaryStore, profile: DiaryProfile) async throws -> String {
+        try await store.trackingDay(id: dayID, expectedProfileID: profile.id).localDate
+    }
+}

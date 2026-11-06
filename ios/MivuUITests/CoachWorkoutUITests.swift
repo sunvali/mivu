@@ -46,6 +46,30 @@ import XCTest
         capture("Gym after Pip added a set", in: app)
     }
 
+    /// Pip's bar in the gym: a message adds the set without leaving the workout, Pip answers above the bar, Undo takes it back.
+    func testGymPipBarAddsASetWithUndo() {
+        let app = launch(["--coach-workout-running"])
+        let banner = app.buttons["workoutBanner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 10))
+        banner.tap()
+        let ticks = app.buttons.matching(identifier: "tickSet")
+        XCTAssertTrue(ticks.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(ticks.count, 1)
+        let input = app.textFields["gymPipInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["gymPipCamera"].exists, "no machine camera without ChatGPT's recognizer")
+        input.tap(); input.typeText("Synthetic another bench set")
+        app.buttons["gymPipSend"].tap()
+        let reply = app.staticTexts["gymPipReply"]
+        XCTAssertTrue(reply.waitForExistence(timeout: 20))
+        XCTAssertTrue(ticks.element(boundBy: 1).waitForExistence(timeout: 5), "Pip's set shows in the open gym")
+        XCTAssertTrue(app.buttons["addExercise"].exists, "still in the gym, not sent to Coach")
+        app.buttons["gymPipUndo"].tap()
+        XCTAssertTrue(ticks.element(boundBy: 1).waitForNonExistence(timeout: 5))
+        XCTAssertEqual(ticks.count, 1)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     func testWorkoutSettingsLinkOpensWorkouts() {
         let app = launch()
         send("open workout settings", in: app)

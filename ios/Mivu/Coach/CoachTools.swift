@@ -16,6 +16,8 @@ enum CoachWrite: Sendable {
     case deleteWorkout(id: UUID, revision: Int)
     /// Sets the person just did, added to the running workout.
     case activeWorkoutSets(exercise: String, sets: [WorkoutSet])
+    /// A strength workout finished today, back to live.
+    case continueWorkout(id: UUID, revision: Int)
     /// A saved routine offered as a card; the person taps Start.
     case routineCard(UUID)
     var target: String {
@@ -31,6 +33,7 @@ enum CoachWrite: Sendable {
         case .deleteWeight(let id, _): "delete_weight/\(id.uuidString)"
         case .deleteWorkout(let id, _): "delete_workout/\(id.uuidString)"
         case .activeWorkoutSets(let name, _): "active_workout/\(WorkoutCatalog.normalized(name))"
+        case .continueWorkout(let id, _): "continue_workout/\(id.uuidString)"
         case .routineCard(let id): "start_routine/\(id.uuidString)"
         }
     }
@@ -193,6 +196,11 @@ enum CoachTools {
             guard !name.isEmpty, name.count <= 200 else { throw CoachError.invalidArguments }
             // The person reports sets already done.
             return .write(.activeWorkoutSets(exercise: name, sets: try workoutSets(args["sets"], done: true)))
+        case "continue_workout":
+            try keys(["workout_id", "expected_revision"], ["workout_id", "expected_revision"])
+            let id = try uuid("workout_id"), expectedRevision = try revision()
+            guard workouts.contains(where: { $0.id == id && $0.revision == expectedRevision }) else { throw CoachError.invalidArguments }
+            return .write(.continueWorkout(id: id, revision: expectedRevision))
         case "get_exercise_history":
             try keys(["exercise", "limit"], ["exercise", "limit"])
             let name = try string("exercise"); guard name.count <= 200 else { throw CoachError.invalidArguments }

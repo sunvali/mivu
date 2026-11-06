@@ -521,6 +521,10 @@ actor DiaryStore {
         try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.finishWorkout(id: id, effort: effort, at: at, expectedRevision: expectedRevision) } }
     }
 
+    func resumeWorkout(id: UUID, at: Date, expectedRevision: Int, expectedProfileID: UUID) throws -> WorkoutSession {
+        try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.resumeWorkout(id: id, at: at, expectedRevision: expectedRevision) } }
+    }
+
     func discardWorkout(id: UUID, expectedRevision: Int, expectedProfileID: UUID) throws {
         try pagedMutation(expectedProfileID) { try $0.transaction(expected: $1, maximumBytes: maximumFileBytes) { try $0.discardWorkout(id: id, expectedRevision: expectedRevision) } }
     }

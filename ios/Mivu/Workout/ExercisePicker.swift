@@ -6,6 +6,8 @@ import AVFoundation
 struct ExercisePicker: View {
     let recent: [WorkoutExercise]
     var recognizer: MachineRecognizer? = nil
+    /// Opened from Pip's camera in the gym: straight to the camera, with search as the fallback.
+    var opensCamera = false
     var onGuess: (MachineGuess) -> Void = { _ in }
     let onPick: (WorkoutExercise) -> Void
     @State private var search = ""
@@ -57,6 +59,7 @@ struct ExercisePicker: View {
             .overlay { if looking { ProgressView("Looking…").padding(24).background(.regularMaterial, in: .rect(cornerRadius: 20)) } }
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
             .searchFocused($searching)
+            .task { if opensCamera, recognizer != nil { await openCamera() } }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraCapture(preparation: preparation, onPhoto: { jpeg in Task { await recognize(jpeg) } }, onFailure: { searching = true })
                     .ignoresSafeArea()
@@ -111,7 +114,8 @@ struct ExercisePicker: View {
 
     private func row(_ name: String, detail: String?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 12) {
+                ExerciseGlyph(exerciseID: nil, name: name)
                 Text(name).foregroundStyle(Color.diaryText)
                 Spacer(minLength: 8)
                 if let detail { Text(detail).font(.subheadline).foregroundStyle(Color.diarySecondary) }

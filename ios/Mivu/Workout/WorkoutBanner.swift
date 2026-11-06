@@ -27,7 +27,7 @@ struct WorkoutBanner: View {
     }
 
     private func running(at now: Date) -> some View {
-        let minutes = max(Int(now.timeIntervalSince(session.performedAt) / 60), 0)
+        let minutes = max(Int(now.timeIntervalSince(session.clockStart) / 60), 0)
         let resting = restEndsAt.map { $0 > now } ?? false
         return Button(action: onOpen) {
             HStack(spacing: 10) {
@@ -44,7 +44,7 @@ struct WorkoutBanner: View {
                 if resting { Image(systemName: "timer").font(.footnote.weight(.semibold)) }
                 Group {
                     if resting, let restEndsAt { Text(timerInterval: now...restEndsAt, countsDown: true) }
-                    else { Text(timerInterval: session.performedAt...Date.distantFuture, countsDown: false) }
+                    else { Text(timerInterval: session.clockStart...Date.distantFuture, countsDown: false) }
                 }
                 .font(.body.weight(.bold)).monospacedDigit()
                 // No digit animation: a clock that animates every second never lets the screen settle.

@@ -23,6 +23,7 @@ and record types.
 | Record, correct, or remove a weight; inspect progress | `get_progress`, `log_weight`, `delete_weight` |
 | Record, inspect, edit, or remove a workout | `log_workout`, `get_workout`, `edit_workout`, `delete_workout`; see [Workouts](#workouts) |
 | Add sets or an exercise to the running workout | `add_to_workout` (the running workout is `activeWorkout` in the context) |
+| Continue a strength workout finished today (back to live) | `continue_workout` with its real ID and revision; refused while another workout runs |
 | Ask about an exercise's history or bests | `get_exercise_history` (at most 10 sessions) |
 | Start a saved routine | `start_routine` shows a card; the user taps Start |
 | Manage routines, own exercises, rest default, bar, plates or unit | `open_settings` with `workouts` |

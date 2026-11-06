@@ -421,6 +421,18 @@ import XCTest
         // The proof size reaches the cover: the ✓ row's name sits at its accessibility size.
         let weight = app.buttons["setWeight"].firstMatch
         XCTAssertGreaterThan(app.staticTexts["Barbell Bench Press"].firstMatch.frame.height, 40)
+        // The rest bar's ±15 take their own row: the countdown stays one line and every button fits on screen.
+        let restTime = app.buttons["restTime"]
+        XCTAssertTrue(restTime.waitForExistence(timeout: 5))
+        let oneLine = restTime.frame.height
+        restTime.tap()
+        let more = app.buttons["15 seconds more"]
+        XCTAssertTrue(more.waitForExistence(timeout: 5) && more.isHittable && app.buttons["skipRest"].isHittable)
+        XCTAssertEqual(restTime.frame.height, oneLine, accuracy: 1, "the countdown did not wrap")
+        XCTAssertLessThanOrEqual(app.buttons["skipRest"].frame.maxX, app.frame.maxX)
+        capture("Rest adjust largest text", in: app)
+        app.buttons["skipRest"].tap()
+        XCTAssertTrue(app.buttons["skipRest"].waitForNonExistence(timeout: 5))
         // Ruling 17: at the largest size a vertical swipe on a weight does not change it; a tap opens the wheels.
         let before = weight.value as? String
         let grip = weight.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
@@ -602,6 +614,51 @@ import XCTest
         let remove = app.buttons["Remove"]
         XCTAssertTrue(remove.waitForExistence(timeout: 5))
         remove.tap()
+    }
+
+    /// Swiping in from the left edge on Today opens Start workout, or the running workout when there is one.
+    func testEdgeSwipeOnTodayOpensTheWorkout() {
+        let app = launch()
+        edgeSwipe(app)
+        let gym = app.buttons["startGym"]
+        XCTAssertTrue(gym.waitForExistence(timeout: 5), "no workout running: Start workout opens")
+        gym.tap()
+        XCTAssertTrue(app.buttons["Minimize"].waitForExistence(timeout: 10))
+        app.buttons["Minimize"].tap()
+        XCTAssertTrue(app.buttons["workoutBanner"].waitForExistence(timeout: 10))
+        edgeSwipe(app)
+        XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10), "a running workout opens straight away")
+        XCTAssertFalse(app.buttons["startGym"].exists)
+    }
+
+    private func edgeSwipe(_ app: XCUIApplication) {
+        let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+        edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0)
+    }
+
+    /// A workout saved today goes back to live from its detail, keeps its sets, and saves again with the new one.
+    func testContinueTodaysWorkout() {
+        let app = launch()
+        saveBenchWorkout(app)
+        openWorkoutRow(app)
+        let resume = app.buttons["continueWorkout"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
+        resume.tap()
+        let addSet = app.buttons["addSet"].firstMatch
+        XCTAssertTrue(addSet.waitForExistence(timeout: 10), "the live gym opens")
+        let ticked = app.buttons.matching(NSPredicate(format: "identifier == 'tickSet' AND selected == true"))
+        XCTAssertEqual(ticked.count, 1, "the saved set is still there, done")
+        addSet.tap()
+        app.buttons.matching(identifier: "tickSet").element(boundBy: 1).tap()
+        XCTAssertTrue(ticked.element(boundBy: 1).waitForExistence(timeout: 5))
+        app.buttons["finishWorkout"].tap()
+        let save = app.buttons["saveWorkout"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        let rows = app.buttons.matching(identifier: "workoutRow")
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(rows.count, 1, "the same workout, not a second one")
+        XCTAssertTrue(rows.firstMatch.label.contains("2 sets"), rows.firstMatch.label)
     }
 
     func testEditPastWorkoutDate() {

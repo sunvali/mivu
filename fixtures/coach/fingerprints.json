@@ -55,6 +55,12 @@
       "tool" : "delete_workout"
     },
     {
+      "arguments" : "{\"workout_id\":\"00000000-0000-0000-0000-000000000090\",\"expected_revision\":2}",
+      "fingerprint" : "bfa0ff75cb983c21af53b9695cdcc6142f4beaf07b4029bddeae961f1ebb2855",
+      "target" : "continue_workout/00000000-0000-0000-0000-000000000090",
+      "tool" : "continue_workout"
+    },
+    {
       "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"item_id\":\"00000000-0000-0000-0000-000000000041\",\"review_submission_id\":null,\"name\":\"Synthetic oats/bran\",\"quantity\":null,\"unit\":null,\"nutrients\":[{\"nutrient\":\"protein\",\"value\":6.5},{\"nutrient\":\"kcal\",\"value\":null}]}",
       "fingerprint" : "78f0b9f64a5fa408890a77cb24e46624386c16cd8ec0c000150ecce4c158a6c5",
       "target" : "edit_item/00000000-0000-0000-0000-000000000020/saved/00000000-0000-0000-0000-000000000041/c819a641277a5e76bf42b8bfc39466f1f5954b0e201a8dc748b68c4742d39814",

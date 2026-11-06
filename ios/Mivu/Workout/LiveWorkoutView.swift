@@ -4,7 +4,10 @@ import SwiftUI
 struct LiveWorkoutView: View {
     @State private var model: LiveWorkoutModel
     let onClose: () -> Void
+    /// Pip's bar in a live workout; nil where there is no Coach (editing a saved workout).
+    let coach: CoachViewModel?
     @State private var picking = false
+    @State private var pickerOpensCamera = false
     @State private var editing: SetPosition?
     @State private var askingDiscard = false
     @State private var showingDone = false
@@ -28,9 +31,10 @@ struct LiveWorkoutView: View {
 
     struct SetPosition: Identifiable { let exercise: Int, set: Int; var id: String { "\(exercise)-\(set)" } }
 
-    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, mode: LiveWorkoutMode, notice: String? = nil, onSaved: @escaping (WorkoutSession, UUID) -> Void,
-         onClose: @escaping () -> Void) {
+    init(store: DiaryStore, profileID: UUID, session: WorkoutSession, mode: LiveWorkoutMode, notice: String? = nil, coach: CoachViewModel? = nil,
+         onSaved: @escaping (WorkoutSession, UUID) -> Void, onClose: @escaping () -> Void) {
         _notice = State(initialValue: notice)
+        self.coach = coach
         let unit = UserDefaults.standard.string(forKey: "weightUnit") ?? "kg"
         _model = State(initialValue: LiveWorkoutModel(store: store, profileID: profileID, session: session, unit: unit, mode: mode, rest: .shared,
                                                       onSaved: onSaved))
@@ -43,8 +47,37 @@ struct LiveWorkoutView: View {
               let infer = try? connection.inference() else { return nil }
         return MachineRecognizer(infer: infer)
     }
+    /// Pip can change a workout only through ChatGPT; the on-device model reads food alone.
+    private var pipAvailable: Bool {
+        (connection?.provider == .chatGPT && connection?.planAuthorized == true) || DiaryLaunch.isCoachInferenceFixture
+    }
     private var tickedCount: Int {
         model.session.exercises.indices.reduce(0) { total, e in total + model.session.exercises[e].sets.indices.filter { model.isTicked(exercise: e, set: $0) }.count }
+    }
+
+    /// A machine guess, the rest countdown and Pip's bar, pinned under the list.
+    private var bottomBar: some View {
+        VStack(spacing: 8) {
+            if let guessedName { guessToast(guessedName) }
+            if model.mode == .live, let end = rest.endsAt { RestBar(rest: rest, endsAt: end) }
+            if model.mode == .live, let coach, pipAvailable {
+                GymPipBar(coach: coach, model: model, onCamera: recognizer == nil ? nil : { pickerOpensCamera = true; picking = true })
+            }
+        }
+        .padding(.horizontal, 16).padding(.bottom, 8)
+    }
+
+    /// Sets ticked, the burn so far and new bests, above the cards.
+    private var stats: some View {
+        let summary = model.summary
+        return HStack(spacing: 20) {
+            Label("\(tickedCount) \(tickedCount == 1 ? "set" : "sets")", systemImage: "checkmark.circle.fill")
+            if let kcal = summary.kcal { Label("~\(Int(kcal.rounded())) kcal", systemImage: "flame.fill") }
+            if summary.newBests > 0 { Label("\(summary.newBests) new best", systemImage: "trophy.fill").foregroundStyle(Color.diaryCarbs) }
+        }
+        .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)
+        .frame(minHeight: 28, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     var body: some View {
@@ -86,6 +119,7 @@ struct LiveWorkoutView: View {
                         }
                     }
                 }
+                if model.mode == .live, tickedCount > 0 { Section { stats }.listRowBackground(Color.clear) }
                 ForEach(blocks, id: \.self) { block in
                     Section {
                         ForEach(block, id: \.self) { index in
@@ -113,13 +147,7 @@ struct LiveWorkoutView: View {
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    if let guessedName { guessToast(guessedName) }
-                    if model.mode == .live, let end = rest.endsAt { RestBar(rest: rest, endsAt: end) }
-                }
-                .padding(.horizontal, 16).padding(.bottom, 8)
-            }
+            .safeAreaInset(edge: .bottom) { bottomBar }
             .animation(reduceMotion ? nil : .snappy, value: model.expandedExercise)
             .animation(reduceMotion ? nil : .snappy, value: model.session.exercises.map(\.groupID))
             // VoiceOver follows a superset to its next exercise.
@@ -129,8 +157,8 @@ struct LiveWorkoutView: View {
         }
         .tint(.diaryAccent)
         .task { await model.load() }
-        .sheet(isPresented: $picking, onDismiss: { replacing = nil }) {
-            ExercisePicker(recent: model.recent, recognizer: replacing == nil ? recognizer : nil, onGuess: { guess in
+        .sheet(isPresented: $picking, onDismiss: { replacing = nil; pickerOpensCamera = false }) {
+            ExercisePicker(recent: model.recent, recognizer: replacing == nil ? recognizer : nil, opensCamera: pickerOpensCamera, onGuess: { guess in
                 picking = false
                 Task {
                     await model.addGuess(guess)
@@ -206,7 +234,7 @@ struct LiveWorkoutView: View {
         ToolbarItem(placement: .principal) {
             if model.mode == .live {
                 // No digit animation: a clock that animates every second never lets the screen settle.
-                Text(timerInterval: model.session.performedAt...Date.distantFuture, countsDown: false)
+                Text(timerInterval: model.session.clockStart...Date.distantFuture, countsDown: false)
                     .font(.headline).monospacedDigit()
                     .contentTransition(.identity).transaction { $0.animation = nil }
             } else {
@@ -268,12 +296,18 @@ struct LiveWorkoutView: View {
 
     @ViewBuilder private func expanded(_ index: Int) -> some View {
         let exercise = model.session.exercises[index]
+        let glyph = ExerciseGlyphStyle(exerciseID: exercise.exerciseID, name: exercise.name)
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                // At accessibility sizes the pill sits under the name instead of squeezing beside it.
-                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
-                    Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
-                    if model.newBests.contains(index) { NewBestPill() }
+            HStack(spacing: 12) {
+                ExerciseGlyph(exerciseID: exercise.exerciseID, name: exercise.name)
+                VStack(alignment: .leading, spacing: 2) {
+                    // At accessibility sizes the pill sits under the name instead of squeezing beside it.
+                    (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
+                        Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
+                        if model.newBests.contains(index) { NewBestPill() }
+                    }
+                    // At accessibility sizes the tile's colour carries the muscle, so the sets stay in view.
+                    if let subtitle = glyph.subtitle, !typeSize.isAccessibilitySize { Text(subtitle).font(.subheadline).foregroundStyle(glyph.family.ink) }
                 }
                 exerciseMenu(index)
             }
@@ -312,6 +346,7 @@ struct LiveWorkoutView: View {
         let last = count > 0 ? model.lastTime(exercise: index, set: 0).map { "last " + describe($0, exercise) } : nil
         return Button { model.expandedExercise = index } label: {
             HStack(spacing: 12) {
+                ExerciseGlyph(exerciseID: exercise.exerciseID, name: exercise.name)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText)
                     Text(["\(count) \(count == 1 ? "set" : "sets")", last].compactMap { $0 }.joined(separator: " · "))
@@ -381,7 +416,8 @@ struct LiveWorkoutView: View {
             .accessibilityIdentifier("tickSet")
         }
         if !caption.isEmpty {
-            Text(caption).font(.caption).foregroundStyle(Color.diarySecondary).padding(.leading, 28).padding(.bottom, 4)
+            Label { Text(caption) } icon: { Image(systemName: set.type.flatMap(Self.typeSymbol) ?? "gauge.with.dots.needle.67percent") }
+                .font(.caption).foregroundStyle(set.type == .warmup ? Color.diaryCarbs : Color.diarySecondary).padding(.leading, 28).padding(.bottom, 4)
         }
         }
         .animation(reduceMotion ? nil : .snappy, value: done)
@@ -455,9 +491,9 @@ struct LiveWorkoutView: View {
     @ViewBuilder private func setMenu(_ exercise: Int, _ index: Int) -> some View {
         let set = model.session.exercises[exercise].sets[index], type = set.type ?? .normal
         ForEach([WorkoutSetType.warmup, .drop, .failure], id: \.self) { option in
-            Toggle(Self.typeName(option) ?? "", isOn: Binding(get: { type == option }, set: { on in
+            Toggle(isOn: Binding(get: { type == option }, set: { on in
                 Task { await model.setType(on ? option : .normal, exercise: exercise, set: index) }
-            }))
+            })) { Label(Self.typeName(option) ?? "", systemImage: Self.typeSymbol(option) ?? "") }
         }
         Menu {
             Picker("How hard?", selection: Binding(get: { set.effort }, set: { effort in Task { await model.setEffort(effort, exercise: exercise, set: index) } })) {
@@ -469,6 +505,15 @@ struct LiveWorkoutView: View {
             if set.effort != nil { Button("Clear") { Task { await model.setEffort(nil, exercise: exercise, set: index) } } }
         } label: { Label("How hard?", systemImage: "gauge.with.dots.needle.67percent") }
         Button("Delete", systemImage: "trash", role: .destructive) { Task { await model.deleteSet(exercise: exercise, set: index) } }
+    }
+
+    static func typeSymbol(_ type: WorkoutSetType) -> String? {
+        switch type {
+        case .normal: nil
+        case .warmup: "flame"
+        case .drop: "arrow.down.right"
+        case .failure: "bolt.fill"
+        }
     }
 
     static func typeName(_ type: WorkoutSetType) -> String? {
@@ -554,9 +599,11 @@ private struct RestBar: View {
     let rest: RestTimer
     let endsAt: Date
     @State private var adjusting = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 12) {
+        // At accessibility sizes the buttons take a second row, so the countdown never wraps.
+        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 12))) {
             Button { adjusting.toggle() } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "timer").font(.body.weight(.semibold)).accessibilityHidden(true)
@@ -568,13 +615,16 @@ private struct RestBar: View {
                 .frame(minHeight: 44).contentShape(.rect)
             }
             .accessibilityHint("Shows 15 seconds less or more.")
-            Spacer(minLength: 4)
-            if adjusting {
-                Button("−15") { Task { await rest.adjust(by: -15) } }.accessibilityLabel("15 seconds less").frame(minWidth: 44, minHeight: 44)
-                Button("+15") { Task { await rest.adjust(by: 15) } }.accessibilityLabel("15 seconds more").frame(minWidth: 44, minHeight: 44)
+            .accessibilityIdentifier("restTime")
+            HStack(spacing: 12) {
+                Spacer(minLength: 4)
+                if adjusting {
+                    Button("−15") { Task { await rest.adjust(by: -15) } }.accessibilityLabel("15 seconds less").frame(minWidth: 44, minHeight: 44)
+                    Button("+15") { Task { await rest.adjust(by: 15) } }.accessibilityLabel("15 seconds more").frame(minWidth: 44, minHeight: 44)
+                }
+                Button("Skip") { rest.skip() }.fontWeight(.semibold).frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel("Skip rest").accessibilityIdentifier("skipRest")
             }
-            Button("Skip") { rest.skip() }.fontWeight(.semibold).frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel("Skip rest").accessibilityIdentifier("skipRest")
         }
         .buttonStyle(.plain)
         .foregroundStyle(Color.diaryCanvas)
