@@ -6,6 +6,8 @@ struct LiveWorkoutView: View {
     let onClose: () -> Void
     /// Pip's bar in a live workout; nil where there is no Coach (editing a saved workout).
     let coach: CoachViewModel?
+    /// Points the way the screen leaves: down under a cover, left in Today's edge panel.
+    let minimizeSymbol: String
     @State private var picking = false
     @State private var pickerOpensCamera = false
     @State private var editing: SetPosition?
@@ -28,13 +30,18 @@ struct LiveWorkoutView: View {
     private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// One width for a number box and the label over it.
+    @ScaledMetric(relativeTo: .title3) private var column = 64.0
+    /// Sets as a table with last time beside each; at accessibility sizes the row has no room for it.
+    private var table: Bool { !typeSize.isAccessibilitySize }
 
     struct SetPosition: Identifiable { let exercise: Int, set: Int; var id: String { "\(exercise)-\(set)" } }
 
     init(store: DiaryStore, profileID: UUID, session: WorkoutSession, mode: LiveWorkoutMode, notice: String? = nil, coach: CoachViewModel? = nil,
-         onSaved: @escaping (WorkoutSession, UUID) -> Void, onClose: @escaping () -> Void) {
+         minimizeSymbol: String = "chevron.down", onSaved: @escaping (WorkoutSession, UUID) -> Void, onClose: @escaping () -> Void) {
         _notice = State(initialValue: notice)
         self.coach = coach
+        self.minimizeSymbol = minimizeSymbol
         let unit = UserDefaults.standard.string(forKey: "weightUnit") ?? "kg"
         _model = State(initialValue: LiveWorkoutModel(store: store, profileID: profileID, session: session, unit: unit, mode: mode, rest: .shared,
                                                       onSaved: onSaved))
@@ -65,19 +72,6 @@ struct LiveWorkoutView: View {
             }
         }
         .padding(.horizontal, 16).padding(.bottom, 8)
-    }
-
-    /// Sets ticked, the burn so far and new bests, above the cards.
-    private var stats: some View {
-        let summary = model.summary
-        return HStack(spacing: 20) {
-            Label("\(tickedCount) \(tickedCount == 1 ? "set" : "sets")", systemImage: "checkmark.circle.fill")
-            if let kcal = summary.kcal { Label("~\(Int(kcal.rounded())) kcal", systemImage: "flame.fill") }
-            if summary.newBests > 0 { Label("\(summary.newBests) new best", systemImage: "trophy.fill").foregroundStyle(Color.diaryCarbs) }
-        }
-        .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)
-        .frame(minHeight: 28, alignment: .leading)
-        .accessibilityElement(children: .combine)
     }
 
     var body: some View {
@@ -119,7 +113,6 @@ struct LiveWorkoutView: View {
                         }
                     }
                 }
-                if model.mode == .live, tickedCount > 0 { Section { stats }.listRowBackground(Color.clear) }
                 ForEach(blocks, id: \.self) { block in
                     Section {
                         ForEach(block, id: \.self) { index in
@@ -226,7 +219,7 @@ struct LiveWorkoutView: View {
         ToolbarItem(placement: .cancellationAction) {
             if model.mode == .live {
                 // Keeps the workout running.
-                Button(action: onClose) { Image(systemName: "chevron.down") }.accessibilityLabel("Minimize")
+                Button(action: onClose) { Image(systemName: minimizeSymbol) }.accessibilityLabel("Minimize")
             } else {
                 Button(role: .close) { if model.mode == .edit ? model.editChanged : model.hasTicked { askingDiscard = true } else { onClose() } }
             }
@@ -244,7 +237,7 @@ struct LiveWorkoutView: View {
         // Without the glass capsule: a glass item re-animates every second as the clock ticks.
         .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .confirmationAction) {
-            Button("Done") {
+            Button(model.mode == .live ? "Finish" : "Done") {
                 // An edit saves as it is: an older workout may have no sets at all, only its time.
                 guard model.mode != .edit else { Task { if await model.finish() { onClose() } }; return }
                 if !model.hasTicked { askingDiscard = true; return }
@@ -296,23 +289,20 @@ struct LiveWorkoutView: View {
 
     @ViewBuilder private func expanded(_ index: Int) -> some View {
         let exercise = model.session.exercises[index]
-        let glyph = ExerciseGlyphStyle(exerciseID: exercise.exerciseID, name: exercise.name)
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 12) {
+                // The tile's colour and symbol carry the muscle and equipment.
                 ExerciseGlyph(exerciseID: exercise.exerciseID, name: exercise.name)
-                VStack(alignment: .leading, spacing: 2) {
-                    // At accessibility sizes the pill sits under the name instead of squeezing beside it.
-                    (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
-                        Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText).frame(maxWidth: .infinity, alignment: .leading)
-                        if model.newBests.contains(index) { NewBestPill() }
-                    }
-                    // At accessibility sizes the tile's colour carries the muscle, so the sets stay in view.
-                    if let subtitle = glyph.subtitle, !typeSize.isAccessibilitySize { Text(subtitle).font(.subheadline).foregroundStyle(glyph.family.ink) }
+                // At accessibility sizes the pill sits under the name instead of squeezing beside it.
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
+                    Text(exercise.name).font(.headline).foregroundStyle(Color.diaryText).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if model.newBests.contains(index) { NewBestPill() }
                 }
                 exerciseMenu(index)
             }
             let next = exercise.sets.firstIndex { $0.done != true } ?? 0
-            if !exercise.sets.isEmpty, let last = model.lastTime(exercise: index, set: next) {
+            if !table, !exercise.sets.isEmpty, let last = model.lastTime(exercise: index, set: next) {
                 Text("Last time \(describe(last, exercise))").font(.subheadline).foregroundStyle(Color.diarySecondary)
             }
             if let note = exercise.note { Text(note).font(.subheadline).foregroundStyle(Color.diarySecondary) }
@@ -322,8 +312,9 @@ struct LiveWorkoutView: View {
                     .accessibilityLabel("Change exercise")
                     .accessibilityIdentifier("changeGuess")
             }
+            if table, !exercise.sets.isEmpty { setHeader(exercise).padding(.top, 8) }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, table ? 0 : 4)
         ForEach(exercise.sets.indices, id: \.self) { set in
             if model.session.exercises.indices.contains(index), model.session.exercises[index].sets.indices.contains(set) {
                 setRow(index, set)
@@ -376,10 +367,11 @@ struct LiveWorkoutView: View {
         HStack(spacing: 8) {
             Text("\(index + 1)").font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diarySecondary)
                 .frame(minWidth: 20, alignment: .leading).accessibilityHidden(true)
+            if table { previous(exercise, index, done: done, commit: commit) }
             switch measure {
             case .time, .distanceTime:
                 SetNumber(value: Double(set.seconds ?? 0), step: 5, range: 0...86_400, unit: nil, label: "Set \(index + 1) time", done: done,
-                          text: { Self.clock(Int($0)) }, onCommit: { commit(nil, nil, Int($0)) }, onTap: open)
+                          column: table ? column : nil, text: { Self.clock(Int($0)) }, onCommit: { commit(nil, nil, Int($0)) }, onTap: open)
                     .accessibilityIdentifier("setTime")
             case .reps:
                 if (set.loadKg ?? 0) > 0 {
@@ -390,20 +382,21 @@ struct LiveWorkoutView: View {
                 // An unset weight shows "–"; a swipe starts from the bar or a light dumbbell.
                 SetNumber(value: set.loadKg.map { WeightStep.display(kg: $0, unit: model.unit) } ?? model.startingWeight(exercise: exercise),
                           step: step, range: 0...(model.unit == "lb" ? 1_100 : 500), unit: model.unit, label: "Set \(index + 1) weight", done: done,
-                          unset: set.loadKg == nil, text: number, onCommit: { commit(WeightStep.kg(fromDisplay: $0, unit: model.unit), nil, nil) }, onTap: open)
+                          unset: set.loadKg == nil, column: table ? column : nil, text: number, onCommit: { commit(WeightStep.kg(fromDisplay: $0, unit: model.unit), nil, nil) }, onTap: open)
                     .accessibilityIdentifier("setWeight")
-                Text("×").foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
+                if !table { Text("×").foregroundStyle(Color.diarySecondary).accessibilityHidden(true) }
                 reps(set, number: index + 1, done: done, commit: commit, open: open)
             }
-            Spacer(minLength: 4)
+            if !table { Spacer(minLength: 4) }
             // A weight never chosen is chosen first: ✓ opens the wheels, whose Done ticks.
             Button { if model.needsWeight(exercise: exercise, set: index) { open() } else { Task { await model.tick(exercise: exercise, set: index) } } } label: {
                 // Fixed size: the glyph sits in a fixed circle; the label carries the text for VoiceOver.
                 Image(systemName: "checkmark").font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(done ? Color.diaryActionText : next ? Color.diaryWorkout : Color.diaryRule)
+                    .foregroundStyle(done ? Color.diaryActionText : next ? Color.diaryWorkout : Color.diarySecondary)
                     .frame(width: 36, height: 36)
                     .background(done ? Color.diarySuccess : .clear, in: .circle)
-                    .overlay { Circle().strokeBorder(done ? Color.diarySuccess : next ? Color.diaryWorkout : Color.diaryRule, lineWidth: 2) }
+                    // The screen's main action: an empty tick is as dark as the text beside it, never faint.
+                    .overlay { Circle().strokeBorder(done ? Color.diarySuccess : next ? Color.diaryWorkout : Color.diarySecondary, lineWidth: 2) }
                     .frame(width: 44, height: 44).contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -421,6 +414,46 @@ struct LiveWorkoutView: View {
         }
         }
         .animation(reduceMotion ? nil : .snappy, value: done)
+    }
+
+    /// "Previous", the unit and "Reps" over the set rows, each over its column.
+    private func setHeader(_ exercise: WorkoutExercise) -> some View {
+        let measure = LiveWorkoutModel.measure(exercise)
+        return HStack(spacing: 8) {
+            Text("Previous").frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 28)
+            switch measure {
+            case .time, .distanceTime: Text("Time").frame(width: column)
+            case .reps: Text("Reps").frame(width: column)
+            case .weightReps:
+                Text(model.unit).frame(width: column)
+                Text("Reps").frame(width: column)
+            }
+            Color.clear.frame(width: 44, height: 1)
+        }
+        .font(.caption.weight(.medium)).foregroundStyle(Color.diarySecondary)
+        // Each number's own label already says what it is.
+        .accessibilityHidden(true)
+    }
+
+    /// The same set last time; a tap copies it into this one.
+    private func previous(_ exercise: Int, _ index: Int, done: Bool, commit: @escaping (Double?, Int?, Int?) -> Void) -> some View {
+        let current = model.session.exercises[exercise], last = model.lastTime(exercise: exercise, set: index)
+        return Button {
+            guard let last else { return }
+            switch LiveWorkoutModel.measure(current) {
+            case .time, .distanceTime: commit(nil, nil, last.seconds)
+            case .reps, .weightReps: commit(last.loadKg, last.repetitions, nil)
+            }
+        } label: {
+            Text(last.map { brief($0, current) } ?? "–").font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(last == nil || done)
+        .accessibilityLabel(last.map { "Previous \(describe($0, current))" } ?? String(localized: "No previous set"))
+        .accessibilityHint(last == nil || done ? "" : String(localized: "Copies it into this set."))
+        .accessibilityIdentifier("previousSet")
     }
 
     // MARK: Hidden one level down
@@ -527,7 +560,7 @@ struct LiveWorkoutView: View {
 
     private func reps(_ set: WorkoutSet, number: Int, done: Bool, commit: @escaping (Double?, Int?, Int?) -> Void, open: @escaping () -> Void) -> some View {
         SetNumber(value: Double(set.repetitions), step: 1, range: 1...100, unit: nil, label: "Set \(number) reps", done: done,
-                  text: { "\(Int($0))" }, onCommit: { commit(nil, Int($0), nil) }, onTap: open)
+                  column: table ? column : nil, text: { "\(Int($0))" }, onCommit: { commit(nil, Int($0), nil) }, onTap: open)
             .accessibilityIdentifier("setReps")
     }
 
@@ -543,6 +576,15 @@ struct LiveWorkoutView: View {
         }
     }
 
+    /// The same without units, for the Previous column: "60 × 8", "12", "+10 × 12" or "1:30".
+    private func brief(_ set: WorkoutSet, _ exercise: WorkoutExercise) -> String {
+        switch LiveWorkoutModel.measure(exercise) {
+        case .time, .distanceTime: return Self.clock(set.seconds ?? 0)
+        case .reps: return (set.loadKg ?? 0) > 0 ? "+\(weight(kg: set.loadKg!)) × \(set.repetitions)" : "\(set.repetitions)"
+        case .weightReps: return set.loadKg.map { "\(weight(kg: $0)) × \(set.repetitions)" } ?? "\(set.repetitions)"
+        }
+    }
+
     nonisolated static func clock(_ seconds: Int) -> String { "\(seconds / 60):" + String(format: "%02d", seconds % 60) }
 }
 
@@ -555,6 +597,8 @@ private struct SetNumber: View {
     let label: String
     let done: Bool
     var unset = false
+    /// A fixed width in the set table, where the label over the column names the unit.
+    var column: CGFloat? = nil
     let text: (Double) -> String
     let onCommit: (Double) -> Void
     let onTap: () -> Void
@@ -569,19 +613,18 @@ private struct SetNumber: View {
         Button(action: onTap) {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(unset && steps == 0 ? "–" : text(shown)).font(.title3.weight(.bold)).monospacedDigit().foregroundStyle(Color.diaryText)
-                if let unit { Text(unit).font(.caption.weight(.medium)).foregroundStyle(Color.diarySecondary) }
+                if let unit, column == nil { Text(unit).font(.caption.weight(.medium)).foregroundStyle(Color.diarySecondary) }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
             .padding(.horizontal, 8)
-            .frame(minWidth: min(width, 120), minHeight: 44)
+            .frame(minWidth: column ?? min(width, 120), maxWidth: column, minHeight: 44)
             .background(done ? Color.diaryTintBurn : Color.diaryCanvas, in: .rect(cornerRadius: 12))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         // One step per 24 points; saved once, when the finger lifts. Off at accessibility sizes, where rows scroll more than they swipe.
-        .highPriorityGesture(DragGesture(minimumDistance: 8)
-            .onChanged { steps = Int(-$0.translation.height / 24) }
-            .onEnded { _ in if steps != 0, shown != value || unset { onCommit(shown) } else { steps = 0 } }, isEnabled: !typeSize.isAccessibilitySize)
+        .gesture(VerticalDrag(isEnabled: !typeSize.isAccessibilitySize, onChanged: { steps = Int(-$0 / 24) },
+                              onEnded: { if steps != 0, shown != value || unset { onCommit(shown) } else { steps = 0 } }))
         .onChange(of: value) { steps = 0 }
         .sensoryFeedback(.selection, trigger: steps)
         .accessibilityLabel(Text(label))
@@ -590,6 +633,39 @@ private struct SetNumber: View {
             // An unset weight is set to its starting value first.
             let next = unset ? value : clamped(value + (direction == .increment ? step : -step))
             if next != value || unset { onCommit(next) }
+        }
+    }
+}
+
+/// An up-or-down drag on a number. A sideways drag is left to the row, so swipe-to-delete starts anywhere on it.
+private struct VerticalDrag: UIGestureRecognizerRepresentable {
+    let isEnabled: Bool
+    let onChanged: (CGFloat) -> Void
+    let onEnded: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func updateUIGestureRecognizer(_ pan: UIPanGestureRecognizer, context: Context) { pan.isEnabled = isEnabled }
+
+    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
+        switch pan.state {
+        case .changed: onChanged(pan.translation(in: pan.view).y)
+        case .ended, .cancelled, .failed: onEnded()
+        default: break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return true }
+            let speed = pan.velocity(in: pan.view)
+            return abs(speed.y) > abs(speed.x)
         }
     }
 }

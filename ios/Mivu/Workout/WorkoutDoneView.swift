@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// After a gym workout: Pip, three numbers, one question, Save. No streaks, no score.
+/// After a gym workout: Pip, the numbers there are, one question, Save. No streaks, no score.
 struct WorkoutDoneView: View {
     @Bindable var model: LiveWorkoutModel
     let onClose: () -> Void
@@ -41,13 +41,9 @@ struct WorkoutDoneView: View {
                 .padding(.bottom, 8)
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 8))) {
                     stat("\(summary.sets)", summary.sets == 1 ? "set" : "sets")
-                    if let kcal = summary.kcal {
-                        stat(kcal.formatted(), "kcal", color: .diaryWorkout)
-                    } else {
-                        // Without a body weight there is no estimate; a dash would be read out as "dash".
-                        stat("–", "kcal", color: .diaryWorkout).accessibilityLabel("kcal not estimated")
-                    }
-                    stat("\(summary.newBests)", summary.newBests == 1 ? "new best" : "new bests")
+                    // Only numbers there are: no dash for an unknown burn, no zero for bests.
+                    if let kcal = summary.kcal { stat(kcal.formatted(), "kcal", color: .diaryWorkout) }
+                    if summary.newBests > 0 { stat("\(summary.newBests)", summary.newBests == 1 ? "new best" : "new bests") }
                 }
                 .card()
                 if model.mode == .past {
@@ -107,13 +103,13 @@ struct WorkoutDoneView: View {
         if let routine = model.routine {
             if model.routineChanged {
                 Button("Update \(routine.name)") { Task { await save { await model.updateRoutine() } } }
-                    .font(.subheadline.weight(.semibold)).frame(minHeight: 44).disabled(saving)
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent).frame(minHeight: 44).disabled(saving)
                     .accessibilityIdentifier("updateRoutine")
             }
         } else {
             // A retry keeps what was typed.
             Button("Save as routine") { if name.isEmpty { name = title }; naming = true }
-                .font(.subheadline.weight(.semibold)).frame(minHeight: 44).disabled(saving)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent).frame(minHeight: 44).disabled(saving)
                 .accessibilityIdentifier("saveRoutine")
         }
     }
