@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// One button starts a gym workout; under it, routines and recent workouts to do again, then cardio.
-/// A past day and time hides behind the clock button.
+/// When it starts ("Today, now" unless changed), gym on top, the most-used sports, then "Again" for routines and recent workouts.
 struct StartWorkoutSheet: View {
     @Bindable var model: DiaryViewModel
     /// nil means now.
@@ -12,15 +11,14 @@ struct StartWorkoutSheet: View {
     var onClose: (() -> Void)? = nil
     @State private var routines: [WorkoutRoutine] = []
     @State private var recent: [WorkoutSession] = []
-    @State private var pickingStart = false
     @Environment(\.dismiss) private var dismiss
 
-    /// Every sport but gym: the most used first, then Run, Walk and Cycle, then the rest.
+    /// At most three sports: the most used first, topped up with Run, Walk and Cycle.
     private var sports: [WorkoutActivity] {
         let counts = Dictionary(recent.compactMap(\.activity).map { ($0, 1) }, uniquingKeysWith: +)
         var seen: Set = ["strength"]
-        return (counts.keys.sorted { (counts[$0]!, $1) > (counts[$1]!, $0) } + ["run", "walk", "cycle"] + WorkoutCatalog.activities.map(\.id))
-            .filter { seen.insert($0).inserted }.compactMap(WorkoutCatalog.activity)
+        return (counts.keys.sorted { (counts[$0]!, $1) > (counts[$1]!, $0) } + ["run", "walk", "cycle"])
+            .filter { seen.insert($0).inserted }.compactMap(WorkoutCatalog.activity).prefix(3).map { $0 }
     }
 
     /// The last three distinct workouts that are not already a routine.
@@ -31,52 +29,58 @@ struct StartWorkoutSheet: View {
 
     var body: some View {
         List {
-            if start != nil || pickingStart { Section { WorkoutStartPicker(start: $start, expanded: pickingStart) } }
+            Section { WorkoutStartPicker(start: $start) }
             Section {
                 Button { onGym(nil) } label: {
-                    // A past start logs a workout that already happened; nothing runs.
-                    Label(start == nil ? "Start workout" : "Log workout", systemImage: "dumbbell.fill").font(.headline)
-                        .foregroundStyle(Color.diaryActionText).frame(maxWidth: .infinity, minHeight: 52).contentShape(.rect)
+                    HStack(spacing: 12) {
+                        Image(systemName: "dumbbell.fill").font(.body.weight(.semibold))
+                            .frame(width: 40, height: 40).background(Color.diaryActionText.opacity(0.18), in: .rect(cornerRadius: 12))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Gym").font(.headline)
+                            Text("Sets and reps").font(.subheadline).opacity(0.85)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(Color.diaryActionText).frame(minHeight: 52).contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(Color.diaryWorkout)
                 .accessibilityIdentifier("startGym")
             }
             Section {
-                ForEach(routines) { routine in
-                    row(routine.name, symbol: "figure.strengthtraining.traditional", detail: routine.lastUsedAt.map(Self.day)) {
-                        onGym(routine.draft)
-                    }
-                }
-                ForEach(again) { session in
-                    row(WorkoutRow.title(session), symbol: WorkoutRow.symbol(session), detail: Self.day(session.performedAt)) { repeatWorkout(session) }
+                ForEach(sports) { sport in
+                    row(sport.name, symbol: sport.symbol) { onCardio(sport.id, last(sport.id)) }
                 }
                 NavigationLink {
-                    SportList(sports: sports) { onCardio($0, last($0)) }
+                    OtherSportList { onCardio($0, last($0)) }
                 } label: {
-                    HStack(spacing: 12) { WorkoutIcon(symbol: "figure.run"); Text("Log cardio") }.frame(minHeight: 44)
+                    HStack(spacing: 12) { WorkoutIcon(symbol: "ellipsis"); Text("Other sport") }.frame(minHeight: 44)
                 }
-                .accessibilityIdentifier("logCardio")
+            }
+            if !routines.isEmpty || !again.isEmpty {
+                Section {
+                    ForEach(routines) { routine in
+                        row(routine.name, symbol: "figure.strengthtraining.traditional", detail: routine.lastUsedAt.map(Self.day)) {
+                            onGym(routine.draft)
+                        }
+                    }
+                    ForEach(again) { session in
+                        row(WorkoutRow.title(session), symbol: WorkoutRow.symbol(session), detail: Self.day(session.performedAt)) { repeatWorkout(session) }
+                    }
+                } header: {
+                    Text("Again").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary).textCase(nil)
+                }
             }
         }
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .navigationTitle("Workout")
+        .navigationTitle("Start workout")
         .toolbarTitleDisplayMode(.inlineLarge)
-        .toolbar {
-            // The clock first, so ✕ keeps the corner.
-            if start == nil, !pickingStart {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Past workout", systemImage: "clock.arrow.circlepath") { pickingStart = true }
-                        .accessibilityIdentifier("pastWorkout")
-                }
-                ToolbarSpacer(.fixed, placement: .topBarTrailing)
-            }
-            ToolbarItem(placement: .topBarTrailing) { Button(role: .close) { if let onClose { onClose() } else { dismiss() } } }
-        }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(role: .close) { if let onClose { onClose() } else { dismiss() } } } }
         .task {
             guard let owner = model.readModel?.profile.id else { return }
             routines = (try? await model.store.routines(expectedProfileID: owner)) ?? []
-            // shortcut: the recent rows and most-used sports look at the latest 30 workouts; widen if people ask for older ones.
+            // shortcut: "Again" and most-used sports look at the latest 30 workouts; widen if people ask for older ones.
             recent = (try? await model.store.workoutHistory(expectedProfileID: owner).values) ?? []
         }
     }
@@ -183,14 +187,8 @@ struct StartWorkoutFlow: ViewModifier {
 /// "Today, now" or the chosen day and time; tap for the date and time wheels. nil means now.
 struct WorkoutStartPicker: View {
     @Binding var start: Date?
-    @State private var choosing: Bool
+    @State private var choosing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// `expanded` opens it with the wheels already showing.
-    init(start: Binding<Date?>, expanded: Bool = false) {
-        _start = start
-        _choosing = State(initialValue: expanded)
-    }
 
     var body: some View {
         Button { withAnimation(reduceMotion ? nil : .snappy) { choosing.toggle() } } label: {
@@ -215,14 +213,13 @@ struct WorkoutStartPicker: View {
     }
 }
 
-/// Every sport except gym, searchable by name.
-private struct SportList: View {
-    let sports: [WorkoutActivity]
+/// Every built-in activity except gym, searchable by name.
+private struct OtherSportList: View {
     let onPick: (String) -> Void
     @State private var search = ""
 
     var body: some View {
-        List(sports.filter { search.isEmpty || $0.name.localizedStandardContains(search) }) { sport in
+        List(WorkoutCatalog.activities.filter { $0.id != "strength" && (search.isEmpty || $0.name.localizedStandardContains(search)) }) { sport in
             Button { onPick(sport.id) } label: {
                 HStack(spacing: 12) { WorkoutIcon(symbol: sport.symbol); Text(sport.name).foregroundStyle(Color.diaryText) }
                     .frame(minHeight: 44).contentShape(.rect)
@@ -231,7 +228,7 @@ private struct SportList: View {
         }
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
-        .navigationTitle("Log cardio")
+        .navigationTitle("Other sport")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -95,28 +95,22 @@ rarely a sentence. Every screen has one obvious next action.
 - Bottom bar unchanged (Log with Pip, Add).
 - Tap a row: workout detail (edit, delete with Undo, Ask Pip), as meals today.
 
-### S2 · Workout (sheet, or Today's edge panel)
+### S2 · Start workout (sheet)
 
-- One purple button: "Start workout" (gym).
-- Under it, with no header: routines first, then the last few distinct workouts.
-  Tap starts it pre-filled (gym) or opens S6 with last values (cardio).
-- "Log cardio" as the last row: a searchable list of about 40 sports, the
-  most-used first.
-- Logging something that already happened: the clock button in the top bar shows
-  the day and time wheels, and the button then reads "Log workout". A past gym
-  workout opens S3 without a running clock and without the banner, rest timer or
-  Live Activity. Opened from a Diary day, the day's row shows from the start.
+- "Gym · Sets and reps" as the main purple row.
+- Run, Walk, Cycle, Other sport (searchable list of about 40 activities).
+  Most-used sports move up; at most four show.
+- "Again": routines first, then the last few distinct workouts. Tap starts it
+  pre-filled (gym) or opens S6 with last values (cardio).
+- Logging something that already happened: a "Today, now" row at the top of the
+  sheet changes date and start time. A past gym workout opens S3 without a
+  running clock and without the banner, rest timer or Live Activity.
 
 ### S3 · Gym (live)
 
-- Top: collapse (⌄, or ‹ in Today's edge panel; keeps it running, banner shows),
-  elapsed time, Finish (Done when editing or logging a past workout).
-- One card per exercise: muscle tile and name, then a labelled set table:
-  `n  Previous  kg  Reps  ✓`, as `1  60 × 8  [62.5]  [8]  ✓`. Previous is the same
-  set last time; a tap copies it into the set. New sets copy the row above, or
-  last time. At accessibility text sizes the table gives way to the earlier row
-  (`n [62.5 kg] × [8] ✓`) with one "Last time" line under the name.
-- No running totals above the cards; the Finish screen has them.
+- Top: collapse (⌄, keeps it running, banner shows), elapsed time, Done.
+- One card per exercise: name, "Last time 60 kg × 8", then set rows:
+  `n  [62.5 kg] × [8]  ✓`. New sets copy the row above, or last time.
 - ✓ saves the set at once (haptic, row turns green) and starts the rest timer.
 - Change a number: swipe up or down on it (one step per notch, haptic), or tap
   it to open the wheel sheet (S4).
@@ -201,8 +195,7 @@ rarely a sentence. Every screen has one obvious next action.
   When any workout is saved (cardio, gym, Pip), Pip on Today or Coach plays a
   matching gesture once: squat for gym and HIIT, yoga tree for yoga and pilates,
   stretch for stretching, jumping jack for everything else.
-- The numbers there are: sets, then kcal when it can be estimated and new bests
-  when there are any.
+- Three numbers: sets, kcal, new bests.
 - "How did it feel?" four chips (as S6), pre-selected from set efforts if any.
 - Save. Under it a text button: "Save as routine" (or "Update <routine>" when
   the exercises changed). No streaks, no score.

@@ -319,9 +319,6 @@ import XCTest
     /// Workouts › Add workout manually › Run, typed to `minutes`, saved.
     private func logRun(minutes: String, in app: XCUIApplication) {
         open("logWorkout", in: app)
-        let cardio = app.buttons["logCardio"]
-        XCTAssertTrue(cardio.waitForExistence(timeout: 5))
-        cardio.tap()
         let run = app.buttons["Run"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
         run.tap()

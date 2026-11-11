@@ -6,7 +6,9 @@ import XCTest
         let start = app.buttons["startWorkout"]
         reveal(start, in: app)
         start.tap()
-        tapRun(app)
+        let run = app.buttons["Run"]
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        run.tap()
 
         let time = app.descendants(matching: .any)["timeRuler"]
         XCTAssertTrue(time.waitForExistence(timeout: 5))
@@ -76,7 +78,9 @@ import XCTest
         let start = app.buttons["startWorkout"]
         reveal(start, in: app)
         start.tap()
-        tapRun(app)
+        let run = app.buttons["Run"]
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        run.tap()
         let save = app.buttons["saveCardio"]
         XCTAssertTrue(save.waitForExistence(timeout: 5) && save.isHittable)
         capture("Cardio largest text", in: app)
@@ -162,18 +166,9 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Recent"].waitForExistence(timeout: 5))
         capture("Exercise picker", in: app)
         bench.tap()
-        // Last time sits beside every set, and a tap on it puts it back.
-        let previous = app.buttons["previousSet"].firstMatch
-        XCTAssertTrue(previous.waitForExistence(timeout: 5))
-        XCTAssertEqual(previous.label, "Previous 40 kg × 10")
+        XCTAssertTrue(app.staticTexts["Last time 40 kg × 10"].waitForExistence(timeout: 5))
         XCTAssertEqual(ticks.count, 3)
-        let weightBox = app.buttons["setWeight"].firstMatch
-        let firstWeight = weightBox.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        firstWeight.press(forDuration: 0.05, thenDragTo: firstWeight.withOffset(CGVector(dx: 0, dy: -60)), withVelocity: .slow, thenHoldForDuration: 0.2)
-        XCTAssertNotEqual(weightBox.value as? String, "40 kg")
-        previous.tap()
-        let copied = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '40 kg'"), object: weightBox)
-        XCTAssertEqual(XCTWaiter.wait(for: [copied], timeout: 5), .completed, "Previous copies last time into the set")
+        let firstWeight = app.buttons["setWeight"].firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         firstWeight.press(forDuration: 0.05, thenDragTo: firstWeight.withOffset(CGVector(dx: 0, dy: -60)), withVelocity: .slow, thenHoldForDuration: 0.2)
         ticks.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["New best"].waitForExistence(timeout: 5))
@@ -359,20 +354,15 @@ import XCTest
         let start = app.buttons["startWorkout"]
         reveal(start, in: app)
         start.tap()
-        // The day and time stay out of the way until asked for.
-        let when = app.buttons["workoutStart"], past = app.buttons["pastWorkout"]
-        XCTAssertTrue(past.waitForExistence(timeout: 5))
-        XCTAssertFalse(when.exists)
-        XCTAssertEqual(app.buttons["startGym"].label, "Start workout")
-        past.tap()
+        let when = app.buttons["workoutStart"]
         XCTAssertTrue(when.waitForExistence(timeout: 5))
         XCTAssertEqual(when.value as? String, "Today, now")
+        when.tap()
         // The first wheel is the day; one notch back is yesterday.
         let day = app.pickerWheels.firstMatch
         XCTAssertTrue(day.waitForExistence(timeout: 5))
         day.adjust(toPickerWheelValue: day.value as? String == "Today" ? Self.yesterdayWheelValue() : "Today")
         XCTAssertNotEqual(when.value as? String, "Today, now")
-        XCTAssertEqual(app.buttons["startGym"].label, "Log workout", "a past start logs; nothing runs")
         app.buttons["startGym"].tap()
 
         XCTAssertTrue(app.buttons["addExercise"].waitForExistence(timeout: 10))
@@ -396,7 +386,7 @@ import XCTest
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         XCTAssertTrue(row.label.hasPrefix("Strength training") && row.label.contains("1 set"), row.label)
 
-        // Save as routine: named, then listed under the Start button and starting pre-filled.
+        // Save as routine: named, then listed under "Again" and starting pre-filled.
         openGym(app)
         addBenchAndTickFirstSet(app)
         app.buttons["finishWorkout"].tap()
@@ -418,6 +408,7 @@ import XCTest
         start.tap()
         let routine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Push day'")).firstMatch
         XCTAssertTrue(routine.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Again"].exists)
         capture("Again with routine", in: app)
         routine.tap()
         let weight = app.buttons["setWeight"].firstMatch
@@ -809,22 +800,14 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 10), .completed)
     }
 
-    /// The Workout screen → Log cardio → Run.
-    private func tapRun(_ app: XCUIApplication) {
-        let cardio = app.buttons["logCardio"]
-        XCTAssertTrue(cardio.waitForExistence(timeout: 5))
-        cardio.tap()
-        let run = app.buttons["Run"]
-        XCTAssertTrue(run.waitForExistence(timeout: 5))
-        run.tap()
-    }
-
-    /// Today → Workout → Log cardio → Run; returns the time ruler.
+    /// Today → Start workout → Run; returns the time ruler.
     private func openRun(_ app: XCUIApplication) -> XCUIElement {
         let start = app.buttons["startWorkout"]
         reveal(start, in: app)
         start.tap()
-        tapRun(app)
+        let run = app.buttons["Run"]
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        run.tap()
         let time = app.descendants(matching: .any)["timeRuler"]
         XCTAssertTrue(time.waitForExistence(timeout: 5))
         return time

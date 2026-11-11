@@ -516,8 +516,7 @@ struct DiaryRootView: View {
         case .live(let session):
             if let owner = model.readModel?.profile.id {
                 LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past,
-                                notice: model.workoutNotice, coach: coach, minimizeSymbol: "chevron.left",
-                                onSaved: model.noteWorkoutSaved) { closeEdge(); model.workoutNotice = nil }
+                                notice: model.workoutNotice, coach: coach, onSaved: model.noteWorkoutSaved) { closeEdge(); model.workoutNotice = nil }
                     .proofTypeSize()
                     .id(session.id)
             }
