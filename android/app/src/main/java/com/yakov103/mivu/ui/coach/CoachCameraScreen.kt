@@ -104,9 +104,10 @@ fun rememberCameraPermission(): CameraPermission {
 }
 
 /**
- * Full-screen CameraX for Coach: ✕, "n of 8 photos", the shutter and Choose photos. Each shot joins the draft and the
- * camera stays open until ✕; it never sends. Denied offers Settings and the Photo Picker; the draft is never touched.
- * With [retaking] (a draft photo path), one shot or one chosen photo replaces it and the camera closes (iOS `retaking`).
+ * Full-screen CameraX for Coach: ✕, "n of 8 photos", the shutter and Choose photos. A shot or chosen photos join the
+ * draft and the camera closes back to Coach, where the next one can be taken (iOS `added`); it never sends. Denied offers
+ * Settings and the Photo Picker; the draft is never touched. With [retaking] (a draft photo path), one shot or one
+ * chosen photo replaces it.
  */
 @Composable
 fun CoachCameraScreen(
@@ -123,7 +124,9 @@ fun CoachCameraScreen(
     val earlier = remember { model.message.value } // a failure from before the camera opened stays in the composer
     val full = retaking == null && draft.photos.size >= MAX_PHOTOS
     // The picker needs at least two slots; the model keeps the cap and names any photo past it.
-    val picker = rememberLauncherForActivityResult(PickMultipleVisualMedia(maxOf(2, MAX_PHOTOS - draft.photos.size))) { model.importPhotos(it) }
+    val picker = rememberLauncherForActivityResult(PickMultipleVisualMedia(maxOf(2, MAX_PHOTOS - draft.photos.size))) { uris ->
+        if (uris.isNotEmpty()) { model.importPhotos(uris); onClose() }
+    }
     val replacement = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
         if (uri != null && retaking != null) { model.retakePhoto(retaking, uri); onClose() }
     }
@@ -164,7 +167,9 @@ fun CoachCameraScreen(
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     capturing = false
-                    if (retaking == null) model.addCapturedPhoto(file) else { model.retakePhoto(retaking, file); onClose() }
+                    // Coach shows "Preparing photos", then the photo; a failure appears there too.
+                    if (retaking == null) model.addCapturedPhoto(file) else model.retakePhoto(retaking, file)
+                    onClose()
                 }
                 override fun onError(exception: ImageCaptureException) { capturing = false; failed = true; file.delete() }
             })
