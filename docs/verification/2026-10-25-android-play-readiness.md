@@ -172,7 +172,7 @@ clipboard item). Install the release build the way Play will deliver it:
 
 | # | Check | Steps | Pass when | Result |
 |---|---|---|---|---|
-| P1 | Phase 0 item 2: sign-in | Settings › Coach AI › Connect ChatGPT › Agree and Continue; sign in in the Custom Tab; after "You can return to Mivu" press Back. Then force-stop Mivu and sign in again. | Settings shows Connected both times; no crash | blocked |
+| P1 | Phase 0 item 2: sign-in | Settings › Coach AI › Connect ChatGPT › Agree and Continue; sign in in the Custom Tab and tap Continue on OpenAI's page; Mivu returns by itself (if not, tap "Return to Mivu"; updated 2026-11-11 for the `mivu://connected` return). Then force-stop Mivu and sign in again. | Coach AI shows "ChatGPT connected" both times; no crash | blocked |
 | P2 | Phase 0 item 3: inference | In Coach send "two boiled eggs and a slice of toast". Leave the app mid-reply, come back. | Pip replies and a meal with nutrition is saved; leaving mid-turn still finishes it | blocked |
 | P3 | Phase 0 item 4: photo analysis | In Coach take a photo of a drawn or printed test plate (not personal food) and send it. | A meal with an estimate is saved from the photo | blocked |
 | P4 | Phase 0 item 5: refresh and Disconnect | Leave the phone signed in past the token expiry (or use the debug proof screen's Force refresh on a debug install), then send a message. Then Settings › Disconnect ChatGPT and send another message. | The first message is answered without signing in again; after Disconnect the new message saves as waiting for a connection | blocked |

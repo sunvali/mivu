@@ -29,6 +29,8 @@ iOS counterpart is [app-store-submission.md](app-store-submission.md).
   step and in the empty Coach screen. Onboarding refuses birth years less than
   18 years back (iOS: 13). It asks for the year only, so someone who turns 18
   later this year can pass; **owner to decide** whether to ask for the month.
+  "Later" skips setup, so the gate is a safeguard inside setup; the 18+ answer
+  under Target audience is what declares the audience.
 - **Backup rules.** `data_extraction_rules.xml` excludes everything from cloud
   backup; device-to-device transfer carries only the diary database and files.
   ChatGPT credentials are Keystore-encrypted under `noBackupFilesDir` and never
@@ -59,7 +61,7 @@ Copy follows [the App Store listing](../app-store/listing.md), with the iPhone
 parts swapped for their Android counterparts. Recount after edits.
 
 - **App name (30):** Mivu – Food Diary & Coach
-- **Short description (80):** Log meals by photo or voice. No Mivu account; your diary is stored on your phone.
+- **Short description (80):** Log meals by photo or voice. No Mivu account; your diary is kept on your phone.
 - **Category:** Health & Fitness (**owner to confirm**; Food & Drink is the
   alternative).
 - **Contact email:** support@mivuapp.com (**Owner:** create the mailbox).
@@ -98,23 +100,31 @@ parts swapped for their Android counterparts. Recount after edits.
 >
 > PRIVATE BY DESIGN
 > • No Mivu account. Your diary and photos are stored on your phone.
-> • No ads and no tracking.
+> • No ads, and no analytics or tracking of our own.
 > • Export your diary and photos to a file at any time.
 >
 > AI THAT USES YOUR OWN PLAN
 > Connect your ChatGPT account to estimate nutrition and chat with Coach.
 > Requests use your ChatGPT plan, and you can manage usage or disconnect in
-> Settings. Mivu asks before anything is shared with OpenAI. Coach and photo or
-> voice logging need your ChatGPT account connected; adding meals by hand
-> works without it.
+> Settings. Mivu asks before anything is shared with OpenAI.
+>
+> On supported phones you can choose Gemini Nano on the phone instead of
+> ChatGPT. It needs no account, but it only logs meals and changes amounts,
+> with lower accuracy. Adding meals by hand works without either.
 >
 > Nutrition figures are estimates, not medical advice. Mivu is not a medical
 > device and does not diagnose, treat, cure, or prevent any medical condition.
 > Consult a healthcare professional for medical advice, diagnosis, or
 > treatment.
 >
-> Mivu is an independent app and is not affiliated with or endorsed by OpenAI.
-> ChatGPT is a trademark of OpenAI.
+> Mivu is an independent app and is not affiliated with or endorsed by OpenAI
+> or Google. ChatGPT is a trademark of OpenAI, and Gemini is a trademark of
+> Google.
+
+**Owner:** the Gemini Nano paragraph describes a feature tested only with a
+fake model so far (the Pixel 8 Pro and the emulator report it unavailable). Keep
+it once the on-device Coach has been seen working on a supported phone;
+otherwise delete it and its mention in the last line.
 
 **Release notes (500):** First release.
 
@@ -138,7 +148,8 @@ no sign-in). Files in
    screen that holds only Mivu's widgets, or leave it out; Play needs two screenshots and the other five qualify.
 6. `play-06-setup.png` — Pip sets your targets in about a minute (Setup)
 
-They are raw captures; framing with brand teal and captions is the owner's
+Shots 2 and 6 show "ChatGPT" as it appears in the app; the description's
+non-affiliation line covers that use. They are raw captures; framing with brand teal and captions is the owner's
 choice. A photo-capture shot is not included: it needs a real meal photo the
 owner has rights to. The earlier 1080 × 1920 captures in `android-play/` are
 superseded.
@@ -163,8 +174,17 @@ How the app works, from the code:
 - All network traffic is HTTPS. The only `http://` address is the sign-in
   callback on `127.0.0.1`, which never leaves the phone.
 - With Gemini Nano chosen, Coach turns run on the phone and meals stay on the
-  phone. Google's ML Kit GenAI SDK (`genai-prompt`) sends Google diagnostic
-  device identifiers and the configured languages.
+  phone.
+- Google's ML Kit GenAI SDK (`genai-prompt`) runs for every user, not only with
+  Gemini Nano chosen: its init provider starts with the app, and Mivu asks it
+  whether Gemini Nano is available at each launch and return
+  (`MivuApplication.kt`, `MainActivity.onStart`). Google's
+  [ML Kit data disclosure](https://developers.google.com/ml-kit/android-data-disclosure)
+  (read 2026-11-11) says GenAI features collect device information, the app's
+  package name and version, "user, device or other identifiers", per-install
+  identifiers, performance metrics, input and output size, event types and
+  error codes, for diagnostics and usage analytics. Meals and messages are not
+  in that list.
 - No analytics, crash reporting, advertising or location SDK of Mivu's own; no
   advertising ID.
 
@@ -185,29 +205,34 @@ Mivu.
 | Play data type | What Mivu sends | Collected | Shared | Ephemeral | Required |
 |---|---|---|---|---|---|
 | Photos and videos › Photos | Meal photos attached to a Coach turn | Yes | Yes | No (**owner to confirm**: `store: false`, but OpenAI's retention applies) | Optional |
-| Health and fitness › Health info | Weight entries, height, pace, calorie and macro goals, diet tags and the free-text allergy, intolerance or health notes | Yes | Yes | No (as above) | Optional |
+| Health and fitness › Health info | Weight entries, height, pace, calorie and macro goals, the calories and macros of logged meals, diet tags and the free-text allergy, intolerance or health notes | Yes | Yes | No (as above) | Optional |
 | Personal info › Other info | Birth year and sex from the profile (**owner to confirm** against the live form; they may belong under Health info instead) | Yes | Yes | No (as above) | Optional |
 | Health and fitness › Fitness info | Logged workouts (kind, minutes) | Yes | Yes | No (as above) | Optional |
 | App activity › Other user-generated content | Coach messages and meal names and notes | Yes | Yes | No (as above) | Optional |
 | Personal info › Name | The profile name, part of the profile in the Coach context (**owner to confirm**: it is often a nickname, but it is sent) | Yes | Yes | No (as above) | Optional |
 | Device or other IDs | The random per-install `ext_agent_host_id` sent at sign-in (**owner to confirm** whether Play counts it) | Yes | Yes | No | Optional |
-| App info and performance › Diagnostics (ML Kit) | Diagnostic device identifiers and configured languages collected by Google ML Kit when Gemini Nano is used; not shared by Mivu (**owner to confirm** the category against ML Kit's Data safety guidance, and whether Device or other IDs also applies) | Yes | No | No | Optional |
+| App info and performance › Diagnostics, and Device or other IDs (ML Kit) | Device information, app name and version, device and per-install identifiers, performance metrics, event types and error codes that Google's ML Kit collects whenever the app runs, for every user. Purposes: Analytics and App functionality. Not shared by Mivu (**owner to confirm** the exact rows against Google's ML Kit disclosure and the live form) | Yes | No | No | Required |
 
 **Not collected:** location, contacts, financial info, calendar, files and docs,
-web browsing, app interactions, crash logs, advertising ID. Diagnostics are
-collected only by ML Kit, in the row above.
+web browsing, app interactions, crash logs, advertising ID. Mivu itself collects
+no diagnostics; ML Kit's are in the row above and apply to every user.
 
 **Voice input** uses Android's system speech recognizer; Mivu receives only the
 transcribed text, which then goes into the message like typed text. The audio
-is handled by the phone's speech service, not by Mivu. **Owner to confirm**
+is handled by the phone's speech service, which may process it on its
+provider's servers (on most phones, Google); Mivu never receives or stores
+audio. **Owner to confirm**
 that Audio › Voice or sound recordings is "not collected".
 
 **Coach reply reports**: when the person reports a reply, its text, the
 reason, their note and the app version go to Mivu's own inbox through the
 reports worker (Cloudflare, a service provider). Declare App activity › Other
 user-generated content as collected, not shared, optional, for App
-functionality (**owner to confirm** the purpose against the live form). The
-email fallback is sent by the person, from their own email app.
+functionality (**owner to confirm** the purpose against the live form). A
+reported reply can mention the person's meals, calories or weight, so also
+mark Health and fitness › Health info as collected, not shared, optional, for
+this feature. The email fallback is sent by the person, from their own email
+app.
 
 ## Health apps declaration (draft)
 
@@ -233,12 +258,15 @@ email fallback is sent by the person, from their own email app.
   reports worker in mivu-infra and read the inbox before release.
 - Coach's instructions treat user text and retrieved content as data, keep
   replies short, and never state numbers it did not read.
-- Restricted content: Coach can only call Mivu's food-diary tools and answers
-  in a couple of short sentences about the diary. Mivu adds no content filter
-  of its own; it relies on the safeguards built into OpenAI's models (and
-  Google's, for the on-device Coach), and reports are how a bad reply reaches
-  the developer. **Owner to decide** whether to add a rule to Coach's
-  instructions to decline sexual, violent, hateful or self-harm requests.
+- Restricted content: Coach's instructions tell it never to produce sexual,
+  violent, hateful or self-harm content and to decline such requests
+  (`CoachEngine.STABLE_RULES`, `CoachRestrictedContentTest`; Android only until
+  the iPhone review is over). Coach can only call Mivu's food-diary tools and
+  replies in a couple of short sentences. Beyond that rule Mivu adds no filter
+  of its own and relies on the safeguards built into OpenAI's models; the
+  on-device model only extracts foods as structured data, and Mivu words that
+  reply itself (`OnDeviceInference.kt`). Reports are how a
+  bad reply reaches the developer.
 
 ## Account deletion
 
@@ -246,7 +274,9 @@ Not applicable: Mivu creates no account. The diary is local; ChatGPT sign-in is
 OpenAI's account. Data deletion: Settings › Coach AI › Disconnect ChatGPT
 (deletes the stored tokens and revokes them), per-item delete in the app, and
 Android Settings › Apps › Mivu › Storage › Clear storage (or uninstall). Owner
-to confirm in the Console.
+to confirm in the Console. OpenAI's sign-in page also offers sign-up, so if
+the Console asks for a deletion link, give
+`https://mivuapp.com/privacy/android#deleting`.
 
 ## App access (reviewer instructions, draft)
 
@@ -254,11 +284,14 @@ to confirm in the Console.
 > entry, editing, history, progress, widgets, export and reports work without
 > any account.
 >
+> On first launch Pip's setup opens; finish it or tap Later. If you enter a
+> birth year, use one at least 18 years back.
+>
 > Coach uses the person's own ChatGPT account. To test it: Settings › Coach AI ›
 > Connect ChatGPT › Agree and Continue, then sign in to ChatGPT in the browser
 > tab with the test account below. OpenAI then shows a page asking to let
 > "Mivu" use the account; tap Continue. The browser returns to Mivu by itself;
-> if it does not, tap "Return to Mivu". Settings now shows Connected. Open the
+> if it does not, tap "Return to Mivu". Coach AI now shows "ChatGPT connected". Open the
 > Coach tab and send "two boiled eggs and a slice of toast"; Pip saves the meal
 > and replies.
 >
@@ -319,6 +352,9 @@ found), so prove sign-in on the physical phone (check P1) before entering this.
 
 ## Release steps (Owner)
 
+0. `git checkout android-v<version>` (the tag of the version PR you merged),
+   with a clean tree, and note `git rev-parse HEAD` for the ledger line in
+   step 5.
 1. Create the upload keystore with `keytool`, keep it and its passwords outside
    the repo, and set `MIVU_UPLOAD_STORE_FILE` (absolute path),
    `MIVU_UPLOAD_STORE_PASSWORD`, `MIVU_UPLOAD_KEY_ALIAS` and
@@ -345,3 +381,9 @@ found), so prove sign-in on the physical phone (check P1) before entering this.
   keeps ChatGPT credentials out of backups and transfers on purpose, so before
   then either adopt the Restore Credentials API or ask for an exemption in
   Console.
+- The app targets API 37 and receives the sign-in redirect on `127.0.0.1`
+  without a local-network permission. Check P1 on an Android 17 phone settles
+  whether that works; Play's Local Network declaration (from 25 August 2027)
+  applies only if the permission is ever added.
+- Notifications are asked for when the morning reminder is turned on, and once
+  after the first message shared into Mivu is saved.
