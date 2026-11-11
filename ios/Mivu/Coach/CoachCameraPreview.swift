@@ -34,7 +34,33 @@ struct CoachCameraPreview: UIViewRepresentable {
     final class PreviewView: UIView, CoachPreviewTarget {
         var camera: CoachCameraSession?
         var presentationID: UUID?
+        private let focusMark = CALayer()
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            focusMark.borderColor = UIColor.systemYellow.cgColor; focusMark.borderWidth = 1.5; focusMark.opacity = 0
+            layer.addSublayer(focusMark)
+            addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinched)))
+            addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+        }
+        required init?(coder: NSCoder) { nil }
+        // Each step is sent as a ratio, so steps that reach the camera out of order still land on the same zoom.
+        @objc private func pinched(_ pinch: UIPinchGestureRecognizer) {
+            guard pinch.state == .changed else { return }
+            let scale = pinch.scale, camera = camera; pinch.scale = 1
+            Task { await camera?.zoom(by: scale) }
+        }
+        @objc private func tapped(_ tap: UITapGestureRecognizer) {
+            guard let preview = layer as? AVCaptureVideoPreviewLayer else { return }
+            let point = tap.location(in: self), camera = camera
+            let target = preview.captureDevicePointConverted(fromLayerPoint: point)
+            Task { await camera?.focus(at: target) }
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            focusMark.frame = CGRect(x: point.x - 36, y: point.y - 36, width: 72, height: 72)
+            CATransaction.commit()
+            let fade = CABasicAnimation(keyPath: "opacity"); fade.fromValue = 1; fade.toValue = 0; fade.duration = 1.2
+            focusMark.add(fade, forKey: "fade")
+        }
         func setSession(_ session: AVCaptureSession?) {
             guard let preview = layer as? AVCaptureVideoPreviewLayer else { return }
             preview.videoGravity = .resizeAspectFill; preview.session = session

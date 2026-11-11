@@ -249,6 +249,29 @@ import Testing
     }
 }
 
+@Suite struct CoachCameraZoomTests {
+    @Test func lensButtonsUseTheZoomNumbersPeopleKnow() {
+        // A triple camera reports its ultra-wide as 1 and switches lenses at 2 and 6; people call those 0.5x, 1x and 3x.
+        #expect(CoachCameraSession.lensFactors(switchOvers: [2, 6], multiplier: 0.5) == [0.5, 1, 3])
+        #expect(CoachCameraSession.lensFactors(switchOvers: [], multiplier: 1) == [1])
+    }
+    @Test func zoomStaysBetweenTheWidestLensAndTwiceTheLongest() {
+        #expect(CoachCameraSession.clampedZoom(0.1, lenses: [0.5, 1, 3]) == 0.5)
+        #expect(CoachCameraSession.clampedZoom(2, lenses: [0.5, 1, 3]) == 2)
+        #expect(CoachCameraSession.clampedZoom(40, lenses: [0.5, 1, 3]) == 6)
+        #expect(CoachCameraSession.clampedZoom(0.5, lenses: [1]) == 1)
+        #expect(CoachCameraSession.clampedZoom(3, lenses: []) == 1)
+    }
+    @Test func zoomAndFocusAreHarmlessWithoutACamera() async throws {
+        let camera = CoachCameraSession(dependencies: .init(available: { true }, authorization: { .authorized }, capture: { try Task10JPEG.tagged() }))
+        try await camera.open(presentationID: UUID(), ownership: Task10Fixture.ownership())
+        await camera.setZoom(3); await camera.zoom(by: 2); await camera.focus(at: CGPoint(x: 0.5, y: 0.5))
+        #expect(await camera.state.zoom == 1)
+        #expect(await camera.state.lenses.isEmpty)
+        try await camera.close()
+    }
+}
+
 enum Task10JPEG {
     static func normalizeCameraOffMain(_ image: CameraCaptureImage) throws -> Data {
         #expect(!Thread.isMainThread)

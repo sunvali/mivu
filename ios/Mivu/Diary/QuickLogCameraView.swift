@@ -4,7 +4,8 @@ import AVFoundation
 /// The Log Food camera: one shutter tap saves the photo as a meal on this iPhone; analysis follows on Today.
 struct QuickLogCameraView: View {
     let model: DiaryViewModel
-    let ownership: DiarySelectionOwnership
+    /// Nil while the diary is still loading: the camera runs, and the shutter waits for somewhere to save.
+    let ownership: DiarySelectionOwnership?
     let onLogged: (UUID) -> Void
     @State private var camera = CoachCameraSession()
     @State private var state = CoachCameraSession.State()
@@ -63,30 +64,19 @@ struct QuickLogCameraView: View {
             HStack {
                 Button("Close") { dismiss() }.frame(minWidth: 64, minHeight: 44).disabled(saving).accessibilityIdentifier("quickLogClose")
                 Spacer()
-                if state.hasFlash { flashButton }
+                if state.hasFlash { CoachCameraFlashButton(flash: $flash) }
             }
             Spacer()
+            CoachCameraLensBar(state: state, camera: camera).padding(.bottom, 12)
             if saving { ProgressView("Logging meal").tint(.white) }
+            else if ownership == nil { ProgressView("Opening your diary").tint(.white) }
             else { Text("Snap your meal to log it").font(.subheadline).shadow(radius: 4).accessibilityHidden(true) }
             shutterButton.padding(.top, 12)
-            if (DiaryLaunch.isSampleMode || DiaryLaunch.isUITest), state.phase == .unavailable {
+            if (DiaryLaunch.isSampleMode || DiaryLaunch.isUITest), state.phase == .unavailable, ownership != nil {
                 Button("Add synthetic test photo") { if let data = PhotoImport.syntheticApple() { save(MealDraft(photos: [data])) } }
                     .frame(minHeight: 44).disabled(saving).accessibilityIdentifier("quickLogSyntheticPhoto")
             }
         }.padding(24)
-    }
-    private var flashButton: some View {
-        let mode = AVCaptureDevice.FlashMode(rawValue: flash) ?? .auto
-        let (icon, name, next): (String, String, AVCaptureDevice.FlashMode) = switch mode {
-        case .on: ("bolt.fill", "On", .off)
-        case .off: ("bolt.slash.fill", "Off", .auto)
-        default: ("bolt.badge.automatic.fill", "Auto", .on)
-        }
-        return Button { flash = next.rawValue } label: {
-            Image(systemName: icon).font(.title3).foregroundStyle(mode == .on ? .yellow : .white)
-                .frame(width: 44, height: 44).background(.black.opacity(0.35), in: .circle)
-        }
-        .accessibilityLabel("Flash").accessibilityValue(name).accessibilityIdentifier("quickLogFlash")
     }
     private var shutterButton: some View {
         Button { shutter() } label: {
@@ -94,7 +84,7 @@ struct QuickLogCameraView: View {
                 .overlay { Circle().stroke(.black.opacity(0.6), lineWidth: 3).padding(5) }
         }
         .frame(minWidth: 80, minHeight: 80)
-        .disabled(!state.isRunning || state.isCapturing || saving || scene != .active)
+        .disabled(!state.isRunning || state.isCapturing || saving || scene != .active || ownership == nil)
         .opacity(state.isRunning ? 1 : 0.4)
         .accessibilityLabel("Take photo and log meal")
         .accessibilityIdentifier("quickLogShutter")
@@ -120,6 +110,7 @@ struct QuickLogCameraView: View {
     }
     // Try Again resends the same draft, so its submission ID lets the diary recognise a save that already landed.
     private func save(_ draft: MealDraft) {
+        guard let ownership else { saving = false; return }
         saving = true; unsaved = draft
         Task {
             let result = await model.capture(draft, destination: .automatic, expectedSelection: ownership)

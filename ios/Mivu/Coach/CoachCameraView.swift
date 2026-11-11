@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import AVFoundation
 
 struct CoachCameraView: View {
     @Bindable var draft: CoachAttachmentDraft
@@ -15,6 +16,8 @@ struct CoachCameraView: View {
     @State private var shotsAdded = 0
     @State private var countdown: Int?
     @State private var timer: Task<Void, Never>?
+    // One flash choice for every mivu camera.
+    @AppStorage("quickLogFlash") private var flash = AVCaptureDevice.FlashMode.auto.rawValue
     @Environment(\.scenePhase) private var scene
     @Environment(\.duoPosture) private var posture
     @Environment(\.dismiss) private var dismiss
@@ -66,6 +69,7 @@ struct CoachCameraView: View {
             Spacer(minLength: 0)
             Text(shotsAdded == 0 ? "Snap when ready." : shotsAdded == 1 ? "1 photo added" : "\(shotsAdded) photos added")
                 .font(.headline).accessibilityIdentifier("coachCameraTally")
+            CoachCameraLensBar(state: state, camera: camera)
             HStack(spacing: 16) {
                 libraryButton.frame(maxWidth: .infinity, alignment: .leading)
                 shutterButton
@@ -107,6 +111,7 @@ struct CoachCameraView: View {
         VStack {
             topControls
             Spacer()
+            CoachCameraLensBar(state: state, camera: camera).padding(.bottom, 12)
             bottomControls
             if (DiaryLaunch.isSampleMode || DiaryLaunch.isCoachUITest), state.phase == .unavailable { syntheticButton }
         }.padding(24)
@@ -120,6 +125,7 @@ struct CoachCameraView: View {
             }
             Spacer()
             if draft.isPreparing { ProgressView("Preparing photo").tint(.white) }
+            if state.hasFlash { CoachCameraFlashButton(flash: $flash) }
         }
     }
     private var bottomControls: some View {
@@ -223,7 +229,7 @@ struct CoachCameraView: View {
     }
     private func shutter() {
         importing = Task {
-            do { try await draft.capture(using: camera, presentationID: presentationID, replacing: retaking); added() }
+            do { try await draft.capture(using: camera, presentationID: presentationID, replacing: retaking, flash: AVCaptureDevice.FlashMode(rawValue: flash) ?? .auto); added() }
             catch { if !Task.isCancelled, !closing { self.error = "Could not take photo. Your note and other photos are kept." } }
         }
     }

@@ -19,6 +19,9 @@ actor CoachCameraSession {
         var canClose = false
         var isCapturing = false
         var hasFlash = false
+        /// Zoom as people read it (0.5, 1, 3), with one entry in `lenses` per back lens.
+        var zoom: CGFloat = 1
+        var lenses: [CGFloat] = []
     }
     struct Dependencies: Sendable {
         let available: @Sendable () -> Bool
@@ -32,6 +35,7 @@ actor CoachCameraSession {
     private let output = AVCapturePhotoOutput()
     nonisolated let previewSource: any CoachPreviewSource
     private var configured = false
+    private var device: AVCaptureDevice?
     private var foreground = true
     private var authorized = false
     private var interruptionActive = false
@@ -68,7 +72,7 @@ actor CoachCameraSession {
         attachedPresentationID = presentationID
         if state.presentationID == presentationID, authorized { try? resumeIfVisible() }
     }
-    func open(presentationID: UUID, ownership: DiarySelectionOwnership) async throws {
+    func open(presentationID: UUID, ownership: DiarySelectionOwnership?) async throws {
         try Task.checkCancellation()
         let previewAlreadyAttached = attachedPresentationID == presentationID
         try close()
@@ -104,11 +108,17 @@ actor CoachCameraSession {
         guard !configured, dependencies == nil else { return }
         session.beginConfiguration(); defer { session.commitConfiguration() }
         session.sessionPreset = .photo
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else { throw CoachCameraFailure.unavailable }
+        // The combined back camera changes physical lens by itself as the zoom changes.
+        guard let device = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera],
+                                                            mediaType: .video, position: .back).devices.first else { throw CoachCameraFailure.unavailable }
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input), session.canAddOutput(output) else { throw CoachCameraFailure.unavailable }
         session.addInput(input); session.addOutput(output)
+        self.device = device
         state.hasFlash = device.hasFlash
+        state.lenses = Self.lensFactors(switchOvers: device.virtualDeviceSwitchOverVideoZoomFactors.map { CGFloat(truncating: $0) },
+                                        multiplier: device.displayVideoZoomFactorMultiplier)
+        setZoom(1)
         if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
         configured = true
         observeSession()
@@ -124,8 +134,40 @@ actor CoachCameraSession {
             },
             center.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: session, queue: nil) { [weak self] _ in
                 Task { await self?.runtimeFailure() }
+            },
+            // A tap holds focus on one spot; once the scene moves, the camera goes back to choosing for itself.
+            center.addObserver(forName: AVCaptureDevice.subjectAreaDidChangeNotification, object: device, queue: nil) { [weak self] _ in
+                Task { await self?.setFocus(CGPoint(x: 0.5, y: 0.5), held: false) }
             }
         ]
+    }
+    nonisolated static func lensFactors(switchOvers: [CGFloat], multiplier: CGFloat) -> [CGFloat] {
+        ([1] + switchOvers).map { $0 * multiplier }
+    }
+    /// Past twice the longest lens the picture is too soft to read a plate or a label.
+    nonisolated static func clampedZoom(_ zoom: CGFloat, lenses: [CGFloat]) -> CGFloat {
+        guard let widest = lenses.first, let longest = lenses.last else { return 1 }
+        return min(max(zoom, widest), longest * 2)
+    }
+    func setZoom(_ zoom: CGFloat) {
+        guard let device, (try? device.lockForConfiguration()) != nil else { return }
+        let multiplier = device.displayVideoZoomFactorMultiplier
+        let factor = Self.clampedZoom(zoom, lenses: state.lenses) / multiplier
+        device.videoZoomFactor = min(max(factor, device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
+        device.unlockForConfiguration()
+        state.zoom = device.videoZoomFactor * multiplier; publish()
+    }
+    func zoom(by scale: CGFloat) { setZoom(state.zoom * scale) }
+    /// `point` is in the capture device's 0...1 space, as the preview layer converts a tap.
+    func focus(at point: CGPoint) { setFocus(point, held: true) }
+    private func setFocus(_ point: CGPoint, held: Bool) {
+        guard let device, (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        let focus: AVCaptureDevice.FocusMode = held ? .autoFocus : .continuousAutoFocus
+        if device.isFocusPointOfInterestSupported, device.isFocusModeSupported(focus) { device.focusPointOfInterest = point; device.focusMode = focus }
+        let exposure: AVCaptureDevice.ExposureMode = held ? .autoExpose : .continuousAutoExposure
+        if device.isExposurePointOfInterestSupported, device.isExposureModeSupported(exposure) { device.exposurePointOfInterest = point; device.exposureMode = exposure }
+        device.isSubjectAreaChangeMonitoringEnabled = held
     }
     private func resumeIfVisible() throws {
         try Task.checkCancellation()
@@ -150,8 +192,10 @@ actor CoachCameraSession {
     func setForeground(_ foreground: Bool) async throws {
         self.foreground = foreground
         if foreground, state.presentationID != nil, dependencies == nil {
-            authorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
-            if !authorized { pause(); state.phase = .denied; publish(); return }
+            // Not asked yet is not a refusal: `open` is still asking, or has found there is no camera.
+            let status = AVCaptureDevice.authorizationStatus(for: .video)
+            authorized = status == .authorized
+            if !authorized, status != .notDetermined { pause(); state.phase = .denied; publish(); return }
         }
         if foreground { try resumeIfVisible() } else { pause(); publish() }
     }
@@ -178,7 +222,7 @@ actor CoachCameraSession {
             session.beginConfiguration()
             for input in session.inputs { session.removeInput(input) }
             for output in session.outputs { session.removeOutput(output) }
-            session.commitConfiguration(); configured = false
+            session.commitConfiguration(); configured = false; device = nil
         }
         state = State(); publish()
     }

@@ -82,6 +82,8 @@ struct DiaryRootView: View {
     @State private var showOnboarding = false
     @State private var quickLog = QuickLogRequest.shared
     @State private var quickLogOwner: DiarySelectionOwnership?
+    /// The camera is up while the diary still loads, so the lens wakes during launch instead of after it.
+    @State private var quickLogEarly = false
     @State private var loggedMealID: UUID?
     @State private var noteMealID: UUID?
     @State private var mealNotifications = MealNotification.shared
@@ -318,14 +320,18 @@ struct DiaryRootView: View {
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(model: model, connection: connection) { showOnboarding = false }
         }
-        .fullScreenCover(isPresented: Binding(get: { quickLogOwner != nil }, set: { if !$0 { quickLogOwner = nil } })) {
-            if let owner = quickLogOwner {
-                QuickLogCameraView(model: model, ownership: owner) { id in
-                    quickLogOwner = nil; selectedTab = "today"
-                    withAnimation { loggedMealID = id }
-                    AccessibilityNotification.Announcement("Meal logged").post()
-                    Task { await MealNotification.requestPermissionIfNeeded() }
-                }
+        // Closing the early camera by hand also drops the request, or it would reopen once the diary loads.
+        // When setup closes it instead, `quickLogEarly` is already false and the request stays for afterwards.
+        .fullScreenCover(isPresented: Binding(get: { quickLogOwner != nil || quickLogEarly }, set: {
+            guard !$0 else { return }
+            if quickLogEarly { quickLog.pending = false }
+            quickLogOwner = nil; quickLogEarly = false
+        })) {
+            QuickLogCameraView(model: model, ownership: quickLogOwner) { id in
+                quickLogOwner = nil; selectedTab = "today"
+                withAnimation { loggedMealID = id }
+                AccessibilityNotification.Announcement("Meal logged").post()
+                Task { await MealNotification.requestPermissionIfNeeded() }
             }
         }
         .sheet(isPresented: Binding(get: { noteMealID != nil }, set: { if !$0 { noteMealID = nil } })) {
@@ -403,12 +409,17 @@ struct DiaryRootView: View {
         }
     }
     private func openQuickLog() {
+        guard quickLog.pending else { return }
+        // A shortcut is a request to shoot now, so the camera appears without the slide-up.
+        var instant = Transaction(); instant.disablesAnimations = true
+        guard hasLoaded else { withTransaction(instant) { quickLogEarly = true }; return }
         // Without a diary there is nowhere to save; the request waits for setup so the camera still opens.
-        guard quickLog.pending, hasLoaded, let owner = model.selection, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
+        guard let owner = model.selection, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { quickLogEarly = false; return }
         quickLog.pending = false
         // shortcut: sheets presented inside a tab (composer, Coach camera) stay up and block this cover; dismiss them if that shows up in use.
         routes.route = nil; coachHistory = nil; noteMealID = nil
-        selectedTab = "today"; quickLogOwner = owner
+        selectedTab = "today"
+        withTransaction(instant) { quickLogOwner = owner; quickLogEarly = false }
     }
     private var showsPlanWelcome: Bool {
         hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil

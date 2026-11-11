@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AVFoundation
 
 @MainActor @Observable final class CoachAttachmentDraft {
     enum Failure: Error, Equatable, Sendable { case conflictingPayload, stalePresentation, busy }
@@ -194,8 +195,8 @@ import Observation
         attachments[index] = MealPhoto(id: id, data: data, createdAt: previous.createdAt, role: previous.role)
     }
 
-    func capture(using camera: CoachCameraSession, presentationID: UUID, replacing id: UUID? = nil) async throws {
-        let selection = Selection { try await camera.capture() }
+    func capture(using camera: CoachCameraSession, presentationID: UUID, replacing id: UUID? = nil, flash: AVCaptureDevice.FlashMode = .off) async throws {
+        let selection = Selection { try await camera.capture(flash: flash) }
         if let id { try await retake(id, selection: selection, presentationID: presentationID, source: .camera) }
         else {
             let failed = try await importPhotos([selection], source: .camera, presentationID: presentationID)
