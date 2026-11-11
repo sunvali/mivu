@@ -26,8 +26,9 @@ iOS counterpart is [app-store-submission.md](app-store-submission.md).
   (`https://mivuapp.com/privacy/android`, the Android policy; `/privacy` is the
   iPhone one and stays as it is).
 - **"Estimates, not medical advice".** In Settings, on the onboarding targets
-  step and in the empty Coach screen. Onboarding refuses birth years under 18
-  (iOS: 13).
+  step and in the empty Coach screen. Onboarding refuses birth years less than
+  18 years back (iOS: 13). It asks for the year only, so someone who turns 18
+  later this year can pass; **owner to decide** whether to ask for the month.
 - **Backup rules.** `data_extraction_rules.xml` excludes everything from cloud
   backup; device-to-device transfer carries only the diary database and files.
   ChatGPT credentials are Keystore-encrypted under `noBackupFilesDir` and never
@@ -58,7 +59,7 @@ Copy follows [the App Store listing](../app-store/listing.md), with the iPhone
 parts swapped for their Android counterparts. Recount after edits.
 
 - **App name (30):** Mivu – Food Diary & Coach
-- **Short description (80):** Log meals by photo or voice. Your diary stays on your phone, not our servers.
+- **Short description (80):** Log meals by photo or voice. No Mivu account; your diary is stored on your phone.
 - **Category:** Health & Fitness (**owner to confirm**; Food & Drink is the
   alternative).
 - **Contact email:** support@mivuapp.com (**Owner:** create the mailbox).
@@ -103,12 +104,17 @@ parts swapped for their Android counterparts. Recount after edits.
 > AI THAT USES YOUR OWN PLAN
 > Connect your ChatGPT account to estimate nutrition and chat with Coach.
 > Requests use your ChatGPT plan, and you can manage usage or disconnect in
-> Settings. Mivu asks before anything is shared with OpenAI.
+> Settings. Mivu asks before anything is shared with OpenAI. Coach and photo or
+> voice logging need your ChatGPT account connected; adding meals by hand
+> works without it.
 >
 > Nutrition figures are estimates, not medical advice. Mivu is not a medical
 > device and does not diagnose, treat, cure, or prevent any medical condition.
 > Consult a healthcare professional for medical advice, diagnosis, or
 > treatment.
+>
+> Mivu is an independent app and is not affiliated with or endorsed by OpenAI.
+> ChatGPT is a trademark of OpenAI.
 
 **Release notes (500):** First release.
 
@@ -127,7 +133,9 @@ no sign-in). Files in
 2. `play-02-coach.png` — Log a meal in your own words (Saved food receipt and Pip's reply)
 3. `play-03-progress.png` — See how close you land (Progress week with Pip)
 4. `play-04-diary.png` — Every day, kept on your phone (Diary week)
-5. `play-05-widgets.png` — Calories left on your home screen (both widget sizes)
+5. `play-05-widgets.png` — Calories left on your home screen (both widget sizes).
+   **Do not upload as is:** it shows other apps' icons and the Google search bar. Retake it on a home
+   screen that holds only Mivu's widgets, or leave it out; Play needs two screenshots and the other five qualify.
 6. `play-06-setup.png` — Pip sets your targets in about a minute (Setup)
 
 They are raw captures; framing with brand teal and captions is the owner's
@@ -143,7 +151,8 @@ user-initiated-transfer exception was considered and not taken.
 How the app works, from the code:
 - The diary (meals, photos, weights, workouts, goals, profile, Coach chat) is
   stored only on the phone, in the app's private storage. There is no Mivu
-  server and no Mivu account.
+  server for the diary and no Mivu account; the only Mivu service is the
+  reply-reports worker described below.
 - When the person connects ChatGPT and uses Coach, Mivu sends the turn's text
   and photos plus bounded diary context (profile, recent meals, weights,
   workouts, goal, recent Coach exchanges) to `api.openai.com` with the person's
@@ -165,7 +174,7 @@ How the app works, from the code:
 |---|---|
 | Does your app collect or share any of the required user data types? | Yes |
 | Is all of the user data collected by your app encrypted in transit? | Yes (HTTPS only) |
-| Do you provide a way for users to request that their data is deleted? | Yes: in-app deletion of each meal, photo, weight and workout; Disconnect ChatGPT; Android's Clear storage or uninstall erases everything. Mivu holds no copy elsewhere. **Owner to confirm** how to describe data already sent to OpenAI under the person's ChatGPT account. |
+| Do you provide a way for users to request that their data is deleted? | Yes: in-app deletion of each meal, photo, weight and workout; Disconnect ChatGPT; Android's Clear storage or uninstall erases everything. Mivu holds no copy elsewhere, except Coach reply reports the person chose to send, which sit in Mivu's support inbox and are deleted on request to support@mivuapp.com. **Owner to confirm** how to describe data already sent to OpenAI under the person's ChatGPT account. |
 | Account creation | The app does not let users create an account. ChatGPT sign-in is OpenAI's account, so account deletion does not apply. |
 
 **Data types** — each, except the ML Kit row, is collected and shared with
@@ -176,7 +185,8 @@ Mivu.
 | Play data type | What Mivu sends | Collected | Shared | Ephemeral | Required |
 |---|---|---|---|---|---|
 | Photos and videos › Photos | Meal photos attached to a Coach turn | Yes | Yes | No (**owner to confirm**: `store: false`, but OpenAI's retention applies) | Optional |
-| Health and fitness › Health info | Weight entries, height, birth year, sex, pace, calorie and macro goals, diet preferences | Yes | Yes | No (as above) | Optional |
+| Health and fitness › Health info | Weight entries, height, pace, calorie and macro goals, diet tags and the free-text allergy, intolerance or health notes | Yes | Yes | No (as above) | Optional |
+| Personal info › Other info | Birth year and sex from the profile (**owner to confirm** against the live form; they may belong under Health info instead) | Yes | Yes | No (as above) | Optional |
 | Health and fitness › Fitness info | Logged workouts (kind, minutes) | Yes | Yes | No (as above) | Optional |
 | App activity › Other user-generated content | Coach messages and meal names and notes | Yes | Yes | No (as above) | Optional |
 | Personal info › Name | The profile name, part of the profile in the Coach context (**owner to confirm**: it is often a nickname, but it is sent) | Yes | Yes | No (as above) | Optional |
@@ -207,8 +217,10 @@ email fallback is sent by the person, from their own email app.
 - Disclaimers in the app: "estimates, not medical advice" in Settings, on the
   onboarding targets step and in the empty Coach. Onboarding keeps weight-loss
   targets to a healthy BMI (not below 18.5), at most 0.75 kg a week, and never
-  below 1200 kcal; minimum age 18.
-- No Health Connect access and no health permissions are requested.
+  below 1200 kcal; minimum age 18. Those limits apply to the targets setup
+  proposes; a person can later edit their own goal to any value.
+- No Health Connect access and no sensor, activity or location permissions. The camera (meal photos) and
+  the microphone (voice logging through the system speech recognizer) are used only to log meals.
 
 ## AI-generated content (draft)
 
@@ -221,6 +233,12 @@ email fallback is sent by the person, from their own email app.
   reports worker in mivu-infra and read the inbox before release.
 - Coach's instructions treat user text and retrieved content as data, keep
   replies short, and never state numbers it did not read.
+- Restricted content: Coach can only call Mivu's food-diary tools and answers
+  in a couple of short sentences about the diary. Mivu adds no content filter
+  of its own; it relies on the safeguards built into OpenAI's models (and
+  Google's, for the on-device Coach), and reports are how a bad reply reaches
+  the developer. **Owner to decide** whether to add a rule to Coach's
+  instructions to decline sexual, violent, hateful or self-harm requests.
 
 ## Account deletion
 
@@ -238,15 +256,26 @@ to confirm in the Console.
 >
 > Coach uses the person's own ChatGPT account. To test it: Settings › Coach AI ›
 > Connect ChatGPT › Agree and Continue, then sign in to ChatGPT in the browser
-> tab with the test account below. When the page says "You can return to Mivu",
-> press Back. Open the Coach tab and send "two boiled eggs and a slice of
-> toast"; Pip saves the meal and replies.
+> tab with the test account below. OpenAI then shows a page asking to let
+> "Mivu" use the account; tap Continue. The browser returns to Mivu by itself;
+> if it does not, tap "Return to Mivu". Settings now shows Connected. Open the
+> Coach tab and send "two boiled eggs and a slice of toast"; Pip saves the meal
+> and replies.
+>
+> To report an AI reply: long-press Pip's reply › Report reply › pick a reason ›
+> Report. It is sent without leaving the app.
 >
 > Test ChatGPT account: `<email>` / `<password>`
 
-**Owner:** Phase 0 item 6 is still blocked. The account must sign in without a
-one-time code the reviewer cannot receive, and the owner must authorize a paid
-plan for it.
+In Console choose "All or some functionality is restricted" and add these
+instructions with the account.
+
+**Owner:** Phase 0 item 6 is still blocked. The account must be on a paid
+ChatGPT plan and sign in from any country without a one-time code the reviewer
+cannot receive; the owner must authorize it. The last recorded emulator sign-in
+after the return-to-Mivu change ended in "Can't reach ChatGPT"
+([record](../verification/2026-10-29-android-gemini-nano.md), cause not
+found), so prove sign-in on the physical phone (check P1) before entering this.
 
 ## Other Console forms (draft)
 
@@ -259,15 +288,28 @@ plan for it.
   bar apps "directed towards or likely to be accessed by individuals under the
   age of 18". Android onboarding refuses birth years under 18 and says "Mivu is
   for ages 18 and up" (`OnboardingScreenTest.underEighteenCannotContinue`).
+  Pip, the cartoon fox, is a mascot for adults tracking calories and weight;
+  nothing in the listing is addressed to children. Keep that answer ready if
+  review asks about the artwork.
 - **Ads:** no ads.
 - **News app:** no. **Government app:** no. **Financial features:** none.
 - **COVID-19 / health research:** no.
+- **Advertising ID:** no. The merged release manifest has no
+  `com.google.android.gms.permission.AD_ID`.
+- **Package registration:** register `com.yakov103.mivu` in Console for Android
+  developer verification.
+- **Trader status:** **owner to confirm** against the Console page. Who must
+  declare it, and for which regions, was not verified here.
+- **Countries:** Israel and the United States must be included. Leave out
+  China and countries under United States sanctions. Europe comes later, so
+  nothing here is adapted for it yet.
 
 ## Closed test
 
-- At least 12 testers opted in for 14 continuous days, on personal Play
-  accounts created after 13 November 2023 (the rule for new personal developer
-  accounts).
+- If the owner's developer account is a personal one created after
+  13 November 2023, Play requires a closed test with at least 12 testers opted
+  in for 14 continuous days before production. Testers only need Google
+  accounts that opt in.
 - The test starts only after Phase 0 items 2–5 pass on the physical phone (the
   [milestone 9 record](../verification/2026-10-25-android-play-readiness.md),
   "Physical phone").
@@ -281,7 +323,12 @@ plan for it.
    the repo, and set `MIVU_UPLOAD_STORE_FILE` (absolute path),
    `MIVU_UPLOAD_STORE_PASSWORD`, `MIVU_UPLOAD_KEY_ALIAS` and
    `MIVU_UPLOAD_KEY_PASSWORD` in `~/.gradle/gradle.properties`.
-2. `cd android && ./gradlew :app:bundleRelease`.
+2. `cd android && ./gradlew :app:bundleRelease`. Without the four values the
+   bundle is built unsigned, so check it before going on:
+   `jarsigner -verify app/build/outputs/bundle/release/app-release.aab` must
+   say "jar verified", and
+   `bundletool dump config --bundle=app/build/outputs/bundle/release/app-release.aab | grep -i alignment`
+   must show `PAGE_ALIGNMENT_16K`.
 3. Install the same AAB on the phone with bundletool
    (`build-apks --connected-device`, then `install-apks`) and run the release
    checks in the record's "Physical phone" section.
@@ -291,3 +338,10 @@ plan for it.
    run `python3 scripts/ci/play_ledger.py android/play-uploads.txt`, and commit
    it.
 6. Read the pre-launch report.
+
+## Later
+
+- From April 2027 Play expects sign-in to be restored on a new phone. Mivu
+  keeps ChatGPT credentials out of backups and transfers on purpose, so before
+  then either adopt the Restore Credentials API or ask for an exemption in
+  Console.
