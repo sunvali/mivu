@@ -43,8 +43,9 @@ struct CoachCameraLensBar: View {
             }
             .overlay(alignment: .top) {
                 if slid != nil {
+                    // Lifted by its own height plus a gap, so it sits clear above the buttons.
                     CoachCameraZoomDial(zoom: state.zoom, lenses: state.lenses)
-                        .alignmentGuide(.top) { $0[.bottom] + 8 }.transition(.opacity)
+                        .offset(y: -(CoachCameraZoomDial.height + 8)).transition(.opacity)
                 }
             }
             // A still finger is a tap on a lens; only a slide turns the dial.
@@ -64,6 +65,7 @@ struct CoachCameraLensBar: View {
 /// The arc of ticks above the lens buttons. Each doubling of zoom is the same distance, so the wheel follows the finger.
 struct CoachCameraZoomDial: View {
     static let pointsPerDoubling: CGFloat = 90
+    static let height: CGFloat = 76
     let zoom: CGFloat
     let lenses: [CGFloat]
     var body: some View {
@@ -85,7 +87,7 @@ struct CoachCameraZoomDial: View {
             context.stroke(needle, with: .color(.yellow), lineWidth: 2)
             context.draw(Text("\(zoomText(zoom))×").font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(.yellow), at: CGPoint(x: center.x, y: 9))
         }
-        .frame(width: 280, height: 76)
+        .frame(width: 280, height: Self.height)
         .mask(LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .leading, endPoint: .trailing))
         .background(.black.opacity(0.35), in: .rect(cornerRadius: 18))
         .allowsHitTesting(false).accessibilityHidden(true)
