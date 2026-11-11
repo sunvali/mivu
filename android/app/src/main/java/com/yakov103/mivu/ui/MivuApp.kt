@@ -281,8 +281,11 @@ private fun Shell(repository: DiaryRepository, profileID: UUID, onMealCaptured: 
         focusCoach = true
     }
     val connectionState by connectionState(connection)
-    // The owner calls back off the main thread, maybe after a rotation: the tab starts from the app, on the main thread.
-    val connect: () -> Unit = { connection?.connect { url -> context.mainExecutor.execute { context.openCustomTab(url) } } }
+    // The owner calls back off the main thread. The tab starts from this activity, so returning to Mivu closes it;
+    // after a rotation that activity is gone, and the tab opens from the app instead (it then stays behind Mivu).
+    val connect: () -> Unit = { connection?.connect { url ->
+        context.mainExecutor.execute { (host.takeUnless { it.isDestroyed } ?: context).openCustomTab(url) }
+    } }
     val entry by navController.currentBackStackEntryAsState()
     val root = Tab.entries.firstOrNull { tab -> entry?.destination?.hasRoute(tab.route::class) == true }
     val current = root ?: Tab.Today

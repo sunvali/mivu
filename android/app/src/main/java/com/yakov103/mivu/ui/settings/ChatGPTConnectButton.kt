@@ -1,5 +1,6 @@
 package com.yakov103.mivu.ui.settings
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -37,9 +38,13 @@ object MivuLinks {
     const val REPORT_EMAIL = "support@mivuapp.com"
 }
 
-/** Opens [url] in a Custom Tab: the system browser, as the sign-in requires. A new task, so any context (the app's) works. */
+/**
+ * Opens [url] in a Custom Tab: the system browser, as the sign-in requires. From an activity the tab joins Mivu's task,
+ * so [SignInReturnActivity] can close it on return; any other context needs a task of its own.
+ */
 fun Context.openCustomTab(url: String) =
-    CustomTabsIntent.Builder().build().apply { intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }.launchUrl(this, Uri.parse(url))
+    CustomTabsIntent.Builder().build().apply { if (this@openCustomTab !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        .launchUrl(this, Uri.parse(url))
 
 enum class ConnectStyle { Filled, Outlined, Link }
 
