@@ -109,16 +109,20 @@ class CoachCameraTest {
         return model
     }
 
-    @Test fun captureAddsPhotoAndStaysOpen() {
+    @Test fun captureReturnsToCoachWithThePhoto() {
         launchApp()
+        compose.onNodeWithTag("coachInput").performTextReplacement("Synthetic snack")
         openCamera()
         compose.onNodeWithText("0 of 8 photos").assertIsDisplayed()
         compose.onNodeWithContentDescription("Take photo").performClick()
-        waitForText("1 of 8 photos")
-        compose.onNodeWithContentDescription("Take photo").assertIsDisplayed()
-        compose.waitUntil(15_000) { runCatching { compose.onNodeWithContentDescription("Take photo").assertIsEnabled() }.isSuccess }
+        // As on iPhone: one shot returns to Coach, where the photo shows and the camera opens again for another.
+        compose.waitUntil(15_000) { !exists(hasContentDescription("Take photo")) && exists(hasTestTag("coachInput")) }
+        compose.waitUntil(15_000) { exists(hasContentDescription("Attached photo 1")) }
+        compose.onNodeWithText("Synthetic snack").assertIsDisplayed()
         assertEquals(1, coachModel().draft.value.photos.size)
         assert(File(coachModel().draft.value.photos.single()).length() > 0)
+        openCamera()
+        waitForText("1 of 8 photos")
     }
 
     @Test fun closeReturnsToComposerWithDraft() {
@@ -127,21 +131,23 @@ class CoachCameraTest {
         openCamera()
         // Coach is covered: Pip hides under the camera.
         compose.waitUntil(5_000) { coachModel().companion.value.playback == Playback.Hidden }
-        compose.onNodeWithContentDescription("Take photo").performClick()
-        waitForText("1 of 8 photos")
         compose.onNodeWithContentDescription("Close").performClick()
         compose.waitUntil(10_000) { exists(hasTestTag("coachInput")) }
         compose.onNodeWithText("Synthetic snack").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Attached photo 1").assertIsDisplayed()
         compose.onNodeWithContentDescription("Take photo").assertDoesNotExist()
     }
 
     @Test fun recreateMidCaptureKeepsDraft() {
         launchApp()
         compose.onNodeWithTag("coachInput").performTextReplacement("Synthetic supper")
+        val picked = png("synthetic-supper.png")
+        try {
+            compose.runOnUiThread { coachModel().importPhotos(listOf(Uri.fromFile(picked))) }
+            waitForText("1 of 8 photos")
+        } finally {
+            picked.delete()
+        }
         openCamera()
-        compose.onNodeWithContentDescription("Take photo").performClick()
-        waitForText("1 of 8 photos")
         compose.activityRule.scenario.recreate()
         compose.activityRule.scenario.onActivity(content)
         // The camera route and the draft both come back; the shutter shows once the new activity's camera binds.
@@ -194,12 +200,12 @@ class CoachCameraTest {
         }
     }
 
-    @Test fun fullDraftDisablesShutter() {
+    @Test fun choosingPhotosReturnsToCoachAndAFullDraftDisablesTheCamera() {
         launchApp()
         openCamera()
         pick(8) { compose.onNodeWithText("Choose photos").performClick() }
-        compose.onNodeWithContentDescription("Take photo").assertIsNotEnabled()
-        compose.onNodeWithText("Choose photos").assertIsNotEnabled()
+        compose.waitUntil(10_000) { !exists(hasContentDescription("Take photo")) && exists(hasTestTag("coachInput")) }
+        compose.onNodeWithContentDescription("Add photos").assertIsNotEnabled()
     }
 
     @Test fun choosePhotosClearsTheShutterAtFontScale2() {
@@ -241,7 +247,6 @@ class CoachCameraTest {
         pick(2) { compose.onNodeWithText("Choose photos").performClick() }
         assertEquals("Synthetic salad", model.draft.value.text)
         assertEquals(2, model.draft.value.photos.size)
-        compose.onNodeWithContentDescription("Close").performClick()
-        assert(closed)
+        assert(closed) { "choosing photos returns to Coach" }
     }
 }
