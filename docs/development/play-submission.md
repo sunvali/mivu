@@ -90,7 +90,8 @@ parts swapped for their Android counterparts. Recount after edits.
 > • Today shows calories and macros against targets that fit you.
 > • The Diary keeps every day, with photo-led meal details.
 > • Progress charts your weight and intake over time.
-> • A home-screen widget shows calories left, with Snap It and Coach one tap away.
+> • A home-screen widget shows calories eaten against your target, with Snap It
+>   and Coach one tap away.
 > • Log from the app icon's shortcuts, a Quick Settings tile, or by sharing a
 >   photo or text into Mivu.
 >
@@ -105,8 +106,8 @@ parts swapped for their Android counterparts. Recount after edits.
 >
 > AI THAT USES YOUR OWN PLAN
 > Connect your ChatGPT account to estimate nutrition and chat with Coach.
-> Requests use your ChatGPT plan, and you can manage usage or disconnect in
-> Settings. Mivu asks before anything is shared with OpenAI.
+> Coach needs an eligible ChatGPT plan; requests use it, and you can manage
+> usage or disconnect in Settings. Mivu asks before anything is shared with OpenAI.
 >
 > On supported phones you can choose Gemini Nano on the phone instead of
 > ChatGPT. It needs no account, but it only logs meals and changes amounts,
@@ -143,7 +144,7 @@ no sign-in). Files in
 2. `play-02-coach.png` — Log a meal in your own words (Saved food receipt and Pip's reply)
 3. `play-03-progress.png` — See how close you land (Progress week with Pip)
 4. `play-04-diary.png` — Every day, kept on your phone (Diary week)
-5. `play-05-widgets.png` — Calories left on your home screen (both widget sizes).
+5. `play-05-widgets.png` — Calories on your home screen (both widget sizes).
    **Do not upload as is:** it shows other apps' icons and the Google search bar. Retake it on a home
    screen that holds only Mivu's widgets, or leave it out; Play needs two screenshots and the other five qualify.
 6. `play-06-setup.png` — Pip sets your targets in about a minute (Setup)
@@ -182,8 +183,9 @@ How the app works, from the code:
   [ML Kit data disclosure](https://developers.google.com/ml-kit/android-data-disclosure)
   (read 2026-11-11) says GenAI features collect device information, the app's
   package name and version, "user, device or other identifiers", per-install
-  identifiers, performance metrics, input and output size, event types and
-  error codes, for diagnostics and usage analytics. Meals and messages are not
+  identifiers, performance metrics, input and output size, event types,
+  error codes and the configured languages, for diagnostics and usage
+  analytics. Meals and messages are not
   in that list.
 - No analytics, crash reporting, advertising or location SDK of Mivu's own; no
   advertising ID.
@@ -211,7 +213,7 @@ Mivu.
 | App activity › Other user-generated content | Coach messages and meal names and notes | Yes | Yes | No (as above) | Optional |
 | Personal info › Name | The profile name, part of the profile in the Coach context (**owner to confirm**: it is often a nickname, but it is sent) | Yes | Yes | No (as above) | Optional |
 | Device or other IDs | The random per-install `ext_agent_host_id` sent at sign-in (**owner to confirm** whether Play counts it) | Yes | Yes | No | Optional |
-| App info and performance › Diagnostics, and Device or other IDs (ML Kit) | Device information, app name and version, device and per-install identifiers, performance metrics, event types and error codes that Google's ML Kit collects whenever the app runs, for every user. Purposes: Analytics and App functionality. Not shared by Mivu (**owner to confirm** the exact rows against Google's ML Kit disclosure and the live form) | Yes | No | No | Required |
+| App info and performance › Diagnostics, and Device or other IDs (ML Kit) | Device information, app name and version, device and per-install identifiers, performance metrics, event types, error codes and configured languages that Google's ML Kit collects whenever the app runs, for every user. Purpose: Analytics (Google states diagnostics and usage analytics only). Not shared by Mivu (**owner to confirm** the exact rows against Google's ML Kit disclosure and the live form) | Yes | No | No | Required |
 
 **Not collected:** location, contacts, financial info, calendar, files and docs,
 web browsing, app interactions, crash logs, advertising ID. Mivu itself collects
@@ -243,7 +245,8 @@ app.
   onboarding targets step and in the empty Coach. Onboarding keeps weight-loss
   targets to a healthy BMI (not below 18.5), at most 0.75 kg a week, and never
   below 1200 kcal; minimum age 18. Those limits apply to the targets setup
-  proposes; a person can later edit their own goal to any value.
+  proposes; a person can later edit their own goal to any value, by hand or
+  by asking Coach.
 - No Health Connect access and no sensor, activity or location permissions. The camera (meal photos) and
   the microphone (voice logging through the system speech recognizer) are used only to log meals.
 
@@ -321,6 +324,12 @@ found), so prove sign-in on the physical phone (check P1) before entering this.
   bar apps "directed towards or likely to be accessed by individuals under the
   age of 18". Android onboarding refuses birth years under 18 and says "Mivu is
   for ages 18 and up" (`OnboardingScreenTest.underEighteenCannotContinue`).
+  The gate covers setup only: a diary archive restored from another phone
+  keeps its profile, including one made on iPhone by someone aged 13 to 17
+  (**owner to decide** whether restore should check the birth year). The same
+  terms ask the developer to tell users that Google processes ML Kit's
+  metrics; today that is said in the Android privacy policy only (**owner to
+  decide** whether to add a line in Settings › Coach AI).
   Pip, the cartoon fox, is a mascot for adults tracking calories and weight;
   nothing in the listing is addressed to children. Keep that answer ready if
   review asks about the artwork.
@@ -355,7 +364,9 @@ found), so prove sign-in on the physical phone (check P1) before entering this.
 0. `git checkout android-v<version>` (the tag of the version PR you merged),
    with a clean tree, and note `git rev-parse HEAD` for the ledger line in
    step 5.
-1. Create the upload keystore with `keytool`, keep it and its passwords outside
+1. Create the upload keystore
+   (`keytool -genkeypair -v -keystore <absolute path> -alias <alias> -keyalg RSA -keysize 2048 -validity 10000`;
+   check the key requirements on Play's app signing page first), keep it and its passwords outside
    the repo, and set `MIVU_UPLOAD_STORE_FILE` (absolute path),
    `MIVU_UPLOAD_STORE_PASSWORD`, `MIVU_UPLOAD_KEY_ALIAS` and
    `MIVU_UPLOAD_KEY_PASSWORD` in `~/.gradle/gradle.properties`.
@@ -364,7 +375,11 @@ found), so prove sign-in on the physical phone (check P1) before entering this.
    `jarsigner -verify app/build/outputs/bundle/release/app-release.aab` must
    say "jar verified", and
    `bundletool dump config --bundle=app/build/outputs/bundle/release/app-release.aab | grep -i alignment`
-   must show `PAGE_ALIGNMENT_16K`.
+   must show `PAGE_ALIGNMENT_16K`. The permission and 16 KB facts in this
+   draft came from an earlier local build, so repeat them on this bundle:
+   `bundletool build-apks --mode=universal`, unzip the APK, then
+   `apkanalyzer manifest print` (same permissions as "Done in the app" and
+   the Health section, targetSdk 37) and `zipalign -c -P 16 4` on it.
 3. Install the same AAB on the phone with bundletool
    (`build-apks --connected-device`, then `install-apks`) and run the release
    checks in the record's "Physical phone" section.
