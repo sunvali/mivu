@@ -23,10 +23,11 @@ iOS counterpart is [app-store-submission.md](app-store-submission.md).
   weights, workouts, goals and profile details"). Sign-in opens only after
   "Agree and Continue" (`ChatGPTConnectButton.kt`, `ConnectionScreenTest`).
 - **Privacy link.** Settings › Support links `MivuLinks.PRIVACY`
-  (`https://mivuapp.com/privacy`).
+  (`https://mivuapp.com/privacy/android`, the Android policy; `/privacy` is the
+  iPhone one and stays as it is).
 - **"Estimates, not medical advice".** In Settings, on the onboarding targets
-  step and in the empty Coach screen. Onboarding refuses birth years under 13,
-  as on iOS.
+  step and in the empty Coach screen. Onboarding refuses birth years under 18
+  (iOS: 13).
 - **Backup rules.** `data_extraction_rules.xml` excludes everything from cloud
   backup; device-to-device transfer carries only the diary database and files.
   ChatGPT credentials are Keystore-encrypted under `noBackupFilesDir` and never
@@ -61,10 +62,10 @@ parts swapped for their Android counterparts. Recount after edits.
 - **Category:** Health & Fitness (**owner to confirm**; Food & Drink is the
   alternative).
 - **Contact email:** support@mivuapp.com (**Owner:** create the mailbox).
-- **Privacy policy URL:** https://mivuapp.com/privacy (**Owner:** publish it).
-  Add: on-device meals stay on the phone; ML Kit sends Google diagnostic
-  device identifiers and configured languages (**owner to confirm** the
-  wording).
+- **Privacy policy URL:** https://mivuapp.com/privacy/android (**Owner:**
+  deploy it from `mivu-site`; it adds one page and changes no existing one).
+  It covers the on-device Coach, ML Kit's Google diagnostics, reply reports
+  and the 18+ age (**owner to confirm** the wording).
 - **App icon (512 × 512):** `design-system/mivu/precision-glass/icon/android/play-icon-512.png`.
 - **Feature graphic (1024 × 500):** `docs/verification/android-play/listing/feature-graphic.png` (Pip, the name and
   the App Store subtitle; rendered from HTML with headless Chrome).
@@ -206,7 +207,7 @@ email fallback is sent by the person, from their own email app.
 - Disclaimers in the app: "estimates, not medical advice" in Settings, on the
   onboarding targets step and in the empty Coach. Onboarding keeps weight-loss
   targets to a healthy BMI (not below 18.5), at most 0.75 kg a week, and never
-  below 1200 kcal; minimum age 13.
+  below 1200 kcal; minimum age 18.
 - No Health Connect access and no health permissions are requested.
 
 ## AI-generated content (draft)

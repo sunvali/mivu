@@ -29,7 +29,8 @@ import com.yakov103.mivu.R
 import com.yakov103.mivu.connection.ConnectionState
 
 object MivuLinks {
-    const val PRIVACY = "https://mivuapp.com/privacy"
+    // Android has its own policy page; /privacy is the iPhone one.
+    const val PRIVACY = "https://mivuapp.com/privacy/android"
     const val USAGE = "https://chatgpt.com/settings/usage"
     // Coach reply reports: sent in the app to the mivu-infra worker, with the mailbox as the fallback.
     const val REPORT_URL = "https://reports.mivuapp.com/"

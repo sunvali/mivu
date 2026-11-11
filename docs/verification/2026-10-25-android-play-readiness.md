@@ -196,9 +196,11 @@ Nothing here is an agent task.
 1. Ask Play support whether a nutrition tracker needs an organization (D-U-N-S) or a personal account.
 2. Create the Play Console account, pay the fee, verify identity, accept the Developer Distribution Agreement.
 3. Create the upload keystore outside the repo, set the four `MIVU_UPLOAD_*` values, enroll in Play App Signing.
-4. Get OpenAI's written answer on ChatGPT sign-in for a closed-source Play app (Phase 0 item 1).
+4. Decide whether the [Android evidence](../development/play-openai-plan-usage.md) closes Phase 0 item 1 now that Mivu is
+   open source (updated 2026-11-11; it was "get OpenAI's written answer for a closed-source Play app").
 5. Authorize and create the reviewer ChatGPT account (Phase 0 item 6); enter it under App access.
-6. Publish `https://mivuapp.com/privacy` and the support page; enter the URL.
+6. Deploy `https://mivuapp.com/privacy/android` from `mivu-site` and enter that URL (updated 2026-11-11; `/privacy` is
+   the iPhone policy and stays unchanged).
 7. Create the `support@mivuapp.com` mailbox before release.
 8. Fill in the Console forms from [play-submission.md](../development/play-submission.md), checking every "owner to
    confirm" answer against the live form.
