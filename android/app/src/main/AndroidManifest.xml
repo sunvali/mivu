@@ -5,7 +5,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- The opt-in morning reminder: asked for only when it is turned on, and rebooked after a restart. -->
+    <!-- Asked for when the opt-in morning reminder is turned on (rebooked after a restart), and once after the first
+         message shared into Mivu is saved, for its Coach reply notification. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />

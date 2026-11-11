@@ -89,7 +89,8 @@ object CoachReports {
 
     /** What leaves the phone: the reply's text, the reason, the person's note and the app version; nothing from the diary. */
     fun body(reply: String, reason: String, note: String, app: String): JSONObject =
-        JSONObject().put("reply", reply).put("reason", reason).put("note", note.trim()).put("app", app)
+        // The worker's limits (mivu-infra reports/worker.js); over them it refuses, and the report would leave the app as an email.
+        JSONObject().put("reply", reply.take(8_000)).put("reason", reason).put("note", note.trim().take(2_000)).put("app", app.take(40))
 
     /** Posts [body] to Mivu's report inbox; false when it was not accepted, so the dialog can fall back to email. */
     fun send(body: JSONObject, url: String = MivuLinks.REPORT_URL): Boolean = try {

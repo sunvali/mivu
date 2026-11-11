@@ -56,4 +56,11 @@ class CoachReportsTest {
         assertEquals(99, CoachReports.read(file).last().getInt("n"))
         dir.deleteRecursively()
     }
+
+    @Test fun bodyStaysWithinTheWorkerLimits() {
+        // mivu-infra reports/worker.js rejects a reply over 8,000 or a note over 2,000 characters, which would open the email fallback.
+        val body = CoachReports.body("r".repeat(9_000), "Something else", "n".repeat(3_000), "Android 0.0.0")
+        assertEquals(8_000, body.getString("reply").length)
+        assertEquals(2_000, body.getString("note").length)
+    }
 }
