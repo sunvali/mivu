@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/sunvali/mivu/compare/android-v0.3.0...android-v0.3.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **android:** close the ChatGPT sign-in tab when it returns to Mivu ([#117](https://github.com/sunvali/mivu/issues/117)) ([a51c0a0](https://github.com/sunvali/mivu/commit/a51c0a06763f3b4381fbe618ef06f40e8f0efbb3))
+* **coach:** return to Coach after each camera photo on Android ([#118](https://github.com/sunvali/mivu/issues/118)) ([112764c](https://github.com/sunvali/mivu/commit/112764c45a56b079c35e3dc64d367785a6c86237))
+
 ## [0.3.0](https://github.com/sunvali/mivu/compare/android-v0.2.0...android-v0.3.0) (2026-11-11)
 
 
