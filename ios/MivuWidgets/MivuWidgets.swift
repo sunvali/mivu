@@ -6,5 +6,6 @@ import WidgetKit
         CaloriesWidget()
         LogFoodControl()
         DayProgressLiveActivity()
+        WorkoutLiveActivity()
     }
 }

@@ -17,7 +17,33 @@ import Testing
     private func goal(_ date: String, kcal: Double = 2_000) -> GoalRecord {
         GoalRecord(effectiveLocalDate: date, timeZoneID: "Asia/Jerusalem",
                    targets: NutritionValues(kcal: kcal, protein: 100), goalWeightKg: 70,
-                   exerciseCreditEnabled: false)
+                   exerciseCreditPercent: 0)
+    }
+
+    @Test func burnCreditWritesTodaysRevision() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let pendingKey = GoalRecord.pendingCreditKey(profile.id); defer { UserDefaults.standard.removeObject(forKey: pendingKey) }
+        // No goal yet: nothing is written, so Today and Progress still show no goal.
+        #expect(try await store.setExerciseCredit(50, on: "2027-01-01", expectedProfileID: profile.id) == nil)
+        #expect(try await store.snapshotForExport().goals.isEmpty)
+        #expect(try await store.goal(on: "2027-01-01", expectedProfileID: profile.id) == nil)
+        // The store never reads the choice Settings keeps waiting; the callers creating a first goal apply it.
+        UserDefaults.standard.set(50, forKey: pendingKey)
+        let earlier = try await store.setGoals(goal("2027-01-05"), expectedRevision: nil, expectedProfileID: profile.id)
+        #expect(earlier.exerciseCreditPercent == 0)
+        let later = try await store.setGoals(goal("2027-02-01"), expectedRevision: nil, expectedProfileID: profile.id)
+
+        // A day without its own record copies the goal in force; earlier days keep their numbers, later goals follow.
+        let today = try #require(try await store.setExerciseCredit(100, on: "2027-01-10", expectedProfileID: profile.id))
+        #expect(today.effectiveLocalDate == "2027-01-10" && today.id != earlier.id && today.targets == earlier.targets && today.goalWeightKg == 70)
+        #expect(try await store.goal(on: "2027-01-07", expectedProfileID: profile.id) == earlier)
+        let movedOn = try #require(try await store.goal(on: "2027-02-01", exact: true, expectedProfileID: profile.id))
+        #expect(movedOn.exerciseCreditPercent == 100 && movedOn.revision == later.revision + 1 && movedOn.targets == later.targets)
+        // Today's own record is updated in place.
+        let again = try #require(try await store.setExerciseCredit(0, on: "2027-01-10", expectedProfileID: profile.id))
+        #expect(again.id == today.id && again.revision == today.revision + 1 && again.exerciseCreditPercent == 0)
+        #expect(try await store.goal(on: "2027-02-01", expectedProfileID: profile.id)?.exerciseCreditPercent == 0)
+        await #expect(throws: DiaryError.invalidData) { try await store.setExerciseCredit(30, on: "2027-01-10", expectedProfileID: profile.id) }
     }
 
     @Test func datedGoalsSelectLatestCompleteSettingAndGuardEdits() async throws {
@@ -196,6 +222,22 @@ import Testing
         #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).workouts.count == 2)
     }
 
+    @Test func workoutOnlyDayHasNoFoodStatusInWeekStripOrHistory() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let finished = WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate)
+        let ran = try await store.createWorkout(localDate: "2027-01-13", draft: finished, performedAt: nil, expectedProfileID: profile.id)
+        var running = finished; running.state = .active
+        _ = try await store.createWorkout(localDate: "2027-01-14", draft: running, performedAt: nil, expectedProfileID: profile.id)
+        let week = try await store.diaryWeek(from: "2027-01-11", through: "2027-01-17", expectedProfileID: profile.id)
+        let done = try #require(week.days.first { $0.day.localDate == "2027-01-13" })
+        let live = try #require(week.days.first { $0.day.localDate == "2027-01-14" })
+        #expect(done.workoutCount == 1 && live.workoutCount == 0)
+        #expect(DiaryWeek.status([done], activeDayID: nil) == nil)
+        #expect(DiaryWeek.status([live], activeDayID: nil) == .skipped)
+        let day = try await store.diaryDay(id: ran.dayID, expectedProfileID: profile.id)
+        #expect(DaySections.foodStatus(day) == nil)
+    }
+
     @Test func workoutEditAndDeleteRequireCurrentRevisionAndLeaveTombstone() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let draft = WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate)
@@ -208,6 +250,44 @@ import Testing
         let snapshot = try await store.snapshotForExport()
         #expect(snapshot.workouts.isEmpty && snapshot.deletedWorkoutIDs.contains(first.id))
         #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id) == snapshot)
+    }
+
+    @Test func editedWorkoutMovesDayAndUndoRestoresADeletedOne() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let draft = WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate)
+        let first = try await store.createWorkout(localDate: "2027-01-15", draft: draft, performedAt: morning, expectedProfileID: profile.id)
+        var edit = first; edit.performedAt = morning.addingTimeInterval(-86_400)
+        let moved = try await store.updateWorkout(edit, onDate: "2027-01-14", expectedRevision: 1, expectedProfileID: profile.id)
+        #expect(try await store.trackingDay(id: moved.dayID, expectedProfileID: profile.id).localDate == "2027-01-14" && moved.revision == 2)
+        await #expect(throws: DiaryError.invalidData) { try await store.updateWorkout(moved, onDate: "2027-01-16", expectedRevision: 2, expectedProfileID: profile.id) }
+
+        try await store.deleteWorkout(id: first.id, expectedRevision: 2, expectedProfileID: profile.id)
+        let restored = try await store.restoreWorkout(moved, expectedProfileID: profile.id)
+        var expected = moved; expected.id = restored.id; expected.revision = 1
+        #expect(restored == expected && restored.id != first.id, "the same workout comes back; the deleted ID stays deleted")
+        let snapshot = try await store.snapshotForExport()
+        #expect(snapshot.workouts.map(\.id) == [restored.id] && snapshot.deletedWorkoutIDs.contains(first.id))
+    }
+
+    @Test func undoKeepsTheDeletedWorkoutUntilItIsRestored() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let model = DiaryViewModel(store: store); await model.load(createDefaultProfile: false)
+        let draft = WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate)
+        let workout = try await store.createWorkout(localDate: "2027-01-15", draft: draft, performedAt: morning, expectedProfileID: profile.id)
+        try await store.deleteWorkout(id: workout.id, expectedRevision: 1, expectedProfileID: profile.id)
+
+        // Its day is gone, so the restore fails: Undo stays offered.
+        var orphan = workout; orphan.dayID = UUID()
+        model.deletedWorkout = .init(session: orphan, owner: profile.id)
+        await model.undoWorkoutDeletion()
+        #expect(model.deletedWorkout?.session == orphan)
+        #expect(try await store.workoutHistory(expectedProfileID: profile.id).values.isEmpty)
+
+        model.deletedWorkout = .init(session: workout, owner: profile.id)
+        await model.undoWorkoutDeletion()
+        #expect(model.deletedWorkout == nil)
+        await model.undoWorkoutDeletion()
+        #expect(try await store.workoutHistory(expectedProfileID: profile.id).values.count == 1, "a second tap restores nothing more")
     }
 
     @Test func invalidNumbersAndForeignDayLeaveSnapshotUnchanged() async throws {

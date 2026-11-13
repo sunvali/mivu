@@ -212,17 +212,52 @@ extension DiaryDatabase {
             let progress = try progressRangeInsideContext(transaction, date: diaryDateLabel(work.capturedAt, zone: work.captureTimeZoneID))
             context.weights = progress.weights; context.workouts = progress.workouts
             context.omittedWeightCount = progress.omittedWeights; context.omittedWorkoutCount = progress.omittedWorkouts
+            var activeTrimmed = false
+            if var active = try transaction.activeWorkout() {
+                // A big running workout keeps its ID, title and as many exercise names as fit in 8 KB.
+                if try JSONEncoder().encode(active).count > 8192 {
+                    active.note = nil; active.exercises = active.exercises.map { WorkoutExercise(name: $0.name, sets: [], exerciseID: $0.exerciseID) }
+                    while try JSONEncoder().encode(active).count > 8192, !active.exercises.isEmpty { active.exercises.removeLast(); activeTrimmed = true }
+                }
+                context.activeWorkout = active
+            }
+            let routines = try domainStatement("SELECT payload FROM routine ORDER BY ordinal DESC, id DESC LIMIT 20")
+            defer { sqlite3_finalize(routines) }; var references: [CoachRoutineReference] = []
+            while try mutationStep(routines) {
+                let routine = try JSONDecoder().decode(WorkoutRoutine.self, from: mutationBlob(routines, 0)); try validateRoutineFields(routine)
+                references.append(.init(id: routine.id, name: routine.name))
+            }
+            if !references.isEmpty { context.routines = references }
             let current = try coachExchangeSummary(turnID: turnID, expectedProfileID: expectedProfileID)
             try context.includeCommittedReceipts(current.receipts)
             context.replyTo = try current.reply.map { try coachReplyContext($0, transaction: transaction) }
-            context.truncated = recent.count < min(12, Int(work.sequence - 1)) || !context.omittedMeals.isEmpty || context.additionalMealCount > 0 || context.preferencesTruncated == true
+            context.truncated = activeTrimmed || recent.count < min(12, Int(work.sequence - 1)) || !context.omittedMeals.isEmpty || context.additionalMealCount > 0 || context.preferencesTruncated == true
             while try JSONEncoder().encode(context).count > 60_000, let meal = context.meals.first {
                 context.meals.removeFirst(); context.omittedMeals.append(.init(id: meal.id, dayID: meal.dayID, revision: meal.revision, itemCount: meal.items.count)); context.truncated = true
             }
             while try JSONEncoder().encode(context).count > 60_000, context.workouts?.isEmpty == false {
                 context.workouts!.removeFirst(); context.omittedWorkoutCount = (context.omittedWorkoutCount ?? 0) + 1; context.truncated = true
             }
+            if try JSONEncoder().encode(context).count > 60_000 { context.routines = nil; context.activeWorkout?.exercises = []; context.truncated = true }
             guard try JSONEncoder().encode(context).count <= 60_000 else { throw CoachError.limitExceeded }; return context
+        }
+    }
+    /// One exercise's latest `limit` finished sessions and its bests, for a question; the name resolves like a log.
+    func coachExerciseHistory(_ name: String, limit: Int, expectedProfileID: UUID) throws -> CoachExerciseHistory {
+        try domainRead(expectedProfileID: expectedProfileID) { head in
+            let catalog = WorkoutCatalog.resolve(name), probe = WorkoutExercise(name: catalog?.name ?? name, sets: [], exerciseID: catalog?.id)
+            let key = ExerciseKey(probe)
+            // shortcut: bests read the latest 1,000 sessions, as the gym screen does.
+            let all = try DiaryTransaction(database: self, head: head).finishedWorkouts(containing: key, limit: 1_000), bests = WorkoutHistory.bests(for: key, in: all)
+            let sessions = try all.prefix(min(limit, 10)).map { session in
+                CoachExerciseHistory.Session(workoutID: session.id, localDate: try trackingDay(id: session.dayID).localDate,
+                                             sets: session.exercises.filter { ExerciseKey($0) == key }.flatMap(\.sets))
+            }
+            var history = CoachExerciseHistory(exercise: probe.name, sessions: sessions, totalSessions: all.count,
+                                               heaviestKg: bests.heaviestKg, mostReps: bests.mostReps, longestSeconds: bests.longestSeconds)
+            // Bounded like get_workout: the oldest sessions go first; totalSessions still says how many there are.
+            while try JSONEncoder().encode(history).count > 48_000, !history.sessions.isEmpty { history.sessions.removeLast() }
+            return history
         }
     }
     /// One bounded read of what the turn quotes; missing records are explicit, never guessed.
@@ -245,6 +280,7 @@ extension DiaryDatabase {
             case .weight(let id): value.weight = try transaction.weight(id: id)
             case .workout(let id):
                 let workout = try transaction.workout(id: id)
+                guard workout.isFinished else { throw DiaryError.notFound } // the running workout is context.activeWorkout
                 if try JSONEncoder().encode(workout).count <= 8192 { value.workout = workout } // else ids only
             }
         } catch DiaryError.notFound { value.unavailable = true }
@@ -254,13 +290,13 @@ extension DiaryDatabase {
         let weights = try domainStatement("SELECT payload FROM weight ORDER BY ordinal DESC, id DESC LIMIT 41")
         defer { sqlite3_finalize(weights) }; var values: [WeightEntry] = []
         while try mutationStep(weights) { values.append(try JSONDecoder().decode(WeightEntry.self, from: mutationBlob(weights, 0))) }
-        let workouts = try domainStatement("SELECT w.id, w.parent, json_extract(CAST(w.payload AS TEXT), '$.revision'), json_extract(CAST(w.payload AS TEXT), '$.kind'), json_extract(CAST(w.payload AS TEXT), '$.durationMinutes') FROM workout w ORDER BY w.ordinal DESC, w.id DESC LIMIT 101")
+        let workouts = try domainStatement("SELECT w.id, w.parent, json_extract(CAST(w.payload AS TEXT), '$.revision'), json_extract(CAST(w.payload AS TEXT), '$.kind'), json_extract(CAST(w.payload AS TEXT), '$.durationMinutes') FROM workout w WHERE json_extract(CAST(w.payload AS TEXT), '$.state') IS NOT 'active' ORDER BY w.ordinal DESC, w.id DESC LIMIT 101")
         defer { sqlite3_finalize(workouts) }; var references: [WorkoutReference] = []
         while try mutationStep(workouts) {
             guard let id = try mutationOptionalUUID(workouts, 0), let dayID = try mutationOptionalUUID(workouts, 1), let kind = WorkoutKind(rawValue: try mutationText(workouts, 3)) else { throw DiaryError.invalidData }
             references.append(.init(id: id, dayID: dayID, localDate: try trackingDay(id: dayID).localDate, revision: Int(sqlite3_column_int64(workouts, 2)), kind: kind, durationMinutes: Int(sqlite3_column_int64(workouts, 4))))
         }
-        return (Array(values.prefix(40).reversed()), Array(references.prefix(100).reversed()), max(0, try mutationInteger("SELECT COUNT(*) FROM weight") - 40), max(0, try mutationInteger("SELECT COUNT(*) FROM workout") - 100))
+        return (Array(values.prefix(40).reversed()), Array(references.prefix(100).reversed()), max(0, try mutationInteger("SELECT COUNT(*) FROM weight") - 40), max(0, try mutationInteger("SELECT COUNT(*) FROM workout WHERE json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active'") - 100))
     }
 }
 

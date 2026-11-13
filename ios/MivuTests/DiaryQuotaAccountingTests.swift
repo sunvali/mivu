@@ -59,7 +59,7 @@ import Testing
                     replay = [.food(date: date, items: [food], eatenAt: nil), .weight(date: date, value: [0.001, 70.125, 1500][cycle % 3], unit: "kg", revision: nil),
                         .workout(date: date, draft: draft), .close(date: date, completeness: .complete),
                         .manual(.goals(date: date, targets: [CoachNutrientEdit(nutrient: "kcal", value: cycle.isMultiple(of: 2) ? nil : 1800.125)],
-                            weight: cycle.isMultiple(of: 2) ? nil : 70.125, clearWeight: cycle.isMultiple(of: 2), exerciseCredit: cycle.isMultiple(of: 2) ? nil : true, revision: nil)),
+                            weight: cycle.isMultiple(of: 2) ? nil : 70.125, clearWeight: cycle.isMultiple(of: 2), exerciseCreditPercent: cycle.isMultiple(of: 2) ? nil : 100, revision: nil)),
                         .manual(.preferences(timezone: nil, text: text, revision: head.revision))]
                     let committed = try database.applyCoachWrites(replay, turnID: turnID, at: fixture.before.days[0].startAt, expected: head, maximumBytes: ChatHistoryFixture.maximumBytes)
                     #expect(committed.value.count == 6, "seed=\(seed) index=\(index) command=batch receipt growth")

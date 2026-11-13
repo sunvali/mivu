@@ -114,7 +114,7 @@ import Testing
         let current = try await store.snapshotForExport()
         let data = try DiaryArchive.encode(current)
         var envelope = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        #expect(envelope["version"] as? Int == 4)
+        #expect(envelope["version"] as? Int == 5)
         #expect(try DiaryArchive.decode(data) == current)
         envelope["version"] = 3
         #expect(try DiaryArchive.decode(JSONSerialization.data(withJSONObject: envelope)) == current)
@@ -519,8 +519,7 @@ import Testing
         let receipts = try await store.applyCoachWrites([write], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         let old = try #require(await store.snapshotForExport().workouts.first)
         let turn = try await capturedTurn(store, text: "45 minutes", photos: [], at: now, expectedProfileID: profile.id)
-        var draft = strength; draft.durationMinutes = 45
-        let edited = try await store.applyCoachWrites([.editWorkout(id: old.id, draft: draft, revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let edited = try await store.applyCoachWrites([.editWorkout(id: old.id, patch: WorkoutPatch(durationMinutes: 45), revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
         let saved = try await store.coachWorkout(id: old.id, expectedProfileID: profile.id)
         #expect(saved.id == old.id); #expect(saved.revision == 2); #expect(saved.performedAt == old.performedAt)
         #expect(saved.dayID == old.dayID); #expect(edited[0].workoutID == old.id)
@@ -531,6 +530,21 @@ import Testing
         #expect(try await store.applyCoachWrites(writes, turnID: deletion.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) == deleted)
         await #expect(throws: DiaryError.notFound) { try await store.applyCoachWrites([write], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
         #expect(receipts[0].workoutID == old.id)
+    }
+    @Test func coachMinuteEditReplacesSecondsAndKeepsUnsetFields() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let create = try await capturedTurn(store, text: "Run", photos: [], at: now, expectedProfileID: profile.id)
+        var made = strength
+        made.durationMinutes = 50; made.durationSeconds = 3_000; made.title = "Evening run"; made.distanceMeters = 8_000
+        made.exercises[0].sets[0].type = .warmup
+        _ = try await store.applyCoachWrites([.workout(date: "2026-12-01", draft: made)], turnID: create.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let old = try #require(await store.snapshotForExport().workouts.first)
+        let turn = try await capturedTurn(store, text: "45 minutes", photos: [], at: now, expectedProfileID: profile.id)
+        _ = try await store.applyCoachWrites([.editWorkout(id: old.id, patch: WorkoutPatch(durationMinutes: 45), revision: 1)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        let saved = try await store.coachWorkout(id: old.id, expectedProfileID: profile.id)
+        #expect(saved.durationMinutes == 45); #expect(saved.durationSeconds == nil)
+        #expect(saved.title == "Evening run"); #expect(saved.distanceMeters == 8_000)
+        #expect(saved.exercises[0].sets[0].type == .warmup)
     }
     @Test func progressBatchRejectsDuplicatesStaleForeignAndCommitFailureWithoutMutation() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
@@ -603,7 +617,7 @@ import Testing
         let turn = try await capturedTurn(store, text: "Synthetic stale edit", photos: [], at: now, expectedProfileID: profile.id)
         let before = try await store.snapshotForExport()
         await #expect(throws: DiaryError.staleRevision) { try await store.applyCoachWrites([.workout(date: "2027-01-15", draft: strength), .correctWeight(id: weight.id, value: 71, unit: "kg", revision: 99)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
-        await #expect(throws: CoachError.invalidArguments) { try await store.applyCoachWrites([.editWorkout(id: workout.id, draft: strength, revision: 1), .deleteWorkout(id: workout.id, revision: 2)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
+        await #expect(throws: CoachError.invalidArguments) { try await store.applyCoachWrites([.editWorkout(id: workout.id, patch: WorkoutPatch(durationMinutes: strength.durationMinutes), revision: 1), .deleteWorkout(id: workout.id, revision: 2)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport() == before)
     }
     @Test func progressJSONDistinguishesUnknownFromCompleteZeroAndRoundTrips() async throws {

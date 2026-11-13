@@ -463,3 +463,17 @@ private actor ReturnedPhotoGate {
         #expect(Set(persistentCoach.exchanges.map(\.id)).union(persistentCoach.turns.map(\.id)).count == 100)
     }
 }
+
+extension CoachReceiptPresentationTests {
+    @MainActor @Test func workoutSummaryNamesWhatWasSaved() {
+        let bench = WorkoutExercise(name: "Barbell Bench Press", sets: Array(repeating: WorkoutSet(repetitions: 8, loadKg: 62.5, done: true), count: 3),
+                                    exerciseID: "barbell-bench-press", measure: .weightReps)
+        let dips = WorkoutExercise(name: "Dips", sets: [WorkoutSet(repetitions: 10, done: true), WorkoutSet(repetitions: 8, done: true)], measure: .reps)
+        let gym = WorkoutSession(dayID: UUID(), performedAt: Date(), timePrecision: .exact, revision: 1, kind: .strength, durationMinutes: 40,
+                                 exercises: [bench, dips], activity: "strength")
+        #expect(CoachReceiptPresentation.workoutLines(gym, unit: "kg") == ["Barbell Bench Press 3 × 8 · 62.5 kg", "Dips · 2 sets"])
+        let run = WorkoutSession(dayID: UUID(), performedAt: Date(), timePrecision: .exact, revision: 1, kind: .cardio, durationMinutes: 28,
+                                 exercises: [], activity: "run", durationSeconds: 1680)
+        #expect(CoachReceiptPresentation.workoutLines(run, unit: "kg") == ["Run · 28 min"])
+    }
+}

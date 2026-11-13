@@ -7,7 +7,7 @@ enum DiaryArchive {
     static let maximumBytes = 350_000_000
     private struct Envelope: Codable {
         var format = "mivu-diary"
-        var version = 4
+        var version = 5
         var profileID: UUID
         var snapshot: DiarySnapshot
     }
@@ -25,10 +25,10 @@ enum DiaryArchive {
         guard !data.isEmpty, data.count <= maximumBytes else { throw DiaryError.invalidData }
         do {
             let envelope = try JSONDecoder().decode(Envelope.self, from: data)
-            guard envelope.format == "mivu-diary", [1, 2, 3, 4].contains(envelope.version) else { throw DiaryError.invalidData }
+            guard envelope.format == "mivu-diary", [1, 2, 3, 4, 5].contains(envelope.version) else { throw DiaryError.invalidData }
             guard envelope.profileID == envelope.snapshot.profile.id,
                   expectedProfileID == nil || expectedProfileID == envelope.profileID else { throw DiaryError.wrongOwner }
-            guard envelope.version == 4 || envelope.snapshot.meals.allSatisfy({ $0.submissions.allSatisfy { $0.manualAcceptance == nil } }) else { throw DiaryError.invalidData }
+            guard envelope.version >= 4 || envelope.snapshot.meals.allSatisfy({ $0.submissions.allSatisfy { $0.manualAcceptance == nil } }) else { throw DiaryError.invalidData }
             try validate(envelope.snapshot)
             return envelope.snapshot
         } catch let error as DiaryError { throw error }
@@ -113,11 +113,13 @@ enum DiaryArchive {
               incoming == original || incoming.isVerifiedSuccessor(of: original),
               Set(incoming.meals.map(\.id)).isDisjoint(with: original.deletedMealIDs),
               Set(incoming.weights.map(\.id)).isDisjoint(with: original.deletedWeightIDs),
-              Set(incoming.workouts.map(\.id)).isDisjoint(with: original.deletedWorkoutIDs) else { throw DiaryError.staleArchive }
+              Set(incoming.workouts.map(\.id)).isDisjoint(with: original.deletedWorkoutIDs),
+              Set(incoming.routines.map(\.id)).isDisjoint(with: original.deletedRoutineIDs) else { throw DiaryError.staleArchive }
         var result = incoming
         result.deletedMealIDs = Array(Set(incoming.deletedMealIDs + original.deletedMealIDs)).sorted { $0.uuidString < $1.uuidString }
         result.deletedWeightIDs = Array(Set(incoming.deletedWeightIDs + original.deletedWeightIDs)).sorted { $0.uuidString < $1.uuidString }
         result.deletedWorkoutIDs = Array(Set(incoming.deletedWorkoutIDs + original.deletedWorkoutIDs)).sorted { $0.uuidString < $1.uuidString }
+        result.deletedRoutineIDs = Array(Set(incoming.deletedRoutineIDs + original.deletedRoutineIDs)).sorted { $0.uuidString < $1.uuidString }
         result.revision = max(incoming.revision, original.revision) + 1
         result.lineage = Array((incoming.lineage ?? []).suffix(255)) + [UUID()]
         return result
@@ -192,12 +194,13 @@ private extension DiaryDatabase {
             guard row.parent == value.dayID.uuidString else { throw DiaryError.invalidData }
             return value
         }
-        for (table, limit) in [("goal", 10_000), ("weight_tombstone", 10_000), ("workout_tombstone", 50_000)] {
+        for (table, limit) in [("goal", 10_000), ("weight_tombstone", 10_000), ("workout_tombstone", 50_000), ("routine", 1_000), ("routine_tombstone", 10_000)] {
             let count = try mutationInteger("SELECT COUNT(*) FROM \(table)")
             guard count <= limit,
                   try mutationInteger("SELECT COALESCE(SUM(length(payload)),0) FROM \(table)") <= maximumBytes else { throw DiaryError.invalidData }
         }
         snapshot.goals = try archiveRows("goal").map { try decode(GoalRecord.self, $0) }
+        snapshot.routines = try archiveRows("routine").map { try decode(WorkoutRoutine.self, $0) }
         func tombstones(_ table: String) throws -> [UUID] {
             try archiveRows(table).map { row in
                 let value = try JSONDecoder().decode(UUID.self, from: row.payload)
@@ -208,6 +211,7 @@ private extension DiaryDatabase {
         snapshot.deletedMealIDs = try tombstones("tombstone")
         snapshot.deletedWeightIDs = try tombstones("weight_tombstone")
         snapshot.deletedWorkoutIDs = try tombstones("workout_tombstone")
+        snapshot.deletedRoutineIDs = try tombstones("routine_tombstone")
         let coachPhotos = try archiveRows("coach_photo")
         let groupedCoachPhotos = Dictionary(grouping: coachPhotos, by: \.parent)
         let turns = try archiveRows("coach_turn", sequenceOrder: true)

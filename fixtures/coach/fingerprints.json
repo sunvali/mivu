@@ -38,7 +38,7 @@
     },
     {
       "arguments" : "{\"workout_id\":\"00000000-0000-0000-0000-000000000090\",\"expected_revision\":2,\"kind\":\"cardio\",\"duration_minutes\":30,\"exercises\":[],\"estimated_burn_kcal\":null,\"burn_source\":null,\"performed_at\":null}",
-      "fingerprint" : "64fcb9e9ce16e2b5a6466cd7c90e8f8b0a0afc998109d90321335df10cf78b56",
+      "fingerprint" : "cf2a3e495970e87601ad4dc279682545a29b75d03cf93ac5abf33aae07a55840",
       "target" : "edit_workout/00000000-0000-0000-0000-000000000090",
       "tool" : "edit_workout"
     },
@@ -53,6 +53,12 @@
       "fingerprint" : "697c5f654f6444efcdba15567a8fb5178ca6fb84717a3d1f162afcf398ad389a",
       "target" : "delete_workout/00000000-0000-0000-0000-000000000090",
       "tool" : "delete_workout"
+    },
+    {
+      "arguments" : "{\"workout_id\":\"00000000-0000-0000-0000-000000000090\",\"expected_revision\":2}",
+      "fingerprint" : "bfa0ff75cb983c21af53b9695cdcc6142f4beaf07b4029bddeae961f1ebb2855",
+      "target" : "continue_workout/00000000-0000-0000-0000-000000000090",
+      "tool" : "continue_workout"
     },
     {
       "arguments" : "{\"meal_id\":\"00000000-0000-0000-0000-000000000020\",\"expected_revision\":3,\"item_id\":\"00000000-0000-0000-0000-000000000041\",\"review_submission_id\":null,\"name\":\"Synthetic oats/bran\",\"quantity\":null,\"unit\":null,\"nutrients\":[{\"nutrient\":\"protein\",\"value\":6.5},{\"nutrient\":\"kcal\",\"value\":null}]}",

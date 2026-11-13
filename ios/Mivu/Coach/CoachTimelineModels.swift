@@ -40,6 +40,12 @@ struct CoachCommittedReceipt: Codable, Equatable, Sendable {
     var weightUnit: String? = nil
     var workoutKind: String? = nil
     var workoutMinutes: Int? = nil
+    /// The running workout's name when Coach added sets to it.
+    var workoutAddedTo: String? = nil
+    var workoutNewBest: Bool? = nil
+    var workoutNewExercises: [String]? = nil
+    var routineID: UUID? = nil
+    var routineName: String? = nil
 }
 
 /// Companion status reads index metadata without decoding an exchange or its receipts.

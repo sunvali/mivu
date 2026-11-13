@@ -36,6 +36,10 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private let preferences: UserDefaults?
     let backup: FolderBackup?
     private(set) var readModel: DiaryReadModel?
+    /// The running live workout; refreshed with `readModel` on every change.
+    var activeWorkout: WorkoutSession? { readModel?.activeWorkout }
+    /// Shown on the gym screen when a start opened the workout already running instead of a new one.
+    var workoutNotice: String?
     private(set) var selection: DiarySelectionOwnership?
     private(set) var workStatus = CoachWorkStatus()
     private(set) var photoLoader: DiaryPhotoLoader?
@@ -69,6 +73,10 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var companionCaptureEvent: CompanionEvent?
     private(set) var companionReviewEvent: CompanionEvent?
     private(set) var companionHabitEvent: CompanionEvent?
+    private(set) var companionWorkoutEvent: CompanionEvent?
+    /// A workout just deleted from its detail, while its Undo shows; only its owner can bring it back.
+    struct DeletedWorkout: Equatable { let session: WorkoutSession; let owner: UUID }
+    var deletedWorkout: DeletedWorkout?
     private var companionReviewSubmissions: [UUID: Set<UUID>] = [:]
     var restoreGeneration = 0
     var backupStatus = FolderBackupStatus()
@@ -186,7 +194,14 @@ enum DiaryCaptureResult: Equatable, Sendable {
             if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 try await install(try await profileSelection(profile.id))
             } else if createDefaultProfile {
-                try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
+                var created = try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier))
+                #if DEBUG
+                if CoachWorkoutUITestFixture.isEnabled {
+                    try await CoachWorkoutUITestFixture.seed(store, profile: created.head.profile)
+                    created = try await profileSelection(created.head.profile.id)
+                }
+                #endif
+                try await install(created)
                 profiles = try await store.profiles()
             }
         } catch { await recoverProfileSelection(previous); presentUnlessLocked(error) }
@@ -267,6 +282,35 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard let token = selection else { return false }
         let saved = await change { _ = try await store.recordWeight(value: (kg * 10).rounded() / 10, startNewDay: false, expectedProfileID: token.identity.profileID) }
         if saved { companionHabitEvent = CompanionEvent(profileID: token.identity.profileID, operationID: UUID(), kind: .saved, committedAt: Date()) }
+        return saved
+    }
+    /// Pip's workout moment. Callers report a workout only once it is durably saved; an active one, or one saved for a
+    /// profile that is no longer selected, never signals.
+    func noteWorkoutSaved(_ workout: WorkoutSession, owner: UUID) {
+        guard workout.isFinished, selection?.identity.profileID == owner else { return }
+        companionWorkoutEvent = CompanionEvent(profileID: owner, operationID: workout.id,
+                                               kind: .workoutSaved(activity: workout.activity ?? workout.kind.rawValue), committedAt: Date())
+    }
+    /// Brings the deleted workout back. Undo stays offered until the restore itself is saved; after that a failed
+    /// refresh cannot make a second tap restore it twice.
+    func undoWorkoutDeletion() async {
+        guard let deleted = deletedWorkout, selection?.identity.profileID == deleted.owner, !restoringWorkout else { return }
+        restoringWorkout = true; defer { restoringWorkout = false }
+        await change {
+            _ = try await store.restoreWorkout(deleted.session, expectedProfileID: deleted.owner)
+            if deletedWorkout == deleted { deletedWorkout = nil }
+        }
+    }
+    private var restoringWorkout = false
+    /// The banner's Finish for a forgotten workout: it ends at its last change, and Pip plays the finish.
+    @discardableResult func finishStaleWorkout(_ session: WorkoutSession) async -> Bool {
+        guard let owner = selection?.identity.profileID else { return false }
+        var finished: WorkoutSession?
+        let saved = await change {
+            finished = try await store.finishWorkout(id: session.id, effort: nil, at: session.staleFinishDate,
+                                                     expectedRevision: session.revision, expectedProfileID: owner)
+        }
+        if saved, let finished { noteWorkoutSaved(finished, owner: owner) }
         return saved
     }
     @discardableResult func change(_ operation: () async throws -> Void) async -> Bool {

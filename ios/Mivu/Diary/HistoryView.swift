@@ -3,6 +3,8 @@ import SwiftUI
 /// Diary tab: a week strip above the selected day's summary and meals.
 struct HistoryView: View {
     @Bindable var model: DiaryViewModel
+    /// Opens the gym screen, which the root shows over every tab.
+    var openWorkout: (WorkoutSession) -> Void = { _ in }
     @Environment(\.openDiaryCoach) private var openChat
     @State private var selected = ""
     @State private var week: DiaryWeekPage?
@@ -137,9 +139,13 @@ struct HistoryView: View {
             }
         }
         .sheet(isPresented: $showWeight) { if let day = recordedDay { MorningWeightEditorView(model: model, dayID: day.id) } }
-        .sheet(isPresented: $showWorkout) {
-            if let day = recordedDay { WorkoutEditorView(model: model, localDate: day.localDate, dayID: day.id) }
-        }
+        .modifier(StartWorkoutFlow(model: model, isPresented: $showWorkout, initialStart: workoutStart, openWorkout: openWorkout))
+    }
+
+    /// A workout added to an earlier day starts at its noon; the open day's starts now.
+    private var workoutStart: Date? {
+        guard let day = recordedDay, day.id != model.activeDay?.id, day.localDate != calendarToday, let noon = try? diaryDateOnlyInstant(day.localDate, zone: zone), noon < Date() else { return nil }
+        return noon
     }
 
     private func askPipAction() {
@@ -192,7 +198,7 @@ struct HistoryView: View {
 }
 
 /// Summary, meals and workouts of one recorded day.
-private struct DaySections: View {
+struct DaySections: View {
     @Bindable var model: DiaryViewModel
     let dayID: UUID
     let title: String
@@ -213,15 +219,13 @@ private struct DaySections: View {
                             .diarySummaryCard()
                     }
                 } header: { DiarySectionHeader(title: "Meals") }
-                let workouts = snapshot.workouts.filter { $0.dayID == dayID }.sorted { $0.performedAt < $1.performedAt }
+                let workouts = snapshot.workouts.filter { $0.dayID == dayID && $0.isFinished }.sorted { $0.performedAt < $1.performedAt }
                 if !workouts.isEmpty {
                     Section {
                         ForEach(workouts) { workout in
-                            NavigationLink { WorkoutDetailView(model: model, sessionID: workout.id) } label: {
-                                Label { LabeledContent("Workout", value: "\(workout.durationMinutes) minutes") } icon: {
-                                    Image(systemName: "figure.strengthtraining.traditional").foregroundStyle(Color.diaryWorkout)
-                                }.frame(minHeight: 44)
-                            }.diarySummaryCard()
+                            NavigationLink { WorkoutDetailView(model: model, sessionID: workout.id) } label: { WorkoutRow(session: workout) }
+                                .diarySummaryCard()
+                                .accessibilityIdentifier("workoutRow")
                         }
                     } header: { DiarySectionHeader(title: "Workouts") }
                 }
@@ -257,11 +261,15 @@ private struct DaySections: View {
         }
     }
 
-    private func coverage(_ snapshot: DiaryDayReadModel) -> some View {
-        let status = ProgressAnalytics.status(days: [snapshot.day], hasFood: snapshot.meals.contains(where: \.isSaved), activeDayID: snapshot.head.activeDayID) ?? .open
-        return DayStatusChip(status: status, isMarkedSkipped: snapshot.day.completeness == .untracked) { skip in
+    /// A day with only workouts has no food status, so it gets no chip.
+    @ViewBuilder private func coverage(_ snapshot: DiaryDayReadModel) -> some View {
+        if let status = Self.foodStatus(snapshot) { DayStatusChip(status: status, isMarkedSkipped: snapshot.day.completeness == .untracked) { skip in
             // Counting again stores `unknown`, which reads as open or closed like any unmarked day.
             Task { await model.change { try await model.store.setCompleteness(dayID: dayID, skip ? .untracked : .unknown, expectedProfileID: snapshot.head.profile.id) } }
-        }
+        } }
+    }
+
+    static func foodStatus(_ snapshot: DiaryDayReadModel) -> DayStatus? {
+        ProgressAnalytics.status(days: [snapshot.day], hasFood: snapshot.meals.contains(where: \.isSaved), hasWorkouts: snapshot.workouts.contains(where: \.isFinished), activeDayID: snapshot.head.activeDayID)
     }
 }

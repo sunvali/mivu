@@ -340,7 +340,7 @@ final class DiaryTransaction {
             let count = try database.mutationInteger("SELECT rowCount FROM storage_row_count WHERE tableName = ?", [.text(table)])
             let limits = ["meta": 1, "day": 10_000, "meal": 50_000, "submission": 50_000_000, "item": 10_000_000,
                 "photo": 1_500_000, "weight": 10_000, "workout": 50_000, "tombstone": 50_000,
-                "coach_turn": 10_000, "coach_photo": 300_000, "goal": 10_000, "weight_tombstone": 10_000, "workout_tombstone": 50_000]
+                "coach_turn": 10_000, "coach_photo": 300_000, "goal": 10_000, "weight_tombstone": 10_000, "workout_tombstone": 50_000, "routine": 1_000, "routine_tombstone": 10_000]
             guard let limit = limits[table], count < limit else { throw DiaryError.invalidData }
             if table != "meta" {
                 let siblings = try parentID.map { parent in
@@ -378,6 +378,10 @@ final class DiaryTransaction {
         changed = true
     }
 
+    func refreshMetaContribution() throws {
+        try contribution(table: "meta", rowID: head.profile.id.uuidString, encodedBytes: JSONEncoder().encode(PortableMetadata(head)).count)
+    }
+
     func finish(maximumBytes: Int) throws {
         guard changed || head != originalHead else { return }
         guard head.profile.id == originalHead.profile.id, head.timelineGeneration == originalHead.timelineGeneration,
@@ -396,7 +400,7 @@ final class DiaryTransaction {
              head.activeDayID.map { .text($0.uuidString) } ?? .null, head.previousDayConfirmedAt.map { .real($0.timeIntervalSinceReferenceDate) } ?? .null,
              head.activeConversationSegmentID.map { .text($0.uuidString) } ?? .null, .integer(previousRevision)])
         guard sqlite3_changes(database.connection) == 1 else { throw DiaryError.staleRevision }
-        try contribution(table: "meta", rowID: head.profile.id.uuidString, encodedBytes: JSONEncoder().encode(PortableMetadata(head)).count)
+        try refreshMetaContribution()
         guard maximumBytes > 0,
               try database.mutationInteger("SELECT portableBytes FROM storage_quota WHERE id = 1") <= maximumBytes,
               try database.mutationInteger("SELECT originalPhotoBytes FROM storage_quota WHERE id = 1") <= 250_000_000 else { throw DiaryError.invalidData }
@@ -418,6 +422,8 @@ final class DiaryTransaction {
         var deletedMealIDs: [UUID] = []
         var deletedWeightIDs: [UUID] = []
         var deletedWorkoutIDs: [UUID] = []
+        var routines: [WorkoutRoutine] = []
+        var deletedRoutineIDs: [UUID] = []
         var lineage: [UUID]?
         var activeConversationSegmentID: UUID?
         init(_ head: DiaryHead) {

@@ -66,15 +66,16 @@ extension DiaryDatabase {
         guard ["goal", "weight", "workout"].contains(table) else { throw DiaryError.invalidData }
         return try domainRead(expectedProfileID: expectedProfileID) { _ in
             let key = table == "goal" ? "effectiveLocalDate" : "json_extract(CAST(payload AS TEXT), '$.\(table == "weight" ? "measuredAt" : "performedAt")')"
-            var values: [DiaryDatabase.Value] = [], clause = ""
+            var values: [DiaryDatabase.Value] = [], conditions = table == "workout" ? ["json_extract(CAST(payload AS TEXT), '$.state') IS NOT 'active'"] : []
             if let before {
                 let cursor = try domainStatement("SELECT id, \(key) FROM \(table) WHERE ordinal = ? LIMIT 1", [.integer(before)])
                 defer { sqlite3_finalize(cursor) }
                 guard try mutationStep(cursor) else { throw DiaryError.notFound }
                 let position: DiaryDatabase.Value = try table == "goal" ? .text(mutationText(cursor, 1)) : .real(sqlite3_column_double(cursor, 1))
                 values = [position, .integer(before), .text(try mutationText(cursor, 0))]
-                clause = "WHERE (\(key), ordinal, id) < (?, ?, ?)"
+                conditions.append("(\(key), ordinal, id) < (?, ?, ?)")
             }
+            let clause = conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ")
             let query = try domainStatement("SELECT id, ordinal, payload FROM \(table) \(clause) ORDER BY \(key) DESC, ordinal DESC, id DESC LIMIT 31", values)
             defer { sqlite3_finalize(query) }; var rows: [Record] = []
             while try mutationStep(query) { rows.append(Record(id: try mutationText(query, 0), ordinal: Int(sqlite3_column_int64(query, 1)), payload: try mutationBlob(query, 2))) }

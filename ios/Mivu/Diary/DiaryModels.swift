@@ -31,7 +31,7 @@ enum SubmissionState: String, Codable, Sendable { case captured, waitingForConne
 enum DayAssignment: Equatable, Sendable { case existing(UUID), newDay }
 
 enum DiaryError: Error, Equatable, LocalizedError {
-    case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, undoExpired, notFound, emptyCapture, ambiguousDay, staleArchive
+    case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, undoExpired, notFound, emptyCapture, ambiguousDay, staleArchive, conflict
     var errorDescription: String? {
         switch self {
         case .noProfile: "Choose a local profile first."
@@ -45,6 +45,7 @@ enum DiaryError: Error, Equatable, LocalizedError {
         case .emptyCapture: "Add a photo or a meal description."
         case .ambiguousDay: "Your day just changed. Save again to add this to the new day."
         case .staleArchive: "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover."
+        case .conflict: "A workout is already running. Finish or discard it first."
         }
     }
 }
@@ -166,20 +167,64 @@ struct GoalRecord: Codable, Equatable, Sendable, Identifiable {
     var revision = 1
     var targets: NutritionValues
     var goalWeightKg: Double?
-    var exerciseCreditEnabled: Bool
+    /// Share of estimated workout burn added back to the food budget: 0, 50 or 100.
+    var exerciseCreditPercent: Int
+}
+
+extension GoalRecord {
+    /// Settings › Workouts with no goal yet: the burn choice waits under this key (per profile) for the first goal.
+    /// The callers that create goals (goal editor, onboarding, Coach) apply it when nothing else chose; the store never reads it.
+    static func pendingCreditKey(_ profileID: UUID) -> String { "workoutCreditPending-" + profileID.uuidString }
+
+    static func waitingCredit(_ profileID: UUID) -> Int? {
+        (UserDefaults.standard.object(forKey: pendingCreditKey(profileID)) as? Int).flatMap { [0, 50, 100].contains($0) ? $0 : nil }
+    }
+
+    static func clearWaitingCredit(_ profileID: UUID) { UserDefaults.standard.removeObject(forKey: pendingCreditKey(profileID)) }
+
+    enum CodingKeys: String, CodingKey { case id, effectiveLocalDate, timeZoneID, revision, targets, goalWeightKg, exerciseCreditPercent }
+    private enum LegacyKeys: String, CodingKey { case exerciseCreditEnabled }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        effectiveLocalDate = try c.decode(String.self, forKey: .effectiveLocalDate)
+        timeZoneID = try c.decode(String.self, forKey: .timeZoneID)
+        revision = try c.decode(Int.self, forKey: .revision)
+        targets = try c.decode(NutritionValues.self, forKey: .targets)
+        goalWeightKg = try c.decodeIfPresent(Double.self, forKey: .goalWeightKg)
+        // Archives before the percent choice stored an on/off switch.
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self).decodeIfPresent(Bool.self, forKey: .exerciseCreditEnabled)
+        exerciseCreditPercent = try c.decodeIfPresent(Int.self, forKey: .exerciseCreditPercent) ?? (legacy == true ? 100 : 0)
+    }
 }
 
 enum WorkoutKind: String, Codable, Sendable { case strength, cardio, other }
 enum WorkoutBurnSource: String, Codable, Sendable { case userEstimate, modelEstimate }
 
+enum WorkoutState: String, Codable, Sendable { case active, finished }
+enum WorkoutSource: String, Codable, Sendable { case manual, coach, live, importStrong = "import.strong", importHevy = "import.hevy" }
+enum WorkoutSetType: String, Codable, Sendable { case normal, warmup, drop, failure }
+enum ExerciseMeasure: String, Codable, Sendable { case weightReps, reps, time, distanceTime }
+
 struct WorkoutSet: Codable, Equatable, Sendable {
     var repetitions: Int
     var loadKg: Double?
+    var type: WorkoutSetType?
+    var effort: Int?
+    var seconds: Int?
+    var distanceMeters: Double?
+    var done: Bool?
 }
 
 struct WorkoutExercise: Codable, Equatable, Sendable {
     var name: String
     var sets: [WorkoutSet]
+    var exerciseID: String?
+    var measure: ExerciseMeasure?
+    var groupID: UUID?
+    var restSeconds: Int?
+    var note: String?
 }
 
 struct WorkoutDraft: Equatable, Sendable {
@@ -188,6 +233,18 @@ struct WorkoutDraft: Equatable, Sendable {
     var exercises: [WorkoutExercise]
     var estimatedBurnKcal: Double?
     var burnSource: WorkoutBurnSource?
+    var title: String?
+    var activity: String?
+    var state: WorkoutState?
+    var durationSeconds: Int?
+    var distanceMeters: Double?
+    var avgHeartRate: Int?
+    var effort: Int?
+    var indoor: Bool?
+    var note: String?
+    var routineID: UUID?
+    var source: WorkoutSource?
+    var externalID: String?
 }
 
 struct WorkoutSession: Codable, Equatable, Sendable, Identifiable {
@@ -201,6 +258,91 @@ struct WorkoutSession: Codable, Equatable, Sendable, Identifiable {
     var exercises: [WorkoutExercise]
     var estimatedBurnKcal: Double?
     var burnSource: WorkoutBurnSource?
+    var title: String?
+    var activity: String?
+    var state: WorkoutState?
+    var durationSeconds: Int?
+    var distanceMeters: Double?
+    var avgHeartRate: Int?
+    var effort: Int?
+    var indoor: Bool?
+    var note: String?
+    var routineID: UUID?
+    var source: WorkoutSource?
+    var externalID: String?
+    /// Last live-workout save; nil means unchanged since `performedAt`.
+    var updatedAt: Date?
+    /// When a finished workout went back to live; its recorded time carries on from here.
+    var resumedAt: Date?
+}
+
+extension WorkoutSession {
+    /// Records saved before live workouts have no state and count as finished.
+    var isFinished: Bool { state != .active }
+
+    /// Where the live clock counts from: the start, or for a continued workout a point that leaves out the break.
+    var clockStart: Date { resumedAt.map { $0.addingTimeInterval(-Double(durationSeconds ?? durationMinutes * 60)) } ?? performedAt }
+
+    /// A running workout untouched for 12 hours; the banner then asks to finish or discard.
+    func isStale(now: Date) -> Bool { now.timeIntervalSince(max(performedAt, updatedAt ?? performedAt)) >= 12 * 3_600 }
+
+    /// Finishing a forgotten workout ends it at its last change, so it never records a day-long session or burn.
+    var staleFinishDate: Date { updatedAt ?? performedAt }
+
+    var hasTickedSets: Bool { exercises.contains { $0.sets.contains { $0.done == true } } }
+
+    /// The exercises of this one's superset (neighbours sharing its group), or just itself.
+    static func block(of index: Int, in exercises: [WorkoutExercise]) -> Range<Int> {
+        guard let group = exercises[index].groupID else { return index..<index + 1 }
+        var lower = index, upper = index + 1
+        while lower > 0, exercises[lower - 1].groupID == group { lower -= 1 }
+        while upper < exercises.count, exercises[upper].groupID == group { upper += 1 }
+        return lower..<upper
+    }
+
+    /// Every set in lifting order: a superset round by round, other exercises set by set.
+    var liftingOrder: [(exercise: Int, set: Int)] {
+        var order: [(exercise: Int, set: Int)] = [], index = 0
+        while index < exercises.count {
+            let block = Self.block(of: index, in: exercises)
+            for round in 0..<(block.map { exercises[$0].sets.count }.max() ?? 0) {
+                for member in block where exercises[member].sets.indices.contains(round) { order.append((member, round)) }
+            }
+            index = block.upperBound
+        }
+        return order
+    }
+
+    /// The first set not yet ticked, in lifting order: its exercise and set number.
+    var nextSet: (name: String, set: Int)? {
+        liftingOrder.first { exercises[$0.exercise].sets[$0.set].done != true }.map { (exercises[$0.exercise].name, $0.set + 1) }
+    }
+
+    /// "Bench press · set 3": the banner, lock screen and rest notification all name the next set this way.
+    static func setLabel(name: String, set: Int) -> String { "\(name) · set \(set)" }
+
+    var nextSetLabel: String? { nextSet.map { Self.setLabel(name: $0.name, set: $0.set) } }
+
+    /// Copies a draft onto this record; fields the draft leaves unset keep their current value.
+    mutating func apply(_ draft: WorkoutDraft) {
+        // Minutes edited without seconds: drop the stale seconds so the new minutes win.
+        if draft.durationSeconds == nil, draft.durationMinutes != durationMinutes { durationSeconds = nil }
+        kind = draft.kind; durationMinutes = draft.durationMinutes; exercises = draft.exercises
+        estimatedBurnKcal = draft.estimatedBurnKcal; burnSource = draft.burnSource
+        // An empty title or note clears it, so a Coach edit can remove one.
+        title = draft.title.map { $0.isEmpty ? nil : $0 } ?? title; activity = draft.activity ?? activity; state = draft.state ?? state
+        durationSeconds = draft.durationSeconds ?? durationSeconds; distanceMeters = draft.distanceMeters ?? distanceMeters
+        avgHeartRate = draft.avgHeartRate ?? avgHeartRate; effort = draft.effort ?? effort; indoor = draft.indoor ?? indoor
+        note = draft.note.map { $0.isEmpty ? nil : $0 } ?? note; routineID = draft.routineID ?? routineID; source = draft.source ?? source
+        externalID = draft.externalID ?? externalID
+    }
+
+    /// `durationSeconds` is the truth for new rows; minutes stay in sync for older readers.
+    var syncedMinutes: WorkoutSession {
+        var copy = self
+        if let seconds = durationSeconds { copy.durationMinutes = max(1, Int((Double(seconds) / 60).rounded())) }
+        return copy
+    }
 }
 
 struct AnalysisInput: Codable, Equatable, Sendable {
@@ -240,15 +382,17 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     var deletedMealIDs: [UUID] = []
     var deletedWeightIDs: [UUID] = []
     var deletedWorkoutIDs: [UUID] = []
+    var routines: [WorkoutRoutine] = []
+    var deletedRoutineIDs: [UUID] = []
     var lineage: [UUID]? = nil
     var activeConversationSegmentID: UUID? = nil
-    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, goals, workouts, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, deletedWeightIDs, deletedWorkoutIDs, lineage, activeConversationSegmentID }
-    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], goals: [GoalRecord] = [], workouts: [WorkoutSession] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], deletedWeightIDs: [UUID] = [], deletedWorkoutIDs: [UUID] = [], lineage: [UUID]? = nil, activeConversationSegmentID: UUID? = nil) {
+    enum CodingKeys: String, CodingKey { case schemaVersion, revision, profile, days, meals, weights, goals, workouts, coachTurns, activeDayID, previousDayConfirmedAt, deletedMealIDs, deletedWeightIDs, deletedWorkoutIDs, routines, deletedRoutineIDs, lineage, activeConversationSegmentID }
+    init(schemaVersion: Int = 1, revision: Int = 0, profile: DiaryProfile, days: [TrackingDay] = [], meals: [DiaryMeal] = [], weights: [WeightEntry] = [], goals: [GoalRecord] = [], workouts: [WorkoutSession] = [], coachTurns: [CoachTurn] = [], activeDayID: UUID? = nil, previousDayConfirmedAt: Date? = nil, deletedMealIDs: [UUID] = [], deletedWeightIDs: [UUID] = [], deletedWorkoutIDs: [UUID] = [], routines: [WorkoutRoutine] = [], deletedRoutineIDs: [UUID] = [], lineage: [UUID]? = nil, activeConversationSegmentID: UUID? = nil) {
         self.schemaVersion = schemaVersion; self.revision = revision; self.profile = profile
         self.days = days; self.meals = meals; self.weights = weights; self.goals = goals; self.workouts = workouts; self.coachTurns = coachTurns
         self.activeDayID = activeDayID; self.previousDayConfirmedAt = previousDayConfirmedAt
         self.deletedMealIDs = deletedMealIDs; self.deletedWeightIDs = deletedWeightIDs
-        self.deletedWorkoutIDs = deletedWorkoutIDs; self.lineage = lineage
+        self.deletedWorkoutIDs = deletedWorkoutIDs; self.routines = routines; self.deletedRoutineIDs = deletedRoutineIDs; self.lineage = lineage
         self.activeConversationSegmentID = activeConversationSegmentID
     }
     init(from decoder: Decoder) throws {
@@ -267,6 +411,8 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
         deletedMealIDs = try c.decode([UUID].self, forKey: .deletedMealIDs)
         deletedWeightIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedWeightIDs) ?? []
         deletedWorkoutIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedWorkoutIDs) ?? []
+        routines = try c.decodeIfPresent([WorkoutRoutine].self, forKey: .routines) ?? []
+        deletedRoutineIDs = try c.decodeIfPresent([UUID].self, forKey: .deletedRoutineIDs) ?? []
         lineage = try c.decodeIfPresent([UUID].self, forKey: .lineage)
         activeConversationSegmentID = try c.decodeIfPresent(UUID.self, forKey: .activeConversationSegmentID)
     }
@@ -292,7 +438,7 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
     func validate() throws {
         try validateDiaryMetadataFields(schemaVersion: schemaVersion, revision: revision, profile: profile,
             lineage: lineage, previousDayConfirmedAt: previousDayConfirmedAt)
-        try validateDiaryMetadataCollections(goals: goals, deletedWeightIDs: deletedWeightIDs, deletedWorkoutIDs: deletedWorkoutIDs)
+        try validateDiaryMetadataCollections(goals: goals, deletedWeightIDs: deletedWeightIDs, deletedWorkoutIDs: deletedWorkoutIDs, routines: routines, deletedRoutineIDs: deletedRoutineIDs)
         let linkedWeightDayIDs = weights.compactMap(\.dayID)
         guard days.count <= 10_000, meals.count <= 50_000, weights.count <= 10_000, workouts.count <= 50_000,
               deletedMealIDs.count <= 50_000,
@@ -301,7 +447,8 @@ struct DiarySnapshot: Codable, Equatable, Sendable {
               activeDayID == nil || days.contains(where: { $0.id == activeDayID }),
               Set(meals.map(\.id)).isDisjoint(with: deletedMealIDs),
               Set(weights.map(\.id)).isDisjoint(with: deletedWeightIDs),
-              Set(workouts.map(\.id)).isDisjoint(with: deletedWorkoutIDs) else { throw DiaryError.invalidData }
+              Set(workouts.map(\.id)).isDisjoint(with: deletedWorkoutIDs),
+              Set(routines.map(\.id)).isDisjoint(with: deletedRoutineIDs) else { throw DiaryError.invalidData }
         var photoBytes = 0
         var submissionIDs = Set<UUID>()
         for day in days { try validateTrackingDayFields(day) }
@@ -413,12 +560,16 @@ private func validAbout(_ about: ProfileAbout) -> Bool {
         && about.dietTags.count <= 32 && about.dietTags.allSatisfy { !$0.isEmpty && $0.count <= 60 } && about.healthNotes.count <= 2_000
 }
 
-func validateDiaryMetadataCollections(goals: [GoalRecord], deletedWeightIDs: [UUID], deletedWorkoutIDs: [UUID]) throws {
+func validateDiaryMetadataCollections(goals: [GoalRecord], deletedWeightIDs: [UUID], deletedWorkoutIDs: [UUID],
+                                      routines: [WorkoutRoutine], deletedRoutineIDs: [UUID]) throws {
     guard goals.count <= 10_000, unique(goals.map(\.id)),
           Set(goals.map(\.effectiveLocalDate)).count == goals.count,
           deletedWeightIDs.count <= 10_000, unique(deletedWeightIDs),
-          deletedWorkoutIDs.count <= 50_000, unique(deletedWorkoutIDs) else { throw DiaryError.invalidData }
+          deletedWorkoutIDs.count <= 50_000, unique(deletedWorkoutIDs),
+          routines.count <= 1_000, unique(routines.map(\.id)),
+          deletedRoutineIDs.count <= 10_000, unique(deletedRoutineIDs) else { throw DiaryError.invalidData }
     for goal in goals { try validateGoalFields(goal) }
+    for routine in routines { try validateRoutineFields(routine) }
 }
 
 func validateTrackingDayFields(_ day: TrackingDay) throws {
@@ -470,7 +621,7 @@ func validateCoachReceiptFields(_ receipt: CoachReceipt, turnID: UUID, revision:
     }
     guard receipt.turnID == turnID, receipt.operationKey.utf8.count <= 500, !receipt.operationKey.isEmpty,
           receipt.committedRevision > 0, receipt.committedRevision <= revision, receipt.resultJSON.utf8.count <= 65_536,
-          receipt.dayID != nil || receipt.goalID != nil || receipt.destination != nil ||
+          receipt.dayID != nil || receipt.goalID != nil || receipt.destination != nil || receipt.routineID != nil ||
             receipt.operationKey == "\(turnID.uuidString)/update_preferences" || receipt.operationKey.hasPrefix("\(turnID.uuidString)/update_preferences/"),
           let data = receipt.resultJSON.data(using: .utf8),
           (try? JSONSerialization.jsonObject(with: data)) != nil else { throw DiaryError.invalidData }
@@ -483,21 +634,32 @@ func validateWeightFields(_ weight: WeightEntry) throws {
 
 func validateGoalFields(_ goal: GoalRecord) throws {
     guard validLocalDate(goal.effectiveLocalDate), TimeZone(identifier: goal.timeZoneID) != nil,
-          goal.revision > 0, goal.revision < 1_000_000,
+          goal.revision > 0, goal.revision < 1_000_000, [0, 50, 100].contains(goal.exerciseCreditPercent),
           [goal.targets.kcal, goal.targets.carbs, goal.targets.protein, goal.targets.fat, goal.goalWeightKg]
             .allSatisfy({ $0 == nil || ($0!.isFinite && $0! > 0 && $0! <= 10_000_000) }) else { throw DiaryError.invalidData }
 }
 
 func validateWorkoutFields(_ workout: WorkoutSession) throws {
-    guard workout.performedAt.timeIntervalSince1970.isFinite, workout.revision > 0, workout.revision < 1_000_000,
-          (1...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
+    guard workout.performedAt.timeIntervalSince1970.isFinite, workout.updatedAt?.timeIntervalSince1970.isFinite != false, workout.resumedAt?.timeIntervalSince1970.isFinite != false, workout.revision > 0, workout.revision < 1_000_000,
+          ((workout.state == .active ? 0 : 1)...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
+          (workout.title?.count ?? 0) <= 200, (workout.activity?.count ?? 0) <= 200, (workout.externalID?.count ?? 0) <= 200, (workout.note?.count ?? 0) <= 2_000,
+          workout.effort == nil || (1...10).contains(workout.effort!), workout.avgHeartRate == nil || (20...250).contains(workout.avgHeartRate!),
+          workout.durationSeconds == nil || (1...86_400).contains(workout.durationSeconds!),
+          workout.distanceMeters == nil || (workout.distanceMeters!.isFinite && (0...1_000_000).contains(workout.distanceMeters!)),
           workout.estimatedBurnKcal == nil || (workout.estimatedBurnKcal!.isFinite && workout.estimatedBurnKcal! >= 0 && workout.estimatedBurnKcal! <= 100_000),
           workout.burnSource == nil || workout.estimatedBurnKcal != nil else { throw DiaryError.invalidData }
-    for exercise in workout.exercises {
+    try validateWorkoutExercises(workout.exercises)
+}
+
+func validateWorkoutExercises(_ exercises: [WorkoutExercise]) throws {
+    for exercise in exercises {
         guard !exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              exercise.name.count <= 200, exercise.sets.count <= 100 else { throw DiaryError.invalidData }
+              exercise.name.count <= 200, exercise.sets.count <= 100, (exercise.exerciseID?.count ?? 0) <= 200,
+              (exercise.note?.count ?? 0) <= 2_000, exercise.restSeconds == nil || (0...86_400).contains(exercise.restSeconds!) else { throw DiaryError.invalidData }
         for set in exercise.sets {
-            guard (1...10_000).contains(set.repetitions),
+            guard ((set.seconds != nil || set.distanceMeters != nil ? 0 : 1)...10_000).contains(set.repetitions),
+                  set.effort == nil || (1...10).contains(set.effort!), set.seconds == nil || (0...86_400).contains(set.seconds!),
+                  set.distanceMeters == nil || (set.distanceMeters!.isFinite && (0...1_000_000).contains(set.distanceMeters!)),
                   set.loadKg == nil || (set.loadKg!.isFinite && set.loadKg! >= 0 && set.loadKg! <= 100_000) else { throw DiaryError.invalidData }
         }
     }

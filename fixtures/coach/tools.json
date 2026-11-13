@@ -83,24 +83,6 @@
       "type" : "function"
     },
     {
-      "description" : "Read a complete owned workout before replacement/edit. Oversized records are refused; never replace unseen sets.",
-      "name" : "get_workout",
-      "parameters" : {
-        "additionalProperties" : false,
-        "properties" : {
-          "workout_id" : {
-            "type" : "string"
-          }
-        },
-        "required" : [
-          "workout_id"
-        ],
-        "type" : "object"
-      },
-      "strict" : true,
-      "type" : "function"
-    },
-    {
       "description" : "Log one weight per date. Corrections require expected_revision; historical correction after travel must use retrieved weight_id, preserving day and measured time. Model measured_at cannot confirm exact time. Current morning weight explicitly starts that waking day.",
       "name" : "log_weight",
       "parameters" : {
@@ -146,204 +128,6 @@
           "unit",
           "value",
           "weight_id"
-        ],
-        "type" : "object"
-      },
-      "strict" : true,
-      "type" : "function"
-    },
-    {
-      "description" : "Log one new session per turn/date; another session needs another turn. Timestamps are unconfirmed date-only. Estimated burn stays separate from food.",
-      "name" : "log_workout",
-      "parameters" : {
-        "additionalProperties" : false,
-        "properties" : {
-          "burn_source" : {
-            "enum" : [
-              "userEstimate",
-              "modelEstimate",
-              null
-            ],
-            "type" : [
-              "string",
-              "null"
-            ]
-          },
-          "duration_minutes" : {
-            "type" : "integer"
-          },
-          "estimated_burn_kcal" : {
-            "type" : [
-              "number",
-              "null"
-            ]
-          },
-          "exercises" : {
-            "items" : {
-              "additionalProperties" : false,
-              "properties" : {
-                "name" : {
-                  "type" : "string"
-                },
-                "sets" : {
-                  "items" : {
-                    "additionalProperties" : false,
-                    "properties" : {
-                      "load_kg" : {
-                        "type" : [
-                          "number",
-                          "null"
-                        ]
-                      },
-                      "repetitions" : {
-                        "type" : "integer"
-                      }
-                    },
-                    "required" : [
-                      "load_kg",
-                      "repetitions"
-                    ],
-                    "type" : "object"
-                  },
-                  "type" : "array"
-                }
-              },
-              "required" : [
-                "name",
-                "sets"
-              ],
-              "type" : "object"
-            },
-            "type" : "array"
-          },
-          "kind" : {
-            "enum" : [
-              "strength",
-              "cardio",
-              "other"
-            ],
-            "type" : "string"
-          },
-          "local_date" : {
-            "type" : "string"
-          },
-          "performed_at" : {
-            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
-            "type" : [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required" : [
-          "burn_source",
-          "duration_minutes",
-          "estimated_burn_kcal",
-          "exercises",
-          "kind",
-          "local_date",
-          "performed_at"
-        ],
-        "type" : "object"
-      },
-      "strict" : true,
-      "type" : "function"
-    },
-    {
-      "description" : "Replace a complete retrieved workout using its real ID/revision. Preserve its day/time; include all existing sets that should remain.",
-      "name" : "edit_workout",
-      "parameters" : {
-        "additionalProperties" : false,
-        "properties" : {
-          "burn_source" : {
-            "enum" : [
-              "userEstimate",
-              "modelEstimate",
-              null
-            ],
-            "type" : [
-              "string",
-              "null"
-            ]
-          },
-          "duration_minutes" : {
-            "type" : "integer"
-          },
-          "estimated_burn_kcal" : {
-            "type" : [
-              "number",
-              "null"
-            ]
-          },
-          "exercises" : {
-            "items" : {
-              "additionalProperties" : false,
-              "properties" : {
-                "name" : {
-                  "type" : "string"
-                },
-                "sets" : {
-                  "items" : {
-                    "additionalProperties" : false,
-                    "properties" : {
-                      "load_kg" : {
-                        "type" : [
-                          "number",
-                          "null"
-                        ]
-                      },
-                      "repetitions" : {
-                        "type" : "integer"
-                      }
-                    },
-                    "required" : [
-                      "load_kg",
-                      "repetitions"
-                    ],
-                    "type" : "object"
-                  },
-                  "type" : "array"
-                }
-              },
-              "required" : [
-                "name",
-                "sets"
-              ],
-              "type" : "object"
-            },
-            "type" : "array"
-          },
-          "expected_revision" : {
-            "type" : "integer"
-          },
-          "kind" : {
-            "enum" : [
-              "strength",
-              "cardio",
-              "other"
-            ],
-            "type" : "string"
-          },
-          "performed_at" : {
-            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
-            "type" : [
-              "string",
-              "null"
-            ]
-          },
-          "workout_id" : {
-            "type" : "string"
-          }
-        },
-        "required" : [
-          "burn_source",
-          "duration_minutes",
-          "estimated_burn_kcal",
-          "exercises",
-          "expected_revision",
-          "kind",
-          "performed_at",
-          "workout_id"
         ],
         "type" : "object"
       },
@@ -619,6 +403,710 @@
           "item_id",
           "meal_id",
           "quantity"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Read a complete owned finished workout before editing it. Oversized records are refused; never replace unseen sets.",
+      "name" : "get_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "workout_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "workout_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Log one finished workout per turn/date; another session needs another turn. Exercise names resolve to the catalog; unknown names become the user's own exercises. Set activity. Pass estimated_burn_kcal only for a number the user said, with burn_source userEstimate; otherwise Mivu estimates burn. Timestamps are unconfirmed date-only. While context.activeWorkout exists, use add_to_workout for what the user is doing now.",
+      "name" : "log_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "activity" : {
+            "enum" : [
+              "strength",
+              "run",
+              "walk",
+              "cycle",
+              "swim",
+              "hike",
+              "yoga",
+              "pilates",
+              "hiit",
+              "crossfit",
+              "stretching",
+              "mobility",
+              "tennis",
+              "elliptical",
+              "rowing",
+              "stairs",
+              "jump-rope",
+              "boxing",
+              "kickboxing",
+              "martial-arts",
+              "dance",
+              "basketball",
+              "soccer",
+              "volleyball",
+              "badminton",
+              "table-tennis",
+              "squash",
+              "pickleball",
+              "golf",
+              "climbing",
+              "surfing",
+              "skiing",
+              "cross-country-skiing",
+              "snowboarding",
+              "skating",
+              "core",
+              "step-training",
+              "water-fitness",
+              "tai-chi",
+              "baseball",
+              "other",
+              null
+            ],
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "avg_heart_rate" : {
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "burn_source" : {
+            "enum" : [
+              "userEstimate",
+              "modelEstimate",
+              null
+            ],
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "distance_meters" : {
+            "type" : [
+              "number",
+              "null"
+            ]
+          },
+          "duration_minutes" : {
+            "type" : "integer"
+          },
+          "duration_seconds" : {
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "effort" : {
+            "description" : "How hard, 1-10: easy 3, moderate 5, hard 7, max 9",
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "estimated_burn_kcal" : {
+            "type" : [
+              "number",
+              "null"
+            ]
+          },
+          "exercises" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "exercise_id" : {
+                  "type" : [
+                    "string",
+                    "null"
+                  ]
+                },
+                "group" : {
+                  "description" : "Same label on neighbouring exercises makes a superset; a retrieved groupID keeps one; empty leaves it",
+                  "type" : [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name" : {
+                  "type" : "string"
+                },
+                "note" : {
+                  "type" : [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rest_seconds" : {
+                  "type" : [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "sets" : {
+                  "items" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "distance_meters" : {
+                        "type" : [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "effort" : {
+                        "description" : "How hard, 1-10",
+                        "type" : [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "load_kg" : {
+                        "type" : [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "repetitions" : {
+                        "type" : "integer"
+                      },
+                      "seconds" : {
+                        "type" : [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "type" : {
+                        "enum" : [
+                          "normal",
+                          "warmup",
+                          "drop",
+                          "failure",
+                          null
+                        ],
+                        "type" : [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required" : [
+                      "distance_meters",
+                      "effort",
+                      "load_kg",
+                      "repetitions",
+                      "seconds",
+                      "type"
+                    ],
+                    "type" : "object"
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [
+                "exercise_id",
+                "group",
+                "name",
+                "note",
+                "rest_seconds",
+                "sets"
+              ],
+              "type" : "object"
+            },
+            "type" : "array"
+          },
+          "indoor" : {
+            "type" : [
+              "boolean",
+              "null"
+            ]
+          },
+          "kind" : {
+            "enum" : [
+              "strength",
+              "cardio",
+              "other"
+            ],
+            "type" : "string"
+          },
+          "local_date" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "performed_at" : {
+            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "title" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required" : [
+          "activity",
+          "avg_heart_rate",
+          "burn_source",
+          "distance_meters",
+          "duration_minutes",
+          "duration_seconds",
+          "effort",
+          "estimated_burn_kcal",
+          "exercises",
+          "indoor",
+          "kind",
+          "local_date",
+          "note",
+          "performed_at",
+          "title"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Edit a retrieved finished workout using its real ID/revision. Only listed fields change; null keeps the stored value; an empty title, note or exercise note clears it. local_date moves it to that date. exercises, when listed, is the complete new list in order, used to add, remove, move or replace exercises; a listed exercise keeps unlisted fields of the stored one with the same name. Each listed set is complete: send all its fields as retrieved, since null means none.",
+      "name" : "edit_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "activity" : {
+            "enum" : [
+              "strength",
+              "run",
+              "walk",
+              "cycle",
+              "swim",
+              "hike",
+              "yoga",
+              "pilates",
+              "hiit",
+              "crossfit",
+              "stretching",
+              "mobility",
+              "tennis",
+              "elliptical",
+              "rowing",
+              "stairs",
+              "jump-rope",
+              "boxing",
+              "kickboxing",
+              "martial-arts",
+              "dance",
+              "basketball",
+              "soccer",
+              "volleyball",
+              "badminton",
+              "table-tennis",
+              "squash",
+              "pickleball",
+              "golf",
+              "climbing",
+              "surfing",
+              "skiing",
+              "cross-country-skiing",
+              "snowboarding",
+              "skating",
+              "core",
+              "step-training",
+              "water-fitness",
+              "tai-chi",
+              "baseball",
+              "other",
+              null
+            ],
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "avg_heart_rate" : {
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "burn_source" : {
+            "enum" : [
+              "userEstimate",
+              "modelEstimate",
+              null
+            ],
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "distance_meters" : {
+            "type" : [
+              "number",
+              "null"
+            ]
+          },
+          "duration_minutes" : {
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "duration_seconds" : {
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "effort" : {
+            "description" : "How hard, 1-10: easy 3, moderate 5, hard 7, max 9",
+            "type" : [
+              "integer",
+              "null"
+            ]
+          },
+          "estimated_burn_kcal" : {
+            "type" : [
+              "number",
+              "null"
+            ]
+          },
+          "exercises" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "exercise_id" : {
+                  "type" : [
+                    "string",
+                    "null"
+                  ]
+                },
+                "group" : {
+                  "description" : "Same label on neighbouring exercises makes a superset; a retrieved groupID keeps one; empty leaves it",
+                  "type" : [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name" : {
+                  "type" : "string"
+                },
+                "note" : {
+                  "type" : [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rest_seconds" : {
+                  "type" : [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "sets" : {
+                  "items" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "distance_meters" : {
+                        "type" : [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "effort" : {
+                        "description" : "How hard, 1-10",
+                        "type" : [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "load_kg" : {
+                        "type" : [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "repetitions" : {
+                        "type" : "integer"
+                      },
+                      "seconds" : {
+                        "type" : [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "type" : {
+                        "enum" : [
+                          "normal",
+                          "warmup",
+                          "drop",
+                          "failure",
+                          null
+                        ],
+                        "type" : [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required" : [
+                      "distance_meters",
+                      "effort",
+                      "load_kg",
+                      "repetitions",
+                      "seconds",
+                      "type"
+                    ],
+                    "type" : "object"
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [
+                "exercise_id",
+                "group",
+                "name",
+                "note",
+                "rest_seconds",
+                "sets"
+              ],
+              "type" : "object"
+            },
+            "type" : [
+              "array",
+              "null"
+            ]
+          },
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "indoor" : {
+            "type" : [
+              "boolean",
+              "null"
+            ]
+          },
+          "kind" : {
+            "enum" : [
+              "strength",
+              "cardio",
+              "other",
+              null
+            ],
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "local_date" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "note" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "performed_at" : {
+            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "title" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "workout_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "activity",
+          "avg_heart_rate",
+          "burn_source",
+          "distance_meters",
+          "duration_minutes",
+          "duration_seconds",
+          "effort",
+          "estimated_burn_kcal",
+          "exercises",
+          "expected_revision",
+          "indoor",
+          "kind",
+          "local_date",
+          "note",
+          "performed_at",
+          "title",
+          "workout_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Add sets the user just did to the running workout in context.activeWorkout: they join that exercise, or the exercise is added. Empty sets adds a new exercise with last time's sets still to do. One call per exercise per turn.",
+      "name" : "add_to_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "exercise" : {
+            "type" : "string"
+          },
+          "sets" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "distance_meters" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "effort" : {
+                  "description" : "How hard, 1-10",
+                  "type" : [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "load_kg" : {
+                  "type" : [
+                    "number",
+                    "null"
+                  ]
+                },
+                "repetitions" : {
+                  "type" : "integer"
+                },
+                "seconds" : {
+                  "type" : [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "type" : {
+                  "enum" : [
+                    "normal",
+                    "warmup",
+                    "drop",
+                    "failure",
+                    null
+                  ],
+                  "type" : [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required" : [
+                "distance_meters",
+                "effort",
+                "load_kg",
+                "repetitions",
+                "seconds",
+                "type"
+              ],
+              "type" : "object"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "exercise",
+          "sets"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Put a strength workout from context.workouts that the user finished today back to live, when they want to keep going; its clock carries on from its recorded time. Only while context.activeWorkout is absent. Use its real ID/revision.",
+      "name" : "continue_workout",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "workout_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "expected_revision",
+          "workout_id"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Read the user's finished sessions of one exercise, newest first (limit 1-10), with bests across them. For questions; answer in one line.",
+      "name" : "get_exercise_history",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "exercise" : {
+            "type" : "string"
+          },
+          "limit" : {
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "exercise",
+          "limit"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Show one of context.routines as a card with a Start button; the user taps Start. It starts nothing itself.",
+      "name" : "start_routine",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "routine_id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "routine_id"
         ],
         "type" : "object"
       },
@@ -1039,7 +1527,7 @@
       "type" : "function"
     },
     {
-      "description" : "Apply only explicit user-requested target changes, never an inferred prescription. First get_goals for this effective_local_date. targets is a patch: omitted nutrients remain; null value unsets a target. Null goal_weight_kg keeps it; clear_goal_weight true unsets it. Unspecified exercise credit remains unchanged. Existing exact date requires expected_revision; new date uses null. Returns saved settings; creates no intake day.",
+      "description" : "Apply only explicit user-requested target changes, never an inferred prescription. First get_goals for this effective_local_date. targets is a patch: omitted nutrients remain; null value unsets a target. Null goal_weight_kg keeps it; clear_goal_weight true unsets it. Unspecified exercise credit remains unchanged; exercise_credit_percent 0, 50 or 100 sets how much workout burn adds to the food budget; omit to keep it. Existing exact date requires expected_revision; new date uses null. Returns saved settings; creates no intake day.",
       "name" : "set_goals",
       "parameters" : {
         "additionalProperties" : false,
@@ -1056,6 +1544,18 @@
           "exercise_credit_enabled" : {
             "type" : [
               "boolean",
+              "null"
+            ]
+          },
+          "exercise_credit_percent" : {
+            "enum" : [
+              0,
+              50,
+              100,
+              null
+            ],
+            "type" : [
+              "integer",
               "null"
             ]
           },
@@ -1104,6 +1604,7 @@
           "clear_goal_weight",
           "effective_local_date",
           "exercise_credit_enabled",
+          "exercise_credit_percent",
           "expected_revision",
           "goal_weight_kg",
           "targets"
@@ -1215,7 +1716,8 @@
               "profiles",
               "connection",
               "nutritionSource",
-              "backup"
+              "backup",
+              "workouts"
             ],
             "type" : "string"
           }

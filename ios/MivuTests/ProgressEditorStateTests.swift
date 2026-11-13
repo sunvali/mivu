@@ -90,42 +90,13 @@ import Testing
         #expect(!DiaryProgressView.shows(loaded: week, for: DiaryProgressView.ReportRequest(ownership: owner, generation: 1, date: "2026-10-24", range: .week)))
     }
 
-    @Test func savedWorkoutBoundsRemainEditable() {
-        let savedSet = WorkoutSet(repetitions: 5_000, loadKg: 0)
-        var fields = WorkoutEditorView.SetFields(savedSet)
-        #expect(fields.valid)
-        #expect(fields.record?.repetitions == 5_000)
-        #expect(fields.record?.loadKg == 0)
-
-        fields.repetitions = "10001"
-        #expect(!fields.valid)
-        fields.repetitions = "10000"
-        #expect(fields.valid)
-        fields.repetitions = "0"
-        #expect(!fields.valid)
-        fields.repetitions = "5000"
-        fields.load = "100000"
-        #expect(fields.valid)
-        fields.load = "100000.1"
-        #expect(!fields.valid)
-        fields.load = "-1"
-        #expect(!fields.valid)
-        fields.load = ""
-        #expect(fields.valid)
-        #expect(fields.record?.loadKg == nil)
-
-        #expect(ProgressDate.validOptionalNonnegative("0"))
-        #expect(ProgressDate.validOptionalNonnegative("100000"))
-        #expect(ProgressDate.validOptionalNonnegative(""))
-        #expect(!ProgressDate.validOptionalNonnegative("-0.1"))
-        #expect(!ProgressDate.validOptionalNonnegative("100000.1"))
-        #expect(!ProgressDate.validOptionalNonnegative("inf"))
+    @Test func optionalNumbersRejectZero() {
         #expect(!ProgressDate.validOptional("0"))
     }
 
     @Test func editedGoalFieldsRequireConfirmationBeforeLoadingAnotherDate() {
         var snapshot = DiarySnapshot(profile: DiaryProfile(name: "Synthetic goal date draft"))
-        snapshot.goals = [GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: snapshot.profile.timeZoneID, targets: NutritionValues(kcal: 1800), goalWeightKg: nil, exerciseCreditEnabled: false)]
+        snapshot.goals = [GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: snapshot.profile.timeZoneID, targets: NutritionValues(kcal: 1800), goalWeightKg: nil, exerciseCreditPercent: 0)]
         var saved = GoalEditorValues(snapshot: snapshot, localDate: "2026-01-01")
         #expect(!saved.hasEditedTargets)
         saved.kcal = "1900"
@@ -135,8 +106,9 @@ import Testing
         blank.protein = "100"
         #expect(blank.hasEditedTargets)
         blank.protein = ""
-        blank.exerciseCredit = true
-        #expect(blank.hasEditedTargets)
+        // The burn choice is set in Settings, not typed here, so it is not a draft to protect.
+        blank.exerciseCreditPercent = 50
+        #expect(!blank.hasEditedTargets)
         #expect(saved.kcal == "1900" && saved.localDate == "2026-01-01")
     }
 
@@ -149,7 +121,7 @@ import Testing
         for (date, target) in [("2026-01-01", 1800.0), ("2026-02-01", 2000.0)] {
             _ = try await store.setGoals(GoalRecord(effectiveLocalDate: date, timeZoneID: profile.timeZoneID,
                                                   targets: NutritionValues(kcal: target), goalWeightKg: nil,
-                                                  exerciseCreditEnabled: false), expectedRevision: nil, expectedProfileID: profile.id)
+                                                  exerciseCreditPercent: 0), expectedRevision: nil, expectedProfileID: profile.id)
         }
         var values = GoalEditorValues(snapshot: try await store.snapshotForExport(), localDate: "2026-02-01")
         values.kcal = ""
@@ -181,11 +153,11 @@ import Testing
         _ = try await store.createProfile(profile)
         let older = try await store.setGoals(GoalRecord(effectiveLocalDate: "2026-01-01", timeZoneID: profile.timeZoneID,
                                                        targets: NutritionValues(kcal: 1_800), goalWeightKg: nil,
-                                                       exerciseCreditEnabled: false),
+                                                       exerciseCreditPercent: 0),
                                              expectedRevision: nil, expectedProfileID: profile.id)
         _ = try await store.setGoals(GoalRecord(effectiveLocalDate: "2026-10-12", timeZoneID: profile.timeZoneID,
                                                 targets: NutritionValues(kcal: 2_000), goalWeightKg: nil,
-                                                exerciseCreditEnabled: false),
+                                                exerciseCreditPercent: 0),
                                       expectedRevision: nil, expectedProfileID: profile.id)
         let snapshot = try await store.snapshotForExport()
         let historical = GoalEditorValues(snapshot: snapshot, localDate: "2026-01-01")

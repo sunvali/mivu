@@ -52,7 +52,7 @@ import Testing
                                  items: [FoodItem(name: "Synthetic bowl", nutrition: NutritionValues(kcal: 1360))],
                                  submissions: [], photos: [], sourceTurnID: nil)
         let goal = GoalRecord(effectiveLocalDate: "2026-10-01", timeZoneID: "Asia/Jerusalem", targets: NutritionValues(kcal: 2000),
-                              goalWeightKg: nil, exerciseCreditEnabled: false)
+                              goalWeightKg: nil, exerciseCreditPercent: 0)
         let head = DiaryHead(profile: DiaryProfile(name: "Synthetic widget", timeZoneID: "Asia/Jerusalem"), revision: 1,
                              lineage: nil, activeDayID: day.id, previousDayConfirmedAt: nil, timelineGeneration: UUID())
         let model = DiaryReadModel(head: head, activeDay: day, meals: [meal], weight: nil, workouts: [], activeGoal: goal, pendingAnalysisCount: 0)

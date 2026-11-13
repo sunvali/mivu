@@ -8,6 +8,7 @@ enum CompanionPose: Int, CaseIterable {
     case firstMealToday = 8, dayComplete = 9, curious = 10, tapped = 11, patted = 12, welcomeBack = 13
     case presentingCheer = 14, presentingCalm = 15
     case progressEntrance = 16, progressEntranceCheer = 17, progressRange = 18, progressTap = 19
+    case workoutSaved = 20, workoutDone = 21, workoutDoneHard = 22
 }
 
 enum CompanionSurface: Hashable {
@@ -17,6 +18,7 @@ enum CompanionSurface: Hashable {
 struct CompanionEvent: Equatable {
     enum Kind: Hashable {
         case saved, reviewed, firstMealToday, dayComplete, photoAdded
+        case workoutSaved(activity: String)
 
         fileprivate var pose: CompanionPose {
             switch self {
@@ -25,6 +27,7 @@ struct CompanionEvent: Equatable {
             case .firstMealToday: .firstMealToday
             case .dayComplete: .dayComplete
             case .photoAdded: .curious
+            case .workoutSaved: .workoutSaved
             }
         }
 
@@ -35,6 +38,8 @@ struct CompanionEvent: Equatable {
             case .firstMealToday: MivuMotion.firstMealToday
             case .dayComplete: MivuMotion.dayComplete
             case .photoAdded: MivuMotion.curious
+            // The move's length depends on the activity, so it comes from the gesture itself.
+            case .workoutSaved(let activity): PipGestureLibrary.gesture(for: .workoutSaved(activity: activity)).duration
             }
         }
     }
@@ -109,6 +114,8 @@ struct CompanionOutput: Equatable {
     let nextDeadline: Date?
     var tapLevel = 0
     var typingProgress = 0.0
+    /// The saved workout's activity, for `workoutSaved`.
+    var activity = ""
 }
 
 @MainActor @Observable final class CompanionPresentation {
@@ -117,6 +124,7 @@ struct CompanionOutput: Equatable {
         let id = UUID()
         let deadline: Date
         var tapLevel = 0
+        var activity = ""
     }
 
     private var profileID: UUID?
@@ -242,7 +250,9 @@ struct CompanionOutput: Equatable {
         if let pending {
             self.pending = nil
             greetingAvailable = false
-            active = Reaction(pose: pending.kind.pose, deadline: now.addingTimeInterval(pending.kind.duration))
+            var reaction = Reaction(pose: pending.kind.pose, deadline: now.addingTimeInterval(pending.kind.duration))
+            if case .workoutSaved(let activity) = pending.kind { reaction.activity = activity }
+            active = reaction
         }
 
         if context.isProcessing, let active, [.greeting, .welcomeBack, .resting, .tapped, .patted].contains(active.pose) {
@@ -333,7 +343,8 @@ struct CompanionOutput: Equatable {
     ) -> CompanionOutput {
         CompanionOutput(pose: pose, playback: playback, reactionID: reaction?.id,
                         nextDeadline: reaction?.deadline ?? deadline,
-                        tapLevel: pose == .tapped ? reaction?.tapLevel ?? 0 : 0, typingProgress: typingProgress)
+                        tapLevel: pose == .tapped ? reaction?.tapLevel ?? 0 : 0, typingProgress: typingProgress,
+                        activity: reaction?.activity ?? "")
     }
 }
 

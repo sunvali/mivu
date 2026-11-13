@@ -2,7 +2,7 @@ import SwiftUI
 
 // Shared with the widget extension so both draw with the same palette.
 extension Color {
-    private static func adaptive(_ light: UInt32, _ dark: UInt32, highContrastLight: UInt32? = nil, highContrastDark: UInt32? = nil) -> Color {
+    static func adaptive(_ light: UInt32, _ dark: UInt32, highContrastLight: UInt32? = nil, highContrastDark: UInt32? = nil) -> Color {
         Color(uiColor: UIColor { traits in
             let highContrast = traits.accessibilityContrast == .high
             let value = traits.userInterfaceStyle == .dark

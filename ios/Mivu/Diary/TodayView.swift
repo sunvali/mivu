@@ -9,6 +9,8 @@ import Observation
 extension EnvironmentValues {
     @Entry var diarySettingsRoutes: DiarySettingsRouteOwner? = nil
     @Entry var diaryPhotoLimiter: PhotoWorkLimiter? = nil
+    /// Opens a workout in the live gym from anywhere below the root.
+    @Entry var openLiveWorkout: ((WorkoutSession) -> Void)? = nil
 }
 
 /// First launch never asks for a diary name: with no diaries one is created and Pip's setup opens;
@@ -100,6 +102,18 @@ struct DiaryRootView: View {
     private var observeCompanionApplication: ((CompanionOutput) -> Void)?
     #endif
     @State private var thermalState = ProcessInfo.processInfo.thermalState
+    /// The live gym screen, over every tab; the banner opens it.
+    @State private var liveWorkout: WorkoutSession?
+    /// What Today's left-edge swipe opens, sliding in from the left with the finger.
+    /// What the edge panel shows while it is in; the finger's position lives in `edgeSlide`.
+    @State private var edgePanel: EdgePanel?
+    /// Read only by the slide itself, so a moving finger never redraws the screens.
+    @State private var edgeSlide = EdgeSlideState()
+    @State private var edgeStart: Date?
+    @State private var edgeCardio: [CardioLogState] = []
+    /// Said once on the gym screen, e.g. when Coach's Start opened another running workout.
+    @State private var discardingWorkout = false
+    private let rest = RestTimer.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
@@ -164,11 +178,7 @@ struct DiaryRootView: View {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: { Text(LocalizedStringKey(model.errorMessage ?? "")) }
         .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--proof-dark") ? .dark : ProcessInfo.processInfo.arguments.contains("--proof-light") ? .light : nil)
-        .transformEnvironment(\.dynamicTypeSize) {
-            let arguments = ProcessInfo.processInfo.arguments
-            if arguments.contains("--proof-largest-text") { $0 = .accessibility5 }
-            else if arguments.contains("--proof-large-text") { $0 = .accessibility3 }
-        }
+        .proofTypeSize()
     }
     private var lifecycleView: some View {
         companionView
@@ -177,6 +187,8 @@ struct DiaryRootView: View {
             let hadSiriPrompts = !services.inbox.entries().isEmpty
             let createDefaultProfile = (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test")
             await services.loadDiary(createDefaultProfile: createDefaultProfile)
+            // A rest running when Mivu was closed comes back with its workout.
+            if model.activeWorkout != nil { await rest.restore() }
             hasLoaded = true
             if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
@@ -186,10 +198,14 @@ struct DiaryRootView: View {
         }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
         .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel); syncDayProgressActivity(readModel) }
+        .onChange(of: model.activeWorkout) { _, _ in syncWorkout() }
+        .onChange(of: rest.endsAt) { _, _ in syncWorkout() }
+        // Finished, discarded or another profile's diary: its rest and sound go too.
+        .onChange(of: model.activeWorkout?.id) { _, id in if id == nil { rest.skip() } }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
         .onOpenURL { if $0.host == "today" { selectedTab = "today" } }
-        .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest(); openNotifiedMeal() }
+        .onChange(of: hasLoaded) { _, _ in openQuickLog(); openCoachRequest(); openNotifiedMeal(); syncWorkout() }
         .onChange(of: showOnboarding) { _, _ in openQuickLog() }
         .onChange(of: mealNotifications.openedMealID, initial: true) { _, _ in openNotifiedMeal() }
         .onChange(of: model.isChangingProfile) { _, changing in
@@ -215,7 +231,7 @@ struct DiaryRootView: View {
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
-            if value == .active { syncDayProgressActivity(model.readModel) }
+            if value == .active { syncDayProgressActivity(model.readModel); syncWorkout() }
             if value != .active {
                 companionRuntime.stop()
                 if value == .background {
@@ -242,7 +258,7 @@ struct DiaryRootView: View {
             if !DiaryLaunch.isUITest { restoredTab = value }
             refreshCompanion()
         }
-        .onChange(of: [routes.route != nil, coachHistory != nil, showOnboarding, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion]) { _, _ in refreshCompanion() }
+        .onChange(of: [routes.route != nil, coachHistory != nil, showOnboarding, model.errorMessage != nil, model.isChangingProfile, hasLoaded, reduceMotion, liveWorkout != nil]) { _, _ in refreshCompanion() }
         .onChange(of: model.selection, initial: true) { _, selection in
             coachRoutes.synchronize(selection: selection, isChangingProfile: model.isChangingProfile)
             coachHistory = nil
@@ -258,6 +274,7 @@ struct DiaryRootView: View {
         .onChange(of: model.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: model.companionHabitEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: model.companionReviewEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: model.companionWorkoutEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionSubmission) { _, _ in receiveCompanionSubmission() }
         .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionPhotoEvent) { _, event in receiveCompanionEvent(event) }
@@ -307,6 +324,7 @@ struct DiaryRootView: View {
         .environment(\.diarySettingsRoutes, routes)
         .environment(\.diaryPhotoLimiter, model.photoWorkLimiter)
         .environment(\.openDiaryCoach, openCoachAction)
+        .environment(\.openLiveWorkout) { liveWorkout = $0 }
         .environment(connection)
         .sensoryFeedback(.success, trigger: model.captureReceipt)
         .sheet(item: $routes.route) { route in
@@ -317,6 +335,19 @@ struct DiaryRootView: View {
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(model: model, connection: connection) { showOnboarding = false }
+        }
+        .fullScreenCover(item: $liveWorkout) { session in
+            if let owner = model.readModel?.profile.id {
+                // The cover does not inherit the proof text size from the root, so it is applied again here.
+                LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past,
+                                notice: model.workoutNotice, coach: coach, onSaved: model.noteWorkoutSaved) { liveWorkout = nil; model.workoutNotice = nil }
+                    .proofTypeSize()
+            }
+        }
+        .alert(model.activeWorkout?.hasTickedSets == true ? "Discard this workout?" : "Discard empty workout?",
+               isPresented: $discardingWorkout) {
+            Button("Discard", role: .destructive) { Task { await discardActiveWorkout() } }
+            Button("Cancel", role: .cancel) {}
         }
         .fullScreenCover(isPresented: Binding(get: { quickLogOwner != nil }, set: { if !$0 { quickLogOwner = nil } })) {
             if let owner = quickLogOwner {
@@ -363,8 +394,12 @@ struct DiaryRootView: View {
                     TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
                               onCompanionContextChanged: updateCompanionContext,
                               onCompanionTouch: touchCompanion).toolbar { profileControl }.duoReadableWidth()
+                        .modifier(WorkoutInset(shown: bannerShown) { workoutBanner })
+                        .overlay(alignment: .leading) { WorkoutEdgeTab(running: model.activeWorkout != nil, action: openEdge) }
                 }
+                .gesture(LeadingEdgeSwipe(onChanged: edgeChanged, onEnded: edgeEnded))
                 .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
+                .modifier(WorkoutDeletedToast(model: model))
                 .task(id: loggedMealID) {
                     guard loggedMealID != nil else { return }
                     try? await Task.sleep(for: .seconds(UIAccessibility.isVoiceOverRunning ? 10 : 5))
@@ -372,10 +407,12 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true) }
+                NavigationStack { HistoryView(model: model, openWorkout: { liveWorkout = $0 }).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true).modifier(WorkoutInset(shown: bannerShown) { workoutBanner }) }
+                    .modifier(WorkoutDeletedToast(model: model))
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
-                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
+                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }, openWorkout: { liveWorkout = $0 }).toolbar { profileControl }.duoReadableWidth().modifier(WorkoutInset(shown: bannerShown) { workoutBanner }) }
+                    .modifier(WorkoutDeletedToast(model: model))
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                 DuoBeside {
@@ -386,10 +423,11 @@ struct DiaryRootView: View {
                                   navigationRequest: coachRoutes.request,
                                   onNavigationConsumed: { coachRoutes.consume($0) },
                                   openHistory: openCoachHistory, openToday: { selectedTab = "today" },
-                                  openProgress: { selectedTab = "progress" }) { destination in
+                                  openProgress: { selectedTab = "progress" }, openWorkout: { liveWorkout = $0 }, startRoutine: startRoutine) { destination in
                             routes.route = SettingsRoute(destination: destination)
-                        }.toolbar { profileControl }.duoReadableWidth()
+                        }.toolbar { profileControl }.duoReadableWidth().modifier(WorkoutInset(shown: bannerShown) { workoutBanner })
                     }
+                    .modifier(WorkoutDeletedToast(model: model))
                 } secondary: {
                     // The day Coach is changing, beside the chat; Pip stays a still image so the rig mounts once.
                     NavigationStack {
@@ -401,6 +439,120 @@ struct DiaryRootView: View {
             }
             .badge(coach.queuedSiri.count)
         }
+        .modifier(WorkoutAccessory(shown: bannerShown) { workoutBanner })
+        .overlay { edgeOverlay }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { edgeSlide.width = max($0, 1) }
+    }
+    /// Coach's routine card: Start opens the live workout from it, or the one already running.
+    private func startRoutine(_ id: UUID) {
+        guard let owner = model.readModel?.profile.id else { return }
+        if let active = model.activeWorkout {
+            if active.routineID != id { model.workoutNotice = "\(WorkoutRow.title(active)) is already running" }
+            liveWorkout = active; return
+        }
+        Task {
+            await model.change {
+                guard let routine = try await model.store.routines(expectedProfileID: owner).first(where: { $0.id == id }) else { throw DiaryError.notFound }
+                liveWorkout = try await model.store.startWorkout(routine.draft, at: Date(), expectedProfileID: owner)
+            }
+        }
+    }
+    private var bannerShown: Bool { model.activeWorkout != nil && liveWorkout == nil }
+
+    enum EdgePanel: Equatable { case start, live(WorkoutSession) }
+
+    private func edgeChanged(_ travel: CGFloat) {
+        if edgePanel == nil { prepareEdge() }
+        edgeSlide.travel = travel
+    }
+
+    /// Made once as a swipe starts; after that only the slide moves.
+    private func prepareEdge() {
+        edgePanel = model.activeWorkout.map { .live($0) } ?? .start
+        edgeStart = nil; edgeCardio = []
+    }
+
+    /// The tab: the same panel, sliding in on its own.
+    private func openEdge() {
+        guard edgePanel == nil else { return }
+        prepareEdge()
+        // Laid out off screen first, so the next frame can slide it in.
+        Task { @MainActor in settleEdge(open: true) }
+    }
+
+    /// Past a third of the screen, or flicked, it settles open; otherwise it slides back.
+    private func edgeEnded(_ travel: CGFloat, _ velocity: CGFloat) {
+        guard edgePanel != nil else { return }
+        let open = velocity < -300 ? false : travel > edgeSlide.width / 3 || velocity > 500
+        settleEdge(open: open, velocity: velocity) { if !open { edgePanel = nil } }
+    }
+
+    /// A spring that starts at the finger's speed, as the system's own swipes do, so letting go never jumps.
+    private func settleEdge(open: Bool, velocity: CGFloat = 0, then: @escaping () -> Void = {}) {
+        let slide = edgeSlide
+        let distance = (open ? 0 : -slide.width) - slide.offset
+        let relative = abs(distance) > 1 ? min(max(velocity / distance, -30), 30) : 0
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .interpolatingSpring(Spring(duration: 0.4, bounce: 0), initialVelocity: relative)) {
+            slide.open = open; slide.travel = 0
+        } completion: { then() }
+    }
+
+    private func closeEdge() {
+        settleEdge(open: false) { edgePanel = nil }
+    }
+
+    @ViewBuilder private var edgeOverlay: some View {
+        if let edgePanel {
+            ZStack(alignment: .leading) {
+                EdgeDim(slide: edgeSlide)
+                edgeContent(edgePanel)
+                    .modifier(EdgeSlideEffect(slide: edgeSlide, reduceMotion: reduceMotion))
+            }
+        }
+    }
+
+    @ViewBuilder private func edgeContent(_ panel: EdgePanel) -> some View {
+        switch panel {
+        case .live(let session):
+            if let owner = model.readModel?.profile.id {
+                LiveWorkoutView(store: model.store, profileID: owner, session: session, mode: session.state == .active ? .live : .past,
+                                notice: model.workoutNotice, coach: coach, onSaved: model.noteWorkoutSaved) { closeEdge(); model.workoutNotice = nil }
+                    .proofTypeSize()
+                    .id(session.id)
+            }
+        case .start:
+            NavigationStack(path: $edgeCardio) {
+                StartWorkoutSheet(model: model, start: $edgeStart, onGym: { draft in
+                    // Gym turns the panel into the gym screen in place.
+                    Task { if let session = await StartWorkoutFlow.gymSession(model: model, draft: draft, start: edgeStart) { withAnimation(.smooth) { edgePanel = .live(session) } } }
+                }, onCardio: { activity, last in
+                    var state = CardioLogState(activity: activity, last: last, now: Date())
+                    if let edgeStart { state.startedAt = edgeStart; state.startEdited = true }
+                    edgeCardio.append(state)
+                }, onClose: closeEdge)
+                .navigationDestination(for: CardioLogState.self) { CardioLogView(model: model, state: $0) { closeEdge() } }
+            }
+            .tint(.diaryAccent)
+        }
+    }
+    @ViewBuilder private var workoutBanner: some View {
+        if let session = model.activeWorkout {
+            WorkoutBanner(session: session, restEndsAt: rest.endsAt, onOpen: { liveWorkout = session },
+                          onFinish: { finishStaleWorkout(session) }, onDiscard: { discardingWorkout = true })
+        }
+    }
+    /// Before the diary loads there is no workout to judge by, so a sync then would end a running activity.
+    private func syncWorkout() {
+        guard hasLoaded else { return }
+        syncWorkoutActivity(model.activeWorkout, restEndsAt: rest.endsAt)
+    }
+    private func finishStaleWorkout(_ session: WorkoutSession) {
+        guard session.hasTickedSets, model.readModel != nil else { discardingWorkout = true; return }
+        Task { await model.finishStaleWorkout(session) }
+    }
+    private func discardActiveWorkout() async {
+        guard let session = model.activeWorkout, let owner = model.readModel?.profile.id else { return }
+        await model.change { try await model.store.discardWorkout(id: session.id, expectedRevision: session.revision, expectedProfileID: owner) }
     }
     private func openQuickLog() {
         // Without a diary there is nowhere to save; the request waits for setup so the camera still opens.
@@ -476,7 +628,8 @@ struct DiaryRootView: View {
         coachHistory = CoachHistoryPresentation(origin: origin, timeZoneID: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
     }
     private var companionEvents: [CompanionEvent] {
-        [model.companionCaptureEvent, model.companionHabitEvent, model.companionReviewEvent, coach.companionCaptureEvent, coach.companionPhotoEvent].compactMap { $0 }
+        [model.companionCaptureEvent, model.companionHabitEvent, model.companionReviewEvent, model.companionWorkoutEvent,
+         coach.companionCaptureEvent, coach.companionPhotoEvent].compactMap { $0 }
     }
     private var companionSubmissions: [CompanionSubmission] { [coach.companionSubmission].compactMap { $0 } }
     private var selectedCompanionSurface: CompanionSurface? {
@@ -535,7 +688,7 @@ struct DiaryRootView: View {
             reduceMotion: reduceMotion, thermalState: thermalState,
             sceneActive: phase == .active && hasLoaded && model.readModel != nil && !model.isChangingProfile,
             selected: context.surface != nil && context.surface == selectedCompanionSurface,
-            visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || showOnboarding || model.errorMessage != nil)
+            visible: context.playback != .hidden, covered: routes.route != nil || coachHistory != nil || showOnboarding || model.errorMessage != nil || liveWorkout != nil)
         let output = companion.resolve(context: context, now: Date())
         if companionOutput.playback == .animated && output.playback != .animated { companionRuntime.stop() }
         #if DEBUG
@@ -595,6 +748,7 @@ struct TodayView: View {
     let companionRuntime: CompanionRuntime
     let onCompanionContextChanged: (CompanionContext) -> Void
     var onCompanionTouch: (CompanionTouch) -> Void = { _ in }
+    /// Opens the gym screen, which the root shows over every tab.
     /// Shown beside Coach: no capture bar, and the meal Coach just added or corrected lights up.
     var isLiveDay = false
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -678,6 +832,22 @@ struct TodayView: View {
             } header: { DiarySectionHeader(title: "Meals") }
         }
     }
+    /// The day's saved workouts; starting one is the left-edge tab or swipe.
+    @ViewBuilder private var workoutSection: some View {
+        if let snapshot = model.readModel, snapshot.workouts.contains(where: \.isFinished) {
+            Section {
+                ForEach(snapshot.workouts.filter(\.isFinished).sorted { $0.performedAt < $1.performedAt }) { session in
+                    NavigationLink {
+                        WorkoutDetailView(model: model, sessionID: session.id)
+                            .onAppear { showingDetail = true; reportCompanionContext() }
+                            .onDisappear { showingDetail = false; reportCompanionContext() }
+                    } label: { WorkoutRow(session: session) }
+                        .diarySummaryCard()
+                        .accessibilityIdentifier("workoutRow")
+                }
+            } header: { DiarySectionHeader(title: "Workouts") }
+        }
+    }
     @ViewBuilder private var trailingSections: some View {
         if let snapshot = model.readModel {
             if let day = model.activeDay, snapshot.activeGoal == nil {
@@ -713,13 +883,13 @@ struct TodayView: View {
                 DuoSplit {
                     todayList { leadingSections; trailingSections }.accessibilityIdentifier("todaySummaryColumn")
                 } secondary: {
-                    todayList { mealSections }.accessibilityIdentifier("todayMealsColumn")
+                    todayList { mealSections; workoutSection }.accessibilityIdentifier("todayMealsColumn")
                 }
             } else if isLiveDay {
                 // Meals first, so the meal Coach just changed shows above the keyboard.
-                todayList { mealSections; leadingSections; trailingSections }
+                todayList { mealSections; workoutSection; leadingSections; trailingSections }
             } else {
-                todayList { leadingSections; mealSections; trailingSections }
+                todayList { leadingSections; mealSections; workoutSection; trailingSections }
             }
         }
         .task(id: isLiveDay ? currentRevisions : nil) {
@@ -823,6 +993,7 @@ struct TodayView: View {
         if typeSize.isAccessibilitySize {
             companionArt
             NutritionSummary(totals: totals)
+            burned
         } else {
             HStack(alignment: .center, spacing: 8) {
                 companionArt
@@ -835,6 +1006,7 @@ struct TodayView: View {
                             .animation(companionOutput.playback == .animated ? .snappy(duration: MivuMotion.numeric) : nil, value: totals.kcal)
                         Text("kcal recorded").font(.subheadline).foregroundStyle(Color.diaryText)
                     }
+                    burned
                     if day == nil { Text("No meals recorded").font(.caption).foregroundStyle(Color.diarySecondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -849,6 +1021,17 @@ struct TodayView: View {
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.")
                     .font(.caption).foregroundStyle(Color.diarySecondary)
             }
+        }
+    }
+    @ViewBuilder private var burned: some View {
+        if let burn = ProgressAnalytics.dayBurn(model.readModel?.workouts ?? []), burn > 0 {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(burn.formatted(.number.precision(.fractionLength(0)))).font(.title3.weight(.bold)).monospacedDigit()
+                    .foregroundStyle(Color.diaryWorkout)
+                Text("burned").font(.subheadline).foregroundStyle(Color.diaryText)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("todayBurned")
         }
     }
     private func heroMetric(_ title: LocalizedStringKey, value: Double?, color: Color) -> some View {
@@ -875,7 +1058,7 @@ struct TodayView: View {
                         .accessibilityLabel("Recorded intake toward your goal")
                         .accessibilityValue("\(recorded.formatted(.number.precision(.fractionLength(0)))) of \(target.formatted(.number.precision(.fractionLength(0)))) kilocalories")
                 }
-                if report.goal?.exerciseCreditEnabled == true, let adjusted = report.exerciseAdjustedKcalRemaining {
+                if (report.goal?.exerciseCreditPercent ?? 0) > 0, let adjusted = report.exerciseAdjustedKcalRemaining {
                     Text("Exercise-adjusted remaining: \(adjusted.formatted(.number.precision(.fractionLength(0)))) kcal")
                         .font(.caption).foregroundStyle(Color.diarySecondary)
                 }
@@ -891,5 +1074,48 @@ struct TodayView: View {
         if let value {
             Text("\(abs(value).formatted(.number.precision(.fractionLength(0)))) \(value < 0 ? "above goal" : "to goal")")
         } else { Text("Not estimated yet").foregroundStyle(Color.diarySecondary) }
+    }
+}
+
+/// The tab bar's accessory, there only while `shown`.
+private struct WorkoutAccessory<Banner: View>: ViewModifier {
+    let shown: Bool
+    @ViewBuilder let banner: () -> Banner
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: shown, content: banner)
+        } else {
+            content // iOS 26.0 cannot hide an accessory; each tab carries the banner instead (WorkoutInset).
+        }
+    }
+}
+
+/// iOS 26.0 only: the banner at the bottom of a tab's first screen, above the tab bar, since the accessory cannot be hidden there.
+/// Inside the NavigationStack: an inset outside it does not reach the screen's own bottom bars.
+private struct WorkoutInset<Banner: View>: ViewModifier {
+    let shown: Bool
+    @ViewBuilder let banner: () -> Banner
+    @ScaledMetric(relativeTo: .subheadline) private var height = 56.0
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content
+        } else {
+            content.safeAreaInset(edge: .bottom) {
+                if shown { banner().frame(height: min(height, 88)).clipShape(.capsule).padding(.horizontal, 16).padding(.bottom, 8) }
+            }
+        }
+    }
+}
+
+extension View {
+    /// Launch-argument text sizes for UI proofs.
+    func proofTypeSize() -> some View {
+        transformEnvironment(\.dynamicTypeSize) {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--proof-largest-text") { $0 = .accessibility5 }
+            else if arguments.contains("--proof-large-text") { $0 = .accessibility3 }
+        }
     }
 }

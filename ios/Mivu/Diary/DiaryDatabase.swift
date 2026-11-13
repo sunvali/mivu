@@ -57,6 +57,13 @@ final class DiaryDatabase {
             try execute("CREATE TABLE IF NOT EXISTS coach_undo (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, mealID TEXT NOT NULL, afterRevision INTEGER NOT NULL, afterState TEXT NOT NULL, beforePayload BLOB, undone INTEGER NOT NULL DEFAULT 0)")
             // Held copies of Coach deletes; outside storage_quota, so Undo never blocks a delete.
             try execute("CREATE TABLE IF NOT EXISTS coach_undo_deleted (operationKey TEXT PRIMARY KEY, turnID TEXT NOT NULL REFERENCES coach_turn(id) ON DELETE CASCADE, payload BLOB NOT NULL, createdAt REAL NOT NULL, restoredID TEXT, undone INTEGER NOT NULL DEFAULT 0)")
+            // Saved workouts: no day parent, like goal.
+            for table in ["routine", "routine_tombstone"] {
+                try execute("CREATE TABLE IF NOT EXISTS \(table) (id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, payload BLOB NOT NULL)")
+            }
+            // Read first: an already-upgraded profile must open without a write lock.
+            if try mutationInteger("SELECT COUNT(*) FROM sqlite_master WHERE name = 'storage_row_count'") == 1,
+               try mutationInteger("SELECT COUNT(*) FROM storage_row_count WHERE tableName = 'routine'") == 0 { try upgradePagedStorageForRoutines() }
         } catch {
             sqlite3_close(connection); connection = nil
             throw create ? DiaryError.persistenceFailed : DiaryError.invalidData
@@ -64,6 +71,20 @@ final class DiaryDatabase {
     }
 
     deinit { sqlite3_close(connection) }
+
+    /// One-time, atomic: row counts plus the larger meta encoding (the snapshot gained two keys), so export keeps matching the quota.
+    private func upgradePagedStorageForRoutines() throws {
+        try execute("BEGIN IMMEDIATE")
+        do {
+            if try mutationInteger("SELECT COUNT(*) FROM storage_row_count WHERE tableName = 'routine'") == 0 {
+                for table in ["routine", "routine_tombstone"] { try execute("INSERT INTO storage_row_count(tableName, rowCount) VALUES ('\(table)', 0)") }
+                let statement = try prepare("SELECT profileID FROM storage_head WHERE id = 1"); defer { sqlite3_finalize(statement) }
+                guard sqlite3_step(statement) == SQLITE_ROW, let id = try UUID(uuidString: mutationText(statement, 0)) else { throw DiaryError.invalidData }
+                try DiaryTransaction(database: self, head: readHead(expectedProfileID: id)).refreshMetaContribution()
+            }
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
 
     private static func identity(of url: URL) throws -> UInt64 {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
