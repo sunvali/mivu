@@ -77,4 +77,20 @@ struct DiaryReportTests {
         let pdf = try Self.range.write(.pdf, to: directory)
         #expect(pdf.map(\.lastPathComponent) == ["Mivu report 2026-09-01 to 2026-09-02.pdf"])
     }
+
+    /// A row saved by another app version can decode to a shorter shape (a dropped or renamed field); export must still work.
+    @Test func exportReadsRowsThatReencodeToADifferentSize() async throws {
+        let fixture = try CaptureFixture(); defer { fixture.remove() }
+        let day = try #require(fixture.rows("SELECT id FROM day LIMIT 1").first?.first)
+        try fixture.execute("""
+            UPDATE day SET payload = CAST(json_set(CAST(payload AS TEXT), '$.fromNewerVersion', 'synthetic') AS BLOB) WHERE id = '\(day)';
+            UPDATE storage_quota SET portableBytes = portableBytes + (SELECT length(d.payload) - c.encodedBytes FROM day d JOIN storage_contribution c ON c.tableName = 'day' AND c.rowID = d.id WHERE d.id = '\(day)');
+            UPDATE storage_contribution SET encodedBytes = (SELECT length(payload) FROM day WHERE id = '\(day)') WHERE tableName = 'day' AND rowID = '\(day)';
+            """)
+        #expect(try fixture.rows("SELECT length(payload) - (SELECT encodedBytes FROM storage_contribution WHERE rowID = '\(day)') FROM day WHERE id = '\(day)'") == [["0"]])
+        let store = DiaryStore(directory: fixture.root)
+        _ = try await store.selectProfile(fixture.profileID)
+        let snapshot = try await store.snapshotForExport(expectedProfileID: fixture.profileID)
+        #expect(snapshot.days.count == fixture.before.days.count)
+    }
 }
