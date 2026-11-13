@@ -397,7 +397,7 @@ fun OnboardingScreen(
     val connection by model.connection.collectAsStateWithLifecycle()
     val step = model.step
     LaunchedEffect(model.saved) { if (model.saved) onFinish() }
-    BackHandler(enabled = step != OnboardingViewModel.Step.hello) { model.back() }
+    BackHandler { if (step == OnboardingViewModel.Step.hello) onFinish() else model.back() } // Back on the first step is "Later"
     val pip = rememberSetupPip(model)
     DialogSystemBarIcons()
     val imeVisible = WindowInsets.isImeVisible

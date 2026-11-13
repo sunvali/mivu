@@ -5,7 +5,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- The opt-in morning reminder: asked for only when it is turned on, and rebooked after a restart. -->
+    <!-- Asked for when the opt-in morning reminder is turned on (rebooked after a restart), and once after the first
+         message shared into Mivu is saved, for its Coach reply notification. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
@@ -34,16 +35,21 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- The ChatGPT sign-in page redirects here, so the browser hands back to Mivu instead of a dead end. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+        <!-- The ChatGPT sign-in page redirects here; it returns to Mivu and closes the sign-in tab. -->
+        <activity
+            android:name=".ui.settings.SignInReturnActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="mivu" android:host="connected" />
             </intent-filter>
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity>
         <!-- Share to Mivu: a sheet over the sharing app that saves the message to Coach (iOS Siri "Tell Coach"). -->
         <activity

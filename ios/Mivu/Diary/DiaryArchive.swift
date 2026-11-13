@@ -246,8 +246,8 @@ private extension DiaryDatabase {
         let encodedBytes = try JSONEncoder().encode(snapshot).count
         let originalBytes = snapshot.meals.flatMap(\.photos).reduce(0) { $0 + $1.data.count }
             + snapshot.coachTurns.flatMap(\.photos).reduce(0) { $0 + $1.data.count }
+        // Stored rows may decode into a newer or older model shape, so re-encoded JSON need not match the byte quota; photo bytes are copied raw and must.
         guard encodedBytes <= maximumBytes,
-              encodedBytes == (try mutationInteger("SELECT portableBytes FROM storage_quota WHERE id=1")),
               originalBytes == (try mutationInteger("SELECT originalPhotoBytes FROM storage_quota WHERE id=1")) else { throw DiaryError.invalidData }
         try execute("COMMIT")
         return snapshot

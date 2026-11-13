@@ -19,6 +19,7 @@ live-provider evidence.
 - Source SHA: n/a
 - Steps: none yet. Ask OpenAI in writing whether a Play-distributed, closed-source Mivu may use this flow (same question applies to iOS).
 - Result: **blocked** (awaiting a written answer)
+- Update 2026-11-11: Mivu is now open source (AGPL-3.0), so the closed-source question no longer applies; OpenAI's public open-source flow covers the app ([Android evidence](../development/play-openai-plan-usage.md)). This is the developer's reading, not a written answer from OpenAI; the owner decides whether it closes the item.
 - Notes: the [quickstart](https://developers.openai.com/siwc/quickstart) says ChatGPT plan usage is "available to all open-source partners and selected private clients"; paid or remotely hosted apps are pointed to an interest form ([overview](https://developers.openai.com/siwc/token-sharing-open-source)). The docs say nothing about closed-source apps distributed through app stores.
 
 ## 2. Authentication

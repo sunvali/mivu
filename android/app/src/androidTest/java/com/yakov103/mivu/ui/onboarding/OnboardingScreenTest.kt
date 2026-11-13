@@ -171,6 +171,32 @@ class OnboardingScreenTest {
         assertTrue(!exists(heading("Hi, I'm Pip")))
     }
 
+    @Test fun setupReturnsAfterTheAppIsKilledUntilFinishedOrPutOff() {
+        launchApp()
+        waitFor(heading("Hi, I'm Pip"))
+        next()
+        waitFor(heading("About you"))
+        launchApp() // a new process: a fresh repository and composition over the same storage
+        waitFor(heading("Hi, I'm Pip"))
+        compose.onNodeWithTag("onboardingLater").performClick()
+        waitFor(heading("Today"))
+        launchApp()
+        waitFor(heading("Today"))
+        compose.waitForIdle()
+        assertTrue(!exists(heading("Hi, I'm Pip")))
+    }
+
+    @Test fun backOnTheFirstStepPutsSetupOff() {
+        launchApp()
+        waitFor(heading("Hi, I'm Pip"))
+        Espresso.pressBack()
+        waitFor(heading("Today"))
+        launchApp()
+        waitFor(heading("Today"))
+        compose.waitForIdle()
+        assertTrue(!exists(heading("Hi, I'm Pip")))
+    }
+
     @Test fun setupStatusBarIconsFollowTheTheme() {
         launchApp()
         waitFor(heading("Hi, I'm Pip"))

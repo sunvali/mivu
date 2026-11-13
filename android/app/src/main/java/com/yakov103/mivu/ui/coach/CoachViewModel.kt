@@ -61,6 +61,7 @@ import com.yakov103.mivu.diary.CoachDayPage
 import com.yakov103.mivu.diary.coachDays
 import com.yakov103.mivu.diary.coachSegments
 import com.yakov103.mivu.diary.coachSourceTurn
+import com.yakov103.mivu.diary.hasCoachDay
 import com.yakov103.mivu.diary.coachTurnForMeal
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.sync.Mutex
@@ -672,14 +673,19 @@ class CoachViewModel(
     }
 
     /**
-     * Replaces the window with the page for [request] (the latest by default); in-flight page reads are retired and keep
+     * Replaces the window with the page for [target] (the latest by default); in-flight page reads are retired and keep
      * their slots until they exit. Replacements run one at a time. False when nothing replaced the window.
      */
-    private suspend fun replace(request: CoachPageRequest = CoachPageRequest.Latest): Boolean = replacing.withLock {
+    private suspend fun replace(target: CoachPageRequest = CoachPageRequest.Latest): Boolean = replacing.withLock {
         window.retireAll()
         if (!window.reserveReplacement(visible)) return false
+        var request = target
         val page = try {
-            read { coachPage(request) }.let { readPageForTest?.invoke(request, it) ?: it }
+            read {
+                // A day with no chat yet (a meal added by hand) has nothing to seek: its Ask Pip opens the latest conversation.
+                if (target is CoachPageRequest.AtDay && !hasCoachDay(target.dayID)) request = CoachPageRequest.Latest
+                coachPage(request)
+            }.let { readPageForTest?.invoke(request, it) ?: it }
         } catch (e: Exception) {
             window.releaseReplacement() // the read has exited
             if (e is CancellationException) throw e
