@@ -7,8 +7,10 @@ struct CoachEngine: Sendable {
     let prepareImages: @Sendable ([Data]) async throws -> [Data]
     let lookup: @Sendable (String) async throws -> [FoodEvidenceRecord]
     let onActivity: @Sendable (CoachActivity) async -> Void
-    init(store: DiaryStore, infer: @escaping @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult, lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured }, prepareImages: @escaping @Sendable ([Data]) async throws -> [Data] = { $0 }, onActivity: @escaping @Sendable (CoachActivity) async -> Void = { _ in }) {
-        self.store = store; self.infer = infer; self.lookup = lookup; self.prepareImages = prepareImages; self.onActivity = onActivity
+    /// What a reply read, for the side pane's follow-up buttons; nothing is stored.
+    let onConsulted: @Sendable (CoachConsulted) async -> Void
+    init(store: DiaryStore, infer: @escaping @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult, lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured }, prepareImages: @escaping @Sendable ([Data]) async throws -> [Data] = { $0 }, onActivity: @escaping @Sendable (CoachActivity) async -> Void = { _ in }, onConsulted: @escaping @Sendable (CoachConsulted) async -> Void = { _ in }) {
+        self.store = store; self.infer = infer; self.lookup = lookup; self.prepareImages = prepareImages; self.onActivity = onActivity; self.onConsulted = onConsulted
     }
     func run(turnID: UUID, expectedProfileID: UUID) async throws -> CoachTurnResult {
         do { return try await attempt(turnID: turnID, expectedProfileID: expectedProfileID, isFinal: false) }
@@ -163,12 +165,14 @@ struct CoachEngine: Sendable {
                     case .meals(let date, let cursor):
                         let page = try await store.coachMeals(on: date, afterMealID: cursor, expectedProfileID: expectedProfileID)
                         foundMeals += page.meals; outputs[index] = try coachJSON(page)
+                        await onConsulted(.day(date))
                     case .findMeals(let query, let from, let to):
                         let found = try await store.coachFindMeals(query: query, from: from, to: to, expectedProfileID: expectedProfileID)
                         foundMeals += found; outputs[index] = try coachJSON(found)
                     case .progress(let date, let days):
                         outputs[index] = try coachJSON(await store.coachProgress(endingOn: date, days: days, expectedProfileID: expectedProfileID))
                         if !requestedProgress.contains(where: { $0.0 == date && $0.1 == days }) { requestedProgress.append((date, days)) }
+                        await onConsulted(.progress)
                     case .workout(let id):
                         let workout = try await store.coachWorkout(id: id, expectedProfileID: expectedProfileID)
                         knownWorkouts.removeAll { $0.id == id }; knownWorkouts.append(workout)
