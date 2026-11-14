@@ -264,8 +264,9 @@ actor DiaryStore {
     func coachInferencePhotos(turnID: UUID, expectedProfileID: UUID) throws -> [Data] {
         let work = try coachWorkItem(turnID: turnID, expectedProfileID: expectedProfileID)
         guard work.receipts.isEmpty else { return [] }
-        guard work.photos.count <= 30 else { throw CoachError.limitExceeded }
-        return try work.photos.map { try photoContent($0, expectedProfileID: expectedProfileID) }
+        let photos = work.photos.isEmpty ? try pagedConnection(expectedProfileID: expectedProfileID).database.coachAnsweredPhotos(turnID: turnID, expectedProfileID: expectedProfileID) : work.photos
+        guard photos.count <= 30 else { throw CoachError.limitExceeded }
+        return try photos.map { try photoContent($0, expectedProfileID: expectedProfileID) }
     }
     func capturedMeal(submissionID: UUID, expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws -> MealReadModel? {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)

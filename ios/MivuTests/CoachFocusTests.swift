@@ -43,4 +43,10 @@ import Testing
         #expect(!CoachEngine.stableRules.contains("Omitted or paginated evidence cannot establish uniqueness"))
         #expect(!CoachEngine.stableRules.contains("Ask when the matching food or serving is ambiguous."))
     }
+    @Test func unclearPhotoGetsALoggedGuessNotABlankQuestion() throws {
+        #expect(CoachEngine.stableRules.contains("log the most likely food as an uncertain estimate, then name the guess in your reply and invite a correction"))
+        #expect(CoachEngine.stableRules.contains("Use ask_clarification kind food only when neither the photo nor the text suggests any food."))
+        let tools = String(decoding: try CoachTools.declarations(), as: UTF8.self)
+        #expect(tools.contains("food only when no reasonable food guess exists"))
+    }
 }

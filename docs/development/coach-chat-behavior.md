@@ -117,12 +117,22 @@ photos and description together; estimate a visible serving first, then a
 labelled typical serving or mixture when identified but not measurable. A
 cocktail photo does not establish hidden alcohol or mixer amounts. Exact grams
 or millilitres are not required when a reasonable uncertain estimate is
-otherwise possible.
+otherwise possible. An uncertain photo with a reasonable guess is logged as
+that guess, and the reply names it and invites a correction; the `food`
+question is only for photos where nothing suggests a food.
+
+An answer to a photo turn's `food` or `portion` question fills that photo's
+empty meal. The answer is the text-only turn right after the question, or a
+reply to that Pip message. The answering turn is sent with that meal's photo.
+When it logs food, it gets its own capture on the photo meal and the question's
+capture is settled, so one meal holds the photo and the food. Later unrelated
+messages never take over the old photo meal.
 
 The bounded inference context is 14 tracking days, at most 40 eligible meals
 within 24 KB and 60 KB overall. Those are diary-projection byte limits, not a
 multimodal request or token limit. Omitted records can still be retrieved with
-`get_meals_for_date`, `find_meals` or `get_meal`; prior photos are not replayed.
+`get_meals_for_date`, `find_meals` or `get_meal`; prior photos are not replayed,
+except the photo a question's answer describes.
 The request stays stateless (`store: false`).
 
 ## Conversation context

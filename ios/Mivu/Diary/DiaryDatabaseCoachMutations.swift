@@ -6,7 +6,10 @@ extension DiaryDatabase {
                           at: Date, expected: DiaryHead, maximumBytes: Int) throws -> DiaryCommit<[CoachReceipt]> {
         guard at.timeIntervalSince1970.isFinite else { throw DiaryError.invalidData }
         return try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
-            guard let turn = try transaction.turn(id: turnID) else { throw DiaryError.notFound }
+            guard var turn = try transaction.turn(id: turnID) else { throw DiaryError.notFound }
+            if writes.filter({ if case .food = $0 { true } else { false } }).count == 1, let mealID = try transaction.answeredPhotoMeal(turn) {
+                turn = try transaction.adoptAnsweredPhotoMeal(mealID, turn: turn)
+            }
             let normalized = try transaction.validateCoachWrites(writes, turn: turn, mode: mode, at: at)
             var results: [CoachReceipt] = [], newReceipts: [CoachReceipt] = []
             for write in normalized {
@@ -47,6 +50,35 @@ extension DiaryDatabase {
 }
 
 extension DiaryTransaction {
+    /// The empty photo meal whose food or portion question this text-only turn answers: the turn just before it, or the Pip message it replies to.
+    func answeredPhotoMeal(_ turn: CoachTurn) throws -> UUID? {
+        guard turn.pendingMealID == nil, turn.receipts.isEmpty, turn.photoIDs.isEmpty else { return nil }
+        let askingID: UUID?
+        if let reply = turn.submissionManifest?.reply {
+            guard case .message(let id, true) = reply.target else { return nil }
+            askingID = id
+        } else {
+            askingID = try ids("SELECT turnID FROM coach_index WHERE sequence < (SELECT sequence FROM coach_index WHERE turnID = ?) ORDER BY sequence DESC LIMIT 1", [.text(turn.id.uuidString)]).first
+        }
+        guard let askingID, let asking = try self.turn(id: askingID), asking.state == .completed, asking.receipts.isEmpty,
+              let kind = asking.question?.kind, [.food, .portion].contains(kind),
+              // An answer that drew a follow-up question still points at the same photo meal.
+              let mealID = try asking.pendingMealID ?? answeredPhotoMeal(asking),
+              try database.mutationInteger("SELECT COUNT(*) FROM meal WHERE id = ?", [.text(mealID.uuidString)]) == 1,
+              try mealItems(id: mealID).isEmpty else { return nil }
+        return mealID
+    }
+    /// Gives the answer its own capture on the photo meal and settles the question's capture, so the meal is not left pending.
+    func adoptAnsweredPhotoMeal(_ mealID: UUID, turn: CoachTurn) throws -> CoachTurn {
+        let meal = try mealRecord(id: mealID)
+        for var asked in try mealSubmissions(id: mealID) where asked.state != .saved && asked.state != .cancelled {
+            asked.state = .saved; try saveSubmission(asked, meal: meal)
+        }
+        try saveSubmission(MealSubmission(id: turn.id, baseRevision: meal.revision, text: turn.text, photoIDs: [], reviewFirst: false), meal: meal)
+        var adopted = turn; adopted.pendingMealID = mealID; adopted.pendingMealRevision = meal.revision
+        try saveTurn(adopted)
+        return adopted
+    }
     func validateCoachWrites(_ writes: [CoachWrite], turn: CoachTurn, mode: CoachWriteMode, at: Date) throws -> [CoachWrite] {
         guard Set(writes.map(\.target)).count == writes.count else { throw CoachError.invalidArguments }
         let normalized = try writes.map { try resolvedWeightWrite($0, turn: turn) }

@@ -689,4 +689,65 @@ import Testing
         #expect(try await store.snapshotForExport() == before)
     }
 
+    /// A photo turn that asked "What food did you eat?" and still holds its empty meal.
+    private func askingPhotoMeal(_ store: DiaryStore, _ profile: DiaryProfile) async throws -> (turnID: UUID, meal: DiaryMeal, photo: MealPhoto) {
+        let day = try await store.snapshotForExport().days[0], photo = MealPhoto(data: Data([1, 2, 3])), turnID = UUID()
+        let meal = try await capturedMeal(store, text: "", photos: [photo], reviewFirst: false, dayID: day.id, at: now, submissionID: turnID, forCoach: true)
+        _ = try await store.preparePendingCoachTurn(turnID: turnID, expectedProfileID: profile.id)
+        try await store.completeCoachTurn(turnID: turnID, assistantText: CoachClarification.food.question,
+            question: CoachQuestion(kind: .food, candidates: [], originalText: ""), expectedProfileID: profile.id)
+        return (turnID, meal, photo)
+    }
+    private func answer(_ store: DiaryStore, _ profile: DiaryProfile, _ text: String, replyTo: UUID? = nil) async throws -> UUID {
+        let prepared = try await store.coachCapturePreparation(at: now, expectedProfileID: profile.id), id = UUID()
+        let payload = try CoachSubmissionPayload(submissionID: id, text: text, attachments: [], context: prepared.context,
+            reply: replyTo.map { CoachReply(target: .message(turnID: $0, fromPip: true), excerpt: CoachClarification.food.question) })
+        _ = try await capturedSubmission(store, payload, expectedProfileID: profile.id)
+        return id
+    }
+    private func logJuice(_ store: DiaryStore, _ profile: DiaryProfile, turnID: UUID) async throws -> CoachReceipt {
+        let localDate = try await store.snapshotForExport().days[0].localDate
+        return try await store.applyCoachFood(turnID: turnID, targetLocalDate: localDate, items: [food("Orange juice", 1, 110)], expectedProfileID: profile.id)
+    }
+    @Test func answerToPhotoQuestionFillsThatPhotoMeal() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let asking = try await askingPhotoMeal(store, profile)
+        let answer = try await answer(store, profile, "It's orange juice")
+        #expect(try await store.coachInferencePhotos(turnID: answer, expectedProfileID: profile.id) == [asking.photo.data])
+        let receipt = try await logJuice(store, profile, turnID: answer)
+        let meals = try await store.snapshotForExport().meals
+        #expect(receipt.mealID == asking.meal.id); #expect(meals.count == 1)
+        #expect(meals[0].items.map(\.name) == ["Orange juice"]); #expect(meals[0].photos.map(\.id) == [asking.photo.id])
+        #expect(!meals[0].hasUnresolvedInput)
+    }
+    @Test func replyToPhotoQuestionFillsThatPhotoMealAfterOtherMessages() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let asking = try await askingPhotoMeal(store, profile)
+        let other = try await answer(store, profile, "How am I doing today?")
+        try await store.completeCoachTurn(turnID: other, assistantText: "On track.", expectedProfileID: profile.id)
+        let reply = try await answer(store, profile, "Orange juice", replyTo: asking.turnID)
+        #expect(try await store.coachInferencePhotos(turnID: reply, expectedProfileID: profile.id) == [asking.photo.data])
+        #expect(try await logJuice(store, profile, turnID: reply).mealID == asking.meal.id)
+        #expect(try await store.snapshotForExport().meals.count == 1)
+    }
+    @Test func answerAfterAFollowUpQuestionStillFillsThePhotoMeal() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let asking = try await askingPhotoMeal(store, profile)
+        let first = try await answer(store, profile, "Juice")
+        try await store.completeCoachTurn(turnID: first, assistantText: CoachClarification.portion.question,
+            question: CoachQuestion(kind: .portion, candidates: [], originalText: "Juice"), expectedProfileID: profile.id)
+        let second = try await answer(store, profile, "One glass")
+        #expect(try await store.coachInferencePhotos(turnID: second, expectedProfileID: profile.id) == [asking.photo.data])
+        #expect(try await logJuice(store, profile, turnID: second).mealID == asking.meal.id)
+    }
+    @Test func laterMessageDoesNotFillAnOldPhotoMeal() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let asking = try await askingPhotoMeal(store, profile)
+        let other = try await answer(store, profile, "How am I doing today?")
+        try await store.completeCoachTurn(turnID: other, assistantText: "On track.", expectedProfileID: profile.id)
+        let late = try await answer(store, profile, "Orange juice")
+        #expect(try await store.coachInferencePhotos(turnID: late, expectedProfileID: profile.id).isEmpty)
+        #expect(try await logJuice(store, profile, turnID: late).mealID != asking.meal.id)
+    }
+
 }
