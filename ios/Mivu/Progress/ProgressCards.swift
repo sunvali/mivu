@@ -46,8 +46,8 @@ struct ProgressSnapshot {
 
     var bands: [ProgressBand] { days.compactMap(ProgressInsights.band) }
     var burnSummary: String {
-        if case let .estimate(estimate) = burn { return "~" + kcal(estimate.kcalPerDay) + " a day" }
-        return "Needs more data"
+        if case let .estimate(estimate) = burn { return String(localized: "~\(kcal(estimate.kcalPerDay)) a day") }
+        return String(localized: "Needs more data")
     }
     /// Complete days with nothing pending: the ones averages and bands use.
     let judgedDays: Int
@@ -65,16 +65,17 @@ struct ProgressSnapshot {
             let points = loadedTrend
             let span = points.count >= 2 ? ProgressInsights.days(from: points[0].localDate, to: points[points.count - 1].localDate) : 0
             let change = (ProgressInsights.slopePerDay(points) ?? 0) * Double(span)
-            return "\(change <= 0 ? "Down" : "Up") \(abs(change).formatted(.number.precision(.fractionLength(1)))) kg in \(loadedDays.count) days"
+            let amount = abs(change).formatted(.number.precision(.fractionLength(1)))
+        return change <= 0 ? String(localized: "Down \(amount) kg in \(loadedDays.count) days") : String(localized: "Up \(amount) kg in \(loadedDays.count) days")
         case let .caloriesOnTrack(near, logged), let .caloriesOff(near, logged):
-            return "\(near) of \(logged) days near your target"
+            return String(localized: "\(near) of \(logged) days near your target")
         case .notEnoughData:
-            return loggedDays > 0 ? "Set a calorie goal to see how close you land" : "Log a meal or weigh in to begin"
+            return loggedDays > 0 ? String(localized: "Set a calorie goal to see how close you land") : String(localized: "Log a meal or weigh in to begin")
         }
     }
 }
 
-func kcal(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0))) + " kcal" }
+func kcal(_ value: Double) -> String { String(localized: "\(value.formatted(.number.precision(.fractionLength(0)))) kcal") }
 
 // MARK: Shared pieces
 
@@ -118,6 +119,8 @@ struct ProgressBucketChart: View {
                     .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
             }
         }
+        // Time runs left to right in every language; only the layout around the chart mirrors.
+        .environment(\.layoutDirection, .leftToRight)
         .chartXAxis {
             AxisMarks(values: .stride(by: unit, count: axisStride)) { _ in
                 AxisValueLabel(format: axisFormat)
@@ -237,10 +240,10 @@ struct ProgressMacrosCard: View {
                     metric("Fat", snapshot.averages.fat, .diaryFat)
                 }
             } else {
-                ProgressPlaceholder(symbol: "fork.knife", text: "Log a full day to see your average day.")
+                ProgressPlaceholder(symbol: "fork.knife", text: String(localized: "Log a full day to see your average day."))
             }
             if let target = snapshot.target, target > 0 {
-                ProgressGoalLine(left: "\(kcal(target)) goal", right: snapshot.averageKcal.map { ProgressInsights.plainGap($0, goal: target) } ?? "no full days yet",
+                ProgressGoalLine(left: String(localized: "\(kcal(target)) goal"), right: snapshot.averageKcal.map { ProgressInsights.plainGap($0, goal: target) } ?? String(localized: "no full days yet"),
                                  value: (snapshot.averageKcal ?? 0) / target)
             } else {
                 Text("No energy target set").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -250,7 +253,7 @@ struct ProgressMacrosCard: View {
     }
 
     private func metric(_ title: LocalizedStringKey, _ grams: Double?, _ color: Color) -> some View {
-        DiaryMetric(title: title, value: grams.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" }, color: color)
+        DiaryMetric(title: title, value: grams.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0)))) g") }, color: color)
     }
 }
 
@@ -287,15 +290,15 @@ struct ProgressWeightCard: View {
                 }
                 if let goal = snapshot.goal?.goalWeightKg, let start = snapshot.startKg {
                     let total = abs(start - goal), left = abs(last.trend - goal)
-                    ProgressGoalLine(left: "\(goal.formatted(.number.precision(.fractionLength(1)))) kg goal",
-                                     right: left < 0.1 ? "At goal" : "\(left.formatted(.number.precision(.fractionLength(1)))) kg to go",
+                    ProgressGoalLine(left: String(localized: "\(goal.formatted(.number.precision(.fractionLength(1)))) kg goal"),
+                                     right: left < 0.1 ? String(localized: "At goal") : String(localized: "\(left.formatted(.number.precision(.fractionLength(1)))) kg to go"),
                                      value: total > 0 ? (total - left) / total : 1)
                 } else {
-                    ProgressPlaceholder(symbol: "flag", text: "Add a goal weight to see how far is left.")
+                    ProgressPlaceholder(symbol: "flag", text: String(localized: "Add a goal weight to see how far is left."))
                 }
             }
             if trend.count < 3 {
-                ProgressPlaceholder(symbol: "scalemass", text: "Weigh in on \(3 - trend.count) more \(3 - trend.count == 1 ? "day" : "days") to see your trend.")
+                ProgressPlaceholder(symbol: "scalemass", text: String(localized: "Weigh in on \(3 - trend.count) more days to see your trend."))
             }
         }
         .diaryProgressCard()
@@ -308,6 +311,7 @@ struct ProgressWeightCard: View {
                     .foregroundStyle(Color.diaryWeight).lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round)).interpolationMethod(.monotone)
             }
         }
+        .environment(\.layoutDirection, .leftToRight)
         .chartXAxis(.hidden).chartYAxis(.hidden)
         .chartYScale(domain: .automatic(includesZero: false))
         .accessibilityElement(children: .ignore)
@@ -320,11 +324,11 @@ struct ProgressCaloriesCard: View {
     let snapshot: ProgressSnapshot
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProgressCardTitle(title: "Calories vs target", detail: snapshot.range.title)
-            Text([snapshot.averageKcal.map { "Average \(kcal($0))" }, snapshot.target.map { "target \(kcal($0))" } ?? "No energy target set"].compactMap { $0 }.joined(separator: " · "))
+            ProgressCardTitle(title: String(localized: "Calories vs target"), detail: snapshot.range.title)
+            Text([snapshot.averageKcal.map { String(localized: "Average \(kcal($0))") }, snapshot.target.map { String(localized: "target \(kcal($0))") } ?? String(localized: "No energy target set")].compactMap { $0 }.joined(separator: " · "))
                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
             if snapshot.loggedDays == 0 {
-                ProgressPlaceholder(symbol: "chart.bar", text: "Log a meal to see your calories against your target.")
+                ProgressPlaceholder(symbol: "chart.bar", text: String(localized: "Log a meal to see your calories against your target."))
             } else {
                 ProgressBucketChart(buckets: snapshot.buckets, range: snapshot.range, zone: snapshot.zone)
                     .accessibilityElement(children: .ignore)
@@ -341,7 +345,7 @@ struct ProgressBurnCard: View {
     let snapshot: ProgressSnapshot
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProgressCardTitle(title: "Estimated burn", color: .diarySuccess)
+            ProgressCardTitle(title: String(localized: "Estimated burn"), color: .diarySuccess)
             switch snapshot.burn {
             case let .estimate(estimate):
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -363,27 +367,35 @@ struct ProgressBurnCard: View {
                 Text("Likely between \(kcal(estimate.kcalPerDay - estimate.band)) and \(kcal(estimate.kcalPerDay + estimate.band)). From your intake and weight trend; it firms up as you log.")
                     .font(.footnote).foregroundStyle(Color.diarySecondary)
             case let .needs(days, weighIns):
-                ProgressPlaceholder(symbol: "flame", text: [days > 0 ? "Log \(days) more complete \(days == 1 ? "day" : "days")" : nil,
-                                                            weighIns > 0 ? "weigh in \(weighIns) more \(weighIns == 1 ? "time" : "times")" : nil]
-                    .compactMap { $0 }.joined(separator: " and ") + " to see your burn.")
+                ProgressPlaceholder(symbol: "flame", text: Self.burnPlaceholder(days: days, weighIns: weighIns))
             }
         }
         .diaryProgressCard(fill: .diaryTintBurn)
         .accessibilityElement(children: .combine)
+    }
+
+    /// What is still needed before the burn estimate appears; plural forms live in the catalog.
+    static func burnPlaceholder(days: Int, weighIns: Int) -> String {
+        switch (days > 0, weighIns > 0) {
+        case (true, true): String(localized: "Log \(days) more complete days and weigh in \(weighIns) more times to see your burn.")
+        case (true, false): String(localized: "Log \(days) more complete days to see your burn.")
+        case (false, true): String(localized: "Weigh in \(weighIns) more times to see your burn.")
+        case (false, false): String(localized: "Keep logging to see your burn.")
+        }
     }
 }
 
 enum ProgressSummary {
     static func buckets(_ buckets: [ProgressBucket], zone: String) -> String {
         let logged = buckets.filter { $0.averageKcal != nil }
-        guard !logged.isEmpty else { return "No logged days in this range." }
+        guard !logged.isEmpty else { return String(localized: "No logged days in this range.") }
         return logged.map { bucket in
-            "\(DiaryWeek.format(ProgressDate.label(bucket.start, zone: zone), "MMM d")): \(kcal(bucket.averageKcal ?? 0))\(bucket.band.map { ", \($0.title.lowercased())" } ?? "")"
+            "\(DiaryWeek.format(ProgressDate.label(bucket.start, zone: zone), "MMM d")): \(kcal(bucket.averageKcal ?? 0))\(bucket.band.map { ", " + $0.title.lowercased(with: .current) } ?? "")"
         }.joined(separator: "; ")
     }
     static func weights(_ trend: [TrendPoint]) -> String {
-        guard let last = trend.last else { return "No weigh-ins in this range." }
-        return "\(trend.count) weigh-ins. Trend \(last.trend.formatted(.number.precision(.fractionLength(1)))) kg on \(last.localDate)."
+        guard let last = trend.last else { return String(localized: "No weigh-ins in this range.") }
+        return String(localized: "\(trend.count) weigh-ins. Trend \(last.trend.formatted(.number.precision(.fractionLength(1)))) kg on \(last.localDate).")
     }
 }
 

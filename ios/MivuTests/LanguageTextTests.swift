@@ -34,4 +34,18 @@ struct LanguageTextTests {
         #expect(DiaryWeek.format("2026-10-19", "MMM d, yyyy") == "Oct 19, 2026")
         #expect(DiaryWeek.format("2026-10-19", "EEEEE") == "M")
     }
+
+    @Test func burnHintCountsReadCorrectly() {
+        #expect(ProgressBurnCard.burnPlaceholder(days: 1, weighIns: 2) == "Log 1 more complete day and weigh in 2 more times to see your burn.")
+        #expect(ProgressBurnCard.burnPlaceholder(days: 2, weighIns: 1) == "Log 2 more complete days and weigh in 1 more time to see your burn.")
+        #expect(ProgressBurnCard.burnPlaceholder(days: 2, weighIns: 0) == "Log 2 more complete days to see your burn.")
+        #expect(ProgressBurnCard.burnPlaceholder(days: 0, weighIns: 1) == "Weigh in 1 more time to see your burn.")
+    }
+
+    @Test func dayResultsKeepTheirEnglishShape() {
+        #expect(ProgressInsights.plainGap(2500, goal: 2000) == "500 over")
+        #expect(ProgressInsights.plainGap(2050, goal: 2000) == "on target")
+        #expect(ProgressInsights.plainMacro(80, goal: 120) == "80 g a day · 40 g under goal")
+        #expect(ProgressInsights.plainMacro(nil, goal: 120) == "No complete days")
+    }
 }

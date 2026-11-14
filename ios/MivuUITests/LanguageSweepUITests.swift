@@ -6,7 +6,7 @@ import XCTest
 @MainActor final class LanguageSweepUITests: XCTestCase {
     /// Screens whose text is not all in the string catalogs yet. Empty when the app is language-ready.
     static let notYetLocalized: Set<String> = [
-        "onboarding", "progress", "goalEditor", "weightEditor", "settings",
+        "onboarding", "settings", "goalEditor",
     ]
     /// Text the fixtures or the test typed: data, not interface.
     static let fixtureData: Set<String> = ["Two eggs, three bread slices and salad", "My diary", "Synthetic history food",
@@ -160,6 +160,23 @@ import XCTest
         let texts = app.staticTexts.allElementsBoundByIndex.map { $0.label }
         XCTAssertTrue(texts.contains { text in months.contains { text.contains($0) } }, "The day title uses an English month: \(texts)")
         XCTAssertFalse(texts.contains { $0.unicodeScalars.contains { (0x0590...0x05FF).contains($0.value) } }, "No Hebrew appears: \(texts)")
+    }
+
+    /// Time runs left to right in every language, so a chart must not mirror with the layout.
+    func testChartsDoNotMirror() throws {
+        try XCTSkipUnless(mode == "rtl", "Needs TEST_RUNNER_SWEEP_MODE=rtl")
+        let app = launch(["--diary-progress-fixture", "--coach-ui-test", "--coach-navigation-start-today"])
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
+        tab("Progress", in: app).tap()
+        let chart = app.descendants(matching: .any)["nutritionChartSummary"]
+        XCTAssertTrue(chart.waitForExistence(timeout: 10))
+        // Each mark is an accessibility element in data order, oldest first.
+        let marks = app.otherElements.matching(NSPredicate(format: "label CONTAINS ' to ' AND label CONTAINS ', 20'")).allElementsBoundByIndex
+            .filter { $0.frame.height > 2 && abs($0.frame.minY - chart.frame.minY) < 1 }
+        XCTAssertGreaterThanOrEqual(marks.count, 2, "The calorie chart shows its bars")
+        if let first = marks.first, let last = marks.last {
+            XCTAssertLessThan(first.frame.minX, last.frame.minX, "The oldest bar sits on the left: \(first.label) at \(first.frame.minX), \(last.label) at \(last.frame.minX)")
+        }
     }
 
     func testTextIsLocalized() throws {

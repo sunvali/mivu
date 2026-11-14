@@ -123,7 +123,7 @@ struct DiaryProgressView: View {
     }
     @ViewBuilder private func secondaryCards(_ snapshot: ProgressSnapshot, _ progress: CoachProgress) -> some View {
         sectionTitle("Average day")
-        detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
+        detail("progressMacros", String(localized: "Macros"), content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
         sectionTitle("More")
         more(snapshot, progress)
     }
@@ -212,25 +212,25 @@ struct DiaryProgressView: View {
     /// Everything else, one line each, a tap deeper.
     private func more(_ snapshot: ProgressSnapshot, _ progress: CoachProgress) -> some View {
         VStack(spacing: 0) {
-            moreLink("progressCalendar", "Calendar", "calendar", value: "\(snapshot.loggedDays) of \(snapshot.days.count) days logged") {
-                ProgressDetail(title: "Calendar", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calendar(snapshot) }
+            moreLink("progressCalendar", String(localized: "Calendar"), "calendar", value: String(localized: "\(snapshot.loggedDays) of \(snapshot.days.count) days logged")) {
+                ProgressDetail(title: String(localized: "Calendar"), model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calendar(snapshot) }
             }
             Divider()
-            moreLink("progressCalories", "Calories", "flame", value: snapshot.averageKcal.map { "avg \(kcal($0))" } ?? "No complete days") {
-                ProgressDetail(title: "Calories", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calories(snapshot) }
+            moreLink("progressCalories", String(localized: "Calories"), "flame", value: snapshot.averageKcal.map { String(localized: "avg \(kcal($0))") } ?? String(localized: "No complete days")) {
+                ProgressDetail(title: String(localized: "Calories"), model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calories(snapshot) }
             }
             Divider()
-            moreLink("progressBurn", "Estimated burn", "bolt.heart", value: snapshot.burnSummary) {
-                ProgressDetail(title: "Estimated burn", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.burn(snapshot) }
+            moreLink("progressBurn", String(localized: "Estimated burn"), "bolt.heart", value: snapshot.burnSummary) {
+                ProgressDetail(title: String(localized: "Estimated burn"), model: model, range: range, today: today) { snapshot, _ in ProgressDetails.burn(snapshot) }
             }
             Divider()
-            moreLink("progressTopFoods", "Top foods", "fork.knife", value: foods.first?.name ?? "None yet") {
-                ProgressDetail(title: "Top foods", model: model, range: range, today: today, foodLimit: 200) { _, foods in ProgressDetails.foods(foods) }
+            moreLink("progressTopFoods", String(localized: "Top foods"), "fork.knife", value: foods.first?.name ?? String(localized: "None yet")) {
+                ProgressDetail(title: String(localized: "Top foods"), model: model, range: range, today: today, foodLimit: 200) { _, foods in ProgressDetails.foods(foods) }
             }
             Divider()
-            moreLink("openWorkouts", "Workouts", "figure.run", value: "\(progress.workoutTotal ?? 0) recorded") { workoutList }
+            moreLink("openWorkouts", String(localized: "Workouts"), "figure.run", value: String(localized: "\(progress.workoutTotal ?? 0) recorded")) { workoutList }
             Divider()
-            Button { showGoals = true } label: { moreRow("Goals", "target", value: "Manage") }
+            Button { showGoals = true } label: { moreRow(String(localized: "Goals"), "target", value: String(localized: "Manage")) }
                 .buttonStyle(.plain).accessibilityIdentifier("progressGoals")  // Settings owns "editGoals"; this stack keeps every row on screen
         }
         .padding(.horizontal, 16).padding(.vertical, 4)
@@ -305,6 +305,7 @@ struct DiaryProgressView: View {
                             PointMark(x: .value("Date", point.date, unit: .day), y: .value("Weight kg", point.value))
                                 .foregroundStyle(Color.diaryWeight)
                         }
+                        .environment(\.layoutDirection, .leftToRight)
                         .chartXSelection(value: $selectedWeightDate)
                         .chartGesture { proxy in
                             SpatialTapGesture()
@@ -423,22 +424,22 @@ struct DiaryProgressView: View {
     }
 
     private var weightSummary: String {
-        let samples = weights.map { "\($0.label): \($0.value.formatted(.number.precision(.fractionLength(1)))) kg" }
-        let average = weightReport?.currentSevenDayAverageKg.map { "Seven-day average \($0.formatted(.number.precision(.fractionLength(1)))) kg from \(weightReport!.currentSevenDayObservedCount) dates." }
-            ?? "Seven-day average: insufficient data."
-        let change = weightReport?.changeFromSevenDaysAgoKg.map { "Seven-day change \($0.formatted(.number.precision(.fractionLength(1)))) kg." }
-            ?? "Seven-day change: insufficient data."
-        return "Weight chart: \(weights.count) measured dates. " + average + " " + change + " " + samples.joined(separator: "; ")
+        let samples = weights.map { String(localized: "\($0.label): \($0.value.formatted(.number.precision(.fractionLength(1)))) kg") }
+        let average = weightReport?.currentSevenDayAverageKg.map { String(localized: "Seven-day average \($0.formatted(.number.precision(.fractionLength(1)))) kg from \(weightReport!.currentSevenDayObservedCount) dates.") }
+            ?? String(localized: "Seven-day average: insufficient data.")
+        let change = weightReport?.changeFromSevenDaysAgoKg.map { String(localized: "Seven-day change \($0.formatted(.number.precision(.fractionLength(1)))) kg.") }
+            ?? String(localized: "Seven-day change: insufficient data.")
+        return String(localized: "Weight chart: \(weights.count) measured dates.") + " " + average + " " + change + " " + samples.joined(separator: "; ")
     }
     private func askPipButton(_ id: String, _ action: @escaping () -> Void) -> some View {
         Button("Ask Pip", systemImage: "sparkles", action: action).accessibilityIdentifier(id)
     }
     private func weightPrompt(_ entry: WeightEntry) -> () -> Void {
-        let text = "Weight · \(entry.value.formatted()) \(entry.unit) · \(DiaryWeek.format(weightDate(entry), "EEE d MMM"))"
+        let text = String(localized: "Weight · \(entry.value.formatted()) \(entry.unit) · \(DiaryWeek.format(weightDate(entry), "EEE d MMM"))")
         return { askPip(.weight(weightID: entry.id), text, day: entry.dayID) }
     }
     private func workoutPrompt(_ session: WorkoutSession) -> () -> Void {
-        let text = "\(session.kind.title) · \(session.durationMinutes) min · \(DiaryWeek.format(workoutDate(session), "EEE d MMM"))"
+        let text = String(localized: "\(session.kind.title) · \(session.durationMinutes) min · \(DiaryWeek.format(workoutDate(session), "EEE d MMM"))")
         return { askPip(.workout(workoutID: session.id), text, day: session.dayID) }
     }
     private func askPip(_ target: CoachReply.Target, _ excerpt: String, day: UUID?) {
@@ -463,7 +464,7 @@ struct DiaryProgressView: View {
             progress = value; foods = top; loadedReport = key
         } catch {
             guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
-            loadError = "Could not load progress. Your diary is preserved."; return
+            loadError = String(localized: "Could not load progress. Your diary is preserved."); return
         }
     }
 
@@ -491,7 +492,7 @@ struct DiaryProgressView: View {
             weightPage = page; weightDates = dates; loadedWeights = key
         } catch {
             guard !Task.isCancelled, model.selection == ownership, weightRequest == key, weightRequestID == requestID else { return }
-            weightError = "Could not load measurements. Your diary is preserved."
+            weightError = String(localized: "Could not load measurements. Your diary is preserved.")
         }
     }
 
@@ -510,7 +511,7 @@ struct DiaryProgressView: View {
             workoutPage = page; workoutDates = dates; loadedWorkouts = key
         } catch {
             guard !Task.isCancelled, model.selection == ownership, workoutRequest == key, workoutRequestID == requestID else { return }
-            workoutError = "Could not load workouts. Your diary is preserved."
+            workoutError = String(localized: "Could not load workouts. Your diary is preserved.")
         }
     }
 }
@@ -550,8 +551,8 @@ struct WorkoutDetailView: View {
                 Section {
                     Text(session.kind.title).font(.title2.weight(.semibold))
                     Text("\(session.durationMinutes) minutes")
-                    Text(session.timePrecision == .dateOnly ? "Time unspecified" : session.performedAt.formatted(date: .omitted, time: .shortened))
-                    Text(session.estimatedBurnKcal.map { "Estimated burn: \($0.formatted()) kcal" } ?? "Estimated burn: unknown")
+                    Text(session.timePrecision == .dateOnly ? String(localized: "Time unspecified") : session.performedAt.formatted(date: .omitted, time: .shortened))
+                    Text(session.estimatedBurnKcal.map { String(localized: "Estimated burn: \($0.formatted()) kcal") } ?? String(localized: "Estimated burn: unknown"))
                 }
                 Section {
                     if session.exercises.isEmpty { Text("No exercise details recorded.") }
@@ -622,9 +623,10 @@ struct WorkoutDetailView: View {
     }
 
     private var deletionTitle: String {
-        guard let session = pendingDeletion else { return "Delete workout?" }
-        let date = day?.localDate ?? "its recorded day"
-        return "Delete \(session.kind.title.lowercased()) workout on \(date)?"
+        guard let session = pendingDeletion else { return String(localized: "Delete workout?") }
+        let kind = session.kind.title.lowercased(with: .current)
+        guard let date = day?.localDate else { return String(localized: "Delete \(kind) workout on its recorded day?") }
+        return String(localized: "Delete \(kind) workout on \(date)?")
     }
 
     private func loadSession() async {
@@ -640,7 +642,7 @@ struct WorkoutDetailView: View {
         } catch {
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
             session = nil; day = nil; loading = false
-            loadError = "Could not load this workout. It may have been removed."
+            loadError = String(localized: "Could not load this workout. It may have been removed.")
         }
     }
 
@@ -649,9 +651,9 @@ struct WorkoutDetailView: View {
 private extension WorkoutKind {
     var title: String {
         switch self {
-        case .strength: "Strength"
-        case .cardio: "Cardio"
-        case .other: "Other"
+        case .strength: String(localized: "Strength")
+        case .cardio: String(localized: "Cardio")
+        case .other: String(localized: "Other")
         }
     }
 }

@@ -79,7 +79,7 @@ struct ProgressDetail<Content: View>: View {
             loadedEnd = key; hasEarlier = older
         } catch {
             guard !Task.isCancelled, key == end else { return }
-            loadError = "Could not load this range. Your diary is preserved."
+            loadError = String(localized: "Could not load this range. Your diary is preserved.")
         }
     }
 }
@@ -126,7 +126,7 @@ extension ProgressSnapshot {
             Section { ProgressMacrosCard(snapshot: snapshot).listCardRow() }
             Section {
                 let goal = snapshot.goal?.targets, average = snapshot.averages
-                ForEach([("Protein", average.protein, goal?.protein), ("Carbs", average.carbs, goal?.carbs), ("Fat", average.fat, goal?.fat)], id: \.0) { name, value, target in
+                ForEach([(String(localized: "Protein"), average.protein, goal?.protein), (String(localized: "Carbs"), average.carbs, goal?.carbs), ("Fat", average.fat, goal?.fat)], id: \.0) { name, value, target in
                     ProgressDayRow(title: name, value: ProgressInsights.plainMacro(value, goal: target))
                 }
             } footer: {
@@ -154,7 +154,7 @@ extension ProgressSnapshot {
                 LabeledContent("Average intake", value: complete.isEmpty ? "—" : kcal(complete.reduce(0, +) / Double(complete.count)))
                 LabeledContent("Weigh-ins", value: snapshot.loadedTrend.count.formatted())
                 if let slope = ProgressInsights.slopePerDay(snapshot.loadedTrend) {
-                    LabeledContent("Weight change", value: "\((slope * 7).formatted(.number.precision(.fractionLength(2)))) kg a week")
+                    LabeledContent("Weight change", value: String(localized: "\((slope * 7).formatted(.number.precision(.fractionLength(2)))) kg a week"))
                 }
                 Text("Each kilogram of body weight stores about 7,700 kcal. Burn = average intake minus the energy your trend stored or released per day.")
                     .font(.footnote).foregroundStyle(Color.diarySecondary)
@@ -164,7 +164,7 @@ extension ProgressSnapshot {
 
     static func foods(_ foods: [TopFood]) -> some View {
         Section {
-            if foods.isEmpty { ProgressPlaceholder(symbol: "fork.knife", text: "No saved foods with known calories in this range.") }
+            if foods.isEmpty { ProgressPlaceholder(symbol: "fork.knife", text: String(localized: "No saved foods with known calories in this range.")) }
             ForEach(Array(foods.enumerated()), id: \.offset) { _, food in
                 ProgressDayRow(title: food.name, value: "\(food.count == 1 ? "once" : "\(food.count) times") · \(kcal(food.kcal))")
             }
