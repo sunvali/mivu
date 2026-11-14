@@ -73,6 +73,13 @@ import Testing
         #expect(!CoachReplyCheck.passes("Dinner is about 700 kcal.", allowed: allowed, receipts: receipts, generalFacts: true))
     }
 
+    @Test func reviewOnlyTurnsMayUseGeneralFactsButNeverClaimALog() {
+        let receipts = [meal(.awaitingReview)]
+        let allowed = CoachReplyCheck.allowedNumbers(in: [], receipts: receipts)
+        #expect(CoachReplyCheck.passes("A slice is typically about 280 kcal, fine as a treat.", allowed: allowed, receipts: receipts, generalFacts: true))
+        #expect(!CoachReplyCheck.passes("I logged it, a slice is about 280 kcal.", allowed: allowed, receipts: receipts, generalFacts: true))
+    }
+
     @Test func identifierDigitsDoNotGroundNumbers() {
         let source = #"{"meals":[{"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","kcal":620},{"id":"45000000-0000-0000-0000-000000000450"}]}"#
         let allowed = CoachReplyCheck.allowedNumbers(in: [source], receipts: [])

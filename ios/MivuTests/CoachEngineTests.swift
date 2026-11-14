@@ -702,6 +702,17 @@ private actor CoachInputFixture {
         #expect(await replies.calls == 2)
     }
 
+    @Test func unclearEatingQuestionAnswersAndLeavesTheFoodInReview() async throws {
+        let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let query = try await capturedTurn(store, text: "About to have a slice of pizza, is that ok?", photos: [], at: now, expectedProfileID: profile.id)
+        let food = #"{"target_local_date":"2027-01-15","review_first":true,"items":[{"name":"Synthetic pizza","quantity":1,"unit":"slice","kcal":285,"carbs":36,"protein":12,"fat":10}]}"#
+        let prose = "Sure, a slice is typically about 280 kcal, fine as a treat."
+        let replies = CoachFixture([result([call("log_food", food)]), result(text: prose)])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: query.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == prose + "\nYour estimate is ready for review.")
+        #expect(completed.receipts.map { DiaryDatabase.coachCommittedReceipt($0).submissionState } == [.awaitingReview])
+    }
+
     @Test func appleFoodQuestionStaysStrict() async throws {
         let (store, profile, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let query = try await capturedTurn(store, text: "How much protein is in Greek yogurt?", photos: [], at: now, expectedProfileID: profile.id)

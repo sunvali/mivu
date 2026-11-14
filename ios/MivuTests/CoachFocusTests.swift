@@ -38,7 +38,8 @@ import Testing
     }
 
     @Test func stableRulesAnswerFoodQuestionsBrieflyWithoutLogging() {
-        #expect(CoachEngine.stableRules.contains("A food or nutrition question, or a request for meal ideas, is not a consumption statement"))
+        #expect(CoachEngine.stableRules.contains("If it says nothing about eating, answer without logging or ask_clarification."))
+        #expect(CoachEngine.stableRules.contains("answer and log that food with review_first true so nothing counts until they accept it"))
         #expect(CoachEngine.stableRules.contains("never more than four short lines"))
         #expect(CoachEngine.stableRules.contains("suggest a doctor or registered dietitian"))
     }

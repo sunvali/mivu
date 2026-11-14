@@ -47,7 +47,8 @@ enum CoachReplyCheck {
             if lowered.contains("logged") || lowered.contains("saved") { return false }
         }
         func grounded(_ text: some StringProtocol) -> Bool { numbers(in: String(text)).allSatisfy { allowed.contains(abs($0)) } }
-        guard generalFacts, receipts.isEmpty else { return grounded(prose) }
+        // A review-only turn counts nothing toward the day, so it may answer the question like a read-only turn.
+        guard generalFacts, receipts.allSatisfy({ $0.mealID != nil && $0.submissionState == .awaitingReview }) else { return grounded(prose) }
         let hedge = /~|\b(?i:about|around|roughly|approximately|typically|usually|nearly)\b/
         let diaryWords = /\b(?i:left|remaining|to go|so far|today|yesterday|this week|goal|target|budget|average|you're|you are|you've|you have|you had|you ate|your)\b/
         return prose.split(separator: /[.!?]\s+|\n+/).allSatisfy { sentence in
