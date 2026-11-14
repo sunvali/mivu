@@ -205,7 +205,12 @@ struct DiaryRootView: View {
             resetCompanionProfile()
         }
         .onChange(of: connection.sessionRevision) { _, _ in coach.cancel() }
-        .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
+        .onChange(of: connection.canInfer) { _, ready in if ready { coach.resume() } }
+        // A reply bound to the old key service or its model ends as "connection changed"; restart it on the new choice.
+        .onChange(of: [connection.provider.rawValue, connection.provider.keyService.map { connection.selectedModel(for: $0) } ?? ""]) { old, new in
+            guard old.first != new.first || connection.provider.keyService != nil else { return }
+            coach.cancel(); Task { await coach.waitForWorker(); coach.resume() }
+        }
         // Waits until no sheet or cover is up (e.g. Settings, where people connect), so the alert is not dropped.
         .alert("You’re using your ChatGPT plan", isPresented: Binding(get: { showsPlanWelcome },
                                                                      set: { if !$0 { connection.acknowledgePlanWelcome() } })) {
@@ -444,7 +449,7 @@ struct DiaryRootView: View {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Meal logged").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
-                Text(connection.planAuthorized ? "Analyzing your photo" : "Analyzes when ChatGPT is connected")
+                Text(connection.canInfer ? "Analyzing your photo" : "Analyzes when ChatGPT is connected")
                     .font(.caption).foregroundStyle(Color.diarySecondary)
             }
             Spacer(minLength: 8)

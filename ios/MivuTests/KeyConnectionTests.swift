@@ -101,6 +101,18 @@ import Testing
         #expect(f.connection.notice == .keyRejected)
     }
 
+    @Test func failureCopyNamesTheActiveService() {
+        #expect(coachFailureText(ResponsesClient.Failure.quotaReached, serviceName: "Claude")
+            == "Your Claude account is out of credit or over its limit. Your message is saved; see Manage usage in Settings.")
+        #expect(coachFailureText(ResponsesClient.Failure.quotaReached, serviceName: nil)
+            == "You've reached your ChatGPT usage limit. Your message is saved; see Manage usage in Settings.")
+        #expect(coachFailureText(ResponsesClient.Failure.usageUnavailable, serviceName: "Gemini")
+            == "Gemini is busy right now. Your message is saved; try again soon.")
+        #expect(coachFailureText(ResponsesClient.Failure.unauthorized, serviceName: "Gemini")
+            == "Gemini rejected your key. Your message is saved; replace the key in Settings.")
+        #expect(coachFailureText(ResponsesClient.Failure.malformedResponse, serviceName: "Gemini") == nil)
+    }
+
     @Test func openRouterSignInTradesTheCallbackCodeForAKey() async throws {
         let f = Fixture(); defer { f.cleanup() }
         f.reply(200, #"{"key":"fixture-or-key"}"#)

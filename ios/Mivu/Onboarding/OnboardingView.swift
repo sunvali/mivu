@@ -304,7 +304,7 @@ struct OnboardingView: View {
             }
             if askFailed {
                 VStack(alignment: .leading, spacing: 8) {
-                    footnote("ChatGPT couldn't answer just now. You can keep the estimate or try again.")
+                    footnote("\(connection.activeName) couldn't answer just now. You can keep the estimate or try again.")
                     Button("Try again", systemImage: "arrow.clockwise") { Task { await askChatGPT() } }
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
@@ -321,10 +321,10 @@ struct OnboardingView: View {
 
     @ViewBuilder private var status: some View {
         if asking {
-            Label { Text("ChatGPT is tuning your targets…") } icon: { ProgressView().controlSize(.small) }
+            Label { Text("\(connection.activeName) is tuning your targets…") } icon: { ProgressView().controlSize(.small) }
                 .font(.subheadline).foregroundStyle(Color.diarySecondary)
         } else {
-            Label(reply == nil ? "Estimate" : "Tuned by ChatGPT", systemImage: reply == nil ? "function" : "sparkles")
+            Label(reply == nil ? "Estimate" : "Tuned by \(connection.activeName)", systemImage: reply == nil ? "function" : "sparkles")
                 .font(.footnote.weight(.semibold)).foregroundStyle(Color.diaryAccent)
                 .padding(.horizontal, 10).padding(.vertical, 4)
                 .background(Capsule().fill(Color.diaryAccent.opacity(0.12)))

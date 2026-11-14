@@ -470,10 +470,10 @@ struct CoachView: View {
                 if coach.connection.provider == .apple {
                     Text("Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.")
                         .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachAppleLimits")
-                } else if coach.connection.planAuthorized {
+                } else if let usage = coach.connection.activeUsagePage, coach.connection.canInfer {
                     HStack(spacing: 4) {
-                        Text("Using ChatGPT plan").foregroundStyle(Color.diarySecondary)
-                        Link("Manage usage", destination: MivuLinks.chatGPTUsage)
+                        Text(coach.connection.provider.keyService.map { "Using your \($0.name) key" } ?? "Using ChatGPT plan").foregroundStyle(Color.diarySecondary)
+                        Link("Manage usage", destination: usage)
                             .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
                     }
                     .font(.caption).accessibilityIdentifier("coachPlanUsage")
@@ -788,7 +788,8 @@ struct CoachView: View {
         switch state {
         case .captured: "Waiting to start"
         case .analyzing: "Thinking…"
-        case .waitingForConnection: "Connect ChatGPT in Settings to continue"
+        case .waitingForConnection:
+            coach.connection.provider.keyService.map { "Check your \($0.name) key in Settings to continue" } ?? "Connect ChatGPT in Settings to continue"
         case .waitingForNetwork: "Offline. I'll reply when you're back online."
         case .needsRetry: "Couldn't finish. Your message is saved."
         case .needsClarification: "I need a little more detail. Reply with it, or edit the record."

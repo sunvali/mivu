@@ -761,10 +761,9 @@ private final class CoachNavigationReadFence: Sendable {
         return Set(turn.receipts.compactMap(\.workoutID)).compactMap { if case .workout(let workout, _) = receiptTargets[$0] { workout } else { nil } }
     }
     private func message(for error: Error) -> String {
-        if error as? ResponsesClient.Failure == .usageUnavailable { return "ChatGPT is busy right now. Your message is saved; try again soon." }
+        if let named = coachFailureText(error, serviceName: connection.provider.keyService?.name) { return named }
         if ProbeRunner.isTransient(error) { return "You're offline. Your message is saved and I'll reply when you're back online." }
         if error is CancellationError || error as? SessionError == .sessionChanged { return "The connection changed. Your message is saved; tap Try again." }
-        if error as? ResponsesClient.Failure == .quotaReached { return "You've reached your ChatGPT usage limit. Your message is saved; see Manage usage in Settings." }
         if error as? DiaryError == .staleRevision { return "Something changed while I was working. Check it, then try again." }
         if error as? DiaryError == .invalidAmountUnitChange { return error.localizedDescription }
         if error as? DiaryError == .ambiguousDay { return "Which day is this for?" }
@@ -798,5 +797,16 @@ private final class CoachNavigationReadFence: Sendable {
             end(ending)
         }
         return finish
+    }
+}
+
+/// The failures whose wording names the AI service. `nil` name means the ChatGPT plan; a `nil` result means the wording does not depend on the service.
+func coachFailureText(_ error: any Error, serviceName: String?) -> String? {
+    switch (error as? ResponsesClient.Failure, serviceName) {
+    case (.usageUnavailable, let name): "\(name ?? "ChatGPT") is busy right now. Your message is saved; try again soon."
+    case (.quotaReached, nil): "You've reached your ChatGPT usage limit. Your message is saved; see Manage usage in Settings."
+    case (.quotaReached, let name?): "Your \(name) account is out of credit or over its limit. Your message is saved; see Manage usage in Settings."
+    case (.unauthorized, let name?), (.forbidden, let name?): "\(name) rejected your key. Your message is saved; replace the key in Settings."
+    default: nil
     }
 }
