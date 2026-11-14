@@ -452,6 +452,15 @@ import Testing
         #expect(try await store.snapshotForExport() == before)
     }
 
+    @Test func lateNightChatFoodForTheWakingDayTakesTheSendTime() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        // 01:00 on 2027-01-15 in Asia/Jerusalem still belongs to the 2027-01-14 waking day.
+        let turn = try await capturedTurn(store, text: "Late snack", photos: [], at: now.addingTimeInterval(-9 * 3600), expectedProfileID: profile.id)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chips", 1, 150)], expectedProfileID: profile.id)
+        let meal = try #require(await store.snapshotForExport().meals.first { $0.id == receipt.mealID })
+        #expect(meal.timePrecision == nil && meal.eatenAt == turn.capturedAt)
+    }
+
     @Test func statedCoachTimeSetsMealTimeForChatAndManualCapture() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Breakfast at eight", photos: [], at: now, expectedProfileID: profile.id)

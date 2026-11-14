@@ -328,9 +328,10 @@ private fun DiaryDatabase.Tx.applyCoachWrite(write: CoachWrite, batch: CoachBatc
         is CoachWrite.Food -> {
             val day = coachDay(write.date, turn)
             val pendingID = turn.pendingMealID
-            // A time the user stated wins; otherwise food for the send date takes the send time and other dates stay date-only.
+            // A time the user stated wins; otherwise food for the send date, or the waking day a late-night send still
+            // belongs to, takes the send time and other dates stay date-only.
             val time = write.eatenAt
-            val sentToday = diaryDateLabel(turn.capturedAt, turn.captureTimeZoneID) == write.date
+            val sentToday = write.date == diaryDateLabel(turn.capturedAt, turn.captureTimeZoneID) || write.date == wakingDateLabel(turn.capturedAt, turn.captureTimeZoneID)
             var meal = pendingID?.let { mealRecord(it) } ?: DiaryMeal(UUID.randomUUID(), day.id, turn.capturedAt,
                 time ?: if (sentToday) turn.capturedAt else day.startAt, 0, null,
                 if (time != null || sentToday) null else MealTimePrecision.dateOnly, emptyList(), emptyList(), emptyList())
