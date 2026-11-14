@@ -28,6 +28,9 @@ and no tracking.
   diary and progress charts.
 - **Meet Pip.** Your fox companion sets up your daily targets and reacts as you
   log.
+- **Made for iPhone Duo.** Mivu fills the unfolded screen. Turn it sideways and
+  Coach sits beside your day as it updates. Prop it half-open on the table to
+  photograph your plates hands-free.
 - **Keep your data.** Back up to a folder you choose, or export everything at any
   time.
 
@@ -44,14 +47,33 @@ so you don't need an API key.
 
 Nutrition figures are estimates, not medical advice.
 
+## On iPhone Duo
+
+<p align="center">
+  <img src="docs/verification/iphone-duo/book-progress-two-columns.png" alt="Progress on an unfolded iPhone Duo held sideways, with the chart on the left and weight on the right" width="70%">
+</p>
+
+- **Closed, or unfolded and upright:** the same app as on any iPhone, full screen.
+- **Unfolded and sideways:** Today and Progress use two columns, and Coach shows
+  the chat beside today's log. A meal lights up when Coach adds or changes it.
+- **Half-open like a book:** the two sides meet at the crease, so nothing sits on
+  the fold.
+- **Half-open on a table:** the conversation stays on the standing half, with the
+  text field, camera and mic on the flat half. The camera stays open for up to
+  8 plates and has a 3-second timer.
+
+Rotating the phone, or moving it between book and table, keeps your place and
+your draft.
+
 ## Run it
 
 ### iPhone
 
-You need Xcode 27 or later. The app runs on iOS 26 and newer.
+You need Xcode 27.1 or later. The app runs on iOS 26 and newer.
 
 1. Open `ios/Mivu.xcodeproj`.
-2. Choose the `Mivu` scheme and an iPhone simulator.
+2. Choose the `Mivu` scheme and an iPhone simulator. To try the fold layouts,
+   choose the iPhone Duo simulator, which needs the iOS 27.1 runtime.
 3. Press Run.
 
 To run on a real device, set your own signing team and bundle identifiers.
