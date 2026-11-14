@@ -140,6 +140,28 @@ import XCTest
         }
     }
 
+    func testRightToLeftFlagMirrorsTheApp() throws {
+        try XCTSkipUnless(mode == "rtl", "Needs TEST_RUNNER_SWEEP_MODE=rtl")
+        let app = launch(["--coach-ui-test", "--coach-navigation-start-today"])
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
+        XCTAssertGreaterThan(tab("Today", in: app).frame.midX, tab("Coach", in: app).frame.midX, "The first tab sits on the right")
+    }
+
+    /// Until a language is complete it is not bundled, so its speakers get the whole app in English.
+    func testHebrewPhoneGetsEnglish() throws {
+        try XCTSkipUnless(mode == "english", "Runs without the right-to-left or double-length flags")
+        let app = launch(["--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"], ["-AppleLanguages", "(he)", "-AppleLocale", "he_IL"])
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
+        for name in ["Today", "Diary", "Progress", "Coach"] { XCTAssertTrue(app.tabBars.buttons[name].exists, "\(name) tab is English") }
+        XCTAssertLessThan(tab("Today", in: app).frame.midX, tab("Coach", in: app).frame.midX, "English lays out left to right")
+        tab("Diary", in: app).tap()
+        XCTAssertTrue(app.descendants(matching: .any)["diaryWeekStrip"].waitForExistence(timeout: 10))
+        let months = DateFormatter().then { $0.locale = Locale(identifier: "en_US") }.monthSymbols ?? []
+        let texts = app.staticTexts.allElementsBoundByIndex.map { $0.label }
+        XCTAssertTrue(texts.contains { text in months.contains { text.contains($0) } }, "The day title uses an English month: \(texts)")
+        XCTAssertFalse(texts.contains { $0.unicodeScalars.contains { (0x0590...0x05FF).contains($0.value) } }, "No Hebrew appears: \(texts)")
+    }
+
     func testTextIsLocalized() throws {
         try XCTSkipUnless(mode == "double", "Needs TEST_RUNNER_SWEEP_MODE=double")
         visitAllScreens { name, app in
@@ -175,4 +197,8 @@ import XCTest
             return words.count % 2 == 0 && Array(words.prefix(words.count / 2)) == Array(words.suffix(words.count / 2))
         }
     }
+}
+
+private extension DateFormatter {
+    func then(_ configure: (DateFormatter) -> Void) -> DateFormatter { configure(self); return self }
 }

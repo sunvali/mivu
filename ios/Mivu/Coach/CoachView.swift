@@ -133,7 +133,6 @@ struct CoachView: View {
         }) {
             if let id = cameraPresentationID {
                 CoachCameraView(draft: coach.attachmentDraft, presentationID: id, retaking: retakingPhotoID)
-                    .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
             }
         }
         .sensoryFeedback(.success, trigger: coach.captureReceipt)

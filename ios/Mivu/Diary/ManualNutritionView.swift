@@ -122,7 +122,6 @@ struct ManualNutritionView: View {
             } message: { Text("Your unsaved food and nutrition will be discarded.") }
             .task { if ownership == nil { ownership = model.selection } }
         }
-        .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
     }
     private func numberField(_ title: String, text: Binding<String>, identifier: String) -> some View {
         Group {

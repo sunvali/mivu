@@ -98,8 +98,6 @@ struct SettingsView: View {
                 HStack { Spacer(); Button("Done") { showDiagnostic = false }.frame(minHeight: 44) }.padding(.horizontal)
                 ConnectionProofView(connection: connection)
             }
-            .environment(\.locale, Locale(identifier: "en"))
-            .environment(\.layoutDirection, .leftToRight)
         }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .fullScreenCover(isPresented: $showOnboarding) { OnboardingView(model: model, connection: connection) { showOnboarding = false } }
@@ -296,8 +294,6 @@ struct SettingsView: View {
                 HStack { Spacer(); Button("Done") { showConnectionDiagnostic = false }.frame(minHeight: 44) }.padding(.horizontal)
                 ConnectionProofView(connection: connection)
             }
-            .environment(\.locale, Locale(identifier: "en"))
-            .environment(\.layoutDirection, .leftToRight)
         }
         .disabled(model.isChangingProfile)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)

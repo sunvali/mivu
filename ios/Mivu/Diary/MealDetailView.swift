@@ -507,7 +507,6 @@ private struct ScaleMealSheet: View {
             .interactiveDismissDisabled(saving)
             .onChange(of: model.readModel?.profile.id) { _, id in if id != ownerID { dismiss() } }
         }
-        .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
     }
     private func save() async {
         guard let kcal = value, !saving else { return }
@@ -637,8 +636,6 @@ private struct FoodItemEditor: View {
                 }.disabled(edited == nil || saving).accessibilityIdentifier("saveItem") }
             }
         }
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
     private var portionChips: some View {
         HStack(spacing: 8) {

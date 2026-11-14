@@ -248,8 +248,6 @@ struct GoalEditorView: View {
         } message: {
             Text("Your entered targets have not been saved. Changing the date loads the saved settings for the selected date.")
         }
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
         .environment(\.timeZone, TimeZone(identifier: zone) ?? .current)
     }
 
@@ -400,8 +398,6 @@ struct WeightCorrectionView: View {
             if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
 
     private func save() {
@@ -610,8 +606,6 @@ struct WorkoutEditorView: View {
             if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
 
     private func kindButton(_ value: WorkoutKind, _ title: String, id: String) -> some View {
@@ -754,8 +748,6 @@ struct MorningWeightEditorView: View {
             if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
 
     private func loadSelectedDay() async {
