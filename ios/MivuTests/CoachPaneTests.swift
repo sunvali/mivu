@@ -12,7 +12,7 @@ struct CoachPaneTests {
         CoachCommittedReceipt(operationKey: key, turnID: UUID(), weightID: UUID(), committedRevision: 1)
     }
     private func landing(seen: Set<String>? = [], _ receipts: [CoachCommittedReceipt], modalOpen: Bool = false) -> CoachPaneLanding {
-        CoachPane.landing(seen: seen, receipts: receipts, activeDayID: today, modalOpen: modalOpen)
+        CoachPane.landing(seen: seen, receipts: receipts, activeDayID: today, today: "2026-11-14", modalOpen: modalOpen)
     }
     private func turn(_ receipts: [CoachCommittedReceipt]) -> CoachExchangeSummary {
         CoachExchangeSummary(id: UUID(), sequence: 1, capturedAt: Date(timeIntervalSince1970: 0), captureTimeZoneID: "UTC", segmentID: UUID(),
@@ -33,6 +33,13 @@ struct CoachPaneTests {
 
     @Test func mealOnActiveDayLandsOnToday() {
         #expect(landing([meal("food/a", day: today, date: "2026-11-14")]) == CoachPaneLanding(pane: nil, jumps: true))
+    }
+
+    /// The first meal of a day starts that day, so the diary has no active day yet when the receipt arrives.
+    @Test func firstMealOfTheDayLandsOnTodayBeforeTheDiaryCatchesUp() {
+        let receipt = meal("food/a", day: otherDay, date: "2026-11-14")
+        let landing = CoachPane.landing(seen: [], receipts: [receipt], activeDayID: nil, today: "2026-11-14", modalOpen: false)
+        #expect(landing == CoachPaneLanding(pane: nil, jumps: true))
     }
 
     @Test func mealOnAnotherDayLandsOnThatDay() {
@@ -59,6 +66,14 @@ struct CoachPaneTests {
 
     @Test func lastNewReceiptWins() {
         #expect(landing([meal("food/a", day: today), weight("weight/2026-11-14")]).pane == .progress)
+    }
+
+    @Test func changeToTheOpenRecordKeepsItOpen() {
+        let receipt = meal("correct/a", day: today)
+        let open = CoachPane.landing(seen: [], receipts: [receipt], activeDayID: today, today: "2026-11-14", modalOpen: false, showing: .meal(receipt.mealID!))
+        #expect(!open.jumps)
+        let other = CoachPane.landing(seen: [], receipts: [receipt], activeDayID: today, today: "2026-11-14", modalOpen: false, showing: .meal(UUID()))
+        #expect(other == CoachPaneLanding(pane: nil, jumps: true))
     }
 
     @Test func consultedProgressOffersSeeProgress() {
