@@ -249,7 +249,7 @@ struct DiaryProgressView: View {
             Text(title).foregroundStyle(Color.diaryText)
             Spacer(minLength: 8)
             Text(value).foregroundStyle(Color.diarySecondary).lineLimit(1)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
+            Image(systemName: "chevron.forward").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
         }
         .frame(minHeight: 52).contentShape(Rectangle())
     }
@@ -559,7 +559,7 @@ struct WorkoutDetailView: View {
                     ForEach(session.exercises.indices, id: \.self) { exerciseIndex in
                         let exercise = session.exercises[exerciseIndex]
                         VStack(alignment: .leading) {
-                            Text(exercise.name).font(.headline)
+                            Text(exercise.name).font(.headline).directionFromContent(exercise.name)
                             ForEach(exercise.sets.indices, id: \.self) { index in
                                 let set = exercise.sets[index]
                                 Text("Set \(index + 1): \(set.repetitions) repetitions · \(set.loadKg.map { "\($0.formatted()) kg" } ?? "bodyweight")")

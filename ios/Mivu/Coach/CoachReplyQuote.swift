@@ -38,7 +38,7 @@ struct CoachReplyQuote: View {
                 Text(title).font(.caption.weight(.semibold))
                     .foregroundStyle(inMessage ? Color.white : Color.diaryAccent)
                 // One line in the composer, two in a sent message; more only at accessibility sizes.
-                Text(reply.excerpt).font(.footnote)
+                Text(reply.excerpt).font(.footnote).directionFromContent(reply.excerpt)
                     .lineLimit((inMessage ? 2 : 1) + (typeSize.isAccessibilitySize ? 1 : 0))
                     .foregroundStyle(inMessage ? Color.white.opacity(0.8) : Color.diarySecondary)
             }

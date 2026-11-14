@@ -179,10 +179,10 @@ struct CoachReceiptView: View {
             ForEach(Array(presentation.itemRows.enumerated()), id: \.offset) { _, row in
                 Group {
                     if dynamicTypeSize.isAccessibilitySize {
-                        VStack(alignment: .leading, spacing: 2) { Text(row.name); Text(row.amount).foregroundStyle(Color.diarySecondary); Text("\(row.kcal) kcal").monospacedDigit() }
+                        VStack(alignment: .leading, spacing: 2) { Text(row.name).directionFromContent(row.name); Text(row.amount).foregroundStyle(Color.diarySecondary); Text("\(row.kcal) kcal").monospacedDigit() }
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(row.name).lineLimit(2)
+                            Text(row.name).lineLimit(2).directionFromContent(row.name)
                             Text(row.amount).foregroundStyle(Color.diarySecondary).lineLimit(1)
                             Spacer(minLength: 8)
                             Text(row.kcal).monospacedDigit().foregroundStyle(Color.diarySecondary)
@@ -308,7 +308,7 @@ private struct CoachReceiptDisclosureStyle: DisclosureGroupStyle {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     configuration.label
                     Spacer(minLength: 0)
-                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
+                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.forward")
                         .font(.caption.weight(.semibold))
                 }
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)

@@ -177,6 +177,28 @@ import XCTest
         }
     }
 
+    /// Typed Hebrew is saved byte for byte and shown in its own direction inside an English (or mirrored) app.
+    func testTypedHebrewKeepsItsDirectionAndBytes() throws {
+        try XCTSkipIf(mode == "double", "Runs in english and rtl modes")
+        let app = launch(["--coach-ui-test", "--coach-inference-fixture"])
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 20)); input.tap()
+        let typed = "צהריים: סלט עוף, 200 גרם ועוד כוס מיץ תפוזים טרי מהשוק הבוקר"
+        input.typeText(typed)
+        app.buttons["coachSend"].tap()
+        let sent = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH 'coachText-'")).firstMatch
+        XCTAssertTrue(sent.waitForExistence(timeout: 10))
+        XCTAssertEqual(sent.label, typed, "The message is shown exactly as typed")
+        // isHittable stays true under the bar, so bring the whole bubble below it.
+        let bar = app.navigationBars.firstMatch.frame.maxY
+        for _ in 0..<8 where sent.frame.minY < bar + 8 {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+        }
+        // The wrapped paragraph shows its alignment: ragged on the left when it reads right to left.
+        let capture = XCTAttachment(screenshot: sent.screenshot())
+        capture.name = "\(mode)-\(text)-typedHebrew"; capture.lifetime = .keepAlways; add(capture)
+    }
+
     func testTextIsLocalized() throws {
         try XCTSkipUnless(mode == "double", "Needs TEST_RUNNER_SWEEP_MODE=double")
         visitAllScreens { name, app in

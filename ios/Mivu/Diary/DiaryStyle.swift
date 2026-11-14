@@ -286,7 +286,7 @@ struct MealRow: View {
     private var text: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).lineLimit(typeSize.isAccessibilitySize ? nil : 2).directionFromContent(title)
                 if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
             }
             statusText.font(.subheadline).foregroundStyle(meal.state == .saved ? Color.diarySecondary : meal.state.color)

@@ -289,7 +289,7 @@ struct CoachView: View {
                 inputBubble(turn)
                 VStack(alignment: .leading, spacing: 12) {
                     if let answer = turn.assistantText {
-                        Text(CoachReplyLines.attributed(answer)).font(.body)
+                        Text(CoachReplyLines.attributed(answer)).font(.body).directionFromContent(answer)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
@@ -694,7 +694,7 @@ struct CoachView: View {
                             .accessibilityIdentifier("coachQuote-" + turn.id.uuidString)
                     }
                 }
-                if !turn.text.isEmpty { Text(turn.text).font(.body).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
+                if !turn.text.isEmpty { Text(turn.text).font(.body).directionFromContent(turn.text).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
                 if !turn.photos.isEmpty {
                     Label(turn.photos.count == 1 ? "1 photo" : "\(turn.photos.count) photos", systemImage: "photo").font(.caption)
                     ForEach(turn.photos) { photo in DiaryPhotoPreview(model: coach.diary, reference: photo, height: 140) }

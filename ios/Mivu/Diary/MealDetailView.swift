@@ -105,7 +105,7 @@ struct MealDetailView: View {
                                         DisclosureGroup("Stored proposal") {
                                             ForEach(proposal.items) { item in
                                                 VStack(alignment: .leading, spacing: 4) {
-                                                    Text(item.name).font(.subheadline.weight(.medium))
+                                                    Text(item.name).font(.subheadline.weight(.medium)).directionFromContent(item.name)
                                                     Text("\(item.quantity.formatted()) \(item.unit)").font(.subheadline).monospacedDigit()
                                                     Text(item.sourceCaption).font(.caption).foregroundStyle(Color.diarySecondary)
                                                 }.padding(.vertical, 4)
@@ -266,7 +266,7 @@ struct MealDetailView: View {
             } label: {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.semibold))
+                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.semibold)).directionFromContent(item.name)
                         Text("\(item.quantity.formatted()) \(item.unit)").font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
                         if item.uncertain { Text("Portion or nutrients are uncertain").font(.caption).foregroundStyle(Color.diarySecondary) }
                     }
@@ -350,14 +350,14 @@ struct MealDetailView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     if typeSize.isAccessibilitySize {
-                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.medium))
+                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.medium)).directionFromContent(item.name)
                         Text("\(item.quantity.formatted()) \(item.unit)").monospacedDigit().foregroundStyle(Color.diarySecondary)
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.medium))
+                            Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.medium)).directionFromContent(item.name)
                             Spacer(minLength: 8)
                             Text("\(item.quantity.formatted()) \(item.unit)").monospacedDigit().foregroundStyle(Color.diarySecondary)
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
+                            Image(systemName: "chevron.forward").font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
                         }
                     }
                     Text(item.sourceCaption).font(.caption).foregroundStyle(Color.diarySecondary)

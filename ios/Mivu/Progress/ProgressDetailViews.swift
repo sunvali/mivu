@@ -27,13 +27,13 @@ struct ProgressDetail<Content: View>: View {
         List {
             Section {
                 HStack {
-                    Button { endingOn = shift(-range.days) } label: { Label("Earlier", systemImage: "chevron.left").frame(minHeight: 44) }
+                    Button { endingOn = shift(-range.days) } label: { Label("Earlier", systemImage: "chevron.backward").frame(minHeight: 44) }
                         .disabled(!hasEarlier || loadedEnd != end)
                         .accessibilityIdentifier("progressDetailEarlier")
                     Spacer()
                     Text(dates).font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)
                     Spacer()
-                    Button { endingOn = min(today, shift(range.days)) } label: { Label("Later", systemImage: "chevron.right").labelStyle(.titleAndIcon).frame(minHeight: 44) }
+                    Button { endingOn = min(today, shift(range.days)) } label: { Label("Later", systemImage: "chevron.forward").labelStyle(.titleAndIcon).frame(minHeight: 44) }
                         .disabled(end >= today)
                 }
                 .buttonStyle(.borderless)
