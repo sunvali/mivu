@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.3.0](https://github.com/sunvali/mivu/compare/ios-v1.2.1...ios-v1.3.0) (2026-11-14)
+
+
+### Features
+
+* **camera:** lens, zoom, focus and flash controls, and a faster shortcut camera ([#116](https://github.com/sunvali/mivu/issues/116)) ([1d73ba1](https://github.com/sunvali/mivu/commit/1d73ba15ac6d47a7df086a3999bb0e09ed0359c7))
+* **duo:** full iPhone Duo support with sideways, book and table layouts ([#90](https://github.com/sunvali/mivu/issues/90)) ([cd78de6](https://github.com/sunvali/mivu/commit/cd78de6046aee39259db2f67403037aeeb6beaa8))
+* **pip:** add upright stance with food and workout gestures ([#106](https://github.com/sunvali/mivu/issues/106)) ([e03d2fb](https://github.com/sunvali/mivu/commit/e03d2fba7c27a07851018fa9ef9fdfd998c66bde))
+
+
+### Bug Fixes
+
+* **coach:** fill the photo meal when answering Pip's food question ([#109](https://github.com/sunvali/mivu/issues/109)) ([ee6df8f](https://github.com/sunvali/mivu/commit/ee6df8f51747722de9aed1465c178db3e92c5f69))
+* **export:** share reports and backups when saved rows changed shape ([#120](https://github.com/sunvali/mivu/issues/120)) ([6a4ac14](https://github.com/sunvali/mivu/commit/6a4ac144af4628483208d202142d474717f2f533))
+* **pip:** keep baked faces on the track clock and skip still tracks ([#112](https://github.com/sunvali/mivu/issues/112)) ([73b063a](https://github.com/sunvali/mivu/commit/73b063a004f9a2dd107de4d9d47938e71711ced8))
+
 ## [1.2.1](https://github.com/sunvali/mivu/compare/ios-v1.2.0...ios-v1.2.1) (2026-10-31)
 
 
