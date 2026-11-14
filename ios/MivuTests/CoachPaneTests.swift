@@ -76,6 +76,37 @@ struct CoachPaneTests {
         #expect(other == CoachPaneLanding(pane: nil, jumps: true))
     }
 
+    /// Coach deleting the meal that is open would leave "Meal unavailable" in the pane.
+    @Test func removalOfTheOpenRecordReturnsToToday() {
+        let id = UUID()
+        let removal = CoachCommittedReceipt(operationKey: "turn/delete_meal/\(id)", turnID: UUID(), dayID: today, mealID: id, committedRevision: 2)
+        let landing = CoachPane.landing(seen: [], receipts: [removal], activeDayID: today, today: "2026-11-14", modalOpen: false, showing: .meal(id))
+        #expect(landing == CoachPaneLanding(pane: nil, jumps: true))
+    }
+
+    private func observe(_ memory: inout CoachPaneMemory, _ owner: CoachTimelineIdentity, _ receipts: [CoachCommittedReceipt], modalOpen: Bool = false) -> CoachPaneLanding {
+        memory.observe(owner: owner, receipts: receipts, activeDayID: today, today: "2026-11-14", modalOpen: modalOpen, showing: nil)
+    }
+
+    /// Another profile's latest turn is not a change Coach just made.
+    @Test func switchingProfileNeverJumps() {
+        let first = CoachTimelineIdentity(profileID: UUID(), timelineGeneration: UUID())
+        let second = CoachTimelineIdentity(profileID: UUID(), timelineGeneration: UUID())
+        var memory = CoachPaneMemory()
+        #expect(!observe(&memory, first, [weight("a/weight/1")]).jumps)
+        #expect(!observe(&memory, second, [weight("b/weight/1")]).jumps)
+        #expect(observe(&memory, second, [weight("b/weight/1"), weight("b/weight/2")]).pane == .progress)
+    }
+
+    /// Skipped, not queued: the change that arrived under an open sheet never moves the pane afterwards.
+    @Test func skippedChangeNeverJumpsLater() {
+        let owner = CoachTimelineIdentity(profileID: UUID(), timelineGeneration: UUID())
+        var memory = CoachPaneMemory()
+        _ = observe(&memory, owner, [])
+        #expect(!observe(&memory, owner, [weight("a/weight/1")], modalOpen: true).jumps)
+        #expect(!observe(&memory, owner, [weight("a/weight/1")]).jumps)
+    }
+
     @Test func consultedProgressOffersSeeProgress() {
         #expect(CoachReplyLines.followUps(for: turn([]), consulted: [.progress], today: "2026-11-14") == [.progress])
     }

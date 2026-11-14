@@ -145,6 +145,17 @@ import XCTest
         XCTAssertFalse(app.navigationBars["Meal"].exists)
     }
 
+    func testUndoingPaneMealReturnsToToday() throws {
+        let (app, input) = try launchCoach()
+        send("Two eggs, three bread slices and salad", app, input)
+        let link = app.buttons["coachMealLink"]
+        XCTAssertTrue(link.waitForExistence(timeout: 20)); link.tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+        app.buttons["coachUndo"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10), "An undone meal leaves the pane on Today, not an empty detail")
+        XCTAssertFalse(app.navigationBars["Meal"].exists)
+    }
+
     func testUprightTapStillPushesOverChat() throws {
         let (app, input) = try launchCoach(wide: false)
         send("Two eggs, three bread slices and salad", app, input)

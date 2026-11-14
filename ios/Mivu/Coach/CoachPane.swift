@@ -13,7 +13,8 @@ enum CoachPane: Hashable, Sendable {
         guard let seen, !modalOpen else { return CoachPaneLanding(pane: nil, jumps: false) }
         for receipt in receipts.reversed() where !seen.contains(receipt.operationKey) {
             if let showing, showing == receipt.mealID.map(CoachPane.meal) || showing == receipt.workoutID.map(CoachPane.workout) {
-                return CoachPaneLanding(pane: nil, jumps: false)
+                // Unless Coach removed it: then there is nothing left to show, and Today takes over.
+                return CoachPaneLanding(pane: nil, jumps: CoachReceiptPresentation(receipt: receipt, target: .loading).isRemoval)
             }
             if receipt.weightID != nil {
                 if !receipt.operationKey.contains("/delete_weight/") { return CoachPaneLanding(pane: .progress, jumps: true) }
@@ -24,6 +25,23 @@ enum CoachPane: Hashable, Sendable {
             }
         }
         return CoachPaneLanding(pane: nil, jumps: false)
+    }
+}
+
+/// The receipts the pane has already shown, for one diary. A first look, or another profile's diary,
+/// only records what is there, so opening the app or switching profile never moves the pane.
+struct CoachPaneMemory {
+    private var owner: CoachTimelineIdentity?
+    private var keys: Set<String> = []
+
+    /// Records the latest turn's receipts and says where the pane goes. A skipped change is recorded too, never queued.
+    mutating func observe(owner: CoachTimelineIdentity, receipts: [CoachCommittedReceipt], activeDayID: UUID?, today: String?,
+                          modalOpen: Bool, showing: CoachPane?) -> CoachPaneLanding {
+        let landing = CoachPane.landing(seen: self.owner == owner ? keys : nil, receipts: receipts, activeDayID: activeDayID,
+                                        today: today, modalOpen: modalOpen, showing: showing)
+        if self.owner != owner { self.owner = owner; keys = [] }
+        keys.formUnion(receipts.map(\.operationKey))
+        return landing
     }
 }
 

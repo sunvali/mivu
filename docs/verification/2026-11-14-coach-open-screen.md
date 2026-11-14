@@ -69,6 +69,26 @@ rotate the inner display.
   XCUITest whatever the inset, and three attempts to measure a card failed to
   detect the band. The before and after were compared by screenshot.
 
+### Independent review
+
+One review of the whole branch against the design found two problems, both
+fixed with a test that failed first:
+
+- Switching profile could move the pane, because the other profile's latest
+  turn looked like a new change. What the pane has seen is now kept per diary.
+  `switchingProfileNeverJumps`, `skippedChangeNeverJumpsLater`.
+- A meal open in the pane that Coach deletes, or whose creation is undone,
+  left "Meal unavailable" there. The pane now returns to Today.
+  `removalOfTheOpenRecordReturnsToToday`, `testUndoingPaneMealReturnsToToday`.
+
+After the fixes, open and sideways: `CoachPaneTests` 20 passed and
+`DuoLayoutUITests` 11 passed, 8 skipped (upright-only), 0 failed. The source
+with these fixes is the commit after `39b520b8` on the branch.
+
+Left as is: undoing a workout while its detail is open in the pane still shows
+"Workout unavailable" (Coach deleting it does return to Today); and a pane
+going from one meal straight to another reuses the same screen instance.
+
 ### Not verified
 
 - VoiceOver: the "Showing …" announcement after an automatic move was not heard.

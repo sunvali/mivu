@@ -9,7 +9,12 @@ struct CoachSidePane: View {
     @Binding var pane: CoachPane?
     let openDiary: () -> Void
     /// Receipts already shown. Nil until the first look, so opening the app or turning the phone never moves the pane.
-    @State private var seen: Set<String>?
+    @State private var seen = CoachPaneMemory()
+    private struct OpenMeal: Equatable { let id: UUID; let exists: Bool }
+    /// Whether the meal open in the pane still exists. Coach's own removals arrive as receipts; this also catches Undo.
+    private var openMeal: OpenMeal? {
+        if case .meal(let id) = pane { OpenMeal(id: id, exists: coach.diary.meal(id) != nil) } else { nil }
+    }
 
     /// The newest exchange's receipts, only while the chat is at its latest page; paging back is not a change.
     private var latestTurn: CoachExchangeSummary? {
@@ -38,18 +43,18 @@ struct CoachSidePane: View {
         }
         .accessibilityIdentifier("coachSidePane")
         .onChange(of: latestTurn?.receipts.map(\.operationKey), initial: true) { _, _ in land() }
+        // A meal that was there and is gone has nothing to show; one still loading was never there.
+        .onChange(of: openMeal) { was, now in if let was, let now, was.id == now.id, was.exists, !now.exists { pane = nil } }
     }
 
     /// Moves the pane to where a change Coach just made landed.
     private func land() {
-        guard let turn = latestTurn else { return }
-        let receipts = turn.receipts
+        guard let owner = coach.timeline?.window.identity, let turn = latestTurn else { return }
         // A sheet, alert or camera anywhere in the app: the change is skipped, not queued, so an edit is never replaced.
         let modalOpen = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?
             .rootViewController?.presentedViewController != nil
-        let landing = CoachPane.landing(seen: seen, receipts: receipts, activeDayID: coach.diary.activeDay?.id,
-                                        today: turn.displayLocalDate, modalOpen: modalOpen, showing: pane)
-        seen = (seen ?? []).union(receipts.map(\.operationKey))
+        let landing = seen.observe(owner: owner, receipts: turn.receipts, activeDayID: coach.diary.activeDay?.id,
+                                   today: turn.displayLocalDate, modalOpen: modalOpen, showing: pane)
         guard landing.jumps, landing.pane != pane else { return }
         pane = landing.pane
         // Focus stays in the chat; VoiceOver only hears where the change went.
