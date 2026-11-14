@@ -34,8 +34,8 @@ struct DiaryBackupSettings: View {
                 } else { Label("Backup pending", systemImage: "clock") }
                 if let error = model.backupStatus.pendingError {
                     Text(error == DiaryError.staleArchive.localizedDescription
-                         ? "Backup copies conflict. Your local diary and existing backup are preserved. Export a copy and resolve the folder copy in Files before retrying."
-                         : "Backup pending. Check that the folder is available, then retry. Your local diary is saved.")
+                         ? String(localized: "Backup copies conflict. Your local diary and existing backup are preserved. Export a copy and resolve the folder copy in Files before retrying.")
+                         : String(localized: "Backup pending. Check that the folder is available, then retry. Your local diary is saved."))
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
                 Button("Retry backup") { model.retryBackup() }.frame(minHeight: 44)
@@ -54,7 +54,7 @@ struct DiaryBackupSettings: View {
                             guard model.selection == token else { return }
                             exportDocument = DiaryExportDocument(data: data); exportPicker = true
                         } catch { try? await model.exportCoordinator.release(ticket); throw error }
-                    } catch { model.errorMessage = "Could not prepare an export. Your local diary is preserved." }
+                    } catch { model.errorMessage = String(localized: "Could not prepare an export. Your local diary is preserved.") }
                 }
             }.frame(minHeight: 44)
             if exported { Label("Export saved", systemImage: "checkmark.circle").font(.subheadline) }
@@ -65,7 +65,7 @@ struct DiaryBackupSettings: View {
         .fileImporter(isPresented: $folderPicker, allowedContentTypes: [.folder]) { result in
             switch result {
             case .success(let url): Task { await model.selectBackupFolder(url) }
-            case .failure: model.errorMessage = "Could not choose this backup folder. Your local diary is preserved."
+            case .failure: model.errorMessage = String(localized: "Could not choose this backup folder. Your local diary is preserved.")
             }
         }
         .fileImporter(isPresented: $importPicker, allowedContentTypes: [.json]) { result in
@@ -77,26 +77,26 @@ struct DiaryBackupSettings: View {
                     do {
                         let archive = try await Task.detached { try DiaryArchive.read(url) }.value
                         guard !model.profiles.contains(where: { $0.id == archive.profile.id }) || model.readModel?.profile.id == archive.profile.id else {
-                            model.errorMessage = "This archive belongs to another local profile. Select that profile before restoring."; return
+                            model.errorMessage = String(localized: "This archive belongs to another local profile. Select that profile before restoring."); return
                         }
                         imported = archive; confirmRestore = true
-                    } catch { model.errorMessage = "Could not read this diary archive. Your local diary is preserved." }
+                    } catch { model.errorMessage = String(localized: "Could not read this diary archive. Your local diary is preserved.") }
                 }
-            case .failure: model.errorMessage = "Could not read this diary archive. Your local diary is preserved."
+            case .failure: model.errorMessage = String(localized: "Could not read this diary archive. Your local diary is preserved.")
             }
         }
         .fileExporter(isPresented: $exportPicker, document: exportDocument, contentType: .json, defaultFilename: "Mivu-private-diary") { result in
             switch result {
             case .success: exported = true
-            case .failure: model.errorMessage = "Export was not saved. Your local diary is preserved."
+            case .failure: model.errorMessage = String(localized: "Export was not saved. Your local diary is preserved.")
             }
         }
         .confirmationDialog("Restore \(imported?.profile.name ?? "this private diary")?", isPresented: $confirmRestore, titleVisibility: .visible) {
             Button("Restore diary", role: .destructive) { if let archive = imported { Task { if await model.importArchive(archive) { imported = nil } } } }
             Button("Cancel", role: .cancel) { imported = nil }
         } message: {
-            if imported?.profile.id == model.readModel?.profile.id { Text("Replace \(model.readModel?.profile.name ?? "the selected profile") with \(imported?.profile.name ?? "the validated archive") (\(imported?.meals.count ?? 0) meals). Older or deleted records cannot overwrite newer changes.") }
-            else { Text("Import \(imported?.profile.name ?? "the archived profile") (\(imported?.meals.count ?? 0) meals) as a separate private local diary. The selected profile is preserved.") }
+            if imported?.profile.id == model.readModel?.profile.id { Text("Replace \(model.readModel?.profile.name ?? String(localized: "the selected profile")) with \(imported?.profile.name ?? String(localized: "the validated archive")) (\(imported?.meals.count ?? 0) meals). Older or deleted records cannot overwrite newer changes.") }
+            else { Text("Import \(imported?.profile.name ?? String(localized: "the archived profile")) (\(imported?.meals.count ?? 0) meals) as a separate private local diary. The selected profile is preserved.") }
         }
     }
 }

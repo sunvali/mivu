@@ -164,10 +164,10 @@ struct OnboardingView: View {
 
     private var primaryTitle: String {
         switch step {
-        case .hello: "Get started"
-        case .connect: connection.activeRegistrationID == nil ? "Continue with ChatGPT" : "Reauthorize ChatGPT"
-        case .results: "Save my targets"
-        default: "Continue"
+        case .hello: String(localized: "Get started")
+        case .connect: connection.activeRegistrationID == nil ? String(localized: "Continue with ChatGPT") : String(localized: "Reauthorize ChatGPT")
+        case .results: String(localized: "Save my targets")
+        default: String(localized: "Continue")
         }
     }
 
@@ -176,18 +176,18 @@ struct OnboardingView: View {
     @ViewBuilder private var page: some View {
         switch step {
         case .hello:
-            header("Hi, I'm Pip", "Answer a few quick questions and I'll set daily targets that fit you. It takes about a minute.")
+            header(String(localized: "Hi, I'm Pip"), String(localized: "Answer a few quick questions and I'll set daily targets that fit you. It takes about a minute."))
             card {
-                promise("ruler", "Your body and goal", "Height, weight and where you want to be.")
+                promise("ruler", String(localized: "Your body and goal"), String(localized: "Height, weight and where you want to be."))
                 Divider()
-                promise("leaf", "How you eat", "Diets, allergies or conditions Coach should know.")
+                promise("leaf", String(localized: "How you eat"), String(localized: "Diets, allergies or conditions Coach should know."))
                 Divider()
-                promise("sparkles", "Targets that fit", "ChatGPT tunes calories, protein, carbs and fat.")
+                promise("sparkles", String(localized: "Targets that fit"), String(localized: "ChatGPT tunes calories, protein, carbs and fat."))
             }
         case .about:
-            header("About you", "Used only to estimate your energy needs.")
+            header(String(localized: "About you"), String(localized: "Used only to estimate your energy needs."))
             card {
-                row("Height", invalid: heightCm.map { !(50...272).contains($0) } ?? false) {
+                row(String(localized: "Height"), invalid: heightCm.map { !(50...272).contains($0) } ?? false) {
                     if metricHeight {
                         numberField($heightCm, field: .height, id: "onboardingHeight")
                     } else {
@@ -198,12 +198,12 @@ struct OnboardingView: View {
                     unitMenu($metricHeight, metric: "cm", imperial: "in")
                 }
                 Divider()
-                row("Weight", invalid: weightKg.map { !(20...400).contains($0) } ?? false) {
+                row(String(localized: "Weight"), invalid: weightKg.map { !(20...400).contains($0) } ?? false) {
                     numberField(shownWeight($weightKg), field: .weight, id: "onboardingWeight")
                     unitMenu($metricWeight, metric: "kg", imperial: "lb")
                 }
                 Divider()
-                row("Birth year", invalid: birthYear.map { !(1900...Self.thisYear - 13).contains($0) } ?? false) {
+                row(String(localized: "Birth year"), invalid: birthYear.map { !(1900...Self.thisYear - 13).contains($0) } ?? false) {
                     TextField("Add", value: $birthYear, format: .number.grouping(.never))
                         .keyboardType(.numberPad).multilineTextAlignment(.trailing).font(.title3.monospacedDigit())
                         .focused($focus, equals: .birthYear).frame(maxWidth: 90)
@@ -218,19 +218,19 @@ struct OnboardingView: View {
                     }.labelsHidden().tint(.diaryAccent).fixedSize()
                 }
             }
-            footnote("Sex is optional. Skipping it uses the midpoint of both formulas.")
+            footnote(String(localized: "Sex is optional. Skipping it uses the midpoint of both formulas."))
         case .goal:
-            header("Your goal", "Enter your current weight to keep it.")
+            header(String(localized: "Your goal"), String(localized: "Enter your current weight to keep it."))
             card {
-                row("Target weight", invalid: targetKg.map { !(20...400).contains($0) } ?? false) {
+                row(String(localized: "Target weight"), invalid: targetKg.map { !(20...400).contains($0) } ?? false) {
                     numberField(shownWeight($targetKg), field: .target, id: "onboardingTarget")
                     unitMenu($metricWeight, metric: "kg", imperial: "lb")
                 }
             }
             if let answers, !answers.targetIsHealthy {
-                footnote("That target is below a healthy weight for your height, so Mivu can't set it. Choose a higher target, or talk to a doctor or registered dietitian.")
+                footnote(String(localized: "That target is below a healthy weight for your height, so Mivu can't set it. Choose a higher target, or talk to a doctor or registered dietitian."))
             } else if let answers, !answers.keepsWeight {
-                Text(answers.targetKg < answers.weightKg ? "How quickly would you like to lose it?" : "How quickly would you like to gain it?")
+                Text(answers.targetKg < answers.weightKg ? String(localized: "How quickly would you like to lose it?") : String(localized: "How quickly would you like to gain it?"))
                     .font(.headline).padding(.top, 4)
                 card {
                     ForEach(ProfileAbout.Pace.allCases, id: \.self) { pace in
@@ -243,7 +243,7 @@ struct OnboardingView: View {
                     .foregroundStyle(Color.diarySecondary)
             }
         case .diet:
-            header("How do you eat?", "Pick anything that applies. Coach keeps it in mind for every suggestion.")
+            header(String(localized: "How do you eat?"), String(localized: "Pick anything that applies. Coach keeps it in mind for every suggestion."))
             FlowLayout(spacing: 8) {
                 ForEach(Self.dietChoices, id: \.self) { chip($0) }
             }
@@ -253,16 +253,16 @@ struct OnboardingView: View {
                     .onChange(of: about.healthNotes) { _, text in if text.count > 2_000 { about.healthNotes = String(text.prefix(2_000)) } }
             }
         case .connect:
-            header("Let ChatGPT tune it", "Connect your ChatGPT account to turn your answers into personal targets.")
+            header(String(localized: "Let ChatGPT tune it"), String(localized: "Connect your ChatGPT account to turn your answers into personal targets."))
             card {
-                promise("lock.shield", "Private by default", "Mivu asks before sharing anything with OpenAI. Your diary stays on this iPhone.")
+                promise("lock.shield", String(localized: "Private by default"), String(localized: "Mivu asks before sharing anything with OpenAI. Your diary stays on this iPhone."))
                 Divider()
-                promise("person.crop.circle.badge.checkmark", "Your own plan", "Recommended. Works with ChatGPT Plus or Pro and uses its allowance. No extra cost.")
+                promise("person.crop.circle.badge.checkmark", String(localized: "Your own plan"), String(localized: "Recommended. Works with ChatGPT Plus or Pro and uses its allowance. No extra cost."))
             }
             if connection.isConnecting { ProgressView("Waiting for ChatGPT…").frame(maxWidth: .infinity) }
-            if let notice = connection.notice { footnote(notice.rawValue) }
+            if let notice = connection.notice { footnote(String(localized: String.LocalizationValue(notice.rawValue))) }
         case .results:
-            header("Your daily targets", nil)
+            header(String(localized: "Your daily targets"), nil)
             results
         }
     }
@@ -296,18 +296,18 @@ struct OnboardingView: View {
             }
             if askFailed {
                 VStack(alignment: .leading, spacing: 8) {
-                    footnote("ChatGPT couldn't answer just now. You can keep the estimate or try again.")
+                    footnote(String(localized: "ChatGPT couldn't answer just now. You can keep the estimate or try again."))
                     Button("Try again", systemImage: "arrow.clockwise") { Task { await askChatGPT() } }
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
             }
-            footnote("These are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat, especially if you have a health condition. You can change targets any time in Settings › Goals.")
+            footnote(String(localized: "These are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat, especially if you have a health condition. You can change targets any time in Settings › Goals."))
         }
     }
 
     @ViewBuilder private var macros: some View {
-        macro("Protein", $targets.protein, .diaryProtein)
-        macro("Carbs", $targets.carbs, .diaryCarbs)
+        macro(String(localized: "Protein"), $targets.protein, .diaryProtein)
+        macro(String(localized: "Carbs"), $targets.carbs, .diaryCarbs)
         macro("Fat", $targets.fat, .diaryFat)
     }
 
@@ -496,10 +496,10 @@ struct OnboardingView: View {
     }
 
     private func paceRow(_ pace: ProfileAbout.Pace) -> some View {
-        let name: String = switch pace { case .gentle: "Gentle"; case .steady: "Steady"; case .faster: "Faster" }
-        let amount = metricWeight ? "\(pace.kgPerWeek.formatted()) kg a week"
-            : "\((pace.kgPerWeek / Self.kgPerLb).formatted(.number.precision(.fractionLength(1)))) lb a week"
-        let note: String = switch pace { case .gentle: "Easiest to keep up"; case .steady: "Right for most people"; case .faster: "Takes more discipline" }
+        let name: String = switch pace { case .gentle: String(localized: "Gentle"); case .steady: String(localized: "Steady"); case .faster: String(localized: "Faster") }
+        let amount = metricWeight ? String(localized: "\(pace.kgPerWeek.formatted()) kg a week")
+            : String(localized: "\((pace.kgPerWeek / Self.kgPerLb).formatted(.number.precision(.fractionLength(1)))) lb a week")
+        let note: String = switch pace { case .gentle: String(localized: "Easiest to keep up"); case .steady: String(localized: "Right for most people"); case .faster: String(localized: "Takes more discipline") }
         let chosen = about.pace == pace
         return Button { withAnimation(.snappy) { about.pace = pace } } label: {
             HStack(spacing: 12) {
@@ -525,7 +525,7 @@ struct OnboardingView: View {
         } label: {
             HStack(spacing: 6) {
                 if chosen { Image(systemName: "checkmark").font(.footnote.weight(.bold)) }
-                Text(tag)
+                Text(LocalizedStringKey(tag)) // The tag itself is stored and sent to the model in English.
             }
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 14).frame(minHeight: 44)

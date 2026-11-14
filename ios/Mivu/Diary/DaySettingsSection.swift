@@ -37,8 +37,8 @@ struct DaySettingsSection: View {
             }
         } header: { Text("Your day") } footer: {
             VStack(alignment: .leading, spacing: 8) {
-                Text(denied ? "Notifications are off for Mivu. You can allow them in iOS Settings."
-                     : "Food before \(hourLabel(cutoff)) still counts for the day before. A new day starts the first time you open Mivu after that.")
+                Text(denied ? String(localized: "Notifications are off for Mivu. You can allow them in iOS Settings.")
+                     : String(localized: "Food before \(hourLabel(cutoff)) still counts for the day before. A new day starts the first time you open Mivu after that."))
                 if !activitiesAllowed { Text("Live Activities are off for Mivu in iOS Settings.") }
             }
         }

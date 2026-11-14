@@ -5,11 +5,9 @@ import XCTest
 /// and `TEST_RUNNER_SWEEP_TEXT=default|largest`. See docs/verification/languages/README.md.
 @MainActor final class LanguageSweepUITests: XCTestCase {
     /// Screens whose text is not all in the string catalogs yet. Empty when the app is language-ready.
-    static let notYetLocalized: Set<String> = [
-        "onboarding", "settings", "goalEditor",
-    ]
+    static let notYetLocalized: Set<String> = []
     /// Text the fixtures or the test typed: data, not interface.
-    static let fixtureData: Set<String> = ["Two eggs, three bread slices and salad", "My diary", "Synthetic history food",
+    static let fixtureData: Set<String> = ["Two eggs, three bread slices and salad", "My diary", "Synthetic history food", "Synthetic history",
                                            "Eggs", "Bread", "Salad", "All set.", "1 bowl", "2 egg", "3 slice"]
 
     private var mode: String { ProcessInfo.processInfo.environment["SWEEP_MODE"] ?? "english" }
@@ -208,13 +206,23 @@ import XCTest
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US")
         let dateWords = Set(formatter.weekdaySymbols + formatter.shortWeekdaySymbols + formatter.monthSymbols + formatter.shortMonthSymbols + ["AM", "PM", "GMT", "UTC"])
         // Typed text can hold commas of its own, so take fixture data out before splitting.
-        let label = fixtureData.reduce(label) { $0.replacingOccurrences(of: $1, with: "") }
-        return label.components(separatedBy: ", ").allSatisfy { part in
-            let part = part.trimmingCharacters(in: .whitespaces)
-            if fixtureData.contains(part) || part.hasPrefix("pose:") || !part.contains(where: \.isLetter) || isDoubled(part) { return true }
-            return part.split(whereSeparator: \.isWhitespace).allSatisfy { word in
-                !word.contains(where: \.isLetter) || dateWords.contains(word.trimmingCharacters(in: .punctuationCharacters))
+        let label = fixtureData.sorted { $0.count > $1.count }.reduce(label) { $0.replacingOccurrences(of: $1, with: "") }
+        // A combined label joins several strings with ", ", and a string can hold commas itself:
+        // accept it when the parts can be grouped so every group is localized on its own.
+        let parts = label.components(separatedBy: ", ")
+        var reachable = [true] + Array(repeating: false, count: parts.count)
+        for end in 1...parts.count {
+            reachable[end] = (0..<end).contains { start in
+                reachable[start] && isLocalizedPart(parts[start..<end].joined(separator: ", ").trimmingCharacters(in: .whitespaces), dateWords)
             }
+        }
+        return reachable[parts.count]
+    }
+
+    private static func isLocalizedPart(_ part: String, _ dateWords: Set<String>) -> Bool {
+        if part.isEmpty || fixtureData.contains(part) || part.hasPrefix("pose:") || !part.contains(where: \.isLetter) || isDoubled(part) { return true }
+        return part.split(whereSeparator: \.isWhitespace).allSatisfy { word in
+            !word.contains(where: \.isLetter) || dateWords.contains(word.trimmingCharacters(in: .punctuationCharacters))
         }
     }
 
