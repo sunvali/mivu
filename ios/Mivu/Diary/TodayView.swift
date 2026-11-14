@@ -63,7 +63,7 @@ private struct DiarySetupView: View {
     private func startNew() async {
         failed = false
         var created = true
-        if model.profiles.isEmpty { created = await model.createFirstProfile() } else { await model.createProfile(name: "Diary \(model.profiles.count + 1)") }
+        if model.profiles.isEmpty { created = await model.createFirstProfile() } else { await model.createProfile(name: String(localized: "Diary \(model.profiles.count + 1)")) }
         // Setup opens first so a waiting Snap It camera follows it instead of covering it.
         if model.readModel != nil { if created { onCreated() }; onSelected() } else { failed = true }
     }
@@ -330,7 +330,7 @@ struct DiaryRootView: View {
             QuickLogCameraView(model: model, ownership: quickLogOwner) { id in
                 quickLogOwner = nil; selectedTab = "today"
                 withAnimation { loggedMealID = id }
-                AccessibilityNotification.Announcement("Meal logged").post()
+                AccessibilityNotification.Announcement(String(localized: "Meal logged")).post()
                 Task { await MealNotification.requestPermissionIfNeeded() }
             }
         }
@@ -469,7 +469,7 @@ struct DiaryRootView: View {
         guard let selection = model.selection else { return }
         let meal = model.meal(id)
         let title = meal?.items.first?.name ?? meal?.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        openCoachAction(nil, reply: CoachReply(target: .meal(mealID: id), excerpt: String((title.isEmpty ? "Meal" : title).prefix(280))), expectedSelection: selection)
+        openCoachAction(nil, reply: CoachReply(target: .meal(mealID: id), excerpt: String((title.isEmpty ? String(localized: "Meal") : title).prefix(280))), expectedSelection: selection)
     }
     private var openCoachAction: OpenDiaryCoachAction {
         coachAction(from: coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile))
@@ -814,10 +814,10 @@ struct TodayView: View {
                 Text(displayDate).font(.subheadline)
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
             }.foregroundStyle(Color.diarySecondary).frame(minHeight: 44)
-        }.accessibilityLabel("Day actions, " + displayDate).accessibilityIdentifier("todayDayActions")
+        }.accessibilityLabel("Day actions, \(displayDate)").accessibilityIdentifier("todayDayActions")
     }
     private var displayDate: String {
-        guard let value = model.activeDay?.localDate else { return "Your waking day" }
+        guard let value = model.activeDay?.localDate else { return String(localized: "Your waking day") }
         let parts = value.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3, let date = Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)) else { return value }
         return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
@@ -863,7 +863,7 @@ struct TodayView: View {
         }
     }
     private func heroMetric(_ title: LocalizedStringKey, value: Double?, color: Color) -> some View {
-        DiaryMetric(title: title, value: value.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" }, color: color)
+        DiaryMetric(title: title, value: value.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0)))) g") }, color: color)
     }
 
     @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay) -> some View {

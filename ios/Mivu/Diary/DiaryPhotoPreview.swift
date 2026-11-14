@@ -30,7 +30,7 @@ struct DiaryPhotoPreview: View {
         .frame(maxWidth: .infinity).frame(height: height).clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .ignore).accessibilityLabel("Saved attachment").accessibilityHidden(false)
         .accessibilityIdentifier("coachPhoto-" + reference.photoID.uuidString)
-        .accessibilityValue(image == nil ? "Loading photo" : "Photo loaded")
+        .accessibilityValue(image == nil ? String(localized: "Loading photo") : String(localized: "Photo loaded"))
         .task(id: request) {
             let captured = request, operation = UUID(); requestID = operation; image = nil
             guard !model.isChangingProfile, captured.profileID == captured.reference.profileID,

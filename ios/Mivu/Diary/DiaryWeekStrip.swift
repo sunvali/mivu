@@ -31,7 +31,8 @@ enum DiaryWeek {
     static func format(_ localDate: String, _ pattern: String) -> String {
         guard let day = date(localDate) else { return localDate }
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US"); formatter.timeZone = .gmt; formatter.dateFormat = pattern
+        // Each pattern is a catalog entry, so a language can reorder the day and month.
+        formatter.locale = .current; formatter.timeZone = .gmt; formatter.dateFormat = String(localized: String.LocalizationValue(pattern))
         return formatter.string(from: day)
     }
 
@@ -41,9 +42,14 @@ enum DiaryWeek {
 
     static func pillLabel(_ localDate: String, summaries: [DiaryDaySummary], activeDayID: UUID? = nil) -> String {
         let name = format(localDate, "EEEE d MMMM")
-        guard let status = status(summaries, activeDayID: activeDayID) else { return "\(name), nothing logged" }
+        guard let status = status(summaries, activeDayID: activeDayID) else { return String(localized: "\(name), nothing logged") }
         let meals = summaries.reduce(0) { $0 + $1.mealCount }
-        return "\(name), \(status.rawValue), \(meals) \(meals == 1 ? "meal" : "meals")"
+        let state = switch status {
+        case .open: String(localized: "open")
+        case .closed: String(localized: "closed")
+        case .skipped: String(localized: "skipped")
+        }
+        return String(localized: "\(name), \(state), \(meals) meals")
     }
 }
 

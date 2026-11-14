@@ -17,4 +17,21 @@ struct LanguageTextTests {
         #expect(open.text == "Yesterday · — kcal")
         #expect(open.spoken == "Logging to yesterday, unknown kcal")
     }
+
+    @Test func mealCountsReadCorrectly() {
+        let day = TrackingDay(localDate: "2027-01-12", timeZoneID: "UTC", startAt: Date(), completeness: .partial)
+        func label(_ meals: Int) -> String {
+            DiaryWeek.pillLabel("2027-01-12", summaries: [DiaryDaySummary(mealCount: meals, day: day, totals: nutritionTotals([]), savedMealCount: meals, pendingMealCount: 0)])
+        }
+        #expect(label(0).hasSuffix(", 0 meals"))
+        #expect(label(1).hasSuffix(", 1 meal"))
+        #expect(label(2).hasSuffix(", 2 meals"))
+    }
+
+    @Test func datePatternsKeepTheirEnglishShape() {
+        #expect(DiaryWeek.format("2026-10-19", "EEEE d MMMM") == "Monday 19 October")
+        #expect(DiaryWeek.format("2026-10-19", "EEEE, d MMM") == "Monday, 19 Oct")
+        #expect(DiaryWeek.format("2026-10-19", "MMM d, yyyy") == "Oct 19, 2026")
+        #expect(DiaryWeek.format("2026-10-19", "EEEEE") == "M")
+    }
 }

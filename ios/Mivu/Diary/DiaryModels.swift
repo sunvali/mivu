@@ -34,17 +34,17 @@ enum DiaryError: Error, Equatable, LocalizedError {
     case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, undoExpired, notFound, emptyCapture, ambiguousDay, staleArchive
     var errorDescription: String? {
         switch self {
-        case .noProfile: "Choose a local profile first."
-        case .wrongOwner: "The profile changed. Please try again."
-        case .invalidData: "This diary contains invalid or unsupported data."
-        case .invalidAmountUnitChange: "Enter or clear each known nutrient when changing to an unrelated unit."
-        case .persistenceFailed: "The diary could not be saved. Your input is still available."
-        case .staleRevision: "This meal changed. Please retry the correction."
-        case .undoExpired: "Undo is no longer available."
-        case .notFound: "This diary entry no longer exists."
-        case .emptyCapture: "Add a photo or a meal description."
-        case .ambiguousDay: "Your day just changed. Save again to add this to the new day."
-        case .staleArchive: "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover."
+        case .noProfile: String(localized: "Choose a local profile first.")
+        case .wrongOwner: String(localized: "The profile changed. Please try again.")
+        case .invalidData: String(localized: "This diary contains invalid or unsupported data.")
+        case .invalidAmountUnitChange: String(localized: "Enter or clear each known nutrient when changing to an unrelated unit.")
+        case .persistenceFailed: String(localized: "The diary could not be saved. Your input is still available.")
+        case .staleRevision: String(localized: "This meal changed. Please retry the correction.")
+        case .undoExpired: String(localized: "Undo is no longer available.")
+        case .notFound: String(localized: "This diary entry no longer exists.")
+        case .emptyCapture: String(localized: "Add a photo or a meal description.")
+        case .ambiguousDay: String(localized: "Your day just changed. Save again to add this to the new day.")
+        case .staleArchive: String(localized: "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover.")
         }
     }
 }

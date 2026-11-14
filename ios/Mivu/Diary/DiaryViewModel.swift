@@ -186,7 +186,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 try await install(try await profileSelection(profile.id))
             } else if createDefaultProfile {
-                try await install(try await store.createProfile(DiaryProfile(name: "My diary", language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
+                try await install(try await store.createProfile(DiaryProfile(name: String(localized: "My diary"), language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
                 profiles = try await store.profiles()
             }
         } catch { await recoverProfileSelection(previous); presentUnlessLocked(error) }
@@ -387,7 +387,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             }
             if meal(saved.id) == nil { refreshNeeded = true }
             if attempt.isNew, !refreshNeeded { noteFirstMealOfDay(saved, profileID: token.identity.profileID, operationID: draft.submissionID) }
-            errorMessage = refreshNeeded ? "Saved on this iPhone. Reload the diary to refresh totals." : nil
+            errorMessage = refreshNeeded ? String(localized: "Saved on this iPhone. Reload the diary to refresh totals.") : nil
             return .saved(saved.id)
         } catch {
             guard selection == token, !isChangingProfile else { return .failed }
@@ -395,7 +395,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             catch DiaryError.wrongOwner, DiaryError.noProfile { return .failed }
             catch { /* Storage failure does not prove that the selected owner changed. */ }
             if let committedID {
-                errorMessage = "Saved on this iPhone. Reload the diary to refresh totals."
+                errorMessage = String(localized: "Saved on this iPhone. Reload the diary to refresh totals.")
                 return .saved(committedID)
             }
             present(error)
@@ -440,7 +440,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             guard !Task.isCancelled, selection == expectedSelection, !isChangingProfile else { return nil }
             if meal(result.meal.id) == nil { refreshNeeded = true }
             savedMealID = result.meal.id
-            errorMessage = refreshNeeded ? "Saved on this iPhone. Reload the diary to refresh totals." : nil
+            errorMessage = refreshNeeded ? String(localized: "Saved on this iPhone. Reload the diary to refresh totals.") : nil
             if !result.replayed, companionCaptureEvent?.operationID != result.submissionID {
                 captureReceipt = result.submissionID
                 companionCaptureEvent = CompanionEvent(profileID: payload.profileID, operationID: result.submissionID, kind: .saved, committedAt: Date())
@@ -471,7 +471,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     @discardableResult func createFirstProfile() async -> Bool {
         do { profiles = try await store.profiles() } catch { presentUnlessLocked(error); return false }
         guard profiles.isEmpty else { await load(createDefaultProfile: false); return false }
-        await createProfile(name: "My diary"); return readModel != nil
+        await createProfile(name: String(localized: "My diary")); return readModel != nil
     }
     func signOut() async { guard beginProfileTransition() else { return }; defer { finishProfileTransition() }; await clearProfileSelection() }
     func deleteProfile(_ owner: UUID) async {
@@ -511,7 +511,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         backupGeneration = nil; backupScheduledRevision = nil; backupRequested = nil
         await backup?.selectProfile(profileID)
         if let owner = profileID, let backup {
-            do { backupGeneration = try await backup.generation(profileID: owner) } catch { backupStatus = FolderBackupStatus(pendingError: "Backup pending"); return }
+            do { backupGeneration = try await backup.generation(profileID: owner) } catch { backupStatus = FolderBackupStatus(pendingError: String(localized: "Backup pending")); return }
             backupStatus = await backup.status(profileID: owner)
         } else { backupStatus = FolderBackupStatus() }
     }
@@ -536,7 +536,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
                 } catch {
                     guard selection == pending.0, !Task.isCancelled else { return }
                     backupStatus = await backup.status(profileID: owner)
-                    if backupStatus.pendingError == nil { backupStatus.pendingError = "Backup pending" }
+                    if backupStatus.pendingError == nil { backupStatus.pendingError = String(localized: "Backup pending") }
                     return
                 }
                 if selection == pending.0 { backupStatus = await backup.status(profileID: owner) }
@@ -555,7 +555,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             guard selection == token else { return }
             backupGeneration = try await backup.generation(profileID: token.identity.profileID)
             backupStatus = await backup.status(profileID: token.identity.profileID); backupScheduledRevision = nil; queueBackup()
-        } catch { errorMessage = "Could not choose this backup folder. Your local diary is preserved." }
+        } catch { errorMessage = String(localized: "Could not choose this backup folder. Your local diary is preserved.") }
     }
     func importArchive(_ archive: DiarySnapshot) async -> Bool {
         guard beginProfileTransition() else { return false }; let previous = readModel?.head.profile.id
@@ -591,7 +591,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     }
     /// A locked phone keeps the diary closed until unlock, when setup retries; a real failure shows then.
     private func presentUnlessLocked(_ error: Error) { if protectedDataAvailable() { present(error) } }
-    private func present(_ error: Error) { errorMessage = (error as? LocalizedError)?.errorDescription ?? "Could not save on this iPhone. Your input is still here." }
+    private func present(_ error: Error) { errorMessage = (error as? LocalizedError)?.errorDescription ?? String(localized: "Could not save on this iPhone. Your input is still here.") }
 }
 
 enum DiaryLaunch {

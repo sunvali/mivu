@@ -45,6 +45,7 @@
         }
       }
     },
+    "%@ · Current day" : {},
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -114,6 +115,28 @@
         }
       }
     },
+    "%@, %@, %lld meals" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@, %2$@, %3$lld meal"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@, %2$@, %3$lld meals"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%@, %@, calories unknown" : {
       "localizations" : {
         "en" : {
@@ -154,6 +177,7 @@
         }
       }
     },
+    "%@, nothing logged" : {},
     "%@: %@ kcal" : {
       "localizations" : {
         "en" : {
@@ -263,6 +287,17 @@
       }
     },
     "A waking day will be started when you save." : {},
+    "About the %@ from %@: " : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "About the %1$@ from %2$@: "
+          }
+        }
+      }
+    },
+    "About the %@: " : {},
     "Account" : {
       "localizations" : {
         "en" : {
@@ -285,6 +320,7 @@
     },
     "Add" : {},
     "Add a note, a photo, or both." : {},
+    "Add a photo or a meal description." : {},
     "Add exercise" : {},
     "Add food manually" : {},
     "Add manually" : {},
@@ -346,6 +382,7 @@
       }
     },
     "Agree and Continue" : {},
+    "Allow camera access in Settings to log meals with a photo." : {},
     "Allow camera access in Settings, or choose a photo instead." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -360,6 +397,7 @@
     "Allow camera access in Settings, or choose photos." : {},
     "Allow microphone access in Settings to log by voice." : {},
     "Allow speech recognition in Settings to log by voice." : {},
+    "Amount" : {},
     "An estimate, shown separately from recorded food." : {},
     "Analysis needs retry" : {},
     "Analysis paused" : {
@@ -583,6 +621,7 @@
         }
       }
     },
+    "Camera could not continue." : {},
     "Camera could not continue. Your input is kept." : {},
     "Camera could not restart. Choose photos or close." : {},
     "Camera is unavailable here. Choose Photos instead." : {},
@@ -597,8 +636,10 @@
         }
       }
     },
+    "Camera is unavailable on this device." : {},
     "Camera is unavailable. Choose photos instead." : {},
     "Camera is unavailable. Choose photos or close." : {},
+    "Camera was interrupted." : {},
     "Camera was interrupted. Your input is kept." : {},
     "Cancel" : {
       "extractionState" : "manual",
@@ -722,6 +763,7 @@
     "Check this value" : {},
     "Checking your diary…" : {},
     "Choose a diary on this iPhone, or start a new one." : {},
+    "Choose a local profile first." : {},
     "Choose a private Files folder. Folder acknowledgement does not confirm remote upload." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -783,6 +825,7 @@
     "Choose your diary" : {},
     "Choose your diary before adding photos." : {},
     "Close" : {},
+    "closed" : {},
     "Closed" : {},
     "Coach" : {},
     "Coach AI" : {},
@@ -834,6 +877,7 @@
         }
       }
     },
+    "Confirmed label values" : {},
     "Connect" : {},
     "Connect ChatGPT" : {
       "localizations" : {
@@ -950,6 +994,7 @@
         }
       }
     },
+    "Could not confirm this save. Retry with the same food to check it safely." : {},
     "Could not import photo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -962,6 +1007,7 @@
       }
     },
     "Could not import photo. Your note and other photos are kept." : {},
+    "Could not import selected photos" : {},
     "Could not load current record" : {},
     "Could not load this conversation. Try again." : {},
     "Could not log photo" : {},
@@ -1001,6 +1047,7 @@
     },
     "Could not save weight" : {},
     "Could not save workout" : {},
+    "Could not take photo. Try again." : {},
     "Could not take photo. Your note and other photos are kept." : {},
     "Couldn't finish the rest" : {},
     "Couldn't finish. Your message is saved." : {},
@@ -1035,6 +1082,7 @@
     "Current workout" : {},
     "Daily targets" : {},
     "Date" : {},
+    "Day actions, %@" : {},
     "Day coverage" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1050,6 +1098,16 @@
     "Day status" : {},
     "Days" : {},
     "Delete" : {},
+    "Delete “%@” on %@?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete “%1$@” on %2$@?"
+          }
+        }
+      }
+    },
     "Delete %@" : {},
     "Delete %@?" : {},
     "Delete food" : {},
@@ -1075,6 +1133,7 @@
         }
       }
     },
+    "Delete meal?" : {},
     "Delete photo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1168,6 +1227,7 @@
     "Describe a meal…" : {},
     "Destination waking day" : {},
     "Diary" : {},
+    "Diary %lld" : {},
     "Diary preferences" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1243,6 +1303,7 @@
         }
       }
     },
+    "Double" : {},
     "Each kilogram of body weight stores about 7,700 kcal. Burn = average intake minus the energy your trend stored or released per day." : {},
     "Earlier" : {},
     "Earlier conversations" : {},
@@ -1281,6 +1342,7 @@
     "Effective date" : {},
     "Empty days aren't counted as zero." : {},
     "End" : {},
+    "Energy (kcal)" : {},
     "Energy unknown" : {},
     "English" : {
       "extractionState" : "manual",
@@ -1303,6 +1365,7 @@
     "Enter at least one nutrient. Leave unknown values blank; zero means a known zero. Saved as entered manually." : {},
     "Enter nutrition" : {},
     "Enter nutrition manually" : {},
+    "Enter or clear each known nutrient when changing to an unrelated unit." : {},
     "Estimate" : {},
     "Estimate awaiting review" : {},
     "Estimated burn: %@ kcal" : {},
@@ -1413,6 +1476,7 @@
     "Food name" : {},
     "Foods" : {},
     "Foods with unknown calories and meals still being analyzed are left out." : {},
+    "For %@: " : {},
     "For breakfast I had " : {},
     "Format" : {},
     "From" : {},
@@ -1436,10 +1500,15 @@
     "Goal: %@ kcal a day." : {},
     "Goals" : {},
     "Goals are your settings. Earlier dates keep their own records." : {},
+    "Good afternoon" : {},
+    "Good evening" : {},
+    "Good morning" : {},
     "Got it" : {},
+    "Half" : {},
     "Have a backup?" : {},
     "Hide check-in" : {},
     "Hide numbers on Lock Screen" : {},
+    "Historical meal" : {},
     "History" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2030,6 +2099,7 @@
     "Older goals" : {},
     "Older measurements" : {},
     "Older workouts" : {},
+    "One and a half" : {},
     "One measurement; a trend needs another date." : {},
     "Only completed analysis will appear as a result." : {
       "localizations" : {
@@ -2044,6 +2114,7 @@
     "Only this food is removed. The meal keeps its other foods." : {},
     "Only this meal will move. The destination changes when you tap Move." : {},
     "Only this photo will be removed. The meal and its notes are kept." : {},
+    "open" : {},
     "Open" : {},
     "Open backup and Files" : {},
     "Open ChatGPT connection" : {},
@@ -2085,6 +2156,7 @@
         }
       }
     },
+    "Original" : {},
     "Other allergies, intolerances or dislikes" : {},
     "Partial" : {
       "extractionState" : "manual",
@@ -2108,6 +2180,7 @@
       }
     },
     "Photo" : {},
+    "Photo %lld" : {},
     "Photo library" : {},
     "Photo loaded" : {},
     "Photo timing" : {
@@ -2145,6 +2218,7 @@
         }
       }
     },
+    "Pip" : {},
     "Portion" : {},
     "Portion or nutrients are uncertain" : {
       "extractionState" : "manual",
@@ -2361,6 +2435,7 @@
         }
       }
     },
+    "Reply to your message: %@" : {},
     "Replying to Pip" : {},
     "Replying to you" : {},
     "Report format" : {},
@@ -2403,6 +2478,7 @@
     "Retake" : {},
     "Retake photo" : {},
     "Retake photo %lld" : {},
+    "Retrieved nutrition source" : {},
     "Retry" : {},
     "Retry analysis" : {
       "localizations" : {
@@ -2540,6 +2616,7 @@
     "Saved food" : {},
     "Saved on this iPhone" : {},
     "Saved on this iPhone before analysis. Pending or unreviewed results do not count in totals. We’ll ask if the waking day needs confirming." : {},
+    "Saved on this iPhone. Reload the diary to refresh totals." : {},
     "Saved submissions are shown below. Individual change times and before-and-after values are not recorded." : {},
     "Saved to backup folder" : {
       "extractionState" : "manual",
@@ -2662,6 +2739,7 @@
     },
     "Skip" : {},
     "Skip This Day" : {},
+    "skipped" : {},
     "Skipped" : {},
     "Skipped days stay out of your statistics." : {},
     "Snap It" : {},
@@ -2799,6 +2877,7 @@
     "The connection changed. Your message is saved; tap Try again." : {},
     "The conversation page was invalid. Try again." : {},
     "The conversation update was invalid. Try again." : {},
+    "The diary could not be saved. Your input is still available." : {},
     "The diary works in apple sample mode without connecting ChatGPT." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2812,6 +2891,8 @@
     },
     "The meal will be recorded on this day. Time will be unspecified." : {},
     "The meal’s original day and time are kept." : {},
+    "The photo was not saved. Try again." : {},
+    "The profile changed. Please try again." : {},
     "The saved attachment could not be displayed." : {},
     "The saved ingredient will keep its original values." : {},
     "There's no food recorded for %@ yet." : {},
@@ -2828,6 +2909,7 @@
         }
       }
     },
+    "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover." : {},
     "This backup is older or contains deleted meals. It cannot replace this diary." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2851,6 +2933,8 @@
         }
       }
     },
+    "This diary contains invalid or unsupported data." : {},
+    "This diary entry no longer exists." : {},
     "This food" : {},
     "This imports the archived profile as a separate private local diary. The selected profile is preserved." : {
       "extractionState" : "manual",
@@ -2878,6 +2962,7 @@
         }
       }
     },
+    "This meal changed. Please retry the correction." : {},
     "This meal changed. Review it before retrying its earlier input." : {},
     "This meal was deleted." : {},
     "This profile is stored privately on this iPhone." : {
@@ -2979,6 +3064,7 @@
     "Undid the change to %@." : {},
     "Undid the change to that meal." : {},
     "Undo" : {},
+    "Undo is no longer available." : {},
     "Undone" : {},
     "Unit" : {
       "extractionState" : "manual",
@@ -3237,6 +3323,8 @@
       }
     },
     "yesterday" : {},
+    "Yesterday" : {},
+    "You" : {},
     "You're offline. Your message is saved and I'll reply when you're back online." : {},
     "You're set for today" : {},
     "You’re using your ChatGPT plan" : {},
@@ -3253,7 +3341,9 @@
       }
     },
     "Your day" : {},
+    "Your day just changed. Save again to add this to the new day." : {},
     "Your diaries" : {},
+    "Your earlier food was saved. These changed values have not been saved." : {},
     "Your entered targets have not been saved. Changing the date loads the saved settings for the selected date." : {},
     "Your estimate is ready for review." : {},
     "Your first meal starts here" : {
@@ -3289,8 +3379,45 @@
         }
       }
     },
+    "Zoom %lld percent" : {},
     "Zoom in" : {},
-    "Zoom out" : {}
+    "Zoom out" : {},
+    "EEEEE" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    },
+    "d" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    },
+    "EEEE, d MMMM" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    },
+    "EEEE, d MMM" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    },
+    "EEE d MMM" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    },
+    "MMM d" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    },
+    "MMM d, yyyy" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    },
+    "MMMM yyyy" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    },
+    "EEEE d MMMM" : {
+      "comment" : "Date pattern (Unicode date format); reorder for the language.",
+      "extractionState" : "manual"
+    }
   },
   "version" : "1.0"
 }

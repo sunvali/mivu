@@ -6,8 +6,7 @@ import XCTest
 @MainActor final class LanguageSweepUITests: XCTestCase {
     /// Screens whose text is not all in the string catalogs yet. Empty when the app is language-ready.
     static let notYetLocalized: Set<String> = [
-        "onboarding", "today", "diary", "mealDetail", "mealComposer", "manualNutrition", "progress",
-        "goalEditor", "weightEditor", "settings",
+        "onboarding", "progress", "goalEditor", "weightEditor", "settings",
     ]
     /// Text the fixtures or the test typed: data, not interface.
     static let fixtureData: Set<String> = ["Two eggs, three bread slices and salad", "My diary", "Synthetic history food",
@@ -185,9 +184,10 @@ import XCTest
     }
 
     /// The double-length flag shows every localized string twice, joined by a space; in the first copy each
-    /// placeholder is left as a bare "@". A label can also join several strings with commas.
+    /// placeholder is left as a bare "@" or "lld". A label can also join several strings with commas.
     static func isLocalized(_ label: String) -> Bool {
-        if isDoubled(label) { return true }
+        // A doubled plural string shows its raw variation marker; it can only come from the catalog.
+        if isDoubled(label) || label.contains("#@") { return true }
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US")
         let dateWords = Set(formatter.weekdaySymbols + formatter.shortWeekdaySymbols + formatter.monthSymbols + formatter.shortMonthSymbols + ["AM", "PM", "GMT", "UTC"])
         // Typed text can hold commas of its own, so take fixture data out before splitting.
@@ -204,7 +204,8 @@ import XCTest
     static func isDoubled(_ label: String) -> Bool {
         let words = label.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
         return (1..<max(words.count, 1)).contains { cut in
-            let pattern = NSRegularExpression.escapedPattern(for: words[..<cut].joined(separator: " ")).replacingOccurrences(of: "@", with: ".+?")
+            let pattern = NSRegularExpression.escapedPattern(for: words[..<cut].joined(separator: " "))
+                .replacingOccurrences(of: "lld", with: ".+?").replacingOccurrences(of: "@", with: ".+?")
             return words[cut...].joined(separator: " ").range(of: "^" + pattern + "$", options: .regularExpression) != nil
         }
     }
