@@ -130,3 +130,57 @@ in the expanded copy only, so collapsing returns to Today beside the chat.
 
 Not verified: book and table pose while expanded, rotation while expanded,
 VoiceOver with the cover, a real device.
+
+## Pull request 3: two-column Diary sideways
+
+- App source: `94f83fa0` on `feat/duo-diary-columns`, stacked on pull request 2.
+- Same environment as above.
+
+Sideways, the Diary tab shows the week strip and the chosen day's summary on
+the left and that day's meals and workouts on the right. Upright, and inside
+the Coach side pane, it is the one list it was. `duoReadableWidth(evenWhenWide:)`
+lost its parameter; Diary was its only user.
+
+- Open, sideways, all three pull requests together: `DuoLayoutUITests`,
+  `CoachPaneTests`, `DuoLayoutTests`, `CoachReplyLinesTests`, `CoachEngineTests`,
+  `CoachReceiptPresentationTests`: 127 passed, 0 failed, 9 skipped (upright-only).
+  New test, seen failing first: `testSidewaysDiarySplitsSummaryAndRecords`. It
+  replaces `testSidewaysDiaryKeepsReadableWidth`. `testUprightDiaryStaysOneColumn`
+  is new and was skipped in this pose; it has not run.
+- iPhone 17, iOS 27.0, the six `DiaryUITests` that use this screen: 5 passed.
+  `testLogMealFromSelectedHistoricalDayKeepsTodaySeparate` failed, and fails the
+  same way at `a10f8a2c` before this change: run on a Sunday just after
+  midnight, "yesterday" is in the previous week, so no pill reads "1 meal".
+- By hand: `coach-open-screen/sideways-diary-two-columns.png`
+
+Independent review: no Critical or Important findings. Noted, not changed: an
+empty day leaves the right column blank; two tracking days on one date repeat
+the "Meals" header on the right without a day marker; rotating recreates the
+lists, so scroll position resets.
+
+Not verified: the whole `DiaryUITests` suite on the open Duo fails 18 tests,
+and that was not compared with `main` (the suite is run on a regular iPhone).
+One full run on the iPhone 17 was cut off by a time limit at 18 of 23 with one
+failure, the test named above. Book and table pose for Diary, the upright
+one-column test, a real device.
+
+## Half width beside another app: blocked
+
+Not verified. The simulator tooling could not put two apps side by side: its
+drag gesture has no speed control, and a drag from the home bar to the edge
+went to the Home Screen. No change was made for this.
+
+The nearest evidence is the closed pose, 466×678 points, against roughly
+475×669 for half of the open screen: `DuoLayoutUITests` passes there. That is
+not the same thing, because the system places its controls differently in a
+split.
+
+To try on a real Duo, with Mivu on each side of Safari in turn:
+
+1. All four tabs show the phone layout with nothing clipped.
+2. In Coach, type with the on-screen keyboard and send; the field stays visible.
+3. Open the camera and the photo picker, and return.
+4. Open a sheet and an alert; both stay inside Mivu's half.
+5. Drag and tap "Jump to latest".
+6. Resize to full screen and back; the draft and chat position survive.
+7. The system controls sit on Mivu's outer edge and cover nothing.

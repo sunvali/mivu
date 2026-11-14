@@ -54,7 +54,7 @@ Nutrition figures are estimates, not medical advice.
 </p>
 
 - **Closed, or unfolded and upright:** the same app as on any iPhone, full screen.
-- **Unfolded and sideways:** Today and Progress use two columns. Coach keeps the
+- **Unfolded and sideways:** Today, Diary and Progress use two columns. Coach keeps the
   chat on the right and shows what you're talking about on the left: today's
   log, a meal or workout you tap, another day, or Progress. When Coach adds or
   changes something, the left side moves to where it landed. One button expands
