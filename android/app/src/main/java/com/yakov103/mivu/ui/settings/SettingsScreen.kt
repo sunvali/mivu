@@ -207,7 +207,7 @@ fun ConnectionScreen(
     }
 }
 
-private const val CHATGPT_FOOTER = "Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI."
+private const val CHATGPT_FOOTER = "Uses your ChatGPT Go, Plus or Pro plan. Coach messages and photos you send are shared with OpenAI."
 private const val ON_DEVICE_FOOTER = "Runs on this phone with no account, but estimates are much less accurate. It only logs meals and " +
     "changes amounts; connect ChatGPT for accurate estimates, questions and other edits."
 
