@@ -134,6 +134,8 @@ anything on the simulator-only paths above. The owner's device has this build.
 ## Pull request 3: two-column Diary sideways
 
 - App source: `94f83fa0` on `feat/duo-diary-columns`, stacked on pull request 2.
+  Rerun at `55e3aa31`, after merging the reworked expand control: the same
+  suites again gave 127 passed, 0 failed, 9 skipped.
 - Same environment as above.
 
 Sideways, the Diary tab shows the week strip and the chosen day's summary on
