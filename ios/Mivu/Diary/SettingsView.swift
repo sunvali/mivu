@@ -217,7 +217,7 @@ struct SettingsView: View {
                 } header: { Text("Coach AI") } footer: {
                     switch connection.provider {
                     case .apple: Text("Runs on this iPhone with no account, but estimates are much less accurate. It only logs meals and changes amounts; connect ChatGPT for accurate estimates, questions and other edits.")
-                    case .chatGPT: Text("Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI.")
+                    case .chatGPT: Text("Uses your ChatGPT Go, Plus or Pro plan. Coach messages and photos you send are shared with OpenAI.")
                     }
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
