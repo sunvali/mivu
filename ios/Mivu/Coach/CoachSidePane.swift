@@ -49,7 +49,6 @@ struct CoachSidePane: View {
                 }
         }
         .accessibilityIdentifier("coachSidePane")
-        .onChange(of: coach.diary.selection) { _, _ in expanded = false }
         .onChange(of: latestTurn?.receipts.map(\.operationKey), initial: true) { _, _ in land() }
         // A meal that was there and is gone has nothing to show; one still loading was never there.
         .onChange(of: openMeal) { was, now in if let was, let now, was.id == now.id, was.exists, !now.exists { pane = nil } }
@@ -68,7 +67,8 @@ struct CoachSidePane: View {
 
     /// Moves the pane to where a change Coach just made landed.
     private func land() {
-        guard let owner = coach.timeline?.window.identity, let turn = latestTurn else { return }
+        // The copy beside the chat is always mounted and decides alone; the full-screen copy only shows the result.
+        guard !fillsScreen, let owner = coach.timeline?.window.identity, let turn = latestTurn else { return }
         // A sheet, alert or camera anywhere in the app: the change is skipped, not queued, so an edit is never replaced.
         let modalOpen = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?
             .rootViewController?.presentedViewController != nil

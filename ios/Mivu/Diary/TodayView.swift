@@ -404,6 +404,8 @@ struct DiaryRootView: View {
                     CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, expanded: $coachPaneExpanded,
                                   openDiary: { selectedTab = "diary" })
                 }
+                // Here, not in the pane: upright the pane is not mounted, and another profile must not open expanded.
+                .onChange(of: model.selection) { _, _ in coachPaneExpanded = false }
             }
             .badge(coach.queuedSiri.count)
         }
