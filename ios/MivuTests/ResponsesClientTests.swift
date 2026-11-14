@@ -503,7 +503,7 @@ private func completed() -> Data {
     event(["type": "response.completed", "response": ["status": "completed", "model": "fixture-model", "output": [["type": "message", "content": [["type": "output_text", "text": "Synthetic output שלום"]]]]]])
 }
 
-private final class RequestCapture: @unchecked Sendable {
+final class RequestCapture: @unchecked Sendable {
     private let lock = NSLock()
     private var value: URLRequest?
     var request: URLRequest? { lock.withLock { value } }
@@ -525,7 +525,7 @@ private final class RequestCapture: @unchecked Sendable {
     }
 }
 
-private final class ResponseFixtureProtocol: URLProtocol, @unchecked Sendable {
+final class ResponseFixtureProtocol: URLProtocol, @unchecked Sendable {
     struct Fixture: Sendable { let status: Int; let body: Data; let capture: RequestCapture? }
     final class Fixtures: @unchecked Sendable {
         private let lock = NSLock()
@@ -549,7 +549,7 @@ private final class ResponseFixtureProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
-private func sessionReturning(status: Int, body: Data, capture: RequestCapture? = nil) -> URLSession {
+func sessionReturning(status: Int, body: Data, capture: RequestCapture? = nil) -> URLSession {
     let id = UUID().uuidString
     ResponseFixtureProtocol.fixtures.add(.init(status: status, body: body, capture: capture), id: id)
     let configuration = URLSessionConfiguration.ephemeral
