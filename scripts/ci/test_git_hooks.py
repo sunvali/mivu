@@ -381,6 +381,26 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         result = self.push(GIT_DIR=str(self.root / '.git'), GIT_WORK_TREE=str(self.root))
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_pre_push_checks_parity_for_feature_commits_before_native_tests(self):
+        shutil.copy2(ROOT / 'scripts/ci/parity.py', self.root / 'scripts/ci/parity.py')
+        matrix = self.root / 'docs/parity.md'
+        matrix.parent.mkdir(parents=True, exist_ok=True)
+        matrix.write_text('## Features\n\n| ID | Feature | Scope | Spec | iOS | Android | Evidence | Notes |\n'
+                          '|---|---|---|---|---|---|---|---|\n| today | Today | baseline | - | partial | pending | - | note |\n')
+        self.git('add', 'scripts/ci/parity.py', 'docs/parity.md')
+        self.git('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'chore: add parity checker')
+        self.base = self.git('rev-parse', 'HEAD').stdout.strip()
+        self.git('update-ref', 'refs/remotes/origin/main', self.base)
+        (self.root / 'ios/source.swift').write_text('// feature without parity\n')
+        self.git('add', 'ios/source.swift')
+        self.git('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'feat(coach): add food questions')
+        blocked = self.push()
+        self.assertNotEqual(blocked.returncode, 0)
+        self.assertEqual(self.calls(), [])
+        self.git('-c', 'core.hooksPath=/dev/null', 'commit', '--amend', '-qm',
+                 'feat(coach): add food questions\n\nParity: unchanged - covered by existing row')
+        self.assertEqual(self.push().returncode, 0)
+        self.assertEqual(len(self.calls()), 1)
 
 
 if __name__ == '__main__':
