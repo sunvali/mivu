@@ -1,0 +1,114 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px 20px; }
+  figure { margin: 0; }
+  figcaption { font: 600 14px/1.3 var(--font-sans); color: var(--foreground); margin: 0 0 4px; }
+  .why { font: 13px/1.4 var(--font-sans); color: var(--muted-foreground, var(--foreground)); opacity: .8; margin: 0 0 10px; }
+  /* Phone: fixed light-mode app colors, taken from the shipped Settings screen. */
+  .phone { --ink:#0b0f10; --sub:#6b7478; --canvas:#eef2f3; --row:#fff; --line:#e2e7e9; --accent:#006d75; --red:#c62828;
+    background: var(--canvas); color: var(--ink); border-radius: 34px; border: 1px solid #cfd6d9; padding: 18px 0 20px;
+    font: 15px/1.35 -apple-system, "SF Pro Text", system-ui, sans-serif; overflow: hidden; }
+  .phone h2 { font: 700 26px/1.15 -apple-system, "SF Pro Display", system-ui, sans-serif; margin: 6px 20px 6px; }
+  .phone .lead { color: var(--sub); margin: 0 20px 14px; }
+  .bar { display: flex; justify-content: space-between; align-items: center; padding: 0 16px 6px; color: var(--accent); font-weight: 600; min-height: 32px; }
+  .sec { color: var(--sub); font-size: 13px; margin: 14px 20px 6px; }
+  .rows { background: var(--row); }
+  .r { display: flex; align-items: center; gap: 12px; padding: 11px 20px; min-height: 44px; box-sizing: border-box; border-top: 1px solid var(--line); }
+  .r:first-child { border-top: 0; }
+  .r .t { flex: 1; min-width: 0; }
+  .r .t small { display: block; color: var(--sub); font-size: 12.5px; }
+  .r .v { color: var(--sub); font-size: 14px; white-space: nowrap; }
+  .r .a { color: var(--accent); font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .ic { width: 30px; height: 30px; border-radius: 8px; background: #dfeeee; color: var(--accent); display: grid; place-items: center; font: 700 13px/1 -apple-system, system-ui, sans-serif; flex: none; }
+  .chk { color: var(--accent); font-weight: 700; }
+  .foot { color: var(--sub); font-size: 12.5px; margin: 8px 20px 0; }
+  .btn { display: block; margin: 14px 20px 0; background: var(--accent); color: #fff; text-align: center; border-radius: 26px; padding: 15px; font-weight: 600; font-size: 16px; }
+  .link { display: block; text-align: center; color: var(--accent); font-weight: 600; font-size: 14px; padding: 12px 0 2px; }
+  .cap { text-align: center; color: var(--sub); font-size: 12px; margin: 0 28px; }
+  .new { display: inline-block; background: #ffe9b8; color: #6a4a00; border-radius: 6px; font: 700 10px/1 -apple-system, system-ui, sans-serif; padding: 3px 5px; margin-left: 6px; vertical-align: 2px; letter-spacing: .04em; }
+  .field { margin: 0 20px; background: var(--row); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; color: var(--sub); }
+  .field b { color: var(--accent); font-weight: 600; }
+  .card { margin: 0 20px 12px; background: var(--row); border-radius: 14px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; }
+  .card small { color: var(--sub); display: block; font-size: 12.5px; }
+  .red { color: var(--red); }
+</style>
+
+<div class="grid">
+
+  <figure>
+    <figcaption>1 · Setup: the quiet link</figcaption>
+    <p class="why">Today's screen, plus one new line. ChatGPT stays the main path.</p>
+    <div class="phone">
+      <div class="bar"><span>‹</span><span>Later</span></div>
+      <h2>Let ChatGPT tune it</h2>
+      <p class="lead">Connect your ChatGPT account to turn your answers into personal targets.</p>
+      <div class="card"><div class="ic">✓</div><div><b>Your own plan</b><small>Recommended. Works with ChatGPT Plus or Pro and uses its allowance. No extra cost.</small></div></div>
+      <div class="btn">Continue with ChatGPT</div>
+      <span class="link">Use another AI<span class="new">NEW</span></span>
+      <p class="cap">Claude, OpenAI, Gemini or OpenRouter with your own key.</p>
+      <span class="link">Use Apple Intelligence instead</span>
+      <p class="cap">No account, but much less accurate.</p>
+    </div>
+  </figure>
+
+  <figure>
+    <figcaption>2 · Choose your AI</figcaption>
+    <p class="why">Opens from the link, and from Settings. One line each on how you connect and what it costs.</p>
+    <div class="phone">
+      <div class="bar"><span>Cancel</span><span></span></div>
+      <h2>Use another AI</h2>
+      <p class="lead">Bring a key from a service you already use. Pip works the same.</p>
+      <div class="rows">
+        <div class="r"><div class="ic">C</div><div class="t">Claude<small>Paste a key · pay per use</small></div><span class="v">›</span></div>
+        <div class="r"><div class="ic">O</div><div class="t">OpenAI<small>Paste a key · pay per use</small></div><span class="v">›</span></div>
+        <div class="r"><div class="ic">G</div><div class="t">Gemini<small>Paste a key · has a free tier</small></div><span class="v">›</span></div>
+        <div class="r"><div class="ic">R</div><div class="t">OpenRouter<small>Sign in · one account, many models</small></div><span class="v">›</span></div>
+      </div>
+      <p class="foot">You pay the service directly for what you use. Mivu adds nothing.</p>
+    </div>
+  </figure>
+
+  <figure>
+    <figcaption>3 · Add a key (Claude shown)</figcaption>
+    <p class="why">Consent, cost and where the key lives are all on the one screen. The key is tested before it is saved.</p>
+    <div class="phone">
+      <div class="bar"><span>‹ Back</span><span></span></div>
+      <h2>Connect Claude</h2>
+      <p class="lead">Create a key in the Claude Console, then paste it here.</p>
+      <div class="rows"><div class="r"><div class="t">Get a key</div><span class="a">Open Claude Console ↗</span></div></div>
+      <p class="sec">Your key</p>
+      <div class="field"><span>sk-ant-••••••••••••</span><b>Paste</b></div>
+      <p class="foot">Stays in this iPhone's Keychain. Never in backups or exports.</p>
+      <p class="foot">You pay Anthropic directly for what you use. Coach messages and photos you send are shared with Anthropic. <span style="color:var(--accent)">Privacy policy</span></p>
+      <div class="btn">Agree, test and save</div>
+      <p class="cap" style="margin-top:8px">Sends one tiny test message to check the key.</p>
+    </div>
+  </figure>
+
+  <figure>
+    <figcaption>4 · Settings: the switcher</figcaption>
+    <p class="why">Today's "Coach AI" list grows. One tick, saved keys stay put, and the model picker follows the active service.</p>
+    <div class="phone">
+      <div class="bar"><span>‹ Settings</span><span></span></div>
+      <p class="sec">Coach AI</p>
+      <div class="rows">
+        <div class="r"><div class="t">ChatGPT<small>Your Plus or Pro plan · connected</small></div></div>
+        <div class="r"><div class="t">Claude<small>Your key · connected</small></div><span class="chk">✓</span></div>
+        <div class="r"><div class="t">OpenAI</div><span class="a">Add key</span></div>
+        <div class="r"><div class="t">Gemini</div><span class="a">Add key</span></div>
+        <div class="r"><div class="t">OpenRouter</div><span class="a">Sign in</span></div>
+        <div class="r"><div class="t">Apple Intelligence on iPhone<small>No account, but much lower accuracy</small></div></div>
+      </div>
+      <p class="foot">Uses your Claude key. Coach messages and photos you send are shared with Anthropic.</p>
+      <p class="sec">Claude</p>
+      <div class="rows">
+        <div class="r"><div class="t">Model</div><span class="v">Claude Haiku 5.5 ⌃</span></div>
+        <div class="r"><div class="t" style="color:var(--accent)">Manage usage ↗</div></div>
+        <div class="r"><div class="t" style="color:var(--accent)">Replace key</div></div>
+        <div class="r"><div class="t red">Remove Claude key</div></div>
+      </div>
+    </div>
+  </figure>
+
+</div>
