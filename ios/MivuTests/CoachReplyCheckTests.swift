@@ -52,6 +52,27 @@ import Testing
         #expect(!CoachReplyCheck.passes("  \n", allowed: [], receipts: []))
     }
 
+    @Test func hedgedGeneralFoodFactPassesOnlyWhenAllowed() {
+        let allowed = CoachReplyCheck.allowedNumbers(in: ["{\"kcal\":500}"], receipts: [])
+        let prose = "Plain Greek yogurt has about 10 g protein per 100 g."
+        #expect(CoachReplyCheck.passes(prose, allowed: allowed, receipts: [], generalFacts: true))
+        #expect(!CoachReplyCheck.passes(prose, allowed: allowed, receipts: []))
+    }
+
+    @Test func generalFactsNeedAHedgeAndCannotDescribeTheDiary() {
+        let allowed = CoachReplyCheck.allowedNumbers(in: ["{\"kcal\":500}"], receipts: [])
+        #expect(!CoachReplyCheck.passes("Greek yogurt has 10 g protein per 100 g.", allowed: allowed, receipts: [], generalFacts: true))
+        #expect(!CoachReplyCheck.passes("You have about 600 kcal left.", allowed: allowed, receipts: [], generalFacts: true))
+        #expect(!CoachReplyCheck.passes("You’re at about 900 kcal.", allowed: allowed, receipts: [], generalFacts: true))
+        #expect(CoachReplyCheck.passes("You're at **500** kcal today. A pot of Greek yogurt adds about 17 g protein.", allowed: allowed, receipts: [], generalFacts: true))
+    }
+
+    @Test func savedTurnsStayStrictEvenWithGeneralFacts() {
+        let receipts = [meal()]
+        let allowed = CoachReplyCheck.allowedNumbers(in: [], receipts: receipts)
+        #expect(!CoachReplyCheck.passes("Dinner is about 700 kcal.", allowed: allowed, receipts: receipts, generalFacts: true))
+    }
+
     @Test func identifierDigitsDoNotGroundNumbers() {
         let source = #"{"meals":[{"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","kcal":620},{"id":"45000000-0000-0000-0000-000000000450"}]}"#
         let allowed = CoachReplyCheck.allowedNumbers(in: [source], receipts: [])

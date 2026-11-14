@@ -37,6 +37,12 @@ import Testing
         #expect(try await store.coachContext(turnID: turn.id, expectedProfileID: profile.id).focus == nil)
     }
 
+    @Test func stableRulesAnswerFoodQuestionsBrieflyWithoutLogging() {
+        #expect(CoachEngine.stableRules.contains("A food or nutrition question, or a request for meal ideas, is not a consumption statement"))
+        #expect(CoachEngine.stableRules.contains("never more than four short lines"))
+        #expect(CoachEngine.stableRules.contains("suggest a doctor or registered dietitian"))
+    }
+
     @Test func stableRulesStateResolutionOrder() {
         #expect(CoachEngine.stableRules.contains("explicit mention, then replyTo, then pendingQuestion, then focus.lastChanged, then the newest matching meal"))
         #expect(CoachEngine.stableRules.contains("remove it means call delete_meal now without asking again"))
