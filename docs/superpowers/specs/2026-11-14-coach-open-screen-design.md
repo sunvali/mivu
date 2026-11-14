@@ -36,8 +36,10 @@ a week of real use, and it shows well in one screenshot or short clip.
 - **Pane control: automatic on changes, tap for the rest.** When Coach logs or
   edits something, the pane jumps to where it landed. For questions, the reply
   offers a button and the pane changes only on tap.
-- **A full-screen button on the pane.** It expands the pane to the whole screen
-  and back, without rotating the phone.
+- **A button that expands the chat.** It gives Coach the whole sideways screen
+  and brings the side pane back, without rotating the phone. Changed by the
+  owner on 2026-11-15 after trying the first build, which expanded the pane
+  instead: Today already has its own tab, so the chat is the thing to enlarge.
 - **No comparison view** (two weeks or two meals side by side) in this version.
 - **Other apps: test half width only.** Try Mivu in system Split View beside
   another app and fix what breaks. Dragging text or photos into Coach is a
@@ -90,12 +92,11 @@ a week of real use, and it shows well in one screenshot or short clip.
   normal pushed screen when the phone turns upright or closes, and returns to
   the pane when it turns sideways again. Open a meal while closed, unfold and
   turn, and it is beside the chat.
-- **Expanded pane** covers the chat and composer and lays out like the matching
-  full screen sideways (Today and Progress in their two columns), following
-  the same crease rules as that screen in book pose. The chat stays mounted
-  underneath, hidden, so its position and draft survive. The same button
-  collapses it. Rotating upright while expanded returns to the normal upright
-  app.
+- **Expanded chat** puts the side pane away and lays the chat out as it is
+  upright: one readable column, records pushed over it, and "See today" offered
+  again, since nothing sits beside it. The control lives in the chat's toolbar.
+  Only a flat sideways screen can expand: half-folded, one centred column would
+  sit on the crease. Turning upright or folding ends it.
 - **Table pose** (half-open on a table) is unchanged: no side pane.
 - **Swapping sides must not cost the chat its place.** `DuoSplit` keeps the
   first pane mounted while the second comes and goes, and today the chat is the
@@ -114,7 +115,7 @@ a week of real use, and it shows well in one screenshot or short clip.
    the chat; the result opens in the side pane and the composer stays usable.
 2. Coach's own changes show where they landed, including on other days and for
    weight.
-3. The pane can be expanded to full screen and collapsed with one control.
+3. The chat can be expanded to the whole screen and collapsed with one control.
 4. Sideways Diary uses the whole width in two columns.
 5. Mivu is usable at half width beside another app: chat, composer with the
    on-screen keyboard, camera, sheets and all four tabs.

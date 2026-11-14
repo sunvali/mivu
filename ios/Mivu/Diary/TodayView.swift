@@ -79,7 +79,7 @@ struct DiaryRootView: View {
     @State private var coachRoutes = CoachNavigationOwner()
     /// What the pane beside the Coach chat shows on a sideways Duo; nil is Today.
     @State private var coachPane: CoachPane?
-    @State private var coachPaneExpanded = false
+    @State private var coachChatExpanded = false
     @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
     @State private var showOnboarding = false
@@ -388,7 +388,7 @@ struct DiaryRootView: View {
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                 // Sideways the chat is on the right, with what the conversation is about on the left.
-                DuoBeside(secondaryLeading: true, secondaryFills: coachPaneExpanded) {
+                DuoBeside(secondaryLeading: true, primaryFills: $coachChatExpanded) {
                     NavigationStack {
                         CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
                                   onCompanionContextChanged: updateCompanionContext,
@@ -396,17 +396,13 @@ struct DiaryRootView: View {
                                   navigationRequest: coachRoutes.request,
                                   onNavigationConsumed: { coachRoutes.consume($0) },
                                   openHistory: openCoachHistory, openToday: { selectedTab = "today" },
-                                  openProgress: { selectedTab = "progress" }, pane: $coachPane) { destination in
+                                  openProgress: { selectedTab = "progress" }, pane: $coachPane, chatExpanded: $coachChatExpanded) { destination in
                             routes.route = SettingsRoute(destination: destination)
                         }.toolbar { profileControl }.duoReadableWidth()
                     }
                 } secondary: {
-                    CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, expanded: $coachPaneExpanded,
-                                  openDiary: { selectedTab = "diary" })
-                }
-                // Here, not in the pane: upright the pane is not mounted, and another profile must not open expanded.
-                .onChange(of: model.selection) { _, _ in coachPaneExpanded = false }
-            }
+                    CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, openDiary: { selectedTab = "diary" })
+                }            }
             .badge(coach.queuedSiri.count)
         }
     }

@@ -57,8 +57,8 @@ Nutrition figures are estimates, not medical advice.
 - **Unfolded and sideways:** Today and Progress use two columns. Coach keeps the
   chat on the right and shows what you're talking about on the left: today's
   log, a meal or workout you tap, another day, or Progress. When Coach adds or
-  changes something, the left side moves to where it landed. One button expands
-  the left side to the whole screen and brings the chat back.
+  changes something, the left side moves to where it landed. One button gives
+  the chat the whole screen and brings the left side back.
 - **Half-open like a book:** the two sides meet at the crease, so nothing sits on
   the fold.
 - **Half-open on a table:** the conversation stays on the standing half, with the
