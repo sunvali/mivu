@@ -393,9 +393,13 @@ print(json.dumps({'schema': 'xcodebuildmcp.output.test-result', 'didError': mode
         self.git('update-ref', 'refs/remotes/origin/main', self.base)
         (self.root / 'ios/source.swift').write_text('// feature without parity\n')
         self.git('add', 'ios/source.swift')
+        reminder = self.hook('pre-commit')
+        self.assertEqual(reminder.returncode, 0)
+        self.assertIn('Parity reminder:', reminder.stderr)
         self.git('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'feat(coach): add food questions')
         blocked = self.push()
         self.assertNotEqual(blocked.returncode, 0)
+        self.assertIn('docs/parity.md: change it or add "Parity: unchanged - <reason>"', blocked.stderr)
         self.assertEqual(self.calls(), [])
         self.git('-c', 'core.hooksPath=/dev/null', 'commit', '--amend', '-qm',
                  'feat(coach): add food questions\n\nParity: unchanged - covered by existing row')
