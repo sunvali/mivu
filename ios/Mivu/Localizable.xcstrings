@@ -1,6 +1,226 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {},
+    " · Estimated" : {},
+    "— kcal" : {},
+    "“%@”" : {},
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · %@ / %@ kcal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ / %3$@ kcal"
+          }
+        }
+      }
+    },
+    "%@ · %@ kcal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ kcal"
+          }
+        }
+      }
+    },
+    "%@ · %lld minutes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld minutes"
+          }
+        }
+      }
+    },
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "%@ from this selection could not be imported. Your other photos and note are preserved. Choose a smaller image or another photo." : {},
+    "%@ g" : {},
+    "%@ grams" : {},
+    "%@ has no calories set, so it isn't counted." : {},
+    "%@ have no calories set, so they aren't counted." : {},
+    "%@ kcal" : {},
+    "%@ kcal goal" : {},
+    "%@ of %@ kcal target" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@ kcal target"
+          }
+        }
+      }
+    },
+    "%@ of %@ kilocalories" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@ kilocalories"
+          }
+        }
+      }
+    },
+    "%@ portion" : {},
+    "%@ times zoom" : {},
+    "%@ to %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ to %2$@ %3$@"
+          }
+        }
+      }
+    },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@, %@ calories" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, %3$@ calories"
+          }
+        }
+      }
+    },
+    "%@, %@, calories unknown" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, calories unknown"
+          }
+        }
+      }
+    },
+    "%@, %lld minutes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$lld minutes."
+          }
+        }
+      }
+    },
+    "%@, about %@ left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, about %2$@ left"
+          }
+        }
+      }
+    },
+    "%@, about %@ over" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, about %2$@ over"
+          }
+        }
+      }
+    },
+    "%@: %@ kcal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ kcal"
+          }
+        }
+      }
+    },
+    "%@: %@ of %@ kcal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ of %3$@ kcal"
+          }
+        }
+      }
+    },
+    "%@. Review / Edit" : {},
+    "%@. Weighed in yet?" : {},
+    "%@. Weight average %@ kg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. Weight average %2$@ kg"
+          }
+        }
+      }
+    },
+    "%@%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@"
+          }
+        }
+      }
+    },
+    "%@%@ %@ this week" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@ %3$@ this week"
+          }
+        }
+      }
+    },
+    "%@×" : {},
+    "%@× of the current portions" : {},
+    "%lld" : {},
+    "%lld minutes" : {},
+    "%lld of %lld logged" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld logged"
+          }
+        }
+      }
+    },
+    "%lld of 8 photos" : {},
     "%lld pending" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12,6 +232,13 @@
         }
       }
     },
+    "%lld photos" : {},
+    "%lld photos added" : {},
+    "%lld%%" : {},
+    "0" : {},
+    "1 photo" : {},
+    "1 photo added" : {},
+    "3-second timer" : {},
     "A photo cannot prove that food meets a dietary restriction." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23,6 +250,7 @@
         }
       }
     },
+    "A summary page with daily totals and weight, then every saved meal. Made for a doctor or dietitian." : {},
     "A tracking day follows your waking cycle." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -34,6 +262,7 @@
         }
       }
     },
+    "A waking day will be started when you save." : {},
     "Account" : {
       "localizations" : {
         "en" : {
@@ -54,6 +283,11 @@
         }
       }
     },
+    "Add" : {},
+    "Add a note, a photo, or both." : {},
+    "Add exercise" : {},
+    "Add food manually" : {},
+    "Add manually" : {},
     "Add message or photo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -65,6 +299,9 @@
         }
       }
     },
+    "Add Note" : {},
+    "Add note or photo" : {},
+    "Add photos" : {},
     "Add photos or a note." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -76,6 +313,7 @@
         }
       }
     },
+    "Add set" : {},
     "Add synthetic apple photo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -87,6 +325,15 @@
         }
       }
     },
+    "Add synthetic test photo" : {},
+    "Add to meal" : {},
+    "Add to this day" : {},
+    "Add weight manually" : {},
+    "Add workout manually" : {},
+    "Added %lld photos." : {},
+    "Added the photo." : {},
+    "Added to %@" : {},
+    "Adjust total" : {},
     "After eating" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -98,6 +345,7 @@
         }
       }
     },
+    "Agree and Continue" : {},
     "Allow camera access in Settings, or choose a photo instead." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -109,6 +357,11 @@
         }
       }
     },
+    "Allow camera access in Settings, or choose photos." : {},
+    "Allow microphone access in Settings to log by voice." : {},
+    "Allow speech recognition in Settings to log by voice." : {},
+    "An estimate, shown separately from recorded food." : {},
+    "Analysis needs retry" : {},
     "Analysis paused" : {
       "localizations" : {
         "en" : {
@@ -119,6 +372,8 @@
         }
       }
     },
+    "Analysis was cancelled. Your note and photos are kept." : {},
+    "Analyzes when ChatGPT is connected" : {},
     "Analyzing" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -130,6 +385,9 @@
         }
       }
     },
+    "Analyzing your photo" : {},
+    "Anything else to log?" : {},
+    "Anything to log?" : {},
     "App language" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -152,6 +410,8 @@
         }
       }
     },
+    "Apple Intelligence on iPhone" : {},
+    "Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more." : {},
     "Apple sample estimate — not food recognition" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -174,6 +434,14 @@
         }
       }
     },
+    "Ask Pip" : {},
+    "Ask Pip about %@" : {},
+    "Ask Pip about this meal" : {},
+    "Ask Pip to add what you ate on this day." : {},
+    "Ask Pip to fix this" : {},
+    "at least %@" : {},
+    "Attached meal photo %lld" : {},
+    "Attached photo %lld" : {},
     "Attached photos" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -185,6 +453,9 @@
         }
       }
     },
+    "Average day" : {},
+    "Average intake" : {},
+    "Averages use complete days only." : {},
     "Awaiting review" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -196,6 +467,7 @@
         }
       }
     },
+    "Back" : {},
     "Backup and portability" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -207,6 +479,7 @@
         }
       }
     },
+    "Backup copies conflict. Your local diary and existing backup are preserved. Export a copy and resolve the folder copy in Files before retrying." : {},
     "Backup pending" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -229,6 +502,7 @@
         }
       }
     },
+    "Based on revision" : {},
     "Before eating" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -240,6 +514,7 @@
         }
       }
     },
+    "Birth year" : {},
     "Browser test cancelled" : {
       "localizations" : {
         "en" : {
@@ -270,6 +545,8 @@
         }
       }
     },
+    "Calorie and nutrition figures are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat." : {},
+    "Calories" : {},
     "Calories (kcal)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -281,6 +558,9 @@
         }
       }
     },
+    "Calories by %@" : {},
+    "Calories per day" : {},
+    "Calories vs target" : {},
     "Camera" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -303,6 +583,9 @@
         }
       }
     },
+    "Camera could not continue. Your input is kept." : {},
+    "Camera could not restart. Choose photos or close." : {},
+    "Camera is unavailable here. Choose Photos instead." : {},
     "Camera is unavailable here. Choose Photos or use the synthetic sample." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -314,6 +597,9 @@
         }
       }
     },
+    "Camera is unavailable. Choose photos instead." : {},
+    "Camera is unavailable. Choose photos or close." : {},
+    "Camera was interrupted. Your input is kept." : {},
     "Cancel" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -345,6 +631,7 @@
         }
       }
     },
+    "Cancel reply" : {},
     "Cancelled" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -378,6 +665,7 @@
         }
       }
     },
+    "Captured on this iPhone" : {},
     "Carbs" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -400,6 +688,22 @@
         }
       }
     },
+    "Carbs %@" : {},
+    "Carbs %@ · Protein %@ · Fat %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Carbs %1$@ · Protein %2$@ · Fat %3$@"
+          }
+        }
+      }
+    },
+    "Change the effective date?" : {},
+    "Chat history" : {},
+    "Chat history is unavailable. Try again." : {},
+    "ChatGPT (recommended)" : {},
+    "ChatGPT connected" : {},
     "ChatGPT connection diagnostic" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -411,6 +715,13 @@
         }
       }
     },
+    "ChatGPT is busy right now. Your message is saved; try again soon." : {},
+    "ChatGPT is tuning your targets…" : {},
+    "Check the meal's photos." : {},
+    "Check the portions before marking this reviewed. This proposal does not count in totals until you save it." : {},
+    "Check this value" : {},
+    "Checking your diary…" : {},
+    "Choose a diary on this iPhone, or start a new one." : {},
     "Choose a private Files folder. Folder acknowledgement does not confirm remote upload." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -444,6 +755,8 @@
         }
       }
     },
+    "Choose date" : {},
+    "Choose photos" : {},
     "Choose private backup folder" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -455,6 +768,7 @@
         }
       }
     },
+    "Choose the date shown in your conversation. Separate visits remain separate choices." : {},
     "Choose the tracking day before saving." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -466,6 +780,16 @@
         }
       }
     },
+    "Choose your diary" : {},
+    "Choose your diary before adding photos." : {},
+    "Close" : {},
+    "Closed" : {},
+    "Coach" : {},
+    "Coach AI" : {},
+    "Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection." : {},
+    "Coach and meal analysis in Mivu use your ChatGPT plan and count toward its usage limits." : {},
+    "Collapsed" : {},
+    "Companion" : {},
     "Complete" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -477,6 +801,7 @@
         }
       }
     },
+    "Complete days" : {},
     "Complete days and partial records are kept separate. Missing logs do not mean zero intake." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -509,6 +834,7 @@
         }
       }
     },
+    "Connect" : {},
     "Connect ChatGPT" : {
       "localizations" : {
         "en" : {
@@ -519,6 +845,10 @@
         }
       }
     },
+    "Connect ChatGPT in Settings to continue" : {},
+    "Connect ChatGPT so I can count for you" : {},
+    "Connect ChatGPT to analyze this saved meal." : {},
+    "Connect for meal analysis" : {},
     "Connect your own ChatGPT plan before testing a sample image." : {
       "localizations" : {
         "en" : {
@@ -549,6 +879,7 @@
         }
       }
     },
+    "Connection" : {},
     "Connection test" : {
       "localizations" : {
         "en" : {
@@ -570,6 +901,9 @@
         }
       }
     },
+    "Conversation date" : {},
+    "Conversation page loaded" : {},
+    "Copy" : {},
     "Correction or extra details" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -581,6 +915,8 @@
         }
       }
     },
+    "Could not add photo" : {},
+    "Could not add photo. Your input is kept." : {},
     "Could not choose this backup folder. Your local diary is preserved." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -625,6 +961,10 @@
         }
       }
     },
+    "Could not import photo. Your note and other photos are kept." : {},
+    "Could not load current record" : {},
+    "Could not load this conversation. Try again." : {},
+    "Could not log photo" : {},
     "Could not prepare an export. Your local diary is preserved." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -647,6 +987,7 @@
         }
       }
     },
+    "Could not save goals" : {},
     "Could not save on this iPhone. Your input is still here." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -658,6 +999,15 @@
         }
       }
     },
+    "Could not save weight" : {},
+    "Could not save workout" : {},
+    "Could not take photo. Your note and other photos are kept." : {},
+    "Couldn't finish the rest" : {},
+    "Couldn't finish. Your message is saved." : {},
+    "Couldn't open your diary" : {},
+    "Couldn't save that. Your message is kept; tap Try again." : {},
+    "Count This Day" : {},
+    "Counting that up…" : {},
     "Create" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -680,6 +1030,11 @@
         }
       }
     },
+    "Current revision" : {},
+    "Current saved meal" : {},
+    "Current workout" : {},
+    "Daily targets" : {},
+    "Date" : {},
     "Day coverage" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -691,6 +1046,13 @@
         }
       }
     },
+    "Day starts at" : {},
+    "Day status" : {},
+    "Days" : {},
+    "Delete" : {},
+    "Delete %@" : {},
+    "Delete %@?" : {},
+    "Delete food" : {},
     "Delete local diary" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -767,6 +1129,7 @@
         }
       }
     },
+    "Delete this meal?" : {},
     "Delete this photo?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -789,6 +1152,7 @@
         }
       }
     },
+    "Delete workout" : {},
     "Deletion removes this profile's meals, photos, weights and preferences from this iPhone. Other profiles are preserved." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -800,6 +1164,10 @@
         }
       }
     },
+    "Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate. Coach gives estimates, not medical advice." : {},
+    "Describe a meal…" : {},
+    "Destination waking day" : {},
+    "Diary" : {},
     "Diary preferences" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -833,6 +1201,12 @@
         }
       }
     },
+    "Discard changes" : {},
+    "Discard changes to goals?" : {},
+    "Discard changes to this workout?" : {},
+    "Discard changes?" : {},
+    "Discard draft and change date" : {},
+    "Discard Photo" : {},
     "Discard this input?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -844,6 +1218,9 @@
         }
       }
     },
+    "Discard this weight correction?" : {},
+    "Discard this weight entry?" : {},
+    "Discard unsaved settings?" : {},
     "Disconnect" : {
       "localizations" : {
         "en" : {
@@ -854,6 +1231,7 @@
         }
       }
     },
+    "Disconnect ChatGPT" : {},
     "Done" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -865,6 +1243,14 @@
         }
       }
     },
+    "Each kilogram of body weight stores about 7,700 kcal. Burn = average intake minus the energy your trend stored or released per day." : {},
+    "Earlier" : {},
+    "Earlier conversations" : {},
+    "Earlier days" : {},
+    "Edit amount, nutrition or delete" : {},
+    "Edit food" : {},
+    "Edit goals" : {},
+    "Edit ingredient amount and nutrition" : {},
     "Edit item" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -876,6 +1262,9 @@
         }
       }
     },
+    "Edit weight" : {},
+    "Edit workout" : {},
+    "Edited · moved to %@" : {},
     "Edited by you" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -887,6 +1276,12 @@
         }
       }
     },
+    "Edited later" : {},
+    "Effective %@" : {},
+    "Effective date" : {},
+    "Empty days aren't counted as zero." : {},
+    "End" : {},
+    "Energy unknown" : {},
     "English" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -898,6 +1293,22 @@
         }
       }
     },
+    "English is supported for this version. Your stored profile language is preserved." : {},
+    "Enter 0–100,000 kcal, or leave this blank." : {},
+    "Enter a duration from 1 to 1,440 minutes." : {},
+    "Enter a number greater than 0 and no more than 1,000 %@." : {},
+    "Enter a positive number, or leave this blank." : {},
+    "Enter a weight greater than 0 and no more than 1,000 %@." : {},
+    "Enter an exercise name and 1–10,000 repetitions per set. Load can be blank for bodyweight, or 0–100,000 kg." : {},
+    "Enter at least one nutrient. Leave unknown values blank; zero means a known zero. Saved as entered manually." : {},
+    "Enter nutrition" : {},
+    "Enter nutrition manually" : {},
+    "Estimate" : {},
+    "Estimate awaiting review" : {},
+    "Estimated burn: %@ kcal" : {},
+    "Estimated burn: unknown" : {},
+    "Estimated nutrition" : {},
+    "Estimated totals" : {},
     "Every capture gets a synthetic apple estimate. Photos and text are saved, but no food recognition runs." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -909,6 +1320,12 @@
         }
       }
     },
+    "Every food in this meal is resized by the same amount. Allowed: 10%% to 300%% of the current %@ kcal." : {},
+    "Exercise" : {},
+    "Exercise details" : {},
+    "Exercise-adjusted remaining: %@ kcal" : {},
+    "Exercises" : {},
+    "Expanded" : {},
     "Export diary and photos" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -975,6 +1392,13 @@
         }
       }
     },
+    "Fat %@" : {},
+    "Female" : {},
+    "Finish the rest" : {},
+    "Flash" : {},
+    "Food" : {},
+    "Food before %@ still counts for the day before. A new day starts the first time you open Mivu after that." : {},
+    "Food estimates and capture work without a lookup key. Add your own USDA key for retrieved nutrition evidence." : {},
     "Food items" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -986,6 +1410,36 @@
         }
       }
     },
+    "Food name" : {},
+    "Foods" : {},
+    "Foods with unknown calories and meals still being analyzed are left out." : {},
+    "For breakfast I had " : {},
+    "Format" : {},
+    "From" : {},
+    "From Diary" : {},
+    "From Progress" : {},
+    "From Siri while locked" : {},
+    "From Siri while locked · %lld waiting" : {},
+    "ft" : {},
+    "g" : {},
+    "Goal history" : {},
+    "Goal: %@ kcal a day, %@ g protein." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal: %1$@ kcal a day, %2$@ g protein."
+          }
+        }
+      }
+    },
+    "Goal: %@ kcal a day." : {},
+    "Goals" : {},
+    "Goals are your settings. Earlier dates keep their own records." : {},
+    "Got it" : {},
+    "Have a backup?" : {},
+    "Hide check-in" : {},
+    "Hide numbers on Lock Screen" : {},
     "History" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -997,6 +1451,13 @@
         }
       }
     },
+    "History unavailable" : {},
+    "How am I doing today?" : {},
+    "How it's worked out" : {},
+    "How much did you eat? Give grams, a serving size, or a container size." : {},
+    "How much was the additional serving? Give its amount and unit." : {},
+    "How quickly would you like to gain it?" : {},
+    "How quickly would you like to lose it?" : {},
     "I ate half" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1004,6 +1465,21 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "I ate half"
+          }
+        }
+      }
+    },
+    "I couldn't find anything to add there." : {},
+    "I need a bit more detail. My question is above." : {},
+    "I need a little more detail to log that." : {},
+    "I need a little more detail. Reply with it, or edit the record." : {},
+    "I’m offline. I’ll pick this up when you’re back." : {},
+    "Import %@ (%lld meals) as a separate private local diary. The selected profile is preserved." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Import %1$@ (%2$lld meals) as a separate private local diary. The selected profile is preserved."
           }
         }
       }
@@ -1019,6 +1495,9 @@
         }
       }
     },
+    "Include estimated workout energy in an adjusted remaining figure" : {},
+    "Insufficient measurements for a weight trend." : {},
+    "Intake toward that day's goal" : {},
     "It may have been deleted or belong to another profile." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1030,6 +1509,24 @@
         }
       }
     },
+    "Jump to latest" : {},
+    "Just updated" : {},
+    "kcal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kcal"
+          }
+        }
+      }
+    },
+    "kcal a day" : {},
+    "kcal on an average day" : {},
+    "kcal recorded" : {},
+    "Keep" : {},
+    "Keep a backup or export before changing phones." : {},
     "Keep editing" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1041,6 +1538,18 @@
         }
       }
     },
+    "kg" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kg"
+          }
+        }
+      }
+    },
+    "kg trend" : {},
     "Language" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1052,6 +1561,44 @@
         }
       }
     },
+    "Last %lld days: about %@ kcal a day on %lld tracked days." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last %1$lld days: about %2$@ kcal a day on %3$lld tracked days."
+          }
+        }
+      }
+    },
+    "Last %lld days: about %@ kcal a day on 1 tracked day." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last %1$lld days: about %2$@ kcal a day on 1 tracked day."
+          }
+        }
+      }
+    },
+    "Later" : {},
+    "Latest goals" : {},
+    "Latest measurement" : {},
+    "Latest measurements" : {},
+    "Latest workouts" : {},
+    "lb" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lb"
+          }
+        }
+      }
+    },
+    "Leave a nutrient blank if you have no target for it." : {},
+    "Leave an unused exercise blank for a simple session. Leave load blank for bodyweight." : {},
     "Leave unknown values blank. Changing only quantity scales the recorded nutrients." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1063,6 +1610,21 @@
         }
       }
     },
+    "Leave unknown values blank. Changing only the amount scales the recorded nutrients. Changes update this meal only." : {},
+    "Likely between %@ and %@. From your intake and weight trend; it firms up as you log." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Likely between %1$@ and %2$@. From your intake and weight trend; it firms up as you log."
+          }
+        }
+      }
+    },
+    "Listening" : {},
+    "Live Activities are off for Mivu in iOS Settings." : {},
+    "Load earlier messages" : {},
+    "Load later messages" : {},
     "Loading account models" : {
       "localizations" : {
         "en" : {
@@ -1073,6 +1635,19 @@
         }
       }
     },
+    "Loading chat history" : {},
+    "Loading conversation" : {},
+    "Loading current record" : {},
+    "Loading earlier messages" : {},
+    "Loading goals…" : {},
+    "Loading later messages" : {},
+    "Loading measurements…" : {},
+    "Loading photo" : {},
+    "Loading progress…" : {},
+    "Loading saved goals…" : {},
+    "Loading workout…" : {},
+    "Loading workouts…" : {},
+    "Loading…" : {},
     "Local sample storage unavailable" : {
       "localizations" : {
         "en" : {
@@ -1083,6 +1658,7 @@
         }
       }
     },
+    "Log breakfast" : {},
     "Log meal" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1094,6 +1670,7 @@
         }
       }
     },
+    "Log Meal" : {},
     "Log morning weight" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1105,6 +1682,38 @@
         }
       }
     },
+    "Log my weight" : {},
+    "Log to %@" : {},
+    "Log weight" : {},
+    "Log with Pip" : {},
+    "Logging meal" : {},
+    "Logging to %@, %@ kcal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logging to %1$@, %2$@ kcal"
+          }
+        }
+      }
+    },
+    "Logging to %@, %@ of %@ kcal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logging to %1$@, %2$@ of %3$@ kcal"
+          }
+        }
+      }
+    },
+    "Looking at your photo…" : {},
+    "Looking at your photos…" : {},
+    "Male" : {},
+    "Manage usage" : {},
+    "Mark reviewed" : {},
+    "Marked %@ as counted." : {},
+    "Marked %@ as skipped." : {},
     "Meal" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1116,6 +1725,7 @@
         }
       }
     },
+    "Meal actions" : {},
     "Meal details" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1127,6 +1737,7 @@
         }
       }
     },
+    "Meal logged" : {},
     "Meal photo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1171,6 +1782,20 @@
         }
       }
     },
+    "Measurement ledger" : {},
+    "Measurements · %@" : {},
+    "medium" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medium"
+          }
+        }
+      }
+    },
+    "Message" : {},
     "Mivu" : {
       "localizations" : {
         "en" : {
@@ -1181,6 +1806,9 @@
         }
       }
     },
+    "More" : {},
+    "More details" : {},
+    "Morning check-in" : {},
     "Morning weight" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1192,6 +1820,11 @@
         }
       }
     },
+    "Morning weight · %@" : {},
+    "Morning! What’s for breakfast?" : {},
+    "Move" : {},
+    "Move meal" : {},
+    "Move to %@" : {},
     "Move to another day" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1203,6 +1836,8 @@
         }
       }
     },
+    "Moved to %@" : {},
+    "Moved to %@." : {},
     "My diary" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1214,6 +1849,7 @@
         }
       }
     },
+    "My weight this morning is " : {},
     "Name" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1245,6 +1881,7 @@
         }
       }
     },
+    "Native test fixture — no provider request" : {},
     "Needs retry" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1256,6 +1893,7 @@
         }
       }
     },
+    "Needs review" : {},
     "New day" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1267,6 +1905,8 @@
         }
       }
     },
+    "New total" : {},
+    "Next" : {},
     "No account models loaded" : {
       "localizations" : {
         "en" : {
@@ -1277,6 +1917,8 @@
         }
       }
     },
+    "No account, but much less accurate. It only logs meals and changes amounts." : {},
+    "No account, but much lower accuracy" : {},
     "No backup folder selected" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1288,6 +1930,12 @@
         }
       }
     },
+    "No chat for this date" : {},
+    "No conversation for this diary day." : {},
+    "No energy target set" : {},
+    "No exercise details recorded." : {},
+    "No finished days in the last %lld days yet." : {},
+    "No goals set" : {},
     "No local sample saved" : {
       "localizations" : {
         "en" : {
@@ -1298,6 +1946,8 @@
         }
       }
     },
+    "No meals recorded" : {},
+    "No meals recorded for this day." : {},
     "No recorded meals yet" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1319,6 +1969,8 @@
         }
       }
     },
+    "No saved chat" : {},
+    "No saved conversation is labeled %@." : {},
     "No saved items yet" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1330,6 +1982,7 @@
         }
       }
     },
+    "No saved submissions." : {},
     "No tracking days yet" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1341,6 +1994,8 @@
         }
       }
     },
+    "No valid total" : {},
+    "No workouts recorded yet." : {},
     "Not connected" : {
       "localizations" : {
         "en" : {
@@ -1351,6 +2006,16 @@
         }
       }
     },
+    "Not estimated yet" : {},
+    "Not Now" : {},
+    "Nothing logged" : {},
+    "Notifications are off for Mivu. You can allow them in iOS Settings." : {},
+    "Nutrition" : {},
+    "Nutrition details" : {},
+    "Nutrition for this amount" : {},
+    "Nutrition provenance unknown" : {},
+    "of %@ kcal" : {},
+    "Offline. I'll reply when you're back online." : {},
     "OK" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1362,6 +2027,10 @@
         }
       }
     },
+    "Older goals" : {},
+    "Older measurements" : {},
+    "Older workouts" : {},
+    "One measurement; a trend needs another date." : {},
     "Only completed analysis will appear as a result." : {
       "localizations" : {
         "en" : {
@@ -1372,6 +2041,18 @@
         }
       }
     },
+    "Only this food is removed. The meal keeps its other foods." : {},
+    "Only this meal will move. The destination changes when you tap Move." : {},
+    "Only this photo will be removed. The meal and its notes are kept." : {},
+    "Open" : {},
+    "Open backup and Files" : {},
+    "Open ChatGPT connection" : {},
+    "Open Coach" : {},
+    "Open Diary" : {},
+    "Open full-screen photo viewer" : {},
+    "Open local profiles" : {},
+    "Open nutrition source" : {},
+    "Open Profile and settings to select a private local profile." : {},
     "Open Settings" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1383,6 +2064,16 @@
         }
       }
     },
+    "Open Settings to choose a private local profile." : {},
+    "Opening diary" : {},
+    "Opening your diary" : {},
+    "Opens Mivu Coach, ready for a question." : {},
+    "Opens the camera to log a meal." : {},
+    "Opens the camera to photograph a meal and log it." : {},
+    "Opens Today" : {},
+    "Optional estimate" : {},
+    "Optional nutrition source" : {},
+    "Optional weight goal" : {},
     "Optional. Saving starts or reuses today's waking day." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1394,6 +2085,7 @@
         }
       }
     },
+    "Other allergies, intolerances or dislikes" : {},
     "Partial" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1415,6 +2107,9 @@
         }
       }
     },
+    "Photo" : {},
+    "Photo library" : {},
+    "Photo loaded" : {},
     "Photo timing" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1426,6 +2121,8 @@
         }
       }
     },
+    "Photo timing: %@" : {},
+    "Photo unavailable" : {},
     "Photos" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1448,6 +2145,7 @@
         }
       }
     },
+    "Portion" : {},
     "Portion or nutrients are uncertain" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1459,6 +2157,13 @@
         }
       }
     },
+    "Prefer not to say" : {},
+    "Preparing camera…" : {},
+    "Preparing photo" : {},
+    "Preparing photos" : {},
+    "Preparing report" : {},
+    "Preparing voice…" : {},
+    "Preview" : {},
     "Previous day" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1470,6 +2175,7 @@
         }
       }
     },
+    "Private diary on this iPhone" : {},
     "Private local profile" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1481,6 +2187,7 @@
         }
       }
     },
+    "Profile and settings" : {},
     "Profile name" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1503,6 +2210,7 @@
         }
       }
     },
+    "Progress" : {},
     "Protein" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1525,6 +2233,7 @@
         }
       }
     },
+    "Protein %@" : {},
     "Quantity" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1546,6 +2255,7 @@
         }
       }
     },
+    "Range" : {},
     "Reading archive" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1557,6 +2267,7 @@
         }
       }
     },
+    "Ready for lunch?" : {},
     "Reauthorize ChatGPT" : {
       "localizations" : {
         "en" : {
@@ -1578,6 +2289,12 @@
         }
       }
     },
+    "Record unavailable" : {},
+    "Recorded day" : {},
+    "Recorded food, remaining from recorded food, and estimated burn are always shown separately." : {},
+    "Recorded intake" : {},
+    "Recorded intake toward your goal" : {},
+    "Recorded operation" : {},
     "Recorded totals" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1599,6 +2316,8 @@
         }
       }
     },
+    "Reload workout" : {},
+    "Reminder time" : {},
     "Remove" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1610,6 +2329,44 @@
         }
       }
     },
+    "Remove exercise" : {},
+    "Remove lookup key" : {},
+    "Remove photo %lld" : {},
+    "Remove set %lld" : {},
+    "Remove the whole %@ meal?" : {},
+    "Remove the whole meal?" : {},
+    "Remove this whole meal?" : {},
+    "Removed" : {},
+    "Removed %@." : {},
+    "Removed that meal." : {},
+    "Removed the photo." : {},
+    "Replace %@ with %@ (%lld meals). Older or deleted records cannot overwrite newer changes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Replace %1$@ with %2$@ (%3$lld meals). Older or deleted records cannot overwrite newer changes."
+          }
+        }
+      }
+    },
+    "Reply" : {},
+    "Reply to %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reply to %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "Replying to Pip" : {},
+    "Replying to you" : {},
+    "Report format" : {},
+    "Report Reply" : {},
+    "Resizes every food in this meal to reach a calorie total" : {},
+    "Restore %@?" : {},
     "Restore diary" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1643,6 +2400,10 @@
         }
       }
     },
+    "Retake" : {},
+    "Retake photo" : {},
+    "Retake photo %lld" : {},
+    "Retry" : {},
     "Retry analysis" : {
       "localizations" : {
         "en" : {
@@ -1664,6 +2425,14 @@
         }
       }
     },
+    "Retry earlier messages" : {},
+    "Retry later messages" : {},
+    "Retry loading goals" : {},
+    "Retry loading history" : {},
+    "Retry loading measurements" : {},
+    "Retry loading progress" : {},
+    "Retry loading weight" : {},
+    "Retry loading workouts" : {},
     "Retry sample estimate" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1675,6 +2444,7 @@
         }
       }
     },
+    "Review / Edit" : {},
     "Review before saving totals" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1686,6 +2456,7 @@
         }
       }
     },
+    "Review captured meal" : {},
     "Review estimate" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1697,6 +2468,7 @@
         }
       }
     },
+    "Runs on this iPhone with no account, but estimates are much less accurate. It only logs meals and changes amounts; connect ChatGPT for accurate estimates, questions and other edits." : {},
     "Sample request" : {
       "localizations" : {
         "en" : {
@@ -1728,6 +2500,8 @@
         }
       }
     },
+    "Save known nutrition directly, including when offline." : {},
+    "Save lookup key" : {},
     "Save preferences" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1761,6 +2535,12 @@
         }
       }
     },
+    "Saved — about **%@** kcal." : {},
+    "Saved attachment" : {},
+    "Saved food" : {},
+    "Saved on this iPhone" : {},
+    "Saved on this iPhone before analysis. Pending or unreviewed results do not count in totals. We’ll ask if the waking day needs confirming." : {},
+    "Saved submissions are shown below. Individual change times and before-and-after values are not recorded." : {},
     "Saved to backup folder" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1772,6 +2552,24 @@
         }
       }
     },
+    "Saved." : {},
+    "Saving updates only this selected waking day. Other day labels and your active day are preserved." : {},
+    "Saving…" : {},
+    "See progress" : {},
+    "See today" : {},
+    "Selected" : {},
+    "Selected %@: %@ kg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Selected %1$@: %2$@ kg"
+          }
+        }
+      }
+    },
+    "Selected companion" : {},
+    "Selected date" : {},
     "Selected profile" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1783,6 +2581,7 @@
         }
       }
     },
+    "Selected source message" : {},
     "Send" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1805,6 +2604,19 @@
         }
       }
     },
+    "Sends a message to Mivu Coach without opening the app." : {},
+    "Set %lld: %lld repetitions · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %1$lld: %2$lld repetitions · %3$@"
+          }
+        }
+      }
+    },
+    "Set a goal" : {},
+    "Setting up your diary" : {},
     "Settings" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1816,6 +2628,17 @@
         }
       }
     },
+    "Settings error" : {},
+    "Setup" : {},
+    "Setup progress" : {},
+    "Sex" : {},
+    "Share a report" : {},
+    "Share report" : {},
+    "Share with OpenAI?" : {},
+    "Show all chat history" : {},
+    "Show date" : {},
+    "Show in Dynamic Island" : {},
+    "Shows the original" : {},
     "Sign out of local profile" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1837,6 +2660,13 @@
         }
       }
     },
+    "Skip" : {},
+    "Skip This Day" : {},
+    "Skipped" : {},
+    "Skipped days stay out of your statistics." : {},
+    "Snap It" : {},
+    "Snap when ready." : {},
+    "Snap your meal to log it" : {},
     "Some nutrients are unknown. Recorded totals may be incomplete." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1848,6 +2678,15 @@
         }
       }
     },
+    "Some nutrients unknown" : {},
+    "Some photos could not be imported. Your note and other photos are kept." : {},
+    "Something changed while I was working. Check it, then try again." : {},
+    "Something went wrong." : {},
+    "Something went wrong. Your message is saved; tap Try again." : {},
+    "Source details" : {},
+    "Speak your meal" : {},
+    "Start" : {},
+    "Start a new diary" : {},
     "Start a waking day?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1870,6 +2709,23 @@
         }
       }
     },
+    "Starting on" : {},
+    "Status changed later" : {},
+    "Step %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Step %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Stop listening" : {},
+    "Stopped listening" : {},
+    "Stored proposal" : {},
+    "Submission %lld" : {},
+    "Support" : {},
     "Synthetic apple estimate" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1891,6 +2747,13 @@
         }
       }
     },
+    "Take photo" : {},
+    "Take photo and log meal" : {},
+    "Taking photo in %lld" : {},
+    "Target" : {},
+    "Teal: near your target. Orange: further off. Grey: logged, not judged yet. Empty: no log." : {},
+    "Tell Coach" : {},
+    "Tell Coach instead" : {},
     "Test native browser" : {
       "localizations" : {
         "en" : {
@@ -1911,6 +2774,7 @@
         }
       }
     },
+    "That one didn’t go through." : {},
     "The active profile changed. Try again in this profile." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1932,6 +2796,9 @@
         }
       }
     },
+    "The connection changed. Your message is saved; tap Try again." : {},
+    "The conversation page was invalid. Try again." : {},
+    "The conversation update was invalid. Try again." : {},
     "The diary works in apple sample mode without connecting ChatGPT." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1943,6 +2810,13 @@
         }
       }
     },
+    "The meal will be recorded on this day. Time will be unspecified." : {},
+    "The meal’s original day and time are kept." : {},
+    "The saved attachment could not be displayed." : {},
+    "The saved ingredient will keep its original values." : {},
+    "There's no food recorded for %@ yet." : {},
+    "These settings changed while you were editing. Your draft is preserved." : {},
+    "Thinking…" : {},
     "This archive belongs to another local profile. Select that profile before restoring." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1965,6 +2839,8 @@
         }
       }
     },
+    "This conversation is unavailable for the current diary." : {},
+    "This corrects the saved measurement for this waking day." : {},
     "This diagnostic uses only a synthetic image and prompt." : {
       "localizations" : {
         "en" : {
@@ -1975,6 +2851,7 @@
         }
       }
     },
+    "This food" : {},
     "This imports the archived profile as a separate private local diary. The selected profile is preserved." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1986,6 +2863,10 @@
         }
       }
     },
+    "This is the meal’s only food, so deleting it deletes the meal." : {},
+    "This item was deleted." : {},
+    "This key stays in this iPhone's Keychain and is excluded from diary exports and backups." : {},
+    "This meal" : {},
     "This meal changed. Open it again before editing." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1997,6 +2878,8 @@
         }
       }
     },
+    "This meal changed. Review it before retrying its earlier input." : {},
+    "This meal was deleted." : {},
     "This profile is stored privately on this iPhone." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2019,6 +2902,9 @@
         }
       }
     },
+    "This removes %@'s meals, photos, weights and preferences from this iPhone. Export or save a backup first if you want to keep your records. Other profiles are preserved. Deleting your last profile also disconnects ChatGPT." : {},
+    "This removes only this workout and its exercise details. Meals, weights and other workouts are preserved." : {},
+    "This removes the meal and its attached photos from this diary." : {},
     "This replaces the selected profile with the validated archive. Older or deleted records cannot overwrite newer changes." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2030,6 +2916,13 @@
         }
       }
     },
+    "This source message is unavailable." : {},
+    "This weight was deleted." : {},
+    "This workout was deleted." : {},
+    "Three spreadsheet files: meals, daily totals against targets, and weigh-ins." : {},
+    "Through" : {},
+    "Time unspecified" : {},
+    "Time will be unspecified." : {},
     "Timezone" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2052,6 +2945,8 @@
         }
       }
     },
+    "To estimate nutrition and answer Coach, Mivu sends OpenAI, through your ChatGPT account, what you record: meals, photos, messages, weights, workouts, goals and profile details. If you add a USDA key, food searches go to USDA FoodData Central. Your diary stays on this iPhone, and you can disconnect any time in Settings." : {},
+    "today" : {},
     "Today" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2063,6 +2958,7 @@
         }
       }
     },
+    "Total calories" : {},
     "Tracking days" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2074,6 +2970,16 @@
         }
       }
     },
+    "Trend" : {},
+    "Try again" : {},
+    "Try Again" : {},
+    "Try camera again" : {},
+    "Trying that meal again." : {},
+    "Tuned by ChatGPT" : {},
+    "Undid the change to %@." : {},
+    "Undid the change to that meal." : {},
+    "Undo" : {},
+    "Undone" : {},
     "Unit" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2085,6 +2991,8 @@
         }
       }
     },
+    "Unit, %@" : {},
+    "unknown" : {},
     "Unknown" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2140,6 +3048,27 @@
         }
       }
     },
+    "Updated %@: %@ → %@ kcal." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated %1$@: %2$@ → %3$@ kcal."
+          }
+        }
+      }
+    },
+    "Updated %@: %@ kcal." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated %1$@: %2$@ kcal."
+          }
+        }
+      }
+    },
+    "Updated %@." : {},
     "Usage limit reached" : {
       "localizations" : {
         "en" : {
@@ -2150,6 +3079,13 @@
         }
       }
     },
+    "USDA API key" : {},
+    "USDA lookup configured" : {},
+    "USDA lookup not configured" : {},
+    "Use Apple Intelligence instead" : {},
+    "Use latest saved settings" : {},
+    "Use the estimate instead" : {},
+    "Use the Settings link to continue." : {},
     "User supplied values" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2171,6 +3107,13 @@
         }
       }
     },
+    "Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI." : {},
+    "Using ChatGPT plan" : {},
+    "View previously saved food" : {},
+    "View saved food" : {},
+    "Voice input couldn’t start. Type, or use the keyboard microphone." : {},
+    "Voice input isn’t available on this iPhone. Type, or use the keyboard microphone." : {},
+    "Voice input stopped. Your text is kept." : {},
     "Waiting for authorized connection" : {
       "localizations" : {
         "en" : {
@@ -2181,6 +3124,7 @@
         }
       }
     },
+    "Waiting for ChatGPT…" : {},
     "Waiting for connection" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2192,6 +3136,7 @@
         }
       }
     },
+    "Waiting to start" : {},
     "Waking day" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2203,6 +3148,11 @@
         }
       }
     },
+    "We'll aim to keep your weight steady." : {},
+    "Weigh-ins" : {},
+    "Weight" : {},
+    "Weight change" : {},
+    "Weight in %@" : {},
     "Weight in kg" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2214,6 +3164,41 @@
         }
       }
     },
+    "Weight kg" : {},
+    "Weight saved" : {},
+    "Weight saved · %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight saved · %1$@ %2$@"
+          }
+        }
+      }
+    },
+    "Weight saved: **%@ %@**." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight saved: **%1$@ %2$@**."
+          }
+        }
+      }
+    },
+    "Weight saved." : {},
+    "Weight trend" : {},
+    "Welcome back" : {},
+    "What food did you eat?" : {},
+    "What have you had today?" : {},
+    "What should I tell the Coach?" : {},
+    "What would you like to record?" : {},
+    "What’s for dinner?" : {},
+    "Which day is this for?" : {},
+    "Which day should this be recorded on?" : {},
+    "Which meal do you mean?" : {},
+    "Which one did you mean?" : {},
+    "Which saved food item should I update?" : {},
     "Which waking day?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2225,6 +3210,21 @@
         }
       }
     },
+    "Which workout do you mean?" : {},
+    "Workout" : {},
+    "Workout · %@" : {},
+    "Workout saved: %@, %lld minutes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout saved: %1$@, %2$lld minutes."
+          }
+        }
+      }
+    },
+    "Workout saved." : {},
+    "Workouts" : {},
     "Write what you ate or what changed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2236,6 +3236,11 @@
         }
       }
     },
+    "yesterday" : {},
+    "You're offline. Your message is saved and I'll reply when you're back online." : {},
+    "You're set for today" : {},
+    "You’re using your ChatGPT plan" : {},
+    "You've reached your ChatGPT usage limit. Your message is saved; see Manage usage in Settings." : {},
     "Your active day began on an earlier date. A late meal can stay in that day." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2247,6 +3252,10 @@
         }
       }
     },
+    "Your day" : {},
+    "Your diaries" : {},
+    "Your entered targets have not been saved. Changing the date loads the saved settings for the selected date." : {},
+    "Your estimate is ready for review." : {},
     "Your first meal starts here" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2258,6 +3267,17 @@
         }
       }
     },
+    "Your goals are updated." : {},
+    "Your meal is saved. Analysis will resume when available." : {},
+    "Your meal is saved. Retry analysis when you’re ready." : {},
+    "Your message is saved." : {},
+    "Your note and photos are still here and have not been sent." : {},
+    "Your preferences are up to date." : {},
+    "Your preferences are updated." : {},
+    "Your saved conversations will appear here." : {},
+    "Your saved settings stay unchanged. Unsaved preferences and lookup key will be discarded." : {},
+    "Your unsaved food and nutrition will be discarded." : {},
+    "Your unsaved note and photos will be discarded." : {},
     "Your waking day" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2269,60 +3289,8 @@
         }
       }
     },
-    "kcal" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kcal"
-          }
-        }
-      }
-    },
-    "kg" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kg"
-          }
-        }
-      }
-    },
-    "lb" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "lb"
-          }
-        }
-      }
-    },
-    "medium" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "medium"
-          }
-        }
-      }
-    },
-    "עברית" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "עברית"
-          }
-        }
-      }
-    }
+    "Zoom in" : {},
+    "Zoom out" : {}
   },
   "version" : "1.0"
 }

@@ -42,9 +42,9 @@ import SwiftUI
         let mine = attempt
         do {
             guard await AVAudioApplication.requestRecordPermission() else {
-                throw Failure("Allow microphone access in Settings to log by voice.")
+                throw Failure(String(localized: "Allow microphone access in Settings to log by voice."))
             }
-            guard await Self.speechAuthorized() else { throw Failure("Allow speech recognition in Settings to log by voice.") }
+            guard await Self.speechAuthorized() else { throw Failure(String(localized: "Allow speech recognition in Settings to log by voice.")) }
             let english = Locale(identifier: "en-US")
             let transcriber: any SpeechModule
             let transcripts: AsyncThrowingStream<(text: String, isFinal: Bool), any Error>
@@ -56,15 +56,15 @@ import SwiftUI
                 let module = DictationTranscriber(locale: locale, preset: .progressiveLongDictation)
                 (transcriber, transcripts) = (module, Self.texts(module.results) { (String($0.text.characters), $0.isFinal) })
             } else {
-                throw Failure("Voice input isn’t available on this iPhone. Type, or use the keyboard microphone.")
+                throw Failure(String(localized: "Voice input isn’t available on this iPhone. Type, or use the keyboard microphone."))
             }
             if let download = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                note = "Preparing voice…"
+                note = String(localized: "Preparing voice…")
                 try await download.downloadAndInstall()
                 note = nil
             }
             guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
-                throw Failure("Voice input isn’t available on this iPhone. Type, or use the keyboard microphone.")
+                throw Failure(String(localized: "Voice input isn’t available on this iPhone. Type, or use the keyboard microphone."))
             }
             let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
             let engine = AVAudioEngine()
@@ -91,14 +91,14 @@ import SwiftUI
                         update(Self.merged(draft: draft, spoken: isFinal ? finished : finished + text))
                     }
                 } catch {
-                    self.note = "Voice input stopped. Your text is kept."
+                    self.note = String(localized: "Voice input stopped. Your text is kept.")
                     Task { await self.stop() } // releases the microphone; this task must finish first
                 }
             }
             phase = .listening
-            AccessibilityNotification.Announcement("Listening").post()
+            AccessibilityNotification.Announcement(String(localized: "Listening")).post()
         } catch {
-            note = (error as? Failure)?.message ?? "Voice input couldn’t start. Type, or use the keyboard microphone."
+            note = (error as? Failure)?.message ?? String(localized: "Voice input couldn’t start. Type, or use the keyboard microphone.")
             await stop()
         }
     }
@@ -116,7 +116,7 @@ import SwiftUI
         (engine, analyzer, input, results) = (nil, nil, nil, nil)
         levels = [Float](repeating: 0, count: Self.waveformBars)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        if wasListening { AccessibilityNotification.Announcement("Stopped listening").post() }
+        if wasListening { AccessibilityNotification.Announcement(String(localized: "Stopped listening")).post() }
     }
 
     private struct Failure: Error { let message: String; init(_ message: String) { self.message = message } }
@@ -143,7 +143,7 @@ import SwiftUI
                                         as format: AVAudioFormat, level: @escaping @Sendable (Float) -> Void) throws {
         let source = node.outputFormat(forBus: 0)
         guard let converter = AVAudioConverter(from: source, to: format) else {
-            throw Failure("Voice input isn’t available on this iPhone. Type, or use the keyboard microphone.")
+            throw Failure(String(localized: "Voice input isn’t available on this iPhone. Type, or use the keyboard microphone."))
         }
         node.installTap(onBus: 0, bufferSize: 4096, format: source) { buffer, _ in
             level(Self.level(of: buffer))

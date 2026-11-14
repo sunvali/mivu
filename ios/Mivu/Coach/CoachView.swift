@@ -195,11 +195,11 @@ struct CoachView: View {
     @ViewBuilder private func accessibilityPageAction(_ direction: CoachPageDirection, timeline: CoachTimelineViewModel) -> some View {
         switch timeline.window.edgeState(direction) {
         case .available:
-            Button(direction == .earlier ? "Load earlier messages" : "Load later messages") {
+            Button(direction == .earlier ? String(localized: "Load earlier messages") : String(localized: "Load later messages")) {
                 _ = requestAccessibilityPage?(direction)
             }
         case .failed:
-            Button(direction == .earlier ? "Retry earlier messages" : "Retry later messages") {
+            Button(direction == .earlier ? String(localized: "Retry earlier messages") : String(localized: "Retry later messages")) {
                 _ = requestAccessibilityPage?(direction)
             }
         case .loading, .exhausted: EmptyView()
@@ -243,18 +243,18 @@ struct CoachView: View {
     #endif
     private func navigationError(_ value: CoachQueryError?) -> String {
         switch value {
-        case .noChatForDay: "No conversation for this diary day."
-        case .missingTurn: "This source message is unavailable."
-        default: "Could not load this conversation. Try again."
+        case .noChatForDay: String(localized: "No conversation for this diary day.")
+        case .missingTurn: String(localized: "This source message is unavailable.")
+        default: String(localized: "Could not load this conversation. Try again.")
         }
     }
     @ViewBuilder private func edge(_ direction: CoachPageDirection, timeline: CoachTimelineViewModel) -> some View {
         switch timeline.window.edgeState(direction) {
         case .loading:
-            ProgressView(direction == .earlier ? "Loading earlier messages" : "Loading later messages")
+            ProgressView(direction == .earlier ? String(localized: "Loading earlier messages") : String(localized: "Loading later messages"))
                 .font(.subheadline).padding(.vertical, 4).allowsHitTesting(false)
         case .failed:
-            Button(direction == .earlier ? "Retry earlier messages" : "Retry later messages") {
+            Button(direction == .earlier ? String(localized: "Retry earlier messages") : String(localized: "Retry later messages")) {
                 refreshViewport?()
                 if direction == .earlier { timeline.loadEarlier(anchor: timeline.window.viewportAnchor) }
                 else { timeline.loadLater(anchor: timeline.window.viewportAnchor) }
@@ -310,7 +310,7 @@ struct CoachView: View {
                 }
             }
             .accessibilityElement(children: .contain).accessibilityIdentifier("coachExchange-" + turn.id.uuidString)
-            .accessibilityValue(row.isHighlighted ? "Selected source message" : "")
+            .accessibilityValue(row.isHighlighted ? String(localized: "Selected source message") : "")
         } else if let date = row.date {
             let label = CoachReplyLines.dayTitle(date, zone: coach.diary.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
             HStack { Rectangle().frame(height: 0.5); Text(label).font(.subheadline).fixedSize(); Rectangle().frame(height: 0.5) }
@@ -391,7 +391,7 @@ struct CoachView: View {
                 }
             case .connect:
                 Text("Connect ChatGPT so I can count for you")
-                ChatGPTConnectButton(connection: coach.connection, title: "Connect").modifier(BubbleAction())
+                ChatGPTConnectButton(connection: coach.connection, title: String(localized: "Connect")).modifier(BubbleAction())
             }
         }
         .font(.subheadline).foregroundStyle(Color.diaryText).fixedSize(horizontal: false, vertical: true)
@@ -410,7 +410,7 @@ struct CoachView: View {
     @ViewBuilder private var queuedSiri: some View {
         if let entry = coach.queuedSiri.first {
             VStack(alignment: .leading, spacing: 8) {
-                Text(coach.queuedSiri.count > 1 ? "From Siri while locked · \(coach.queuedSiri.count) waiting" : "From Siri while locked")
+                Text(coach.queuedSiri.count > 1 ? String(localized: "From Siri while locked · \(coach.queuedSiri.count) waiting") : String(localized: "From Siri while locked"))
                     .font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary)
                 Text("“\(entry.text)”").lineLimit(4)
                 Text(entry.capturedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Color.diarySecondary)
@@ -443,7 +443,7 @@ struct CoachView: View {
                dismissedMorningDay != day.id.uuidString {
                 MorningCheckInCard(model: coach.diary, day: day, previous: recap.previous, previousTarget: recap.target,
                                    todayWeight: coach.diary.readModel?.weight, compact: true,
-                                   onTellCoach: { coach.attachmentDraft.text = "My weight this morning is "; editing = true }) {
+                                   onTellCoach: { coach.attachmentDraft.text = String(localized: "My weight this morning is "); editing = true }) {
                     withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
                 }.transition(.opacity)
             }
@@ -501,7 +501,7 @@ struct CoachView: View {
                 // Stacked, not overlaid, so the field grows to fit the words plus the wave while listening.
                 ZStack(alignment: .leading) {
                     TextField("Describe a meal…", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }),
-                              prompt: Text(listening ? "" : "Describe a meal…"), axis: .vertical)
+                              prompt: Text(listening ? "" : String(localized: "Describe a meal…")), axis: .vertical)
                         // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
                         .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
                         .accessibilityIdentifier("coachInput")
@@ -534,8 +534,8 @@ struct CoachView: View {
         // Each starter fills the draft for review; nothing is sent until the user taps Send.
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                ForEach([("Log breakfast", "For breakfast I had "), ("Log my weight", "My weight this morning is "),
-                         ("How am I doing today?", "How am I doing today?")], id: \.0) { title, draft in
+                ForEach([(String(localized: "Log breakfast"), String(localized: "For breakfast I had ")), (String(localized: "Log my weight"), String(localized: "My weight this morning is ")),
+                         (String(localized: "How am I doing today?"), String(localized: "How am I doing today?"))], id: \.0) { title, draft in
                     Button(title) { coach.attachmentDraft.text = draft; editing = true }
                         .font(.subheadline).controlSize(.large)
                         .buttonStyle(.glass).accessibilityIdentifier("coachStarter")
@@ -677,7 +677,7 @@ struct CoachView: View {
         do {
             cameraPresentationID = try coach.attachmentDraft.beginPresentation()
             retakingPhotoID = id; restoreKeyboard = editing; editing = false; showPhotos = true
-        } catch { coach.errorMessage = "Choose your diary before adding photos." }
+        } catch { coach.errorMessage = String(localized: "Choose your diary before adding photos.") }
     }
     private func inputBubble(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
@@ -727,9 +727,9 @@ struct CoachView: View {
                 }
                 if turn.needsDayChoice {
                     if let date = coach.previousDayDate(turn) {
-                        Button("Log to " + CoachReplyLines.shortDate(date)) { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
+                        Button("Log to \(CoachReplyLines.shortDate(date))") { Task { await coach.chooseDay(turn.id, usePrevious: true) } }.frame(minHeight: 44).disabled(coach.isWorking)
                     }
-                    Button("Log to " + CoachReplyLines.shortDate(coach.captureDate(turn))) { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
+                    Button("Log to \(CoachReplyLines.shortDate(coach.captureDate(turn)))") { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
                 } else if [.waitingForConnection, .waitingForNetwork, .needsRetry, .needsClarification].contains(turn.state) {
                     Button("Try again") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
                 }
@@ -757,7 +757,7 @@ struct CoachView: View {
                     HStack(spacing: 8) {
                         ForEach(followUps, id: \.self) { followUp in
                             Button(action: followUp == .today ? openToday : openProgress) {
-                                Text(followUp == .today ? "See today" : "See progress").frame(minHeight: 36)
+                                Text(followUp == .today ? String(localized: "See today") : String(localized: "See progress")).frame(minHeight: 36)
                             }
                             .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
                                 .accessibilityIdentifier(followUp == .today ? "coachFollowUp-today" : "coachFollowUp-progress")
@@ -785,13 +785,13 @@ struct CoachView: View {
     }
     private func status(_ state: CoachTurnState) -> String {
         switch state {
-        case .captured: "Waiting to start"
-        case .analyzing: "Thinking…"
-        case .waitingForConnection: "Connect ChatGPT in Settings to continue"
-        case .waitingForNetwork: "Offline. I'll reply when you're back online."
-        case .needsRetry: "Couldn't finish. Your message is saved."
-        case .needsClarification: "I need a little more detail. Reply with it, or edit the record."
-        case .completed: "Completed"
+        case .captured: String(localized: "Waiting to start")
+        case .analyzing: String(localized: "Thinking…")
+        case .waitingForConnection: String(localized: "Connect ChatGPT in Settings to continue")
+        case .waitingForNetwork: String(localized: "Offline. I'll reply when you're back online.")
+        case .needsRetry: String(localized: "Couldn't finish. Your message is saved.")
+        case .needsClarification: String(localized: "I need a little more detail. Reply with it, or edit the record.")
+        case .completed: String(localized: "Completed")
         }
     }
 }
@@ -799,11 +799,11 @@ struct CoachView: View {
 private extension CoachDestination {
     var linkTitle: String {
         switch self {
-        case .settings: "Open Settings"
-        case .profiles: "Open local profiles"
-        case .connection: "Open ChatGPT connection"
-        case .nutritionSource: "Open nutrition source"
-        case .backup: "Open backup and Files"
+        case .settings: String(localized: "Open Settings")
+        case .profiles: String(localized: "Open local profiles")
+        case .connection: String(localized: "Open ChatGPT connection")
+        case .nutritionSource: String(localized: "Open nutrition source")
+        case .backup: String(localized: "Open backup and Files")
         }
     }
 }

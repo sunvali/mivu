@@ -5,31 +5,33 @@ enum CoachReplyLines {
     static func factLine(progress: [CoachProgress], goals: [GoalRecord], workouts: [WorkoutSession], preferencesRead: Bool, today: String) -> String {
         var sentences = progress.map { progressLine($0, today: today) }
         sentences += goals.compactMap(goalLine)
-        sentences += workouts.map { "\($0.kind.rawValue.capitalized), \($0.durationMinutes) minutes." }
-        if preferencesRead { sentences.append("Your preferences are up to date.") }
-        return sentences.isEmpty ? "I couldn't find anything to add there." : sentences.prefix(2).joined(separator: " ")
+        sentences += workouts.map { String(localized: "\($0.kind.rawValue.capitalized), \($0.durationMinutes) minutes.") }
+        if preferencesRead { sentences.append(String(localized: "Your preferences are up to date.")) }
+        return sentences.isEmpty ? String(localized: "I couldn't find anything to add there.") : sentences.prefix(2).joined(separator: " ")
     }
 
     private static func progressLine(_ progress: CoachProgress, today: String) -> String {
         if let period = progress.period, period.dayCount > 1 {
-            guard let average = period.averageIntake.kcal else { return "No finished days in the last \(period.dayCount) days yet." }
+            guard let average = period.averageIntake.kcal else { return String(localized: "No finished days in the last \(period.dayCount) days yet.") }
             let tracked = period.knownIntakeSamples.kcal
-            return "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on \(tracked) tracked \(tracked == 1 ? "day" : "days")."
+            return tracked == 1 ? String(localized: "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on 1 tracked day.")
+                : String(localized: "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on \(tracked) tracked days.")
         }
         let daily = progress.daily
-        let label = daily.localDate == today ? "Today" : daily.localDate
-        guard let eaten = daily.foodTotals?.kcal, eaten > 0 else { return "There's no food recorded for \(daily.localDate) yet." }
-        var line = "\(label): \(number(eaten))"
-        if let target = daily.goal?.targets.kcal { line += " of \(number(target))" }
-        line += " kcal"
-        if let remaining = daily.remainingFromRecorded.kcal { line += remaining >= 0 ? ", about \(number(remaining, step: 10)) left" : ", about \(number(-remaining, step: 10)) over" }
-        if let weight = progress.weight.currentSevenDayAverageKg { line += ". Weight average \(number(weight)) kg" }
+        let label = daily.localDate == today ? String(localized: "Today") : daily.localDate
+        guard let eaten = daily.foodTotals?.kcal, eaten > 0 else { return String(localized: "There's no food recorded for \(daily.localDate) yet.") }
+        // Each clause wraps the line so far, so a translation can reorder it.
+        var line = daily.goal?.targets.kcal.map { String(localized: "\(label): \(number(eaten)) of \(number($0)) kcal") } ?? String(localized: "\(label): \(number(eaten)) kcal")
+        if let remaining = daily.remainingFromRecorded.kcal {
+            line = remaining >= 0 ? String(localized: "\(line), about \(number(remaining, step: 10)) left") : String(localized: "\(line), about \(number(-remaining, step: 10)) over")
+        }
+        if let weight = progress.weight.currentSevenDayAverageKg { line = String(localized: "\(line). Weight average \(number(weight)) kg") }
         return line + "."
     }
 
     private static func goalLine(_ goal: GoalRecord) -> String? {
         guard let kcal = goal.targets.kcal else { return nil }
-        return "Goal: \(number(kcal)) kcal a day" + (goal.targets.protein.map { ", \(number($0)) g protein" } ?? "") + "."
+        return goal.targets.protein.map { String(localized: "Goal: \(number(kcal)) kcal a day, \(number($0)) g protein.") } ?? String(localized: "Goal: \(number(kcal)) kcal a day.")
     }
 
     enum FollowUp: Equatable { case today, progress }
@@ -51,9 +53,9 @@ enum CoachReplyLines {
 
     /// "today", "yesterday" or a short date such as "Oct 17"; the year appears only when it differs.
     static func dayLabel(_ localDate: String, today: String, locale: Locale = .current) -> String {
-        if localDate == today { return "today" }
+        if localDate == today { return String(localized: "today") }
         guard let day = date(localDate), let now = date(today) else { return localDate }
-        if Calendar.gregorianUTC.dateComponents([.day], from: day, to: now).day == 1 { return "yesterday" }
+        if Calendar.gregorianUTC.dateComponents([.day], from: day, to: now).day == 1 { return String(localized: "yesterday") }
         let sameYear = localDate.prefix(4) == today.prefix(4)
         var style = Date.FormatStyle(locale: locale, timeZone: .gmt).month(.abbreviated).day()
         if !sameYear { style = style.year() }

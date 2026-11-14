@@ -50,7 +50,9 @@ def errors(catalogs, languages):
                 units = list(_values(localizations[language]))
                 if None in units:
                     found.append(f"{path}: {key!r} in {language!r} has a plural without 'other'")
-                if not units or any(u and (u.get('state') != 'translated' or not u.get('value')) for u in units):
+                # Xcode leaves extracted source strings in state 'new'; only a translation must be marked done.
+                done = (lambda u: bool(u.get('value'))) if language == source else (lambda u: u.get('state') == 'translated' and bool(u.get('value')))
+                if not units or any(u and not done(u) for u in units):
                     found.append(f"{path}: {key!r} in {language!r} is not fully translated")
     return found
 

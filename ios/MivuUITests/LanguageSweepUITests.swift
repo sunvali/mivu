@@ -7,10 +7,11 @@ import XCTest
     /// Screens whose text is not all in the string catalogs yet. Empty when the app is language-ready.
     static let notYetLocalized: Set<String> = [
         "onboarding", "today", "diary", "mealDetail", "mealComposer", "manualNutrition", "progress",
-        "goalEditor", "weightEditor", "coach", "coachHistory", "settings",
+        "goalEditor", "weightEditor", "settings",
     ]
     /// Text the fixtures or the test typed: data, not interface.
-    static let fixtureData: Set<String> = ["Two eggs, three bread slices and salad", "My diary", "Synthetic history food"]
+    static let fixtureData: Set<String> = ["Two eggs, three bread slices and salad", "My diary", "Synthetic history food",
+                                           "Eggs", "Bread", "Salad", "All set.", "1 bowl", "2 egg", "3 slice"]
 
     private var mode: String { ProcessInfo.processInfo.environment["SWEEP_MODE"] ?? "english" }
     private var text: String { ProcessInfo.processInfo.environment["SWEEP_TEXT"] ?? "default" }
@@ -183,18 +184,28 @@ import XCTest
         }
     }
 
-    /// The double-length flag shows every localized string twice, joined by a space. A label can join several
-    /// strings with commas; each part must be doubled, fixture data, a formatted date, or free of letters.
+    /// The double-length flag shows every localized string twice, joined by a space; in the first copy each
+    /// placeholder is left as a bare "@". A label can also join several strings with commas.
     static func isLocalized(_ label: String) -> Bool {
+        if isDoubled(label) { return true }
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US")
-        let dateWords = Set((formatter.weekdaySymbols + formatter.shortWeekdaySymbols + formatter.monthSymbols + formatter.shortMonthSymbols + ["AM", "PM"]))
+        let dateWords = Set(formatter.weekdaySymbols + formatter.shortWeekdaySymbols + formatter.monthSymbols + formatter.shortMonthSymbols + ["AM", "PM", "GMT", "UTC"])
+        // Typed text can hold commas of its own, so take fixture data out before splitting.
+        let label = fixtureData.reduce(label) { $0.replacingOccurrences(of: $1, with: "") }
         return label.components(separatedBy: ", ").allSatisfy { part in
             let part = part.trimmingCharacters(in: .whitespaces)
-            if fixtureData.contains(part) || part.hasPrefix("pose:") { return true }
-            // Format placeholders double into stray symbols, so compare only the words.
-            let words = part.split(separator: " ").map(String.init).filter { $0.contains(where: \.isLetter) }
-            if words.allSatisfy({ dateWords.contains($0.trimmingCharacters(in: .punctuationCharacters)) }) { return true }
-            return words.count % 2 == 0 && Array(words.prefix(words.count / 2)) == Array(words.suffix(words.count / 2))
+            if fixtureData.contains(part) || part.hasPrefix("pose:") || !part.contains(where: \.isLetter) || isDoubled(part) { return true }
+            return part.split(whereSeparator: \.isWhitespace).allSatisfy { word in
+                !word.contains(where: \.isLetter) || dateWords.contains(word.trimmingCharacters(in: .punctuationCharacters))
+            }
+        }
+    }
+
+    static func isDoubled(_ label: String) -> Bool {
+        let words = label.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        return (1..<max(words.count, 1)).contains { cut in
+            let pattern = NSRegularExpression.escapedPattern(for: words[..<cut].joined(separator: " ")).replacingOccurrences(of: "@", with: ".+?")
+            return words[cut...].joined(separator: " ").range(of: "^" + pattern + "$", options: .regularExpression) != nil
         }
     }
 }

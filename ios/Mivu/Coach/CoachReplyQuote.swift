@@ -4,18 +4,22 @@ extension CoachReply {
     /// Who wrote the quoted content, as the person reads it.
     var author: String {
         switch target {
-        case .message(_, true): "Pip"
-        case .message: "You"
-        case .meal, .item, .day: "Diary"
-        case .weight, .workout: "Progress"
+        case .message(_, true): String(localized: "Pip")
+        case .message: String(localized: "You")
+        case .meal, .item, .day: String(localized: "Diary")
+        case .weight, .workout: String(localized: "Progress")
         }
+    }
+    var spokenLabel: String {
+        if case .message(_, false) = target { return String(localized: "Reply to your message: \(excerpt)") }
+        return String(localized: "Reply to \(author): \(excerpt)")
     }
     var composerTitle: String {
         switch target {
-        case .message(_, true): "Replying to Pip"
-        case .message: "Replying to you"
-        case .meal, .item, .day: "From Diary"
-        case .weight, .workout: "From Progress"
+        case .message(_, true): String(localized: "Replying to Pip")
+        case .message: String(localized: "Replying to you")
+        case .meal, .item, .day: String(localized: "From Diary")
+        case .weight, .workout: String(localized: "From Progress")
         }
     }
 }
@@ -42,6 +46,6 @@ struct CoachReplyQuote: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Reply to \(reply.author == "You" ? "your message" : reply.author): \(reply.excerpt)")
+        .accessibilityLabel(reply.spokenLabel)
     }
 }

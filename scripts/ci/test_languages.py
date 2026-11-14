@@ -50,6 +50,12 @@ class Catalogs(unittest.TestCase):
     def test_source_language_needs_no_entry(self):
         self.assertEqual(languages.errors(catalog(Account={}), {'en'}), [])
 
+    def test_source_language_keeps_the_state_xcode_extracts(self):
+        entry = {'extractionState': 'extracted_with_value', 'localizations': {'en': {'stringUnit': {'state': 'new', 'value': '%1$@ of %2$@'}}}}
+        self.assertEqual(languages.errors(catalog(**{'%@ of %@': entry}), {'en'}), [])
+        entry['localizations']['he'] = {'stringUnit': {'state': 'new', 'value': '%1$@ of %2$@'}}
+        self.assertTrue(languages.errors(catalog(**{'%@ of %@': entry}), {'en', 'he'}))
+
     def test_xliff_key_missing_from_catalog_fails(self):
         xliff = ('<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2"><file original="Mivu/Localizable.xcstrings"><body>'
                  '<trans-unit id="Account"><source>Account</source></trans-unit>'
