@@ -51,6 +51,9 @@ import XCTest
         }
         let cancel = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Cancel' OR label BEGINSWITH 'Close' OR label BEGINSWITH 'Done'")).firstMatch
         if cancel.exists && cancel.isHittable { cancel.tap(); return }
+        // On the Duo the system can move Back into its side rail, outside any navigation bar.
+        let rail = app.buttons["BackButton"].firstMatch
+        if rail.exists && rail.isHittable { rail.tap(); return }
         let back = app.navigationBars.buttons.firstMatch
         if back.exists && back.isHittable { back.tap() } else { app.swipeDown(velocity: .fast) }
     }
@@ -91,7 +94,7 @@ import XCTest
         else { XCTFail("weightEditor did not open") }
         let meal = app.buttons["historyMeal"].firstMatch
         reveal(meal, in: app)
-        if meal.exists { meal.tap(); show("mealDetail", app, opened: app.navigationBars.buttons["BackButton"].waitForExistence(timeout: 10)); close(app) }
+        if meal.exists { meal.tap(); show("mealDetail", app, opened: app.buttons["mealAskPip"].waitForExistence(timeout: 10)); close(app) }
         else { XCTFail("mealDetail did not open") }
 
         tab("Progress", in: app).tap()
@@ -199,6 +202,16 @@ import XCTest
         // The wrapped paragraph shows its alignment: ragged on the left when it reads right to left.
         let capture = XCTAttachment(screenshot: sent.screenshot())
         capture.name = "\(mode)-\(text)-typedHebrew"; capture.lifetime = .keepAlways; add(capture)
+    }
+
+    /// Keeps the app open in the chosen mode for an outside capture tool. XCTest photographs the Duo's
+    /// outer panel only, so open poses are captured from outside while this holds.
+    func testHoldForCapture() throws {
+        let seconds = Double(ProcessInfo.processInfo.environment["SWEEP_HOLD"] ?? "") ?? 0
+        try XCTSkipUnless(seconds > 0, "Needs TEST_RUNNER_SWEEP_HOLD=<seconds>")
+        let app = launch(["--coach-ui-test", "--coach-inference-fixture", "--coach-navigation-start-today", "--diary-history-fixture"])
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
+        Thread.sleep(forTimeInterval: seconds)
     }
 
     func testTextIsLocalized() throws {
