@@ -48,4 +48,24 @@ struct LanguageTextTests {
         #expect(ProgressInsights.plainMacro(80, goal: 120) == "80 g a day · 40 g under goal")
         #expect(ProgressInsights.plainMacro(nil, goal: 120) == "No complete days")
     }
+
+    /// A phone set to another calendar or digit system still shows Gregorian dates with 0–9.
+    @Test func datesStayGregorianWithLatinDigits() {
+        let hebrewCalendar = Locale(identifier: "en_US@calendar=hebrew;numbers=arab")
+        #expect(DiaryWeek.format("2026-10-19", "EEEE d MMMM", locale: hebrewCalendar) == "Monday 19 October")
+        #expect(DiaryWeek.format("2026-10-19", "MMM d, yyyy", locale: Locale(identifier: "en_US@calendar=buddhist")) == "Oct 19, 2026")
+    }
+
+    @Test func oneWeighInReadsSingular() {
+        #expect(String(localized: "\(1) weigh-ins. Trend \("72.4") kg on \("2026-10-19").") == "1 weigh-in. Trend 72.4 kg on 2026-10-19.")
+        #expect(String(localized: "\(3) weigh-ins. Trend \("72.4") kg on \("2026-10-19").") == "3 weigh-ins. Trend 72.4 kg on 2026-10-19.")
+    }
+
+    @Test func convertedCountsKeepTheirEnglish() {
+        #expect(String(localized: "Last \(7) days: about \("2,100") kcal a day on \(1) tracked days.") == "Last 7 days: about 2,100 kcal a day on 1 tracked day.")
+        #expect(String(localized: "Last \(7) days: about \("2,100") kcal a day on \(5) tracked days.") == "Last 7 days: about 2,100 kcal a day on 5 tracked days.")
+        #expect(String(localized: "\(1) photos added") == "1 photo added")
+        #expect(String(localized: "\(3) photos added") == "3 photos added")
+        #expect(String(localized: "\(1) minutes") == "1 minute")
+    }
 }

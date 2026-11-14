@@ -28,11 +28,12 @@ enum DiaryWeek {
         return Array(sequence(first: start) { week in week < end ? adding(7, to: week) : nil })
     }
 
-    static func format(_ localDate: String, _ pattern: String) -> String {
+    static func format(_ localDate: String, _ pattern: String, locale: Locale = .current) -> String {
         guard let day = date(localDate) else { return localDate }
         let formatter = DateFormatter()
         // Each pattern is a catalog entry, so a language can reorder the day and month.
-        formatter.locale = .current; formatter.timeZone = .gmt; formatter.dateFormat = String(localized: String.LocalizationValue(pattern))
+        // Gregorian with 0–9 in every language: only the words and their order follow it, never a calendar or digit setting.
+        formatter.calendar = utc; formatter.locale = Locale(identifier: locale.language.minimalIdentifier); formatter.timeZone = .gmt; formatter.dateFormat = String(localized: String.LocalizationValue(pattern))
         return formatter.string(from: day)
     }
 

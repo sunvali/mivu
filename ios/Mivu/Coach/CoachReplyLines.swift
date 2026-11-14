@@ -14,8 +14,7 @@ enum CoachReplyLines {
         if let period = progress.period, period.dayCount > 1 {
             guard let average = period.averageIntake.kcal else { return String(localized: "No finished days in the last \(period.dayCount) days yet.") }
             let tracked = period.knownIntakeSamples.kcal
-            return tracked == 1 ? String(localized: "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on 1 tracked day.")
-                : String(localized: "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on \(tracked) tracked days.")
+            return String(localized: "Last \(period.dayCount) days: about \(number(average, step: 10)) kcal a day on \(tracked) tracked days.")
         }
         let daily = progress.daily
         let label = daily.localDate == today ? String(localized: "Today") : daily.localDate

@@ -696,7 +696,7 @@ struct CoachView: View {
                 }
                 if !turn.text.isEmpty { Text(turn.text).font(.body).directionFromContent(turn.text).accessibilityIdentifier("coachText-" + turn.id.uuidString) }
                 if !turn.photos.isEmpty {
-                    Label(turn.photos.count == 1 ? "1 photo" : "\(turn.photos.count) photos", systemImage: "photo").font(.caption)
+                    Label("\(turn.photos.count) photos", systemImage: "photo").font(.caption)
                     ForEach(turn.photos) { photo in DiaryPhotoPreview(model: coach.diary, reference: photo, height: 140) }
                 }
             }

@@ -53,7 +53,9 @@ enum CoachReplyCheck {
 
     /// The prose without the marker, and whether the marker was present.
     static func splitSaveClaim(_ prose: String) -> (text: String, claimsSave: Bool) {
-        (prose.replacingOccurrences(of: saveMarker, with: "").trimmingCharacters(in: .whitespacesAndNewlines), prose.contains(saveMarker))
+        // Models vary the spelling ("<saved />", "<Saved/>", in backticks), so match the tag loosely.
+        let marker = /`?<\s*saved\s*\/?\s*>`?/.ignoresCase()
+        return (prose.replacing(marker, with: "").trimmingCharacters(in: .whitespacesAndNewlines), prose.contains(marker))
     }
 
     static func passes(_ prose: String, allowed: Set<Decimal>, receipts: [CoachCommittedReceipt], claimsSave: Bool = false) -> Bool {

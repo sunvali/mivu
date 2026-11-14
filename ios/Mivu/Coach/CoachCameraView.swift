@@ -67,7 +67,7 @@ struct CoachCameraView: View {
         VStack(spacing: 20) {
             topControls
             Spacer(minLength: 0)
-            Text(shotsAdded == 0 ? String(localized: "Snap when ready.") : shotsAdded == 1 ? String(localized: "1 photo added") : String(localized: "\(shotsAdded) photos added"))
+            Text(shotsAdded == 0 ? String(localized: "Snap when ready.") : String(localized: "\(shotsAdded) photos added"))
                 .font(.headline).accessibilityIdentifier("coachCameraTally")
             CoachCameraLensBar(state: state, camera: camera)
             HStack(spacing: 16) {
@@ -173,7 +173,7 @@ struct CoachCameraView: View {
         guard !Task.isCancelled, !closing else { return }
         guard atTable else { finish(); return }
         shotsAdded += 1
-        AccessibilityNotification.Announcement(shotsAdded == 1 ? String(localized: "1 photo added") : String(localized: "\(shotsAdded) photos added")).post()
+        AccessibilityNotification.Announcement(String(localized: "\(shotsAdded) photos added")).post()
     }
     private var syntheticButton: some View {
         Button(DiaryLaunch.isSampleMode ? "Add synthetic apple photo" : "Add synthetic test photo") {

@@ -166,7 +166,7 @@ extension ProgressSnapshot {
         Section {
             if foods.isEmpty { ProgressPlaceholder(symbol: "fork.knife", text: String(localized: "No saved foods with known calories in this range.")) }
             ForEach(Array(foods.enumerated()), id: \.offset) { _, food in
-                ProgressDayRow(title: food.name, value: "\(food.count == 1 ? "once" : "\(food.count) times") · \(kcal(food.kcal))")
+                ProgressDayRow(title: food.name, value: food.count == 1 ? String(localized: "once · \(kcal(food.kcal))") : String(localized: "\(food.count) times · \(kcal(food.kcal))"))
             }
         } footer: {
             Text("Foods with unknown calories and meals still being analyzed are left out.")

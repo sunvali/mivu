@@ -68,6 +68,29 @@ Failures that are not caused by this change:
   `LoopbackCallbackTests` cases fail only under full-suite load and pass when run
   alone (32/32).
 
+## After the whole-branch review
+
+An independent review found five issues, fixed in `fix(languages): …` on top of
+`ad5f0485`, each with a test that failed first:
+
+- Diary and Progress dates followed the phone's calendar and digit settings
+  (a Hebrew or Buddhist calendar, Arabic-Indic digits), and the day name reaches
+  Coach. Dates are now always Gregorian with 0–9 (`datesStayGregorianWithLatinDigits`).
+- The save marker made Coach drop the model's reply after every weight or
+  workout save (`markedWeightReplyKeepsTheModelsProse`).
+- The marker rule now applies only to saves made in this turn, so "yes, breakfast
+  is logged" about an earlier save no longer fails the turn.
+- The marker is matched loosely (`<saved />`, `<Saved/>`, in backticks), so it
+  never shows in the chat (`markerSpellingsAreAllStripped`).
+- "1 weigh-ins" now reads "1 weigh-in"; weigh-ins, minutes, days logged, photos,
+  tracked days and "times" use plural forms, and "once · …" in Top foods became
+  translatable (`oneWeighInReadsSingular`, `convertedCountsKeepTheirEnglish`).
+
+Re-run on the iPhone 18 Pro (iOS 27.0) after the fixes: `MivuTests` 1,356 tests
+with only the base and load-only failures listed above (the on-device Apple model
+tests pass on iOS 27); Smoke, Progress, CoachReply and Companion UI 31/31;
+`testTextIsLocalized` (double), `testEveryScreenOpens` and `testChartsDoNotMirror` (rtl) pass.
+
 ## Captures
 
 `languages/step1/` holds contact sheets: `iphone17-*`, `iphone18pro-*`,

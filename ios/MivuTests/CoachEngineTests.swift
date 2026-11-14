@@ -187,6 +187,14 @@ private actor CoachInputFixture {
         let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
         await #expect(throws: CoachError.ungroundedConfirmation) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
     }
+    @Test func markedWeightReplyKeepsTheModelsProse() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let weight = #"{"local_date":"2027-01-15","value":70,"unit":"kg","weight_id":null,"expected_revision":null,"measured_at":null}"#
+        let replies = CoachFixture([result([call("log_weight", weight)]), result(text: "Logged 70 kg, nice and steady.\n<saved/>")])
+        let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
+        let completed = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == "Logged 70 kg, nice and steady.")
+    }
     @Test func readOnlyInventedSaveClaimRequiresClarification() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let replies = CoachFixture([result(text: "I saved your meal, 9999 calories")])

@@ -84,4 +84,12 @@ import Testing
         #expect(!CoachReplyCheck.passes("הארוחה מחכה.", allowed: allowed, receipts: receipts, claimsSave: true))
         #expect(CoachReplyCheck.passes("הארוחה מחכה לבדיקה.", allowed: allowed, receipts: receipts, claimsSave: false))
     }
+
+    @Test func markerSpellingsAreAllStripped() {
+        for reply in ["Saved.\n<saved />", "Saved.\n<Saved/>", "Saved.\n`<saved/>`", "Saved. < saved >"] {
+            let split = CoachReplyCheck.splitSaveClaim(reply)
+            #expect(split.claimsSave, "\(reply)")
+            #expect(split.text == "Saved.", "\(reply)")
+        }
+    }
 }
