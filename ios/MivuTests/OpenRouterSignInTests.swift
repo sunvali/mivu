@@ -29,6 +29,8 @@ import Testing
         let body = try #require(request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] })
         #expect(body == ["code": "abc", "code_verifier": attempt.verifier, "code_challenge_method": "S256"])
         #expect(try OpenRouterSignIn.key(from: Data(#"{"key":"fixture-or-key"}"#.utf8)) == "fixture-or-key")
+        // The reply carries other fields, and not all of them are strings.
+        #expect(try OpenRouterSignIn.key(from: Data(#"{"key":"fixture-or-key","user_id":null,"limit":5}"#.utf8)) == "fixture-or-key")
         #expect(throws: OAuthError.invalidCallback) { try OpenRouterSignIn.key(from: Data("{}".utf8)) }
     }
 }

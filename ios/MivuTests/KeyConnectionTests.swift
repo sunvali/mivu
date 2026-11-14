@@ -101,6 +101,39 @@ import Testing
         #expect(f.connection.notice == .keyRejected)
     }
 
+    @Test func savingAKeyDoesNotStrandAChatGPTSignInThatIsWaiting() async throws {
+        let f = Fixture(); defer { f.cleanup() }
+        f.connection.recordSharingConsent(); f.connection.recordConsent(to: .claude); f.reply(200, modelsReply)
+        let (browserOpen, closeBrowser) = AsyncStream<Void>.makeStream()
+        let signIn = Task { await f.connection.connect { _ in for await _ in browserOpen { break }; throw CancellationError() } }
+        for _ in 0..<2_000 where !f.connection.isConnecting { try await Task.sleep(for: .milliseconds(1)) }
+        #expect(f.connection.isConnecting)
+        try await f.connection.saveKey("fixture-key", for: .claude)       // from Settings, while the browser is still open
+        closeBrowser.yield(); await signIn.value
+        #expect(!f.connection.isConnecting, "A later ChatGPT sign-in must still be possible")
+        #expect(f.connection.provider == .claude && f.connection.canInfer)
+    }
+
+    @Test func aModelTheServiceDroppedIsReplacedAfterItsFirstFailure() async throws {
+        let f = try await Fixture.connected(.claude); defer { f.cleanup() }
+        f.connection.selectModel("claude-opus-5-5", for: .claude)
+        f.once(404, "{}")                                                  // the reply: this model is gone
+        f.reply(200, #"{"data":[{"id":"claude-sonnet-5-5","display_name":"Claude Sonnet 5.5"}]}"#)
+        await #expect(throws: ResponsesClient.Failure.http(status: 404)) { _ = try await f.connection.inference()([.message(role: .user, text: "hi")], nil) }
+        #expect(f.connection.selectedModel(for: .claude) == "claude-sonnet-5-5")
+        _ = try f.connection.inference()                                   // the retry binds to a model that exists
+    }
+
+    @Test func theModelListLoadsLaterWhenLaunchWasOffline() async throws {
+        let f = try await Fixture.connected(.claude); defer { f.cleanup() }
+        f.reply(503, "{}")
+        let restored = f.relaunched(); await restored.restore()
+        #expect(restored.serviceModels[.claude] == nil)
+        f.reply(200, modelsReply)
+        await restored.refreshServiceModels()                              // Settings asks again when its section appears
+        #expect(restored.serviceModels[.claude]?.count == 2)
+    }
+
     @Test func failureCopyNamesTheActiveService() {
         #expect(coachFailureText(ResponsesClient.Failure.quotaReached, serviceName: "Claude")
             == "Your Claude account is out of credit or over its limit. Your message is saved; see Manage usage in Settings.")
@@ -145,9 +178,16 @@ private let modelsReply = #"{"data":[{"id":"claude-haiku-5-5","display_name":"Cl
 
 private final class Replies: @unchecked Sendable {
     private let lock = NSLock()
-    private var status = 200, body = "{}", seen: [URLRequest] = []
+    private var status = 200, body = "{}", seen: [URLRequest] = [], first: [(Int, String)] = []
     func set(_ status: Int, _ body: String) { lock.withLock { self.status = status; self.body = body } }
-    func answer(_ request: URLRequest) -> SessionReply { lock.withLock { seen.append(request); return SessionReply(status: status, data: Data(body.utf8)) } }
+    func once(_ status: Int, _ body: String) { lock.withLock { first.append((status, body)) } }
+    func answer(_ request: URLRequest) -> SessionReply {
+        lock.withLock {
+            seen.append(request)
+            let (status, body) = first.isEmpty ? (status, body) : first.removeFirst()
+            return SessionReply(status: status, data: Data(body.utf8))
+        }
+    }
     var requests: [URLRequest] { lock.withLock { seen } }
 }
 
@@ -183,6 +223,8 @@ private final class Replies: @unchecked Sendable {
     }
 
     func reply(_ status: Int, _ body: String) { replies.set(status, body) }
+    /// Answers the next request only; later ones get the standing reply.
+    func once(_ status: Int, _ body: String) { replies.once(status, body) }
     var requests: [URLRequest] { replies.requests }
 
     func cleanup() {

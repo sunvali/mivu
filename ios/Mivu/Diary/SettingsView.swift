@@ -245,6 +245,7 @@ struct SettingsView: View {
                             .frame(minHeight: 44).accessibilityIdentifier("removeKey")
                         if let notice = connection.notice { Text(notice.rawValue).font(.subheadline).foregroundStyle(Color.diarySecondary) }
                     }
+                    .task(id: service) { await connection.refreshServiceModels() }   // the list may not have loaded at launch
                     .sheet(item: $replacingKey) { service in
                         ConnectKeyServiceView(connection: connection, service: service) { replacingKey = nil }
                     }

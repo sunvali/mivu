@@ -74,6 +74,8 @@ final class ChatGPTConnection {
     private(set) var serviceModels: [KeyService: [AvailableModel]] = [:]
     private var chosenModels: [KeyService: String] = [:]
     private(set) var isCheckingKey = false
+    /// Moves when a key is saved or removed. Kept apart from `generation`, which guards ChatGPT sign-in and its flags.
+    private var keyRevision = 0
 
     /// `apple` is the on-device model, a no-account fallback for logging; ChatGPT is the main Coach.
     /// The other four run on the person's own key.
@@ -320,7 +322,7 @@ final class ChatGPTConnection {
         }
     }
 
-    var sessionRevision: Int { generation }
+    var sessionRevision: Int { generation &+ keyRevision }
 
     // MARK: Key services
 
@@ -350,7 +352,7 @@ final class ChatGPTConnection {
         do { try keyStore.save(key, for: service) }
         catch AIKeyStore.Failure.invalidKey { throw KeyConnectionError.invalidKey }
         catch { throw KeyConnectionError.storage }
-        generation += 1   // a reply still in flight on the old key must not complete
+        keyRevision += 1   // a reply still in flight on the old key must not complete
         connectedServices.insert(service)
         adopt(listed, for: service)
         notice = nil
@@ -368,10 +370,11 @@ final class ChatGPTConnection {
 
     // shortcut: OpenRouter's acceptance of a 127.0.0.1 callback is unverified, fall back to a pasted key if sign-in cannot return
     func signInOpenRouter(openBrowser: @escaping @MainActor (URL) async throws -> Void) async {
-        guard !isConnecting, !isDisconnecting, consented(to: .openRouter) else { return }
+        guard !isConnecting, !isDisconnecting, !isAnalyzing, consented(to: .openRouter) else { return }
         generation += 1
         let revision = generation
         isConnecting = true
+        isLoadingModels = false   // as connect(): a model load from before this sign-in no longer clears it
         notice = nil
         let task = Task { await self.authorizeOpenRouter(revision: revision, openBrowser: openBrowser) }
         connectionTask = task
@@ -394,8 +397,6 @@ final class ChatGPTConnection {
             let key = try await keyClient.openRouterKey(attempt.exchange(code: code))
             guard revision == generation else { return }
             try await saveKey(key, for: .openRouter)
-            // saveKey moved the generation on, so the caller no longer clears these.
-            connectionTask = nil; isConnecting = false
         } catch {
             guard revision == generation else { return }
             notice = error is CancellationError ? .cancelled : .unavailable
@@ -404,7 +405,7 @@ final class ChatGPTConnection {
 
     func removeKey(for service: KeyService) {
         do { try keyStore.remove(service) } catch { notice = .storageFailed; return }
-        generation += 1
+        keyRevision += 1
         connectedServices.remove(service)
         serviceModels[service] = nil
     }
@@ -419,10 +420,10 @@ final class ChatGPTConnection {
     }
 
     /// The list only feeds the picker; when it cannot load, the saved model keeps working.
-    private func refreshServiceModels() async {
+    func refreshServiceModels() async {
         guard let service = provider.keyService, let key = try? keyStore.load(service) else { return }
-        let revision = generation
-        guard let listed = try? await keyClient.models(service, key: key), !listed.isEmpty, revision == generation else { return }
+        let revision = keyRevision
+        guard let listed = try? await keyClient.models(service, key: key), !listed.isEmpty, revision == keyRevision else { return }
         adopt(listed, for: service)
     }
 
@@ -430,7 +431,7 @@ final class ChatGPTConnection {
                                 input: [CoachInferenceInput], namespace: Data?) async throws -> CoachInferenceResult {
         func validate() throws {
             try Task.checkCancellation()
-            guard generation == revision, provider.keyService == service, selectedModel(for: service) == model else { throw SessionError.sessionChanged }
+            guard keyRevision == revision, provider.keyService == service, selectedModel(for: service) == model else { throw SessionError.sessionChanged }
         }
         try validate()
         do {
@@ -442,6 +443,8 @@ final class ChatGPTConnection {
             let failure = error as? ResponsesClient.Failure
             if failure == .unauthorized || failure == .forbidden { notice = .keyRejected }
             else if failure == .quotaReached { notice = .keyQuota }
+            // The model is gone: pick one the service still lists, so the retry works without a trip to Settings.
+            else if failure == .http(status: 404) { await refreshServiceModels() }
             throw error
         }
     }
@@ -460,7 +463,7 @@ final class ChatGPTConnection {
         if let service = provider.keyService {
             let model = selectedModel(for: service)
             guard !model.isEmpty, let key = try? keyStore.load(service) else { throw SessionError.noActiveSession }
-            let revision = generation
+            let revision = keyRevision
             return { [self] input, namespace in
                 try await self.respondWithKey(service, key: key, model: model, revision: revision, input: input, namespace: namespace)
             }

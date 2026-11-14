@@ -33,7 +33,8 @@ struct OpenRouterSignIn {
     }
 
     static func key(from reply: Data) throws -> String {
-        guard let key = (try? JSONDecoder().decode([String: String].self, from: reply))?["key"], !key.isEmpty else { throw OAuthError.invalidCallback }
+        struct Reply: Decodable { let key: String }   // other fields come along, not all of them strings
+        guard let key = (try? JSONDecoder().decode(Reply.self, from: reply))?.key, !key.isEmpty else { throw OAuthError.invalidCallback }
         return key
     }
 }
