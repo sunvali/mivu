@@ -15,6 +15,7 @@ struct OnboardingView: View {
 
     @State private var step = Step.hello
     @State private var askSharingConsent = false
+    @State private var showOtherAI = false
     @State private var forward = true
     @State private var heightCm: Double?
     @State private var weightKg: Double?
@@ -81,6 +82,9 @@ struct OnboardingView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .openAIConsent(isPresented: $askSharingConsent, connection: connection) { connectChatGPT() }
+        .sheet(isPresented: $showOtherAI) {
+            UseAnotherAIView(connection: connection) { showOtherAI = false; go(to: .results) }
+        }
         .sensoryFeedback(.selection, trigger: step)
         .sensoryFeedback(.success, trigger: savedCount)
         .task {
@@ -147,6 +151,10 @@ struct OnboardingView: View {
             .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
             .disabled(!canContinue).accessibilityIdentifier("onboardingNext")
             if step == .connect {
+                Button("Use another AI") { showOtherAI = true }
+                    .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingUseAnotherAI")
+                Text("Claude, OpenAI, Gemini or OpenRouter with your own key.")
+                    .font(.caption).foregroundStyle(Color.diarySecondary).multilineTextAlignment(.center)
                 if connection.appleAvailable {
                     Button("Use Apple Intelligence instead") { connection.provider = .apple; go(to: .results) }
                         .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingChooseApple")
@@ -351,13 +359,13 @@ struct OnboardingView: View {
 
     private func advance() {
         var next = Step(rawValue: step.rawValue + 1) ?? .results
-        if next == .connect, connection.planAuthorized { next = .results }
+        if next == .connect, connection.planAuthorized || connection.tunesTargets { next = .results }
         go(to: next)
     }
 
     private func back() {
         var previous = Step(rawValue: step.rawValue - 1) ?? .hello
-        if previous == .connect, connection.planAuthorized { previous = .diet }
+        if previous == .connect, connection.planAuthorized || connection.tunesTargets { previous = .diet }
         go(to: previous)
     }
 

@@ -67,6 +67,27 @@ import XCTest
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Synthetic offline persisted Coach"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 
+    func testCoachAISettingsOffersKeyServicesAndAsksConsentFirst() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        openConnectionSettings(in: app)
+        for service in ["claude", "openAI", "gemini", "openRouter"] {
+            XCTAssertTrue(app.buttons["keyService." + service].waitForExistence(timeout: 5), service)
+        }
+        let claude = app.buttons["keyService.claude"]
+        revealList(claude, in: app); claude.tap()
+        let consent = app.alerts["Share with Anthropic?"]
+        XCTAssertTrue(consent.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.secureTextFields["keyField"].exists, "No key screen before consent")
+        consent.buttons["Agree and Continue"].tap()
+        XCTAssertTrue(app.secureTextFields["keyField"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["saveKey"].exists)
+        XCTAssertFalse(app.buttons["saveKey"].isEnabled, "Nothing to test until a key is entered")
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Connect Claude"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+
     func testChatGPTConnectAsksForSharingConsentFromCoachAndSettings() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]

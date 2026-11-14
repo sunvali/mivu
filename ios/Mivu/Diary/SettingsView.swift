@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var pendingRowDeletion: DiaryProfile?
     @State private var showDiagnostic = false
     @State private var showConnectionDiagnostic = false
+    @State private var replacingKey: KeyService?
+    @State private var removingKey: KeyService?
     @State private var showGoals = false
     @State private var showOnboarding = false
     @State private var fields = DiaryPreferencesDraft()
@@ -52,7 +54,7 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
                         settingsRow("Coach AI", symbol: "sparkles", color: .diaryFat,
-                                    value: connection.provider == .apple ? "Apple Intelligence" : connection.planAuthorized ? "ChatGPT" : "Connect ChatGPT")
+                                    value: connection.canInfer ? connection.activeName : "Connect ChatGPT")
                     }
                     NavigationLink(value: SettingsSection.nutritionSource) {
                         settingsRow("Nutrition source", symbol: "fork.knife", color: .diaryCarbs, value: nutritionConfigured ? "Configured" : "Optional")
@@ -205,21 +207,52 @@ struct SettingsView: View {
                 if model.readModel != nil { Section("Share a report") { DiaryReportSettings(model: model) } }
             case .connection:
                 Section {
-                    Picker("Coach AI", selection: $connection.provider) {
-                        Text("ChatGPT (recommended)").tag(ChatGPTConnection.Provider.chatGPT)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Apple Intelligence on iPhone")
-                            Text("No account, but much lower accuracy").font(.caption).foregroundStyle(Color.diarySecondary)
+                    // One tick: tapping a connected AI makes it the Coach; an unconnected key service opens its connect screen.
+                    Button { connection.provider = .chatGPT } label: { coachAIRow("ChatGPT (recommended)", provider: .chatGPT) }
+                    ForEach(KeyService.allCases) { service in
+                        let connected = connection.connectedServices.contains(service)
+                        KeyServiceLink(connection: connection, service: service) {
+                            coachAIRow(service.name, caption: connected ? "Your key · connected" : nil, provider: .init(rawValue: service.rawValue)!,
+                                       action: connected ? nil : service.connectsBySignIn ? "Sign in" : "Add key")
                         }
-                        .tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.available(.apple))
                     }
-                    .pickerStyle(.inline).labelsHidden()
+                    Button { connection.provider = .apple } label: {
+                        coachAIRow("Apple Intelligence on iPhone", caption: "No account, but much lower accuracy", provider: .apple)
+                    }
+                    .disabled(!connection.available(.apple)).opacity(connection.available(.apple) ? 1 : 0.5)
                 } header: { Text("Coach AI") } footer: {
                     switch connection.provider {
                     case .apple: Text("Runs on this iPhone with no account, but estimates are much less accurate. It only logs meals and changes amounts; connect ChatGPT for accurate estimates, questions and other edits.")
                     case .chatGPT: Text("Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI.")
                     case .claude, .openAI, .gemini, .openRouter:
                         Text("Uses your \(connection.activeName) key. Coach messages and photos you send are shared with \(connection.provider.keyService?.company ?? "").")
+                    }
+                }
+                if let service = connection.provider.keyService {
+                    Section(service.name) {
+                        if let models = connection.serviceModels[service], !models.isEmpty {
+                            Picker("Model", selection: Binding(get: { connection.selectedModel(for: service) },
+                                                               set: { connection.selectModel($0, for: service) })) {
+                                ForEach(models, id: \.slug) { Text($0.displayName).tag($0.slug) }
+                            }
+                        } else {
+                            LabeledContent("Model", value: connection.selectedModel(for: service))
+                        }
+                        Link("Manage usage", destination: service.usagePage).frame(minHeight: 44)
+                        Button(service.connectsBySignIn ? "Sign in again" : "Replace key") { replacingKey = service }
+                            .frame(minHeight: 44).accessibilityIdentifier("replaceKey")
+                        Button("Remove \(service.name) key", role: .destructive) { removingKey = service }
+                            .frame(minHeight: 44).accessibilityIdentifier("removeKey")
+                        if let notice = connection.notice { Text(notice.rawValue).font(.subheadline).foregroundStyle(Color.diarySecondary) }
+                    }
+                    .sheet(item: $replacingKey) { service in
+                        ConnectKeyServiceView(connection: connection, service: service) { replacingKey = nil }
+                    }
+                    .confirmationDialog("Remove this key?", isPresented: Binding(get: { removingKey != nil }, set: { if !$0 { removingKey = nil } }),
+                                        titleVisibility: .visible, presenting: removingKey) { service in
+                        Button("Remove \(service.name) key", role: .destructive) { connection.removeKey(for: service) }
+                    } message: { service in
+                        Text("Coach stops using \(service.name) until you add a key again. Your diary is not affected.")
                     }
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
@@ -306,6 +339,28 @@ struct SettingsView: View {
         .navigationTitle(title(section))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+    }
+
+    private func coachAIRow(_ title: String, caption: String? = nil, provider: ChatGPTConnection.Provider, action: String? = nil) -> some View {
+        let name = VStack(alignment: .leading, spacing: 2) {
+            Text(title).foregroundStyle(Color.diaryText)
+            if let caption { Text(caption).font(.caption).foregroundStyle(Color.diarySecondary) }
+        }
+        let trailing = Group {
+            if connection.provider == provider {
+                Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+            } else if let action {
+                Text(action).font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+            }
+        }
+        // Side by side when it fits; stacked at the largest text sizes, where a shared line breaks words apart.
+        return ViewThatFits(in: .horizontal) {
+            HStack { name; Spacer(minLength: 12); trailing }
+            VStack(alignment: .leading, spacing: 4) { name; trailing }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: 44).contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(connection.provider == provider ? .isSelected : [])
     }
 
     private func settingsRow(_ title: String, symbol: String, color: Color, value: String? = nil) -> some View {

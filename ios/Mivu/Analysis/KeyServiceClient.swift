@@ -14,7 +14,10 @@ struct KeyServiceClient: Sendable {
         case .gemini: "https://generativelanguage.googleapis.com/v1beta/openai/models"
         case .openRouter: "https://openrouter.ai/api/v1/key"
         }
-        let reply = try await send(request(service, address, key: key))
+        let reply: Data
+        do { reply = try await send(request(service, address, key: key)) }
+        // Google answers a wrong key with 400, and this request has nothing else that could be invalid.
+        catch ResponsesClient.Failure.http(status: 400) where service == .gemini { throw ResponsesClient.Failure.unauthorized }
         if service == .openRouter { return service.shortlist }
         struct Catalog: Decodable {
             struct Model: Decodable { let id: String; let display_name: String? }

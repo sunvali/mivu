@@ -38,6 +38,14 @@ import Testing
             try await KeyServiceClient(session: sessionReturning(status: status, body: Data("{}".utf8))).models(.gemini, key: "fixture-key") }
     }
 
+    /// Observed on 2026-11-14: Google answers a made-up key with 400 "Please pass a valid API key", not 401.
+    @Test func geminiKeyCheckTreatsItsBadKeyStatusAsRejected() async {
+        await #expect(throws: ResponsesClient.Failure.unauthorized) {
+            try await KeyServiceClient(session: sessionReturning(status: 400, body: Data("{}".utf8))).models(.gemini, key: "fixture-key") }
+        await #expect(throws: ResponsesClient.Failure.http(status: 400)) {
+            try await KeyServiceClient(session: sessionReturning(status: 400, body: Data("{}".utf8))).models(.openAI, key: "fixture-key") }
+    }
+
     @Test func modelListsAreFilteredToChatModels() async throws {
         let body = Data(#"{"data":[{"id":"gpt-fixture-mini"},{"id":"text-embedding-3-small"},{"id":"gpt-fixture-tts"}]}"#.utf8)
         let models = try await KeyServiceClient(session: sessionReturning(status: 200, body: body)).models(.openAI, key: "fixture-key")

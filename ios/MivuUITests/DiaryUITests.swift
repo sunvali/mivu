@@ -182,6 +182,38 @@ import XCTest
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.buttons["localProfiles"].label.contains("My diary"))
     }
+    func testSetupOffersAnotherAIBesideChatGPT() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--proof-english"]
+        app.launch()
+        let next = app.buttons["onboardingNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        next.tap()
+        let height = app.textFields["onboardingHeight"]
+        XCTAssertTrue(height.waitForExistence(timeout: 5))
+        height.tap(); height.typeText("170")
+        app.buttons["keyboardNext"].tap(); app.typeText("80")
+        app.buttons["keyboardNext"].tap(); app.typeText("1990")
+        app.buttons["keyboardDone"].tap()
+        next.tap()
+        let target = app.textFields["onboardingTarget"]
+        XCTAssertTrue(target.waitForExistence(timeout: 5))
+        target.tap(); target.typeText("72")
+        app.buttons["keyboardDone"].tap()
+        next.tap() // goal, steady pace
+        next.tap() // diet
+        // ChatGPT stays the main button; the key services sit behind one quiet link.
+        let other = app.buttons["onboardingUseAnotherAI"]
+        XCTAssertTrue(other.waitForExistence(timeout: 5) && other.isHittable)
+        XCTAssertEqual(next.label, "Continue with ChatGPT")
+        let step = XCTAttachment(screenshot: app.screenshot()); step.name = "Setup connect step"; step.lifetime = .keepAlways; add(step)
+        other.tap()
+        XCTAssertTrue(app.navigationBars["Use another AI"].waitForExistence(timeout: 5))
+        for service in ["claude", "openAI", "gemini", "openRouter"] { XCTAssertTrue(app.buttons["keyService." + service].exists, service) }
+        let list = XCTAttachment(screenshot: app.screenshot()); list.name = "Use another AI"; list.lifetime = .keepAlways; add(list)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(other.waitForExistence(timeout: 5), "Cancelling returns to the connect step with nothing chosen")
+    }
     func testPrecisionGlassReferenceScreensInBothAppearances() {
         for mode in ["light", "dark"] {
             let app = launch(["--proof-" + mode])

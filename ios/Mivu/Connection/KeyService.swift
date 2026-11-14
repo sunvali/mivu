@@ -32,6 +32,16 @@ enum KeyService: String, CaseIterable, Sendable {
         }
     }
 
+    /// What the "Get a key" page is called, so the link says where it leads.
+    var keyPageName: String {
+        switch self {
+        case .claude: "Claude Console"
+        case .openAI: "OpenAI Platform"
+        case .gemini: "Google AI Studio"
+        case .openRouter: "OpenRouter"
+        }
+    }
+
     var keyPage: URL {
         let page = switch self {
         case .claude: "https://platform.claude.com/settings/keys"
