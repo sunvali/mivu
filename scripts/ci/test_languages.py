@@ -64,6 +64,22 @@ class Catalogs(unittest.TestCase):
         self.assertEqual(len(errs), 1, errs)
         self.assertIn("'Brand new'", errs[0])
 
+    def test_xliff_plural_units_resolve_to_their_key(self):
+        xliff = ('<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2"><file original="Mivu/Localizable.xcstrings"><body>'
+                 '<trans-unit id="%lld meals|==|plural.one"><source>%lld meal</source></trans-unit></body></file></xliff>')
+        self.assertEqual(languages.xliff_errors(xliff, catalog(**{'%lld meals': {}})), [])
+
+    def test_widget_text_must_be_in_the_widget_catalog(self):
+        source = 'Text("Snap It"); capsule("Coach", systemImage: "x"); let id = "calories"'
+        app = {'Snap It': {}, 'Coach': {}, 'Unused': {}}
+        self.assertEqual(languages.widget_errors(source, app, {'Snap It': {}}), ["'Coach' is shown by the widget but is not in its catalog"])
+
+    def test_shortcut_phrase_sets_count_as_values(self):
+        entry = {'localizations': {'en': {'stringSet': {'state': 'new', 'values': ['Tell ${applicationName}']}}}}
+        self.assertEqual(languages.errors(catalog(**{'Tell ${applicationName}': entry}), {'en'}), [])
+        entry['localizations']['he'] = {'stringSet': {'state': 'new', 'values': ['Tell']}}
+        self.assertTrue(languages.errors(catalog(**{'Tell ${applicationName}': entry}), {'en', 'he'}))
+
     def test_shipped_languages_come_from_known_regions(self):
         text = 'knownRegions = (\n\t\t\t\ten,\n\t\t\t\the,\n\t\t\t\tBase,\n\t\t\t);'
         self.assertEqual(languages.shipped(text), {'en', 'he'})

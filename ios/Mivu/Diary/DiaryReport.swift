@@ -63,18 +63,18 @@ struct DiaryReport {
     // MARK: CSV
 
     var mealsCSV: String {
-        csv(["Date", "Time", "Meal", "Calories (kcal)", "Protein (g)", "Carbs (g)", "Fat (g)"], days.flatMap { day in
+        csv([String(localized: "Date"), String(localized: "Time"), String(localized: "Meal"), String(localized: "Calories (kcal)"), String(localized: "Protein (g)"), String(localized: "Carbs (g)"), String(localized: "Fat (g)")], days.flatMap { day in
             day.meals.map { [day.localDate, $0.time, $0.name, number($0.totals.kcal), number($0.totals.protein), number($0.totals.carbs), number($0.totals.fat)] }
         })
     }
     var daysCSV: String {
-        csv(["Date", "Calories (kcal)", "Calorie target (kcal)", "Protein (g)", "Protein target (g)", "Carbs (g)", "Fat (g)", "Weight"], days.map {
+        csv([String(localized: "Date"), String(localized: "Calories (kcal)"), String(localized: "Calorie target (kcal)"), String(localized: "Protein (g)"), String(localized: "Protein target (g)"), String(localized: "Carbs (g)"), String(localized: "Fat (g)"), String(localized: "Weight")], days.map {
             [$0.localDate, number($0.totals.kcal), number($0.target?.kcal), number($0.totals.protein), number($0.target?.protein),
              number($0.totals.carbs), number($0.totals.fat), $0.weight.map { "\(number($0.value)) \($0.unit)" } ?? ""]
         })
     }
     var weightsCSV: String {
-        csv(["Date", "Time", "Weight", "Unit"], weights.map { [$0.localDate, $0.time, number($0.entry.value), $0.entry.unit] })
+        csv([String(localized: "Date"), String(localized: "Time"), String(localized: "Weight"), String(localized: "Unit")], weights.map { [$0.localDate, $0.time, number($0.entry.value), $0.entry.unit] })
     }
 
     private func csv(_ header: [String], _ rows: [[String]]) -> String {
@@ -95,8 +95,8 @@ struct DiaryReport {
     func write(_ format: Format, to directory: URL) throws -> [URL] {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let files: [(String, Data)] = switch format {
-        case .pdf: [("Mivu report \(label).pdf", pdfData())]
-        case .csv: [("Mivu meals \(label).csv", Data(mealsCSV.utf8)), ("Mivu days \(label).csv", Data(daysCSV.utf8)), ("Mivu weights \(label).csv", Data(weightsCSV.utf8))]
+        case .pdf: [(String(localized: "Mivu report \(label).pdf"), pdfData())]
+        case .csv: [(String(localized: "Mivu meals \(label).csv"), Data(mealsCSV.utf8)), (String(localized: "Mivu days \(label).csv"), Data(daysCSV.utf8)), (String(localized: "Mivu weights \(label).csv"), Data(weightsCSV.utf8))]
         }
         return try files.map { name, data in
             let url = directory.appendingPathComponent(name)

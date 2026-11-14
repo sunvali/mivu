@@ -30,18 +30,28 @@ struct DayProgressAttributes: ActivityAttributes {
             return word == "left" ? "≤" + kcalNumber : kcalNumber + "+"
         }
         var word: String { kcalTarget == nil ? "eaten" : isOver ? "over" : "left" }
-        var compact: String { isOver ? "\(figure) over" : figure }
+        var compact: String { isOver ? String(localized: "\(figure) over") : figure }
 
         var spoken: String {
-            let macros = [("Protein", protein, proteinTarget), ("Carbs", carbs, carbsTarget), ("Fat", fat, fatTarget)]
-                .compactMap { name, value, target in
+            // The key names the stored field; the title is what the person hears.
+            let macros = [("protein", String(localized: "Protein"), protein, proteinTarget), ("carbs", String(localized: "Carbs"), carbs, carbsTarget),
+                          ("fat", String(localized: "Fat"), fat, fatTarget)]
+                .compactMap { key, name, value, target in
                     value.map { v in
-                        let amount = (isPartial(name.lowercased()) ? "at least " : "") + Self.number(v)
-                        return target.map { "\(name) \(amount) of \(Self.number($0)) grams." } ?? "\(name) \(amount) grams."
+                        let amount = isPartial(key) ? String(localized: "at least \(Self.number(v))") : Self.number(v)
+                        return target.map { String(localized: "\(name) \(amount) of \(Self.number($0)) grams.") } ?? String(localized: "\(name) \(amount) grams.")
                     }
                 }
-            let bound = isPartial("kcal") ? (word == "left" ? "At most " : "At least ") : ""
-            let calories = kcalNumber.map { "\(bound)\($0) calories \(word)." } ?? "Calories not known yet."
+            let calories = kcalNumber.map { n in
+                switch (isPartial("kcal"), word) {
+                case (false, "left"): String(localized: "\(n) calories left.")
+                case (false, "over"): String(localized: "\(n) calories over.")
+                case (false, _): String(localized: "\(n) calories eaten.")
+                case (true, "left"): String(localized: "At most \(n) calories left.")
+                case (true, "over"): String(localized: "At least \(n) calories over.")
+                case (true, _): String(localized: "At least \(n) calories eaten.")
+                }
+            } ?? String(localized: "Calories not known yet.")
             return ([calories] + macros).joined(separator: " ")
         }
 

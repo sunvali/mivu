@@ -21,6 +21,9 @@ def _values(localization):
     """Every stringUnit under a localization, with the plural sets on the way."""
     if 'stringUnit' in localization:
         yield localization['stringUnit']
+    if 'stringSet' in localization:  # App Shortcut phrases: several values under one key
+        values = localization['stringSet'].get('values', [])
+        yield {'state': localization['stringSet'].get('state'), 'value': ' / '.join(values)}
     for kind, forms in localization.get('variations', {}).items():
         if kind == 'plural' and 'other' not in forms:
             yield None
@@ -60,12 +63,25 @@ def errors(catalogs, languages):
 def xliff_errors(xliff, catalogs):
     """Keys the compiler extracted that no catalog holds."""
     known = {key for catalog in catalogs.values() for key in catalog.get('strings', {})}
-    ids = {unit.get('id') for unit in ET.fromstring(xliff).iter('{urn:oasis:names:tc:xliff:document:1.2}trans-unit')}
+    # Plural and substitution units carry their path after '|==|'.
+    ids = {unit.get('id').split('|==|')[0] for unit in ET.fromstring(xliff).iter('{urn:oasis:names:tc:xliff:document:1.2}trans-unit')}
     return [f"{key!r} is used in code but is in no string catalog" for key in sorted(ids - known)]
 
 
+def widget_errors(source, app_strings, widget_strings):
+    """The widget resolves text from its own catalog, and Xcode only extracts part of it there:
+    any plain literal the widget code uses that the app translates must be in the widget's catalog."""
+    literals = set(re.findall(r'"((?:[^"\\\\]|\\\\.)*)"', source))
+    return [f"{key!r} is shown by the widget but is not in its catalog"
+            for key in sorted(literals) if key and key in app_strings and key not in widget_strings]
+
+
+WIDGET_SOURCES = ('ios/MivuWidgets', 'ios/Shared')
+
+
 def load(root=ROOT):
-    paths = subprocess.check_output(['git', 'ls-files', 'ios/**/*.xcstrings', 'ios/*.xcstrings'], cwd=root, text=True).split('\n')
+    # Untracked catalogs count too, so a new one is checked before its first commit.
+    paths = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', 'ios/**/*.xcstrings', 'ios/*.xcstrings'], cwd=root, text=True).split('\n')
     return {path: json.loads((root / path).read_text()) for path in paths if path}
 
 
@@ -73,6 +89,9 @@ def main(argv):
     catalogs = load()
     if argv[1:2] == ['check']:
         found = errors(catalogs, shipped((ROOT / PROJECT).read_text()))
+        source = ''.join(p.read_text() for d in WIDGET_SOURCES for p in sorted((ROOT / d).glob('*.swift')))
+        found += widget_errors(source, catalogs['ios/Mivu/Localizable.xcstrings']['strings'],
+                               catalogs['ios/MivuWidgets/Localizable.xcstrings']['strings'])
     elif argv[1:2] == ['xliff'] and len(argv) == 3:
         found = xliff_errors(Path(argv[2]).read_text(), catalogs)
     else:

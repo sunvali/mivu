@@ -51,7 +51,7 @@ private struct CompactFigure: View {
             .lineLimit(1).minimumScaleFactor(0.6)
             .foregroundStyle(state.isOver ? Color.diarySecondary : Color.diaryAccent)
             .privacySensitive(state.hideWhenLocked)
-            .accessibilityLabel(isStale ? "Open Mivu for today" : redaction.contains(.privacy) ? "Mivu day progress" : state.spoken)
+            .accessibilityLabel(isStale ? Text("Open Mivu for today") : redaction.contains(.privacy) ? Text("Mivu day progress") : Text(verbatim: state.spoken))
     }
 }
 
@@ -111,9 +111,9 @@ private struct Headline: View {
         }
         .accessibilityElement(children: .ignore)
         // Redacted numbers must not come back through VoiceOver on a locked phone.
-        .accessibilityLabel(isStale ? "Open Mivu for today"
-                            : redaction.contains(.privacy) ? "Mivu day progress"
-                            : state.spoken)
+        .accessibilityLabel(isStale ? Text("Open Mivu for today")
+                            : redaction.contains(.privacy) ? Text("Mivu day progress")
+                            : Text(verbatim: state.spoken))
     }
 }
 
@@ -155,7 +155,7 @@ private struct MacroRow: View {
         .accessibilityHidden(true)
     }
 
-    private func column(_ name: String, _ value: Double?, _ target: Double?, _ tint: Color, partial: Bool) -> some View {
+    private func column(_ name: LocalizedStringKey, _ value: Double?, _ target: Double?, _ tint: Color, partial: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Capsule().fill(tint.opacity(0.22)).frame(height: 5)
                 .overlay(alignment: .leading) {
