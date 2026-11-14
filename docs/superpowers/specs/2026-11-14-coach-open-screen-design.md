@@ -75,8 +75,10 @@ a week of real use, and it shows well in one screenshot or short clip.
 - **Tap targets** reuse what the chat already draws: receipt cards, meal chips
   and quotes set the same selected record as today, and the existing "See
   today" / "See progress" buttons on the latest reply open in the pane when
-  sideways instead of switching tabs. "See today" is hidden sideways only while
-  the pane already shows Today.
+  sideways instead of switching tabs. "See today" is hidden sideways, as on
+  `main`: Today is the pane's root, one back tap away. (Built this way because
+  chat rows do not redraw when the pane changes, so a button cannot appear and
+  disappear with it.)
 - **Buttons for questions** ("how was my week?"): when Coach reads progress or
   another day's meals to answer, the latest reply gets "See progress" or "See
   that day". These reads leave no receipt, so this needs one small in-memory
