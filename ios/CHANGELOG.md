@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/sunvali/mivu/compare/ios-v1.3.0...ios-v1.3.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **coach:** give chat-logged meals a time ([#122](https://github.com/sunvali/mivu/issues/122)) ([90664b9](https://github.com/sunvali/mivu/commit/90664b9aa450a0bd1cac68350487ede856850330))
+* **copy:** include ChatGPT Go among eligible plans ([#125](https://github.com/sunvali/mivu/issues/125)) ([9773161](https://github.com/sunvali/mivu/commit/97731611d637b4c45bd5bd0e81423527803917af))
+
 ## [1.3.0](https://github.com/sunvali/mivu/compare/ios-v1.2.1...ios-v1.3.0) (2026-11-14)
 
 
