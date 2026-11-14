@@ -58,4 +58,30 @@ import Testing
         #expect(!CoachReplyCheck.passes("About 450 kcal left.", allowed: allowed, receipts: []))
         #expect(CoachReplyCheck.passes("About 620 kcal so far.", allowed: allowed, receipts: []))
     }
+
+    @Test func readsDigitsInAnyScript() {
+        #expect(CoachReplyCheck.numbers(in: "٧٤٠ kcal") == [740])
+        #expect(CoachReplyCheck.numbers(in: "७४० kcal") == [740])
+        #expect(CoachReplyCheck.numbers(in: "٧٣٫٦ كغ") == [Decimal(string: "73.6")!])
+    }
+
+    @Test func ungroundedForeignDigitsFail() {
+        #expect(!CoachReplyCheck.passes("٧٤٠ kcal", allowed: [], receipts: [], claimsSave: false))
+        #expect(CoachReplyCheck.passes("٧٤٠ kcal", allowed: [740], receipts: [], claimsSave: false))
+    }
+
+    @Test func markerIsStrippedAndReported() {
+        let split = CoachReplyCheck.splitSaveClaim("נשמר.\n<saved/>\n")
+        #expect(split.text == "נשמר.")
+        #expect(split.claimsSave)
+        #expect(!CoachReplyCheck.splitSaveClaim("Looks good.").claimsSave)
+        #expect(CoachReplyCheck.splitSaveClaim("Looks good.").text == "Looks good.")
+    }
+
+    @Test func markerOnAnAwaitingReviewMealFails() {
+        let receipts = [meal(.awaitingReview)]
+        let allowed = CoachReplyCheck.allowedNumbers(in: [], receipts: receipts)
+        #expect(!CoachReplyCheck.passes("הארוחה מחכה.", allowed: allowed, receipts: receipts, claimsSave: true))
+        #expect(CoachReplyCheck.passes("הארוחה מחכה לבדיקה.", allowed: allowed, receipts: receipts, claimsSave: false))
+    }
 }

@@ -30,20 +30,38 @@ enum CoachReplyCheck {
     }
 
     static func numbers(in text: String) -> [Decimal] {
+        // Digits in any script (Arabic-Indic, Devanagari…) read as 0–9, with Arabic separators as "." and ",".
+        let text = String(text.map { character -> Character in
+            if character == "٫" { return "." }
+            if character == "٬" { return "," }
+            guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1,
+                  scalar.properties.numericType == .decimal, let digit = character.wholeNumberValue else { return character }
+            return Character(String(digit))
+        })
         let pattern = /-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?/
-        return text.matches(of: pattern).compactMap { match in
+        return text.matches(of: pattern).map { match in
             var token = String(match.output).replacingOccurrences(of: ",", with: "")
             // A hyphen joining date parts or a range is not a minus sign.
             if token.hasPrefix("-"), match.range.lowerBound > text.startIndex, text[text.index(before: match.range.lowerBound)].isNumber { token.removeFirst() }
-            return Decimal(string: token, locale: Locale(identifier: "en_US_POSIX"))
+            // An unreadable number fails closed: NaN is never in the allowed set.
+            return Decimal(string: token, locale: Locale(identifier: "en_US_POSIX")) ?? .nan
         }
     }
 
-    static func passes(_ prose: String, allowed: Set<Decimal>, receipts: [CoachCommittedReceipt]) -> Bool {
+    /// The model ends a reply with this line when the reply says something was saved, in any language.
+    static let saveMarker = "<saved/>"
+
+    /// The prose without the marker, and whether the marker was present.
+    static func splitSaveClaim(_ prose: String) -> (text: String, claimsSave: Bool) {
+        (prose.replacingOccurrences(of: saveMarker, with: "").trimmingCharacters(in: .whitespacesAndNewlines), prose.contains(saveMarker))
+    }
+
+    static func passes(_ prose: String, allowed: Set<Decimal>, receipts: [CoachCommittedReceipt], claimsSave: Bool = false) -> Bool {
         guard !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         if receipts.contains(where: { $0.mealID != nil && $0.submissionState == .awaitingReview }) {
+            // shortcut: English-only net beside the marker, remove once a live evaluation shows the marker alone holds.
             let lowered = prose.lowercased()
-            if lowered.contains("logged") || lowered.contains("saved") { return false }
+            if claimsSave || lowered.contains("logged") || lowered.contains("saved") { return false }
         }
         return numbers(in: prose).allSatisfy { allowed.contains(abs($0)) }
     }
