@@ -381,7 +381,7 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true) }
+                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
                 NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }

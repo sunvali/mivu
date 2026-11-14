@@ -186,13 +186,28 @@ import XCTest
         XCTAssertFalse(input.exists, "Upright the meal covers the chat, as before")
     }
 
-    func testSidewaysDiaryKeepsReadableWidth() throws {
+    func testSidewaysDiarySplitsSummaryAndRecords() throws {
         let app = launch(wide: true)
-        try XCTSkipIf(app.windows.firstMatch.frame.width < 760, "Needs the sideways inner display, wider than the readable width")
+        try XCTSkipIf(app.windows.firstMatch.frame.width < 760, "Needs the sideways inner display")
         app.buttons["Diary"].firstMatch.tap()
-        let intake = app.staticTexts["Recorded intake"]
-        XCTAssertTrue(intake.waitForExistence(timeout: 10))
-        XCTAssertGreaterThan(intake.frame.minX, 70, "Diary is capped and centered, not stretched")
+        let summary = app.descendants(matching: .any)["diarySummaryColumn"]
+        let records = app.descendants(matching: .any)["diaryRecordsColumn"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        XCTAssertTrue(records.exists)
+        XCTAssertLessThanOrEqual(summary.frame.maxX, records.frame.minX + 1)
+        XCTAssertLessThan(app.descendants(matching: .any)["diaryWeekStrip"].frame.midX, records.frame.minX, "The week strip stays with the day's summary")
+        let meal = app.descendants(matching: .any)["historyMeal"].firstMatch
+        XCTAssertTrue(meal.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(meal.frame.minX, records.frame.minX - 1, "Meals sit in the second column")
+    }
+
+    func testUprightDiaryStaysOneColumn() throws {
+        let app = launch(wide: false)
+        let window = app.windows.firstMatch.frame
+        try XCTSkipIf(window.width > window.height, "Needs an upright window: run Closed, or rotate the open Duo upright")
+        app.buttons["Diary"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["diaryWeekStrip"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["diaryRecordsColumn"].exists)
     }
 
     func testSidewaysProgressUsesTwoColumns() {
