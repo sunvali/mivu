@@ -102,31 +102,31 @@ going from one meal straight to another reuses the same screen instance.
   the meal values in the screenshots differ from the UI tests' fixture.
 - No real device.
 
-## Pull request 2: expand the pane
 
-- App source: `499d271b` on `feat/duo-pane-expand`, stacked on pull request 1.
+## Pull request 2: expand the chat
+
+- App source: `3ea3c7e4` on `feat/duo-pane-expand`, stacked on pull request 1.
 - Same environment as above.
 
-How it works: the expand control shows a second copy of the pane over the whole
-screen, laid out wide. The split, with the chat, stays mounted underneath at
-its own size, so the chat's position and draft are untouched. The plan's
-zero-width chat was not used, because resizing the chat's table risks its
-scroll position.
+The first version of this pull request expanded the side pane over the chat.
+The owner tried it on a real iPhone Duo on 2026-11-15 and changed the decision:
+Today already has its own tab, so the control should enlarge the chat. That
+version is replaced, not kept.
 
-- Open, sideways: `DuoLayoutUITests` and `CoachPaneTests`: 32 passed, 0 failed,
-  8 skipped (upright-only). New test, seen failing first:
-  `testSidewaysPaneExpandsAndCollapses` (draft kept, Today in two columns when
-  expanded, pane back on the left after collapsing).
-- By hand: expanded Today fills the screen in two columns and the collapse
-  control sits in the system strip. `coach-open-screen/sideways-pane-expanded.png`
+How it works: a control in the chat's toolbar puts the side pane away and gives
+the chat the whole sideways screen. The chat is then told it is not wide, so it
+lays out as it does upright: one readable column, a tapped record pushed over
+it, and "See today" offered again. Only a flat sideways screen can expand;
+turning upright or folding ends it.
 
-Independent review: no Critical or Important findings. Two small ones fixed:
-only the copy beside the chat now decides automatic moves (two copies could
-have written different results), and a profile switch collapses the pane even
-while upright. Neither has its own test; the suite above ran after them.
+- Open, sideways: `DuoLayoutUITests`, `CoachPaneTests`, `DuoLayoutTests`,
+  `CoachReceiptPresentationTests`: 58 passed, 0 failed, 8 skipped
+  (upright-only). New test, seen failing first:
+  `testSidewaysChatExpandsAndCollapses` (the pane leaves, the chat grows into
+  the left half, the draft survives both ways, the pane returns on the left).
+- By hand: `coach-open-screen/sideways-chat-expanded.png`
 
-Left as is: a meal opened by tapping a row inside the expanded Today is pushed
-in the expanded copy only, so collapsing returns to Today beside the chat.
-
-Not verified: book and table pose while expanded, rotation while expanded,
-VoiceOver with the cover, a real device.
+Not reviewed independently: the earlier review covered the replaced version.
+Not verified: that folding to book pose or turning upright while expanded
+collapses it, the chat's scroll position across expanding, VoiceOver, and
+anything on the simulator-only paths above. The owner's device has this build.
