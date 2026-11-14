@@ -6,8 +6,8 @@ the person's own credential. Design: [spec](../superpowers/specs/2026-11-14-brin
 **No request with a real key has reached any of the four services.** The owner chose to build first and test with real
 keys afterwards. Every service below is *built, not verified live*.
 
-- Tested source: `65ab5824e7d908313c1e93195df6eee01556ec3b` on `feat/bring-your-own-ai`, from `main` at `90664b9a`. Later
-  commits on the branch are listed under "After the tested source".
+- Tested source: `77b8f6f19de77ae3bb9724bc76ce90e8163f632c` on `feat/bring-your-own-ai`, from `main` at `90664b9a`. The
+  record's own commit changes docs only.
 - Environment: macOS 27.0, Xcode 27.2 (27B52), simulator "Mivu BYO AI" (iPhone 17, iOS 27.0), XcodeBuildMCP, test plan `Mivu`.
 
 ## Results
@@ -17,12 +17,12 @@ keys afterwards. Every service below is *built, not verified live*.
 | `KeyServiceTests` (new) | failed first (types missing); 4/4 |
 | `KeyServiceWireTests` (new) | failed first; 5/5 |
 | `KeyServiceClientTests` (new) | failed first; 8/8 |
-| `KeyConnectionTests` (new) | failed first; 12/12 |
+| `KeyConnectionTests` (new) | failed first; 15/15 |
 | `OpenRouterSignInTests` (new) | failed first; 3/3 |
-| Whole `MivuTests` target | 1,371 passed, 1 skipped, **1 failed**: `CoachToolsFixtureTests/fixturesMatchCurrentDeclarationsAndFingerprints` ("tools.json is stale"). This branch changes neither `CoachTools.swift` nor `fixtures/`, so the inputs are the ones on `main`. It was not re-run on `main` to confirm. Bundle `test_sim_2026-11-14T18-29-55-429Z_pid63101_c72de997.xcresult`. |
+| Whole `MivuTests` target plus the six UI tests below, one run | 1,380 passed, 1 skipped, **1 failed**: `CoachToolsFixtureTests/fixturesMatchCurrentDeclarationsAndFingerprints` ("tools.json is stale"). It compares `CoachTools.declarations()` with `fixtures/coach/tools.json`; this branch changes neither, so the inputs are the ones on `main`. It was not re-run on `main` to confirm. Bundle `test_sim_2026-11-14T19-14-02-049Z_pid84152_e9883e46.xcresult`. |
 | UI: `CoachUITests/testCoachAISettingsOffersKeyServicesAndAsksConsentFirst` (new) | failed first (services not on screen); passes |
 | UI: `DiaryUITests/testSetupOffersAnotherAIBesideChatGPT` (new) | written after the link existed, so never seen failing; passes |
-| UI: `CoachUITests/testChatGPTConnectAsksForSharingConsentFromCoachAndSettings`, `testOfflineTextPhotoCapturePersistsAcrossRelaunchAndTabs`, `DiaryUITests/testFirstRunOpensSetupWithoutInventingRecords`, `testLegacyHebrewLaunchUsesEnglishLeftToRight` | 4/4. With the two new ones: 6/6, bundle `test_sim_2026-11-14T18-33-26-722Z_pid65058_9e2273fc.xcresult`. |
+| UI: `CoachUITests/testChatGPTConnectAsksForSharingConsentFromCoachAndSettings`, `testOfflineTextPhotoCapturePersistsAcrossRelaunchAndTabs`, `DiaryUITests/testFirstRunOpensSetupWithoutInventingRecords`, `testLegacyHebrewLaunchUsesEnglishLeftToRight` | 4/4. With the two new ones: 6/6, in the run above. |
 
 ## Checked against the real services with a made-up key
 
@@ -40,6 +40,20 @@ Finding: Google answers a wrong key with 400. The key check now treats a Gemini 
 (`geminiKeyCheckTreatsItsBadKeyStatusAsRejected`). A chat request keeps 400 as a plain failure, because there it can
 also mean a bad request. In the app, the made-up key typed into Connect Claude shows "Claude rejected this key. Check it
 and try again." ([screenshot](bring-your-own-ai/connect-claude-rejected-light.png)).
+
+## Review
+
+One independent review of the whole branch at `65ab5824`. No critical findings. Three fixed, each with a test that failed first:
+
+| Finding | Test |
+|---|---|
+| Saving or removing a key moved the counter that guards ChatGPT sign-in, so a ChatGPT sign-in waiting in the browser could never finish or be retried | `savingAKeyDoesNotStrandAChatGPTSignInThatIsWaiting` |
+| A saved model the service later dropped had no way back when the list failed to load at launch | `aModelTheServiceDroppedIsReplacedAfterItsFirstFailure`, `theModelListLoadsLaterWhenLaunchWasOffline` |
+| The OpenRouter key reply was decoded as all-strings and failed on any other field | `exchangeSendsTheCodeAndVerifierAndReadsTheKey` |
+
+Not changed, by decision: the reviewer expected an empty Claude balance to arrive as HTTP 400. Anthropic's error table
+lists 402 for billing, which already maps to "out of credit". This is the first thing to check with a real Claude key.
+Eight minor findings are listed in the pull request and left for the owner.
 
 ## Services
 
