@@ -37,7 +37,7 @@ struct CoachEngine: Sendable {
             let reply = context.replyTo == nil ? "" : "The user's message replies to replyTo, a quoted message or record: act on its real IDs rather than another record, and ask if it is unavailable. "
             var input: [CoachInferenceInput] = [.message(role: .developer, text: Self.stableRules)]
                 + Self.historyMessages(context.recentTurns)
-                + [.message(role: .developer, text: "\(WakingDayInstruction.text(capturedAt: context.capturedAt, zone: context.captureTimeZoneID)) \(reply)Context: " + (try coachJSON(bare)))]
+                + [.message(role: .developer, text: "The captured local clock is \(diaryLocalClock(context.capturedAt, zone: context.captureTimeZoneID)). \(WakingDayInstruction.text(capturedAt: context.capturedAt, zone: context.captureTimeZoneID)) \(reply)Context: " + (try coachJSON(bare)))]
                 + capturedInput(text: turn.text, images: images)
             var knownMeals = context.meals
             var foundMeals: [CoachMealCandidate] = []
@@ -117,7 +117,7 @@ struct CoachEngine: Sendable {
                 let currentTurn = try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
                 let commands: [CoachCommand], writes: [CoachWrite], clarification: (CoachClarification, [CoachReply.Target])?
                 do {
-                    commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts, workouts: knownWorkouts, found: foundMeals).estimated(by: response.model) }
+                    commands = try response.calls.map { try CoachTools.parse($0, meals: knownMeals, evidence: evidence, receipts: currentTurn.receipts, workouts: knownWorkouts, found: foundMeals, zone: context.captureTimeZoneID).estimated(by: response.model) }
                     writes = commands.compactMap { command -> CoachWrite? in if case .write(let write) = command { return write }; return nil }
                     clarification = commands.compactMap({ command -> (CoachClarification, [CoachReply.Target])? in if case .clarification(let kind, let candidates) = command { return (kind, candidates) }; return nil }).first
                     guard clarification == nil || commands.count == 1 else { throw CoachError.invalidArguments }
