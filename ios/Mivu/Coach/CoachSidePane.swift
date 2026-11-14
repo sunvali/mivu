@@ -7,9 +7,15 @@ struct CoachSidePane: View {
     let coach: CoachViewModel
     let companionRuntime: CompanionRuntime
     @Binding var pane: CoachPane?
+    /// True while the pane covers the whole screen; the expand control toggles it.
+    @Binding var expanded: Bool
     let openDiary: () -> Void
-    /// Receipts already shown. Nil until the first look, so opening the app or turning the phone never moves the pane.
+    /// True in the copy shown over the whole screen, false beside the chat (see `DuoBeside`).
+    @Environment(\.isWideLayout) private var fillsScreen
+    /// Receipts already shown, so opening the app or turning the phone never moves the pane.
     @State private var seen = CoachPaneMemory()
+    // Beside the chat the system's control strip is on the chat's page, but this stack still inherits its inset.
+    private var ignoredEdges: Edge.Set { fillsScreen ? [] : .trailing }
     private struct OpenMeal: Equatable { let id: UUID; let exists: Bool }
     /// Whether the meal open in the pane still exists. Coach's own removals arrive as receipts; this also catches Undo.
     private var openMeal: OpenMeal? {
@@ -27,7 +33,8 @@ struct CoachSidePane: View {
             // Pip stays a still image here and Progress shows none, so the rig mounts once.
             TodayView(model: coach.diary, companionOutput: CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil),
                       companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, isLiveDay: true)
-                .ignoresSafeArea(.container, edges: .trailing)
+                .ignoresSafeArea(.container, edges: ignoredEdges)
+                .toolbar { expandControl }
                 .navigationDestination(item: $pane) { pane in
                     Group {
                         switch pane {
@@ -37,14 +44,26 @@ struct CoachSidePane: View {
                         case .progress: DiaryProgressView(model: coach.diary, openDiary: openDiary, showsCompanion: false)
                         }
                     }
-                    // The system's control strip is on the chat's page, but this stack still inherits its inset.
-                    .ignoresSafeArea(.container, edges: .trailing)
+                    .ignoresSafeArea(.container, edges: ignoredEdges)
+                    .toolbar { expandControl }
                 }
         }
         .accessibilityIdentifier("coachSidePane")
+        .onChange(of: coach.diary.selection) { _, _ in expanded = false }
         .onChange(of: latestTurn?.receipts.map(\.operationKey), initial: true) { _, _ in land() }
         // A meal that was there and is gone has nothing to show; one still loading was never there.
         .onChange(of: openMeal) { was, now in if let was, let now, was.id == now.id, was.exists, !now.exists { pane = nil } }
+    }
+
+    private var expandControl: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button(expanded ? "Show chat" : "Expand", systemImage: expanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
+                // The composer is about to be covered; it must not keep the keyboard up over the pane.
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                expanded.toggle()
+            }
+            .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("coachPaneExpand")
+        }
     }
 
     /// Moves the pane to where a change Coach just made landed.

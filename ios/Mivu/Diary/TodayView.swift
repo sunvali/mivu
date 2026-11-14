@@ -79,6 +79,7 @@ struct DiaryRootView: View {
     @State private var coachRoutes = CoachNavigationOwner()
     /// What the pane beside the Coach chat shows on a sideways Duo; nil is Today.
     @State private var coachPane: CoachPane?
+    @State private var coachPaneExpanded = false
     @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
     @State private var showOnboarding = false
@@ -387,7 +388,7 @@ struct DiaryRootView: View {
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                 // Sideways the chat is on the right, with what the conversation is about on the left.
-                DuoBeside(secondaryLeading: true) {
+                DuoBeside(secondaryLeading: true, secondaryFills: coachPaneExpanded) {
                     NavigationStack {
                         CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
                                   onCompanionContextChanged: updateCompanionContext,
@@ -400,7 +401,8 @@ struct DiaryRootView: View {
                         }.toolbar { profileControl }.duoReadableWidth()
                     }
                 } secondary: {
-                    CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, openDiary: { selectedTab = "diary" })
+                    CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, expanded: $coachPaneExpanded,
+                                  openDiary: { selectedTab = "diary" })
                 }
             }
             .badge(coach.queuedSiri.count)

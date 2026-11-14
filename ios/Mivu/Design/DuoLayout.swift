@@ -120,6 +120,9 @@ struct DuoSplit<Primary: View, Secondary: View>: View {
 struct DuoBeside<Primary: View, Secondary: View>: View {
     /// True puts `secondary` on the left.
     var secondaryLeading = false
+    /// True also shows `secondary` over the whole screen while sideways, laid out wide. The split stays
+    /// mounted underneath at its own size, so `primary` keeps its scroll position and draft.
+    var secondaryFills = false
     @ViewBuilder let primary: Primary
     @ViewBuilder let secondary: Secondary
     @Environment(\.isWideLayout) private var isWide
@@ -130,6 +133,9 @@ struct DuoBeside<Primary: View, Secondary: View>: View {
                 .environment(\.isWideLayout, false)
                 .environment(\.horizontalSizeClass, .compact)
         }
+        // Hidden underneath and modal on top, so VoiceOver stays in the cover and never reaches the split.
+        .accessibilityHidden(isWide && secondaryFills)
+        .overlay { if isWide, secondaryFills { secondary.background(Color.diaryCanvas).accessibilityAddTraits(.isModal) } }
         .background(Color.diaryCanvas)
     }
 }

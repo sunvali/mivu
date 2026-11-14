@@ -156,6 +156,26 @@ import XCTest
         XCTAssertFalse(app.navigationBars["Meal"].exists)
     }
 
+    func testSidewaysPaneExpandsAndCollapses() throws {
+        let (app, input) = try launchCoach()
+        input.tap(); input.typeText("draft text")
+        let expand = app.buttons["coachPaneExpand"].firstMatch
+        XCTAssertTrue(expand.waitForExistence(timeout: 5)); expand.tap()
+        // Expanded, Today lays out like its own tab sideways, and the chat is out of reach underneath.
+        XCTAssertTrue(app.descendants(matching: .any)["todaySummaryColumn"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["todayMealsColumn"].exists)
+        XCTAssertGreaterThan(app.descendants(matching: .any)["todayMealsColumn"].frame.maxX, app.windows.firstMatch.frame.width * 0.75, "The pane covers the chat's half")
+        XCTAssertFalse(input.isHittable, "The chat is covered")
+        // The split stays mounted underneath, so XCUITest may still see its control; the cover's is the one at the far edge.
+        let collapse = try XCTUnwrap(app.buttons.matching(identifier: "coachPaneExpand").allElementsBoundByIndex.max { $0.frame.maxX < $1.frame.maxX })
+        XCTAssertEqual(collapse.label, "Show chat")
+        collapse.tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertTrue(input.isHittable)
+        XCTAssertEqual(input.value as? String, "draft text", "The draft survives")
+        XCTAssertLessThanOrEqual(pane(app).frame.maxX, input.frame.minX + 1, "Collapsed, the pane is back on the left")
+    }
+
     func testUprightTapStillPushesOverChat() throws {
         let (app, input) = try launchCoach(wide: false)
         send("Two eggs, three bread slices and salad", app, input)
