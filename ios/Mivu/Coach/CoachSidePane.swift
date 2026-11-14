@@ -22,17 +22,20 @@ struct CoachSidePane: View {
             // Pip stays a still image here and Progress shows none, so the rig mounts once.
             TodayView(model: coach.diary, companionOutput: CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil),
                       companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, isLiveDay: true)
+                .ignoresSafeArea(.container, edges: .trailing)
                 .navigationDestination(item: $pane) { pane in
-                    switch pane {
-                    case .meal(let id): MealDetailView(model: coach.diary, mealID: id)
-                    case .workout(let id): WorkoutDetailView(model: coach.diary, sessionID: id)
-                    case .day(let date): HistoryView(model: coach.diary, startDate: date).id(date)
-                    case .progress: DiaryProgressView(model: coach.diary, openDiary: openDiary, showsCompanion: false)
+                    Group {
+                        switch pane {
+                        case .meal(let id): MealDetailView(model: coach.diary, mealID: id)
+                        case .workout(let id): WorkoutDetailView(model: coach.diary, sessionID: id)
+                        case .day(let date): HistoryView(model: coach.diary, startDate: date).id(date)
+                        case .progress: DiaryProgressView(model: coach.diary, openDiary: openDiary, showsCompanion: false)
+                        }
                     }
+                    // The system's control strip is on the chat's page, but this stack still inherits its inset.
+                    .ignoresSafeArea(.container, edges: .trailing)
                 }
         }
-        // The system's control strip is on the chat's page now, but this stack still inherits its inset.
-        .ignoresSafeArea(.container, edges: .trailing)
         .accessibilityIdentifier("coachSidePane")
         .onChange(of: latestTurn?.receipts.map(\.operationKey), initial: true) { _, _ in land() }
     }
