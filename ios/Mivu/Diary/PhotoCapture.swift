@@ -165,7 +165,8 @@ struct PhotoInput: View {
         .onAppear { preparation.use(limiter: limiter) }
         .buttonStyle(.borderless)
         .tint(.diaryAccent)
-        .sheet(isPresented: $showCamera) { CameraCapture(preparation: preparation, onPhoto: { if photos.count < 8 { photos.append($0) } }, onFailure: { importFailed = true }).ignoresSafeArea() }
+        // Full screen: a sheet leaves no room for the system camera's flash and lens controls.
+        .fullScreenCover(isPresented: $showCamera) { CameraCapture(preparation: preparation, onPhoto: { if photos.count < 8 { photos.append($0) } }, onFailure: { importFailed = true }).ignoresSafeArea() }
         .alert(noticeTitle, isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } }), presenting: notice) { value in
             switch value {
             case .cameraDenied:
