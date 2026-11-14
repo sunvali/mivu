@@ -157,7 +157,8 @@ extension DiaryTransaction {
         switch write {
         case .food(let date, let items, let time, _):
             guard !items.isEmpty else { throw DiaryError.invalidData }; try validateItems(items); _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID)
-            if let time { guard time.timeIntervalSince1970.isFinite, diaryDateLabel(time, zone: turn.captureTimeZoneID) == date else { throw DiaryError.invalidData } }
+            // After midnight a meal still belongs to the waking day before it.
+            if let time { guard time.timeIntervalSince1970.isFinite, [diaryDateLabel(time, zone: turn.captureTimeZoneID), wakingDateLabel(time, zone: turn.captureTimeZoneID)].contains(date) else { throw DiaryError.invalidData } }
             if let id = turn.pendingMealID {
                 let current = try mealRecord(id: id), submission = try submission(id: turn.id, mealID: id)
                 guard submission.state != .cancelled else { throw DiaryError.notFound }
@@ -256,9 +257,11 @@ extension DiaryTransaction {
     fileprivate func applyCoachWrite(_ write: CoachWrite, turn: CoachTurn, at: Date) throws -> CoachReceipt {
         var receipt = CoachReceipt(operationKey: "\(turn.id)/\(write.target)", turnID: turn.id, dayID: nil, committedRevision: head.revision + 1, resultJSON: "{}")
         switch write {
-        case .food(let date, let items, _, let review):
+        case .food(let date, let items, let time, let review):
             let day = try coachDay(date, turn: turn), isNew = turn.pendingMealID == nil
-            var meal = try turn.pendingMealID.map { try mealRecord(id: $0) } ?? DiaryMeal(dayID: day.id, capturedAt: turn.capturedAt, eatenAt: day.startAt, revision: 0, timePrecision: .dateOnly)
+            // A time the user stated wins; otherwise food for the send date takes the send time and other dates stay date-only.
+            let sentToday = diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == date
+            var meal = try turn.pendingMealID.map { try mealRecord(id: $0) } ?? DiaryMeal(dayID: day.id, capturedAt: turn.capturedAt, eatenAt: time ?? (sentToday ? turn.capturedAt : day.startAt), revision: 0, timePrecision: time != nil || sentToday ? nil : .dateOnly)
             if isNew { try insertMeal(meal) }
             let proposalItems = try addedCoachItems(items, meal: meal, turnID: turn.id)
             if let pending = turn.pendingMealID {
@@ -270,7 +273,8 @@ extension DiaryTransaction {
                     try saveMeal(meal)
                     meal = try commitSavedItems(mealID: meal.id, items: proposalItems, expectedRevision: meal.revision); submission.state = .saved
                 }
-                if turn.pendingMealRevision == 0 && day.id != turn.activeDayID { meal.eatenAt = day.startAt; meal.timePrecision = .dateOnly }
+                if turn.pendingMealRevision == 0, let time { meal.eatenAt = time; meal.timePrecision = nil }
+                else if turn.pendingMealRevision == 0 && day.id != turn.activeDayID { meal.eatenAt = day.startAt; meal.timePrecision = .dateOnly }
                 try saveMeal(meal); try saveSubmission(submission, meal: meal)
             } else if review {
                 let proposal = AnalysisOutput(profileID: head.profile.id, mealID: meal.id, submissionID: turn.id, baseRevision: 0, items: items)

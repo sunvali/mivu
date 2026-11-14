@@ -16,6 +16,9 @@ import com.yakov103.mivu.diary.WorkoutSession
 import com.yakov103.mivu.diary.WorkoutSet
 import com.yakov103.mivu.diary.atMost
 import com.yakov103.mivu.diary.blankLikeSwift
+import com.yakov103.mivu.diary.diaryDateLabel
+import com.yakov103.mivu.diary.diaryLocalInstant
+import com.yakov103.mivu.diary.wakingDateLabel
 import com.yakov103.mivu.diary.swift
 import com.yakov103.mivu.diary.strictJsonContainer
 import com.yakov103.mivu.diary.swiftUUID
@@ -140,7 +143,7 @@ object CoachTools {
             Triple("find_meals", "Search saved meals by food name, newest first, at most 10 candidates with their dates. Optional inclusive from_date/to_date local dates. Use for older references; call get_meal on the chosen meal before any edit or delete of it.", obj(mapOf("query" to string, "from_date" to string, "to_date" to string), listOf("query"))),
             Triple("get_meal", "Retrieve actual owner-scoped meal by UUID before correction. omittedItemCount marks unavailable details requiring manual review.", obj(mapOf("meal_id" to string), listOf("meal_id"))),
             Triple("lookup_nutrition", "Search retrieved nutrition evidence; unavailable means use clearly uncertain estimates.", obj(mapOf("query" to string), listOf("query"))),
-            Triple("log_food", "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Set review_first true when the user wants a proposal before totals. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.", obj(mapOf("target_local_date" to string, "items" to mapOf("type" to "array", "items" to food), "eaten_at" to unconfirmedTime, "review_first" to mapOf("type" to "boolean")), listOf("target_local_date", "items"))),
+            Triple("log_food", "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Without eaten_at, food for today's date is stamped with the send time and other dates stay date-only. Set review_first true when the user wants a proposal before totals.", obj(mapOf("target_local_date" to string, "items" to mapOf("type" to "array", "items" to food), "eaten_at" to mapOf("type" to "string", "description" to "Local wall clock yyyy-MM-dd HH:mm (24-hour, real calendar date) of eating, only when the user stated a time (\"at 8\", \"yesterday at noon\") or a relative one (\"an hour ago\"), worked out from the captured local clock; otherwise null. Never guess a time from a meal name."), "review_first" to mapOf("type" to "boolean")), listOf("target_local_date", "items"))),
             Triple("correct_item", "Correct only quantity on a retrieved actual item, preserving its nutrition basis and sources.", obj(mapOf("meal_id" to string, "item_id" to string, "expected_revision" to mapOf("type" to "integer"), "quantity" to mapOf("type" to "number")), listOf("meal_id", "item_id", "expected_revision", "quantity"))),
         ) + manualSchemas(food)
         val tools = schemas.map { (name, description, parameters) ->
@@ -196,6 +199,7 @@ object CoachTools {
         receipts: List<CoachReceipt>,
         workouts: List<WorkoutSession> = emptyList(),
         found: List<CoachMealCandidate> = emptyList(),
+        zone: String? = null,
     ): CoachCommand {
         if (call.namespace != NAMESPACE || utf8(call.arguments) > 65_536) throw CoachError.InvalidTool
         // kotlinx parsing is lenient (True, 7d, +7); refuse what JSONSerialization refuses, including lone surrogates.
@@ -309,10 +313,14 @@ object CoachTools {
             "log_food" -> {
                 args.keys(setOf("target_local_date", "items", "eaten_at", "review_first"), setOf("target_local_date", "items"))
                 val items = foodItems(args["items"])
-                // Validate legacy syntax without treating model output as owner-confirmed time.
-                unconfirmedTime("eaten_at")
+                // Only a local wall clock on the target calendar or waking day sets the time; a mismatch is dropped
+                // rather than failing the log, and legacy date or ISO syntax stays valid but ignored.
+                val day = string("target_local_date")
+                val at = zone?.let { z -> args.text("eaten_at")?.let { diaryLocalInstant(it, z) } }
+                if (at == null) unconfirmedTime("eaten_at")
+                val eatenAt = at?.takeIf { day == diaryDateLabel(it, zone!!) || day == wakingDateLabel(it, zone) }
                 val reviewFirst = if (args.present("review_first")) args.bool("review_first") ?: invalid() else false
-                CoachCommand.Write(CoachWrite.Food(string("target_local_date"), items, null, reviewFirst))
+                CoachCommand.Write(CoachWrite.Food(day, items, eatenAt, reviewFirst))
             }
             "get_meals_for_date" -> {
                 args.keys(setOf("target_local_date", "after_meal_id"), setOf("target_local_date"))

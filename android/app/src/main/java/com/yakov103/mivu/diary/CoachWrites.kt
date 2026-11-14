@@ -195,7 +195,8 @@ private fun DiaryDatabase.Tx.validateCoachWrite(write: CoachWrite, turn: CoachTu
             if (write.items.isEmpty()) throw DiaryError.InvalidData("food")
             validateItems(write.items)
             diaryDateOnlyInstant(write.date, zone)
-            if (write.eatenAt != null && diaryDateLabel(write.eatenAt, zone) != write.date) throw DiaryError.InvalidData("eaten at")
+            // After midnight a meal still belongs to the waking day before it.
+            if (write.eatenAt != null && write.date != diaryDateLabel(write.eatenAt, zone) && write.date != wakingDateLabel(write.eatenAt, zone)) throw DiaryError.InvalidData("eaten at")
             turn.pendingMealID?.let { id ->
                 val current = mealRecord(id)
                 if (current.submission(turn.id).state == SubmissionState.cancelled) throw DiaryError.NotFound
@@ -327,8 +328,12 @@ private fun DiaryDatabase.Tx.applyCoachWrite(write: CoachWrite, batch: CoachBatc
         is CoachWrite.Food -> {
             val day = coachDay(write.date, turn)
             val pendingID = turn.pendingMealID
-            var meal = pendingID?.let { mealRecord(it) } ?: DiaryMeal(UUID.randomUUID(), day.id, turn.capturedAt, day.startAt, 0, null,
-                MealTimePrecision.dateOnly, emptyList(), emptyList(), emptyList())
+            // A time the user stated wins; otherwise food for the send date takes the send time and other dates stay date-only.
+            val time = write.eatenAt
+            val sentToday = diaryDateLabel(turn.capturedAt, turn.captureTimeZoneID) == write.date
+            var meal = pendingID?.let { mealRecord(it) } ?: DiaryMeal(UUID.randomUUID(), day.id, turn.capturedAt,
+                time ?: if (sentToday) turn.capturedAt else day.startAt, 0, null,
+                if (time != null || sentToday) null else MealTimePrecision.dateOnly, emptyList(), emptyList(), emptyList())
             val proposalItems = addedCoachItems(write.items, meal, turn.id)
             if (pendingID != null) {
                 var sub = meal.submission(turn.id)
@@ -339,7 +344,8 @@ private fun DiaryDatabase.Tx.applyCoachWrite(write: CoachWrite, batch: CoachBatc
                     meal = commitSavedItems(meal, proposalItems, meal.revision)
                     sub = sub.copy(proposal = proposal, state = SubmissionState.saved)
                 }
-                if (turn.pendingMealRevision == 0 && day.id != turn.activeDayID) meal = meal.copy(eatenAt = day.startAt, timePrecision = MealTimePrecision.dateOnly)
+                if (turn.pendingMealRevision == 0 && time != null) meal = meal.copy(eatenAt = time, timePrecision = null)
+                else if (turn.pendingMealRevision == 0 && day.id != turn.activeDayID) meal = meal.copy(eatenAt = day.startAt, timePrecision = MealTimePrecision.dateOnly)
                 meal = meal.with(sub)
             } else if (write.reviewFirst) {
                 val proposal = AnalysisOutput(1, head.profile.id, meal.id, turn.id, 0, write.items)

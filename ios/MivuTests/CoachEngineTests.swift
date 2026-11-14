@@ -66,7 +66,7 @@ private actor CoachInputFixture {
         }
     }
 
-    @Test func nullOptionalMealWeightAndWorkoutFieldsCommitWithoutInventingExactTimes() async throws {
+    @Test func nullOptionalFieldsStampTodaysMealWithSendTimeAndKeepWeightAndWorkoutDateOnly() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let food = #"{"target_local_date":"2027-01-15","eaten_at":null,"items":[{"name":"Synthetic eggs","quantity":2,"unit":"egg","kcal":140,"carbs":1,"protein":12,"fat":10,"evidence_id":null}]}"#
         let weight = #"{"local_date":"2027-01-15","value":70,"unit":"kg","weight_id":null,"expected_revision":null,"measured_at":null}"#
@@ -76,13 +76,34 @@ private actor CoachInputFixture {
         let snapshot = try await store.snapshotForExport()
         #expect(completed.state == .completed && completed.receipts.count == 3)
         #expect(snapshot.meals.count == 1 && snapshot.weights.count == 1 && snapshot.workouts.count == 1)
-        #expect(snapshot.meals[0].timePrecision == .dateOnly)
+        #expect(snapshot.meals[0].timePrecision == nil && snapshot.meals[0].eatenAt == turn.capturedAt)
         #expect(snapshot.weights[0].timePrecision == .dateOnly)
         #expect(snapshot.workouts[0].timePrecision == .dateOnly)
     }
 
+    // Sent at 10:00 on 2027-01-15: a stated time today, "an hour ago", yesterday evening, and after midnight on yesterday's waking day.
+    @Test(arguments: [("2027-01-15", "2027-01-15 08:30"), ("2027-01-15", "2027-01-15 09:00"), ("2027-01-14", "2027-01-14 20:00"), ("2027-01-14", "2027-01-15 01:00")])
+    func statedLocalClockSetsMealTimeOnTheRequestedDay(date: String, clock: String) async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result([call("log_food", timedFood(date, clock))]), result(text: "Done")])
+        _ = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let snapshot = try await store.snapshotForExport(), meal = try #require(snapshot.meals.first)
+        #expect(meal.timePrecision == nil && meal.eatenAt == diaryLocalInstant(clock, zone: turn.captureTimeZoneID))
+        #expect(snapshot.days.first { $0.id == meal.dayID }?.localDate == date)
+    }
+    @Test func clockOnAnotherDayIsDroppedInsteadOfFailingTheLog() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result([call("log_food", timedFood("2027-01-15", "2027-01-12 08:00"))]), result(text: "Done")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.state == .completed)
+        #expect(try await store.snapshotForExport().meals.first?.eatenAt == turn.capturedAt)
+    }
+    private func timedFood(_ date: String, _ clock: String) -> String {
+        #"{"target_local_date":"\#(date)","eaten_at":"\#(clock)","items":[{"name":"Synthetic eggs","quantity":2,"unit":"egg","kcal":140,"carbs":1,"protein":12,"fat":10,"evidence_id":null}]}"#
+    }
+
     @Test(arguments: ["log_food", "log_weight", "log_workout"], ["2027-01-14T08:00:00.123Z", "2027-01-14"])
-    func modelTimeSyntaxKeepsDateOnlyPrecisionAndRequestedDay(operation: String, timestamp: String) async throws {
+    func modelTimeSyntaxCannotSetTimeOrChangeRequestedDay(operation: String, timestamp: String) async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let arguments = timestampArguments(operation: operation, timestamp: timestamp)
         let replies = CoachFixture([result([call(operation, arguments)]), result(text: "Done")])
@@ -90,7 +111,7 @@ private actor CoachInputFixture {
         let snapshot = try await store.snapshotForExport()
         switch operation {
         case "log_food":
-            #expect(snapshot.meals.first?.timePrecision == .dateOnly)
+            #expect(snapshot.meals.first?.eatenAt == turn.capturedAt)
             #expect(snapshot.days.first { $0.id == snapshot.meals.first?.dayID }?.localDate == "2027-01-15")
         case "log_weight":
             #expect(snapshot.weights.first?.timePrecision == .dateOnly)
