@@ -13,6 +13,8 @@ enum ProofState: Equatable {
     case quotaReached, unavailable, queued, analyzing, completed, needsRetry
 }
 
+enum KeyConnectionError: Error, Equatable { case consentRequired, invalidKey, rejected, unavailable, storage }
+
 enum ConnectionNotice: String {
     case cancelled = "Connection cancelled"
     case denied = "Connection permission declined"
@@ -25,6 +27,8 @@ enum ConnectionNotice: String {
     case revoked = "Reconnect to authorize plan usage."
     case disconnected = "Local credentials removed"
     case unconfirmed = "Local credentials removed. Remote revocation unconfirmed."
+    case keyRejected = "This key was rejected. Replace it in Settings → Coach AI."
+    case keyQuota = "Your AI service is out of credit or over its limit. Check its usage page, then try again."
 }
 
 @Observable @MainActor
@@ -63,9 +67,20 @@ final class ChatGPTConnection {
     @ObservationIgnored private var isForeground = true
 
     @ObservationIgnored private let appleModelAvailable: @Sendable () -> Bool
+    @ObservationIgnored private let keyStore: AIKeyStore
+    @ObservationIgnored private let keyClient: KeyServiceClient
+    /// Services with a saved key. Each keeps its own key, model list and chosen model, so switching loses nothing.
+    private(set) var connectedServices: Set<KeyService> = []
+    private(set) var serviceModels: [KeyService: [AvailableModel]] = [:]
+    private var chosenModels: [KeyService: String] = [:]
+    private(set) var isCheckingKey = false
 
     /// `apple` is the on-device model, a no-account fallback for logging; ChatGPT is the main Coach.
-    enum Provider: String { case apple, chatGPT }
+    /// The other four run on the person's own key.
+    enum Provider: String, CaseIterable {
+        case apple, chatGPT, claude, openAI, gemini, openRouter
+        var keyService: KeyService? { KeyService(rawValue: rawValue) }
+    }
 
     nonisolated static let appleIntelligenceAvailable: @Sendable () -> Bool = {
         if #available(iOS 27.0, *) { SystemLanguageModel.default.isAvailable } else { false }
@@ -78,22 +93,32 @@ final class ChatGPTConnection {
             let stored = preferences.string(forKey: "aiProvider").flatMap(Provider.init)
             if let stored, stored == .chatGPT || available(stored) { return stored }
             // Someone with a saved ChatGPT connection keeps it until they pick Apple, also while it restores at launch.
-            if stored == nil, planAuthorized || preferences.string(forKey: "selectedRegistrationID") != nil { return .chatGPT }
+            // Also where a key service lands once its key is removed.
+            if planAuthorized || preferences.string(forKey: "selectedRegistrationID") != nil { return .chatGPT }
             return appleModelAvailable() ? .apple : .chatGPT
         }
         set { withMutation(keyPath: \.provider) { preferences.set(newValue.rawValue, forKey: "aiProvider") } }
     }
 
-    func available(_ provider: Provider) -> Bool { provider == .apple ? appleModelAvailable() : planAuthorized }
+    func available(_ provider: Provider) -> Bool {
+        if let service = provider.keyService { return connectedServices.contains(service) && consented(to: service) }
+        return provider == .apple ? appleModelAvailable() : planAuthorized
+    }
+    var activeName: String { provider.keyService?.name ?? (provider == .apple ? "Apple Intelligence" : "ChatGPT") }
+    var activeUsagePage: URL? { provider.keyService?.usagePage ?? (provider == .chatGPT ? MivuLinks.chatGPTUsage : nil) }
     var appleAvailable: Bool { appleModelAvailable() }
     var canInfer: Bool { available(provider) }
-    /// Only ChatGPT tunes onboarding targets; the formula estimate beats the on-device model there.
-    var tunesTargets: Bool { provider == .chatGPT && planAuthorized }
+    /// Cloud models tune onboarding targets; the formula estimate beats the on-device model there.
+    var tunesTargets: Bool { provider != .apple && available(provider) }
 
     init(auth: AuthSession = AuthSession(), client: ResponsesClient = ResponsesClient(),
          jobStore: ProbeJobStore? = nil, preferences: UserDefaults = .standard,
-         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceAvailable) {
+         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceAvailable,
+         keyStore: AIKeyStore? = nil, keyClient: KeyServiceClient = KeyServiceClient()) {
         self.appleModelAvailable = appleModelAvailable
+        let keys = keyStore ?? .local
+        self.keyStore = keys
+        self.keyClient = keyClient
         self.auth = auth
         self.client = client
         self.preferences = preferences
@@ -103,10 +128,16 @@ final class ChatGPTConnection {
         runner = ProbeRunner(store: store, client: client,
             accessToken: { try await auth.accessToken(expectedRegistrationID: $0) },
             activeRegistrationID: { await auth.snapshot()?.registrationID })
+        // Read here, not in restore(), so the active AI is right from the first frame.
+        for service in KeyService.allCases where (try? keys.load(service)) != nil {
+            connectedServices.insert(service)
+            chosenModels[service] = preferences.string(forKey: "aiModel." + service.rawValue)
+        }
     }
 
     // Launch restoration is explicit; constructing the screen never activates saved credentials.
     func restore() async {
+        await refreshServiceModels()
         // A connection saved before the sharing consent existed stays unused until the person agrees and reconnects.
         guard !isConnecting, !isDisconnecting, sharingConsented else { return }
         let revision = generation
@@ -291,6 +322,85 @@ final class ChatGPTConnection {
 
     var sessionRevision: Int { generation }
 
+    // MARK: Key services
+
+    func consented(to service: KeyService) -> Bool { preferences.bool(forKey: service.consentKey) }
+    func recordConsent(to service: KeyService) { preferences.set(true, forKey: service.consentKey) }
+
+    func selectedModel(for service: KeyService) -> String { chosenModels[service] ?? "" }
+    func selectModel(_ slug: String, for service: KeyService) {
+        guard serviceModels[service]?.contains(where: { $0.slug == slug }) == true else { return }
+        chosenModels[service] = slug
+        preferences.set(slug, forKey: "aiModel." + service.rawValue)
+    }
+
+    /// Checks the key with the service before keeping it, then makes that service the Coach AI.
+    func saveKey(_ raw: String, for service: KeyService) async throws {
+        guard consented(to: service) else { throw KeyConnectionError.consentRequired }
+        let key = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty, !key.contains(where: { $0.isWhitespace }) else { throw KeyConnectionError.invalidKey }
+        guard !isCheckingKey else { throw KeyConnectionError.unavailable }
+        isCheckingKey = true
+        defer { isCheckingKey = false }
+        let listed: [AvailableModel]
+        do { listed = try await keyClient.models(service, key: key) }
+        catch let failure as ResponsesClient.Failure where failure == .unauthorized || failure == .forbidden { throw KeyConnectionError.rejected }
+        catch { throw KeyConnectionError.unavailable }
+        guard !listed.isEmpty else { throw KeyConnectionError.unavailable }
+        do { try keyStore.save(key, for: service) }
+        catch AIKeyStore.Failure.invalidKey { throw KeyConnectionError.invalidKey }
+        catch { throw KeyConnectionError.storage }
+        generation += 1   // a reply still in flight on the old key must not complete
+        connectedServices.insert(service)
+        adopt(listed, for: service)
+        notice = nil
+        provider = Provider(rawValue: service.rawValue)!
+    }
+
+    func removeKey(for service: KeyService) {
+        do { try keyStore.remove(service) } catch { notice = .storageFailed; return }
+        generation += 1
+        connectedServices.remove(service)
+        serviceModels[service] = nil
+    }
+
+    /// Keeps the chosen model while the service still lists it; otherwise the service default, then the first listed.
+    private func adopt(_ listed: [AvailableModel], for service: KeyService) {
+        serviceModels[service] = listed
+        guard !listed.contains(where: { $0.slug == chosenModels[service] }) else { return }
+        let model = listed.contains { $0.slug == service.defaultModel } ? service.defaultModel : listed[0].slug
+        chosenModels[service] = model
+        preferences.set(model, forKey: "aiModel." + service.rawValue)
+    }
+
+    /// The list only feeds the picker; when it cannot load, the saved model keeps working.
+    private func refreshServiceModels() async {
+        guard let service = provider.keyService, let key = try? keyStore.load(service) else { return }
+        let revision = generation
+        guard let listed = try? await keyClient.models(service, key: key), !listed.isEmpty, revision == generation else { return }
+        adopt(listed, for: service)
+    }
+
+    private func respondWithKey(_ service: KeyService, key: String, model: String, revision: Int,
+                                input: [CoachInferenceInput], namespace: Data?) async throws -> CoachInferenceResult {
+        func validate() throws {
+            try Task.checkCancellation()
+            guard generation == revision, provider.keyService == service, selectedModel(for: service) == model else { throw SessionError.sessionChanged }
+        }
+        try validate()
+        do {
+            let result = try await keyClient.respond(service, model: model, input: input, toolNamespace: namespace, key: key)
+            try validate()
+            return result
+        } catch {
+            try validate()
+            let failure = error as? ResponsesClient.Failure
+            if failure == .unauthorized || failure == .forbidden { notice = .keyRejected }
+            else if failure == .quotaReached { notice = .keyQuota }
+            throw error
+        }
+    }
+
     func coachInference() throws -> @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult {
         let respond = try inference()
         return { input, namespace in try await respond(input, namespace) }
@@ -301,6 +411,14 @@ final class ChatGPTConnection {
         if provider == .apple {
             guard #available(iOS 27.0, *), appleModelAvailable() else { throw SessionError.noActiveSession }
             return { input, namespace in try await AppleInference.respondLocally(input, namespace: namespace) }
+        }
+        if let service = provider.keyService {
+            let model = selectedModel(for: service)
+            guard !model.isEmpty, let key = try? keyStore.load(service) else { throw SessionError.noActiveSession }
+            let revision = generation
+            return { [self] input, namespace in
+                try await self.respondWithKey(service, key: key, model: model, revision: revision, input: input, namespace: namespace)
+            }
         }
         guard planAuthorized, let owner = activeRegistrationID,
               !isConnecting, !isDisconnecting,
