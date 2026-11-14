@@ -26,6 +26,8 @@ import XCTest
         if mode == "double" { app.launchArguments += ["-NSDoubleLocalizedStrings", "YES"] }
         if text == "largest" { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
+        // The Duo's open and half-open poses are sideways by default; "portrait" turns them upright (table pose when half-open).
+        if ProcessInfo.processInfo.environment["SWEEP_ORIENTATION"] == "portrait" { XCUIDevice.shared.orientation = .portrait }
         return app
     }
 
