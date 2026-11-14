@@ -156,24 +156,23 @@ import XCTest
         XCTAssertFalse(app.navigationBars["Meal"].exists)
     }
 
-    func testSidewaysPaneExpandsAndCollapses() throws {
+    func testSidewaysChatExpandsAndCollapses() throws {
         let (app, input) = try launchCoach()
+        XCTAssertTrue(pane(app).waitForExistence(timeout: 5))
         input.tap(); input.typeText("draft text")
-        let expand = app.buttons["coachPaneExpand"].firstMatch
+        let besideWidth = input.frame.width
+        let expand = app.buttons["coachExpand"].firstMatch
         XCTAssertTrue(expand.waitForExistence(timeout: 5)); expand.tap()
-        // Expanded, Today lays out like its own tab sideways, and the chat is out of reach underneath.
-        XCTAssertTrue(app.descendants(matching: .any)["todaySummaryColumn"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)["todayMealsColumn"].exists)
-        XCTAssertGreaterThan(app.descendants(matching: .any)["todayMealsColumn"].frame.maxX, app.windows.firstMatch.frame.width * 0.75, "The pane covers the chat's half")
-        XCTAssertFalse(input.isHittable, "The chat is covered")
-        // The split stays mounted underneath, so XCUITest may still see its control; the cover's is the one at the far edge.
-        let collapse = try XCTUnwrap(app.buttons.matching(identifier: "coachPaneExpand").allElementsBoundByIndex.max { $0.frame.maxX < $1.frame.maxX })
-        XCTAssertEqual(collapse.label, "Show chat")
-        collapse.tap()
-        XCTAssertTrue(input.waitForExistence(timeout: 5))
-        XCTAssertTrue(input.isHittable)
-        XCTAssertEqual(input.value as? String, "draft text", "The draft survives")
-        XCTAssertLessThanOrEqual(pane(app).frame.maxX, input.frame.minX + 1, "Collapsed, the pane is back on the left")
+        // Expanded, the chat takes the screen and the side pane is gone; Today keeps its own tab.
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !self.pane(app).exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "The side pane leaves")
+        XCTAssertGreaterThan(input.frame.width, besideWidth + 100, "The chat is wider than its half")
+        XCTAssertLessThan(input.frame.minX, app.windows.firstMatch.frame.midX, "The chat reaches into the left half")
+        XCTAssertEqual(input.value as? String, "draft text", "The draft survives expanding")
+        app.buttons["coachExpand"].firstMatch.tap()
+        XCTAssertTrue(pane(app).waitForExistence(timeout: 5), "Collapsed, the side pane is back")
+        XCTAssertLessThanOrEqual(pane(app).frame.maxX, input.frame.minX + 1)
+        XCTAssertEqual(input.value as? String, "draft text", "The draft survives collapsing")
     }
 
     func testUprightTapStillPushesOverChat() throws {
