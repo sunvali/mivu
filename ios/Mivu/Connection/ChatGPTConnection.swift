@@ -357,6 +357,51 @@ final class ChatGPTConnection {
         provider = Provider(rawValue: service.rawValue)!
     }
 
+    /// Signs in to OpenRouter over whichever window is in front.
+    func signInOpenRouter() async {
+        let scene = UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        guard let window = scene?.keyWindow else { notice = .unavailable; return }
+        let browser = NativeAuthorizationBrowser(window: window)
+        await signInOpenRouter { try await browser.open($0) }
+    }
+
+    // shortcut: OpenRouter's acceptance of a 127.0.0.1 callback is unverified, fall back to a pasted key if sign-in cannot return
+    func signInOpenRouter(openBrowser: @escaping @MainActor (URL) async throws -> Void) async {
+        guard !isConnecting, !isDisconnecting, consented(to: .openRouter) else { return }
+        generation += 1
+        let revision = generation
+        isConnecting = true
+        notice = nil
+        let task = Task { await self.authorizeOpenRouter(revision: revision, openBrowser: openBrowser) }
+        connectionTask = task
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+        if revision == generation { connectionTask = nil; isConnecting = false }
+    }
+
+    private func authorizeOpenRouter(revision: Int, openBrowser: @escaping @MainActor (URL) async throws -> Void) async {
+        let callback = LoopbackCallback()
+        listener = callback
+        defer { callback.stop(); if listener === callback { listener = nil } }
+        do {
+            let attempt = try OpenRouterSignIn.make(callbackURL: try await callback.start())
+            guard revision == generation else { return }
+            var code: String?
+            _ = try await callback.receive(validating: { code = try attempt.code(from: $0) },
+                                           openBrowser: openBrowser, browserURL: attempt.authorizationURL)
+            try Task.checkCancellation()
+            guard revision == generation, let code else { return }
+            let key = try await keyClient.openRouterKey(attempt.exchange(code: code))
+            guard revision == generation else { return }
+            try await saveKey(key, for: .openRouter)
+            // saveKey moved the generation on, so the caller no longer clears these.
+            connectionTask = nil; isConnecting = false
+        } catch {
+            guard revision == generation else { return }
+            notice = error is CancellationError ? .cancelled : .unavailable
+        }
+    }
+
     func removeKey(for service: KeyService) {
         do { try keyStore.remove(service) } catch { notice = .storageFailed; return }
         generation += 1

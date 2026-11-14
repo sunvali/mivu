@@ -47,6 +47,11 @@ struct KeyServiceClient: Sendable {
         }
     }
 
+    /// The last step of OpenRouter sign-in: trades the one-time code for the person's key.
+    func openRouterKey(_ exchange: URLRequest) async throws -> String {
+        try OpenRouterSignIn.key(from: await send(exchange))
+    }
+
     private func request(_ service: KeyService, _ address: String, key: String) throws -> URLRequest {
         guard !key.isEmpty, !key.contains(where: { $0.isWhitespace }) else { throw ResponsesClient.Failure.invalidInput }
         var request = URLRequest(url: URL(string: address)!)

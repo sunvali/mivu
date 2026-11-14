@@ -95,7 +95,7 @@ struct OAuthAttempt {
         base64URL(Data(SHA256.hash(data: Data(verifier.utf8))))
     }
 
-    private static func randomValue() throws -> String {
+    static func randomValue() throws -> String {
         var bytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
             throw OAuthError.randomGenerationFailed

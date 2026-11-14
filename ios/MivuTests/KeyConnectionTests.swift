@@ -100,6 +100,33 @@ import Testing
         await #expect(throws: ResponsesClient.Failure.unauthorized) { _ = try await f.connection.inference()([.message(role: .user, text: "hi")], nil) }
         #expect(f.connection.notice == .keyRejected)
     }
+
+    @Test func openRouterSignInTradesTheCallbackCodeForAKey() async throws {
+        let f = Fixture(); defer { f.cleanup() }
+        f.reply(200, #"{"key":"fixture-or-key"}"#)
+        await f.connection.signInOpenRouter { _ in Issue.record("Opened a browser before consent") }
+        #expect(f.requests.isEmpty)
+        f.connection.recordConsent(to: .openRouter)
+        await f.connection.signInOpenRouter { url in
+            let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+            let returnAddress = try #require(query.first { $0.name == "callback_url" }?.value)
+            var callback = try #require(URLComponents(string: returnAddress))
+            callback.queryItems = [URLQueryItem(name: "code", value: "synthetic-code"), URLQueryItem(name: "state", value: query.first { $0.name == "state" }?.value)]
+            _ = try await URLSession.shared.data(from: #require(callback.url))
+            throw CancellationError()
+        }
+        #expect(try f.keyStore.load(.openRouter) == "fixture-or-key")
+        #expect(f.connection.provider == .openRouter && f.connection.canInfer && !f.connection.isConnecting)
+        #expect(f.requests.map { $0.url?.path } == ["/api/v1/auth/keys", "/api/v1/key"])
+    }
+
+    @Test func cancelledOpenRouterSignInSavesNothing() async throws {
+        let f = Fixture(); defer { f.cleanup() }
+        f.connection.recordConsent(to: .openRouter)
+        await f.connection.signInOpenRouter { _ in throw CancellationError() }
+        #expect(f.requests.isEmpty && f.connection.notice == .cancelled && !f.connection.isConnecting)
+        #expect(try f.keyStore.load(.openRouter) == nil)
+    }
 }
 
 private let modelsReply = #"{"data":[{"id":"claude-haiku-5-5","display_name":"Claude Haiku 5.5"},{"id":"claude-opus-5-5","display_name":"Claude Opus 5.5"}]}"#
