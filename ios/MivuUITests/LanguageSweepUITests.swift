@@ -195,7 +195,7 @@ import XCTest
 
     /// Names that stay in Latin letters in every language.
     /// "GMT" comes from the system's time-zone format, and Diagnostics is a Debug-only row.
-    static let latinNames = ["Apple Intelligence", "Dynamic Island", "ChatGPT", "OpenAI", "iPhone", "Mivu", "Apple", "USDA", "Siri", "iOS", "IBS", "AI", "GMT", "Diagnostics"]
+    static let latinNames = ["Apple Intelligence", "Dynamic Island", "Snap It", "ChatGPT", "OpenAI", "iPhone", "Mivu", "Apple", "USDA", "Siri", "iOS", "IBS", "AI", "GMT", "Diagnostics"]
 
     /// Every visible label on every screen is Hebrew, apart from names and the fixtures' own data.
     func testTextIsHebrew() throws {

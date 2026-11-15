@@ -1519,7 +1519,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "יום המעקב נמשך מההשכמה ועד השינה."
+            "value" : "יום המעקב עוקב אחר סדר היום שלך."
           }
         }
       }
@@ -1529,7 +1529,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "יום מעקב חדש יתחיל עם השמירה."
+            "value" : "היום שלך יתחיל עם השמירה."
           }
         }
       }
@@ -5071,7 +5071,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "יום המעקב ליעד"
+            "value" : "היום שלך ביעד"
           }
         }
       }
@@ -9794,7 +9794,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "לא חובה. השמירה פותחת את יום המעקב של היום או משתמשת בו."
+            "value" : "אופציונלי. השמירה מתחילה את היום שלך או משתמשת בו אם כבר התחיל."
           }
         }
       }
@@ -11498,7 +11498,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "נשמר באייפון הזה לפני הניתוח. תוצאות ממתינות או שלא נבדקו לא נכללות בסכומים. אם צריך לאשר את יום המעקב, תופיע שאלה."
+            "value" : "נשמר באייפון הזה לפני הניתוח. תוצאות ממתינות או שלא נבדקו לא נכללות בסכומים. אם צריך לאשר את היום שלך, תופיע שאלה."
           }
         }
       }
@@ -11576,7 +11576,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "השמירה מעדכנת רק את יום המעקב שנבחר. שמות ימים אחרים והיום הפעיל שלך נשמרים."
+            "value" : "השמירה מעדכנת רק את היום שנבחר. שמות ימים אחרים והיום הפעיל שלך נשמרים."
           }
         }
       }
@@ -12285,7 +12285,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "צילום ארוחה"
+            "value" : "Snap It"
           }
         }
       }
@@ -12431,7 +12431,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "להתחיל יום מעקב?"
+            "value" : "להתחיל יום חדש?"
           }
         }
       }
@@ -13147,7 +13147,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "זה מתקן את המדידה השמורה ביום המעקב הזה."
+            "value" : "זה מתקן את המדידה השמורה של היום הזה."
           }
         }
       }
@@ -13498,7 +13498,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "שינוי אזור הזמן שומר את הארוחות ואת תוויות הימים הקודמים. ייתכן שתופיע שאלה באיזה יום מעקב להשתמש."
+            "value" : "שינוי אזור הזמן שומר את הארוחות ואת תוויות הימים הקודמים. ייתכן שתופיע שאלה באיזה יום להשתמש."
           }
         }
       }
@@ -13657,7 +13657,14 @@
       }
     },
     "Turn on Apple Intelligence in iOS Settings, or wait for it to finish downloading" : {
-
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יש להפעיל את Apple Intelligence בהגדרות iOS, או להמתין לסיום ההורדה"
+          }
+        }
+      }
     },
     "Type 1 diabetes" : {
       "comment" : "Shown from a stored value; the value itself stays English.",
@@ -14242,7 +14249,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "יום מעקב"
+            "value" : "היום שלך"
           }
         }
       }
@@ -14725,7 +14732,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "איזה יום מעקב?"
+            "value" : "איזה יום?"
           }
         }
       }
@@ -14978,7 +14985,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "אני"
+            "value" : "את/ה"
           }
         }
       }
@@ -15362,7 +15369,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "יום המעקב שלך"
+            "value" : "היום שלך"
           }
         }
       }

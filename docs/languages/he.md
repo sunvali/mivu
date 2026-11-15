@@ -42,9 +42,9 @@ the person, so:
 | kg / lb | ק״ג / ליב׳ | |
 | ml | מ״ל | |
 | Coach (tab, Pip) | פיפ | |
-| You (own chat messages) | אני | |
+| You (own chat messages) | את/ה | Owner's choice |
 | Thinking… (Pip preparing) | בודקים… | First-person plural, like Pip's other lines |
-| Snap It | צילום ארוחה | |
+| Snap It | Snap It | Owner's choice: the feature name stays in Latin letters |
 | Cancel | ביטול | |
 | Undo | ביטול פעולה | Different from Cancel, so both can sit together |
 | Log meal | הוספת ארוחה | |
@@ -54,7 +54,7 @@ the person, so:
 | Progress | התקדמות | |
 | meal | ארוחה | |
 | app | אפליקציה | Never יישום |
-| waking day | יום המעקב | "היום שלך" would clash with the Today tab (היום). Never יום ערות |
+| waking day | היום שלך | Owner's choice. Never יום ערות |
 | estimate | הערכה | |
 | review (a proposal) | לבדוק / בדיקה | |
 | goal / target | יעד | |
