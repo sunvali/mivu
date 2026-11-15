@@ -26,8 +26,10 @@ import UIKit
     private static func local() -> MivuServices {
         // UI tests never reach a live model, so the host Mac's Apple Intelligence cannot change their flows.
         var appleModelAvailable = ChatGPTConnection.appleIntelligenceAvailable
-        if DiaryLaunch.isUITest { appleModelAvailable = { false } }
-        let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults, appleModelAvailable: appleModelAvailable)
+        var appleModelSupported = ChatGPTConnection.appleIntelligenceSupported
+        if DiaryLaunch.isUITest { appleModelAvailable = { false }; appleModelSupported = { false } }
+        let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults, appleModelAvailable: appleModelAvailable,
+                                                                        appleModelSupported: appleModelSupported)
         let keys = NutritionAPIKeyStore.local
         let foodSource = FoodEvidenceClient()
         let fixture: (() throws -> CoachViewModel.Inference)? = DiaryLaunch.isCoachInferenceFixture
