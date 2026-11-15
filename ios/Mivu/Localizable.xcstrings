@@ -862,7 +862,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@%2$@ %3$@ השבוע"
+            "value" : "⁦%1$@%2$@⁩ %3$@ השבוע"
           }
         }
       }
@@ -3131,7 +3131,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "פחמימות (גרם)"
+            "value" : "פחמימות גרם"
           }
         }
       }
@@ -6205,7 +6205,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "שומן בגרם"
+            "value" : "שומן גרם"
           }
         }
       }
