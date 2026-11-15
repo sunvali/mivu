@@ -68,6 +68,13 @@ class Catalogs(unittest.TestCase):
         self.assertEqual(languages.hidden_errors(stripped), [])
         self.assertEqual(languages.hidden_errors(target('Mivu', '')), [])
 
+    def test_substitution_forms_without_placeholders_pass(self):
+        def sub(value, forms):
+            return {'stringUnit': unit(value)['stringUnit'], 'substitutions': {'days': {'argNum': 2, 'formatSpecifier': 'lld', 'variations': {'plural': {f: unit(v) for f, v in forms.items()}}}}}
+        en = sub('%1$lld of %#@days@ logged', {'one': '%arg day', 'other': '%arg days'})
+        he = sub('%1$lld מתוך %#@days@ נרשמו', {'one': 'יום אחד', 'two': 'יומיים', 'other': '%arg ימים'})
+        self.assertEqual(languages.errors(catalog(**{'%lld of %lld days logged': {'localizations': {'en': en, 'he': he}}}), {'en', 'he'}), [])
+
     def test_clean_catalogs_pass(self):
         strings = {'Account': {'localizations': {'he': unit('חשבון')}},
                    '%lld meals': {'localizations': {'en': PLURAL, 'he': HEBREW_PLURAL}},

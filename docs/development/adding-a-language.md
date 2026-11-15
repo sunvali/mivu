@@ -10,7 +10,7 @@ surface below is translated, its strings stay out of the bundle.
 1. A glossary at `docs/languages/<code>.md`, written before the draft: voice
    (Hebrew uses gender-neutral wording), how the names appear (Mivu stays in
    Latin letters; Pip is translated, for example "פיפ"), and key food and
-   nutrition terms. Old Hebrew drafts are kept in `docs/languages/he-legacy.json`.
+   nutrition terms. `docs/languages/he.md` is the example.
 2. Translations in all four catalogs:
    - `ios/Mivu/Localizable.xcstrings` (app),
    - `ios/MivuWidgets/Localizable.xcstrings` (widgets, Live Activity, control),

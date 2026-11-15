@@ -101,7 +101,7 @@ def _format_errors(path, key, language, localization, source):
     for form, value in _forms(source):  # the source's widest form, usually 'other'
         expected[form] = _placeholders(value)
     for form, value in _forms(localization):
-        want = expected.get(form) or expected.get('other') or expected.get(None) or []
+        want = next((expected[f] for f in (form, 'other', None) if f in expected), [])  # [] is a real answer: '%arg days'
         got = _placeholders(value)
         if got != want and not (form in MAY_DROP_NUMBER and set(got) <= set(want)):
             found.append(f"{path}: {key!r} in {language!r} ({form or 'value'!r}) has placeholders {got}, the source has {want}")

@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "Mivu"
           }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
         }
       }
     },
@@ -20,6 +26,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "Mivu"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Mivu"
           }
         }
@@ -33,6 +45,12 @@
             "state" : "translated",
             "value" : "Mivu uses the camera to attach meal photos to your private diary."
           }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המצלמה משמשת לצירוף תמונות של ארוחות ליומן הפרטי שלך."
+          }
         }
       }
     },
@@ -43,6 +61,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המיקרופון מאזין בזמן הקראת ארוחה, כדי להקליד אותה בשיחה עם פיפ. השמע נשאר באייפון הזה ואינו נשמר."
           }
         }
       }
@@ -55,11 +79,25 @@
             "state" : "translated",
             "value" : "Mivu turns your spoken meal into text on this iPhone so you can review it before sending."
           }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הדיבור הופך לטקסט באייפון הזה, כדי שאפשר יהיה לבדוק אותו לפני השליחה."
+          }
         }
       }
     },
     "Snap It" : {
-      "comment" : "Home-screen quick-action title: opens camera to log a meal"
+      "comment" : "Home-screen quick-action title: opens camera to log a meal",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צילום ארוחה"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

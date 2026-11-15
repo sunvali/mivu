@@ -12,6 +12,17 @@
               "Open ${applicationName} Coach"
             ]
           }
+        },
+        "he" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "לשאול את פיפ ב-${applicationName}",
+              "שאל את ${applicationName}",
+              "שאלי את ${applicationName}",
+              "לפתוח את פיפ ב-${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -24,6 +35,17 @@
             "values" : [
               "Log a meal in ${applicationName}",
               "Log food with ${applicationName}"
+            ]
+          }
+        },
+        "he" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "רישום ארוחה ב-${applicationName}",
+              "לרשום ארוחה ב-${applicationName}",
+              "רשום ארוחה ב-${applicationName}",
+              "רשמי ארוחה ב-${applicationName}"
             ]
           }
         }
@@ -40,6 +62,17 @@
               "Snap a meal in ${applicationName}"
             ]
           }
+        },
+        "he" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "צילום ארוחה ב-${applicationName}",
+              "לצלם ארוחה ב-${applicationName}",
+              "צלם ארוחה ב-${applicationName}",
+              "צלמי ארוחה ב-${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -54,6 +87,17 @@
               "Tell ${applicationName}",
               "Tell ${applicationName} Coach",
               "Message ${applicationName} Coach"
+            ]
+          }
+        },
+        "he" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "לספר ל-${applicationName}",
+              "ספר ל-${applicationName}",
+              "ספרי ל-${applicationName}",
+              "הודעה לפיפ ב-${applicationName}"
             ]
           }
         }
