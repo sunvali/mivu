@@ -262,16 +262,6 @@
         }
       }
     },
-    "%@, %lld minutes." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, %2$lld minutes."
-          }
-        }
-      }
-    },
     "%@, about %@ left" : {
       "localizations" : {
         "en" : {
@@ -293,6 +283,17 @@
       }
     },
     "%@, nothing logged" : {},
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      },
+      "comment" : "Progress chart, spoken summary of one bar: the date, then the calories"
+    },
     "%@: %@ kcal" : {
       "localizations" : {
         "en" : {
@@ -322,6 +323,17 @@
           }
         }
       }
+    },
+    "%@: %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@, %3$@"
+          }
+        }
+      },
+      "comment" : "Progress chart, spoken summary of one bar: the date, the calories, then how close to the goal (near, a bit off…)"
     },
     "%@. Review / Edit" : {},
     "%@. Weighed in yet?" : {},
@@ -571,6 +583,9 @@
     "3-second timer" : {},
     "3M" : {
       "comment" : "Three months, as a short range button"
+    },
+    "a bit off" : {
+      "comment" : "Calorie band, lowercase inside a sentence"
     },
     "A bit off" : {},
     "A new chance this week" : {},
@@ -1081,6 +1096,28 @@
     },
     "Carbs g" : {},
     "Cardio" : {},
+    "Cardio, %lld minutes." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Cardio, %lld minute."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Cardio, %lld minutes."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Change the effective date?" : {},
     "Chat history" : {},
     "Chat history is unavailable. Try again." : {},
@@ -1504,18 +1541,9 @@
       }
     },
     "Delete %@" : {},
-    "Delete %@ workout on %@?" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Delete %1$@ workout on %2$@?"
-          }
-        }
-      }
-    },
-    "Delete %@ workout on its recorded day?" : {},
     "Delete %@?" : {},
+    "Delete cardio workout on %@?" : {},
+    "Delete cardio workout on its recorded day?" : {},
     "Delete food" : {},
     "Delete local diary" : {
       "extractionState" : "manual",
@@ -1540,6 +1568,8 @@
       }
     },
     "Delete meal?" : {},
+    "Delete other workout on %@?" : {},
+    "Delete other workout on its recorded day?" : {},
     "Delete photo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1562,6 +1592,8 @@
         }
       }
     },
+    "Delete strength workout on %@?" : {},
+    "Delete strength workout on its recorded day?" : {},
     "Delete synthetic sample" : {
       "localizations" : {
         "en" : {
@@ -1883,6 +1915,9 @@
           }
         }
       }
+    },
+    "far off" : {
+      "comment" : "Calorie band, lowercase inside a sentence"
     },
     "Far off" : {},
     "Faster" : {},
@@ -2563,6 +2598,9 @@
       }
     },
     "Native test fixture — no provider request" : {},
+    "near" : {
+      "comment" : "Calorie band, lowercase inside a sentence"
+    },
     "Near" : {},
     "Needs more data" : {},
     "Needs retry" : {
@@ -2716,6 +2754,10 @@
     "Nutrition provenance unknown" : {},
     "Nutrition source" : {},
     "of %@ kcal" : {},
+    "off" : {
+      "comment" : "Calorie band, lowercase inside a sentence"
+    },
+    "Off" : {},
     "Offline. I'll reply when you're back online." : {},
     "OK" : {
       "extractionState" : "manual",
@@ -2795,6 +2837,28 @@
     "Original" : {},
     "Other" : {},
     "Other allergies, intolerances or dislikes" : {},
+    "Other, %lld minutes." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Other, %lld minute."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Other, %lld minutes."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Page %lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -3373,12 +3437,66 @@
     },
     "Sends a message to Mivu Coach without opening the app." : {},
     "Sent to the Coach." : {},
-    "Set %lld: %lld repetitions · %@" : {
+    "Set %lld: %lld repetitions · %@ kg" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Set %1$lld: %2$lld repetitions · %3$@"
+            "state" : "translated",
+            "value" : "Set %1$lld: %#@reps@ · %3$@ kg"
+          },
+          "substitutions" : {
+            "reps" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg repetition"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg repetitions"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Set %lld: %lld repetitions · bodyweight" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set %1$lld: %#@reps@ · bodyweight"
+          },
+          "substitutions" : {
+            "reps" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg repetition"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg repetitions"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -3510,6 +3628,28 @@
     "Stopped listening" : {},
     "Stored proposal" : {},
     "Strength" : {},
+    "Strength, %lld minutes." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Strength, %lld minute."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Strength, %lld minutes."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Submission %lld" : {},
     "Support" : {},
     "Synthetic apple estimate" : {
@@ -4109,12 +4249,68 @@
     "Which workout do you mean?" : {},
     "Workout" : {},
     "Workout · %@" : {},
-    "Workout saved: %@, %lld minutes." : {
+    "Workout saved: cardio, %lld minutes." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Workout saved: %1$@, %2$lld minutes."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Workout saved: cardio, %lld minute."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Workout saved: cardio, %lld minutes."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Workout saved: other, %lld minutes." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Workout saved: other, %lld minute."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Workout saved: other, %lld minutes."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Workout saved: strength, %lld minutes." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Workout saved: strength, %lld minute."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Workout saved: strength, %lld minutes."
+                }
+              }
+            }
           }
         }
       }

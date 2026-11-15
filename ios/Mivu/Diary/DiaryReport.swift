@@ -33,7 +33,7 @@ struct DiaryReport {
                 let name = meal.items.map(\.name).joined(separator: ", ")
                 let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 return Meal(time: meal.timePrecision == .dateOnly ? "" : clock(meal.eatenAt, day.timeZoneID),
-                            name: name.isEmpty ? (text.isEmpty ? "Meal" : text) : name, totals: meal.totals)
+                            name: name.isEmpty ? (text.isEmpty ? String(localized: "Meal") : text) : name, totals: meal.totals)
             }
             return Day(localDate: day.localDate, totals: snapshot.totals(dayID: day.id), target: snapshot.goal(on: day.localDate)?.targets,
                        weight: weights.last { $0.localDate == day.localDate }?.entry, meals: meals)

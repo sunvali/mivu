@@ -562,7 +562,7 @@ struct WorkoutDetailView: View {
                             Text(exercise.name).font(.headline).directionFromContent(exercise.name)
                             ForEach(exercise.sets.indices, id: \.self) { index in
                                 let set = exercise.sets[index]
-                                Text("Set \(index + 1): \(set.repetitions) repetitions · \(set.loadKg.map { "\($0.formatted()) kg" } ?? "bodyweight")")
+                                Text(set.line(number: index + 1))
                             }
                         }
                     }
@@ -624,9 +624,7 @@ struct WorkoutDetailView: View {
 
     private var deletionTitle: String {
         guard let session = pendingDeletion else { return String(localized: "Delete workout?") }
-        let kind = session.kind.title.lowercased(with: .current)
-        guard let date = day?.localDate else { return String(localized: "Delete \(kind) workout on its recorded day?") }
-        return String(localized: "Delete \(kind) workout on \(date)?")
+        return session.kind.deletionTitle(on: day?.localDate)
     }
 
     private func loadSession() async {
@@ -648,12 +646,51 @@ struct WorkoutDetailView: View {
 
 }
 
-private extension WorkoutKind {
+// Whole sentences per kind, so a language can inflect or reorder the kind word.
+extension WorkoutKind {
     var title: String {
         switch self {
         case .strength: String(localized: "Strength")
         case .cardio: String(localized: "Cardio")
         case .other: String(localized: "Other")
         }
+    }
+
+    func factLine(minutes: Int) -> String {
+        switch self {
+        case .strength: String(localized: "Strength, \(minutes) minutes.")
+        case .cardio: String(localized: "Cardio, \(minutes) minutes.")
+        case .other: String(localized: "Other, \(minutes) minutes.")
+        }
+    }
+
+    func savedLine(minutes: Int) -> String {
+        switch self {
+        case .strength: String(localized: "Workout saved: strength, \(minutes) minutes.")
+        case .cardio: String(localized: "Workout saved: cardio, \(minutes) minutes.")
+        case .other: String(localized: "Workout saved: other, \(minutes) minutes.")
+        }
+    }
+
+    func deletionTitle(on localDate: String?) -> String {
+        guard let localDate else {
+            switch self {
+            case .strength: return String(localized: "Delete strength workout on its recorded day?")
+            case .cardio: return String(localized: "Delete cardio workout on its recorded day?")
+            case .other: return String(localized: "Delete other workout on its recorded day?")
+            }
+        }
+        switch self {
+        case .strength: return String(localized: "Delete strength workout on \(localDate)?")
+        case .cardio: return String(localized: "Delete cardio workout on \(localDate)?")
+        case .other: return String(localized: "Delete other workout on \(localDate)?")
+        }
+    }
+}
+
+extension WorkoutSet {
+    func line(number: Int) -> String {
+        guard let loadKg else { return String(localized: "Set \(number): \(repetitions) repetitions · bodyweight") }
+        return String(localized: "Set \(number): \(repetitions) repetitions · \(loadKg.formatted()) kg")
     }
 }

@@ -451,7 +451,7 @@ extension DiaryDatabase {
                 } else if let id = receipt.workoutID {
                     do {
                         _ = try transaction.workout(id: id)
-                        if let kind = facts.workoutKind, let minutes = facts.workoutMinutes { summaries.append(String(localized: "Workout saved: \(kind), \(minutes) minutes.")) }
+                        if let kind = facts.workoutKind.flatMap(WorkoutKind.init(rawValue:)), let minutes = facts.workoutMinutes { summaries.append(kind.savedLine(minutes: minutes)) }
                         else { summaries.append(String(localized: "Workout saved.")) }
                     } catch DiaryError.notFound { summaries.append(String(localized: "This workout was deleted.")) }
                 } else if let id = receipt.goalID {

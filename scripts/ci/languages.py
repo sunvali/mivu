@@ -17,6 +17,10 @@ def shipped(pbxproj):
     return {name for name in re.findall(r'[\w-]+', block[1] if block else '') if name != 'Base'}
 
 
+def unit_of(value):
+    return {'stringUnit': {'state': 'translated', 'value': value}}
+
+
 def _values(localization):
     """Every stringUnit under a localization, with the plural sets on the way."""
     if 'stringUnit' in localization:
@@ -31,6 +35,58 @@ def _values(localization):
             yield from _values(form)
     for substitution in localization.get('substitutions', {}).values():
         yield from _values(substitution)
+
+
+# CLDR plural forms each language needs. shortcut: covers the expected languages; add a row with each new one.
+PLURAL_FORMS = {
+    'ar': {'zero', 'one', 'two', 'few', 'many', 'other'}, 'he': {'one', 'two', 'other'},
+    'ru': {'one', 'few', 'many', 'other'}, 'uk': {'one', 'few', 'many', 'other'}, 'pl': {'one', 'few', 'many', 'other'},
+    'es': {'one', 'many', 'other'}, 'fr': {'one', 'many', 'other'}, 'it': {'one', 'many', 'other'}, 'pt': {'one', 'many', 'other'},
+}
+# Only these forms may drop the number ("one meal"); the others always cover several counts.
+MAY_DROP_NUMBER = {'zero', 'one', 'two'}
+PLACEHOLDER = re.compile(r'%(?:\d+\$)?(#@\w+@|[-+ 0#]*\d*(?:\.\d+)?(?:ll|l|h)?[@dDiuUxXoOfeEgGcCsSp])')
+
+
+def _placeholders(value):
+    """The kinds of placeholder in a value, ignoring position: '%2$@' and '%@' are the same."""
+    return sorted(re.sub(r'^[-+ 0#]*\d*(?:\.\d+)?', '', kind) for kind in PLACEHOLDER.findall(value.replace('%%', '')))
+
+
+def _forms(localization, form=None):
+    """(plural form or None, value) for every value, with plural dictionaries checked on the way."""
+    if 'stringUnit' in localization:
+        yield form, localization['stringUnit'].get('value', '')
+    for kind, forms in localization.get('variations', {}).items():
+        for name, inner in forms.items():
+            yield from _forms(inner, name if kind == 'plural' else form)
+    for substitution in localization.get('substitutions', {}).values():
+        yield from _forms(substitution, form)
+
+
+def _plural_sets(localization):
+    for kind, forms in localization.get('variations', {}).items():
+        if kind == 'plural':
+            yield set(forms)
+        for inner in forms.values():
+            yield from _plural_sets(inner)
+    for substitution in localization.get('substitutions', {}).values():
+        yield from _plural_sets(substitution)
+
+
+def _format_errors(path, key, language, localization, source):
+    found = []
+    for missing in sorted({form for forms in _plural_sets(localization) for form in PLURAL_FORMS.get(language, {'other'}) - forms}):
+        found.append(f"{path}: {key!r} in {language!r} needs the plural form {missing!r}")
+    expected = {}
+    for form, value in _forms(source):  # the source's widest form, usually 'other'
+        expected[form] = _placeholders(value)
+    for form, value in _forms(localization):
+        want = expected.get(form) or expected.get('other') or expected.get(None) or []
+        got = _placeholders(value)
+        if got != want and not (form in MAY_DROP_NUMBER and set(got) <= set(want)):
+            found.append(f"{path}: {key!r} in {language!r} ({form or 'value'!r}) has placeholders {got}, the source has {want}")
+    return found
 
 
 def errors(catalogs, languages):
@@ -57,6 +113,8 @@ def errors(catalogs, languages):
                 done = (lambda u: bool(u.get('value'))) if language == source else (lambda u: u.get('state') == 'translated' and bool(u.get('value')))
                 if not units or any(u and not done(u) for u in units):
                     found.append(f"{path}: {key!r} in {language!r} is not fully translated")
+                elif language != source:
+                    found += _format_errors(path, key, language, localizations[language], localizations.get(source, unit_of(key)))
     return found
 
 

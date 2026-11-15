@@ -5,7 +5,7 @@ enum CoachReplyLines {
     static func factLine(progress: [CoachProgress], goals: [GoalRecord], workouts: [WorkoutSession], preferencesRead: Bool, today: String) -> String {
         var sentences = progress.map { progressLine($0, today: today) }
         sentences += goals.compactMap(goalLine)
-        sentences += workouts.map { String(localized: "\($0.kind.rawValue.capitalized), \($0.durationMinutes) minutes.") }
+        sentences += workouts.map { $0.kind.factLine(minutes: $0.durationMinutes) }
         if preferencesRead { sentences.append(String(localized: "Your preferences are up to date.")) }
         return sentences.isEmpty ? String(localized: "I couldn't find anything to add there.") : sentences.prefix(2).joined(separator: " ")
     }
@@ -51,10 +51,11 @@ enum CoachReplyLines {
     nonisolated static func plain(_ text: String) -> String { String(attributed(text).characters) }
 
     /// "today", "yesterday" or a short date such as "Oct 17"; the year appears only when it differs.
-    static func dayLabel(_ localDate: String, today: String, locale: Locale = .current) -> String {
-        if localDate == today { return String(localized: "today") }
+    /// `title` gives the heading form ("Today"); a language without letter case can make both forms the same.
+    static func dayLabel(_ localDate: String, today: String, title: Bool = false, locale: Locale = .current) -> String {
+        if localDate == today { return title ? String(localized: "Today") : String(localized: "today") }
         guard let day = date(localDate), let now = date(today) else { return localDate }
-        if Calendar.gregorianUTC.dateComponents([.day], from: day, to: now).day == 1 { return String(localized: "yesterday") }
+        if Calendar.gregorianUTC.dateComponents([.day], from: day, to: now).day == 1 { return title ? String(localized: "Yesterday") : String(localized: "yesterday") }
         let sameYear = localDate.prefix(4) == today.prefix(4)
         var style = Date.FormatStyle(locale: locale, timeZone: .gmt).month(.abbreviated).day()
         if !sameYear { style = style.year() }
@@ -63,7 +64,7 @@ enum CoachReplyLines {
 
     /// A heading such as "Today" or "Oct 17", relative to today in the profile's `zone`.
     static func dayTitle(_ localDate: String, zone: String) -> String {
-        dayLabel(localDate, today: ProgressAnalytics.dateLabel(Date(), zone: zone)).capitalized(with: .current)
+        dayLabel(localDate, today: ProgressAnalytics.dateLabel(Date(), zone: zone), title: true)
     }
 
     static func shortDate(_ localDate: String, locale: Locale = .current) -> String {

@@ -16,6 +16,7 @@ def catalog(**strings):
 
 
 PLURAL = {'variations': {'plural': {'one': unit('%lld meal'), 'other': unit('%lld meals')}}}
+HEBREW_PLURAL = {'variations': {'plural': {'one': unit('ארוחה אחת'), 'two': unit('%lld ארוחות'), 'other': unit('%lld ארוחות')}}}
 
 
 class Catalogs(unittest.TestCase):
@@ -43,7 +44,7 @@ class Catalogs(unittest.TestCase):
 
     def test_clean_catalogs_pass(self):
         strings = {'Account': {'localizations': {'he': unit('חשבון')}},
-                   '%lld meals': {'localizations': {'en': PLURAL, 'he': PLURAL}},
+                   '%lld meals': {'localizations': {'en': PLURAL, 'he': HEBREW_PLURAL}},
                    'Mivu': {'shouldTranslate': False}}
         self.assertEqual(languages.errors(catalog(**strings), {'en', 'he'}), [])
 
@@ -83,6 +84,30 @@ class Catalogs(unittest.TestCase):
     def test_shipped_languages_come_from_known_regions(self):
         text = 'knownRegions = (\n\t\t\t\ten,\n\t\t\t\the,\n\t\t\t\tBase,\n\t\t\t);'
         self.assertEqual(languages.shipped(text), {'en', 'he'})
+
+
+    def test_translation_must_keep_the_source_placeholders(self):
+        entry = {'localizations': {'he': unit('%1$@ מתוך')}}
+        errs = languages.errors(catalog(**{'%@ of %@': entry}), {'en', 'he'})
+        self.assertTrue(any('placeholder' in e for e in errs), errs)
+        entry = {'localizations': {'he': unit('%2$@ מתוך %1$@')}}
+        self.assertEqual(languages.errors(catalog(**{'%@ of %@': entry}), {'en', 'he'}), [])
+
+    def test_plural_counting_form_must_keep_the_number(self):
+        forms = {'one': unit('%lld ужин'), 'few': unit('ужина'), 'many': unit('%lld ужинов'), 'other': unit('%lld ужина')}
+        errs = languages.errors(catalog(**{'%lld meals': {'localizations': {'en': PLURAL, 'ru': {'variations': {'plural': forms}}}}}), {'en', 'ru'})
+        self.assertTrue(any('placeholder' in e and "'few'" in e for e in errs), errs)
+
+    def test_plural_needs_every_form_the_language_uses(self):
+        errs = languages.errors(catalog(**{'%lld meals': {'localizations': {'en': PLURAL, 'he': PLURAL}}}), {'en', 'he'})
+        self.assertTrue(any("'two'" in e for e in errs), errs)
+
+    def test_substitution_placeholders_are_compared_by_name(self):
+        en = {'stringUnit': {'state': 'translated', 'value': 'Set %1$lld: %#@reps@'},
+              'substitutions': {'reps': {'argNum': 2, 'formatSpecifier': 'lld', 'variations': PLURAL['variations']}}}
+        he = {'stringUnit': {'state': 'translated', 'value': 'סט %1$lld: %#@reps@'},
+              'substitutions': {'reps': {'argNum': 2, 'formatSpecifier': 'lld', 'variations': HEBREW_PLURAL['variations']}}}
+        self.assertEqual(languages.errors(catalog(**{'Set %lld: %lld meals': {'localizations': {'en': en, 'he': he}}}), {'en', 'he'}), [])
 
 
 if __name__ == '__main__':

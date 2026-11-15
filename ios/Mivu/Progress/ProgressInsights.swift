@@ -15,8 +15,18 @@ enum ProgressBand: Int, CaseIterable {
         switch self {
         case .near: String(localized: "Near")
         case .bitOff: String(localized: "A bit off")
-        case .off: "Off"
+        case .off: String(localized: "Off")
         case .farOff: String(localized: "Far off")
+        }
+    }
+
+    /// The band inside a sentence, e.g. "Oct 19: 1,200 kcal, near".
+    var spoken: String {
+        switch self {
+        case .near: String(localized: "near", comment: "Calorie band, lowercase inside a sentence")
+        case .bitOff: String(localized: "a bit off", comment: "Calorie band, lowercase inside a sentence")
+        case .off: String(localized: "off", comment: "Calorie band, lowercase inside a sentence")
+        case .farOff: String(localized: "far off", comment: "Calorie band, lowercase inside a sentence")
         }
     }
 

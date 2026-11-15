@@ -390,7 +390,8 @@ enum ProgressSummary {
         let logged = buckets.filter { $0.averageKcal != nil }
         guard !logged.isEmpty else { return String(localized: "No logged days in this range.") }
         return logged.map { bucket in
-            "\(DiaryWeek.format(ProgressDate.label(bucket.start, zone: zone), "MMM d")): \(kcal(bucket.averageKcal ?? 0))\(bucket.band.map { ", " + $0.title.lowercased(with: .current) } ?? "")"
+            let day = DiaryWeek.format(ProgressDate.label(bucket.start, zone: zone), "MMM d"), energy = kcal(bucket.averageKcal ?? 0)
+            return bucket.band.map { String(localized: "\(day): \(energy), \($0.spoken)") } ?? String(localized: "\(day): \(energy)")
         }.joined(separator: "; ")
     }
     static func weights(_ trend: [TrendPoint]) -> String {

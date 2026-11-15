@@ -17,13 +17,17 @@ surface below is translated, its strings stay out of the bundle.
    - `ios/Mivu/InfoPlist.xcstrings` (permission prompts),
    - `ios/Mivu/AppShortcuts.xcstrings` (Siri and Shortcuts phrases).
    Every plural key needs every form the language has (Arabic has six).
+   Add the language's CLDR plural forms to `PLURAL_FORMS` in
+   `scripts/ci/languages.py` if it is not listed yet.
 3. The language code added to `knownRegions` in `ios/Mivu.xcodeproj/project.pbxproj`.
 4. Store text and screenshots for that language.
 5. The capture sweep below, on iPhone and iPhone Duo.
 
 `python3 scripts/ci/languages.py check` must pass. It fails when a bundled
 language misses any key, plural form or catalog, when a catalog holds a language
-that is not bundled, and when widget text is missing from the widget catalog.
+that is not bundled, when widget text is missing from the widget catalog, and
+when a translation drops or changes a placeholder (only the `zero`, `one` and
+`two` plural forms may leave the number out).
 
 ## Writing new text
 
@@ -33,6 +37,8 @@ that is not bundled, and when widget text is missing from the widget catalog.
 | A `String` a person reads, built outside a view (view models, notifications, Siri replies, receipts, Pip's lines, errors, report headings) | `String(localized: "English text")`. |
 | A sentence with values | One whole string with placeholders, never glued parts: `String(localized: "Remove the whole \(names) meal?")`. |
 | A count next to a noun | One key with plural variations in the catalog. |
+| A word that changes with a value (a workout kind, a day) | One whole sentence per value. Never lowercase, capitalize or glue a translated word into another sentence. |
+| A short or ambiguous key (`open`, `Off`, `%@: %@`) | Add a `comment:` saying where it appears and what it means. |
 | A unit people see (`kcal`, `g`, `kg`) | Part of the translatable string: `"\(value) kcal"`. |
 | A date pattern people see | Pass it to `DiaryWeek.format`, which looks the pattern up in the catalog, so each language orders its own. |
 | A stored value shown on screen (an enum raw value, a diet tag) | Show it through `LocalizedStringKey(value)` and add a manual catalog key; keep the stored value English. |
@@ -52,7 +58,9 @@ language by name in layout code.
 - Text a person typed or a model wrote uses `.directionFromContent(text)`, so a
   Hebrew message reads right to left on an English phone and back.
 - Digits stay 0–9. The Coach reply check reads digits in any script and rejects
-  numbers it cannot ground.
+  numbers it cannot ground. Numbers people read are formatted with the phone's
+  locale, so before Arabic ships, decide whether its numbers use 0–9 or Arabic
+  digits and check the reply check reads comma decimals ("73,5").
 
 ## Sweep
 

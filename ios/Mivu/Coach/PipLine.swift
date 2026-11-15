@@ -41,7 +41,7 @@ func coachDayChip(localDate: String, today: String, kcal: Double?, kcalPartial: 
     let eaten = kcal.map { $0.formatted(whole) + (kcalPartial ? "+" : "") } ?? (mealsLogged ? "—" : "0")
     let spokenEaten = kcal.map { kcalPartial ? String(localized: "at least \($0.formatted(whole))") : $0.formatted(whole) } ?? (mealsLogged ? String(localized: "unknown") : "0")
     let target = goal.map { $0.formatted(whole) }
-    let title = day.capitalized(with: .current)
+    let title = CoachReplyLines.dayLabel(localDate, today: today, title: true)
     guard let target else { return (String(localized: "\(title) · \(eaten) kcal"), String(localized: "Logging to \(day), \(spokenEaten) kcal")) }
     return (String(localized: "\(title) · \(eaten) / \(target) kcal"), String(localized: "Logging to \(day), \(spokenEaten) of \(target) kcal"))
 }

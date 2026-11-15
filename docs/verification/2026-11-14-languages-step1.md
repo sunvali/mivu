@@ -91,6 +91,34 @@ with only the base and load-only failures listed above (the on-device Apple mode
 tests pass on iOS 27); Smoke, Progress, CoachReply and Companion UI 31/31;
 `testTextIsLocalized` (double), `testEveryScreenOpens` and `testChartsDoNotMirror` (rtl) pass.
 
+## After the specialist reviews
+
+A localization engineer review (74/100) and a Hebrew user review (72/100) raised
+step 1 items, fixed in `fix(languages): whole sentences per workout kind …`:
+
+- Workout lines, deletion titles and "Workout saved" are whole sentences per kind;
+  the stored raw kind ("cardio") no longer reaches the screen through
+  `capitalized` (`workoutLinesAreWholePerKind`). "1 minutes" reads "1 minute".
+- The set line ("bodyweight", "repetitions") and the report's fallback "Meal"
+  are translatable; "1 repetitions" reads "1 repetition" (`setLinesReadCorrectly`).
+- "Today"/"Yesterday" headings come from their own keys, not by capitalizing
+  "today"; the band word in the chart summary has its own lowercase keys, and
+  the band "Off" was not translatable (`bandWordsReadMidSentence`).
+- `languages.py check` now rejects a translation that drops or changes a
+  placeholder, and a plural missing a form its language needs (CLDR table for
+  ar, he, ru, uk, pl, es, fr, it, pt).
+
+Deferred to step 2 or the language that needs it: comment coverage for short
+keys (only the new ones have comments), comma decimals in the reply check,
+digit style for numbers in Arabic, first-letter alignment of mixed messages,
+and the chart direction question.
+
+Re-run on the iPhone 18 Pro (iOS 27.0): 7 affected `MivuTests` suites, 117/118
+(the one failure is the base `summaryCountsEveryCalendarDayInTheRequestedRange`);
+`testTextIsLocalized` (double) passes; `testEveryScreenOpens` (double) failed once
+waiting for the Coach receipt, passed on base and on a rerun of this change.
+`test_languages.py` 17/17.
+
 ## Captures
 
 `languages/step1/` holds contact sheets: `iphone17-*`, `iphone18pro-*`,

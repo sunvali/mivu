@@ -68,4 +68,21 @@ struct LanguageTextTests {
         #expect(String(localized: "\(3) photos added") == "3 photos added")
         #expect(String(localized: "\(1) minutes") == "1 minute")
     }
+
+    /// Each workout kind is its own whole sentence, so a language can inflect the kind word.
+    @Test func workoutLinesAreWholePerKind() {
+        #expect(WorkoutKind.strength.savedLine(minutes: 45) == "Workout saved: strength, 45 minutes.")
+        #expect(WorkoutKind.cardio.factLine(minutes: 1) == "Cardio, 1 minute.")
+        #expect(WorkoutKind.other.deletionTitle(on: "2026-10-19") == "Delete other workout on 2026-10-19?")
+        #expect(WorkoutKind.strength.deletionTitle(on: nil) == "Delete strength workout on its recorded day?")
+    }
+
+    @Test func setLinesReadCorrectly() {
+        #expect(WorkoutSet(repetitions: 8, loadKg: 60.5).line(number: 1) == "Set 1: 8 repetitions · 60.5 kg")
+        #expect(WorkoutSet(repetitions: 1, loadKg: nil).line(number: 2) == "Set 2: 1 repetition · bodyweight")
+    }
+
+    @Test func bandWordsReadMidSentence() {
+        #expect(ProgressBand.allCases.map(\.spoken) == ["near", "a bit off", "off", "far off"])
+    }
 }
