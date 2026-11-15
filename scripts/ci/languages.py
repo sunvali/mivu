@@ -186,6 +186,21 @@ def widget_errors(source, app_strings, widget_strings):
             for key in sorted(literals) if key and key in app_strings and key not in widget_strings]
 
 
+TERNARY = re.compile(r'\b(?:Text|Label|Button|Section|LabeledContent|Toggle|navigationTitle|accessibilityLabel|accessibilityHint)\(([^()]*\?[^()]*)\)')
+
+
+def ternary_errors(source, keys):
+    """Xcode does not extract the literals of Text(flag ? "a" : "b"), so each must already be a catalog key."""
+    found = []
+    for args in TERNARY.findall(source):
+        for literal in re.findall(r'"((?:[^"\\]|\\.)*)"', args):
+            key = re.sub(r'\\\(.*?\)', '%@', literal)
+            # SF Symbol names and identifiers are lowercase words joined by dots; people never read them.
+            if re.search(r'[A-Za-z]{2}', literal) and ' ' in literal and literal not in keys and key not in keys:
+                found.append(f"{literal!r} is chosen by a ternary inside the view, so Xcode never extracts it; use a Text per branch")
+    return found
+
+
 WIDGET_SOURCES = ('ios/MivuWidgets', 'ios/Shared')
 
 
@@ -203,6 +218,8 @@ def main(argv):
         source = ''.join(p.read_text() for d in WIDGET_SOURCES for p in sorted((ROOT / d).glob('*.swift')))
         found += widget_errors(source, catalogs['ios/Mivu/Localizable.xcstrings']['strings'],
                                catalogs['ios/MivuWidgets/Localizable.xcstrings']['strings'])
+        swift = ''.join(p.read_text() for p in sorted((ROOT / 'ios').glob('Mivu*/**/*.swift')) + sorted((ROOT / 'ios/Shared').glob('*.swift')) if 'Tests' not in p.parts[-2])
+        found += ternary_errors(swift, {key for catalog in catalogs.values() for key in catalog.get('strings', {})})
     elif argv[1:2] == ['xliff'] and len(argv) == 3:
         found = xliff_errors(Path(argv[2]).read_text(), catalogs)
     else:

@@ -172,7 +172,8 @@ struct WeightEntry: Codable, Equatable, Sendable, Identifiable {
     var timePrecision: MealTimePrecision = .exact
 
     /// The unit as people read it; `unit` stays the stored "kg" or "lb".
-    var shownUnit: String { unit == "kg" ? String(localized: "kg") : unit == "lb" ? String(localized: "lb") : unit }
+    var shownUnit: String { Self.shownUnit(unit) }
+    nonisolated static func shownUnit(_ unit: String) -> String { unit == "kg" ? String(localized: "kg") : unit == "lb" ? String(localized: "lb") : unit }
 }
 
 extension WeightEntry {

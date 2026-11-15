@@ -40,6 +40,7 @@ the person, so:
 | calories (in prose) | קלוריות | |
 | g | גרם | Never ג׳ |
 | kg / lb | ק״ג / ליב׳ | |
+| cm / in / ft, in | ס״מ / אינץ׳ / רגל, אינץ׳ | Height units in setup |
 | ml | מ״ל | |
 | Coach (tab, Pip) | פיפ | |
 | You (own chat messages) | את/ה | Owner's choice |

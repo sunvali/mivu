@@ -231,6 +231,39 @@
         }
       }
     },
+    "kcal eaten" : {
+      "comment" : "Under the calories-eaten figure when there is no target, in the Dynamic Island.",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קק״ל נאכלו"
+          }
+        }
+      }
+    },
+    "kcal left" : {
+      "comment" : "Under the calories-left figure in the Dynamic Island and Lock Screen.",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קק״ל נותרו"
+          }
+        }
+      }
+    },
+    "kcal over" : {
+      "comment" : "Under the figure when the day is over its calorie target, in the Dynamic Island.",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קק״ל מעל היעד"
+          }
+        }
+      }
+    },
     "kcal recorded" : {
       "comment" : "Widget text: calories recorded today, after a number",
       "localizations" : {

@@ -6,14 +6,16 @@ struct ManualNutritionDraft: Equatable {
     var submissionID = UUID()
     var name = ""
     var quantity = "1"
-    var unit = "serving"
+    /// The person edits the unit as text, so it starts in their language and is saved as written.
+    static let defaultUnit = FoodItem.shownUnit("serving")
+    var unit = defaultUnit
     var kcal = ""
     var carbs = ""
     var protein = ""
     var fat = ""
 
     private(set) var frozenPayload: ManualNutritionPayload?
-    var isDirty: Bool { !name.isEmpty || quantity != "1" || unit != "serving" || ![kcal, carbs, protein, fat].allSatisfy(\.isEmpty) }
+    var isDirty: Bool { !name.isEmpty || quantity != "1" || unit != Self.defaultUnit || ![kcal, carbs, protein, fat].allSatisfy(\.isEmpty) }
     func item() throws -> FoodItem {
         func number(_ text: String) -> Double? { Double(text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")) }
         let strings = [kcal, carbs, protein, fat]

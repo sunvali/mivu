@@ -131,6 +131,12 @@ class Catalogs(unittest.TestCase):
         twice = catalog(**{'Tell ${applicationName}': phrases('לספר ל-${applicationName}'), 'Ask ${applicationName}': phrases('לספר ל-${applicationName}')})
         self.assertTrue(any('more than one' in e for e in languages.phrase_errors(twice)))
 
+    def test_ternary_text_must_already_be_a_catalog_key(self):
+        source = 'Text(isOver ? "kcal over" : "kcal left")\nLabel(on ? "Turn off" : "Turn on", systemImage: on ? "bell.slash" : "bell")'
+        errs = languages.ternary_errors(source, {'kcal over', 'Turn off', 'Turn on'})
+        self.assertEqual(len(errs), 1, errs)
+        self.assertIn("'kcal left'", errs[0])
+
     def test_shipped_languages_come_from_known_regions(self):
         text = 'knownRegions = (\n\t\t\t\ten,\n\t\t\t\the,\n\t\t\t\tBase,\n\t\t\t);'
         self.assertEqual(languages.shipped(text), {'en', 'he'})

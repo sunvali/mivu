@@ -3567,6 +3567,17 @@
         }
       }
     },
+    "cm" : {
+      "comment" : "Centimetres, a height unit",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ס״מ"
+          }
+        }
+      }
+    },
     "Coach" : {
       "comment" : "Name of the AI coach section/tab",
       "localizations" : {
@@ -6450,6 +6461,17 @@
         }
       }
     },
+    "ft, in" : {
+      "comment" : "Feet and inches, a height unit",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רגל, אינץ׳"
+          }
+        }
+      }
+    },
     "g" : {
       "comment" : "Unit: grams",
       "localizations" : {
@@ -6950,6 +6972,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ייבוא תמונה"
+          }
+        }
+      }
+    },
+    "in" : {
+      "comment" : "Inches, a height unit",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אינץ׳"
           }
         }
       }
