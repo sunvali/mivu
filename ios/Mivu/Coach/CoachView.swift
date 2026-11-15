@@ -120,7 +120,11 @@ struct CoachView: View {
             if (isWide && posture == .flat) || chatExpanded {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(chatExpanded ? "Show side by side" : "Expand chat",
-                           systemImage: chatExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") { chatExpanded.toggle() }
+                           systemImage: chatExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
+                        // What the pane held is put away with it; otherwise it would be pushed over the chat being expanded.
+                        if !chatExpanded { pane = nil }
+                        chatExpanded.toggle()
+                    }
                         .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("coachExpand")
                 }
             }

@@ -125,6 +125,17 @@ turning upright or folding ends it.
   `testSidewaysChatExpandsAndCollapses` (the pane leaves, the chat grows into
   the left half, the draft survives both ways, the pane returns on the left).
 - By hand: `coach-open-screen/sideways-chat-expanded.png`
+- Found afterwards: with the pane showing another day or a meal, expanding
+  pushed that screen over the chat. Expanding now puts away whatever the pane
+  held, and collapsing returns to Today.
+  `testExpandedChatOpensAnotherDaysMealOverTheChat` failed, then passed
+  together with `testSidewaysChatExpandsAndCollapses` (2 passed, run with pull
+  request 3's code merged in). `testSidewaysTapOpensAnotherDaysMealBesideChat`
+  is added coverage for a card on another day; it passed without a change.
+- By hand, on a private copy of a real diary (removed afterwards): "Review /
+  Edit" on a card from the day before opened the meal on the left side by
+  side, and over the chat when expanded. The meal screen fills the whole width
+  when it is pushed over an expanded chat; not capped.
 
 Not reviewed independently: the earlier review covered the replaced version.
 Not verified: that folding to book pose or turning upright while expanded

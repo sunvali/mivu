@@ -132,6 +132,28 @@ import XCTest
         XCTAssertLessThanOrEqual(diary.frame.maxX, input.frame.minX + 1)
     }
 
+    func testSidewaysTapOpensAnotherDaysMealBesideChat() throws {
+        let (app, input) = try launchCoach()
+        send("Yesterday I had dessert", app, input)
+        XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 20))
+        app.buttons["coachMealLink"].tap()
+        let meal = app.navigationBars["Meal"]
+        XCTAssertTrue(meal.waitForExistence(timeout: 5), "Yesterday's meal opens from its card while the pane shows that day")
+        XCTAssertLessThanOrEqual(meal.frame.maxX, input.frame.minX + 1)
+        XCTAssertTrue(app.buttons["deleteMeal"].exists || app.buttons["Meal actions"].exists, "The full meal loaded, not a placeholder")
+    }
+
+    func testExpandedChatOpensAnotherDaysMealOverTheChat() throws {
+        let (app, input) = try launchCoach()
+        send("Yesterday I had dessert", app, input)
+        XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 20))
+        app.buttons["coachExpand"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5), "Expanding shows the chat, not what the pane held")
+        XCTAssertFalse(app.navigationBars["Diary"].exists)
+        app.buttons["coachMealLink"].tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5), "A card opens its meal over the expanded chat")
+    }
+
     func testDeletingPaneMealReturnsToToday() throws {
         let (app, input) = try launchCoach()
         send("Two eggs, three bread slices and salad", app, input)
