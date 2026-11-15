@@ -28,3 +28,12 @@ custom foreground/background layering remains future Icon Composer work.
 Review Pip's ears, face and scarf through the system mask at small
 home-screen sizes in each appearance. Light/dark icon choices are controlled by
 Home Screen customization and can differ from the app's interface appearance.
+
+## Snap It symbol
+
+`render-android.py` also writes `pip.head.symbolset` into the app and widget
+asset catalogs: the same ears-and-head silhouette as Android's `ic_stat_pip`,
+as a custom SF Symbol. The home-screen quick action and the Control Center /
+Lock Screen / Action button control use it. Siri and Spotlight App Shortcuts
+accept only system symbols, so they keep `camera`; the Calories widget keeps
+`camera.fill` because Pip already appears on it.
