@@ -63,7 +63,19 @@ on rerun.
 
 ## Final run
 
-Filled in from the merged branch before the PR.
+Merged branch (main at `b78cf22e` plus this branch), iPhone 18 Pro simulator:
+
+| Suite | Source | Passed | Failed | Skipped (other modes) |
+|---|---|---|---|---|
+| LanguageSweep english | `02037b5d` | 3 | 0 | 6 |
+| LanguageSweep rtl | `02037b5d` | 5 | 0 | 4 |
+| LanguageSweep double | `02037b5d` | 3 | 0 | 6 |
+| LanguageSweep hebrew | `cb8bbca7` (owner's wording choices) | 6 | 0 | 3 |
+| CompanionUITests + CoachReplyUITests | `02037b5d` | 20 | 1 | 0 |
+
+The one failure, `CoachReplyUITests/testUnrecordedDayAskPipPrefillsDate`,
+fails on `main` too (seen at `bc0753a8` during step 1). `cb8bbca7` changed
+only Hebrew strings and the Hebrew sweep's list of Latin names after `02037b5d`.
 
 ## Blocked or not run
 
