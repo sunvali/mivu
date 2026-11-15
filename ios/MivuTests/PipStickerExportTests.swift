@@ -19,16 +19,21 @@ import UIKit
     }
 
     /// The packer re-crops every sticker, so the bar is only that nothing reaches the canvas edge and gets cut.
-    @Test func stillsRenderUncutOnTheCanvas() throws {
+    @Test func everyFrameRendersUncutOnTheCanvas() throws {
         for sticker in PipStickerCatalog.all {
-            guard case .still(let pose) = sticker.kind else { continue }
-            let image = try renderSticker(pose, hidden: sticker.hidden)
-            #expect(image.size == CGSize(width: 512, height: 512), "\(sticker.id)")
-            #expect(Self.ink(image).map { Self.uncut.contains($0) } == true, "\(sticker.id): \(String(describing: Self.ink(image)))")
+            let poses: [PipPose] = switch sticker.kind {
+            case .still(let pose): [pose]
+            case .animated(let frames, _): frames
+            }
+            for (n, pose) in poses.enumerated() {
+                let image = try renderSticker(pose, hidden: sticker.hidden)
+                #expect(image.size == CGSize(width: stickerCanvas, height: stickerCanvas), "\(sticker.id)")
+                #expect(Self.ink(image).map { Self.uncut.contains($0) } == true, "\(sticker.id) frame \(n): \(String(describing: Self.ink(image)))")
+            }
         }
     }
 
-    private static let uncut = CGRect(x: 1, y: 1, width: 510, height: 510)
+    private static let uncut = CGRect(x: 1, y: 1, width: stickerCanvas - 2, height: stickerCanvas - 2)
 
     /// A loop's wrap (last frame back to the first) is no bigger a step than its ordinary frame-to-frame steps,
     /// and it fits WhatsApp's timing: at most 10 s, no frame shorter than 8 ms.
@@ -63,7 +68,7 @@ import UIKit
             }
             for (n, pose) in frames.enumerated() {
                 let png = try #require(try renderSticker(pose, hidden: sticker.hidden).pngData())
-                #expect(UIImage(data: png)?.cgImage.map { ($0.width, $0.height, $0.alphaInfo != .none) } ?? (0, 0, false) == (512, 512, true), "\(sticker.id) \(n)")
+                #expect(UIImage(data: png)?.cgImage.map { ($0.width, $0.height, $0.alphaInfo != .none) } ?? (0, 0, false) == (Int(stickerCanvas), Int(stickerCanvas), true), "\(sticker.id) \(n)")
                 if exporting { try png.write(to: folder.appendingPathComponent(String(format: "%04d.png", n))) }
             }
             if exporting {

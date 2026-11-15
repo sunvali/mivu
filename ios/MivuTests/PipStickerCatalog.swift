@@ -104,7 +104,11 @@ enum PipStickerCatalog {
     }
 }
 
-/// The pose on the app's rig at 512 × 512, light fills, transparent background.
+/// The rig's 512 artboard with 32 points of room all round: hops and raised paws may leave the artboard, and
+/// pack.py re-crops every sticker anyway.
+let stickerCanvas: CGFloat = 576
+
+/// The pose on the app's rig, light fills, transparent background, on a `stickerCanvas` square.
 @MainActor func renderSticker(_ pose: PipPose, hidden: [String]) throws -> UIImage {
     let asset = try PipRigAsset.load(PipRigAssetTests.bundledData())
     let view = PipRigView(asset: asset, set: pose.set)
@@ -117,5 +121,9 @@ enum PipStickerCatalog {
     let format = UIGraphicsImageRendererFormat()
     format.scale = 1
     format.opaque = false
-    return UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { view.layer.render(in: $0.cgContext) }
+    let inset = (stickerCanvas - 512) / 2
+    return UIGraphicsImageRenderer(size: CGSize(width: stickerCanvas, height: stickerCanvas), format: format).image {
+        $0.cgContext.translateBy(x: inset, y: inset)
+        view.layer.render(in: $0.cgContext)
+    }
 }
