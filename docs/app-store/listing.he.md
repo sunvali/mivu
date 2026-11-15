@@ -54,7 +54,10 @@ AI שמשתמש בתוכנית שלך
 
 עכשיו גם בעברית: כל המסכים, הווידג׳טים, Siri וההתראות. פיפ עונה בשפה שבה כתבת.
 
-## Screenshot captions (in order)
+## Screenshots (6.9-inch iPhone, 1320 × 2868, in order)
+
+Captured on an iPhone 17 Pro Max simulator in Hebrew with a real ChatGPT connection: the meals, targets and weights were entered through Pip and setup, in invented Hebrew. Framed with `swift scripts/app-store/frame.swift <capture> <out> "<caption>"`.
+
 
 1. `screenshots/he/01-coach.png` — לרשום ארוחה במילים שלך
 2. `screenshots/he/02-today.png` — כל היום במבט אחד
