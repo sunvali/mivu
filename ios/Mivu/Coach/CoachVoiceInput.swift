@@ -34,8 +34,8 @@ import SwiftUI
         return min(max((20 * log10(rms) + 50) / 50, 0), 1)
     }
 
-    /// Streams the transcript appended to `draft` into `update` until `stop()`.
-    func start(appendingTo draft: String, update: @escaping @MainActor (String) -> Void) async {
+    /// Streams the transcript appended to `draft` into `update` until `stop()`, listening in `language`.
+    func start(appendingTo draft: String, language: Locale = CoachVoiceLanguages.app, update: @escaping @MainActor (String) -> Void) async {
         guard phase == .idle else { return }
         phase = .preparing; note = nil
         attempt += 1
@@ -45,13 +45,12 @@ import SwiftUI
                 throw Failure(String(localized: "Allow microphone access in Settings to log by voice."))
             }
             guard await Self.speechAuthorized() else { throw Failure(String(localized: "Allow speech recognition in Settings to log by voice.")) }
-            let english = Locale(identifier: "en-US")
             let transcriber: any SpeechModule
             let transcripts: AsyncThrowingStream<(text: String, isFinal: Bool), any Error>
-            if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: english) {
+            if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: language) {
                 let module = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
                 (transcriber, transcripts) = (module, Self.texts(module.results) { (String($0.text.characters), $0.isFinal) })
-            } else if let locale = await DictationTranscriber.supportedLocale(equivalentTo: english) {
+            } else if let locale = await DictationTranscriber.supportedLocale(equivalentTo: language) {
                 // Devices without the newer model (and the Simulator) still have dictation.
                 let module = DictationTranscriber(locale: locale, preset: .progressiveLongDictation)
                 (transcriber, transcripts) = (module, Self.texts(module.results) { (String($0.text.characters), $0.isFinal) })

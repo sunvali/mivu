@@ -31,6 +31,9 @@ struct CoachView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var voice = CoachVoiceInput()
+    /// Languages the mic can listen in, and this session's choice; each launch starts in the app language.
+    @State private var voiceLanguages: [Locale] = []
+    @State private var voiceLanguage: Locale?
     @State private var cameraPresentationID: UUID?
     @State private var retakingPhotoID: UUID?
     @State private var restoreKeyboard = false
@@ -589,7 +592,7 @@ struct CoachView: View {
                 coach.synchronizeDraftOwnership(); editing = false
                 let owner = coach.attachmentDraft.ownership
                 Task {
-                    await voice.start(appendingTo: coach.attachmentDraft.text) { text in
+                    await voice.start(appendingTo: coach.attachmentDraft.text, language: voiceLanguage ?? voiceLanguages.first ?? CoachVoiceLanguages.app) { text in
                         // Final words can arrive after a profile switch; they belong only to the draft they started in.
                         // Once the person is typing, late final words must not overwrite what they type.
                         if coach.attachmentDraft.ownership == owner, !editing { coach.attachmentDraft.text = text }
@@ -610,6 +613,20 @@ struct CoachView: View {
         }
         .accessibilityLabel(voice.phase == .idle ? "Speak your meal" : "Stop listening").accessibilityIdentifier("coachVoice")
         .buttonStyle(.plain).foregroundStyle(listening ? Color.diaryError : Color.diaryAccent)
+        // A long press switches the listening language when the person has more than one that speech supports.
+        .contextMenu {
+            // An empty menu shows nothing, so one language keeps the plain button.
+            if voiceLanguages.count > 1, voice.phase == .idle {
+                let current = voiceLanguage ?? voiceLanguages[0]
+                ForEach(voiceLanguages, id: \.identifier) { option in
+                    Button { voiceLanguage = option } label: {
+                        if option == current { Label(CoachVoiceLanguages.name(option), systemImage: "checkmark") } else { Text(CoachVoiceLanguages.name(option)) }
+                    }
+                }
+            }
+        }
+        .accessibilityValue(voiceLanguages.count > 1 ? String(localized: "Listening language, \(CoachVoiceLanguages.name(voiceLanguage ?? voiceLanguages[0]))") : "")
+        .task { voiceLanguages = await CoachVoiceLanguages.available() }
     }
     private func stopListening() { Task { await voice.stop() } }
     private var send: some View {
