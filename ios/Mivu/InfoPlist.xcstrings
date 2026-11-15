@@ -59,7 +59,7 @@
       }
     },
     "Snap It" : {
-
+      "comment" : "Home-screen quick-action title: opens camera to log a meal"
     }
   },
   "version" : "1.0"

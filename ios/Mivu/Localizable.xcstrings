@@ -2,16 +2,16 @@
   "sourceLanguage" : "en",
   "strings" : {
     "" : {
-
+      "shouldTranslate" : false
     },
     " · Estimated" : {
-
+      "comment" : "Suffix after a calorie value: the number is an estimate, not exact"
     },
     "— kcal" : {
-
+      "comment" : "Placeholder when calories are unknown; kcal is the unit"
     },
     "“%@”" : {
-
+      "shouldTranslate" : false
     },
     "%@ – %@" : {
       "localizations" : {
@@ -21,7 +21,8 @@
             "value" : "%1$@ – %2$@"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%@ · %@" : {
       "localizations" : {
@@ -31,7 +32,8 @@
             "value" : "%1$@ · %2$@"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%@ · %@ · prepared for your clinician" : {
       "localizations" : {
@@ -74,6 +76,7 @@
       }
     },
     "%@ · %@ kcal" : {
+      "comment" : "Meal row subtitle: first %@ is a time or meal name, second %@ is a calorie number",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -94,6 +97,7 @@
       }
     },
     "%@ · %lld minutes" : {
+      "comment" : "Workout row subtitle: %@ is the workout type, %lld is the duration in minutes",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -120,7 +124,8 @@
             "value" : "%1$@ %2$@"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%@ %@ %@" : {
       "localizations" : {
@@ -130,9 +135,11 @@
             "value" : "%1$@ %2$@ %3$@"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%@ %@ grams." : {
+      "comment" : "VoiceOver: %1 is a nutrient name (protein), %2 is the gram amount",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -143,6 +150,7 @@
       }
     },
     "%@ %@ of %@ grams." : {
+      "comment" : "VoiceOver: nutrient name, grams eaten, of the gram target",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -153,6 +161,7 @@
       }
     },
     "%@ and %@" : {
+      "comment" : "Joins two items in a spoken list, e.g. two food names",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -163,28 +172,28 @@
       }
     },
     "%@ calories eaten." : {
-
+      "comment" : "VoiceOver for the calorie ring: %@ is the calories eaten today"
     },
     "%@ calories left." : {
-
+      "comment" : "VoiceOver for the calorie ring: %@ is calories remaining in the daily target"
     },
     "%@ calories over." : {
-
+      "comment" : "VoiceOver for the calorie ring: %@ is calories above the daily target"
     },
     "%@ from this selection could not be imported. Your other photos and note are preserved. Choose a smaller image or another photo." : {
 
     },
     "%@ g" : {
-
+      "comment" : "Gram amount; %@ is a number"
     },
     "%@ g a day" : {
 
     },
     "%@ goal" : {
-
+      "comment" : "Daily goal label; %@ is a number with its unit"
     },
     "%@ grams" : {
-
+      "comment" : "Spoken gram amount; %@ is a number"
     },
     "%@ has no calories set, so it isn't counted." : {
 
@@ -196,16 +205,16 @@
 
     },
     "%@ kcal" : {
-
+      "comment" : "Calorie amount; %@ is a number"
     },
     "%@ kcal goal" : {
-
+      "comment" : "Calorie goal line; %@ is a number"
     },
     "%@ kg a week" : {
 
     },
     "%@ kg goal" : {
-
+      "comment" : "Weight goal line; %@ is a number in kilograms"
     },
     "%@ kg to go" : {
 
@@ -214,7 +223,7 @@
 
     },
     "%@ logged" : {
-
+      "comment" : "Count of logged items; %@ is a number"
     },
     "%@ of %@ kcal target" : {
       "localizations" : {
@@ -227,6 +236,7 @@
       }
     },
     "%@ of %@ kilocalories" : {
+      "comment" : "VoiceOver: calories eaten of the calorie target",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -237,15 +247,16 @@
       }
     },
     "%@ over" : {
-
+      "comment" : "Amount above the target; %@ is a number with unit"
     },
     "%@ portion" : {
-
+      "comment" : "Meal portion scale label; %@ is a multiplier like 1½×"
     },
     "%@ times zoom" : {
-
+      "comment" : "VoiceOver for a camera zoom button; %@ is the zoom factor like 0.5 or 3"
     },
     "%@ to %@ %@" : {
+      "comment" : "Range of values with unit: low, high, unit",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -256,7 +267,7 @@
       }
     },
     "%@ under" : {
-
+      "comment" : "Amount below the target; %@ is a number with unit"
     },
     "%@, %@" : {
       "localizations" : {
@@ -266,7 +277,8 @@
             "value" : "%1$@, %2$@"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%@, %@ and %lld more" : {
       "localizations" : {
@@ -352,9 +364,11 @@
             "value" : "%1$@: %2$@"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%@: %@ kcal" : {
+      "comment" : "Chart VoiceOver: %1 is a date or period, %2 is calories",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -365,6 +379,7 @@
       }
     },
     "%@: %@ kg" : {
+      "comment" : "Chart VoiceOver: %1 is a date, %2 is weight in kg",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -393,7 +408,8 @@
             "value" : "%1$@: %2$@, %3$@"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%@. Review / Edit" : {
 
@@ -419,9 +435,11 @@
             "value" : "%1$@%2$@"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%@%@ %@ this week" : {
+      "comment" : "Weekly weight change: sign (+ or −), amount, unit (kg or lb)",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -432,13 +450,13 @@
       }
     },
     "%@×" : {
-
+      "shouldTranslate" : false
     },
     "%@× of the current portions" : {
 
     },
     "%lld" : {
-
+      "shouldTranslate" : false
     },
     "%lld / %lld" : {
       "localizations" : {
@@ -448,9 +466,11 @@
             "value" : "%1$lld / %2$lld"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "%lld days logged" : {
+      "comment" : "Count of days with a logged meal",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -473,6 +493,7 @@
       }
     },
     "%lld minutes" : {
+      "comment" : "Duration in minutes; %lld is a number",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -515,6 +536,7 @@
       }
     },
     "%lld of %lld logged" : {
+      "comment" : "Progress count: days or meals logged out of total",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -528,6 +550,7 @@
 
     },
     "%lld pending" : {
+      "comment" : "Count of items waiting to be analyzed or backed up",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -539,6 +562,7 @@
       }
     },
     "%lld photos" : {
+      "comment" : "Count of photos; plural form needed",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -561,6 +585,7 @@
       }
     },
     "%lld photos added" : {
+      "comment" : "Count of photos just added; plural form needed",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -583,9 +608,10 @@
       }
     },
     "%lld recorded" : {
-
+      "comment" : "Count of recorded entries"
     },
     "%lld times · %@" : {
+      "comment" : "Food used %lld times, then %@ (a unit or date) after the dot",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -608,6 +634,7 @@
       }
     },
     "%lld weigh-ins" : {
+      "comment" : "Count of weight measurements",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -652,16 +679,16 @@
       }
     },
     "%lld%%" : {
-
+      "shouldTranslate" : false
     },
     "~%@ a day" : {
 
     },
     "0" : {
-
+      "shouldTranslate" : false
     },
     "3-second timer" : {
-
+      "comment" : "Camera: accessibility label of the 3-second self-timer toggle"
     },
     "3M" : {
       "comment" : "Three months, as a short range button"
@@ -720,9 +747,10 @@
 
     },
     "About you" : {
-
+      "comment" : "Onboarding heading: asks for sex, birth year, height and weight"
     },
     "Account" : {
+      "comment" : "Section heading in the ChatGPT connection test screen",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -733,6 +761,7 @@
       }
     },
     "Account model" : {
+      "comment" : "Picker label: which ChatGPT model to use",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -743,7 +772,7 @@
       }
     },
     "Add" : {
-
+      "comment" : "Button: adds an item (food, exercise or set)"
     },
     "Add a goal weight to see how far is left." : {
 
@@ -755,13 +784,13 @@
 
     },
     "Add exercise" : {
-
+      "comment" : "Button: adds an exercise to a workout"
     },
     "Add food manually" : {
 
     },
     "Add manually" : {
-
+      "comment" : "Button: enter a meal by hand without photo or AI"
     },
     "Add message or photo" : {
       "extractionState" : "manual",
@@ -775,13 +804,13 @@
       }
     },
     "Add Note" : {
-
+      "comment" : "Button: adds a text note to a meal photo"
     },
     "Add note or photo" : {
 
     },
     "Add photos" : {
-
+      "comment" : "Button: attaches photos to a meal or Coach message"
     },
     "Add photos or a note." : {
       "extractionState" : "manual",
@@ -795,7 +824,7 @@
       }
     },
     "Add set" : {
-
+      "comment" : "Button: adds a set (reps and weight) to a strength exercise"
     },
     "Add synthetic apple photo" : {
       "extractionState" : "manual",
@@ -824,18 +853,19 @@
 
     },
     "Added %lld photos." : {
-
+      "comment" : "VoiceOver announcement after adding %lld photos"
     },
     "Added the photo." : {
 
     },
     "Added to %@" : {
-
+      "comment" : "Confirmation after adding a meal; %@ is a day name or date"
     },
     "Adjust total" : {
-
+      "comment" : "Button/heading: scale a meal to a new calorie total"
     },
     "After eating" : {
+      "comment" : "Photo timing option: the photo was taken after the meal",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -877,7 +907,7 @@
 
     },
     "Amount" : {
-
+      "comment" : "Field label: quantity number of a food item (e.g. 150)"
     },
     "An estimate, shown separately from recorded food." : {
 
@@ -886,6 +916,7 @@
 
     },
     "Analysis paused" : {
+      "comment" : "Status: meal analysis is paused",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -906,6 +937,7 @@
 
     },
     "Analyzing" : {
+      "comment" : "Status: the AI is analyzing a meal photo",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -929,6 +961,7 @@
 
     },
     "App language" : {
+      "comment" : "Settings row label for the app language",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -940,6 +973,7 @@
       }
     },
     "Apple (sample)" : {
+      "comment" : "Name of a built-in sample food item (an apple) shown by the sample analyzer",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -951,7 +985,7 @@
       }
     },
     "Apple Intelligence" : {
-
+      "comment" : "Product name of Apple's on-device AI; option for Coach AI. Keep as is"
     },
     "Apple Intelligence on iPhone" : {
 
@@ -982,7 +1016,7 @@
       }
     },
     "Ask Pip" : {
-
+      "comment" : "Placeholder/label for asking the Pip coach a question"
     },
     "Ask Pip about %@" : {
 
@@ -997,10 +1031,10 @@
 
     },
     "At goal" : {
-
+      "comment" : "Weight progress status: the user reached the weight goal"
     },
     "at least %@" : {
-
+      "comment" : "Lower bound; %@ is a number with unit (calories are partly unknown)"
     },
     "At least %@ calories eaten." : {
 
@@ -1021,9 +1055,10 @@
 
     },
     "Attached photo %lld" : {
-
+      "comment" : "VoiceOver label for the %lld-th attached photo"
     },
     "Attached photos" : {
+      "comment" : "Label for the list of photos attached to a message",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1035,27 +1070,28 @@
       }
     },
     "Average %@" : {
-
+      "comment" : "VoiceOver: average value; %@ is a number with unit"
     },
     "Average day" : {
-
+      "comment" : "Progress heading: the typical day averaged over the range"
     },
     "Average intake" : {
-
+      "comment" : "Progress heading: average calories eaten"
     },
     "Averages use complete days only." : {
 
     },
     "avg %@" : {
-
+      "comment" : "Short average label on a chart; %@ is a number"
     },
     "Avg calories" : {
-
+      "comment" : "Short label: average calories (table column)"
     },
     "Avg protein" : {
-
+      "comment" : "Short label: average protein (table column)"
     },
     "Awaiting review" : {
+      "comment" : "Meal status: AI estimate waiting for the user to review",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1067,7 +1103,7 @@
       }
     },
     "Back" : {
-
+      "comment" : "Button: go back to previous step"
     },
     "Backup & export" : {
 
@@ -1087,6 +1123,7 @@
 
     },
     "Backup pending" : {
+      "comment" : "Status: backup file write not yet confirmed",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1112,6 +1149,7 @@
 
     },
     "Before eating" : {
+      "comment" : "Photo timing option: the photo was taken before the meal",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1123,7 +1161,7 @@
       }
     },
     "Birth year" : {
-
+      "comment" : "Onboarding field label: year of birth"
     },
     "Browser test cancelled" : {
       "localizations" : {
@@ -1156,7 +1194,7 @@
       }
     },
     "Calendar" : {
-
+      "comment" : "Progress section title: calendar of logged days"
     },
     "Calorie and nutrition figures are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat." : {
 
@@ -1165,9 +1203,10 @@
 
     },
     "Calories" : {
-
+      "comment" : "Nutrient label / heading for calories (noun)"
     },
     "Calories (kcal)" : {
+      "comment" : "Field label for calories with unit in brackets",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1179,7 +1218,7 @@
       }
     },
     "Calories by %@" : {
-
+      "comment" : "VoiceOver chart label; %@ is day, week or month"
     },
     "Calories not known yet" : {
 
@@ -1194,6 +1233,7 @@
 
     },
     "Camera" : {
+      "comment" : "Source option: take a photo with the camera",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1254,6 +1294,7 @@
 
     },
     "Cancel" : {
+      "comment" : "Button: dismisses without saving",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1275,6 +1316,7 @@
       }
     },
     "Cancel connection" : {
+      "comment" : "Button: stops the ChatGPT sign-in in progress",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1285,9 +1327,10 @@
       }
     },
     "Cancel reply" : {
-
+      "comment" : "Button: cancels replying to a Coach message"
     },
     "Cancelled" : {
+      "comment" : "Status: the operation was cancelled",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1310,6 +1353,7 @@
       }
     },
     "Captured" : {
+      "comment" : "Meal status: photo captured, not yet analyzed",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1324,6 +1368,7 @@
 
     },
     "Carbs" : {
+      "comment" : "Nutrient name: carbohydrates",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1335,6 +1380,7 @@
       }
     },
     "Carbs (g)" : {
+      "comment" : "Field label: carbohydrates in grams",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1346,7 +1392,7 @@
       }
     },
     "Carbs %@" : {
-
+      "comment" : "Carbohydrates with amount; %@ is a number"
     },
     "Carbs %@ · Protein %@ · Fat %@" : {
       "localizations" : {
@@ -1359,12 +1405,13 @@
       }
     },
     "Carbs g" : {
-
+      "comment" : "Report column heading: carbohydrates in grams"
     },
     "Cardio" : {
-
+      "comment" : "Workout type name"
     },
     "Cardio, %lld minutes." : {
+      "comment" : "VoiceOver for a cardio workout row, duration in minutes",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -1390,19 +1437,19 @@
 
     },
     "Chat history" : {
-
+      "comment" : "Title of and button to open earlier Coach conversations"
     },
     "Chat history is unavailable. Try again." : {
 
     },
     "ChatGPT" : {
-
+      "comment" : "Product name. Keep as is"
     },
     "ChatGPT (recommended)" : {
-
+      "comment" : "Picker option: ChatGPT as Coach AI, marked recommended"
     },
     "ChatGPT connected" : {
-
+      "comment" : "Status: signed in to ChatGPT"
     },
     "ChatGPT connection diagnostic" : {
       "extractionState" : "manual",
@@ -1483,10 +1530,10 @@
       }
     },
     "Choose date" : {
-
+      "comment" : "Label of a date picker"
     },
     "Choose photos" : {
-
+      "comment" : "Button: pick photos from the library"
     },
     "Choose private backup folder" : {
       "extractionState" : "manual",
@@ -1520,19 +1567,19 @@
 
     },
     "Close" : {
-
+      "comment" : "Button: closes a sheet or camera"
     },
     "closed" : {
-
+      "comment" : "VoiceOver value of a week-strip day: the day is closed (not a button)"
     },
     "Closed" : {
-
+      "comment" : "Diary day status: the day is finished (not a button)"
     },
     "Coach" : {
-
+      "comment" : "Name of the AI coach section/tab"
     },
     "Coach AI" : {
-
+      "comment" : "Setting name: which AI powers the Coach"
     },
     "Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection." : {
 
@@ -1541,12 +1588,13 @@
 
     },
     "Collapsed" : {
-
+      "comment" : "VoiceOver value: a disclosure section is collapsed"
     },
     "Companion" : {
-
+      "comment" : "Settings section heading: choose the companion character (Pip)"
     },
     "Complete" : {
+      "comment" : "Day coverage status: everything eaten was logged",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1558,7 +1606,7 @@
       }
     },
     "Complete days" : {
-
+      "comment" : "Progress row: number of fully logged days"
     },
     "Complete days and partial records are kept separate. Missing logs do not mean zero intake." : {
       "extractionState" : "manual",
@@ -1583,6 +1631,7 @@
       }
     },
     "Completed" : {
+      "comment" : "Status: operation finished",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1593,15 +1642,16 @@
       }
     },
     "Configured" : {
-
+      "comment" : "Status: nutrition source is set up"
     },
     "Confirmed label values" : {
 
     },
     "Connect" : {
-
+      "comment" : "Button: starts ChatGPT sign-in"
     },
     "Connect ChatGPT" : {
+      "comment" : "Button: sign in to ChatGPT",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1647,6 +1697,7 @@
       }
     },
     "Connecting" : {
+      "comment" : "Status: sign-in to ChatGPT in progress",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1657,7 +1708,7 @@
       }
     },
     "Connection" : {
-
+      "comment" : "Settings section heading for the ChatGPT connection"
     },
     "Connection cancelled" : {
       "comment" : "Shown from a stored value; the value itself stays English.",
@@ -1668,6 +1719,7 @@
       "extractionState" : "manual"
     },
     "Connection test" : {
+      "comment" : "Title of the diagnostic screen testing the ChatGPT connection",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1682,6 +1734,7 @@
       "extractionState" : "manual"
     },
     "Consumed nutrients" : {
+      "comment" : "Heading/VoiceOver for the nutrient totals eaten",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1693,19 +1746,19 @@
       }
     },
     "Continue" : {
-
+      "comment" : "Button: go to the next step"
     },
     "Continue with ChatGPT" : {
 
     },
     "Conversation date" : {
-
+      "comment" : "Label of the date of a Coach conversation"
     },
     "Conversation page loaded" : {
 
     },
     "Copy" : {
-
+      "comment" : "Menu action: copy a Coach message text"
     },
     "Correction or extra details" : {
       "extractionState" : "manual",
@@ -1898,6 +1951,7 @@
 
     },
     "Create" : {
+      "comment" : "Alert button: creates a new profile",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1924,13 +1978,13 @@
       "extractionState" : "manual"
     },
     "Current revision" : {
-
+      "comment" : "Meal details row: revision number of the record (technical)"
     },
     "Current saved meal" : {
 
     },
     "Current workout" : {
-
+      "comment" : "Label for the workout being edited"
     },
     "Custom" : {
       "comment" : "Shown from a stored value; the value itself stays English.",
@@ -1941,21 +1995,22 @@
       "extractionState" : "manual"
     },
     "Daily targets" : {
-
+      "comment" : "Heading: daily calorie and nutrient goals"
     },
     "Daily totals" : {
-
+      "comment" : "Heading: nutrient totals for the day"
     },
     "Date" : {
-
+      "comment" : "Field/column label: a calendar date"
     },
     "Day" : {
-
+      "comment" : "Column heading in the report: a day; also general word"
     },
     "Day actions, %@" : {
-
+      "comment" : "VoiceOver label of the day menu button; %@ is the date"
     },
     "Day coverage" : {
+      "comment" : "Heading: whether the day is fully logged, partial or skipped",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1970,19 +2025,19 @@
 
     },
     "Day status" : {
-
+      "comment" : "VoiceOver label of the week-strip day status"
     },
     "Days" : {
-
+      "comment" : "Section heading: list of days"
     },
     "Days logged" : {
-
+      "comment" : "Label of number of days with logged meals"
     },
     "days with saved meals" : {
 
     },
     "Delete" : {
-
+      "comment" : "Button: deletes the item"
     },
     "Delete “%@” on %@?" : {
       "localizations" : {
@@ -1995,10 +2050,10 @@
       }
     },
     "Delete %@" : {
-
+      "comment" : "Button: deletes a named item; %@ is its name"
     },
     "Delete %@?" : {
-
+      "comment" : "Confirmation title: delete a named item; %@ is its name"
     },
     "Delete cardio workout on %@?" : {
 
@@ -2007,7 +2062,7 @@
 
     },
     "Delete food" : {
-
+      "comment" : "Button: deletes a food item from a meal"
     },
     "Delete local diary" : {
       "extractionState" : "manual",
@@ -2021,6 +2076,7 @@
       }
     },
     "Delete meal" : {
+      "comment" : "Button: deletes the meal",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2032,7 +2088,7 @@
       }
     },
     "Delete meal?" : {
-
+      "comment" : "Confirmation title before deleting a meal"
     },
     "Delete other workout on %@?" : {
 
@@ -2041,6 +2097,7 @@
 
     },
     "Delete photo" : {
+      "comment" : "Button: deletes a meal photo",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2052,6 +2109,7 @@
       }
     },
     "Delete profile" : {
+      "comment" : "Button: deletes a local profile",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2126,10 +2184,10 @@
       }
     },
     "Delete workout" : {
-
+      "comment" : "Button: deletes a workout"
     },
     "Delete workout?" : {
-
+      "comment" : "Confirmation title before deleting a workout"
     },
     "Deletion removes this profile's meals, photos, weights and preferences from this iPhone. Other profiles are preserved." : {
       "extractionState" : "manual",
@@ -2152,12 +2210,13 @@
 
     },
     "Diary" : {
-
+      "comment" : "Name of the food diary tab"
     },
     "Diary %lld" : {
-
+      "comment" : "Default name for a new diary profile; %lld is a number"
     },
     "Diary preferences" : {
+      "comment" : "Settings section: diary options",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2183,6 +2242,7 @@
 
     },
     "Discard" : {
+      "comment" : "Button: throws away a queued Coach message",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2194,7 +2254,7 @@
       }
     },
     "Discard changes" : {
-
+      "comment" : "Button: throws away unsaved edits"
     },
     "Discard changes to goals?" : {
 
@@ -2203,13 +2263,13 @@
 
     },
     "Discard changes?" : {
-
+      "comment" : "Confirmation title for unsaved edits"
     },
     "Discard draft and change date" : {
 
     },
     "Discard Photo" : {
-
+      "comment" : "Button: throws away the taken photo"
     },
     "Discard this input?" : {
       "extractionState" : "manual",
@@ -2232,6 +2292,7 @@
 
     },
     "Disconnect" : {
+      "comment" : "Button: signs out of the connection",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2242,9 +2303,10 @@
       }
     },
     "Disconnect ChatGPT" : {
-
+      "comment" : "Button: signs out of ChatGPT"
     },
     "Done" : {
+      "comment" : "Button: finishes editing",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2256,7 +2318,7 @@
       }
     },
     "Double" : {
-
+      "comment" : "Meal portion scale choice: 2 times the amount"
     },
     "Down %@ kg in %lld days" : {
       "localizations" : {
@@ -2275,13 +2337,13 @@
 
     },
     "Earlier" : {
-
+      "comment" : "Button: go to earlier dates; also a list heading"
     },
     "Earlier conversations" : {
-
+      "comment" : "Heading of older Coach chat sessions"
     },
     "Earlier days" : {
-
+      "comment" : "Heading of older days list"
     },
     "Easiest to keep up" : {
 
@@ -2290,15 +2352,16 @@
 
     },
     "Edit food" : {
-
+      "comment" : "Title/button: edit a food item"
     },
     "Edit goals" : {
-
+      "comment" : "Title/button: edit daily goals"
     },
     "Edit ingredient amount and nutrition" : {
 
     },
     "Edit item" : {
+      "comment" : "Title/button: edit an item",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2310,10 +2373,10 @@
       }
     },
     "Edit weight" : {
-
+      "comment" : "Title/button: edit a weight measurement"
     },
     "Edit workout" : {
-
+      "comment" : "Title/button: edit a workout"
     },
     "Edited · moved to %@" : {
 
@@ -2330,7 +2393,7 @@
       }
     },
     "Edited later" : {
-
+      "comment" : "Coach receipt note: the record was changed after this action"
     },
     "EEE d MMM" : {
       "comment" : "Date pattern (Unicode date format); reorder for the language.",
@@ -2353,10 +2416,10 @@
       "extractionState" : "manual"
     },
     "Effective %@" : {
-
+      "comment" : "Goal effective from a date; %@ is a date"
     },
     "Effective date" : {
-
+      "comment" : "Section heading: date a goal starts to apply"
     },
     "Empty days aren't counted as zero." : {
 
@@ -2369,18 +2432,19 @@
       "extractionState" : "manual"
     },
     "End" : {
-
+      "comment" : "Button: marks the end of a measured scroll range (test/diagnostic)"
     },
     "Energy" : {
-
+      "comment" : "Nutrient label: energy (calories)"
     },
     "Energy (kcal)" : {
-
+      "comment" : "Field label: energy in kilocalories"
     },
     "Energy unknown" : {
-
+      "comment" : "Coach receipt: calories unknown for this meal"
     },
     "English" : {
+      "comment" : "Language name shown as the app language fallback",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2416,7 +2480,7 @@
 
     },
     "Enter nutrition" : {
-
+      "comment" : "Button: type nutrition values by hand"
     },
     "Enter nutrition manually" : {
 
@@ -2428,13 +2492,13 @@
 
     },
     "Estimate" : {
-
+      "comment" : "Badge: values come from an on-device formula, not ChatGPT"
     },
     "Estimate awaiting review" : {
 
     },
     "Estimated burn" : {
-
+      "comment" : "Label: calories estimated burned by a workout"
     },
     "Estimated burn (kcal)" : {
 
@@ -2446,10 +2510,10 @@
 
     },
     "Estimated nutrition" : {
-
+      "comment" : "Heading: nutrition values are estimated"
     },
     "Estimated totals" : {
-
+      "comment" : "Heading: totals of AI-estimated items"
     },
     "Every capture gets a synthetic apple estimate. Photos and text are saved, but no food recognition runs." : {
       "extractionState" : "manual",
@@ -2469,25 +2533,25 @@
 
     },
     "Exercise" : {
-
+      "comment" : "Label/heading: a single exercise in a workout"
     },
     "Exercise adjustment enabled" : {
 
     },
     "Exercise details" : {
-
+      "comment" : "Heading: details of an exercise"
     },
     "Exercise-adjusted remaining: %@ kcal" : {
 
     },
     "Exercises" : {
-
+      "comment" : "Heading: list of exercises"
     },
     "Expand chat" : {
-
+      "comment" : "Button: enlarges the Coach chat (iPad/foldable)"
     },
     "Expanded" : {
-
+      "comment" : "VoiceOver value: a disclosure section is expanded"
     },
     "Export diary and photos" : {
       "extractionState" : "manual",
@@ -2512,6 +2576,7 @@
       }
     },
     "Export saved" : {
+      "comment" : "Status: backup export file was saved",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2537,12 +2602,13 @@
       "comment" : "Calorie band, lowercase inside a sentence"
     },
     "Far off" : {
-
+      "comment" : "Progress insight: weight is far from the goal"
     },
     "Faster" : {
-
+      "comment" : "Onboarding goal pace option: faster weight change"
     },
     "Fat" : {
+      "comment" : "Nutrient name: fat",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2554,6 +2620,7 @@
       }
     },
     "Fat (g)" : {
+      "comment" : "Field label: fat in grams",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2565,22 +2632,22 @@
       }
     },
     "Fat %@" : {
-
+      "comment" : "Fat with amount; %@ is a number"
     },
     "Fat g" : {
-
+      "comment" : "Report column heading: fat in grams"
     },
     "Female" : {
-
+      "comment" : "Onboarding option: sex"
     },
     "Finish the rest" : {
 
     },
     "Flash" : {
-
+      "comment" : "VoiceOver label of the camera flash button"
     },
     "Food" : {
-
+      "comment" : "Label: a food item"
     },
     "Food before %@ still counts for the day before. A new day starts the first time you open Mivu after that." : {
 
@@ -2589,6 +2656,7 @@
 
     },
     "Food items" : {
+      "comment" : "Heading: foods in a meal",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2600,37 +2668,37 @@
       }
     },
     "Food log" : {
-
+      "comment" : "Title: log of eaten food"
     },
     "Food name" : {
-
+      "comment" : "Field label: name of a food"
     },
     "Foods" : {
-
+      "comment" : "Heading: list of foods"
     },
     "Foods with unknown calories and meals still being analyzed are left out." : {
 
     },
     "For %@: " : {
-
+      "comment" : "Prefix naming the day/meal a Coach answer is about; %@ is a date or meal"
     },
     "For breakfast I had " : {
 
     },
     "Format" : {
-
+      "comment" : "Picker label: report file format (PDF or CSV)"
     },
     "Fresh start ahead" : {
 
     },
     "From" : {
-
+      "comment" : "Date picker label: start date of a report range"
     },
     "From Diary" : {
-
+      "comment" : "Label: opened from the Diary screen"
     },
     "From Progress" : {
-
+      "comment" : "Label: opened from the Progress screen"
     },
     "From Siri while locked" : {
 
@@ -2639,23 +2707,23 @@
 
     },
     "ft" : {
-
+      "comment" : "Unit: feet (height)"
     },
     "g" : {
-
+      "comment" : "Unit: grams"
     },
     "Gentle" : {
-
+      "comment" : "Onboarding goal pace option: slow weight change"
     },
     "Get started" : {
-
+      "comment" : "Button: begins onboarding"
     },
     "Gluten-free" : {
       "comment" : "Shown from a stored value; the value itself stays English.",
       "extractionState" : "manual"
     },
     "Goal history" : {
-
+      "comment" : "Heading: past goal versions"
     },
     "Goal: %@ kcal a day, %@ g protein." : {
       "localizations" : {
@@ -2671,31 +2739,31 @@
 
     },
     "Goals" : {
-
+      "comment" : "Title/row: daily nutrition and weight goals"
     },
     "Goals are your settings. Earlier dates keep their own records." : {
 
     },
     "Good afternoon" : {
-
+      "comment" : "Greeting shown on Today screen in the afternoon"
     },
     "Good evening" : {
-
+      "comment" : "Greeting shown on Today screen in the evening"
     },
     "Good morning" : {
-
+      "comment" : "Greeting shown on Today screen in the morning"
     },
     "Got it" : {
-
+      "comment" : "Button: acknowledges a message"
     },
     "Half" : {
-
+      "comment" : "Meal portion scale choice: 0.5 times the amount"
     },
     "Have a backup?" : {
 
     },
     "Height" : {
-
+      "comment" : "Onboarding/profile field: body height"
     },
     "Height, weight and where you want to be." : {
 
@@ -2704,15 +2772,16 @@
 
     },
     "Hide check-in" : {
-
+      "comment" : "VoiceOver label of the button that dismisses the morning weight card"
     },
     "Hide numbers on Lock Screen" : {
 
     },
     "Historical meal" : {
-
+      "comment" : "Label: a meal from an earlier day"
     },
     "History" : {
+      "comment" : "Title/heading: past records",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2724,10 +2793,10 @@
       }
     },
     "History unavailable" : {
-
+      "comment" : "Message: past records cannot be shown"
     },
     "Holding steady" : {
-
+      "comment" : "Progress insight: weight is stable"
     },
     "How am I doing today?" : {
 
@@ -2797,6 +2866,7 @@
       }
     },
     "Importing photo" : {
+      "comment" : "Status: photo is being imported",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2817,7 +2887,7 @@
 
     },
     "Invalid request." : {
-
+      "comment" : "Message on the web page shown after ChatGPT sign-in: bad callback"
     },
     "It may have been deleted or belong to another profile." : {
       "extractionState" : "manual",
@@ -2834,9 +2904,10 @@
 
     },
     "Just updated" : {
-
+      "comment" : "VoiceOver hint: this meal row was just changed"
     },
     "kcal" : {
+      "comment" : "Unit: kilocalories (calories) after a number",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2854,15 +2925,16 @@
 
     },
     "kcal recorded" : {
-
+      "comment" : "Widget text: calories recorded today, after a number"
     },
     "Keep" : {
-
+      "comment" : "Button: keep the current value, answers a Coach question"
     },
     "Keep a backup or export before changing phones." : {
 
     },
     "Keep editing" : {
+      "comment" : "Button: stay on the edit screen instead of discarding",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2880,6 +2952,7 @@
 
     },
     "kg" : {
+      "comment" : "Unit: kilograms",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2891,13 +2964,14 @@
       }
     },
     "kg trend" : {
-
+      "comment" : "Weight card label: trend line in kilograms"
     },
     "Lactose-free" : {
       "comment" : "Shown from a stored value; the value itself stays English.",
       "extractionState" : "manual"
     },
     "Language" : {
+      "comment" : "Settings section heading for language",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -2949,21 +3023,22 @@
       "extractionState" : "manual"
     },
     "Later" : {
-
+      "comment" : "Button: postpone (onboarding); also forward arrow in date range (later dates)"
     },
     "Latest goals" : {
-
+      "comment" : "Button: show the newest goal version"
     },
     "Latest measurement" : {
-
+      "comment" : "Heading: most recent weight measurement"
     },
     "Latest measurements" : {
-
+      "comment" : "Heading: most recent weight measurements"
     },
     "Latest workouts" : {
-
+      "comment" : "Heading: most recent workouts"
     },
     "lb" : {
+      "comment" : "Unit: pounds",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3011,7 +3086,7 @@
       }
     },
     "Listening" : {
-
+      "comment" : "Status: voice input is recording speech"
     },
     "Live Activities are off for Mivu in iOS Settings." : {
 
@@ -3039,7 +3114,7 @@
 
     },
     "Loading conversation" : {
-
+      "comment" : "Progress text while a Coach conversation loads"
     },
     "Loading current record" : {
 
@@ -3048,31 +3123,31 @@
 
     },
     "Loading goals…" : {
-
+      "comment" : "Progress text while goals load"
     },
     "Loading later messages" : {
 
     },
     "Loading measurements…" : {
-
+      "comment" : "Progress text while measurements load"
     },
     "Loading photo" : {
-
+      "comment" : "Progress text while a photo loads"
     },
     "Loading progress…" : {
-
+      "comment" : "Progress text while Progress loads"
     },
     "Loading saved goals…" : {
 
     },
     "Loading workout…" : {
-
+      "comment" : "Progress text while a workout loads"
     },
     "Loading workouts…" : {
-
+      "comment" : "Progress text while workouts load"
     },
     "Loading…" : {
-
+      "comment" : "Progress text while loading"
     },
     "Local credentials removed" : {
       "comment" : "Shown from a stored value; the value itself stays English.",
@@ -3083,7 +3158,7 @@
       "extractionState" : "manual"
     },
     "Local profiles" : {
-
+      "comment" : "Heading: diary profiles stored on this device"
     },
     "Local sample storage unavailable" : {
       "localizations" : {
@@ -3179,9 +3254,10 @@
 
     },
     "Log breakfast" : {
-
+      "comment" : "Siri/shortcut or button: record a breakfast meal"
     },
     "Log meal" : {
+      "comment" : "Button/action: record a meal",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3193,7 +3269,7 @@
       }
     },
     "Log Meal" : {
-
+      "comment" : "Button/action title: record a meal"
     },
     "Log morning weight" : {
       "extractionState" : "manual",
@@ -3210,10 +3286,10 @@
 
     },
     "Log to %@" : {
-
+      "comment" : "Button: add a meal to a day; %@ is the day name"
     },
     "Log weight" : {
-
+      "comment" : "Button: record a weight measurement"
     },
     "Log with Pip" : {
 
@@ -3222,7 +3298,7 @@
 
     },
     "Logging meal" : {
-
+      "comment" : "Status: meal is being saved"
     },
     "Logging to %@, %@ kcal" : {
       "localizations" : {
@@ -3251,22 +3327,22 @@
 
     },
     "Macros" : {
-
+      "comment" : "Progress section title: macronutrients (protein, carbs, fat)"
     },
     "Made with Mivu · values are logged estimates" : {
 
     },
     "Male" : {
-
+      "comment" : "Onboarding option: sex"
     },
     "Manage" : {
-
+      "comment" : "Button/value: open goal management"
     },
     "Manage usage" : {
-
+      "comment" : "Button: open the ChatGPT usage page"
     },
     "Mark reviewed" : {
-
+      "comment" : "Button: confirms the AI estimate is reviewed"
     },
     "Marked %@ as counted." : {
 
@@ -3275,6 +3351,7 @@
 
     },
     "Meal" : {
+      "comment" : "Label: a meal (noun)",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3286,9 +3363,10 @@
       }
     },
     "Meal actions" : {
-
+      "comment" : "VoiceOver label of the meal menu button"
     },
     "Meal details" : {
+      "comment" : "Title: meal detail screen",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3300,9 +3378,10 @@
       }
     },
     "Meal logged" : {
-
+      "comment" : "Confirmation: meal saved"
     },
     "Meal photo" : {
+      "comment" : "Label: photo of a meal",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3314,6 +3393,7 @@
       }
     },
     "Meal unavailable" : {
+      "comment" : "Message: the meal cannot be shown",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3325,6 +3405,7 @@
       }
     },
     "Meals" : {
+      "comment" : "Heading: list of meals",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3347,12 +3428,13 @@
       }
     },
     "Measurement ledger" : {
-
+      "comment" : "Progress section: list of weight measurements"
     },
     "Measurements · %@" : {
-
+      "comment" : "Progress section title; %@ is the range name (week, month)"
     },
     "medium" : {
+      "comment" : "Lowercase spoken confidence or size value (not a button)",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3364,9 +3446,10 @@
       }
     },
     "Message" : {
-
+      "comment" : "Parameter name in the Siri shortcut: the text to tell Coach"
     },
     "Mivu" : {
+      "comment" : "App name. Keep as is",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3407,18 +3490,19 @@
       "extractionState" : "manual"
     },
     "Month" : {
-
+      "comment" : "Range option: one month"
     },
     "More" : {
-
+      "comment" : "Button/menu: more options"
     },
     "More details" : {
-
+      "comment" : "Disclosure heading: extra nutrient fields"
     },
     "Morning check-in" : {
-
+      "comment" : "Heading of the morning weight card"
     },
     "Morning weight" : {
+      "comment" : "Label: weight measured in the morning",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3436,13 +3520,13 @@
 
     },
     "Move" : {
-
+      "comment" : "Button: moves a meal to another day"
     },
     "Move meal" : {
-
+      "comment" : "Title/button: move a meal to another day"
     },
     "Move to %@" : {
-
+      "comment" : "Button: move to a day; %@ is a day name"
     },
     "Move to another day" : {
       "extractionState" : "manual",
@@ -3456,12 +3540,13 @@
       }
     },
     "Moved to %@" : {
-
+      "comment" : "Confirmation after moving a meal; %@ is a day name"
     },
     "Moved to %@." : {
 
     },
     "My diary" : {
+      "comment" : "Default name of the user's diary",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3476,6 +3561,7 @@
 
     },
     "Name" : {
+      "comment" : "Field label: profile name",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3513,12 +3599,13 @@
       "comment" : "Calorie band, lowercase inside a sentence"
     },
     "Near" : {
-
+      "comment" : "Progress insight: weight is near the goal"
     },
     "Needs more data" : {
 
     },
     "Needs retry" : {
+      "comment" : "Meal status: analysis failed and must be tried again",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3530,9 +3617,10 @@
       }
     },
     "Needs review" : {
-
+      "comment" : "Meal status: AI estimate needs the user's review"
     },
     "New day" : {
+      "comment" : "Title: a new day started",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3544,10 +3632,10 @@
       }
     },
     "New total" : {
-
+      "comment" : "Label: the calorie total after scaling a meal"
     },
     "Next" : {
-
+      "comment" : "Button: next onboarding step"
     },
     "No account models loaded" : {
       "localizations" : {
@@ -3614,7 +3702,7 @@
       }
     },
     "No log" : {
-
+      "comment" : "Status: nothing logged for the day"
     },
     "No logged days in this range." : {
 
@@ -3673,7 +3761,7 @@
 
     },
     "no target" : {
-
+      "comment" : "Lowercase text: no target set"
     },
     "No targets set" : {
 
@@ -3693,7 +3781,7 @@
 
     },
     "no weigh-ins" : {
-
+      "comment" : "Lowercase text: no weight measurements in the range"
     },
     "No weigh-ins in this range." : {
 
@@ -3702,9 +3790,10 @@
 
     },
     "None yet" : {
-
+      "comment" : "Placeholder: nothing recorded so far"
     },
     "Not connected" : {
+      "comment" : "Status: not signed in to ChatGPT",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3718,10 +3807,10 @@
 
     },
     "Not Now" : {
-
+      "comment" : "Button: decline for now (consent dialog)"
     },
     "Nothing logged" : {
-
+      "comment" : "Empty state: no food logged"
     },
     "Notifications are off for Mivu. You can allow them in iOS Settings." : {
 
@@ -3731,10 +3820,10 @@
       "extractionState" : "manual"
     },
     "Nutrition" : {
-
+      "comment" : "Heading: nutrition values"
     },
     "Nutrition details" : {
-
+      "comment" : "Heading: detailed nutrition values"
     },
     "Nutrition for this amount" : {
 
@@ -3746,21 +3835,22 @@
 
     },
     "Nutrition source" : {
-
+      "comment" : "Settings row: where nutrition values come from"
     },
     "of %@ kcal" : {
-
+      "comment" : "Fragment after a calorie number: of the daily target; %@ is the target"
     },
     "off" : {
       "comment" : "Calorie band, lowercase inside a sentence"
     },
     "Off" : {
-
+      "comment" : "Status: a setting is off"
     },
     "Offline. I'll reply when you're back online." : {
 
     },
     "OK" : {
+      "comment" : "Button: dismisses an alert",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3772,19 +3862,19 @@
       }
     },
     "Older goals" : {
-
+      "comment" : "Button: load older goal versions"
     },
     "Older measurements" : {
-
+      "comment" : "Button: load older measurements"
     },
     "Older workouts" : {
-
+      "comment" : "Button: load older workouts"
     },
     "on target" : {
-
+      "comment" : "Lowercase status: calories are on target"
     },
     "once · %@" : {
-
+      "comment" : "Food used once, then %@ (a unit or date) after the dot"
     },
     "One and a half" : {
 
@@ -3812,10 +3902,10 @@
 
     },
     "open" : {
-
+      "comment" : "VoiceOver value of a week-strip day: the day is still open (not a button)"
     },
     "Open" : {
-
+      "comment" : "Diary day status: the day is still open (not a button)"
     },
     "Open backup and Files" : {
 
@@ -3824,10 +3914,10 @@
 
     },
     "Open Coach" : {
-
+      "comment" : "Button/shortcut: opens the Coach"
     },
     "Open Diary" : {
-
+      "comment" : "Button/shortcut: opens the Diary"
     },
     "Open full-screen photo viewer" : {
 
@@ -3845,6 +3935,7 @@
 
     },
     "Open Settings" : {
+      "comment" : "Button: opens iOS Settings",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3859,7 +3950,7 @@
 
     },
     "Opening diary" : {
-
+      "comment" : "Status: the diary is loading"
     },
     "Opening your diary" : {
 
@@ -3874,13 +3965,13 @@
 
     },
     "Opens Today" : {
-
+      "comment" : "VoiceOver hint: the button opens the Today screen"
     },
     "Optional" : {
-
+      "comment" : "Field hint: not required"
     },
     "Optional estimate" : {
-
+      "comment" : "Section heading: optional estimated burn for a workout"
     },
     "Optional nutrition source" : {
 
@@ -3900,15 +3991,16 @@
       }
     },
     "Original" : {
-
+      "comment" : "Meal portion scale choice: unchanged amount (1×)"
     },
     "Other" : {
-
+      "comment" : "Workout type: any other kind of workout"
     },
     "Other allergies, intolerances or dislikes" : {
 
     },
     "Other, %lld minutes." : {
+      "comment" : "VoiceOver for an other-type workout row, duration in minutes",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -3931,6 +4023,7 @@
       }
     },
     "Page %lld of %lld" : {
+      "comment" : "Page position in a list",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3941,6 +4034,7 @@
       }
     },
     "Partial" : {
+      "comment" : "Day coverage status: only part of the day was logged",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3962,18 +4056,19 @@
       }
     },
     "Photo" : {
-
+      "comment" : "Label: a photo"
     },
     "Photo %lld" : {
-
+      "comment" : "Label for the %lld-th photo"
     },
     "Photo library" : {
-
+      "comment" : "Source option: choose from the photo library"
     },
     "Photo loaded" : {
-
+      "comment" : "VoiceOver announcement: photo finished loading"
     },
     "Photo timing" : {
+      "comment" : "Picker label: photo taken before or after eating",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -3985,12 +4080,13 @@
       }
     },
     "Photo timing: %@" : {
-
+      "comment" : "VoiceOver: photo timing value, %@ is Before eating or After eating"
     },
     "Photo unavailable" : {
-
+      "comment" : "Message: photo cannot be shown"
     },
     "Photos" : {
+      "comment" : "Heading: photos",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4016,10 +4112,10 @@
 
     },
     "Pip" : {
-
+      "comment" : "Name of the fox companion character. Keep as is"
     },
     "Portion" : {
-
+      "comment" : "Section heading: portion size of a food"
     },
     "Portion or nutrients are uncertain" : {
       "extractionState" : "manual",
@@ -4036,24 +4132,25 @@
 
     },
     "Preparing camera…" : {
-
+      "comment" : "Progress text while the camera starts"
     },
     "Preparing photo" : {
-
+      "comment" : "Progress text while a photo is prepared"
     },
     "Preparing photos" : {
-
+      "comment" : "Progress text while photos are prepared"
     },
     "Preparing report" : {
-
+      "comment" : "Progress text while the diary report is built"
     },
     "Preparing voice…" : {
-
+      "comment" : "Progress text while voice input starts"
     },
     "Preview" : {
-
+      "comment" : "Section heading: preview of a scaled meal"
     },
     "Previous day" : {
+      "comment" : "Button/VoiceOver: go to the previous day",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4065,7 +4162,7 @@
       }
     },
     "Privacy Policy" : {
-
+      "comment" : "Link to the privacy policy"
     },
     "Private by default" : {
 
@@ -4088,6 +4185,7 @@
 
     },
     "Profile name" : {
+      "comment" : "Field label: name of a diary profile",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4110,9 +4208,10 @@
       }
     },
     "Progress" : {
-
+      "comment" : "Name of the progress tab"
     },
     "Protein" : {
+      "comment" : "Nutrient name: protein",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4124,6 +4223,7 @@
       }
     },
     "Protein (g)" : {
+      "comment" : "Field label: protein in grams",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4135,10 +4235,10 @@
       }
     },
     "Protein %@" : {
-
+      "comment" : "Protein with amount; %@ is a number"
     },
     "Protein g" : {
-
+      "comment" : "Report column heading: protein in grams"
     },
     "Protein goal %lld days running" : {
       "localizations" : {
@@ -4166,6 +4266,7 @@
 
     },
     "Quantity" : {
+      "comment" : "Label: amount of a food item",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4177,6 +4278,7 @@
       }
     },
     "Queued" : {
+      "comment" : "Status: waiting to run",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4187,9 +4289,10 @@
       }
     },
     "Range" : {
-
+      "comment" : "Picker label: time range (week, month, year)"
     },
     "Reading archive" : {
+      "comment" : "Progress text while an import file is read",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4204,6 +4307,7 @@
 
     },
     "Reauthorize ChatGPT" : {
+      "comment" : "Button: sign in to ChatGPT again",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4221,6 +4325,7 @@
       "extractionState" : "manual"
     },
     "Record history" : {
+      "comment" : "Heading: history of changes of a record",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4232,24 +4337,25 @@
       }
     },
     "Record unavailable" : {
-
+      "comment" : "Message: record cannot be shown"
     },
     "Recorded day" : {
-
+      "comment" : "Label: the day a record belongs to"
     },
     "Recorded food, remaining from recorded food, and estimated burn are always shown separately." : {
 
     },
     "Recorded intake" : {
-
+      "comment" : "Heading: nutrition eaten, as recorded"
     },
     "Recorded intake toward your goal" : {
 
     },
     "Recorded operation" : {
-
+      "comment" : "Coach receipt status: a change was recorded (generic)"
     },
     "Recorded totals" : {
+      "comment" : "Heading: recorded nutrient totals",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4277,12 +4383,13 @@
       }
     },
     "Reload workout" : {
-
+      "comment" : "Button: load the workout again"
     },
     "Reminder time" : {
-
+      "comment" : "Setting: time of the daily reminder"
     },
     "Remove" : {
+      "comment" : "Button: removes an item",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4294,16 +4401,16 @@
       }
     },
     "Remove exercise" : {
-
+      "comment" : "Button: removes an exercise"
     },
     "Remove lookup key" : {
 
     },
     "Remove photo %lld" : {
-
+      "comment" : "VoiceOver: removes the %lld-th photo"
     },
     "Remove set %lld" : {
-
+      "comment" : "VoiceOver: removes set number %lld"
     },
     "Remove the whole %@ meal?" : {
 
@@ -4315,10 +4422,10 @@
 
     },
     "Removed" : {
-
+      "comment" : "Status: item removed"
     },
     "Removed %@." : {
-
+      "comment" : "Confirmation; %@ is the removed item"
     },
     "Removed that meal." : {
 
@@ -4327,7 +4434,7 @@
 
     },
     "Repetitions" : {
-
+      "comment" : "Field label: number of reps in a set"
     },
     "Replace %@ with %@ (%lld meals). Older or deleted records cannot overwrite newer changes." : {
       "localizations" : {
@@ -4340,7 +4447,7 @@
       }
     },
     "Reply" : {
-
+      "comment" : "Menu action: reply to a Coach message"
     },
     "Reply to %@: %@" : {
       "localizations" : {
@@ -4362,18 +4469,19 @@
 
     },
     "Report format" : {
-
+      "comment" : "Section heading: PDF or CSV"
     },
     "Report Reply" : {
-
+      "comment" : "Menu action: report a bad Coach reply"
     },
     "Resizes every food in this meal to reach a calorie total" : {
 
     },
     "Restore %@?" : {
-
+      "comment" : "Confirmation title to restore a diary backup; %@ is its name"
     },
     "Restore diary" : {
+      "comment" : "Button: restore diary from a backup",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4407,21 +4515,22 @@
       }
     },
     "Retake" : {
-
+      "comment" : "Button: take the photo again"
     },
     "Retake photo" : {
-
+      "comment" : "Button: take the photo again"
     },
     "Retake photo %lld" : {
-
+      "comment" : "VoiceOver: retake the %lld-th photo"
     },
     "Retrieved nutrition source" : {
 
     },
     "Retry" : {
-
+      "comment" : "Button: try again"
     },
     "Retry analysis" : {
+      "comment" : "Button: run the meal analysis again",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4432,6 +4541,7 @@
       }
     },
     "Retry backup" : {
+      "comment" : "Button: retry writing the backup file",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4495,6 +4605,7 @@
 
     },
     "Review estimate" : {
+      "comment" : "Button: open the AI estimate to review",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4516,6 +4627,7 @@
       "extractionState" : "manual"
     },
     "Sample request" : {
+      "comment" : "Section heading in connection test: a synthetic test message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4526,6 +4638,7 @@
       }
     },
     "Save" : {
+      "comment" : "Button: saves the edited item",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4556,6 +4669,7 @@
 
     },
     "Save preferences" : {
+      "comment" : "Button: saves diary preferences",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4578,6 +4692,7 @@
       }
     },
     "Saved" : {
+      "comment" : "Status: saved",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4592,10 +4707,10 @@
 
     },
     "Saved attachment" : {
-
+      "comment" : "VoiceOver label of a saved photo attachment"
     },
     "Saved food" : {
-
+      "comment" : "Label: a food saved earlier"
     },
     "Saved on this iPhone" : {
 
@@ -4621,7 +4736,7 @@
       }
     },
     "Saved." : {
-
+      "comment" : "Confirmation text: saved (with period)"
     },
     "Saved. Open Mivu after you unlock to see the Coach's reply." : {
 
@@ -4633,19 +4748,19 @@
 
     },
     "Saving…" : {
-
+      "comment" : "Progress text while saving"
     },
     "See %@" : {
-
+      "comment" : "Button: open a screen; %@ is its name (Diary, Progress)"
     },
     "See progress" : {
-
+      "comment" : "Button: opens Progress"
     },
     "See today" : {
-
+      "comment" : "Button: opens Today"
     },
     "Selected" : {
-
+      "comment" : "Label of a chosen option, with a checkmark"
     },
     "Selected %@: %@ kg" : {
       "localizations" : {
@@ -4658,12 +4773,13 @@
       }
     },
     "Selected companion" : {
-
+      "comment" : "VoiceOver label of the checkmark on the chosen companion"
     },
     "Selected date" : {
-
+      "comment" : "VoiceOver label of the chosen date"
     },
     "Selected profile" : {
+      "comment" : "VoiceOver label of the chosen profile",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4678,6 +4794,7 @@
 
     },
     "Send" : {
+      "comment" : "Button: sends a message to Coach",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4779,6 +4896,7 @@
 
     },
     "Settings" : {
+      "comment" : "Title of the settings screen",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -4790,13 +4908,13 @@
       }
     },
     "Settings error" : {
-
+      "comment" : "Alert title: a settings action failed"
     },
     "Setup" : {
-
+      "comment" : "Settings section heading"
     },
     "Setup progress" : {
-
+      "comment" : "VoiceOver label of the onboarding progress bar"
     },
     "Seven-day average %@ kg from %lld dates." : {
       "localizations" : {
@@ -4818,7 +4936,7 @@
 
     },
     "Sex" : {
-
+      "comment" : "Onboarding field label"
     },
     "Sex is optional. Skipping it uses the midpoint of both formulas." : {
 
@@ -4827,7 +4945,7 @@
 
     },
     "Share report" : {
-
+      "comment" : "Button: shares the diary report file"
     },
     "Share with OpenAI?" : {
 
@@ -4836,7 +4954,7 @@
 
     },
     "Show date" : {
-
+      "comment" : "Button: show a date in the timeline"
     },
     "Show in Dynamic Island" : {
 
@@ -4869,22 +4987,22 @@
       }
     },
     "Skip" : {
-
+      "comment" : "Button: skips a step or marks a day skipped"
     },
     "Skip This Day" : {
 
     },
     "skipped" : {
-
+      "comment" : "Lowercase status: the day was skipped"
     },
     "Skipped" : {
-
+      "comment" : "Diary day status: the day was skipped (not a button)"
     },
     "Skipped days stay out of your statistics." : {
 
     },
     "Snap It" : {
-
+      "comment" : "Quick-action name: opens camera to log a meal; keep short"
     },
     "Snap when ready." : {
 
@@ -4919,13 +5037,13 @@
 
     },
     "Source details" : {
-
+      "comment" : "Disclosure heading: source reference of a food item"
     },
     "Speak your meal" : {
 
     },
     "Start" : {
-
+      "comment" : "Button/label: start of a range (diagnostic)"
     },
     "Start a new diary" : {
 
@@ -4953,15 +5071,16 @@
       }
     },
     "Starting on" : {
-
+      "comment" : "Label: date a goal starts"
     },
     "Status changed later" : {
 
     },
     "Steady" : {
-
+      "comment" : "Onboarding goal pace option: moderate weight change"
     },
     "Step %lld of %lld" : {
+      "comment" : "Onboarding progress, e.g. Step 2 of 5",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4972,18 +5091,19 @@
       }
     },
     "Stop listening" : {
-
+      "comment" : "Button: stops voice input"
     },
     "Stopped listening" : {
-
+      "comment" : "VoiceOver announcement: voice input stopped"
     },
     "Stored proposal" : {
-
+      "comment" : "Disclosure heading: the saved AI proposal (technical)"
     },
     "Strength" : {
-
+      "comment" : "Workout type name"
     },
     "Strength, %lld minutes." : {
+      "comment" : "VoiceOver for a strength workout row, duration in minutes",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -5006,10 +5126,10 @@
       }
     },
     "Submission %lld" : {
-
+      "comment" : "Label for the %lld-th submission of a meal (technical)"
     },
     "Support" : {
-
+      "comment" : "Link: contact support"
     },
     "Synthetic apple estimate" : {
       "extractionState" : "manual",
@@ -5033,7 +5153,7 @@
       }
     },
     "Take photo" : {
-
+      "comment" : "Button: take a photo"
     },
     "Take photo and log meal" : {
 
@@ -5051,16 +5171,16 @@
 
     },
     "Target" : {
-
+      "comment" : "Column heading: calorie target; also chart legend"
     },
     "target %@" : {
-
+      "comment" : "Target value; %@ is a number with unit"
     },
     "target %@ g" : {
-
+      "comment" : "Target value in grams; %@ is a number"
     },
     "Target weight" : {
-
+      "comment" : "Label: goal body weight"
     },
     "Targets that fit" : {
 
@@ -5069,7 +5189,7 @@
 
     },
     "Tell Coach" : {
-
+      "comment" : "Siri shortcut title: send a message to the Coach"
     },
     "Tell Coach instead" : {
 
@@ -5184,7 +5304,7 @@
 
     },
     "Thinking…" : {
-
+      "comment" : "Status: the AI is preparing a reply"
     },
     "This archive belongs to another local profile. Select that profile before restoring." : {
       "extractionState" : "manual",
@@ -5234,7 +5354,7 @@
 
     },
     "This food" : {
-
+      "comment" : "Coach question option: the single food item"
     },
     "This imports the archived profile as a separate private local diary. The selected profile is preserved." : {
       "extractionState" : "manual",
@@ -5257,7 +5377,7 @@
 
     },
     "This meal" : {
-
+      "comment" : "Coach question option: the whole meal"
     },
     "This meal changed. Open it again before editing." : {
       "extractionState" : "manual",
@@ -5334,18 +5454,19 @@
 
     },
     "Through" : {
-
+      "comment" : "Date picker label: end date of a report range"
     },
     "Time" : {
-
+      "comment" : "Field/column label: time of day"
     },
     "Time unspecified" : {
-
+      "comment" : "Meal row: no time known, only a date"
     },
     "Time will be unspecified." : {
 
     },
     "Timezone" : {
+      "comment" : "Field label: time zone",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5371,9 +5492,10 @@
 
     },
     "today" : {
-
+      "comment" : "Lowercase: refers to today (mid-sentence)"
     },
     "Today" : {
+      "comment" : "Name of the Today tab/screen; also day label",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5385,12 +5507,13 @@
       }
     },
     "Top foods" : {
-
+      "comment" : "Progress heading: most often eaten foods"
     },
     "Total calories" : {
-
+      "comment" : "Label: total calories"
     },
     "Tracking days" : {
+      "comment" : "Label: number of days tracked",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5402,13 +5525,13 @@
       }
     },
     "Trend" : {
-
+      "comment" : "Chart legend: weight trend line"
     },
     "Try again" : {
-
+      "comment" : "Button: try again"
     },
     "Try Again" : {
-
+      "comment" : "Button: try again"
     },
     "Try camera again" : {
 
@@ -5434,15 +5557,16 @@
 
     },
     "Undo" : {
-
+      "comment" : "Button: reverts a Coach action"
     },
     "Undo is no longer available." : {
 
     },
     "Undone" : {
-
+      "comment" : "Status: a Coach action was reverted"
     },
     "Unit" : {
+      "comment" : "Field label: unit of a food amount (g, piece); also kg/lb picker",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5454,12 +5578,13 @@
       }
     },
     "Unit, %@" : {
-
+      "comment" : "VoiceOver label of a unit picker; %@ is the current unit"
     },
     "unknown" : {
-
+      "comment" : "Lowercase value: not known"
     },
     "Unknown" : {
+      "comment" : "Value: not known",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5471,6 +5596,7 @@
       }
     },
     "Unspecified" : {
+      "comment" : "Value: not specified",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5482,6 +5608,7 @@
       }
     },
     "Untracked" : {
+      "comment" : "Day coverage status: the user did not track this day",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5503,6 +5630,7 @@
       }
     },
     "Update meal" : {
+      "comment" : "Button: applies changes to a meal",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5545,7 +5673,7 @@
       }
     },
     "Updated %@." : {
-
+      "comment" : "Confirmation; %@ is the updated item"
     },
     "Usage limit reached" : {
       "localizations" : {
@@ -5659,6 +5787,7 @@
 
     },
     "Waking day" : {
+      "comment" : "Label: the day (waking-day, from wake to sleep) a record belongs to",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -5673,7 +5802,7 @@
 
     },
     "Week" : {
-
+      "comment" : "Range option: one week"
     },
     "Weigh in %lld more times to see your burn." : {
       "localizations" : {
@@ -5720,10 +5849,10 @@
       }
     },
     "Weigh-ins" : {
-
+      "comment" : "Heading: weight measurements"
     },
     "Weight" : {
-
+      "comment" : "Label: body weight"
     },
     "Weight · %@ %@ · %@" : {
       "localizations" : {
@@ -5736,22 +5865,22 @@
       }
     },
     "Weight (%@)" : {
-
+      "comment" : "Field label: body weight with unit; %@ is kg or lb"
     },
     "Weight (kg)" : {
-
+      "comment" : "Field label: body weight in kilograms"
     },
     "Weight change" : {
-
+      "comment" : "Label: change in body weight"
     },
     "Weight chart: %lld measured dates." : {
 
     },
     "Weight goal" : {
-
+      "comment" : "Label: goal body weight"
     },
     "Weight in %@" : {
-
+      "comment" : "Field label/VoiceOver: weight entry; %@ is the unit"
     },
     "Weight in kg" : {
       "extractionState" : "manual",
@@ -5765,10 +5894,10 @@
       }
     },
     "Weight kg" : {
-
+      "comment" : "Report column heading: weight in kilograms"
     },
     "Weight saved" : {
-
+      "comment" : "Confirmation: weight saved"
     },
     "Weight saved · %@ %@" : {
       "localizations" : {
@@ -5791,16 +5920,16 @@
       }
     },
     "Weight saved." : {
-
+      "comment" : "Confirmation: weight saved (with period)"
     },
     "Weight trend" : {
-
+      "comment" : "Heading: trend of body weight"
     },
     "Weight trend (%@)" : {
 
     },
     "Welcome back" : {
-
+      "comment" : "Heading on Today when the user returns"
     },
     "What food did you eat?" : {
 
@@ -5847,10 +5976,10 @@
 
     },
     "Workout" : {
-
+      "comment" : "Label: a workout"
     },
     "Workout · %@" : {
-
+      "comment" : "Row title; %@ is the workout type"
     },
     "Workout saved: cardio, %lld minutes." : {
       "localizations" : {
@@ -5919,10 +6048,10 @@
       }
     },
     "Workout saved." : {
-
+      "comment" : "Confirmation: workout saved"
     },
     "Workouts" : {
-
+      "comment" : "Heading: workouts"
     },
     "Write what you ate or what changed" : {
       "extractionState" : "manual",
@@ -5936,16 +6065,16 @@
       }
     },
     "Year" : {
-
+      "comment" : "Range option: one year"
     },
     "yesterday" : {
-
+      "comment" : "Lowercase: refers to yesterday (mid-sentence)"
     },
     "Yesterday" : {
-
+      "comment" : "Day label: the day before today"
     },
     "You" : {
-
+      "comment" : "Label of the user in the chat"
     },
     "You can return to Mivu." : {
 
@@ -5986,13 +6115,13 @@
 
     },
     "Your day" : {
-
+      "comment" : "Settings section heading about the waking day"
     },
     "Your day just changed. Save again to add this to the new day." : {
 
     },
     "Your diaries" : {
-
+      "comment" : "Heading: list of the user's diary profiles"
     },
     "Your earlier food was saved. These changed values have not been saved." : {
 
@@ -6024,7 +6153,7 @@
       }
     },
     "Your goal" : {
-
+      "comment" : "Label: the user's weight goal"
     },
     "Your goals are updated." : {
 
@@ -6080,13 +6209,13 @@
       }
     },
     "Zoom %lld percent" : {
-
+      "comment" : "VoiceOver value of the photo zoom level in percent"
     },
     "Zoom in" : {
-
+      "comment" : "VoiceOver label: zoom the photo in"
     },
     "Zoom out" : {
-
+      "comment" : "VoiceOver label: zoom the photo out"
     }
   },
   "version" : "1.0"

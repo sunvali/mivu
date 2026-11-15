@@ -42,6 +42,7 @@ PLURAL_FORMS = {
     'ar': {'zero', 'one', 'two', 'few', 'many', 'other'}, 'he': {'one', 'two', 'other'},
     'ru': {'one', 'few', 'many', 'other'}, 'uk': {'one', 'few', 'many', 'other'}, 'pl': {'one', 'few', 'many', 'other'},
     'es': {'one', 'many', 'other'}, 'fr': {'one', 'many', 'other'}, 'it': {'one', 'many', 'other'}, 'pt': {'one', 'many', 'other'},
+    'en': {'one', 'other'}, 'de': {'one', 'other'}, 'ja': {'other'}, 'zh': {'other'}, 'ko': {'other'},
 }
 # Only these forms may drop the number ("one meal"); the others always cover several counts.
 MAY_DROP_NUMBER = {'zero', 'one', 'two'}
@@ -76,7 +77,7 @@ def _plural_sets(localization):
 
 def _format_errors(path, key, language, localization, source):
     found = []
-    for missing in sorted({form for forms in _plural_sets(localization) for form in PLURAL_FORMS.get(language, {'other'}) - forms}):
+    for missing in sorted({form for forms in _plural_sets(localization) for form in PLURAL_FORMS.get(language, set()) - forms}):
         found.append(f"{path}: {key!r} in {language!r} needs the plural form {missing!r}")
     expected = {}
     for form, value in _forms(source):  # the source's widest form, usually 'other'
@@ -89,8 +90,14 @@ def _format_errors(path, key, language, localization, source):
     return found
 
 
+def _text(key, entry, source):
+    """The source text people read, without placeholders (Info.plist keys are names, so use their value)."""
+    value = entry.get('localizations', {}).get(source, {}).get('stringUnit', {}).get('value', key)
+    return PLACEHOLDER.sub('', value.replace('%%', ''))
+
+
 def errors(catalogs, languages):
-    found = []
+    found = [f"add CLDR plural forms for {language!r} to PLURAL_FORMS" for language in sorted(languages - set(PLURAL_FORMS))]
     for path, catalog in sorted(catalogs.items()):
         source = catalog.get('sourceLanguage', 'en')
         for key, entry in sorted(catalog.get('strings', {}).items()):
@@ -101,6 +108,13 @@ def errors(catalogs, languages):
                 found.append(f"{path}: {key!r} has {language!r}, which is not in knownRegions")
             if entry.get('shouldTranslate') is False:
                 continue
+            text = _text(key, entry, source)
+            if not any(ch.isalpha() for ch in text):
+                found.append(f"{path}: {key!r} has no words; mark it shouldTranslate false")
+                continue
+            # A word or two alone ("Open", "Log") can be a verb, a status or a noun; translators need to know which.
+            if len(text.split()) <= 2 and not entry.get('comment'):
+                found.append(f"{path}: {key!r} needs a translator comment")
             for language in sorted(languages):
                 if language not in localizations:
                     if language != source:

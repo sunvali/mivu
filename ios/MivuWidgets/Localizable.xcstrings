@@ -2,6 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "%@ / %@ kcal" : {
+      "comment" : "Widget: calories eaten / daily target",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12,19 +13,22 @@
       }
     },
     "%@ calories eaten" : {
-
+      "comment" : "Widget VoiceOver: %@ is calories eaten"
     },
     "%@ calories eaten." : {
+      "comment" : "VoiceOver for the calorie ring: %@ is the calories eaten today",
       "extractionState" : "manual"
     },
     "%@ calories left." : {
+      "comment" : "VoiceOver for the calorie ring: %@ is calories remaining in the daily target",
       "extractionState" : "manual"
     },
     "%@ calories over." : {
+      "comment" : "VoiceOver for the calorie ring: %@ is calories above the daily target",
       "extractionState" : "manual"
     },
     "%@ kcal recorded" : {
-
+      "comment" : "Widget: %@ is calories recorded today"
     },
     "%@ of %@ calories eaten" : {
       "localizations" : {
@@ -37,9 +41,11 @@
       }
     },
     "%@ over" : {
+      "comment" : "Amount above the target; %@ is a number with unit",
       "extractionState" : "manual"
     },
     "at least %@" : {
+      "comment" : "Lower bound; %@ is a number with unit (calories are partly unknown)",
       "extractionState" : "manual"
     },
     "At least %@ calories eaten." : {
@@ -52,12 +58,14 @@
       "extractionState" : "manual"
     },
     "Calories" : {
+      "comment" : "Nutrient label / heading for calories (noun)",
       "extractionState" : "manual"
     },
     "Calories not known yet." : {
       "extractionState" : "manual"
     },
     "Carbs" : {
+      "comment" : "Nutrient name: carbohydrates",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -69,9 +77,11 @@
       }
     },
     "Coach" : {
+      "comment" : "Widget button label: opens the Coach",
       "extractionState" : "manual"
     },
     "Fat" : {
+      "comment" : "Nutrient name: fat",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -83,21 +93,22 @@
       }
     },
     "kcal" : {
-
+      "comment" : "Unit: kilocalories (calories) after a number"
     },
     "kcal recorded" : {
-
+      "comment" : "Widget text: calories recorded today, after a number"
     },
     "Mivu" : {
-
+      "comment" : "App name. Keep as is"
     },
     "Mivu day progress" : {
 
     },
     "of %@ kcal" : {
-
+      "comment" : "Fragment after a calorie number: of the daily target; %@ is the target"
     },
     "Open Coach" : {
+      "comment" : "Widget button: opens the Coach",
       "extractionState" : "manual"
     },
     "Open Mivu for today" : {
@@ -116,6 +127,7 @@
 
     },
     "Protein" : {
+      "comment" : "Nutrient name: protein",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -133,10 +145,11 @@
 
     },
     "Snap It" : {
+      "comment" : "Widget/control button: opens camera to log a meal; keep short",
       "extractionState" : "manual"
     },
     "Today" : {
-
+      "comment" : "Widget heading: today"
     },
     "Today's calories, with Snap It and Coach one tap away." : {
       "extractionState" : "manual"

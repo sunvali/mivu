@@ -44,6 +44,7 @@
       }
     },
     "Tell ${applicationName}" : {
+      "comment" : "Siri phrase to message the Coach; ${applicationName} is Mivu, keep it",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
