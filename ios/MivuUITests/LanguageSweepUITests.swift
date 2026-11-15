@@ -185,7 +185,9 @@ import XCTest
         let app = launch(["--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"])
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
         for name in ["Today", "Diary", "Progress", "Coach"] { XCTAssertTrue(tab(name, in: app).exists, "\(name) tab reads \(shown(name))") }
-        XCTAssertGreaterThan(tab("Today", in: app).frame.midX, tab("Coach", in: app).frame.midX, "Hebrew lays out right to left")
+        let first = tab("Today", in: app).frame, last = tab("Coach", in: app).frame
+        // The Duo's side rail stacks the tabs; testRightToLeftFlagMirrorsTheApp checks the screen beside it.
+        if abs(first.midY - last.midY) < 1 { XCTAssertGreaterThan(first.midX, last.midX, "Hebrew lays out right to left") }
         tab("Diary", in: app).tap()
         XCTAssertTrue(app.descendants(matching: .any)["diaryWeekStrip"].waitForExistence(timeout: 10))
         let months = DateFormatter().then { $0.locale = Locale(identifier: "he_IL") }.monthSymbols ?? []
