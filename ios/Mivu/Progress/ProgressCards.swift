@@ -66,7 +66,7 @@ struct ProgressSnapshot {
             let span = points.count >= 2 ? ProgressInsights.days(from: points[0].localDate, to: points[points.count - 1].localDate) : 0
             let change = (ProgressInsights.slopePerDay(points) ?? 0) * Double(span)
             let amount = abs(change).formatted(.number.precision(.fractionLength(1)))
-        return change <= 0 ? String(localized: "Down \(amount) kg in \(loadedDays.count) days") : String(localized: "Up \(amount) kg in \(loadedDays.count) days")
+            return change <= 0 ? String(localized: "Down \(amount) kg in \(loadedDays.count) days") : String(localized: "Up \(amount) kg in \(loadedDays.count) days")
         case let .caloriesOnTrack(near, logged), let .caloriesOff(near, logged):
             return String(localized: "\(near) of \(logged) days near your target")
         case .notEnoughData:

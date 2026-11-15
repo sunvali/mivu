@@ -104,7 +104,8 @@ private struct Headline: View {
                 Text(state.figure).font(figureFont).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                     .foregroundStyle(state.isOver ? Color.diarySecondary : primary)
                     .privacySensitive(state.hideWhenLocked)
-                Text("kcal \(state.word)")
+                // One whole key per word, so a language can reorder or inflect it.
+                Text(state.word == "left" ? "kcal left" : state.word == "over" ? "kcal over" : "kcal eaten")
                     .font(.footnote.weight(.medium)).foregroundStyle(Color.diarySecondary).lineLimit(1)
                     .privacySensitive(state.hideWhenLocked)
             }

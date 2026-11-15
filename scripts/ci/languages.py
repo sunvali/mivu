@@ -129,7 +129,8 @@ def xliff_errors(xliff, catalogs):
 def widget_errors(source, app_strings, widget_strings):
     """The widget resolves text from its own catalog, and Xcode only extracts part of it there:
     any plain literal the widget code uses that the app translates must be in the widget's catalog."""
-    literals = set(re.findall(r'"((?:[^"\\\\]|\\\\.)*)"', source))
+    source = re.sub(r'#Preview\([^\n]*', '', source)  # preview names are never shown to people
+    literals = set(re.findall(r'"((?:[^"\\]|\\.)*)"', source))
     return [f"{key!r} is shown by the widget but is not in its catalog"
             for key in sorted(literals) if key and key in app_strings and key not in widget_strings]
 

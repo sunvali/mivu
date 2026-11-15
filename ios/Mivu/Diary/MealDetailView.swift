@@ -266,7 +266,7 @@ struct MealDetailView: View {
             } label: {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.semibold)).directionFromContent(item.name)
+                        Text(item.provenance == .sample ? String(localized: "Apple (sample)") : item.name).font(.body.weight(.semibold)).directionFromContent(item.name)
                         Text("\(item.quantity.formatted()) \(item.unit)").font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
                         if item.uncertain { Text("Portion or nutrients are uncertain").font(.caption).foregroundStyle(Color.diarySecondary) }
                     }
@@ -300,7 +300,7 @@ struct MealDetailView: View {
         }
     }
     private func displayTitle(_ meal: MealReadModel) -> String {
-        if let item = meal.items.first { return item.provenance == .sample ? "Apple (sample)" : item.name }
+        if let item = meal.items.first { return item.provenance == .sample ? String(localized: "Apple (sample)") : item.name }
         let note = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return note.isEmpty ? String(localized: "Meal") : note
     }
@@ -350,11 +350,11 @@ struct MealDetailView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     if typeSize.isAccessibilitySize {
-                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.medium)).directionFromContent(item.name)
+                        Text(item.provenance == .sample ? String(localized: "Apple (sample)") : item.name).font(.body.weight(.medium)).directionFromContent(item.name)
                         Text("\(item.quantity.formatted()) \(item.unit)").monospacedDigit().foregroundStyle(Color.diarySecondary)
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.medium)).directionFromContent(item.name)
+                            Text(item.provenance == .sample ? String(localized: "Apple (sample)") : item.name).font(.body.weight(.medium)).directionFromContent(item.name)
                             Spacer(minLength: 8)
                             Text("\(item.quantity.formatted()) \(item.unit)").monospacedDigit().foregroundStyle(Color.diarySecondary)
                             Image(systemName: "chevron.forward").font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
@@ -566,7 +566,7 @@ private struct FoodItemEditor: View {
                             Image(systemName: "chevron.down").rotationEffect(.degrees(showDetails ? 180 : 0)).accessibilityHidden(true)
                         }.frame(minHeight: 44)
                     }
-                    .accessibilityValue(showDetails ? "Expanded" : "Collapsed").accessibilityIdentifier("foodMoreDetails")
+                    .accessibilityValue(showDetails ? String(localized: "Expanded") : String(localized: "Collapsed")).accessibilityIdentifier("foodMoreDetails")
                     if showDetails {
                         TextField("Name", text: $name).focused($editingField, equals: "Name")
                         nutrientField(String(localized: "Energy (kcal)"), text: nutrientBinding("kcal", $kcal), identifier: "itemCalories")

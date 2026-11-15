@@ -75,6 +75,11 @@ class Catalogs(unittest.TestCase):
         app = {'Snap It': {}, 'Coach': {}, 'Unused': {}}
         self.assertEqual(languages.widget_errors(source, app, {'Snap It': {}}), ["'Coach' is shown by the widget but is not in its catalog"])
 
+    def test_widget_literal_after_an_interpolated_one_is_checked(self):
+        source = 'Text("\\(x) kcal"); Text("Open Mivu")\n#Preview("Expanded", as: .dynamicIsland(.expanded)) {'
+        errs = languages.widget_errors(source, {'Open Mivu': {}, 'Expanded': {}}, {})
+        self.assertEqual(errs, ["'Open Mivu' is shown by the widget but is not in its catalog"])
+
     def test_shortcut_phrase_sets_count_as_values(self):
         entry = {'localizations': {'en': {'stringSet': {'state': 'new', 'values': ['Tell ${applicationName}']}}}}
         self.assertEqual(languages.errors(catalog(**{'Tell ${applicationName}': entry}), {'en'}), [])

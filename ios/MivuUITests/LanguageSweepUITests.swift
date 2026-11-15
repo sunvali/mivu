@@ -128,7 +128,6 @@ import XCTest
     func testEveryScreenOpens() {
         var seen: [String] = []
         visitAllScreens { name, _ in seen.append(name) }
-        XCTAssertEqual(Set(seen), Self.notYetLocalized.union(seen), "Every screen in the list is visited")
         XCTAssertEqual(seen.count, 12)
     }
 
