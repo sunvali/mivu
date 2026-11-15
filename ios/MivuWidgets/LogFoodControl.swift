@@ -5,7 +5,7 @@ import WidgetKit
 struct LogFoodControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.yakov103.mivu.log-food-control") {
-            ControlWidgetButton(action: LogFoodIntent()) { Label("Snap It", systemImage: "camera") }
+            ControlWidgetButton(action: LogFoodIntent()) { Label("Snap It", image: "pip.head") }
         }
         .displayName("Snap It")
         .description("Photograph a meal and log it in Mivu.")

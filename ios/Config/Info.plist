@@ -11,8 +11,8 @@
 			<string>com.yakov103.mivu.log-food</string>
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Snap It</string>
-			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>camera</string>
+			<key>UIApplicationShortcutItemIconFile</key>
+			<string>pip.head</string>
 		</dict>
 	</array>
 </dict>
