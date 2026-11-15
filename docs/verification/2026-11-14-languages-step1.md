@@ -125,18 +125,40 @@ waiting for the Coach receipt, passed on base and on a rerun of this change.
 `duo-closed-*` (all 12 screens), `duo-book` and `duo-open-sideways` (four tabs
 in english, rtl and double), and the typed-Hebrew pair.
 
+## Simulator checks after the PR opened
+
+Run on 2026-11-15 on a dedicated iPhone Duo simulator (iOS 27.1) with the
+build of `9a68162`, right-to-left pseudolanguage, driven by the device tool
+(`fold`, `orientation landscape-left` turns the inner screen upright):
+
+- **Open upright** (`languages/step1/duo-open-upright.png`) and **table pose**
+  (`duo-table.png`): Today, Diary, Progress and Coach mirror (tab bar from the
+  right, titles and meal rows trailing, Week first in the range control), charts
+  keep time left to right, Pip is not flipped except the known Progress card case.
+  In table pose Coach hides Pip and moves the controls to the flat half by design
+  (`CoachView.atTable`).
+- **Fold and unfold with a draft** (`duo-draft.png`): the Hebrew draft
+  "2 ביצים ו-toast, קפה עם חלב 3%" kept every character, its right-to-left
+  alignment and keyboard focus through open → closed → open. Seen on the way:
+  closed and sideways with the keyboard up, Coach's empty-state heading overlaps
+  the date divider; a layout issue, not checked against `main`.
+- **VoiceOver, partly**: the accessibility tree on all four tabs has a name for
+  every control and reads right to left (Today tab first, Week first). Spoken
+  output was not heard; one button was printed by the tool as its identifier
+  (`todayDayActions`) although the source gives it the label "Day actions, <date>".
+
+The real iPhone Duo (iOS 27.2.1) ran the right-to-left sweep once: charts stayed
+left to right; the other three tests failed because the sweep's steps assume the
+simulator layout (the real outer screen, 457 × 678 points, uses the side rail
+upright and puts Add in the "…" menu). The phone was restored to a `main` build
+and its diary checked identical to a backup taken before install.
+
 ## Not verified
 
-- **Duo open upright and table pose.** XCTest cannot turn the Duo's inner screen
-  upright (as the earlier Duo record also found), and the device tool has no
-  rotation, so those captures repeated the sideways layout and are not counted.
-  The closed pose covers the upright single-column layout.
-- **Duo open poses through XCTest.** XCTest photographs the outer panel only, so
-  open-pose captures were taken with the device tool while a test held the app
-  open (`testHoldForCapture`).
-- **Fold and unfold with a draft**, VoiceOver on a device, and Siri phrases on a
-  device: physical checks, not done.
-- **The save marker with the live model**: fixtures prove the engine handles it;
-  whether the model writes it reliably belongs to the step 2 live check.
+- **The save marker with the live model**: needs a ChatGPT sign-in on the test
+  simulator, not done yet. Fixtures prove the engine handles the marker.
+- **Siri phrases**: Siri does not run on the simulator.
+- **VoiceOver speech and the Duo split-screen with another app**: real-device checks.
 - **Widgets and the Live Activity under right-to-left**: their text is in the
   catalogs and the lint checks it, but they were not captured on a Home Screen.
+- **The sweep on the real Duo's outer screen**: its steps need the side-rail layout.
