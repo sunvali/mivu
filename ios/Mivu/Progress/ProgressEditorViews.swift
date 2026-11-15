@@ -163,7 +163,7 @@ struct GoalEditorView: View {
                             Text(historyError).foregroundStyle(.red)
                             Button("Retry loading history") { historyRequest = UUID() }.frame(minHeight: 44)
                         } else {
-                            Text(historyLoading || historyGeneration != model.changeGeneration ? "Loading goals…" : "No goals set").foregroundStyle(Color.diarySecondary)
+                            Text(historyLoading || historyGeneration != model.changeGeneration ? String(localized: "Loading goals…") : String(localized: "No goals set")).foregroundStyle(Color.diarySecondary)
                         }
                         if !historyLoading, historyGeneration == model.changeGeneration, history?.hasMore == true {
                             Button("Older goals") { historyBefore = history?.cursor; historyRequest = UUID() }
@@ -182,14 +182,14 @@ struct GoalEditorView: View {
                     }
                 }
                 Section("Daily targets") {
-                    field("Energy (kcal)", text: $values.kcal, id: "goalKcal")
-                    field("Carbs (g)", text: $values.carbs, id: "goalCarbs")
-                    field("Protein (g)", text: $values.protein, id: "goalProtein")
-                    field("Fat (g)", text: $values.fat, id: "goalFat")
+                    field(String(localized: "Energy (kcal)"), text: $values.kcal, id: "goalKcal")
+                    field(String(localized: "Carbs (g)"), text: $values.carbs, id: "goalCarbs")
+                    field(String(localized: "Protein (g)"), text: $values.protein, id: "goalProtein")
+                    field(String(localized: "Fat (g)"), text: $values.fat, id: "goalFat")
                     Text("Leave a nutrient blank if you have no target for it.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
-                Section("Optional weight goal") { field("Weight (kg)", text: $values.weight, id: "goalWeight") }
+                Section("Optional weight goal") { field(String(localized: "Weight (kg)"), text: $values.weight, id: "goalWeight") }
                 Section("Exercise") {
                     Toggle("Include estimated workout energy in an adjusted remaining figure", isOn: $values.exerciseCredit)
                         .disabled(!goalLoaded)
@@ -224,7 +224,7 @@ struct GoalEditorView: View {
                         .frame(minHeight: 44).accessibilityIdentifier("saveGoals")
                         .alert("Could not save goals", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                             Button("OK", role: .cancel) { saveError = nil }
-                        } message: { Text(saveError ?? "Your entered goals are preserved.") }
+                        } message: { Text(saveError ?? String(localized: "Your entered goals are preserved.")) }
                 }
             }
         }
@@ -248,8 +248,6 @@ struct GoalEditorView: View {
         } message: {
             Text("Your entered targets have not been saved. Changing the date loads the saved settings for the selected date.")
         }
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
         .environment(\.timeZone, TimeZone(identifier: zone) ?? .current)
     }
 
@@ -274,15 +272,15 @@ struct GoalEditorView: View {
 
     private func goalHistorySummary(_ goal: GoalRecord) -> String {
         let targets: [(String, Double?, String)] = [
-            ("Energy", goal.targets.kcal, "kcal"), ("Carbs", goal.targets.carbs, "g"),
-            ("Protein", goal.targets.protein, "g"), ("Fat", goal.targets.fat, "g"),
-            ("Weight goal", goal.goalWeightKg, "kg")
+            (String(localized: "Energy"), goal.targets.kcal, "kcal"), (String(localized: "Carbs"), goal.targets.carbs, "g"),
+            (String(localized: "Protein"), goal.targets.protein, "g"), ("Fat", goal.targets.fat, "g"),
+            (String(localized: "Weight goal"), goal.goalWeightKg, "kg")
         ]
         var parts = targets.compactMap { name, value, unit in
-            value.map { "\(name) \($0.formatted(.number.precision(.fractionLength(0...1)))) \(unit)" }
+            value.map { String(localized: "\(name) \($0.formatted(.number.precision(.fractionLength(0...1)))) \(unit)") }
         }
-        if goal.exerciseCreditEnabled { parts.append("Exercise adjustment enabled") }
-        return parts.isEmpty ? "No targets set" : parts.joined(separator: " · ")
+        if goal.exerciseCreditEnabled { parts.append(String(localized: "Exercise adjustment enabled")) }
+        return parts.isEmpty ? String(localized: "No targets set") : parts.joined(separator: " · ")
     }
 
     private func loadDate(_ chosen: Date) {
@@ -303,7 +301,7 @@ struct GoalEditorView: View {
             values = loaded; originalValues = loaded; goalLoaded = true; loading = false; saveError = nil
         } catch {
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, goalRequest == request else { return }
-            loading = false; saveError = "Could not load saved goals. Your draft is preserved."
+            loading = false; saveError = String(localized: "Could not load saved goals. Your draft is preserved.")
         }
     }
 
@@ -317,7 +315,7 @@ struct GoalEditorView: View {
             history = page; historyGeneration = generation; historyLoading = false
         } catch {
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, historyRequest == request else { return }
-            historyLoading = false; historyError = "Could not load goal history. Your draft is preserved."
+            historyLoading = false; historyError = String(localized: "Could not load goal history. Your draft is preserved.")
         }
     }
 
@@ -335,7 +333,7 @@ struct GoalEditorView: View {
             saving = false
             if success && model.selection == ownership && ownership != nil { dismiss() }
             else if model.selection == ownership && ownership != nil {
-                saveError = model.errorMessage ?? "Could not save these goals. Your entries are preserved."
+                saveError = model.errorMessage ?? String(localized: "Could not save these goals. Your entries are preserved.")
                 model.errorMessage = nil
             }
         }
@@ -367,7 +365,7 @@ struct WeightCorrectionView: View {
         NavigationStack {
             Form {
                 Section("Morning weight · \(localDate)") {
-                    progressNumberField("Weight in \(entry.unit)", text: $value, id: "weightCorrectionInput")
+                    progressNumberField(String(localized: "Weight in \(entry.unit)"), text: $value, id: "weightCorrectionInput")
                     if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !valid {
                         Text("Enter a number greater than 0 and no more than 1,000 \(entry.unit).")
                             .font(.subheadline).foregroundStyle(.red)
@@ -392,7 +390,7 @@ struct WeightCorrectionView: View {
                         .frame(minHeight: 44).accessibilityIdentifier("saveWeightCorrection")
                         .alert("Could not save weight", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                             Button("OK", role: .cancel) { saveError = nil }
-                        } message: { Text(saveError ?? "Your entered weight is preserved.") }
+                        } message: { Text(saveError ?? String(localized: "Your entered weight is preserved.")) }
                 }
             }
         }
@@ -400,8 +398,6 @@ struct WeightCorrectionView: View {
             if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
 
     private func save() {
@@ -416,7 +412,7 @@ struct WeightCorrectionView: View {
             saving = false
             if success && model.selection == ownership && ownership != nil { dismiss() }
             else if model.selection == ownership && ownership != nil {
-                saveError = model.errorMessage ?? "Could not save this weight. Your entry is preserved."
+                saveError = model.errorMessage ?? String(localized: "Could not save this weight. Your entry is preserved.")
                 model.errorMessage = nil
             }
         }
@@ -518,18 +514,18 @@ struct WorkoutEditorView: View {
                 Section("Workout · \(localDate)") {
                     if typeSize.isAccessibilitySize {
                         VStack(alignment: .leading) {
-                            kindButton(.strength, "Strength", id: "workoutStrength")
-                            kindButton(.cardio, "Cardio", id: "workoutCardio")
-                            kindButton(.other, "Other", id: "workoutOther")
+                            kindButton(.strength, String(localized: "Strength"), id: "workoutStrength")
+                            kindButton(.cardio, String(localized: "Cardio"), id: "workoutCardio")
+                            kindButton(.other, String(localized: "Other"), id: "workoutOther")
                         }
                     } else {
                         HStack {
-                            kindButton(.strength, "Strength", id: "workoutStrength")
-                            kindButton(.cardio, "Cardio", id: "workoutCardio")
-                            kindButton(.other, "Other", id: "workoutOther")
+                            kindButton(.strength, String(localized: "Strength"), id: "workoutStrength")
+                            kindButton(.cardio, String(localized: "Cardio"), id: "workoutCardio")
+                            kindButton(.other, String(localized: "Other"), id: "workoutOther")
                         }
                     }
-                    progressNumberField("Duration in minutes", text: $duration, id: "workoutDuration", keyboard: .numberPad)
+                    progressNumberField(String(localized: "Duration in minutes"), text: $duration, id: "workoutDuration", keyboard: .numberPad)
                     if !duration.isEmpty && Int(duration).map({ (1...1440).contains($0) }) != true {
                         Text("Enter a duration from 1 to 1,440 minutes.").font(.subheadline).foregroundStyle(.red)
                     }
@@ -542,9 +538,9 @@ struct WorkoutEditorView: View {
                             ForEach(exercises[exerciseIndex].sets.indices, id: \.self) { setIndex in
                                 let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
                                 layout {
-                                    progressNumberField("Repetitions", text: $exercises[exerciseIndex].sets[setIndex].repetitions,
+                                    progressNumberField(String(localized: "Repetitions"), text: $exercises[exerciseIndex].sets[setIndex].repetitions,
                                                         id: setID("workoutRepetitions", exercise: exerciseIndex, set: setIndex), keyboard: .numberPad)
-                                    progressNumberField("Load (kg, blank for bodyweight)", text: $exercises[exerciseIndex].sets[setIndex].load,
+                                    progressNumberField(String(localized: "Load (kg, blank for bodyweight)"), text: $exercises[exerciseIndex].sets[setIndex].load,
                                                         id: setID("workoutLoad", exercise: exerciseIndex, set: setIndex))
                                 }
                                 if exercises[exerciseIndex].sets.count > 1 {
@@ -577,7 +573,7 @@ struct WorkoutEditorView: View {
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
                 Section("Optional estimate") {
-                    progressNumberField("Estimated burn (kcal)", text: $burn, id: "workoutBurn")
+                    progressNumberField(String(localized: "Estimated burn (kcal)"), text: $burn, id: "workoutBurn")
                     if !ProgressDate.validOptionalNonnegative(burn) {
                         Text("Enter 0–100,000 kcal, or leave this blank.").font(.subheadline).foregroundStyle(.red)
                     }
@@ -589,7 +585,7 @@ struct WorkoutEditorView: View {
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
-            .navigationTitle(session == nil ? "Add workout manually" : "Edit workout")
+            .navigationTitle(session == nil ? String(localized: "Add workout manually") : String(localized: "Edit workout"))
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { dismissProgressKeyboard() }.accessibilityIdentifier("progressKeyboardDone") }
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if isDirty { showDiscard = true } else { dismiss() } }.disabled(saving).frame(minHeight: 44)
@@ -602,7 +598,7 @@ struct WorkoutEditorView: View {
                         .frame(minHeight: 44).accessibilityIdentifier("saveWorkout")
                         .alert("Could not save workout", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                             Button("OK", role: .cancel) { saveError = nil }
-                        } message: { Text(saveError ?? "Your entered workout is preserved.") }
+                        } message: { Text(saveError ?? String(localized: "Your entered workout is preserved.")) }
                 }
             }
         }
@@ -610,8 +606,6 @@ struct WorkoutEditorView: View {
             if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
 
     private func kindButton(_ value: WorkoutKind, _ title: String, id: String) -> some View {
@@ -650,7 +644,7 @@ struct WorkoutEditorView: View {
             saving = false
             if success && model.selection == ownership && ownership != nil { dismiss() }
             else if model.selection == ownership && ownership != nil {
-                saveError = model.errorMessage ?? "Could not save this workout. Your entries are preserved."
+                saveError = model.errorMessage ?? String(localized: "Could not save this workout. Your entries are preserved.")
                 model.errorMessage = nil
             }
         }
@@ -714,12 +708,12 @@ struct MorningWeightEditorView: View {
             Form {
                 Section("Morning weight") {
                     if let localDate { LabeledContent("Waking day", value: localDate) }
-                    progressNumberField("Weight (\(unit))", text: $value, id: "weightInput").disabled(loading || !dayLoaded)
+                    progressNumberField(String(localized: "Weight (\(unit))"), text: $value, id: "weightInput").disabled(loading || !dayLoaded)
                     if !value.isEmpty && !valid {
                         Label("Enter a weight greater than 0 and no more than 1,000 \(unit).", systemImage: "exclamationmark.circle")
                             .font(.subheadline).foregroundStyle(.red)
                     }
-                    Text(dayID == nil ? "Optional. Saving starts or reuses today's waking day." : "Saving updates only this selected waking day. Other day labels and your active day are preserved.")
+                    Text(dayID == nil ? String(localized: "Optional. Saving starts or reuses today's waking day.") : String(localized: "Saving updates only this selected waking day. Other day labels and your active day are preserved."))
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
                 if let saveError {
@@ -754,8 +748,6 @@ struct MorningWeightEditorView: View {
             if selected != ownership { dismiss() }
         }
         .interactiveDismissDisabled(isDirty || saving)
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
 
     private func loadSelectedDay() async {
@@ -771,7 +763,7 @@ struct MorningWeightEditorView: View {
             dayLoaded = true; loading = false; saveError = nil
         } catch {
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, dayRequest == request else { return }
-            loading = false; saveError = "Could not load this day's saved weight. Your entry is preserved."
+            loading = false; saveError = String(localized: "Could not load this day's saved weight. Your entry is preserved.")
         }
     }
 
@@ -798,7 +790,7 @@ struct MorningWeightEditorView: View {
             saving = false
             if success && model.selection == ownership && ownership != nil { dismiss() }
             else if model.selection == ownership && ownership != nil {
-                saveError = model.errorMessage ?? "Could not save this weight. Your entry is preserved."
+                saveError = model.errorMessage ?? String(localized: "Could not save this weight. Your entry is preserved.")
                 model.errorMessage = nil
             }
         }

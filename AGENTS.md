@@ -21,10 +21,12 @@ for this native app. No web frontend is required.
 - Preserve durable local capture: save acknowledgement and backup-folder write
   acknowledgement are separate. Never claim remote sync from a file-provider
   write; retain pending errors and never restore stale data over deletions.
-- The MVP UI and acceptance are English-only; disable the Hebrew language
-  selector. Preserve existing profile/archive data and stored language values;
-  do not require Hebrew RTL functionality for MVP acceptance. Keep Dynamic Type,
-  VoiceOver, reduced motion, and minimum 44-point touch targets.
+- Mivu follows the system language and layout direction. English is the only
+  bundled language until a language is complete on every surface. All text a
+  person reads goes through the string catalogs; stored and model-facing values
+  never localize. Follow [adding a language](docs/development/adding-a-language.md).
+  Preserve existing profile/archive data and stored language values. Keep Dynamic
+  Type, VoiceOver, reduced motion, and minimum 44-point touch targets.
 - For behavior changes, include focused evidence from source plus named tests;
   report the source revision, environment, result counts, and any blocked gates.
   A workflow definition is not evidence of a hosted run.

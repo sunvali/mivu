@@ -11,7 +11,7 @@ struct DiaryReportSettings: View {
     @State private var shared: [URL]?
 
     var body: some View {
-        Picker("Range", selection: $range) { ForEach(Range.allCases) { Text($0.rawValue).tag($0) } }
+        Picker("Range", selection: $range) { ForEach(Range.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) } }
         if range == .custom {
             DatePicker("From", selection: $start, in: ...end, displayedComponents: .date)
             DatePicker("Through", selection: $end, in: start..., displayedComponents: .date)
@@ -19,8 +19,8 @@ struct DiaryReportSettings: View {
         Picker("Format", selection: $format) { ForEach(DiaryReport.Format.allCases) { Text($0.rawValue).tag($0) } }
             .pickerStyle(.segmented).frame(minHeight: 44)
             .accessibilityLabel("Report format")
-        Text(format == .pdf ? "A summary page with daily totals and weight, then every saved meal. Made for a doctor or dietitian."
-                            : "Three spreadsheet files: meals, daily totals against targets, and weigh-ins.")
+        Text(format == .pdf ? String(localized: "A summary page with daily totals and weight, then every saved meal. Made for a doctor or dietitian.")
+                            : String(localized: "Three spreadsheet files: meals, daily totals against targets, and weigh-ins."))
             .font(.subheadline).foregroundStyle(Color.diarySecondary)
         Button { share() } label: {
             if preparing { ProgressView("Preparing report") } else { Label("Share report", systemImage: "square.and.arrow.up") }
@@ -53,7 +53,7 @@ struct DiaryReportSettings: View {
                 }.value
                 guard model.selection == token else { try? FileManager.default.removeItem(at: urls[0].deletingLastPathComponent()); return }
                 shared = urls
-            } catch { model.errorMessage = "Could not prepare this report. Your local diary is preserved." }
+            } catch { model.errorMessage = String(localized: "Could not prepare this report. Your local diary is preserved.") }
         }
     }
     private func cleanUp() {

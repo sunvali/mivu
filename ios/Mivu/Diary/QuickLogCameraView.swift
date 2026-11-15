@@ -30,7 +30,7 @@ struct QuickLogCameraView: View {
         .onDisappear { Task { try? await camera.close(presentationID: presentationID) } }
         .alert("Could not log photo", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             if let unsaved { Button("Try Again") { save(unsaved) } }
-            Button(unsaved == nil ? "OK" : "Discard Photo", role: unsaved == nil ? .cancel : .destructive) { unsaved = nil }
+            Button(unsaved == nil ? "OK" : String(localized: "Discard Photo"), role: unsaved == nil ? .cancel : .destructive) { unsaved = nil }
         } message: { Text(error ?? "") }
     }
     private var statusCover: some View {
@@ -52,11 +52,11 @@ struct QuickLogCameraView: View {
     }
     private var status: String {
         switch state.phase {
-        case .denied: "Allow camera access in Settings to log meals with a photo."
-        case .unavailable: "Camera is unavailable on this device."
-        case .interrupted: "Camera was interrupted."
-        case .failed: "Camera could not continue."
-        default: "Preparing camera…"
+        case .denied: String(localized: "Allow camera access in Settings to log meals with a photo.")
+        case .unavailable: String(localized: "Camera is unavailable on this device.")
+        case .interrupted: String(localized: "Camera was interrupted.")
+        case .failed: String(localized: "Camera could not continue.")
+        default: String(localized: "Preparing camera…")
         }
     }
     private var controls: some View {
@@ -105,7 +105,7 @@ struct QuickLogCameraView: View {
             do {
                 let photo = try await camera.capture(flash: AVCaptureDevice.FlashMode(rawValue: flash) ?? .auto)
                 save(MealDraft(photos: [try await CoachAttachmentDraft.normalize(photo, source: .camera)]))
-            } catch { saving = false; self.error = "Could not take photo. Try again." }
+            } catch { saving = false; self.error = String(localized: "Could not take photo. Try again.") }
         }
     }
     // Try Again resends the same draft, so its submission ID lets the diary recognise a save that already landed.
@@ -117,7 +117,7 @@ struct QuickLogCameraView: View {
             saving = false
             if case .saved(let id) = result { unsaved = nil; onLogged(id); return }
             // Shown here because the root alert cannot appear over this full-screen camera.
-            error = model.errorMessage ?? "The photo was not saved. Try again."
+            error = model.errorMessage ?? String(localized: "The photo was not saved. Try again.")
             model.errorMessage = nil
         }
     }

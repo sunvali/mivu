@@ -108,8 +108,6 @@ struct MealComposerView: View {
         .onChange(of: model.selection) { _, selection in
             if let ownership, selection != ownership { photoPreparation.cancel(); dismiss() }
         }
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
     private func send() async {
         let destination: DiaryCaptureDestination

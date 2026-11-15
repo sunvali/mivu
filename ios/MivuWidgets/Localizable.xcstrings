@@ -1,0 +1,146 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ / %@ kcal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ / %2$@ kcal"
+          }
+        }
+      }
+    },
+    "%@ calories eaten" : {
+
+    },
+    "%@ calories eaten." : {
+      "extractionState" : "manual"
+    },
+    "%@ calories left." : {
+      "extractionState" : "manual"
+    },
+    "%@ calories over." : {
+      "extractionState" : "manual"
+    },
+    "%@ kcal recorded" : {
+
+    },
+    "%@ of %@ calories eaten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@ calories eaten"
+          }
+        }
+      }
+    },
+    "%@ over" : {
+      "extractionState" : "manual"
+    },
+    "at least %@" : {
+      "extractionState" : "manual"
+    },
+    "At least %@ calories eaten." : {
+      "extractionState" : "manual"
+    },
+    "At least %@ calories over." : {
+      "extractionState" : "manual"
+    },
+    "At most %@ calories left." : {
+      "extractionState" : "manual"
+    },
+    "Calories" : {
+      "extractionState" : "manual"
+    },
+    "Calories not known yet." : {
+      "extractionState" : "manual"
+    },
+    "Carbs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carbs"
+          }
+        }
+      }
+    },
+    "Coach" : {
+      "extractionState" : "manual"
+    },
+    "Fat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fat"
+          }
+        }
+      }
+    },
+    "kcal" : {
+
+    },
+    "kcal recorded" : {
+
+    },
+    "Mivu" : {
+
+    },
+    "Mivu day progress" : {
+
+    },
+    "of %@ kcal" : {
+
+    },
+    "Open Coach" : {
+      "extractionState" : "manual"
+    },
+    "Open Mivu for today" : {
+
+    },
+    "Opens Mivu Coach, ready for a question." : {
+      "extractionState" : "manual"
+    },
+    "Opens the camera to photograph a meal and log it." : {
+      "extractionState" : "manual"
+    },
+    "Photograph a meal and log it in Mivu." : {
+      "extractionState" : "manual"
+    },
+    "Pip will track your day here." : {
+
+    },
+    "Protein" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protein"
+          }
+        }
+      }
+    },
+    "Set a target" : {
+
+    },
+    "Set up Mivu" : {
+
+    },
+    "Snap It" : {
+      "extractionState" : "manual"
+    },
+    "Today" : {
+
+    },
+    "Today's calories, with Snap It and Coach one tap away." : {
+      "extractionState" : "manual"
+    }
+  },
+  "version" : "1.0"
+}

@@ -149,7 +149,7 @@ struct NutritionSummary: View {
         VStack(alignment: .leading, spacing: 4) {
             Capsule().fill(color).frame(width: 24, height: 3).accessibilityHidden(true)
             Text(label).font(.caption).foregroundStyle(color)
-            Text(value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "—").font(.body.weight(.medium)).monospacedDigit().foregroundStyle(color)
+            Text(value.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(1)))) g") } ?? "—").font(.body.weight(.medium)).monospacedDigit().foregroundStyle(color)
         }
     }
 }
@@ -266,7 +266,7 @@ struct MealRow: View {
     @ScaledMetric(relativeTo: .body) private var thumbnail = 56.0
     private var title: String {
         let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return meal.items.first.map { $0.provenance == .sample ? "Apple (sample)" : $0.name } ?? (text.isEmpty ? "Meal" : text)
+        return meal.items.first.map { $0.provenance == .sample ? "Apple (sample)" : $0.name } ?? (text.isEmpty ? String(localized: "Meal") : text)
     }
     private var needsReview: Bool { meal.state == .awaitingReview }
     private var statusText: Text {
@@ -286,7 +286,7 @@ struct MealRow: View {
     private var text: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).lineLimit(typeSize.isAccessibilitySize ? nil : 2).directionFromContent(title)
                 if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
             }
             statusText.font(.subheadline).foregroundStyle(meal.state == .saved ? Color.diarySecondary : meal.state.color)
@@ -338,11 +338,11 @@ struct MacroBar: View {
 extension NutritionProvenance {
     var description: String {
         switch self {
-        case .sample: "Synthetic apple estimate"
-        case .user: "Edited by you"
-        case .confirmedLabel: "Confirmed label values"
-        case .identifiedSource: "Retrieved nutrition source"
-        case .estimate: "Estimated nutrition"
+        case .sample: String(localized: "Synthetic apple estimate")
+        case .user: String(localized: "Edited by you")
+        case .confirmedLabel: String(localized: "Confirmed label values")
+        case .identifiedSource: String(localized: "Retrieved nutrition source")
+        case .estimate: String(localized: "Estimated nutrition")
         }
     }
 }

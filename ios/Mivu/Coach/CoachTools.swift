@@ -34,12 +34,12 @@ enum CoachClarification: String, CaseIterable, Codable, Sendable {
     case portion, food, day, meal, workout, confirm
     var question: String {
         switch self {
-        case .portion: "How much did you eat? Give grams, a serving size, or a container size."
-        case .food: "What food did you eat?"
-        case .day: "Which day should this be recorded on?"
-        case .meal: "Which meal do you mean?"
-        case .workout: "Which workout do you mean?"
-        case .confirm: "Remove this whole meal?"
+        case .portion: String(localized: "How much did you eat? Give grams, a serving size, or a container size.")
+        case .food: String(localized: "What food did you eat?")
+        case .day: String(localized: "Which day should this be recorded on?")
+        case .meal: String(localized: "Which meal do you mean?")
+        case .workout: String(localized: "Which workout do you mean?")
+        case .confirm: String(localized: "Remove this whole meal?")
         }
     }
 }

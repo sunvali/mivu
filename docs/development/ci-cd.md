@@ -13,11 +13,13 @@ This is the owner's approved policy from 2026-10-14.
 python3 -m unittest discover -s scripts/ci -p 'test_*.py'
 bash -n scripts/ci/native.sh scripts/ci/signed.sh
 python3 scripts/ci/parity.py
+python3 scripts/ci/languages.py check
 python3 scripts/ci/play_ledger.py android/play-uploads.txt
 ```
 
 The shell check validates syntax; it does not execute native or signing scripts.
-`play_ledger.py` validates the Play upload ledger. `parity.py` validates
+`languages.py` checks that every bundled language is complete in every iOS
+string catalog. `play_ledger.py` validates the Play upload ledger. `parity.py` validates
 `docs/parity.md` and, on pull requests and local `pre-push`, fails when the
 branch changes non-test product paths under `ios/`, `android/`, `fixtures/` or
 `design-system/mivu/` without changing `docs/parity.md`. Test-only paths pass

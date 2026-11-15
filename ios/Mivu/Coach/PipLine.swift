@@ -12,22 +12,22 @@ enum PipLine: Equatable {
         if recovery {
             switch turnState {
             case .waitingForConnection: return .connect
-            case .waitingForNetwork: return .problem("I’m offline. I’ll pick this up when you’re back.", detail: error, canRetry: false)
-            case .needsClarification: return .problem("I need a bit more detail. My question is above.", detail: error, canRetry: false)
-            case .needsRetry: return .problem("That one didn’t go through.", detail: error, canRetry: true)
-            default: return .problem("Something went wrong.", detail: error, canRetry: false)
+            case .waitingForNetwork: return .problem(String(localized: "I’m offline. I’ll pick this up when you’re back."), detail: error, canRetry: false)
+            case .needsClarification: return .problem(String(localized: "I need a bit more detail. My question is above."), detail: error, canRetry: false)
+            case .needsRetry: return .problem(String(localized: "That one didn’t go through."), detail: error, canRetry: true)
+            default: return .problem(String(localized: "Something went wrong."), detail: error, canRetry: false)
             }
         }
-        if processing { return .working(withPhotos ? "Looking at your photo…" : "Counting that up…") }
+        if processing { return .working(withPhotos ? String(localized: "Looking at your photo…") : String(localized: "Counting that up…")) }
         if !connected { return .connect }
         if typing { return nil }
-        if mealsLogged { return .say("Anything else to log?") }
+        if mealsLogged { return .say(String(localized: "Anything else to log?")) }
         switch hour {
-        case 4..<11: return .say("Morning! What’s for breakfast?")
-        case 11..<15: return .say("Ready for lunch?")
-        case 15..<18: return .say("What have you had today?")
-        case 18..<22: return .say("What’s for dinner?")
-        default: return .say("Anything to log?")
+        case 4..<11: return .say(String(localized: "Morning! What’s for breakfast?"))
+        case 11..<15: return .say(String(localized: "Ready for lunch?"))
+        case 15..<18: return .say(String(localized: "What have you had today?"))
+        case 18..<22: return .say(String(localized: "What’s for dinner?"))
+        default: return .say(String(localized: "Anything to log?"))
         }
     }
 }
@@ -39,8 +39,9 @@ func coachDayChip(localDate: String, today: String, kcal: Double?, kcalPartial: 
     let day = CoachReplyLines.dayLabel(localDate, today: today)
     let whole = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
     let eaten = kcal.map { $0.formatted(whole) + (kcalPartial ? "+" : "") } ?? (mealsLogged ? "—" : "0")
-    let spokenEaten = kcal.map { (kcalPartial ? "at least " : "") + $0.formatted(whole) } ?? (mealsLogged ? "unknown" : "0")
+    let spokenEaten = kcal.map { kcalPartial ? String(localized: "at least \($0.formatted(whole))") : $0.formatted(whole) } ?? (mealsLogged ? String(localized: "unknown") : "0")
     let target = goal.map { $0.formatted(whole) }
-    return ("\(day.capitalized(with: .current)) · \(eaten)" + (target.map { " / " + $0 } ?? "") + " kcal",
-            "Logging to \(day), \(spokenEaten)" + (target.map { " of " + $0 } ?? "") + " kcal")
+    let title = CoachReplyLines.dayLabel(localDate, today: today, title: true)
+    guard let target else { return (String(localized: "\(title) · \(eaten) kcal"), String(localized: "Logging to \(day), \(spokenEaten) kcal")) }
+    return (String(localized: "\(title) · \(eaten) / \(target) kcal"), String(localized: "Logging to \(day), \(spokenEaten) of \(target) kcal"))
 }

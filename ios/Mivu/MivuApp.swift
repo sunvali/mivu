@@ -6,8 +6,6 @@ struct MivuApp: App {
     var body: some Scene {
         WindowGroup {
             root
-                .environment(\.locale, Locale(identifier: "en"))
-                .environment(\.layoutDirection, .leftToRight)
         }
     }
 

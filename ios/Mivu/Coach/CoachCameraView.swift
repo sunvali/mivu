@@ -67,7 +67,7 @@ struct CoachCameraView: View {
         VStack(spacing: 20) {
             topControls
             Spacer(minLength: 0)
-            Text(shotsAdded == 0 ? "Snap when ready." : shotsAdded == 1 ? "1 photo added" : "\(shotsAdded) photos added")
+            Text(shotsAdded == 0 ? String(localized: "Snap when ready.") : String(localized: "\(shotsAdded) photos added"))
                 .font(.headline).accessibilityIdentifier("coachCameraTally")
             CoachCameraLensBar(state: state, camera: camera)
             HStack(spacing: 16) {
@@ -104,7 +104,7 @@ struct CoachCameraView: View {
     }
     private var retryButton: some View {
         Button("Try camera again") {
-            Task { do { try await camera.retry() } catch { self.error = "Camera could not restart. Choose photos or close." } }
+            Task { do { try await camera.retry() } catch { self.error = String(localized: "Camera could not restart. Choose photos or close.") } }
         }.frame(minHeight: 44)
     }
     private var cameraControls: some View {
@@ -150,7 +150,7 @@ struct CoachCameraView: View {
         .frame(minWidth: 80, minHeight: 80)
         .disabled(shutterDisabled)
         .opacity(state.isRunning ? 1 : 0.4)
-        .accessibilityLabel(retaking == nil ? "Take photo" : "Retake photo")
+        .accessibilityLabel(retaking == nil ? String(localized: "Take photo") : String(localized: "Retake photo"))
         .accessibilityIdentifier("coachCameraShutter")
     }
     private var shutterDisabled: Bool {
@@ -173,7 +173,7 @@ struct CoachCameraView: View {
         guard !Task.isCancelled, !closing else { return }
         guard atTable else { finish(); return }
         shotsAdded += 1
-        AccessibilityNotification.Announcement(shotsAdded == 1 ? "1 photo added" : "\(shotsAdded) photos added").post()
+        AccessibilityNotification.Announcement(String(localized: "\(shotsAdded) photos added")).post()
     }
     private var syntheticButton: some View {
         Button(DiaryLaunch.isSampleMode ? "Add synthetic apple photo" : "Add synthetic test photo") {
@@ -192,10 +192,10 @@ struct CoachCameraView: View {
                 if let retaking, let selection = selections.first { try await draft.retake(retaking, selection: selection, presentationID: presentationID) }
                 else {
                     let failures = try await draft.importSelections(selections, presentationID: presentationID)
-                    if !failures.isEmpty { error = "Some photos could not be imported. Your note and other photos are kept."; return }
+                    if !failures.isEmpty { error = String(localized: "Some photos could not be imported. Your note and other photos are kept."); return }
                 }
                 guard !Task.isCancelled, !closing else { return }; finish()
-            } catch { if !Task.isCancelled, !closing { self.error = "Could not import photo. Your note and other photos are kept." } }
+            } catch { if !Task.isCancelled, !closing { self.error = String(localized: "Could not import photo. Your note and other photos are kept.") } }
         }
     }
     private func observeCamera() async {
@@ -213,15 +213,15 @@ struct CoachCameraView: View {
             try Task.checkCancellation()
             guard !closing, draft.isPresentationCurrent(presentationID), draft.ownership == owner else { return }
             try await camera.open(presentationID: presentationID, ownership: owner)
-        } catch { if !Task.isCancelled, !closing { self.error = "Camera is unavailable. Choose photos or close." } }
+        } catch { if !Task.isCancelled, !closing { self.error = String(localized: "Camera is unavailable. Choose photos or close.") } }
     }
     private var status: String {
         switch state.phase {
-        case .denied: "Allow camera access in Settings, or choose photos."
-        case .unavailable: "Camera is unavailable. Choose photos instead."
-        case .interrupted: "Camera was interrupted. Your input is kept."
-        case .failed: "Camera could not continue. Your input is kept."
-        default: "Preparing camera…"
+        case .denied: String(localized: "Allow camera access in Settings, or choose photos.")
+        case .unavailable: String(localized: "Camera is unavailable. Choose photos instead.")
+        case .interrupted: String(localized: "Camera was interrupted. Your input is kept.")
+        case .failed: String(localized: "Camera could not continue. Your input is kept.")
+        default: String(localized: "Preparing camera…")
         }
     }
     private func choosePhotos() {
@@ -230,13 +230,13 @@ struct CoachCameraView: View {
     private func shutter() {
         importing = Task {
             do { try await draft.capture(using: camera, presentationID: presentationID, replacing: retaking, flash: AVCaptureDevice.FlashMode(rawValue: flash) ?? .auto); added() }
-            catch { if !Task.isCancelled, !closing { self.error = "Could not take photo. Your note and other photos are kept." } }
+            catch { if !Task.isCancelled, !closing { self.error = String(localized: "Could not take photo. Your note and other photos are kept.") } }
         }
     }
     private func importData(_ data: Data) {
         importing = Task {
             do { _ = try await draft.importSelections([.init { data }], presentationID: presentationID); added() }
-            catch { if !Task.isCancelled, !closing { self.error = "Could not add photo. Your input is kept." } }
+            catch { if !Task.isCancelled, !closing { self.error = String(localized: "Could not add photo. Your input is kept.") } }
         }
     }
     private func finish() {

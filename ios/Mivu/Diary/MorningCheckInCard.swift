@@ -83,9 +83,9 @@ struct MorningCheckInCard: View {
 
     private var greeting: String {
         switch Calendar.current.component(.hour, from: Date()) {
-        case 5..<12: "Good morning"
-        case 12..<18: "Good afternoon"
-        default: "Good evening"
+        case 5..<12: String(localized: "Good morning")
+        case 12..<18: String(localized: "Good afternoon")
+        default: String(localized: "Good evening")
         }
     }
 
@@ -97,7 +97,7 @@ struct MorningCheckInCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(kcal.formatted(.number.precision(.fractionLength(0))))
                     .font(.title2.weight(.bold)).monospacedDigit().foregroundStyle(Color.diaryText)
-                Text(previousTarget.map { "of \($0.formatted(.number.precision(.fractionLength(0)))) kcal" } ?? "kcal")
+                Text(previousTarget.map { String(localized: "of \($0.formatted(.number.precision(.fractionLength(0)))) kcal") } ?? String(localized: "kcal"))
                     .font(.subheadline).foregroundStyle(Color.diarySecondary)
             }
             if let target = previousTarget, target > 0 {
@@ -116,7 +116,7 @@ struct MorningCheckInCard: View {
     }
     private var weightField: some View {
         HStack(spacing: 8) {
-            TextField(lastKg.map { display($0) } ?? "Weight", text: $weight)
+            TextField(lastKg.map { display($0) } ?? String(localized: "Weight"), text: $weight)
                 .keyboardType(.decimalPad).focused($weightFocused)
                 .font((compact ? Font.body : .title2).weight(.semibold)).monospacedDigit()
                 .accessibilityLabel("Weight in \(unit == "lb" ? "pounds" : "kilograms")").accessibilityIdentifier("morningWeight")
@@ -194,6 +194,6 @@ func wakingDayTitle(_ localDate: String, relativeTo reference: String? = nil) ->
     let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
     formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"; formatter.timeZone = .gmt
     guard let date = formatter.date(from: localDate) else { return localDate }
-    if let reference, let next = formatter.date(from: reference), next.timeIntervalSince(date) == 86_400 { return "Yesterday" }
+    if let reference, let next = formatter.date(from: reference), next.timeIntervalSince(date) == 86_400 { return String(localized: "Yesterday") }
     return date.formatted(Date.FormatStyle(timeZone: .gmt).weekday(.abbreviated).month(.abbreviated).day())
 }

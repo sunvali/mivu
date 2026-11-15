@@ -20,15 +20,24 @@ import UserNotifications
         // An estimate awaiting review lives in the submission's proposal until it is accepted.
         let items = review ? meal.submissions.last?.proposal?.items ?? [] : meal.items
         guard !items.isEmpty else {
-            return [.captured, .saved].contains(meal.state) ? ("Couldn't recognize your meal", "Tap to add a note so Mivu can log it.") : nil
+            return [.captured, .saved].contains(meal.state) ? (String(localized: "Couldn't recognize your meal"), String(localized: "Tap to add a note so Mivu can log it.")) : nil
         }
         let names = items.map(\.name)
-        let name = names.count <= 2 ? names.joined(separator: " and ") : names.prefix(2).joined(separator: ", ") + " and \(names.count - 2) more"
+        let name = switch names.count {
+        case 1: names[0]
+        case 2: String(localized: "\(names[0]) and \(names[1])")
+        default: String(localized: "\(names[0]), \(names[1]) and \(names.count - 2) more")
+        }
         // Foods without calories are left out of the sum, so the figure is a floor.
         let partial = items.contains { $0.nutrition.kcal == nil }
-        let calories = nutritionTotals(items).kcal.map { (partial ? "At least " : "") + "\(Int($0.rounded())) kcal" }
-        if review { return ("\(name) is ready to review", (calories.map { "\(partial ? "" : "About ")\($0) · " } ?? "") + "Tap to review") }
-        return ("\(name) logged", calories ?? "Calories not known yet")
+        // Plain digits, as before: an Int placeholder would add grouping.
+        let kcal = nutritionTotals(items).kcal.map { String(Int($0.rounded())) }
+        if review {
+            guard let kcal else { return (String(localized: "\(name) is ready to review"), String(localized: "Tap to review")) }
+            return (String(localized: "\(name) is ready to review"), partial ? String(localized: "At least \(kcal) kcal · Tap to review") : String(localized: "About \(kcal) kcal · Tap to review"))
+        }
+        let calories = kcal.map { partial ? String(localized: "At least \($0) kcal") : String(localized: "\($0) kcal") }
+        return (String(localized: "\(name) logged"), calories ?? String(localized: "Calories not known yet"))
     }
 
     nonisolated static func post(_ meal: MealReadModel) {

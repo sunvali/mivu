@@ -13,10 +13,20 @@ enum ProgressBand: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .near: "Near"
-        case .bitOff: "A bit off"
-        case .off: "Off"
-        case .farOff: "Far off"
+        case .near: String(localized: "Near")
+        case .bitOff: String(localized: "A bit off")
+        case .off: String(localized: "Off")
+        case .farOff: String(localized: "Far off")
+        }
+    }
+
+    /// The band inside a sentence, e.g. "Oct 19: 1,200 kcal, near".
+    var spoken: String {
+        switch self {
+        case .near: String(localized: "near", comment: "Calorie band, lowercase inside a sentence")
+        case .bitOff: String(localized: "a bit off", comment: "Calorie band, lowercase inside a sentence")
+        case .off: String(localized: "off", comment: "Calorie band, lowercase inside a sentence")
+        case .farOff: String(localized: "far off", comment: "Calorie band, lowercase inside a sentence")
         }
     }
 
@@ -43,10 +53,10 @@ enum ProgressRange: String, CaseIterable, Identifiable {
     }
     var title: String {
         switch self {
-        case .week: "Week"
-        case .month: "Month"
-        case .quarter: "3M"
-        case .year: "Year"
+        case .week: String(localized: "Week")
+        case .month: String(localized: "Month")
+        case .quarter: String(localized: "3M", comment: "Three months, as a short range button")
+        case .year: String(localized: "Year")
         }
     }
 }
@@ -104,12 +114,12 @@ enum ProgressHeadline: Equatable {
 
     var title: String {
         switch self {
-        case .onTrack, .caloriesOnTrack: "You're on track"
-        case .holdingSteady: "Holding steady"
-        case .drifting: "A new chance this week"
-        case .atGoal: "You're at your goal"
-        case .caloriesOff: "Fresh start ahead"
-        case .notEnoughData: "Let's get started"
+        case .onTrack, .caloriesOnTrack: String(localized: "You're on track")
+        case .holdingSteady: String(localized: "Holding steady")
+        case .drifting: String(localized: "A new chance this week")
+        case .atGoal: String(localized: "You're at your goal")
+        case .caloriesOff: String(localized: "Fresh start ahead")
+        case .notEnoughData: String(localized: "Let's get started")
         }
     }
 
@@ -171,9 +181,9 @@ enum ProgressInsights {
         }
         let logged = days.filter { $0.status != nil && $0.foodTotals?.kcal != nil }.count
         var wins: [ProgressWin] = []
-        if run >= 3 { wins.append(ProgressWin(id: "protein-run", title: "Protein goal \(run) days running", detail: "Keep it going", symbol: "bolt.fill", color: .diaryProtein)) }
-        if logged >= 5 { wins.append(ProgressWin(id: "logged-days", title: "\(logged) days logged", detail: "Every one counts", symbol: "checkmark", color: .diaryAccent)) }
-        if weighIns >= 3 { wins.append(ProgressWin(id: "weigh-ins", title: "\(weighIns) weigh-ins", detail: "Your trend keeps sharpening", symbol: "scalemass.fill", color: .diaryWeight)) }
+        if run >= 3 { wins.append(ProgressWin(id: "protein-run", title: String(localized: "Protein goal \(run) days running"), detail: String(localized: "Keep it going"), symbol: "bolt.fill", color: .diaryProtein)) }
+        if logged >= 5 { wins.append(ProgressWin(id: "logged-days", title: String(localized: "\(logged) days logged"), detail: String(localized: "Every one counts"), symbol: "checkmark", color: .diaryAccent)) }
+        if weighIns >= 3 { wins.append(ProgressWin(id: "weigh-ins", title: String(localized: "\(weighIns) weigh-ins"), detail: String(localized: "Your trend keeps sharpening"), symbol: "scalemass.fill", color: .diaryWeight)) }
         return wins
     }
 
@@ -211,25 +221,27 @@ enum ProgressInsights {
 
     /// "2,420 kcal · 320 over": the day's energy against its own target, in words.
     static func plainResult(_ day: DailyProgress) -> String {
-        guard day.status != nil, let kcal = day.foodTotals?.kcal else { return "No log" }
-        let energy = whole(kcal) + " kcal"
+        guard day.status != nil, let kcal = day.foodTotals?.kcal else { return String(localized: "No log") }
+        let energy = String(localized: "\(whole(kcal)) kcal")
         guard let target = day.goal?.targets.kcal, let band = band(day) else { return energy }
-        if band == .near { return energy + " · on target" }
-        return energy + " · \(whole(abs(kcal - target))) \(kcal > target ? "over" : "under")"
+        if band == .near { return String(localized: "\(energy) · on target") }
+        return "\(energy) · " + plainGap(kcal, goal: target)
     }
 
     /// "400 over", or "on target" within 10%.
     static func plainGap(_ value: Double, goal: Double) -> String {
-        if abs(value - goal) <= goal * 0.1 { return "on target" }
-        return "\(whole(abs(value - goal))) \(value > goal ? "over" : "under")"
+        if abs(value - goal) <= goal * 0.1 { return String(localized: "on target") }
+        let gap = whole(abs(value - goal))
+        return value > goal ? String(localized: "\(gap) over") : String(localized: "\(gap) under")
     }
 
     static func plainMacro(_ grams: Double?, goal: Double?) -> String {
-        guard let grams else { return "No complete days" }
-        let amount = "\(whole(grams)) g a day"
+        guard let grams else { return String(localized: "No complete days") }
+        let amount = String(localized: "\(whole(grams)) g a day")
         guard let goal, goal > 0 else { return amount }
-        if abs(grams - goal) <= goal * 0.1 { return amount + " · on goal" }
-        return amount + " · \(whole(abs(grams - goal))) g \(grams > goal ? "over" : "under") goal"
+        if abs(grams - goal) <= goal * 0.1 { return String(localized: "\(amount) · on goal") }
+        let gap = whole(abs(grams - goal))
+        return grams > goal ? String(localized: "\(amount) · \(gap) g over goal") : String(localized: "\(amount) · \(gap) g under goal")
     }
 
     /// Newest first. Week and Month show Monday weeks as dots; 3M and Year show months as counts.

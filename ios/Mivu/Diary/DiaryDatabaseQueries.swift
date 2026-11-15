@@ -396,67 +396,73 @@ extension DiaryDatabase {
                         let original = try UUID(uuidString: String(key.prefix(36))).flatMap { try transaction.turn(id: $0) }?.receipts.first { $0.operationKey == key }
                         names = original.map { Self.coachCommittedReceipt($0).items.map(\.name) } ?? []
                     }
-                    let list = names.isEmpty ? "that meal" : names.joined(separator: ", ")
-                    summaries.append(receipt.mealID == nil ? "Removed \(list)." : "Undid the change to \(list).")
+                    let list = names.joined(separator: ", ")
+                    if names.isEmpty { summaries.append(receipt.mealID == nil ? String(localized: "Removed that meal.") : String(localized: "Undid the change to that meal.")) }
+                    else { summaries.append(receipt.mealID == nil ? String(localized: "Removed \(list).") : String(localized: "Undid the change to \(list).")) }
                     continue
                 }
                 if let id = receipt.mealID {
                     let meal: MealReadModel
                     do { meal = try transaction.mealProjection(id: id) }
-                    catch DiaryError.notFound { summaries.append("This meal was deleted."); continue }
+                    catch DiaryError.notFound { summaries.append(String(localized: "This meal was deleted.")); continue }
                     let proposalItems = meal.submissions.filter { $0.state == .awaitingReview }.flatMap { $0.proposal?.items ?? [] }
                     if let itemID = receipt.itemID, !(meal.items + proposalItems).contains(where: { $0.id == itemID }) {
-                        summaries.append("This item was deleted."); continue
+                        summaries.append(String(localized: "This item was deleted.")); continue
                     }
                     if receipt.itemID != nil, !facts.items.isEmpty {
-                        if meal.state == .awaitingReview { summaries.append("Your estimate is ready for review."); continue }
-                        let items = facts.items.map { "\($0.name) to \(number($0.quantity)) \($0.unit)" }.joined(separator: ", ")
-                        summaries.append("Updated \(items).")
+                        if meal.state == .awaitingReview { summaries.append(String(localized: "Your estimate is ready for review.")); continue }
+                        let items = facts.items.map { String(localized: "\($0.name) to \(number($0.quantity)) \($0.unit)") }.joined(separator: ", ")
+                        summaries.append(String(localized: "Updated \(items)."))
                     } else if receipt.operationKey.contains("/scale_meal/"), meal.state != .awaitingReview {
                         let known = { (items: [FoodItem]) in Int(items.compactMap(\.nutrition.kcal).reduce(0, +).rounded()) }
-                        let before = (try transaction.coachUndo(receipt.operationKey)?.before).map { "\(known($0)) → " } ?? ""
-                        let unknown = meal.items.filter { $0.nutrition.kcal == nil }.map(\.name)
-                        let note = unknown.isEmpty ? "" : " \(unknown.joined(separator: ", ")) \(unknown.count == 1 ? "has" : "have") no calories set, so \(unknown.count == 1 ? "it isn't" : "they aren't") counted."
-                        summaries.append("Updated \(meal.items.map(\.name).joined(separator: ", ")): \(before)\(known(meal.items)) kcal.\(note)")
+                        // Plain digits, as before: an Int placeholder would add grouping.
+                        let before = (try transaction.coachUndo(receipt.operationKey)?.before).map { String(known($0)) }
+                        let names = meal.items.map(\.name).joined(separator: ", "), now = String(known(meal.items))
+                        let unknown = meal.items.filter { $0.nutrition.kcal == nil }.map(\.name).joined(separator: ", ")
+                        let single = meal.items.filter { $0.nutrition.kcal == nil }.count == 1
+                        let update = before.map { String(localized: "Updated \(names): \($0) → \(now) kcal.") } ?? String(localized: "Updated \(names): \(now) kcal.")
+                        let note = single ? String(localized: "\(unknown) has no calories set, so it isn't counted.") : String(localized: "\(unknown) have no calories set, so they aren't counted.")
+                        summaries.append(unknown.isEmpty ? update : update + " " + note)
                     } else if receipt.operationKey.contains("/retry_meal/") {
-                        summaries.append("Trying that meal again.")
+                        summaries.append(String(localized: "Trying that meal again."))
                     } else if receipt.operationKey.contains("/move_meal/") {
                         let day = try trackingDay(id: meal.dayID)
-                        summaries.append("Moved to \(CoachReplyLines.shortDate(day.localDate)).")
+                        summaries.append(String(localized: "Moved to \(CoachReplyLines.shortDate(day.localDate))."))
                     } else if receipt.operationKey.contains("/attach_photos/") {
-                        summaries.append(meal.photos.count == 1 ? "Added the photo." : "Added \(meal.photos.count) photos.")
+                        summaries.append(meal.photos.count == 1 ? String(localized: "Added the photo.") : String(localized: "Added \(meal.photos.count) photos."))
                     } else if receipt.operationKey.contains("/delete_photo/") {
                         struct DeletedPhoto: Decodable { let id: UUID }
                         let deleted = try? JSONDecoder().decode(DeletedPhoto.self, from: Data(receipt.resultJSON.utf8))
                         if let deleted, !meal.photos.contains(where: { $0.photoID == deleted.id }) {
-                            summaries.append("Removed the photo.")
-                        } else { summaries.append("Check the meal's photos.") }
-                    } else if meal.state == .awaitingReview { summaries.append("Your estimate is ready for review.") }
+                            summaries.append(String(localized: "Removed the photo."))
+                        } else { summaries.append(String(localized: "Check the meal's photos.")) }
+                    } else if meal.state == .awaitingReview { summaries.append(String(localized: "Your estimate is ready for review.")) }
                     else {
                         let calories = facts.items.map { $0.nutrition?.kcal }
                         let total = calories.contains(nil) || calories.isEmpty ? nil : calories.compactMap { $0 }.reduce(0, +)
-                        summaries.append(total.map { "Saved — about **\(number(($0 / 10).rounded() * 10))** kcal." } ?? "Saved.")
+                        summaries.append(total.map { String(localized: "Saved — about **\(number(($0 / 10).rounded() * 10))** kcal.") } ?? String(localized: "Saved."))
                     }
                 } else if let id = receipt.weightID {
                     do {
                         _ = try transaction.weight(id: id)
-                        if let value = facts.weightValue, let unit = facts.weightUnit { summaries.append("Weight saved: **\(number(value)) \(unit)**.") }
-                        else { summaries.append("Weight saved.") }
-                    } catch DiaryError.notFound { summaries.append("This weight was deleted.") }
+                        if let value = facts.weightValue, let unit = facts.weightUnit { summaries.append(String(localized: "Weight saved: **\(number(value)) \(unit)**.")) }
+                        else { summaries.append(String(localized: "Weight saved.")) }
+                    } catch DiaryError.notFound { summaries.append(String(localized: "This weight was deleted.")) }
                 } else if let id = receipt.workoutID {
                     do {
                         _ = try transaction.workout(id: id)
-                        if let kind = facts.workoutKind, let minutes = facts.workoutMinutes { summaries.append("Workout saved: \(kind), \(minutes) minutes.") }
-                        else { summaries.append("Workout saved.") }
-                    } catch DiaryError.notFound { summaries.append("This workout was deleted.") }
+                        if let kind = facts.workoutKind.flatMap(WorkoutKind.init(rawValue:)), let minutes = facts.workoutMinutes { summaries.append(kind.savedLine(minutes: minutes)) }
+                        else { summaries.append(String(localized: "Workout saved.")) }
+                    } catch DiaryError.notFound { summaries.append(String(localized: "This workout was deleted.")) }
                 } else if let id = receipt.goalID {
                     guard try transaction.records("goal", clause: "id = ?", values: [.text(id.uuidString)], limit: 1).first != nil else { throw DiaryError.notFound }
-                    summaries.append("Your goals are updated.")
-                } else if receipt.destination != nil { summaries.append("Use the Settings link to continue.") }
-                else if receipt.operationKey.contains("/update_preferences") { summaries.append("Your preferences are updated.") }
+                    summaries.append(String(localized: "Your goals are updated."))
+                } else if receipt.destination != nil { summaries.append(String(localized: "Use the Settings link to continue.")) }
+                else if receipt.operationKey.contains("/update_preferences") { summaries.append(String(localized: "Your preferences are updated.")) }
                 else if let id = receipt.dayID {
                     let day = try trackingDay(id: id)
-                    summaries.append("Marked \(CoachReplyLines.shortDate(day.localDate)) as \(day.completeness == .untracked ? "skipped" : "counted").")
+                    let date = CoachReplyLines.shortDate(day.localDate)
+                    summaries.append(day.completeness == .untracked ? String(localized: "Marked \(date) as skipped.") : String(localized: "Marked \(date) as counted."))
                 }
             }
             // Each line is one short sentence; cards do not show every operation's facts, so keep them all.

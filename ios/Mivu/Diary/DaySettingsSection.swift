@@ -37,8 +37,8 @@ struct DaySettingsSection: View {
             }
         } header: { Text("Your day") } footer: {
             VStack(alignment: .leading, spacing: 8) {
-                Text(denied ? "Notifications are off for Mivu. You can allow them in iOS Settings."
-                     : "Food before \(hourLabel(cutoff)) still counts for the day before. A new day starts the first time you open Mivu after that.")
+                Text(denied ? String(localized: "Notifications are off for Mivu. You can allow them in iOS Settings.")
+                     : String(localized: "Food before \(hourLabel(cutoff)) still counts for the day before. A new day starts the first time you open Mivu after that."))
                 if !activitiesAllowed { Text("Live Activities are off for Mivu in iOS Settings.") }
             }
         }
@@ -77,7 +77,7 @@ enum MorningReminder {
     /// One repeating local notification; adding it again with the same identifier replaces the old time.
     static func schedule(minutes: Int) {
         let content = UNMutableNotificationContent()
-        content.title = "Good morning"; content.body = "Log your weight or breakfast."; content.sound = .default
+        content.title = String(localized: "Good morning"); content.body = String(localized: "Log your weight or breakfast."); content.sound = .default
         let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: minutes / 60, minute: minutes % 60), repeats: true)
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
     }

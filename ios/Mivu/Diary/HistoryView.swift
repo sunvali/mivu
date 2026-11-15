@@ -172,7 +172,7 @@ struct HistoryView: View {
             let reply = CoachReply(target: .day(dayID: day.id), excerpt: DiaryWeek.format(day.localDate, "EEEE, d MMM"))
             openChat(.day(day.id), reply: reply, expectedSelection: selection)
         } else {
-            openChat(nil, draft: "For \(DiaryWeek.format(selected, "EEEE, d MMM")): ", expectedSelection: selection)
+            openChat(nil, draft: String(localized: "For \(DiaryWeek.format(selected, "EEEE, d MMM")): "), expectedSelection: selection)
         }
     }
 
@@ -251,7 +251,7 @@ private struct DaySections: View {
             Section {
                 ForEach(workouts) { workout in
                     NavigationLink { WorkoutDetailView(model: model, sessionID: workout.id) } label: {
-                        Label { LabeledContent("Workout", value: "\(workout.durationMinutes) minutes") } icon: {
+                        Label { LabeledContent("Workout", value: String(localized: "\(workout.durationMinutes) minutes")) } icon: {
                             Image(systemName: "figure.strengthtraining.traditional").foregroundStyle(Color.diaryWorkout)
                         }.frame(minHeight: 44)
                     }.diarySummaryCard()

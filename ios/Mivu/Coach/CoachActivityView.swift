@@ -32,10 +32,10 @@ struct CoachActivityView: View {
 
     private var title: String {
         switch activity {
-        case .preparingPhotos: "Looking at your photos…"
-        case .thinking: "Thinking…"
-        case .reading: "Checking your diary…"
-        case .saving: "Saving…"
+        case .preparingPhotos: String(localized: "Looking at your photos…")
+        case .thinking: String(localized: "Thinking…")
+        case .reading: String(localized: "Checking your diary…")
+        case .saving: String(localized: "Saving…")
         }
     }
 }

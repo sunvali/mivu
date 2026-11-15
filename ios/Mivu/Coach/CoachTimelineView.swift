@@ -142,7 +142,7 @@ struct CoachTimelineView: UIViewRepresentable {
             let completed = owner.timeline.completedPageRequestID
             defer { lastCompletion = completed; completionBaselineSet = true }
             guard completionBaselineSet, let completed, completed != lastCompletion else { return }
-            UIAccessibility.post(notification: .announcement, argument: "Conversation page loaded")
+            UIAccessibility.post(notification: .announcement, argument: String(localized: "Conversation page loaded"))
         }
         init(_ owner: CoachTimelineView) { self.owner = owner }
         func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { (tableView as! CoachTimelineTable).rows.count }
@@ -243,8 +243,8 @@ struct CoachTimelineView: UIViewRepresentable {
             table.accessibilityCustomActions = [CoachPageDirection.earlier, .later].compactMap { direction in
                 let name: String
                 switch owner.timeline.window.edgeState(direction) {
-                case .available: name = direction == .earlier ? "Load earlier messages" : "Load later messages"
-                case .failed: name = direction == .earlier ? "Retry earlier messages" : "Retry later messages"
+                case .available: name = direction == .earlier ? String(localized: "Load earlier messages") : String(localized: "Load later messages")
+                case .failed: name = direction == .earlier ? String(localized: "Retry earlier messages") : String(localized: "Retry later messages")
                 case .loading, .exhausted: return nil
                 }
                 return UIAccessibilityCustomAction(name: name) { [weak self] _ in

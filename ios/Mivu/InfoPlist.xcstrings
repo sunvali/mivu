@@ -1,25 +1,66 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "NSCameraUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {"stringUnit": {"state": "translated", "value": "Mivu uses the camera to attach meal photos to your private diary."}},
-        "he": {"stringUnit": {"state": "translated", "value": "Mivu משתמש במצלמה כדי לצרף תמונות של ארוחות ליומן הפרטי שלך."}}
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "comment" : "Bundle display name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mivu"
+          }
+        }
       }
     },
-    "NSMicrophoneUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {"stringUnit": {"state": "translated", "value": "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved."}}
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mivu"
+          }
+        }
       }
     },
-    "NSSpeechRecognitionUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {"stringUnit": {"state": "translated", "value": "Mivu turns your spoken meal into text on this iPhone so you can review it before sending."}}
+    "NSCameraUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu uses the camera to attach meal photos to your private diary."
+          }
+        }
       }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved."
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu turns your spoken meal into text on this iPhone so you can review it before sending."
+          }
+        }
+      }
+    },
+    "Snap It" : {
+
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }

@@ -1,0 +1,63 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Ask ${applicationName} Coach" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Ask ${applicationName} Coach",
+              "Open ${applicationName} Coach"
+            ]
+          }
+        }
+      }
+    },
+    "Log a meal in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Log a meal in ${applicationName}",
+              "Log food with ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Snap it with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Snap it with ${applicationName}",
+              "Snap a meal in ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Tell ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Tell ${applicationName}",
+              "Tell ${applicationName} Coach",
+              "Message ${applicationName} Coach"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

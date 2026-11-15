@@ -193,6 +193,34 @@ private actor CoachInputFixture {
         await #expect(throws: CoachError.limitExceeded) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport().meals.isEmpty)
     }
+    @Test func hebrewSaveClaimWithoutAReceiptIsRejected() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result(text: "שמרתי את הארוחה.\n<saved/>")])
+        let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
+        await #expect(throws: CoachError.ungroundedConfirmation) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+    }
+    @Test func markerNeverReachesStoredText() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result([call("log_food", logArgs)]), result(text: "Logged.\n<saved/>")])
+        let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
+        let completed = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.state == .completed)
+        #expect(completed.assistantText?.contains("<saved/>") == false)
+    }
+    @Test func englishClaimWithoutMarkerIsStillRejected() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result(text: "I've saved your lunch.")])
+        let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
+        await #expect(throws: CoachError.ungroundedConfirmation) { try await engine.run(turnID: turn.id, expectedProfileID: profile.id) }
+    }
+    @Test func markedWeightReplyKeepsTheModelsProse() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let weight = #"{"local_date":"2027-01-15","value":70,"unit":"kg","weight_id":null,"expected_revision":null,"measured_at":null}"#
+        let replies = CoachFixture([result([call("log_weight", weight)]), result(text: "Logged 70 kg, nice and steady.\n<saved/>")])
+        let engine = CoachEngine(store: store, infer: { try await replies.infer($0, $1) })
+        let completed = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == "Logged 70 kg, nice and steady.")
+    }
     @Test func readOnlyInventedSaveClaimRequiresClarification() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let replies = CoachFixture([result(text: "I saved your meal, 9999 calories")])
