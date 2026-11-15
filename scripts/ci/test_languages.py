@@ -121,6 +121,16 @@ class Catalogs(unittest.TestCase):
         entry['localizations']['he'] = {'stringSet': {'state': 'new', 'values': ['Tell']}}
         self.assertTrue(languages.errors(catalog(**{'Tell ${applicationName}': entry}), {'en', 'he'}))
 
+    def test_shortcut_phrases_name_the_app_once_per_language(self):
+        def phrases(*values):
+            return {'localizations': {'he': {'stringSet': {'state': 'translated', 'values': list(values)}}}}
+        ok = catalog(**{'Tell ${applicationName}': phrases('לספר ל-${applicationName}'), 'Ask ${applicationName}': phrases('לשאול את ${applicationName}')})
+        self.assertEqual(languages.phrase_errors(ok), [])
+        unnamed = catalog(**{'Tell ${applicationName}': phrases('לספר לפיפ')})
+        self.assertTrue(any('applicationName' in e for e in languages.phrase_errors(unnamed)))
+        twice = catalog(**{'Tell ${applicationName}': phrases('לספר ל-${applicationName}'), 'Ask ${applicationName}': phrases('לספר ל-${applicationName}')})
+        self.assertTrue(any('more than one' in e for e in languages.phrase_errors(twice)))
+
     def test_shipped_languages_come_from_known_regions(self):
         text = 'knownRegions = (\n\t\t\t\ten,\n\t\t\t\the,\n\t\t\t\tBase,\n\t\t\t);'
         self.assertEqual(languages.shipped(text), {'en', 'he'})

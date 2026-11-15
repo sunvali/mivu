@@ -154,6 +154,21 @@ def errors(catalogs, languages):
     return found
 
 
+def phrase_errors(catalogs):
+    """Siri ignores an App Shortcut phrase without the app's name, and a phrase two shortcuts share."""
+    found, seen = [], {}
+    for path, catalog in sorted(catalogs.items()):
+        for key, entry in sorted(catalog.get('strings', {}).items()):
+            for language, localization in sorted(entry.get('localizations', {}).items()):
+                for phrase in localization.get('stringSet', {}).get('values', []):
+                    if '${applicationName}' not in phrase:
+                        found.append(f"{path}: {key!r} in {language!r}: {phrase!r} must contain ${{applicationName}}")
+                    other = seen.setdefault((language, phrase), key)
+                    if other != key:
+                        found.append(f"{path}: {phrase!r} in {language!r} is a phrase of more than one shortcut ({other!r}, {key!r})")
+    return found
+
+
 def xliff_errors(xliff, catalogs):
     """Keys the compiler extracted that no catalog holds."""
     known = {key for catalog in catalogs.values() for key in catalog.get('strings', {})}
@@ -184,7 +199,7 @@ def main(argv):
     catalogs = load()
     if argv[1:2] == ['check']:
         pbxproj = (ROOT / PROJECT).read_text()
-        found = errors(catalogs, shipped(pbxproj)) + hidden_errors(pbxproj)
+        found = errors(catalogs, shipped(pbxproj)) + hidden_errors(pbxproj) + phrase_errors(catalogs)
         source = ''.join(p.read_text() for d in WIDGET_SOURCES for p in sorted((ROOT / d).glob('*.swift')))
         found += widget_errors(source, catalogs['ios/Mivu/Localizable.xcstrings']['strings'],
                                catalogs['ios/MivuWidgets/Localizable.xcstrings']['strings'])

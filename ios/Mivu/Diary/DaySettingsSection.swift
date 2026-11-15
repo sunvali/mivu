@@ -81,5 +81,10 @@ enum MorningReminder {
         let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: minutes / 60, minute: minutes % 60), repeats: true)
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
     }
+    /// The text is fixed when scheduled; a language change relaunches Mivu, and this puts the reminder in the new language.
+    static func refresh() {
+        guard UserDefaults.standard.bool(forKey: enabledKey) else { return }
+        schedule(minutes: UserDefaults.standard.object(forKey: minutesKey) as? Int ?? 8 * 60)
+    }
     static func cancel() { UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id]) }
 }
