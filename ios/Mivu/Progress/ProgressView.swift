@@ -437,7 +437,7 @@ struct DiaryProgressView: View {
         Button("Ask Pip", systemImage: "sparkles", action: action).accessibilityIdentifier(id)
     }
     private func weightPrompt(_ entry: WeightEntry) -> () -> Void {
-        let text = String(localized: "Weight · \(entry.value.formatted()) \(entry.shownUnit) · \(DiaryWeek.format(weightDate(entry), "EEE d MMM"))")
+        let text = String(localized: "Weight · \(entry.value.formatted()) \(entry.unit) · \(DiaryWeek.format(weightDate(entry), "EEE d MMM"))")
         return { askPip(.weight(weightID: entry.id), text, day: entry.dayID) }
     }
     private func workoutPrompt(_ session: WorkoutSession) -> () -> Void {

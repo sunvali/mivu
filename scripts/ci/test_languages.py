@@ -63,9 +63,11 @@ class Catalogs(unittest.TestCase):
         def target(name, phases):
             return f'isa = PBXNativeTarget;\n buildPhases = (\n{phases}\n);\n name = {name};\n'
         bare = 'MIVU_HIDDEN_LANGUAGES = he;\n' + target('Mivu', 'A /* Resources */,') + target('MivuWidgets', 'B /* Resources */,')
-        self.assertEqual(languages.hidden_errors(bare), ["hidden language 'he' is not stripped from Mivu", "hidden language 'he' is not stripped from MivuWidgets"])
+        self.assertEqual(languages.hidden_errors(bare)[1:], ["hidden language 'he' is not stripped from Mivu", "hidden language 'he' is not stripped from MivuWidgets"])
         stripped = bare.replace('/* Resources */,', '/* Resources */,\n C /* Strip hidden languages */,')
-        self.assertEqual(languages.hidden_errors(stripped), [])
+        self.assertEqual(len(languages.hidden_errors(stripped)), 1)  # listed, but no script that deletes anything
+        phase = 'name = "Strip hidden languages";\n shellScript = "[ \\"$CONFIGURATION\\" = Release ] || exit 0\\nfor language in $MIVU_HIDDEN_LANGUAGES; do rm -rf \\"$language.lproj\\"; done";\n'
+        self.assertEqual(languages.hidden_errors(stripped + phase), [])
         self.assertEqual(languages.hidden_errors(target('Mivu', '')), [])
 
     def test_substitution_forms_without_placeholders_pass(self):

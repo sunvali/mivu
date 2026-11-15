@@ -47,10 +47,18 @@ import SwiftUI
             guard await Self.speechAuthorized() else { throw Failure(String(localized: "Allow speech recognition in Settings to log by voice.")) }
             let transcriber: any SpeechModule
             let transcripts: AsyncThrowingStream<(text: String, isFinal: Bool), any Error>
-            if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: language) {
+            // A language speech can't transcribe here (Hebrew on the Simulator) falls back to the English it always used.
+            var speech = await SpeechTranscriber.supportedLocale(equivalentTo: language)
+            var dictation = speech == nil ? await DictationTranscriber.supportedLocale(equivalentTo: language) : nil
+            if speech == nil, dictation == nil {
+                let english = Locale(identifier: "en-US")
+                speech = await SpeechTranscriber.supportedLocale(equivalentTo: english)
+                if speech == nil { dictation = await DictationTranscriber.supportedLocale(equivalentTo: english) }
+            }
+            if let locale = speech {
                 let module = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
                 (transcriber, transcripts) = (module, Self.texts(module.results) { (String($0.text.characters), $0.isFinal) })
-            } else if let locale = await DictationTranscriber.supportedLocale(equivalentTo: language) {
+            } else if let locale = dictation {
                 // Devices without the newer model (and the Simulator) still have dictation.
                 let module = DictationTranscriber(locale: locale, preset: .progressiveLongDictation)
                 (transcriber, transcripts) = (module, Self.texts(module.results) { (String($0.text.characters), $0.isFinal) })

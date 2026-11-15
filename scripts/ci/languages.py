@@ -22,13 +22,17 @@ def hidden_errors(pbxproj, targets=('Mivu', 'MivuWidgets')):
     hidden = {name for value in re.findall(r'MIVU_HIDDEN_LANGUAGES = "?([^";]*)"?;', pbxproj) for name in value.split()}
     if not hidden:
         return []
+    found = []
+    # The phase must really delete each hidden language from Release builds.
+    script = re.search(r'name = "Strip hidden languages";.*?shellScript = "(.*?)";\n', pbxproj, re.S)
+    if not script or 'Release' not in script[1] or '$language.lproj' not in script[1] or '$MIVU_HIDDEN_LANGUAGES' not in script[1]:
+        found.append("the Strip hidden languages phase must delete $language.lproj for each of $MIVU_HIDDEN_LANGUAGES in Release")
     phases = {}
     for block in pbxproj.split('isa = PBXNativeTarget;')[1:]:
         name = re.search(r'\bname = "?([^";]+)"?;', block)
         listed = re.search(r'buildPhases = \((.*?)\);', block, re.S)
         if name and listed:
             phases[name[1]] = listed[1]
-    found = []
     for target in targets:
         if 'Strip hidden languages' not in phases.get(target, ''):
             found += [f"hidden language {language!r} is not stripped from {target}" for language in sorted(hidden)]
