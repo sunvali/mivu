@@ -8,7 +8,9 @@ import XCTest
     static let notYetLocalized: Set<String> = []
     /// Text the fixtures or the test typed: data, not interface.
     static let fixtureData: Set<String> = ["Two eggs, three bread slices and salad", "My diary", "Synthetic history food", "Synthetic history",
-                                           "Eggs", "Bread", "Salad", "All set.", "1 bowl", "2 egg", "3 slice"]
+                                           "Eggs", "Bread", "Salad", "All set.", "1 bowl", "2 egg", "3 slice",
+                                           // The units are translatable, so double mode doubles them.
+                                           "1 bowl bowl", "3 slice slice"]
 
     private var mode: String { ProcessInfo.processInfo.environment["SWEEP_MODE"] ?? "english" }
     private var text: String { ProcessInfo.processInfo.environment["SWEEP_TEXT"] ?? "default" }
