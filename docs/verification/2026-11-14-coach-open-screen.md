@@ -137,7 +137,14 @@ turning upright or folding ends it.
   side, and over the chat when expanded. The meal screen fills the whole width
   when it is pushed over an expanded chat; not capped.
 
-Not reviewed independently: the earlier review covered the replaced version.
-Not verified: that folding to book pose or turning upright while expanded
-collapses it, the chat's scroll position across expanding, VoiceOver, and
-anything on the simulator-only paths above. The owner's device has this build.
+Independent review of the reworked control at `66851af5`: no Critical or
+Important findings. It suspected the expanded state could go stale when the
+phone turns upright while another tab is selected. Checked by hand on the
+simulator: expand, switch to Today, rotate upright, return to Coach (no
+control, one column), rotate sideways (pane back, control reads "Expand
+chat"). A misplaced brace it pointed out is fixed. No automated test covers
+the reset on rotate or fold; XCUITest cannot rotate or fold the inner display.
+
+Not verified: folding to book pose while expanded, the chat's scroll position
+across expanding, VoiceOver, and anything on the simulator-only paths above.
+The owner's device has this build.
