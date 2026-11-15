@@ -14,6 +14,8 @@ struct CoachView: View {
     var openProgress: () -> Void = {}
     /// Shared with the side pane: sideways it shows this beside the chat, upright it is pushed over the chat.
     @Binding var pane: CoachPane?
+    /// True while the chat takes the whole sideways screen and the side pane is put away.
+    @Binding var chatExpanded: Bool
     let openDestination: (CoachDestination) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -113,6 +115,18 @@ struct CoachView: View {
                             accessibilityPageAction(.later, timeline: timeline)
                         }
                     }
+            }
+            // Expanded, this view is told it is not wide (see `DuoBeside`), so the flag keeps the control in reach.
+            if (isWide && posture == .flat) || chatExpanded {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(chatExpanded ? "Show side by side" : "Expand chat",
+                           systemImage: chatExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
+                        // What the pane held is put away with it; otherwise it would be pushed over the chat being expanded.
+                        if !chatExpanded { pane = nil }
+                        chatExpanded.toggle()
+                    }
+                        .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("coachExpand")
+                }
             }
         }
         .navigationDestination(item: pushed) { record in

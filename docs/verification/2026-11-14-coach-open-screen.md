@@ -101,3 +101,68 @@ going from one meal straight to another reuses the same screen instance.
 - The by-hand session used on-device inference, not the scripted replies, so
   the meal values in the screenshots differ from the UI tests' fixture.
 - No real device.
+
+
+## Pull request 2: expand the chat
+
+- App source: `3ea3c7e4` on `feat/duo-pane-expand`, stacked on pull request 1.
+- Same environment as above.
+
+The first version of this pull request expanded the side pane over the chat.
+The owner tried it on a real iPhone Duo on 2026-11-15 and changed the decision:
+Today already has its own tab, so the control should enlarge the chat. That
+version is replaced, not kept.
+
+How it works: a control in the chat's toolbar puts the side pane away and gives
+the chat the whole sideways screen. The chat is then told it is not wide, so it
+lays out as it does upright: one readable column, a tapped record pushed over
+it, and "See today" offered again. Only a flat sideways screen can expand;
+turning upright or folding ends it.
+
+- Open, sideways: `DuoLayoutUITests`, `CoachPaneTests`, `DuoLayoutTests`,
+  `CoachReceiptPresentationTests`: 58 passed, 0 failed, 8 skipped
+  (upright-only). New test, seen failing first:
+  `testSidewaysChatExpandsAndCollapses` (the pane leaves, the chat grows into
+  the left half, the draft survives both ways, the pane returns on the left).
+- By hand: `coach-open-screen/sideways-chat-expanded.png`
+- Found afterwards: with the pane showing another day or a meal, expanding
+  pushed that screen over the chat. Expanding now puts away whatever the pane
+  held, and collapsing returns to Today.
+  `testExpandedChatOpensAnotherDaysMealOverTheChat` failed, then passed
+  together with `testSidewaysChatExpandsAndCollapses` (2 passed, run with pull
+  request 3's code merged in). `testSidewaysTapOpensAnotherDaysMealBesideChat`
+  is added coverage for a card on another day; it passed without a change.
+- By hand, on a private copy of a real diary (removed afterwards): "Review /
+  Edit" on a card from the day before opened the meal on the left side by
+  side, and over the chat when expanded. The meal screen fills the whole width
+  when it is pushed over an expanded chat; not capped.
+
+Independent review of the reworked control at `66851af5`: no Critical or
+Important findings. It suspected the expanded state could go stale when the
+phone turns upright while another tab is selected. Checked by hand on the
+simulator: expand, switch to Today, rotate upright, return to Coach (no
+control, one column), rotate sideways (pane back, control reads "Expand
+chat"). A misplaced brace it pointed out is fixed. No automated test covers
+the reset on rotate or fold; XCUITest cannot rotate or fold the inner display.
+
+Not verified: folding to book pose while expanded, the chat's scroll position
+across expanding, VoiceOver, and anything on the simulator-only paths above.
+The owner's device has this build.
+
+## After main moved: the weekly-report test
+
+Pull request 1 merged as `8b96cd3f` onto a `main` that had gained the
+food-questions change (`14a36222`). Together they broke
+`testSidewaysQuestionOffersProgressInPane`: that change asks the model to
+rephrase a reply with an unverifiable number, and the scripted UI-test replies
+read their context from the last developer message, which was now the rephrase
+note. The scripted replies now look for the message that carries the context.
+Test support only; the app's real replies are unchanged.
+
+On `feat/duo-pane-expand` with `main` merged in, open sideways Duo, iOS 27.1:
+`CoachEngineTests`, `CoachPaneTests`, `CoachReplyLinesTests`,
+`DuoLayoutUITests`: 105 passed, 2 failed, 8 skipped before the fix. After it,
+`CoachEngineTests` and the failing UI test: 62 passed, 0 failed. The other
+failure, `requestedProgressRereadsFactsAfterSuspendedInference`, passed on the
+rerun without a change; it waits on a fixed number of yields, so it is treated
+as a timing failure under load, not proven as one.

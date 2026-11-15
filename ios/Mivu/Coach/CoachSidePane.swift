@@ -8,7 +8,7 @@ struct CoachSidePane: View {
     let companionRuntime: CompanionRuntime
     @Binding var pane: CoachPane?
     let openDiary: () -> Void
-    /// Receipts already shown. Nil until the first look, so opening the app or turning the phone never moves the pane.
+    /// Receipts already shown, so opening the app or turning the phone never moves the pane.
     @State private var seen = CoachPaneMemory()
     private struct OpenMeal: Equatable { let id: UUID; let exists: Bool }
     /// Whether the meal open in the pane still exists. Coach's own removals arrive as receipts; this also catches Undo.

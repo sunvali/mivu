@@ -120,17 +120,30 @@ struct DuoSplit<Primary: View, Secondary: View>: View {
 struct DuoBeside<Primary: View, Secondary: View>: View {
     /// True puts `secondary` on the left.
     var secondaryLeading = false
+    /// True while `primary` takes the whole screen sideways and `secondary` is put away. `primary` then lays
+    /// out as it does upright (one readable column, records pushed over it), since nothing sits beside it.
+    @Binding var primaryFills: Bool
     @ViewBuilder let primary: Primary
     @ViewBuilder let secondary: Secondary
     @Environment(\.isWideLayout) private var isWide
+    @Environment(\.duoPosture) private var posture
+    /// Only a flat sideways screen can expand: half-folded, one centred column would sit on the crease.
+    private var canFill: Bool { isWide && posture == .flat }
 
     var body: some View {
-        DuoSplit(showsSecondary: isWide, secondaryLeading: secondaryLeading) { primary } secondary: {
+        let fills = canFill && primaryFills
+        DuoSplit(showsSecondary: isWide && !fills, secondaryLeading: secondaryLeading) {
+            primary
+                .environment(\.isWideLayout, isWide && !fills)
+                .transformEnvironment(\.horizontalSizeClass) { if fills { $0 = .compact } }
+        } secondary: {
             secondary
                 .environment(\.isWideLayout, false)
                 .environment(\.horizontalSizeClass, .compact)
         }
         .background(Color.diaryCanvas)
+        // Turning upright or folding ends it, so the control never claims a state the screen cannot show.
+        .onChange(of: canFill) { _, can in if !can { primaryFills = false } }
     }
 }
 

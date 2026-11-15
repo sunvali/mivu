@@ -132,6 +132,28 @@ import XCTest
         XCTAssertLessThanOrEqual(diary.frame.maxX, input.frame.minX + 1)
     }
 
+    func testSidewaysTapOpensAnotherDaysMealBesideChat() throws {
+        let (app, input) = try launchCoach()
+        send("Yesterday I had dessert", app, input)
+        XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 20))
+        app.buttons["coachMealLink"].tap()
+        let meal = app.navigationBars["Meal"]
+        XCTAssertTrue(meal.waitForExistence(timeout: 5), "Yesterday's meal opens from its card while the pane shows that day")
+        XCTAssertLessThanOrEqual(meal.frame.maxX, input.frame.minX + 1)
+        XCTAssertTrue(app.buttons["deleteMeal"].exists || app.buttons["Meal actions"].exists, "The full meal loaded, not a placeholder")
+    }
+
+    func testExpandedChatOpensAnotherDaysMealOverTheChat() throws {
+        let (app, input) = try launchCoach()
+        send("Yesterday I had dessert", app, input)
+        XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 20))
+        app.buttons["coachExpand"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5), "Expanding shows the chat, not what the pane held")
+        XCTAssertFalse(app.navigationBars["Diary"].exists)
+        app.buttons["coachMealLink"].tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5), "A card opens its meal over the expanded chat")
+    }
+
     func testDeletingPaneMealReturnsToToday() throws {
         let (app, input) = try launchCoach()
         send("Two eggs, three bread slices and salad", app, input)
@@ -154,6 +176,25 @@ import XCTest
         app.buttons["coachUndo"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10), "An undone meal leaves the pane on Today, not an empty detail")
         XCTAssertFalse(app.navigationBars["Meal"].exists)
+    }
+
+    func testSidewaysChatExpandsAndCollapses() throws {
+        let (app, input) = try launchCoach()
+        XCTAssertTrue(pane(app).waitForExistence(timeout: 5))
+        input.tap(); input.typeText("draft text")
+        let besideWidth = input.frame.width
+        let expand = app.buttons["coachExpand"].firstMatch
+        XCTAssertTrue(expand.waitForExistence(timeout: 5)); expand.tap()
+        // Expanded, the chat takes the screen and the side pane is gone; Today keeps its own tab.
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !self.pane(app).exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "The side pane leaves")
+        XCTAssertGreaterThan(input.frame.width, besideWidth + 100, "The chat is wider than its half")
+        XCTAssertLessThan(input.frame.minX, app.windows.firstMatch.frame.midX, "The chat reaches into the left half")
+        XCTAssertEqual(input.value as? String, "draft text", "The draft survives expanding")
+        app.buttons["coachExpand"].firstMatch.tap()
+        XCTAssertTrue(pane(app).waitForExistence(timeout: 5), "Collapsed, the side pane is back")
+        XCTAssertLessThanOrEqual(pane(app).frame.maxX, input.frame.minX + 1)
+        XCTAssertEqual(input.value as? String, "draft text", "The draft survives collapsing")
     }
 
     func testUprightTapStillPushesOverChat() throws {
