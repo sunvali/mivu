@@ -222,3 +222,9 @@ On `feat/duo-pane-expand` with `main` merged in, open sideways Duo, iOS 27.1:
 failure, `requestedProgressRereadsFactsAfterSuspendedInference`, passed on the
 rerun without a change; it waits on a fixed number of yields, so it is treated
 as a timing failure under load, not proven as one.
+
+All three pull requests with `main` merged in, `be8fb36c` on
+`feat/duo-diary-columns`, open sideways Duo: `CoachEngineTests`,
+`CoachPaneTests`, `CoachReplyLinesTests`, `DuoLayoutTests`,
+`CoachReceiptPresentationTests`, `DuoLayoutUITests`: 133 passed, 0 failed,
+9 skipped (upright-only).
