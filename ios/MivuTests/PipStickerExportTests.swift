@@ -30,6 +30,66 @@ import UIKit
 
     private static let uncut = CGRect(x: 1, y: 1, width: 510, height: 510)
 
+    /// A loop's wrap (last frame back to the first) is no bigger a step than its ordinary frame-to-frame steps,
+    /// and it fits WhatsApp's timing: at most 10 s, no frame shorter than 8 ms.
+    @Test func loopClosesWithinTolerance() throws {
+        for sticker in PipStickerCatalog.all {
+            guard case .animated(let frames, let fps) = sticker.kind else { continue }
+            #expect(frames.count >= 12, "\(sticker.id) is barely animated")
+            #expect(Double(frames.count) / fps <= 10 && 1000 / fps >= 8, "\(sticker.id)")
+            let alphas = try frames.map { try Self.alpha(renderSticker($0, hidden: sticker.hidden)) }
+            let steps = zip(alphas, alphas.dropFirst()).map(Self.difference)
+            let mean = steps.reduce(0, +) / Double(steps.count)
+            let seam = Self.difference(alphas[alphas.count - 1], alphas[0])
+            #expect(mean > 0 && seam <= mean * 1.5, "\(sticker.id): seam \(seam), mean step \(mean)")
+        }
+    }
+
+    /// Writes every sticker's raw frames for design-system/mivu/stickers/pack.py, but only when
+    /// `build/pip-stickers/frames/` exists (`mkdir -p` it first); otherwise it just checks the frames render.
+    @Test func exportFrames() throws {
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let out = repo.appendingPathComponent("build/pip-stickers/frames")
+        let exporting = FileManager.default.fileExists(atPath: out.path)
+        for sticker in PipStickerCatalog.all {
+            let (frames, fps): ([PipPose], Double) = switch sticker.kind {
+            case .still(let pose): ([pose], 0)
+            case .animated(let frames, let fps): (frames, fps)
+            }
+            let folder = out.appendingPathComponent(sticker.id)
+            if exporting {
+                try? FileManager.default.removeItem(at: folder)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            }
+            for (n, pose) in frames.enumerated() {
+                let png = try #require(try renderSticker(pose, hidden: sticker.hidden).pngData())
+                #expect(UIImage(data: png)?.cgImage.map { ($0.width, $0.height, $0.alphaInfo != .none) } ?? (0, 0, false) == (512, 512, true), "\(sticker.id) \(n)")
+                if exporting { try png.write(to: folder.appendingPathComponent(String(format: "%04d.png", n))) }
+            }
+            if exporting {
+                let meta: [String: Any] = ["id": sticker.id, "emoji": sticker.emoji, "animated": fps > 0, "fps": fps]
+                try JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys])
+                    .write(to: folder.appendingPathComponent("meta.json"))
+            }
+        }
+    }
+
+    private static func alpha(_ image: UIImage) -> [UInt8] {
+        guard let cg = image.cgImage else { return [] }
+        var pixels = [UInt8](repeating: 0, count: cg.width * cg.height)
+        pixels.withUnsafeMutableBytes { buffer in
+            let context = CGContext(data: buffer.baseAddress, width: cg.width, height: cg.height, bitsPerComponent: 8,
+                                    bytesPerRow: cg.width, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue)
+            context?.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+        }
+        return pixels
+    }
+
+    /// Mean absolute alpha change per pixel, 0...255.
+    private static func difference(_ a: [UInt8], _ b: [UInt8]) -> Double {
+        Double(zip(a, b).reduce(0) { $0 + abs(Int($1.0) - Int($1.1)) }) / Double(max(a.count, 1))
+    }
+
     /// Bounding box of every pixel with any alpha, in points; nil when nothing is drawn.
     static func ink(_ image: UIImage) -> CGRect? {
         guard let cg = image.cgImage else { return nil }
