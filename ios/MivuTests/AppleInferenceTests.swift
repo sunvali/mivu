@@ -27,6 +27,14 @@ struct AppleInferenceTests {
         #expect(throws: SessionError.noActiveSession) { _ = try none.inference() }
     }
 
+    @Test func onlyIneligibleHardwareHidesAppleIntelligence() {
+        guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
+        #expect(!ChatGPTConnection.appleSupported(.unavailable(.deviceNotEligible)))
+        #expect(ChatGPTConnection.appleSupported(.unavailable(.appleIntelligenceNotEnabled)))
+        #expect(ChatGPTConnection.appleSupported(.unavailable(.modelNotReady)))
+        #expect(ChatGPTConnection.appleSupported(.available))
+    }
+
     @Test @MainActor func savedAppleChoiceUsesChatGPTWhileAppleIsUnavailable() throws {
         let preferences = UserDefaults(suiteName: "AppleInference-" + UUID().uuidString)!
         ChatGPTConnection(preferences: preferences, appleModelAvailable: { true }).provider = .apple

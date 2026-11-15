@@ -36,7 +36,8 @@ import XCTest
 
     /// What a Hebrew phone shows for the English names the sweep looks for.
     static let hebrew = ["Today": "היום", "Diary": "יומן", "Progress": "התקדמות", "Coach": "פיפ", "Chat history": "היסטוריית שיחות",
-                         "Cancel": "ביטול", "Close": "סגירה", "Done": "סיום", "More": "עוד"]
+                         "Cancel": "ביטול", "Close": "סגירה", "Done": "סיום", "More": "עוד",
+                         "Add to this day": "הוספה ליום הזה", "Day actions, ": "פעולות ליום, "]
     private func shown(_ english: String) -> String { mode == "hebrew" ? Self.hebrew[english] ?? english : english }
 
     private func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {
@@ -50,6 +51,24 @@ import XCTest
         // Short drags: a full swipe at the largest text size can carry a row past the screen.
         for _ in 0..<24 where !(element.exists && element.isHittable) {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)).press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)))
+        }
+    }
+
+    /// Taps a bar item, opening the overflow first: the real Duo's outer screen folds some into "…".
+    private func tapBarItem(_ id: String, label: String, in app: XCUIApplication) {
+        // In the side rail a menu item is a pop-up button, not a button.
+        let item = app.descendants(matching: .any)[id].firstMatch
+        if item.exists && item.isHittable { item.tap(); return }
+        app.buttons.matching(NSPredicate(format: "identifier == 'OverflowBarButtonItem' OR label BEGINSWITH %@", shown("More"))).firstMatch.tap()
+        let folded = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", shown(label))).firstMatch
+        XCTAssertTrue(folded.waitForExistence(timeout: 5), "\(label) is in the bar or its overflow"); folded.tap()
+    }
+
+    /// The first tap can land while the rail layout settles, so tap until the field has the keyboard.
+    private func focus(_ field: XCUIElement) {
+        for _ in 0..<3 where !((field.value(forKey: "hasKeyboardFocus") as? Bool) ?? false) {
+            field.tap()
+            _ = XCUIApplication().keyboards.firstMatch.waitForExistence(timeout: 2)
         }
     }
 
@@ -96,8 +115,8 @@ import XCTest
 
         tab("Diary", in: app).tap()
         show("diary", app, opened: app.descendants(matching: .any)["diaryWeekStrip"].waitForExistence(timeout: 10))
-        app.buttons["diaryAddMenu"].firstMatch.tap()
-        let weight = app.buttons["logWeightForDay"]
+        tapBarItem("diaryAddMenu", label: "Add to this day", in: app)
+        let weight = app.buttons.matching(NSPredicate(format: "identifier == 'logWeightForDay' OR label BEGINSWITH 'Add weight manually'")).firstMatch
         if weight.waitForExistence(timeout: 5) { weight.tap(); show("weightEditor", app, opened: app.buttons["saveWeight"].waitForExistence(timeout: 10)); close(app) }
         else { XCTFail("weightEditor did not open") }
         let meal = app.buttons["historyMeal"].firstMatch
@@ -110,18 +129,13 @@ import XCTest
 
         tab("Coach", in: app).tap()
         let input = app.textFields["coachInput"]
-        XCTAssertTrue(input.waitForExistence(timeout: 10)); input.tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 10)); focus(input)
         input.typeText("Two eggs, three bread slices and salad")
         app.buttons["coachSend"].tap()
         let receipt = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'coachReceipt-'")).firstMatch
         show("coach", app, opened: receipt.waitForExistence(timeout: 30))
         if app.keyboards.firstMatch.exists { receipt.tap() }
-        // Narrow bars fold Chat history into the overflow menu.
-        let overflow = app.navigationBars.buttons.matching(NSPredicate(format: "identifier == 'OverflowBarButtonItem' OR label BEGINSWITH %@", shown("More"))).firstMatch
-        if !app.buttons["coachHistory"].exists, overflow.exists { overflow.tap() }
-        let history = app.buttons["coachHistory"].exists ? app.buttons["coachHistory"].firstMatch
-            : app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", shown("Chat history"))).firstMatch
-        if history.waitForExistence(timeout: 5) { history.tap() }
+        tapBarItem("coachHistory", label: "Chat history", in: app)
         show("coachHistory", app, opened: app.buttons["coachHistoryChooseDate"].waitForExistence(timeout: 10))
         close(app)
 
@@ -154,7 +168,15 @@ import XCTest
         try XCTSkipUnless(mode == "rtl" || mode == "hebrew", "Needs TEST_RUNNER_SWEEP_MODE=rtl or hebrew")
         let app = launch(["--coach-ui-test", "--coach-navigation-start-today"])
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
-        XCTAssertGreaterThan(tab("Today", in: app).frame.midX, tab("Coach", in: app).frame.midX, "The first tab sits on the right")
+        let first = tab("Today", in: app).frame, last = tab("Coach", in: app).frame
+        if abs(first.midY - last.midY) < 1 {
+            XCTAssertGreaterThan(first.midX, last.midX, "The first tab sits on the right")
+        } else {
+            // The Duo's side rail stays at the screen edge in every direction; the screen beside it mirrors.
+            let title = app.navigationBars[shown("Today")].staticTexts[shown("Today")].firstMatch.frame
+            XCTAssertGreaterThan(title.midX, app.windows.firstMatch.frame.midX, "The title sits on the right")
+        }
+        XCTAssertTrue(app.buttons["todayDayActions"].label.hasPrefix(shown("Day actions, ")), "Day actions is read by its label")
     }
 
     /// Debug builds bundle Hebrew (Release builds strip it until it ships), so a Hebrew phone gets the app in Hebrew.
@@ -210,7 +232,7 @@ import XCTest
         try XCTSkipIf(mode == "double", "Runs in english and rtl modes")
         let app = launch(["--coach-ui-test", "--coach-inference-fixture"])
         let input = app.textFields["coachInput"]
-        XCTAssertTrue(input.waitForExistence(timeout: 20)); input.tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 20)); focus(input)
         let typed = "צהריים: סלט עוף, 200 גרם ועוד כוס מיץ תפוזים טרי מהשוק הבוקר"
         input.typeText(typed)
         app.buttons["coachSend"].tap()

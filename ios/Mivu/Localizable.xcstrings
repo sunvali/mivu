@@ -13656,6 +13656,9 @@
         }
       }
     },
+    "Turn on Apple Intelligence in iOS Settings, or wait for it to finish downloading" : {
+
+    },
     "Type 1 diabetes" : {
       "comment" : "Shown from a stored value; the value itself stays English.",
       "extractionState" : "manual",
