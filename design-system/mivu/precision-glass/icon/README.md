@@ -31,9 +31,9 @@ Home Screen customization and can differ from the app's interface appearance.
 
 ## Snap It symbol
 
-`render-android.py` also writes `pip.head.symbolset` into the app and widget
-asset catalogs: the same ears-and-head silhouette as Android's `ic_stat_pip`,
-as a custom SF Symbol. The home-screen quick action and the Control Center /
-Lock Screen / Action button control use it. Siri and Spotlight App Shortcuts
-accept only system symbols, so they keep `camera`; the Calories widget keeps
-`camera.fill` because Pip already appears on it.
+`render-ios-symbol.py` reads only Pip's rig (`pip.svg`) and writes
+`pip.head.symbolset`, a custom SF Symbol of Pip's ears and head, into the app
+and widget asset catalogs. The home-screen quick action and the Control
+Center / Lock Screen / Action button control use it. Siri and Spotlight App
+Shortcuts accept only system symbols, so they keep `camera`; the Calories
+widget keeps `camera.fill` because Pip already appears on it.
