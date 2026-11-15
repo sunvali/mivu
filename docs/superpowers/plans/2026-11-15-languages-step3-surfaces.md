@@ -17,7 +17,7 @@
 - "Charts over time keep time running left to right in every language." "Pip's artwork does not flip."
 - "Digits are 0–9"; "Dates shown to people use the Gregorian calendar."
 - English users see no change before Task 6. After it, the only English change is the Settings Language row (spec: "appears once Mivu ships more than one language").
-- Uploading the listing to App Store Connect is the owner's action; this plan only prepares it in the repository.
+- Uploading the listing to App Store Connect is the owner's action; this plan only prepares it in the repository. Nothing here touches App Store Connect or uploads a build while a review is in progress (owner, 2026-11-15).
 - Hebrew wording follows `docs/languages/he.md`. Any new Hebrew string goes on the owner's review page before Task 6.
 - Tests: targeted only, on my own "(Claude)" simulators. Record the exact SHA, the environment and the counts.
 - Commits and PR: Conventional Commits, the owner's git identity, no mention of tools or assistants.
@@ -136,7 +136,7 @@
   - Neutral voice; "Mivu" in Latin letters; Pip is "פיפ".
   - Keywords are words Israelis search for ("ספירת קלוריות", "יומן אוכל", "חלבון"…), not a word-for-word translation.
   - Count every limit with `python3 -c 'print(len(open(...).read()))'`, field by field, and write the counts in the file.
-  - First ask the owner whether the live 1.2.0 listing differs from `listing.md`; translate the live text if it does.
+  - Translate `listing.md` as it is. Owner, 2026-11-15: do nothing that may risk the App Store review in progress, so nothing in App Store Connect is touched and no build is uploaded.
 - [ ] **Step 2: Capture the five screens in Hebrew** on a 6.9-inch simulator of my own (create "Mivu store 6.9 (Claude)" if none exists).
   - Same method as the English set: the simulator in Hebrew, a real ChatGPT connection, and meals, targets and weights entered through Coach in Hebrew. The emulator sign-in consent is authorized for test sign-ins.
   - Status bar 9:41.
@@ -157,7 +157,7 @@ Only after Tasks 1–5 are merged, or green on this branch, and the owner has re
 
 **Files:**
 - Modify: `ios/Mivu.xcodeproj/project.pbxproj` (`MIVU_HIDDEN_LANGUAGES = "";` in project Debug and Release; keep the strip phases for the next language)
-- Modify: `AGENTS.md:24-27`, `docs/development/adding-a-language.md`, `docs/parity.md`
+- Modify: `AGENTS.md:24-27`, `docs/development/adding-a-language.md`, `docs/parity.md`, `docs/superpowers/specs/2026-11-14-languages-design.md`
 
 - [ ] **Step 1: Change the setting.** Run `python3 scripts/ci/languages.py check` and `scripts/ci/test_languages.py`. Expected: exit 0 and 23/23. `hidden_errors` returns `[]` for an empty set.
 - [ ] **Step 2: Release build for the simulator.** `he.lproj` must be in both `Mivu.app` and `MivuWidgets.appex`. Launch it with `-AppleLanguages (he)`: Today shows Hebrew, and the Settings Language row appears. Launch in English: everything is unchanged except the Language row.
@@ -165,6 +165,7 @@ Only after Tasks 1–5 are merged, or green on this branch, and the owner has re
 - [ ] **Step 4: Docs.**
   - `AGENTS.md`: Mivu ships English and Hebrew.
   - `adding-a-language.md`: the switch-on step is "remove it from `MIVU_HIDDEN_LANGUAGES`".
+  - Spec: the receipt bullet in step 2 now says cards follow the app language (owner, 2026-11-15).
   - `parity.md`: the `languages` row says Hebrew is shipped; add rows for Hebrew widgets and Live Activity, Siri, notifications and reports, each with Android `pending`.
 - [ ] **Step 5: Commit** `feat(languages): ship Hebrew`.
 
@@ -184,6 +185,6 @@ Only after Tasks 1–5 are merged, or green on this branch, and the owner has re
 
 ## Not in this plan
 
-- **Receipt cards in the turn's language** (spec step 2; skipped in step 2). Cards follow the app language. Doing it needs every card string looked up through a per-language bundle. Proposal: amend the spec to "cards follow the app language" unless the owner wants it.
+- **Receipt cards in the turn's language.** Owner, 2026-11-15: cards follow the app language. The spec is amended to match (Task 6 commit).
 - Android, region units, translating saved foods.
 - Uploading to App Store Connect and submitting a version; both are the owner's.
