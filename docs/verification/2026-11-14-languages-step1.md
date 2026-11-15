@@ -153,6 +153,40 @@ simulator layout (the real outer screen, 457 × 678 points, uses the side rail
 upright and puts Add in the "…" menu). The phone was restored to a `main` build
 and its diary checked identical to a backup taken before install.
 
+## Follow-ups from the Duo checks
+
+Source `30f491f` (the tests ran on this tree; a one-line comment was reworded
+before the commit). Local Xcode runs with XcodeBuildMCP on two simulators made
+for this work: "Mivu duo followups (Claude)" (iPhone Duo, iOS 27.1, closed and
+sideways, so the side rail shows as on the real outer screen) and "Mivu duo
+followups iPhone (Claude)" (iPhone 17, iOS 27.0). Not hosted CI.
+
+- **Coach empty state over the date row**: `main` has the same code, so it had
+  the same problem. The heading and body now show only when their full height
+  fits between the day row and the composer, and stay out of VoiceOver when
+  hidden. `DuoLayoutUITests/testShortCoachEmptyStateStaysInItsSpace` failed
+  first (body 47 points under Pip), then passed on the Duo and on the iPhone 17.
+  The empty state still shows on the closed Duo without the keyboard; at the
+  largest text there it is hidden because the composer's note already fills the
+  screen (an existing layout matter, not changed here).
+  `DiaryUITests/testPrecisionGlassReferenceScreensInBothAppearances`, which
+  checks the heading on a normal iPhone, passed: 1 of 1. Its runtime warning
+  "Invalid frame dimension" also appears on the base commit `50fb54a`.
+- **Sweep on the side rail**: with `TEST_RUNNER_SWEEP_MODE=rtl`,
+  `testRightToLeftFlagMirrorsTheApp` failed on the Duo as on the real phone
+  (both tabs at x = 418). The side rail stays on the screen's right edge in both
+  directions, so for a vertical rail the test now checks that the screen beside
+  it mirrors (the "Today" title sits right of centre). Bar items go through one
+  helper that opens "…" when an item is folded away (Add and Chat history), and
+  the Coach field is tapped until it has the keyboard. `testEveryScreenOpens`,
+  `testRightToLeftFlagMirrorsTheApp` and `testTypedHebrewKeepsItsDirectionAndBytes`
+  passed 3 of 3 on the Duo and 3 of 3 on the iPhone 17. The simulator shows Add
+  in the rail, so the "…" path did not run; the real outer screen still needs
+  one sweep run.
+- **Day actions label**: not a bug. XCUITest reads `todayDayActions` with the
+  label "Day actions, Your waking day" in both directions; the sweep now asserts
+  the label.
+
 ## Not verified
 
 - **The save marker with the live model**: needs a ChatGPT sign-in on the test
@@ -161,4 +195,5 @@ and its diary checked identical to a backup taken before install.
 - **VoiceOver speech and the Duo split-screen with another app**: real-device checks.
 - **Widgets and the Live Activity under right-to-left**: their text is in the
   catalogs and the lint checks it, but they were not captured on a Home Screen.
-- **The sweep on the real Duo's outer screen**: its steps need the side-rail layout.
+- **The sweep on the real Duo's outer screen**: it now handles the side rail and
+  the "…" menu, but has not been run on the phone again.
