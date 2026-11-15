@@ -48,6 +48,31 @@ import XCTest
                        "The keyboard shortens the view, but the window is still upright")
     }
 
+    /// Closed and sideways with the keyboard up, the empty conversation is only a few lines tall.
+    func testShortCoachEmptyStateStaysInItsSpace() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        // Upright there is room, so hiding it must be about space, never a blanket hide.
+        XCTAssertTrue(app.staticTexts["What would you like to record?"].waitForExistence(timeout: 15), "A tall window shows the empty state")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap()
+        try XCTSkipUnless(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Needs the software keyboard")
+        let strip = app.descendants(matching: .any)["coachCompanionStrip"]
+        XCTAssertTrue(strip.exists, "Pip's strip is on screen")
+        let top = app.navigationBars["Coach"].frame.maxY, bottom = strip.frame.minY
+        for text in ["What would you like to record?", "Describe a meal"] {
+            let element = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", text)).firstMatch
+            guard element.exists else { continue }
+            XCTAssertGreaterThanOrEqual(element.frame.minY, top, "\(text) runs under the bar")
+            XCTAssertLessThanOrEqual(element.frame.maxY, bottom, "\(text) runs under Pip")
+        }
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "short-coach-empty"; capture.lifetime = .keepAlways; add(capture)
+        XCUIDevice.shared.orientation = .portrait
+    }
+
     func testSidewaysCoachShowsLiveDayAndHighlightsChange() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture",

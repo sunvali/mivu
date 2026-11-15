@@ -39,6 +39,7 @@ struct CoachView: View {
     @State private var diagnostics = CoachTimelineDiagnostics()
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @FocusState private var editing: Bool
+    @ScaledMetric(relativeTo: .subheadline) private var dayRowHeight: CGFloat = 36
     /// Upright, a record or day is pushed over the chat. Progress keeps its own tab there, and sideways
     /// the pane shows everything, so leaving upright must not clear what the pane will show.
     private var pushed: Binding<CoachPane?> {
@@ -76,9 +77,18 @@ struct CoachView: View {
                 .dynamicTypeSize(diagnostics.largeText ? .accessibility2 : typeSize)
                 .overlay {
                     if timeline.exchanges.isEmpty, timeline.error == nil {
-                        ContentUnavailableView("What would you like to record?", systemImage: "text.bubble",
-                            description: Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate. Coach gives estimates, not medical advice."))
-                            .allowsHitTesting(false).padding(.bottom, conversationInset)
+                        // A short window (the closed Duo sideways with the keyboard up) hides it rather than drawing it over the day row, the bar or Pip.
+                        // Plain views: a hidden ContentUnavailableView ignored accessibilityHidden and stayed in VoiceOver.
+                        ShownIfItFits {
+                            VStack(spacing: 8) {
+                                Image(systemName: "text.bubble").font(.largeTitle).foregroundStyle(Color.diarySecondary).padding(.bottom, 8).accessibilityHidden(true)
+                                Text("What would you like to record?").font(.headline).accessibilityAddTraits(.isHeader)
+                                Text("Describe a meal, add a photo, or record a weigh-in or workout. You can review and correct every estimate. Coach gives estimates, not medical advice.")
+                                    .foregroundStyle(Color.diarySecondary)
+                            }
+                            .multilineTextAlignment(.center).padding(.horizontal, 32)
+                        }
+                        .allowsHitTesting(false).padding(.top, dayRowHeight).padding(.bottom, conversationInset)
                     }
                 }
                 .overlay(alignment: .top) { edge(.earlier, timeline: timeline) }
@@ -845,5 +855,24 @@ private extension CoachDestination {
         case .nutritionSource: String(localized: "Open nutrition source")
         case .backup: String(localized: "Open backup and Files")
         }
+    }
+}
+
+/// Shows its content only when its full height fits; unlike `ViewThatFits`, a hidden one stays out of VoiceOver.
+private struct ShownIfItFits<Content: View>: View {
+    @ViewBuilder var content: Content
+    // Starts hidden, so nothing flashes before the first measurement.
+    @State private var needs: CGFloat = .infinity
+    @State private var room: CGFloat = 0
+
+    var body: some View {
+        // Color.clear takes exactly the offered height; a hidden copy measures the content's full height.
+        Color.clear
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
+            .background {
+                content.fixedSize(horizontal: false, vertical: true).hidden().accessibilityHidden(true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { needs = $0 }
+            }
+            .overlay { if needs <= room { content } }
     }
 }
