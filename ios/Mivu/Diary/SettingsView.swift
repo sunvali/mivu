@@ -205,11 +205,15 @@ struct SettingsView: View {
                 Section {
                     Picker("Coach AI", selection: $connection.provider) {
                         Text("ChatGPT (recommended)").tag(ChatGPTConnection.Provider.chatGPT)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Apple Intelligence on iPhone")
-                            Text("No account, but much lower accuracy").font(.caption).foregroundStyle(Color.diarySecondary)
+                        // Hidden on iPhones that can never run it; shown but disabled while it is off or downloading.
+                        if connection.appleSupported {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Apple Intelligence on iPhone")
+                                Text(connection.appleAvailable ? "No account, but much lower accuracy" : "Turn on Apple Intelligence in iOS Settings, or wait for it to finish downloading")
+                                    .font(.caption).foregroundStyle(Color.diarySecondary)
+                            }
+                            .tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.available(.apple))
                         }
-                        .tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.available(.apple))
                     }
                     .pickerStyle(.inline).labelsHidden()
                 } header: { Text("Coach AI") } footer: {
