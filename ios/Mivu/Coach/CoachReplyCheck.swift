@@ -38,9 +38,11 @@ enum CoachReplyCheck {
                   scalar.properties.numericType == .decimal, let digit = character.wholeNumberValue else { return character }
             return Character(String(digit))
         })
-        let pattern = /-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?/
+        // Groups of three after a comma or a thin or no-break space ("1,240", "1 240"); a comma before one or two
+        // digits is a decimal ("73,5"), as many languages write it.
+        let pattern = /-?\d{1,3}(?:[,\u{202F}\u{00A0}]\d{3})+(?:[.,]\d{1,2}(?!\d)|\.\d+)?|-?\d+(?:,\d{1,2}(?!\d)|\.\d+)?/
         return text.matches(of: pattern).map { match in
-            var token = String(match.output).replacingOccurrences(of: ",", with: "")
+            var token = String(match.output).replacing(/[\u{202F}\u{00A0}]|,(?=\d{3})/, with: "").replacingOccurrences(of: ",", with: ".")
             // A hyphen joining date parts or a range is not a minus sign.
             if token.hasPrefix("-"), match.range.lowerBound > text.startIndex, text[text.index(before: match.range.lowerBound)].isNumber { token.removeFirst() }
             // An unreadable number fails closed: NaN is never in the allowed set.
@@ -70,6 +72,7 @@ enum CoachReplyCheck {
         // A review-only turn counts nothing toward the day, so it may answer the question like a read-only turn.
         guard generalFacts, receipts.allSatisfy({ $0.mealID != nil && $0.submissionState == .awaitingReview }) else { return grounded(prose) }
         let hedge = /~|\b(?i:about|around|roughly|approximately|typically|usually|nearly)\b/
+        // shortcut: English words only; elsewhere the prompt keeps "~" for typical food values. Add a language's words if live checks show hedged diary claims.
         let diaryWords = /\b(?i:left|remaining|to go|so far|today|yesterday|this week|goal|target|budget|average|you're|you are|you've|you have|you had|you ate|your)\b/
         return prose.split(separator: /[.!?]\s+|\n+/).allSatisfy { sentence in
             let plain = sentence.replacingOccurrences(of: "’", with: "'")
