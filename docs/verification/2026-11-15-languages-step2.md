@@ -2,6 +2,7 @@
 
 Plan: [2026-11-15-languages-step2-hebrew.md](../superpowers/plans/2026-11-15-languages-step2-hebrew.md).
 Glossary: [he.md](../languages/he.md). Branch `feat/languages-step2`.
+Step 1 record: [2026-11-14-languages-step1.md](2026-11-14-languages-step1.md).
 
 ## What changed
 
