@@ -3204,6 +3204,16 @@
         }
       }
     },
+    "Change the language Mivu uses in iOS Settings." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אפשר לשנות את השפה של Mivu בהגדרות iOS."
+          }
+        }
+      }
+    },
     "Chat history" : {
       "comment" : "Title of and button to open earlier Coach conversations",
       "localizations" : {
@@ -9695,6 +9705,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "פותח את היומן שלך"
+          }
+        }
+      }
+    },
+    "Opens iOS Settings" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פותח את הגדרות iOS"
           }
         }
       }
