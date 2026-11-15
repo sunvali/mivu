@@ -209,6 +209,7 @@
 				8B41F6422DEDD0D5001A66F9 /* Frameworks */,
 				8B41F6432DEDD0D5001A66F9 /* Resources */,
 				64000000000000000000000B /* Embed Foundation Extensions */,
+				650000000000000000000001 /* Strip hidden languages */,
 			);
 			buildRules = (
 			);
@@ -259,6 +260,7 @@
 				640000000000000000000006 /* Sources */,
 				640000000000000000000004 /* Frameworks */,
 				640000000000000000000005 /* Resources */,
+				650000000000000000000002 /* Strip hidden languages */,
 			);
 			buildRules = (
 			);
@@ -347,6 +349,47 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		650000000000000000000001 /* Strip hidden languages */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Strip hidden languages";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Hidden languages stay out of Release builds until they are switched on for users (docs/development/adding-a-language.md).\n[ \"$CONFIGURATION\" = Release ] || exit 0\nfor language in $MIVU_HIDDEN_LANGUAGES; do\n  rm -rf \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/$language.lproj\"\ndone\n";
+		};
+		650000000000000000000002 /* Strip hidden languages */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Strip hidden languages";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Hidden languages stay out of Release builds until they are switched on for users (docs/development/adding-a-language.md).\n[ \"$CONFIGURATION\" = Release ] || exit 0\nfor language in $MIVU_HIDDEN_LANGUAGES; do\n  rm -rf \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/$language.lproj\"\ndone\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		620000000000000000000006 /* Sources */ = {
@@ -482,6 +525,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MIVU_HIDDEN_LANGUAGES = he;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -540,6 +584,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MIVU_HIDDEN_LANGUAGES = he;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;

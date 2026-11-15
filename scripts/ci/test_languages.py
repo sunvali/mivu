@@ -59,6 +59,15 @@ class Catalogs(unittest.TestCase):
         self.assertTrue(any('shouldTranslate' in e for e in languages.errors(catalog(**{'%@ · %@': {}}), {'en'})))
         self.assertEqual(languages.errors(catalog(**{'%@ · %@': {'shouldTranslate': False}}), {'en'}), [])
 
+    def test_hidden_language_needs_the_strip_phase(self):
+        def target(name, phases):
+            return f'isa = PBXNativeTarget;\n buildPhases = (\n{phases}\n);\n name = {name};\n'
+        bare = 'MIVU_HIDDEN_LANGUAGES = he;\n' + target('Mivu', 'A /* Resources */,') + target('MivuWidgets', 'B /* Resources */,')
+        self.assertEqual(languages.hidden_errors(bare), ["hidden language 'he' is not stripped from Mivu", "hidden language 'he' is not stripped from MivuWidgets"])
+        stripped = bare.replace('/* Resources */,', '/* Resources */,\n C /* Strip hidden languages */,')
+        self.assertEqual(languages.hidden_errors(stripped), [])
+        self.assertEqual(languages.hidden_errors(target('Mivu', '')), [])
+
     def test_clean_catalogs_pass(self):
         strings = {'Account': {'localizations': {'he': unit('חשבון')}},
                    '%lld meals': {'localizations': {'en': PLURAL, 'he': HEBREW_PLURAL}},

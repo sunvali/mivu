@@ -31,6 +31,20 @@ when a translation drops or changes a placeholder (only the `zero`, `one` and
 two words has no translator comment, and when a key with no words (`%@ · %@`)
 is not marked `shouldTranslate: false`.
 
+## Shipping a hidden language
+
+A language can be bundled and tested before people see it. List it in the
+project build setting `MIVU_HIDDEN_LANGUAGES` (space-separated, for example
+`he`). The "Strip hidden languages" build phase in `Mivu` and `MivuWidgets`
+deletes its `.lproj` from Release builds, so archives and TestFlight show English
+while Debug builds, tests and captures use the language. `languages.py check`
+fails if a target lacks the phase. To switch the language on for people, remove
+it from `MIVU_HIDDEN_LANGUAGES`; nothing else changes.
+
+To confirm a Release bundle, build `-configuration Release` and run
+`find <Products>/Release-iphonesimulator/Mivu.app -name '<code>.lproj'`: it must
+print nothing.
+
 ## Writing new text
 
 | Text | What to do |

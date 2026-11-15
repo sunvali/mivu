@@ -17,6 +17,24 @@ def shipped(pbxproj):
     return {name for name in re.findall(r'[\w-]+', block[1] if block else '') if name != 'Base'}
 
 
+def hidden_errors(pbxproj, targets=('Mivu', 'MivuWidgets')):
+    """Languages in MIVU_HIDDEN_LANGUAGES must be stripped from every shipped bundle's Release build."""
+    hidden = {name for value in re.findall(r'MIVU_HIDDEN_LANGUAGES = "?([^";]*)"?;', pbxproj) for name in value.split()}
+    if not hidden:
+        return []
+    phases = {}
+    for block in pbxproj.split('isa = PBXNativeTarget;')[1:]:
+        name = re.search(r'\bname = "?([^";]+)"?;', block)
+        listed = re.search(r'buildPhases = \((.*?)\);', block, re.S)
+        if name and listed:
+            phases[name[1]] = listed[1]
+    found = []
+    for target in targets:
+        if 'Strip hidden languages' not in phases.get(target, ''):
+            found += [f"hidden language {language!r} is not stripped from {target}" for language in sorted(hidden)]
+    return found
+
+
 def unit_of(value):
     return {'stringUnit': {'state': 'translated', 'value': value}}
 
@@ -161,7 +179,8 @@ def load(root=ROOT):
 def main(argv):
     catalogs = load()
     if argv[1:2] == ['check']:
-        found = errors(catalogs, shipped((ROOT / PROJECT).read_text()))
+        pbxproj = (ROOT / PROJECT).read_text()
+        found = errors(catalogs, shipped(pbxproj)) + hidden_errors(pbxproj)
         source = ''.join(p.read_text() for d in WIDGET_SOURCES for p in sorted((ROOT / d).glob('*.swift')))
         found += widget_errors(source, catalogs['ios/Mivu/Localizable.xcstrings']['strings'],
                                catalogs['ios/MivuWidgets/Localizable.xcstrings']['strings'])
