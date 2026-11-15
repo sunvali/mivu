@@ -861,7 +861,8 @@ private extension CoachDestination {
 /// Shows its content only when its full height fits; unlike `ViewThatFits`, a hidden one stays out of VoiceOver.
 private struct ShownIfItFits<Content: View>: View {
     @ViewBuilder var content: Content
-    @State private var needs: CGFloat = 0
+    // Starts hidden, so nothing flashes before the first measurement.
+    @State private var needs: CGFloat = .infinity
     @State private var room: CGFloat = 0
 
     var body: some View {

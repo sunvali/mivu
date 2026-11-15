@@ -53,11 +53,15 @@ import XCTest
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
         app.launch()
+        // Upright there is room, so hiding it must be about space, never a blanket hide.
+        XCTAssertTrue(app.staticTexts["What would you like to record?"].waitForExistence(timeout: 15), "A tall window shows the empty state")
         XCUIDevice.shared.orientation = .landscapeLeft
         let input = app.textFields["coachInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap()
         try XCTSkipUnless(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Needs the software keyboard")
-        let top = app.navigationBars["Coach"].frame.maxY, bottom = app.descendants(matching: .any)["coachCompanionStrip"].frame.minY
+        let strip = app.descendants(matching: .any)["coachCompanionStrip"]
+        XCTAssertTrue(strip.exists, "Pip's strip is on screen")
+        let top = app.navigationBars["Coach"].frame.maxY, bottom = strip.frame.minY
         for text in ["What would you like to record?", "Describe a meal"] {
             let element = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", text)).firstMatch
             guard element.exists else { continue }
