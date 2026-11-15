@@ -33,11 +33,23 @@ enum CoachReplyLines {
         return goal.targets.protein.map { String(localized: "Goal: \(number(kcal)) kcal a day, \(number($0)) g protein.") } ?? String(localized: "Goal: \(number(kcal)) kcal a day.")
     }
 
-    enum FollowUp: Equatable { case today, progress }
+    enum FollowUp: Hashable {
+        case today, progress, day(String)
+        /// What the side pane shows for this follow-up; nil is Today.
+        var pane: CoachPane? {
+            switch self { case .today: nil; case .progress: .progress; case .day(let date): .day(date) }
+        }
+    }
 
-    static func followUps(for turn: CoachExchangeSummary) -> [FollowUp] {
+    /// Receipts decide the first two; `consulted` adds what the reply only read (a question about last week).
+    static func followUps(for turn: CoachExchangeSummary, consulted: [CoachConsulted] = [], today: String? = nil) -> [FollowUp] {
         guard turn.state == .completed else { return [] }
-        return (turn.receipts.contains { $0.mealID != nil } ? [.today] : []) + (turn.receipts.contains { $0.weightID != nil && !$0.operationKey.contains("/delete_weight/") } ? [.progress] : [])
+        var result: [FollowUp] = (turn.receipts.contains { $0.mealID != nil } ? [.today] : []) + (turn.receipts.contains { $0.weightID != nil && !$0.operationKey.contains("/delete_weight/") } ? [.progress] : [])
+        for read in consulted {
+            let followUp: FollowUp = switch read { case .progress: .progress; case .day(let date): date == today ? .today : .day(date) }
+            if !result.contains(followUp) { result.append(followUp) }
+        }
+        return result
     }
 
     /// Inline Markdown for emphasis only; links are dropped so model text cannot add tappable destinations.

@@ -77,6 +77,9 @@ struct DiaryRootView: View {
     private typealias SettingsRoute = DiarySettingsRouteOwner.Route
     @State private var routes = DiarySettingsRouteOwner()
     @State private var coachRoutes = CoachNavigationOwner()
+    /// What the pane beside the Coach chat shows on a sideways Duo; nil is Today.
+    @State private var coachPane: CoachPane?
+    @State private var coachChatExpanded = false
     @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
     @State private var showOnboarding = false
@@ -378,13 +381,14 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true) }
+                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
                 NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
-                DuoBeside {
+                // Sideways the chat is on the right, with what the conversation is about on the left.
+                DuoBeside(secondaryLeading: true, primaryFills: $coachChatExpanded) {
                     NavigationStack {
                         CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
                                   onCompanionContextChanged: updateCompanionContext,
@@ -392,17 +396,12 @@ struct DiaryRootView: View {
                                   navigationRequest: coachRoutes.request,
                                   onNavigationConsumed: { coachRoutes.consume($0) },
                                   openHistory: openCoachHistory, openToday: { selectedTab = "today" },
-                                  openProgress: { selectedTab = "progress" }) { destination in
+                                  openProgress: { selectedTab = "progress" }, pane: $coachPane, chatExpanded: $coachChatExpanded) { destination in
                             routes.route = SettingsRoute(destination: destination)
                         }.toolbar { profileControl }.duoReadableWidth()
                     }
                 } secondary: {
-                    // The day Coach is changing, beside the chat; Pip stays a still image so the rig mounts once.
-                    NavigationStack {
-                        TodayView(model: model, companionOutput: CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil),
-                                  companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, isLiveDay: true)
-                    }
-                    .accessibilityIdentifier("coachLiveDay")
+                    CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, openDiary: { selectedTab = "diary" })
                 }
             }
             .badge(coach.queuedSiri.count)

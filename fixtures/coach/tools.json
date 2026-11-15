@@ -504,13 +504,13 @@
       "type" : "function"
     },
     {
-      "description" : "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Set review_first true when the user wants a proposal before totals. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.",
+      "description" : "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Without eaten_at, food for today's date is stamped with the send time and other dates stay date-only. Set review_first true when the user wants a proposal before totals.",
       "name" : "log_food",
       "parameters" : {
         "additionalProperties" : false,
         "properties" : {
           "eaten_at" : {
-            "description" : "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time.",
+            "description" : "Local wall clock yyyy-MM-dd HH:mm (24-hour, real calendar date) of eating, only when the user stated a time (\"at 8\", \"yesterday at noon\") or a relative one (\"an hour ago\"), worked out from the captured local clock; otherwise null. Never guess a time from a meal name.",
             "type" : [
               "string",
               "null"

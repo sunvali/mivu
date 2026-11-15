@@ -12,6 +12,10 @@ struct CoachView: View {
     var openHistory: () -> Void = {}
     var openToday: () -> Void = {}
     var openProgress: () -> Void = {}
+    /// Shared with the side pane: sideways it shows this beside the chat, upright it is pushed over the chat.
+    @Binding var pane: CoachPane?
+    /// True while the chat takes the whole sideways screen and the side pane is put away.
+    @Binding var chatExpanded: Bool
     let openDestination: (CoachDestination) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -33,12 +37,12 @@ struct CoachView: View {
     @State private var refreshViewport: (@MainActor () -> Void)?
     @State private var requestAccessibilityPage: CoachTimelineView.AccessibilityPageRequest?
     @State private var diagnostics = CoachTimelineDiagnostics()
-    @State private var selectedRecord: RecordDestination?
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @FocusState private var editing: Bool
-    private enum RecordDestination: Hashable, Identifiable {
-        case meal(UUID), workout(UUID)
-        var id: Self { self }
+    /// Upright, a record or day is pushed over the chat. Progress keeps its own tab there, and sideways
+    /// the pane shows everything, so leaving upright must not clear what the pane will show.
+    private var pushed: Binding<CoachPane?> {
+        Binding(get: { isWide || pane == .progress ? nil : pane }, set: { if $0 == nil, !isWide { pane = nil } })
     }
 
     private struct ReceiptRefreshKey: Equatable {
@@ -100,8 +104,6 @@ struct CoachView: View {
         }
         // Also behind the keyboard: on the Duo it can sit lower than the inset it reports, leaving a bare window band.
         .background { Color.diaryCanvas.ignoresSafeArea() }
-        // Beside the live day the sidebar is on the far page, but this NavigationStack still inherits its inset.
-        .ignoresSafeArea(.container, edges: isWide ? .trailing : [])
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -114,12 +116,26 @@ struct CoachView: View {
                         }
                     }
             }
+            // Expanded, this view is told it is not wide (see `DuoBeside`), so the flag keeps the control in reach.
+            if (isWide && posture == .flat) || chatExpanded {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(chatExpanded ? String(localized: "Show side by side") : String(localized: "Expand chat"),
+                           systemImage: chatExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
+                        // What the pane held is put away with it; otherwise it would be pushed over the chat being expanded.
+                        if !chatExpanded { pane = nil }
+                        chatExpanded.toggle()
+                    }
+                        .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("coachExpand")
+                }
+            }
         }
-        .navigationDestination(item: $selectedRecord) { record in
+        .navigationDestination(item: pushed) { record in
             Group {
                 switch record {
                 case .meal(let id): MealDetailView(model: coach.diary, mealID: id)
                 case .workout(let id): WorkoutDetailView(model: coach.diary, sessionID: id)
+                case .day(let date): HistoryView(model: coach.diary, startDate: date)
+                case .progress: EmptyView()
                 }
             }
             .onAppear { showingDetail = true; reportCompanionContext() }
@@ -187,7 +203,7 @@ struct CoachView: View {
         .sensoryFeedback(trigger: listening) { _, on in on ? .start : .stop }
         .onChange(of: caretSignal) { _, _ in reportCompanionContext() }
         .onChange(of: coach.diary.selection) { _, _ in
-            coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; selectedRecord = nil
+            coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; pane = nil
             stopListening()
         }
     }
@@ -660,13 +676,37 @@ struct CoachView: View {
         .accessibilityElement(children: .contain).accessibilityIdentifier("coachReplyBar")
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
     }
+    /// Sideways a follow-up opens beside the chat. Upright, Today and Progress switch tabs as before
+    /// and another day is pushed over the chat.
+    private func open(_ followUp: CoachReplyLines.FollowUp) {
+        if isWide { pane = followUp.pane; return }
+        switch followUp {
+        case .today: openToday()
+        case .progress: openProgress()
+        case .day: pane = followUp.pane
+        }
+    }
+    private func title(_ followUp: CoachReplyLines.FollowUp) -> String {
+        switch followUp {
+        case .today: String(localized: "See today")
+        case .progress: String(localized: "See progress")
+        case .day(let date): String(localized: "See \(CoachReplyLines.shortDate(date))")
+        }
+    }
+    private func identifier(_ followUp: CoachReplyLines.FollowUp) -> String {
+        switch followUp {
+        case .today: "coachFollowUp-today"
+        case .progress: "coachFollowUp-progress"
+        case .day: "coachFollowUp-day"
+        }
+    }
     private func openQuote(_ reply: CoachReply) {
         let target: CoachSeekTarget
         switch reply.target {
-        case .meal(let id), .item(let id, _): selectedRecord = .meal(id); return
+        case .meal(let id), .item(let id, _): pane = .meal(id); return
         case .message(let id, _): target = .turn(id)
         case .day(let id): target = .day(id)
-        case .workout(let id): selectedRecord = .workout(id); return
+        case .workout(let id): pane = .workout(id); return
         case .weight: return // shortcut: weight quotes render non-interactive (no record route yet), seek the record's day once Progress has one
         }
         guard let identity = coach.diary.selection?.identity else { return }
@@ -737,8 +777,8 @@ struct CoachView: View {
             ForEach(turn.receipts.filter(CoachReceiptPresentation.showsCard), id: \.operationKey) { receipt in
                 CoachReceiptView(receipt: receipt, target: coach.receiptTarget(receipt), undoState: coach.undoState(receipt),
                                  undo: { Task { await coach.undo(receipt) } }) {
-                    if let id = receipt.mealID { selectedRecord = .meal(id) }
-                    else if let id = receipt.workoutID { selectedRecord = .workout(id) }
+                    if let id = receipt.mealID { pane = .meal(id) }
+                    else if let id = receipt.workoutID { pane = .workout(id) }
                 }
             }
             ForEach(turn.receipts.filter { $0.weightID != nil }, id: \.operationKey) { receipt in
@@ -751,16 +791,16 @@ struct CoachView: View {
                 }
             }
             if coach.timeline?.window.isLatest(turn.id) == true {
-                // Sideways the live day already sits beside the chat.
-                let followUps = CoachReplyLines.followUps(for: turn).filter { !(isWide && $0 == .today) }
+                // Sideways Today is the pane's root, one back tap away. Rows don't redraw when the pane
+                // changes, so the other buttons stay; tapping one the pane already shows changes nothing.
+                let followUps = CoachReplyLines.followUps(for: turn, consulted: coach.consulted(turn.id), today: coach.diary.activeDay?.localDate)
+                    .filter { !(isWide && $0 == .today) }
                 if !followUps.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(followUps, id: \.self) { followUp in
-                            Button(action: followUp == .today ? openToday : openProgress) {
-                                Text(followUp == .today ? String(localized: "See today") : String(localized: "See progress")).frame(minHeight: 36)
-                            }
-                            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
-                                .accessibilityIdentifier(followUp == .today ? "coachFollowUp-today" : "coachFollowUp-progress")
+                            Button { open(followUp) } label: { Text(title(followUp)).frame(minHeight: 36) }
+                                .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
+                                .accessibilityIdentifier(identifier(followUp))
                         }
                     }
                 }
@@ -771,7 +811,7 @@ struct CoachView: View {
             }
             if let pendingID = turn.pendingMealID, !turn.receipts.contains(where: { $0.mealID == pendingID }),
                let meal = coach.linkedMeals(turn).first(where: { $0.id == pendingID }) {
-                Button { selectedRecord = .meal(meal.id) } label: {
+                Button { pane = .meal(meal.id) } label: {
                     Label(meal.state == .awaitingReview ? "Needs review" : "Review captured meal", systemImage: "square.and.pencil").frame(minHeight: 44)
                 }.accessibilityIdentifier("coachMealLink")
             }

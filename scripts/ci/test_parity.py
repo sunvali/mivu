@@ -60,9 +60,18 @@ class ParityMatrix(unittest.TestCase):
 
     def test_shared_paths_need_matrix_change(self):
         self.assertTrue(parity.needs_update(['android/app/x.kt'], ''))
+        self.assertTrue(parity.needs_update(['ios/Mivu/Coach/CoachEngine.swift'], '',
+                                            messages=['fix(coach): return rejected tool batch']))
         self.assertFalse(parity.needs_update(['android/app/x.kt', 'docs/parity.md'], ''))
         self.assertFalse(parity.needs_update(['design-system/mivu/x'], 'Parity: unchanged - asset rename'))
         self.assertFalse(parity.needs_update(['README.md'], ''))
+
+    def test_test_only_paths_and_commit_trailers_pass_without_matrix_change(self):
+        test_only = ['ios/MivuTests/CoachTests.swift', 'ios/MivuUITests/CoachUITests.swift',
+                     'android/app/src/test/CoachTest.kt', 'android/app/src/androidTest/CoachUiTest.kt']
+        self.assertFalse(parity.needs_update(test_only, ''))
+        msg = 'fix(coach): guard nil token\n\nParity: unchanged - iOS-only Keychain guard'
+        self.assertFalse(parity.needs_update(['ios/Mivu/Coach/CoachEngine.swift'], '', messages=[msg]))
 
     def test_repository_matrix_is_valid(self):
         text = (ROOT / 'docs/parity.md').read_text()

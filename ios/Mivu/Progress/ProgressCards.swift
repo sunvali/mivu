@@ -177,7 +177,7 @@ struct ProgressCardTitle: View {
 struct ProgressHeadlineCard: View {
     let snapshot: ProgressSnapshot
     let dates: String
-    let companion: CompanionView
+    let companion: CompanionView?
     let openDiary: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -207,7 +207,7 @@ struct ProgressHeadlineCard: View {
     }
 
     /// Pip stands on the right, mirrored to face the verdict and the bars (the rig itself only faces right).
-    private var pip: some View { companion.scaleEffect(x: -1, y: 1) }
+    @ViewBuilder private var pip: some View { if let companion { companion.scaleEffect(x: -1, y: 1) } }
 
     private var verdict: some View {
         VStack(alignment: .leading, spacing: 6) {

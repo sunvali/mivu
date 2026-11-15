@@ -501,6 +501,8 @@ private final class CoachNavigationReadFence: Sendable {
                                 try await photoLimiter.withPermit { try PhotoImport.visionCopies(originals) }
                             }, onActivity: { phase in
                                 await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
+                            }, onConsulted: { read in
+                                await self.noteConsulted(read, turnID: turn.id)
                             }).run(turnID: turn.id, expectedProfileID: owner)
                         } catch {
                             guard !Task.isCancelled, diary.selection == selected else { break }
@@ -660,6 +662,14 @@ private final class CoachNavigationReadFence: Sendable {
     func cancel() { activity = nil; activityTurnID = nil; worker?.cancel() }
     deinit { monitor.cancel() }
     func waitForWorker() async { await worker?.value }
+    // shortcut: session only, lost on relaunch; store with the turn if users miss the button.
+    private var consultedByTurn: (turnID: UUID, items: [CoachConsulted])?
+    /// What the engine read to answer this turn, in this session; empty for any other turn.
+    func consulted(_ turnID: UUID) -> [CoachConsulted] { consultedByTurn.flatMap { $0.turnID == turnID ? $0.items : nil } ?? [] }
+    private func noteConsulted(_ read: CoachConsulted, turnID: UUID) {
+        if consultedByTurn?.turnID != turnID { consultedByTurn = (turnID, []) }
+        if consultedByTurn?.items.contains(read) == false { consultedByTurn?.items.append(read) }
+    }
     private func reportActivity(_ phase: CoachActivity, workerID id: UUID, owner: UUID, turnID: UUID) async {
         guard active, presentationActive, !Task.isCancelled, workerID == id, diary.readModel?.head.profile.id == owner, !diary.isChangingProfile else { return }
         activity = phase; activityTurnID = turnID

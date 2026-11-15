@@ -390,7 +390,7 @@ private actor ReturnedPhotoGate {
         let runtime = CompanionRuntime()
         let output = CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil)
         let hosting = UIHostingController(rootView: CoachView(coach: coach, companionOutput: output, companionRuntime: runtime,
-            onCompanionContextChanged: { _ in }, openDestination: { _ in }))
+            onCompanionContextChanged: { _ in }, pane: .constant(nil), chatExpanded: .constant(false), openDestination: { _ in }))
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene); window.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
         window.rootViewController = hosting; window.makeKeyAndVisible()
