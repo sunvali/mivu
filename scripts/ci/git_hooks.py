@@ -47,8 +47,8 @@ def pre_commit():
     if git('ls-files', '--unmerged'):
         raise ValueError('Resolve staged conflicts before committing.')
     subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
-    paths = git('diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR').split('\0')
-    for name in filter(None, paths):
+    paths = [name for name in git('diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR').split('\0') if name]
+    for name in paths:
         if name.endswith('.py'):
             ast.parse(git('show', ':' + name), filename=name)
         elif name.endswith('.sh') or name.startswith('.githooks/'):
@@ -56,6 +56,14 @@ def pre_commit():
                                     text=True, capture_output=True)
             if result.returncode:
                 raise ValueError('Invalid staged shell syntax: ' + name)
+    if Path('docs/parity.md').is_file() and 'docs/parity.md' not in paths:
+        watched = ('ios/', 'android/', 'fixtures/', 'design-system/mivu/')
+        ignored = ('ios/MivuTests/', 'ios/MivuUITests/', 'android/app/src/test/', 'android/app/src/androidTest/',
+                   'ios/version.txt', 'ios/CHANGELOG.md', 'android/version.txt', 'android/CHANGELOG.md')
+        if any(name.startswith(watched) and not name.startswith(ignored) for name in paths):
+            print('Parity reminder: update docs/parity.md or add "Parity: unchanged - <reason>" to a commit message before pushing.',
+                  file=sys.stderr)
+
 
 
 def native_environment(developer):
@@ -206,19 +214,34 @@ def pre_push():
     if any(tree(source, QUICK) != tree(head, QUICK) for source, _ in refs):
         raise ValueError('Check scripts differ from pushed source; check out that commit before pushing.')
     native = android = False
+    parity_ranges = []
     for source, remote in refs:
+        parity_base = None
         try:
-            baseline = (git('merge-base', source, 'origin/main').strip() if set(remote) == {'0'}
+            parity_base = git('merge-base', source, 'origin/main').strip()
+        except subprocess.CalledProcessError:
+            pass
+        try:
+            baseline = (parity_base if set(remote) == {'0'} and parity_base
                         else git('rev-parse', remote + '^{commit}').strip())
             needs_native = tree(source, NATIVE) != tree(baseline, NATIVE)
             needs_android = tree(source, ANDROID) != tree(baseline, ANDROID)
+            parity_base = parity_base or baseline
         except subprocess.CalledProcessError:
             needs_native = needs_android = True
+        if parity_base:
+            parity_ranges.append((parity_base, source))
         needs_android &= bool(tree(source, ANDROID))
         if (needs_native or needs_android) and source != head:
             raise ValueError('Native changes must be pushed from their checked-out HEAD.')
         native |= needs_native
         android |= needs_android
+    if Path('scripts/ci/parity.py').is_file() and Path('docs/parity.md').is_file():
+        for base, source in (parity_ranges or [(None, None)]):
+            args = ['--range', base, source] if base else []
+            check = subprocess.run(['python3', 'scripts/ci/parity.py', *args], text=True, capture_output=True)
+            if check.returncode:
+                raise ValueError((check.stdout or check.stderr).strip() or 'Parity check failed.')
     subprocess.run(['python3', '-m', 'unittest', 'discover', '-s', 'scripts/ci', '-p', 'test_*.py'],
                    env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'), check=True)
     subprocess.run(['bash', '-n', 'scripts/ci/native.sh', 'scripts/ci/signed.sh'], check=True)

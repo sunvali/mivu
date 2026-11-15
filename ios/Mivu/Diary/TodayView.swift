@@ -402,7 +402,8 @@ struct DiaryRootView: View {
                     }
                 } secondary: {
                     CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, openDiary: { selectedTab = "diary" })
-                }            }
+                }
+            }
             .badge(coach.queuedSiri.count)
         }
     }

@@ -39,13 +39,22 @@ enum CoachReplyCheck {
         }
     }
 
-    static func passes(_ prose: String, allowed: Set<Decimal>, receipts: [CoachCommittedReceipt]) -> Bool {
+    /// `generalFacts` lets a read-only answer use typical food values in hedged sentences that do not describe the diary.
+    static func passes(_ prose: String, allowed: Set<Decimal>, receipts: [CoachCommittedReceipt], generalFacts: Bool = false) -> Bool {
         guard !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         if receipts.contains(where: { $0.mealID != nil && $0.submissionState == .awaitingReview }) {
             let lowered = prose.lowercased()
             if lowered.contains("logged") || lowered.contains("saved") { return false }
         }
-        return numbers(in: prose).allSatisfy { allowed.contains(abs($0)) }
+        func grounded(_ text: some StringProtocol) -> Bool { numbers(in: String(text)).allSatisfy { allowed.contains(abs($0)) } }
+        // A review-only turn counts nothing toward the day, so it may answer the question like a read-only turn.
+        guard generalFacts, receipts.allSatisfy({ $0.mealID != nil && $0.submissionState == .awaitingReview }) else { return grounded(prose) }
+        let hedge = /~|\b(?i:about|around|roughly|approximately|typically|usually|nearly)\b/
+        let diaryWords = /\b(?i:left|remaining|to go|so far|today|yesterday|this week|goal|target|budget|average|you're|you are|you've|you have|you had|you ate|your)\b/
+        return prose.split(separator: /[.!?]\s+|\n+/).allSatisfy { sentence in
+            let plain = sentence.replacingOccurrences(of: "’", with: "'")
+            return grounded(plain) || (plain.contains(hedge) && !plain.contains(diaryWords))
+        }
     }
 
     // Decimal(Double) keeps binary noise (73.6 → 73.59999…); the shortest description does not.
