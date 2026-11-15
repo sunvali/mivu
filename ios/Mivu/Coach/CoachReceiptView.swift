@@ -15,7 +15,7 @@ struct CoachReceiptPresentation: Equatable {
     let target: CoachReceiptTarget
     var committedDate: String? { receipt.targetLocalDate }
     var committedItems: [String] {
-        receipt.items.map { "\($0.name) · \($0.quantity.formatted(.number.grouping(.never))) \($0.unit)" }
+        receipt.items.map { "\($0.name) · \($0.quantity.formatted(.number.grouping(.never))) \(FoodItem.shownUnit($0.unit))" }
     }
     /// The write after the turn ID, so an undo of a delete never reads as the delete itself.
     private static func write(_ key: String) -> Substring { key.split(separator: "/", maxSplits: 1).last ?? "" }
@@ -129,7 +129,7 @@ struct CoachReceiptPresentation: Equatable {
         return String(localized: "Carbs \(grams(carbs)) · Protein \(grams(protein)) · Fat \(grams(fat))")
     }
     var itemRows: [(name: String, amount: String, kcal: String)] {
-        receipt.items.map { ($0.name, "\($0.quantity.formatted(.number.grouping(.never))) \($0.unit)", $0.nutrition?.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—") }
+        receipt.items.map { ($0.name, "\($0.quantity.formatted(.number.grouping(.never))) \(FoodItem.shownUnit($0.unit))", $0.nutrition?.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—") }
     }
     /// Energy share of carbs, protein and fat (4/4/9 kcal per gram); nil when any total is unknown.
     var macroShare: (carbs: Double, protein: Double, fat: Double)? {

@@ -86,6 +86,29 @@ struct FoodItem: Codable, Equatable, Sendable, Identifiable {
     /// The Coach model that estimated this food; nil for manual and older foods.
     var estimatedBy: String? = nil
 
+    /// The unit as people read it. Coach writes units in English ("g", "slice"), and the stored value stays as written.
+    var shownUnit: String { FoodItem.shownUnit(unit) }
+
+    nonisolated static func shownUnit(_ unit: String) -> String {
+        switch unit.lowercased() {
+        case "g": String(localized: "g")
+        case "ml": String(localized: "ml")
+        case "piece": String(localized: "piece", comment: "Food unit after a quantity: one piece")
+        case "pieces": String(localized: "pieces", comment: "Food unit after a quantity: several pieces")
+        case "slice": String(localized: "slice", comment: "Food unit after a quantity: one slice")
+        case "slices": String(localized: "slices", comment: "Food unit after a quantity: several slices")
+        case "cup": String(localized: "cup", comment: "Food unit after a quantity: one cup")
+        case "cups": String(localized: "cups", comment: "Food unit after a quantity: several cups")
+        case "serving": String(localized: "serving", comment: "Food unit after a quantity: one serving")
+        case "servings": String(localized: "servings", comment: "Food unit after a quantity: several servings")
+        case "bowl": String(localized: "bowl", comment: "Food unit after a quantity: one bowl")
+        case "medium": String(localized: "medium")
+        case "tbsp": String(localized: "tbsp", comment: "Food unit after a quantity: tablespoon")
+        case "tsp": String(localized: "tsp", comment: "Food unit after a quantity: teaspoon")
+        default: unit
+        }
+    }
+
     var estimatedByLabel: String? {
         estimatedBy.map { $0 == "apple-intelligence" ? "Apple Intelligence" : "ChatGPT" }
     }
