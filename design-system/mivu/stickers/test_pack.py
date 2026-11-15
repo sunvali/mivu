@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+import check
 import pack
 
 RED = (220, 60, 50, 255)
@@ -85,6 +86,43 @@ class PackTests(unittest.TestCase):
             self.assertEqual(getattr(Image.open(out / "imessage/hi.png"), "n_frames", 1), 12)
             self.assertEqual(Image.open(out / "gif/hi.gif").n_frames, 12)
             self.assertTrue((out / "png/a.png").is_file())
+
+
+class CheckTests(unittest.TestCase):
+    def export(self, tmp, still=3, moving=3):
+        frames, out = Path(tmp) / "frames", Path(tmp) / "out"
+        order = []
+        for n in range(still + moving):
+            sticker, animated = f"s{n}", n >= still
+            folder = frames / sticker
+            folder.mkdir(parents=True)
+            for i in range(12 if animated else 1):
+                disc(cx=200 + i * 4, r=60).save(folder / f"{i:04d}.png")
+            (folder / "meta.json").write_text(json.dumps({"id": sticker, "emoji": ["🙂"], "animated": animated, "fps": 20 if animated else 0}))
+            order.append(sticker)
+        pack.build(frames, out, order=order)
+        return out
+
+    def test_check_passes_minimal_valid_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(check.problems(self.export(tmp)), [])
+
+    def test_check_rejects_oversize_animated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self.export(tmp)
+            big = out / "whatsapp/animated/s3.webp"
+            big.write_bytes(big.read_bytes() + b"\0" * 600_000)  # RIFF readers ignore trailing bytes; the size is what counts
+            self.assertTrue(any("s3.webp" in p and "bytes" in p for p in check.problems(out)))
+
+    def test_check_rejects_mixed_pack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self.export(tmp)
+            (out / "whatsapp/still/s0.webp").write_bytes((out / "whatsapp/animated/s3.webp").read_bytes())
+            self.assertTrue(any("s0.webp" in p and "animated" in p for p in check.problems(out)))
+
+    def test_check_rejects_short_pack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(any("3-30" in p for p in check.problems(self.export(tmp, still=2))))
 
 
 if __name__ == "__main__":

@@ -166,5 +166,16 @@
         "coach-greeting"
       ]
     }
+  },
+  "stickers": {
+    "directory": "design-system/mivu/stickers",
+    "source": "Poses in ios/MivuTests/PipStickerCatalog.swift rendered by the app's PipRigView (MivuTests/PipStickerExportTests/exportFrames), outlined and encoded by stickers/pack.py; no new imported artwork",
+    "newRigParts": [
+      "fx-z-1@curled",
+      "fx-z-2@curled",
+      "fx-z-3@curled"
+    ],
+    "check": "design-system/mivu/stickers/check.py",
+    "instructions": "design-system/mivu/stickers/README.md"
   }
 }

@@ -128,7 +128,6 @@ def build(frames_dir, out_dir, order=LINEUP):
             "publisher": "Mivu",
             "tray_image_file": "tray.png",
             "image_data_version": "1",
-            "avoid_cache": False,
             "publisher_email": "", "publisher_website": "", "privacy_policy_website": "", "license_agreement_website": "",
             "animated_sticker_pack": animated,
             "stickers": stickers,
