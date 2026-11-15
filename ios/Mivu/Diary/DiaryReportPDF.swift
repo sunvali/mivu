@@ -128,6 +128,6 @@ extension DiaryReport {
     private func whole(_ value: Double?) -> String { value.map { Int($0.rounded()).formatted() } ?? "—" }
     private static func dayTitle(_ localDate: String) -> String {
         guard let date = try? Date(localDate + "T00:00:00Z", strategy: .iso8601) else { return localDate }
-        return date.formatted(Date.FormatStyle(timeZone: TimeZone(identifier: "UTC")!).weekday(.abbreviated).month(.abbreviated).day().year())
+        return date.formatted(Date.FormatStyle(calendar: .gregorianUTC, timeZone: .gmt).weekday(.abbreviated).month(.abbreviated).day().year())
     }
 }

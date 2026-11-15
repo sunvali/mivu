@@ -147,6 +147,9 @@ struct WeightEntry: Codable, Equatable, Sendable, Identifiable {
     var unit = "kg"
     var revision = 1
     var timePrecision: MealTimePrecision = .exact
+
+    /// The unit as people read it; `unit` stays the stored "kg" or "lb".
+    var shownUnit: String { unit == "kg" ? String(localized: "kg") : unit == "lb" ? String(localized: "lb") : unit }
 }
 
 extension WeightEntry {

@@ -699,7 +699,7 @@ struct TodayView: View {
                         Label { Text("Morning weight") } icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
                         Spacer()
                         if let entry = snapshot.weight {
-                            Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()
+                            Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.shownUnit)").monospacedDigit()
                         } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
                     }.frame(minHeight: 44)
                 }.accessibilityIdentifier("logWeight").diarySummaryCard()
@@ -818,8 +818,8 @@ struct TodayView: View {
     private var displayDate: String {
         guard let value = model.activeDay?.localDate else { return String(localized: "Your waking day") }
         let parts = value.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 3, let date = Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)) else { return value }
-        return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        guard parts.count == 3, let date = Calendar.gregorianUTC.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)) else { return value }
+        return date.formatted(Date.FormatStyle(calendar: .gregorianUTC, timeZone: .gmt).weekday(.wide).month(.wide).day())
     }
     private var companionArt: some View {
         // 186 keeps the hero's old height; taller pushes the first meal row under the floating Log meal bar.

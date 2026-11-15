@@ -365,9 +365,9 @@ struct WeightCorrectionView: View {
         NavigationStack {
             Form {
                 Section("Morning weight · \(localDate)") {
-                    progressNumberField(String(localized: "Weight in \(entry.unit)"), text: $value, id: "weightCorrectionInput")
+                    progressNumberField(String(localized: "Weight in \(entry.shownUnit)"), text: $value, id: "weightCorrectionInput")
                     if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !valid {
-                        Text("Enter a number greater than 0 and no more than 1,000 \(entry.unit).")
+                        Text("Enter a number greater than 0 and no more than 1,000 \(entry.shownUnit).")
                             .font(.subheadline).foregroundStyle(.red)
                     }
                     Text("This corrects the saved measurement for this waking day.")

@@ -283,7 +283,7 @@ private struct DaySections: View {
                 }
             }
             if let weight = snapshot.weight {
-                LabeledContent("Morning weight", value: "\(weight.value.formatted()) \(weight.unit)").monospacedDigit()
+                LabeledContent("Morning weight", value: "\(weight.value.formatted()) \(weight.shownUnit)").monospacedDigit()
             }
         }
     }

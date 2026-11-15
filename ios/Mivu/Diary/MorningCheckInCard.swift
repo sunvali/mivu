@@ -195,5 +195,5 @@ func wakingDayTitle(_ localDate: String, relativeTo reference: String? = nil) ->
     formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"; formatter.timeZone = .gmt
     guard let date = formatter.date(from: localDate) else { return localDate }
     if let reference, let next = formatter.date(from: reference), next.timeIntervalSince(date) == 86_400 { return String(localized: "Yesterday") }
-    return date.formatted(Date.FormatStyle(timeZone: .gmt).weekday(.abbreviated).month(.abbreviated).day())
+    return date.formatted(Date.FormatStyle(calendar: .gregorianUTC, timeZone: .gmt).weekday(.abbreviated).month(.abbreviated).day())
 }

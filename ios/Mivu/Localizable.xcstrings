@@ -100,9 +100,21 @@
       "comment" : "Workout row subtitle: %@ is the workout type, %lld is the duration in minutes",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld minutes"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$lld minute"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$lld minutes"
+                }
+              }
+            }
           }
         }
       }
@@ -516,11 +528,34 @@
       }
     },
     "%lld of %lld days logged" : {
+      "comment" : "Progress Calendar row value: days with food logged out of the days in the period",
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld of %2$lld days logged"
+            "state" : "translated",
+            "value" : "%1$lld of %#@days@ logged"
+          },
+          "substitutions" : {
+            "days" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg day"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg days"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -529,8 +564,30 @@
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld of %2$lld days near your target"
+            "state" : "translated",
+            "value" : "%1$lld of %#@days@ near your target"
+          },
+          "substitutions" : {
+            "days" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg day"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg days"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -853,7 +910,27 @@
 
     },
     "Added %lld photos." : {
-      "comment" : "VoiceOver announcement after adding %lld photos"
+      "comment" : "VoiceOver announcement after adding %lld photos",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld photo."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld photos."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "Added the photo." : {
 
@@ -2323,9 +2400,21 @@
     "Down %@ kg in %lld days" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Down %1$@ kg in %2$lld days"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Down %1$@ kg in %2$lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Down %1$@ kg in %2$lld days"
+                }
+              }
+            }
           }
         }
       }
@@ -2858,9 +2947,21 @@
     "Import %@ (%lld meals) as a separate private local diary. The selected profile is preserved." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Import %1$@ (%2$lld meals) as a separate private local diary. The selected profile is preserved."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Import %1$@ (%2$lld meal) as a separate private local diary. The selected profile is preserved."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Import %1$@ (%2$lld meals) as a separate private local diary. The selected profile is preserved."
+                }
+              }
+            }
           }
         }
       }
@@ -3683,7 +3784,26 @@
 
     },
     "No finished days in the last %lld days yet." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No finished days in the last %lld day yet."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No finished days in the last %lld days yet."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "no full days yet" : {
 
@@ -4439,9 +4559,21 @@
     "Replace %@ with %@ (%lld meals). Older or deleted records cannot overwrite newer changes." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Replace %1$@ with %2$@ (%3$lld meals). Older or deleted records cannot overwrite newer changes."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Replace %1$@ with %2$@ (%3$lld meal). Older or deleted records cannot overwrite newer changes."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Replace %1$@ with %2$@ (%3$lld meals). Older or deleted records cannot overwrite newer changes."
+                }
+              }
+            }
           }
         }
       }
@@ -4919,9 +5051,21 @@
     "Seven-day average %@ kg from %lld dates." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Seven-day average %1$@ kg from %2$lld dates."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Seven-day average %1$@ kg from %2$lld date."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Seven-day average %1$@ kg from %2$lld dates."
+                }
+              }
+            }
           }
         }
       }
@@ -5622,9 +5766,21 @@
     "Up %@ kg in %lld days" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Up %1$@ kg in %2$lld days"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Up %1$@ kg in %2$lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Up %1$@ kg in %2$lld days"
+                }
+              }
+            }
           }
         }
       }
@@ -5874,7 +6030,26 @@
       "comment" : "Label: change in body weight"
     },
     "Weight chart: %lld measured dates." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Weight chart: %lld measured date."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Weight chart: %lld measured dates."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "Weight goal" : {
       "comment" : "Label: goal body weight"

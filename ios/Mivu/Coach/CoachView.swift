@@ -429,7 +429,7 @@ struct CoachView: View {
                 Text(coach.queuedSiri.count > 1 ? String(localized: "From Siri while locked · \(coach.queuedSiri.count) waiting") : String(localized: "From Siri while locked"))
                     .font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary)
                 Text("“\(entry.text)”").lineLimit(4)
-                Text(entry.capturedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Color.diarySecondary)
+                Text(entry.capturedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, calendar: Calendar(identifier: .gregorian)))).font(.caption).foregroundStyle(Color.diarySecondary)
                 HStack {
                     Spacer()
                     Button(role: .destructive) { coach.discardQueued(entry) } label: { Text("Discard").frame(minWidth: 44, minHeight: 44) }
