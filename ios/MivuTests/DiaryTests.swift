@@ -167,6 +167,11 @@ struct DiaryTests {
         #expect(nutritionTotals([items[0]]).protein == nil)
         #expect(nutritionTotals([]).kcal == nil)
     }
+    @Test func onlyAnEmptyDayDisplaysZero() {
+        #expect(nutritionTotals([]).zeroIfEmpty == NutritionTotals(kcal: 0, carbs: 0, protein: 0, fat: 0, unknownItemCount: 0))
+        let unknown = nutritionTotals([FoodItem(name: "A", nutrition: NutritionValues())])
+        #expect(unknown.zeroIfEmpty == unknown)
+    }
     @Test func profileSwitchRejectsWorkFromFormerOwner() async throws {
         let (store, profile, day) = try await Self.ready()
         let meal = try await capturedMeal(store, text: "apple", photos: [], reviewFirst: false, dayID: day.id)

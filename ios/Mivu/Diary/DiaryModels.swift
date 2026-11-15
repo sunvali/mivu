@@ -66,6 +66,10 @@ struct NutritionTotals: Equatable, Sendable {
     var protein: Double?
     var fat: Double?
     var unknownItemCount: Int
+    /// Nothing logged yet reads 0; a logged-but-unknown nutrient stays nil.
+    var zeroIfEmpty: NutritionTotals {
+        self == nutritionTotals([]) ? NutritionTotals(kcal: 0, carbs: 0, protein: 0, fat: 0, unknownItemCount: 0) : self
+    }
 }
 
 struct FoodItem: Codable, Equatable, Sendable, Identifiable {

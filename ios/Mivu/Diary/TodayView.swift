@@ -653,12 +653,12 @@ struct TodayView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     summaryDate
                     if let day = model.activeDay {
-                        intakeHero(totals: snapshot.totals, day: day)
+                        intakeHero(totals: snapshot.totals.zeroIfEmpty, day: day)
                         if snapshot.activeGoal != nil {
                             todayGoal(snapshot: snapshot, day: day)
                         }
                     } else {
-                        intakeHero(totals: nutritionTotals([]), day: nil)
+                        intakeHero(totals: nutritionTotals([]).zeroIfEmpty, day: nil)
                     }
                 }.diarySummaryCard()
             }
