@@ -20,3 +20,7 @@ or expand to all unit/UI tests after a focused pass. The default `MivuQuick`
 plan runs just smoke. Reserve the full `Mivu` plan for releases, broad regressions
 or an explicit request. This supersedes full-suite instructions in older plans.
 Never use another agent's simulator; set `MIVU_TEST_SIMULATOR_ID` for push hooks.
+When changing non-test files under `ios/`, `android/`, `fixtures/` or
+`design-system/mivu/`, update `docs/parity.md` or add
+`Parity: unchanged - <reason>` to the commit message (and PR description) before
+pushing so `pre-push` and CI pass on the first run.
