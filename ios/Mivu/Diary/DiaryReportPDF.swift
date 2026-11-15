@@ -80,7 +80,7 @@ extension DiaryReport {
             for day in days {
                 let isOver = (day.totals.kcal ?? 0) > (day.target?.kcal ?? .infinity)
                 row([Self.dayTitle(day.localDate), whole(day.totals.kcal), whole(day.target?.kcal), whole(day.totals.protein), whole(day.totals.carbs), whole(day.totals.fat),
-                     day.weight.map { "\(number($0.value)) \($0.unit)" } ?? "—"], first: 120, colors: isOver ? [1: over] : [:])
+                     day.weight.map { "\(number($0.value)) \($0.shownUnit)" } ?? "—"], first: 120, colors: isOver ? [1: over] : [:])
             }
             y += 8
             draw(String(localized: "Red calories are above that day’s target. “—” means unknown."), font(8), secondary,
@@ -112,7 +112,7 @@ extension DiaryReport {
         let logged = days.filter { !$0.meals.isEmpty }, target = days.last?.target
         let first = weights.first?.entry, last = weights.last?.entry
         let change: String = if let first, let last, weights.count > 1, first.unit == last.unit {
-            "\(last.value < first.value ? "−" : "+")\(number(abs(last.value - first.value))) \(last.unit)"
+            "\(last.value < first.value ? "−" : "+")\(number(abs(last.value - first.value))) \(last.shownUnit)"
         } else { "—" }
         return [
             (String(localized: "Avg calories"), whole(average(logged.compactMap(\.totals.kcal))), target?.kcal.map { String(localized: "target \(whole($0))") } ?? String(localized: "no target")),
@@ -128,6 +128,6 @@ extension DiaryReport {
     private func whole(_ value: Double?) -> String { value.map { Int($0.rounded()).formatted() } ?? "—" }
     private static func dayTitle(_ localDate: String) -> String {
         guard let date = try? Date(localDate + "T00:00:00Z", strategy: .iso8601) else { return localDate }
-        return date.formatted(Date.FormatStyle(timeZone: TimeZone(identifier: "UTC")!).weekday(.abbreviated).month(.abbreviated).day().year())
+        return date.formatted(Date.FormatStyle(calendar: .gregorianUTC, timeZone: .gmt).weekday(.abbreviated).month(.abbreviated).day().year())
     }
 }

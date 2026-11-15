@@ -365,9 +365,9 @@ struct WeightCorrectionView: View {
         NavigationStack {
             Form {
                 Section("Morning weight · \(localDate)") {
-                    progressNumberField(String(localized: "Weight in \(entry.unit)"), text: $value, id: "weightCorrectionInput")
+                    progressNumberField(String(localized: "Weight in \(entry.shownUnit)"), text: $value, id: "weightCorrectionInput")
                     if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !valid {
-                        Text("Enter a number greater than 0 and no more than 1,000 \(entry.unit).")
+                        Text("Enter a number greater than 0 and no more than 1,000 \(entry.shownUnit).")
                             .font(.subheadline).foregroundStyle(.red)
                     }
                     Text("This corrects the saved measurement for this waking day.")
@@ -684,6 +684,7 @@ struct MorningWeightEditorView: View {
 
     private var isDirty: Bool { value != (initialWeight.map { String($0.value) } ?? "") }
     private var unit: String { initialWeight?.unit ?? "kg" }
+    private var shownUnit: String { WeightEntry(measuredAt: .now, value: 0, unit: unit).shownUnit }
 
     init(model: DiaryViewModel, dayID: UUID? = nil) {
         self.model = model
@@ -708,9 +709,9 @@ struct MorningWeightEditorView: View {
             Form {
                 Section("Morning weight") {
                     if let localDate { LabeledContent("Waking day", value: localDate) }
-                    progressNumberField(String(localized: "Weight (\(unit))"), text: $value, id: "weightInput").disabled(loading || !dayLoaded)
+                    progressNumberField(String(localized: "Weight (\(shownUnit))"), text: $value, id: "weightInput").disabled(loading || !dayLoaded)
                     if !value.isEmpty && !valid {
-                        Label("Enter a weight greater than 0 and no more than 1,000 \(unit).", systemImage: "exclamationmark.circle")
+                        Label("Enter a weight greater than 0 and no more than 1,000 \(shownUnit).", systemImage: "exclamationmark.circle")
                             .font(.subheadline).foregroundStyle(.red)
                     }
                     Text(dayID == nil ? String(localized: "Optional. Saving starts or reuses today's waking day.") : String(localized: "Saving updates only this selected waking day. Other day labels and your active day are preserved."))

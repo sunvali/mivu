@@ -411,7 +411,7 @@ extension DiaryDatabase {
                     }
                     if receipt.itemID != nil, !facts.items.isEmpty {
                         if meal.state == .awaitingReview { summaries.append(String(localized: "Your estimate is ready for review.")); continue }
-                        let items = facts.items.map { String(localized: "\($0.name) to \(number($0.quantity)) \($0.unit)") }.joined(separator: ", ")
+                        let items = facts.items.map { String(localized: "\($0.name) to \(number($0.quantity)) \(FoodItem.shownUnit($0.unit))") }.joined(separator: ", ")
                         summaries.append(String(localized: "Updated \(items)."))
                     } else if receipt.operationKey.contains("/scale_meal/"), meal.state != .awaitingReview {
                         let known = { (items: [FoodItem]) in Int(items.compactMap(\.nutrition.kcal).reduce(0, +).rounded()) }

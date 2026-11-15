@@ -18,6 +18,24 @@ struct LanguageTextTests {
         #expect(open.spoken == "Logging to yesterday, unknown kcal")
     }
 
+    @Test func coachDatesStayGregorian() {
+        #expect(CoachReplyLines.shortDate("2026-10-19", locale: Locale(identifier: "en_US@calendar=buddhist")) == "Oct 19")
+        #expect(CoachReplyLines.dayLabel("2025-10-19", today: "2026-10-19", locale: Locale(identifier: "en_US@calendar=hebrew")).contains("2025"))
+    }
+
+    @Test func countsUsePluralForms() {
+        #expect(String(localized: "Down \("1.0") kg in \(1) days") == "Down 1.0 kg in 1 day")
+        #expect(String(localized: "Added \(1) photos.") == "Added 1 photo.")
+        #expect(String(localized: "\(1) of \(1) days logged") == "1 of 1 day logged")
+        #expect(String(localized: "\(3) of \(7) days logged") == "3 of 7 days logged")
+        #expect(String(localized: "Weight chart: \(2) measured dates.") == "Weight chart: 2 measured dates.")
+    }
+
+    @Test func weightUnitIsShownNotStored() {
+        #expect(WeightEntry(measuredAt: Date(), value: 70, unit: "lb").shownUnit == "lb")
+        #expect(WeightEntry(measuredAt: Date(), value: 70).shownUnit == "kg")
+    }
+
     @Test func mealCountsReadCorrectly() {
         let day = TrackingDay(localDate: "2027-01-12", timeZoneID: "UTC", startAt: Date(), completeness: .partial)
         func label(_ meals: Int) -> String {

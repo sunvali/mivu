@@ -290,7 +290,7 @@ struct DiaryProgressView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Latest measurement").font(.subheadline).foregroundStyle(Color.diarySecondary)
-                        Text("\(latest.value.formatted()) \(latest.unit)").font(.largeTitle.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diaryWeight)
+                        Text("\(latest.value.formatted()) \(latest.shownUnit)").font(.largeTitle.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diaryWeight)
                         Text(weightDate(latest)).font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }.padding(.vertical, 8)
                 }.listRowBackground(Color.diarySummarySurface)
@@ -347,7 +347,7 @@ struct DiaryProgressView: View {
                     } else if loadedWeights != weightRequest { ProgressView("Loading measurements…") }
                     ForEach(visibleWeights.sorted { $0.measuredAt > $1.measuredAt }) { entry in
                         Button { editingWeight = entry } label: {
-                            LabeledContent(weightDate(entry), value: "\(entry.value.formatted()) \(entry.unit)")
+                            LabeledContent(weightDate(entry), value: "\(entry.value.formatted()) \(entry.shownUnit)")
                                 .foregroundStyle(Color.diaryText).monospacedDigit().frame(minHeight: 44)
                         }.accessibilityIdentifier("editWeight")
                         .contextMenu { askPipButton("askPipWeight", weightPrompt(entry)) }

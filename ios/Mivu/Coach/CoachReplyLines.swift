@@ -69,7 +69,7 @@ enum CoachReplyLines {
         guard let day = date(localDate), let now = date(today) else { return localDate }
         if Calendar.gregorianUTC.dateComponents([.day], from: day, to: now).day == 1 { return title ? String(localized: "Yesterday") : String(localized: "yesterday") }
         let sameYear = localDate.prefix(4) == today.prefix(4)
-        var style = Date.FormatStyle(locale: locale, timeZone: .gmt).month(.abbreviated).day()
+        var style = Date.FormatStyle(locale: locale, calendar: .gregorianUTC, timeZone: .gmt).month(.abbreviated).day()
         if !sameYear { style = style.year() }
         return day.formatted(style)
     }
@@ -80,7 +80,7 @@ enum CoachReplyLines {
     }
 
     static func shortDate(_ localDate: String, locale: Locale = .current) -> String {
-        date(localDate)?.formatted(Date.FormatStyle(locale: locale, timeZone: .gmt).month(.abbreviated).day()) ?? localDate
+        date(localDate)?.formatted(Date.FormatStyle(locale: locale, calendar: .gregorianUTC, timeZone: .gmt).month(.abbreviated).day()) ?? localDate
     }
 
     private static func date(_ localDate: String) -> Date? {
@@ -93,6 +93,7 @@ enum CoachReplyLines {
     }
 }
 
-private extension Calendar {
+extension Calendar {
+    /// Dates people see are Gregorian in every language, whatever calendar the phone is set to.
     static let gregorianUTC: Calendar = { var calendar = Calendar(identifier: .gregorian); calendar.timeZone = .gmt; return calendar }()
 }

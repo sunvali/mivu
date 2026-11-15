@@ -17,6 +17,28 @@ def shipped(pbxproj):
     return {name for name in re.findall(r'[\w-]+', block[1] if block else '') if name != 'Base'}
 
 
+def hidden_errors(pbxproj, targets=('Mivu', 'MivuWidgets')):
+    """Languages in MIVU_HIDDEN_LANGUAGES must be stripped from every shipped bundle's Release build."""
+    hidden = {name for value in re.findall(r'MIVU_HIDDEN_LANGUAGES = "?([^";]*)"?;', pbxproj) for name in value.split()}
+    if not hidden:
+        return []
+    found = []
+    # The phase must really delete each hidden language from Release builds.
+    script = re.search(r'name = "Strip hidden languages";.*?shellScript = "(.*?)";\n', pbxproj, re.S)
+    if not script or 'Release' not in script[1] or '$language.lproj' not in script[1] or '$MIVU_HIDDEN_LANGUAGES' not in script[1]:
+        found.append("the Strip hidden languages phase must delete $language.lproj for each of $MIVU_HIDDEN_LANGUAGES in Release")
+    phases = {}
+    for block in pbxproj.split('isa = PBXNativeTarget;')[1:]:
+        name = re.search(r'\bname = "?([^";]+)"?;', block)
+        listed = re.search(r'buildPhases = \((.*?)\);', block, re.S)
+        if name and listed:
+            phases[name[1]] = listed[1]
+    for target in targets:
+        if 'Strip hidden languages' not in phases.get(target, ''):
+            found += [f"hidden language {language!r} is not stripped from {target}" for language in sorted(hidden)]
+    return found
+
+
 def unit_of(value):
     return {'stringUnit': {'state': 'translated', 'value': value}}
 
@@ -42,6 +64,7 @@ PLURAL_FORMS = {
     'ar': {'zero', 'one', 'two', 'few', 'many', 'other'}, 'he': {'one', 'two', 'other'},
     'ru': {'one', 'few', 'many', 'other'}, 'uk': {'one', 'few', 'many', 'other'}, 'pl': {'one', 'few', 'many', 'other'},
     'es': {'one', 'many', 'other'}, 'fr': {'one', 'many', 'other'}, 'it': {'one', 'many', 'other'}, 'pt': {'one', 'many', 'other'},
+    'en': {'one', 'other'}, 'de': {'one', 'other'}, 'ja': {'other'}, 'zh': {'other'}, 'ko': {'other'},
 }
 # Only these forms may drop the number ("one meal"); the others always cover several counts.
 MAY_DROP_NUMBER = {'zero', 'one', 'two'}
@@ -76,21 +99,27 @@ def _plural_sets(localization):
 
 def _format_errors(path, key, language, localization, source):
     found = []
-    for missing in sorted({form for forms in _plural_sets(localization) for form in PLURAL_FORMS.get(language, {'other'}) - forms}):
+    for missing in sorted({form for forms in _plural_sets(localization) for form in PLURAL_FORMS.get(language, set()) - forms}):
         found.append(f"{path}: {key!r} in {language!r} needs the plural form {missing!r}")
     expected = {}
     for form, value in _forms(source):  # the source's widest form, usually 'other'
         expected[form] = _placeholders(value)
     for form, value in _forms(localization):
-        want = expected.get(form) or expected.get('other') or expected.get(None) or []
+        want = next((expected[f] for f in (form, 'other', None) if f in expected), [])  # [] is a real answer: '%arg days'
         got = _placeholders(value)
         if got != want and not (form in MAY_DROP_NUMBER and set(got) <= set(want)):
             found.append(f"{path}: {key!r} in {language!r} ({form or 'value'!r}) has placeholders {got}, the source has {want}")
     return found
 
 
+def _text(key, entry, source):
+    """The source text people read, without placeholders (Info.plist keys are names, so use their value)."""
+    value = entry.get('localizations', {}).get(source, {}).get('stringUnit', {}).get('value', key)
+    return PLACEHOLDER.sub('', value.replace('%%', ''))
+
+
 def errors(catalogs, languages):
-    found = []
+    found = [f"add CLDR plural forms for {language!r} to PLURAL_FORMS" for language in sorted(languages - set(PLURAL_FORMS))]
     for path, catalog in sorted(catalogs.items()):
         source = catalog.get('sourceLanguage', 'en')
         for key, entry in sorted(catalog.get('strings', {}).items()):
@@ -101,6 +130,13 @@ def errors(catalogs, languages):
                 found.append(f"{path}: {key!r} has {language!r}, which is not in knownRegions")
             if entry.get('shouldTranslate') is False:
                 continue
+            text = _text(key, entry, source)
+            if not any(ch.isalpha() for ch in text):
+                found.append(f"{path}: {key!r} has no words; mark it shouldTranslate false")
+                continue
+            # A word or two alone ("Open", "Log") can be a verb, a status or a noun; translators need to know which.
+            if len(text.split()) <= 2 and not entry.get('comment'):
+                found.append(f"{path}: {key!r} needs a translator comment")
             for language in sorted(languages):
                 if language not in localizations:
                     if language != source:
@@ -147,7 +183,8 @@ def load(root=ROOT):
 def main(argv):
     catalogs = load()
     if argv[1:2] == ['check']:
-        found = errors(catalogs, shipped((ROOT / PROJECT).read_text()))
+        pbxproj = (ROOT / PROJECT).read_text()
+        found = errors(catalogs, shipped(pbxproj)) + hidden_errors(pbxproj)
         source = ''.join(p.read_text() for d in WIDGET_SOURCES for p in sorted((ROOT / d).glob('*.swift')))
         found += widget_errors(source, catalogs['ios/Mivu/Localizable.xcstrings']['strings'],
                                catalogs['ios/MivuWidgets/Localizable.xcstrings']['strings'])

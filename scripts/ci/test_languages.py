@@ -11,8 +11,13 @@ def unit(value):
     return {'stringUnit': {'state': 'translated', 'value': value}}
 
 
-def catalog(**strings):
+def bare_catalog(**strings):
     return {'ios/Mivu/Localizable.xcstrings': {'sourceLanguage': 'en', 'strings': strings}}
+
+
+def catalog(**strings):
+    """Entries get a translator comment unless they say otherwise, so each test checks one rule."""
+    return bare_catalog(**{key: {'comment': 'test', **entry} for key, entry in strings.items()})
 
 
 PLURAL = {'variations': {'plural': {'one': unit('%lld meal'), 'other': unit('%lld meals')}}}
@@ -41,6 +46,36 @@ class Catalogs(unittest.TestCase):
     def test_stale_key_fails(self):
         errs = languages.errors(catalog(Old={'extractionState': 'stale'}), {'en'})
         self.assertTrue(any("'Old'" in e and 'stale' in e for e in errs), errs)
+
+    def test_language_without_plural_table_fails(self):
+        errs = languages.errors(catalog(**{'%lld meals': {'comment': 'c', 'localizations': {'en': PLURAL, 'xx': PLURAL}}}), {'en', 'xx'})
+        self.assertIn("add CLDR plural forms for 'xx' to PLURAL_FORMS", errs)
+
+    def test_short_key_needs_a_comment(self):
+        self.assertTrue(any("'Open'" in e and 'comment' in e for e in languages.errors(bare_catalog(Open={}), {'en'})))
+        self.assertEqual(languages.errors(bare_catalog(Open={'comment': 'Day status: the day is still open'}), {'en'}), [])
+
+    def test_key_without_words_must_not_translate(self):
+        self.assertTrue(any('shouldTranslate' in e for e in languages.errors(catalog(**{'%@ · %@': {}}), {'en'})))
+        self.assertEqual(languages.errors(catalog(**{'%@ · %@': {'shouldTranslate': False}}), {'en'}), [])
+
+    def test_hidden_language_needs_the_strip_phase(self):
+        def target(name, phases):
+            return f'isa = PBXNativeTarget;\n buildPhases = (\n{phases}\n);\n name = {name};\n'
+        bare = 'MIVU_HIDDEN_LANGUAGES = he;\n' + target('Mivu', 'A /* Resources */,') + target('MivuWidgets', 'B /* Resources */,')
+        self.assertEqual(languages.hidden_errors(bare)[1:], ["hidden language 'he' is not stripped from Mivu", "hidden language 'he' is not stripped from MivuWidgets"])
+        stripped = bare.replace('/* Resources */,', '/* Resources */,\n C /* Strip hidden languages */,')
+        self.assertEqual(len(languages.hidden_errors(stripped)), 1)  # listed, but no script that deletes anything
+        phase = 'name = "Strip hidden languages";\n shellScript = "[ \\"$CONFIGURATION\\" = Release ] || exit 0\\nfor language in $MIVU_HIDDEN_LANGUAGES; do rm -rf \\"$language.lproj\\"; done";\n'
+        self.assertEqual(languages.hidden_errors(stripped + phase), [])
+        self.assertEqual(languages.hidden_errors(target('Mivu', '')), [])
+
+    def test_substitution_forms_without_placeholders_pass(self):
+        def sub(value, forms):
+            return {'stringUnit': unit(value)['stringUnit'], 'substitutions': {'days': {'argNum': 2, 'formatSpecifier': 'lld', 'variations': {'plural': {f: unit(v) for f, v in forms.items()}}}}}
+        en = sub('%1$lld of %#@days@ logged', {'one': '%arg day', 'other': '%arg days'})
+        he = sub('%1$lld מתוך %#@days@ נרשמו', {'one': 'יום אחד', 'two': 'יומיים', 'other': '%arg ימים'})
+        self.assertEqual(languages.errors(catalog(**{'%lld of %lld days logged': {'localizations': {'en': en, 'he': he}}}), {'en', 'he'}), [])
 
     def test_clean_catalogs_pass(self):
         strings = {'Account': {'localizations': {'he': unit('חשבון')}},

@@ -10,7 +10,7 @@ surface below is translated, its strings stay out of the bundle.
 1. A glossary at `docs/languages/<code>.md`, written before the draft: voice
    (Hebrew uses gender-neutral wording), how the names appear (Mivu stays in
    Latin letters; Pip is translated, for example "פיפ"), and key food and
-   nutrition terms. Old Hebrew drafts are kept in `docs/languages/he-legacy.json`.
+   nutrition terms. `docs/languages/he.md` is the example.
 2. Translations in all four catalogs:
    - `ios/Mivu/Localizable.xcstrings` (app),
    - `ios/MivuWidgets/Localizable.xcstrings` (widgets, Live Activity, control),
@@ -18,7 +18,7 @@ surface below is translated, its strings stay out of the bundle.
    - `ios/Mivu/AppShortcuts.xcstrings` (Siri and Shortcuts phrases).
    Every plural key needs every form the language has (Arabic has six).
    Add the language's CLDR plural forms to `PLURAL_FORMS` in
-   `scripts/ci/languages.py` if it is not listed yet.
+   `scripts/ci/languages.py` if it is not listed yet; the check fails without them.
 3. The language code added to `knownRegions` in `ios/Mivu.xcodeproj/project.pbxproj`.
 4. Store text and screenshots for that language.
 5. The capture sweep below, on iPhone and iPhone Duo.
@@ -27,7 +27,23 @@ surface below is translated, its strings stay out of the bundle.
 language misses any key, plural form or catalog, when a catalog holds a language
 that is not bundled, when widget text is missing from the widget catalog, and
 when a translation drops or changes a placeholder (only the `zero`, `one` and
-`two` plural forms may leave the number out).
+`two` plural forms may leave the number out). It also fails when a key of one or
+two words has no translator comment, and when a key with no words (`%@ · %@`)
+is not marked `shouldTranslate: false`.
+
+## Shipping a hidden language
+
+A language can be bundled and tested before people see it. List it in the
+project build setting `MIVU_HIDDEN_LANGUAGES` (space-separated, for example
+`he`). The "Strip hidden languages" build phase in `Mivu` and `MivuWidgets`
+deletes its `.lproj` from Release builds, so archives and TestFlight show English
+while Debug builds, tests and captures use the language. `languages.py check`
+fails if a target lacks the phase. To switch the language on for people, remove
+it from `MIVU_HIDDEN_LANGUAGES`; nothing else changes.
+
+To confirm a Release bundle, build `-configuration Release` and run
+`find <Products>/Release-iphonesimulator/Mivu.app -name '<code>.lproj'`: it must
+print nothing.
 
 ## Writing new text
 
@@ -38,7 +54,8 @@ when a translation drops or changes a placeholder (only the `zero`, `one` and
 | A sentence with values | One whole string with placeholders, never glued parts: `String(localized: "Remove the whole \(names) meal?")`. |
 | A count next to a noun | One key with plural variations in the catalog. |
 | A word that changes with a value (a workout kind, a day) | One whole sentence per value. Never lowercase, capitalize or glue a translated word into another sentence. |
-| A short or ambiguous key (`open`, `Off`, `%@: %@`) | Add a `comment:` saying where it appears and what it means. |
+| A key of one or two words, or an ambiguous one (`Open`, `Off`) | Add a `comment:` saying where it appears and what it means: a button, a status, a heading. The check requires it. |
+| A key with no words (`%@ · %@`) | Mark it `shouldTranslate: false` in the catalog. |
 | A unit people see (`kcal`, `g`, `kg`) | Part of the translatable string: `"\(value) kcal"`. |
 | A date pattern people see | Pass it to `DiaryWeek.format`, which looks the pattern up in the catalog, so each language orders its own. |
 | A stored value shown on screen (an enum raw value, a diet tag) | Show it through `LocalizedStringKey(value)` and add a manual catalog key; keep the stored value English. |
@@ -56,7 +73,9 @@ language by name in layout code.
   runs left to right in every language.
 - Pip's artwork, photos and the camera never flip.
 - Text a person typed or a model wrote uses `.directionFromContent(text)`, so a
-  Hebrew message reads right to left on an English phone and back.
+  Hebrew message reads right to left on an English phone and back. The script
+  with more letters decides ("KitKat שוקולד" reads right to left; a tie goes
+  right to left).
 - Digits stay 0–9. The Coach reply check reads digits in any script and rejects
   numbers it cannot ground. Numbers people read are formatted with the phone's
   locale, so before Arabic ships, decide whether its numbers use 0–9 or Arabic

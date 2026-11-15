@@ -1,14 +1,16 @@
 import XCTest
 
 /// Walks every main screen in one of three modes and attaches a capture of each.
-/// Mode and text size come from the runner's environment: `TEST_RUNNER_SWEEP_MODE=english|rtl|double`
+/// Mode and text size come from the runner's environment: `TEST_RUNNER_SWEEP_MODE=english|rtl|double|hebrew`
 /// and `TEST_RUNNER_SWEEP_TEXT=default|largest`. See docs/verification/languages/README.md.
 @MainActor final class LanguageSweepUITests: XCTestCase {
     /// Screens whose text is not all in the string catalogs yet. Empty when the app is language-ready.
     static let notYetLocalized: Set<String> = []
     /// Text the fixtures or the test typed: data, not interface.
     static let fixtureData: Set<String> = ["Two eggs, three bread slices and salad", "My diary", "Synthetic history food", "Synthetic history",
-                                           "Eggs", "Bread", "Salad", "All set.", "1 bowl", "2 egg", "3 slice"]
+                                           "Eggs", "Bread", "Salad", "All set.", "1 bowl", "2 egg", "3 slice",
+                                           // The units are translatable, so double mode doubles them.
+                                           "1 bowl bowl", "3 slice slice"]
 
     private var mode: String { ProcessInfo.processInfo.environment["SWEEP_MODE"] ?? "english" }
     private var text: String { ProcessInfo.processInfo.environment["SWEEP_TEXT"] ?? "default" }
@@ -24,6 +26,7 @@ import XCTest
         app.launchArguments = ["--diary-ui-test", UUID().uuidString] + fixture + extra
         if mode == "rtl" { app.launchArguments += ["-AppleTextDirection", "YES", "-NSForceRightToLeftWritingDirection", "YES"] }
         if mode == "double" { app.launchArguments += ["-NSDoubleLocalizedStrings", "YES"] }
+        if mode == "hebrew" { app.launchArguments += ["-AppleLanguages", "(he)", "-AppleLocale", "he_IL"] }
         if text == "largest" { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
         // The Duo's open and half-open poses are sideways by default; "portrait" turns them upright (table pose when half-open).
@@ -31,9 +34,15 @@ import XCTest
         return app
     }
 
+    /// What a Hebrew phone shows for the English names the sweep looks for.
+    static let hebrew = ["Today": "היום", "Diary": "יומן", "Progress": "התקדמות", "Coach": "פיפ", "Chat history": "היסטוריית שיחות",
+                         "Cancel": "ביטול", "Close": "סגירה", "Done": "סיום", "More": "עוד",
+                         "Add to this day": "הוספה ליום הזה", "Day actions, ": "פעולות ליום, "]
+    private func shown(_ english: String) -> String { mode == "hebrew" ? Self.hebrew[english] ?? english : english }
+
     private func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {
         // Labels are doubled in double mode, and the Duo's sideways bar is not a tab bar.
-        let named = NSPredicate(format: "label BEGINSWITH %@", name)
+        let named = NSPredicate(format: "label BEGINSWITH %@", shown(name))
         let inBar = app.tabBars.buttons.matching(named).firstMatch
         return inBar.exists ? inBar : app.buttons.matching(named).firstMatch
     }
@@ -50,8 +59,8 @@ import XCTest
         // In the side rail a menu item is a pop-up button, not a button.
         let item = app.descendants(matching: .any)[id].firstMatch
         if item.exists && item.isHittable { item.tap(); return }
-        app.buttons.matching(NSPredicate(format: "identifier == 'OverflowBarButtonItem' OR label BEGINSWITH 'More'")).firstMatch.tap()
-        let folded = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+        app.buttons.matching(NSPredicate(format: "identifier == 'OverflowBarButtonItem' OR label BEGINSWITH %@", shown("More"))).firstMatch.tap()
+        let folded = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", shown(label))).firstMatch
         XCTAssertTrue(folded.waitForExistence(timeout: 5), "\(label) is in the bar or its overflow"); folded.tap()
     }
 
@@ -67,7 +76,7 @@ import XCTest
         for id in ["doneSettings", "cancelManualNutrition", "quickLogClose", "coachCameraClose"] where app.buttons[id].exists && app.buttons[id].isHittable {
             app.buttons[id].tap(); return
         }
-        let cancel = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Cancel' OR label BEGINSWITH 'Close' OR label BEGINSWITH 'Done'")).firstMatch
+        let cancel = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@", shown("Cancel"), shown("Close"), shown("Done"))).firstMatch
         if cancel.exists && cancel.isHittable { cancel.tap(); return }
         // On the Duo the system can move Back into its side rail, outside any navigation bar.
         let rail = app.buttons["BackButton"].firstMatch
@@ -156,7 +165,7 @@ import XCTest
     }
 
     func testRightToLeftFlagMirrorsTheApp() throws {
-        try XCTSkipUnless(mode == "rtl", "Needs TEST_RUNNER_SWEEP_MODE=rtl")
+        try XCTSkipUnless(mode == "rtl" || mode == "hebrew", "Needs TEST_RUNNER_SWEEP_MODE=rtl or hebrew")
         let app = launch(["--coach-ui-test", "--coach-navigation-start-today"])
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
         let first = tab("Today", in: app).frame, last = tab("Coach", in: app).frame
@@ -164,25 +173,41 @@ import XCTest
             XCTAssertGreaterThan(first.midX, last.midX, "The first tab sits on the right")
         } else {
             // The Duo's side rail stays at the screen edge in every direction; the screen beside it mirrors.
-            let title = app.navigationBars["Today"].staticTexts["Today"].firstMatch.frame
+            let title = app.navigationBars[shown("Today")].staticTexts[shown("Today")].firstMatch.frame
             XCTAssertGreaterThan(title.midX, app.windows.firstMatch.frame.midX, "The title sits on the right")
         }
-        XCTAssertTrue(app.buttons["todayDayActions"].label.hasPrefix("Day actions, "), "Day actions is read by its label")
+        XCTAssertTrue(app.buttons["todayDayActions"].label.hasPrefix(shown("Day actions, ")), "Day actions is read by its label")
     }
 
-    /// Until a language is complete it is not bundled, so its speakers get the whole app in English.
-    func testHebrewPhoneGetsEnglish() throws {
-        try XCTSkipUnless(mode == "english", "Runs without the right-to-left or double-length flags")
-        let app = launch(["--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"], ["-AppleLanguages", "(he)", "-AppleLocale", "he_IL"])
+    /// Debug builds bundle Hebrew (Release builds strip it until it ships), so a Hebrew phone gets the app in Hebrew.
+    func testHebrewPhoneGetsHebrew() throws {
+        try XCTSkipUnless(mode == "hebrew", "Needs TEST_RUNNER_SWEEP_MODE=hebrew")
+        let app = launch(["--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"])
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
-        for name in ["Today", "Diary", "Progress", "Coach"] { XCTAssertTrue(app.tabBars.buttons[name].exists, "\(name) tab is English") }
-        XCTAssertLessThan(tab("Today", in: app).frame.midX, tab("Coach", in: app).frame.midX, "English lays out left to right")
+        for name in ["Today", "Diary", "Progress", "Coach"] { XCTAssertTrue(tab(name, in: app).exists, "\(name) tab reads \(shown(name))") }
+        XCTAssertGreaterThan(tab("Today", in: app).frame.midX, tab("Coach", in: app).frame.midX, "Hebrew lays out right to left")
         tab("Diary", in: app).tap()
         XCTAssertTrue(app.descendants(matching: .any)["diaryWeekStrip"].waitForExistence(timeout: 10))
-        let months = DateFormatter().then { $0.locale = Locale(identifier: "en_US") }.monthSymbols ?? []
+        let months = DateFormatter().then { $0.locale = Locale(identifier: "he_IL") }.monthSymbols ?? []
         let texts = app.staticTexts.allElementsBoundByIndex.map { $0.label }
-        XCTAssertTrue(texts.contains { text in months.contains { text.contains($0) } }, "The day title uses an English month: \(texts)")
-        XCTAssertFalse(texts.contains { $0.unicodeScalars.contains { (0x0590...0x05FF).contains($0.value) } }, "No Hebrew appears: \(texts)")
+        XCTAssertTrue(texts.contains { text in months.contains { text.contains($0) } }, "The day title uses a Hebrew Gregorian month: \(texts)")
+    }
+
+    /// Names that stay in Latin letters in every language.
+    /// "GMT" comes from the system's time-zone format, and Diagnostics is a Debug-only row.
+    static let latinNames = ["Apple Intelligence", "Dynamic Island", "Snap It", "ChatGPT", "OpenAI", "iPhone", "Mivu", "Apple", "USDA", "Siri", "iOS", "IBS", "AI", "GMT", "Diagnostics"]
+
+    /// Every visible label on every screen is Hebrew, apart from names and the fixtures' own data.
+    func testTextIsHebrew() throws {
+        try XCTSkipUnless(mode == "hebrew", "Needs TEST_RUNNER_SWEEP_MODE=hebrew")
+        visitAllScreens { name, app in
+            let english = readWholeScreen(app).filter { label in
+                let rest = (Array(Self.fixtureData) + Self.latinNames).sorted { $0.count > $1.count }
+                    .reduce(label) { $0.replacingOccurrences(of: $1, with: "") }
+                return !label.hasPrefix("pose:") && rest.unicodeScalars.contains { ("a"..."z").contains($0) || ("A"..."Z").contains($0) }
+            }
+            XCTAssertTrue(english.isEmpty, "\(name) shows English: \(english.sorted())")
+        }
     }
 
     /// Time runs left to right in every language, so a chart must not mirror with the layout.
@@ -234,21 +259,25 @@ import XCTest
         Thread.sleep(forTimeInterval: seconds)
     }
 
+    /// Lists build rows as they scroll in, so this reads the whole screen, then puts it back.
+    private func readWholeScreen(_ app: XCUIApplication) -> Set<String> {
+        func read() -> Set<String> { Set([app.staticTexts, app.buttons, app.navigationBars].flatMap { $0.allElementsBoundByIndex.map { $0.label } }) }
+        var labels = read(), swipes = 0
+        while swipes < 6 {
+            app.swipeUp(); swipes += 1
+            let more = read().subtracting(labels)
+            if more.isEmpty { break }
+            labels.formUnion(more)
+        }
+        for _ in 0..<swipes { app.swipeDown() }
+        return labels
+    }
+
     func testTextIsLocalized() throws {
         try XCTSkipUnless(mode == "double", "Needs TEST_RUNNER_SWEEP_MODE=double")
         visitAllScreens { name, app in
             guard !Self.notYetLocalized.contains(name) else { return }
-            // Lists build rows as they scroll in, so read the whole screen, then put it back.
-            func read() -> Set<String> { Set([app.staticTexts, app.buttons, app.navigationBars].flatMap { $0.allElementsBoundByIndex.map { $0.label } }) }
-            var labels = read(), swipes = 0
-            while swipes < 6 {
-                app.swipeUp(); swipes += 1
-                let more = read().subtracting(labels)
-                if more.isEmpty { break }
-                labels.formUnion(more)
-            }
-            for _ in 0..<swipes { app.swipeDown() }
-            let plain = labels.filter { label in
+            let plain = readWholeScreen(app).filter { label in
                 !Self.fixtureData.contains(label) && !Self.isLocalized(label)
             }
             XCTAssertTrue(plain.isEmpty, "\(name) shows text that is not localized: \(plain.sorted())")

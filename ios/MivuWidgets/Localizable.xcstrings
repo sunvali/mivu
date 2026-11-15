@@ -2,29 +2,79 @@
   "sourceLanguage" : "en",
   "strings" : {
     "%@ / %@ kcal" : {
+      "comment" : "Widget: calories eaten / daily target",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ / %2$@ kcal"
           }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ קק״ל"
+          }
         }
       }
     },
     "%@ calories eaten" : {
-
+      "comment" : "Widget VoiceOver: %@ is calories eaten",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נאכלו %@ קלוריות"
+          }
+        }
+      }
     },
     "%@ calories eaten." : {
-      "extractionState" : "manual"
+      "comment" : "VoiceOver for the calorie ring: %@ is the calories eaten today",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נאכלו %@ קלוריות."
+          }
+        }
+      }
     },
     "%@ calories left." : {
-      "extractionState" : "manual"
+      "comment" : "VoiceOver for the calorie ring: %@ is calories remaining in the daily target",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נותרו %@ קלוריות."
+          }
+        }
+      }
     },
     "%@ calories over." : {
-      "extractionState" : "manual"
+      "comment" : "VoiceOver for the calorie ring: %@ is calories above the daily target",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ קלוריות מעל היעד."
+          }
+        }
+      }
     },
     "%@ kcal recorded" : {
-
+      "comment" : "Widget: %@ is calories recorded today",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נרשמו %@ קק״ל"
+          }
+        }
+      }
     },
     "%@ of %@ calories eaten" : {
       "localizations" : {
@@ -33,31 +83,97 @@
             "state" : "new",
             "value" : "%1$@ of %2$@ calories eaten"
           }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נאכלו %1$@ מתוך %2$@ קלוריות"
+          }
         }
       }
     },
     "%@ over" : {
-      "extractionState" : "manual"
+      "comment" : "Amount above the target; %@ is a number with unit",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ מעל"
+          }
+        }
+      }
     },
     "at least %@" : {
-      "extractionState" : "manual"
+      "comment" : "Lower bound; %@ is a number with unit (calories are partly unknown)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לפחות %@"
+          }
+        }
+      }
     },
     "At least %@ calories eaten." : {
-      "extractionState" : "manual"
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נאכלו לפחות %@ קלוריות."
+          }
+        }
+      }
     },
     "At least %@ calories over." : {
-      "extractionState" : "manual"
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לפחות %@ קלוריות מעל היעד."
+          }
+        }
+      }
     },
     "At most %@ calories left." : {
-      "extractionState" : "manual"
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נותרו לכל היותר %@ קלוריות."
+          }
+        }
+      }
     },
     "Calories" : {
-      "extractionState" : "manual"
+      "comment" : "Nutrient label / heading for calories (noun)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קלוריות"
+          }
+        }
+      }
     },
     "Calories not known yet." : {
-      "extractionState" : "manual"
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הקלוריות עדיין לא ידועות."
+          }
+        }
+      }
     },
     "Carbs" : {
+      "comment" : "Nutrient name: carbohydrates",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -65,13 +181,29 @@
             "state" : "translated",
             "value" : "Carbs"
           }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פחמימות"
+          }
         }
       }
     },
     "Coach" : {
-      "extractionState" : "manual"
+      "comment" : "Widget button label: opens the Coach",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ"
+          }
+        }
+      }
     },
     "Fat" : {
+      "comment" : "Nutrient name: fat",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -79,43 +211,136 @@
             "state" : "translated",
             "value" : "Fat"
           }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שומן"
+          }
         }
       }
     },
     "kcal" : {
-
+      "comment" : "Unit: kilocalories (calories) after a number",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קק״ל"
+          }
+        }
+      }
     },
     "kcal recorded" : {
-
+      "comment" : "Widget text: calories recorded today, after a number",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קק״ל נרשמו"
+          }
+        }
+      }
     },
     "Mivu" : {
-
+      "comment" : "App name. Keep as is",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
+        }
+      }
     },
     "Mivu day progress" : {
-
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "התקדמות היום ב-Mivu"
+          }
+        }
+      }
     },
     "of %@ kcal" : {
-
+      "comment" : "Fragment after a calorie number: of the daily target; %@ is the target",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מתוך %@ קק״ל"
+          }
+        }
+      }
     },
     "Open Coach" : {
-      "extractionState" : "manual"
+      "comment" : "Widget button: opens the Coach",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתיחת פיפ"
+          }
+        }
+      }
     },
     "Open Mivu for today" : {
-
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתיחת Mivu להיום"
+          }
+        }
+      }
     },
     "Opens Mivu Coach, ready for a question." : {
-      "extractionState" : "manual"
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתיחת פיפ ב-Mivu לשאלה."
+          }
+        }
+      }
     },
     "Opens the camera to photograph a meal and log it." : {
-      "extractionState" : "manual"
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתיחת המצלמה לצילום ארוחה ולרישומה."
+          }
+        }
+      }
     },
     "Photograph a meal and log it in Mivu." : {
-      "extractionState" : "manual"
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צילום ארוחה ורישומה ב-Mivu."
+          }
+        }
+      }
     },
     "Pip will track your day here." : {
-
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כאן נעקוב אחרי היום שלך."
+          }
+        }
+      }
     },
     "Protein" : {
+      "comment" : "Nutrient name: protein",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -123,23 +348,68 @@
             "state" : "translated",
             "value" : "Protein"
           }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חלבון"
+          }
         }
       }
     },
     "Set a target" : {
-
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגדרת יעד"
+          }
+        }
+      }
     },
     "Set up Mivu" : {
-
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגדרת Mivu"
+          }
+        }
+      }
     },
     "Snap It" : {
-      "extractionState" : "manual"
+      "comment" : "Widget/control button: opens camera to log a meal; keep short",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snap It"
+          }
+        }
+      }
     },
     "Today" : {
-
+      "comment" : "Widget heading: today",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "היום"
+          }
+        }
+      }
     },
     "Today's calories, with Snap It and Coach one tap away." : {
-      "extractionState" : "manual"
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הקלוריות של היום, עם צילום מהיר ופיפ במרחק הקשה."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

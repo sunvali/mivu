@@ -221,6 +221,29 @@ private actor CoachInputFixture {
         let completed = try await engine.run(turnID: turn.id, expectedProfileID: profile.id)
         #expect(completed.assistantText == "Logged 70 kg, nice and steady.")
     }
+    @Test func hebrewMealReplyKeepsTheModelsProseAndFoodNames() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let food = #"{"target_local_date":"2027-01-15","items":[{"name":"חביתה","quantity":2,"unit":"egg","kcal":180,"carbs":1,"protein":12,"fat":14}]}"#
+        let replies = CoachFixture([result([call("log_food", food)]), result(text: "נרשם, בערך **180** קק״ל.\n<saved/>")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == "נרשם, בערך **180** קק״ל.")
+        #expect(try await store.snapshotForExport().meals.first?.items.map(\.name) == ["חביתה"])
+    }
+    @Test func commaDecimalWeightReplyMatchesTheSavedWeight() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let weight = #"{"local_date":"2027-01-15","value":72.5,"unit":"kg","weight_id":null,"expected_revision":null,"measured_at":null}"#
+        let replies = CoachFixture([result([call("log_weight", weight)]), result(text: "נרשם: 72,5 ק״ג.\n<saved/>")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == "נרשם: 72,5 ק״ג.")
+        #expect(try await store.snapshotForExport().weights.first?.value == 72.5)
+    }
+    @Test func spanishMealReplyKeepsTheModelsProse() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let food = #"{"target_local_date":"2027-01-15","items":[{"name":"Huevos","quantity":2,"unit":"egg","kcal":140,"carbs":1,"protein":12,"fat":10}]}"#
+        let replies = CoachFixture([result([call("log_food", food)]), result(text: "Anotado: unos **140** kcal.\n<saved/>")])
+        let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(completed.assistantText == "Anotado: unos **140** kcal.")
+    }
     @Test func readOnlyInventedSaveClaimRequiresClarification() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let replies = CoachFixture([result(text: "I saved your meal, 9999 calories")])

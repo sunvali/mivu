@@ -87,6 +87,28 @@ import Testing
         #expect(CoachReplyCheck.passes("About 620 kcal so far.", allowed: allowed, receipts: []))
     }
 
+    @Test func commaDecimalReadsAsOneNumber() {
+        #expect(CoachReplyCheck.numbers(in: "73,5 кг") == [Decimal(string: "73.5")!])
+        #expect(CoachReplyCheck.numbers(in: "2,25") == [Decimal(string: "2.25")!])
+        #expect(CoachReplyCheck.numbers(in: "1,240 kcal") == [1240])
+        #expect(CoachReplyCheck.numbers(in: "1\u{202F}240 kcal") == [1240])
+        #expect(CoachReplyCheck.numbers(in: "1\u{00A0}240,5") == [Decimal(string: "1240.5")!])
+        #expect(CoachReplyCheck.numbers(in: "3, 4 and 5") == [3, 4, 5])
+        #expect(CoachReplyCheck.numbers(in: "1 240 kcal") == [1240])
+        #expect(CoachReplyCheck.numbers(in: "2 eggs, 300 g") == [2, 300])
+    }
+
+    @Test func hedgedGeneralFactPassesInAnyLanguage() {
+        let receipts = [meal(.awaitingReview)]
+        let allowed = CoachReplyCheck.allowedNumbers(in: [], receipts: receipts)
+        #expect(CoachReplyCheck.passes("בתפוח יש ~95 קק״ל.", allowed: allowed, receipts: receipts, generalFacts: true))
+        #expect(!CoachReplyCheck.passes("בתפוח יש 95 קק״ל.", allowed: allowed, receipts: receipts, generalFacts: true))
+        #expect(!CoachReplyCheck.passes("בתפוח יש ~95 קק״ל.", allowed: allowed, receipts: [meal()], generalFacts: true))
+        #expect(!CoachReplyCheck.passes("נשארו לך היום ~600 קק״ל.", allowed: allowed, receipts: receipts, generalFacts: true))
+        // A language whose diary words aren't known grounds every number.
+        #expect(!CoachReplyCheck.passes("Hoy llevas ~1800 kcal y te quedan ~200.", allowed: allowed, receipts: receipts, generalFacts: true))
+    }
+
     @Test func readsDigitsInAnyScript() {
         #expect(CoachReplyCheck.numbers(in: "٧٤٠ kcal") == [740])
         #expect(CoachReplyCheck.numbers(in: "७४० kcal") == [740])
