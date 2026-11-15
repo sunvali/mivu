@@ -4,6 +4,8 @@ import SwiftUI
 struct DiaryProgressView: View {
     @Bindable var model: DiaryViewModel
     let openDiary: () -> Void
+    /// False beside the Coach chat, where Coach's own Pip is the only rig allowed to run.
+    var showsCompanion = true
     @Environment(\.isWideLayout) private var isWide
     @Environment(\.duoPosture) private var posture
     @State private var range = ProgressRange.week
@@ -116,7 +118,7 @@ struct DiaryProgressView: View {
         .accessibilityIdentifier("progressRange")
         // The last report stays on screen during a range switch, so a failed switch must still say so.
         if let loadError { loadFailure(loadError) }
-        ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
+        ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: showsCompanion ? companion(snapshot.headline) : nil, openDiary: openDiary)
         sectionTitle("Weight")
         NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
             .buttonStyle(.plain).accessibilityIdentifier("openWeight")
@@ -193,8 +195,8 @@ struct DiaryProgressView: View {
             await companionRuntime.apply(companionOutput(snapshot.headline), darkMode: colorScheme == .dark)
         }
         .onChange(of: range) { _, _ in pipReaction = PipReaction(pose: .progressRange) }
-        .onAppear { companionVisible = true }
-        .onDisappear { companionVisible = false; pipEntered = false; companionRuntime.stop() }
+        .onAppear { companionVisible = showsCompanion }
+        .onDisappear { companionVisible = false; pipEntered = false; if showsCompanion { companionRuntime.stop() } }
         .onChange(of: model.selection) { _, _ in
             selectedWeightDate = nil
             weightBefore = nil; workoutBefore = nil; editingWeight = nil

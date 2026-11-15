@@ -3,6 +3,8 @@ import SwiftUI
 /// Diary tab: a week strip above the selected day's summary and meals.
 struct HistoryView: View {
     @Bindable var model: DiaryViewModel
+    /// The day shown first; nil is the active day. Set when Coach opens a day beside the chat.
+    var startDate: String? = nil
     @Environment(\.openDiaryCoach) private var openChat
     @State private var selected = ""
     @State private var week: DiaryWeekPage?
@@ -90,8 +92,8 @@ struct HistoryView: View {
         .task(id: DayLoad(ids: selectedDays.map(\.id), generation: model.changeGeneration)) {
             for day in selectedDays { await model.loadDay(day.id) }
         }
-        .onAppear { if selected.isEmpty { selected = defaultDate } }
-        .onChange(of: model.activeDay?.localDate) { _, _ in if selected.isEmpty { selected = defaultDate } }
+        .onAppear { if selected.isEmpty { selected = startDate ?? defaultDate } }
+        .onChange(of: model.activeDay?.localDate) { _, _ in if selected.isEmpty { selected = startDate ?? defaultDate } }
         .onChange(of: selected) { _, _ in savedMealID = nil }
         .onChange(of: model.readModel?.profile.id) { _, _ in
             week = nil; weekStart = nil; selected = defaultDate; savedMealID = nil

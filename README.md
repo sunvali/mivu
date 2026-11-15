@@ -54,8 +54,10 @@ Nutrition figures are estimates, not medical advice.
 </p>
 
 - **Closed, or unfolded and upright:** the same app as on any iPhone, full screen.
-- **Unfolded and sideways:** Today and Progress use two columns, and Coach shows
-  the chat beside today's log. A meal lights up when Coach adds or changes it.
+- **Unfolded and sideways:** Today and Progress use two columns. Coach keeps the
+  chat on the right and shows what you're talking about on the left: today's
+  log, a meal or workout you tap, another day, or Progress. When Coach adds or
+  changes something, the left side moves to where it landed.
 - **Half-open like a book:** the two sides meet at the crease, so nothing sits on
   the fold.
 - **Half-open on a table:** the conversation stays on the standing half, with the

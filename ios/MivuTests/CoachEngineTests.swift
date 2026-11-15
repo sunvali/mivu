@@ -3,6 +3,11 @@ import SQLite3
 import Testing
 @testable import Mivu
 
+private actor ConsultedLog {
+    var items: [CoachConsulted] = []
+    func add(_ item: CoachConsulted) { items.append(item) }
+}
+
 private actor CoachFixture {
     var results: [CoachInferenceResult]
     var calls = 0
@@ -636,6 +641,15 @@ private actor CoachInputFixture {
         let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":1}")]), result(text: prose)])
         let completed = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: query.id, expectedProfileID: profile.id)
         #expect(completed.assistantText == prose)
+    }
+
+    @Test func progressAndDayReadsAreReported() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result([call("get_progress", "{\"ending_on\":\"2027-01-15\",\"days\":7}", id: "progress"),
+                                            call("get_meals_for_date", "{\"target_local_date\":\"2027-01-10\"}", id: "meals")]), result(text: "A steady week.")])
+        let read = ConsultedLog()
+        _ = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }, onConsulted: { await read.add($0) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(await read.items == [.progress, .day("2027-01-10")])
     }
 
     @Test func weightOnlyTurnCannotClaimAMealWasLogged() async throws {
