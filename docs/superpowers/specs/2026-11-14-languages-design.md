@@ -59,6 +59,11 @@ notice nothing, and saved diaries must stay exactly as compatible as today.
   1 and 2 merge with Hebrew still hidden from users. *(My call, following
   from the owner's answers.)*
 - **Test on the iPhone Duo** as well as a normal iPhone.
+- **Decided 2026-11-15 (after the step 1 reviews):** the Coach tab is "פיפ" in
+  Hebrew (gender-neutral, matches "Ask Pip"); charts over time keep time
+  running left to right in every language; a mixed-direction text aligns by
+  whichever script has more letters (ties go right to left), replacing the
+  first-letter rule.
 - **Units** (pounds, ounces, feet) are a separate project.
 
 ## Goals
@@ -105,7 +110,8 @@ notice nothing, and saved diaries must stay exactly as compatible as today.
   over time, Pip's artwork, photos, the camera, numbers, the macro colour order
   inside a card follows layout direction like any other row.
 - **Mixed text:** any text a person typed, a food name, or a model reply takes
-  its direction from its own content, never from the app language.
+  its direction from its own content (the script with more letters), never
+  from the app language.
 - **Formatting follows the language on screen.** Dates and numbers people read
   use the same language as the text around them, never a different one. While
   only English ships, a phone set to any other language shows English text
