@@ -42,6 +42,9 @@ the person, so:
 | kg / lb | ק״ג / ליב׳ | |
 | ml | מ״ל | |
 | Coach (tab, Pip) | פיפ | |
+| You (own chat messages) | אני | |
+| Thinking… (Pip preparing) | בודקים… | First-person plural, like Pip's other lines |
+| Snap It | צילום ארוחה | |
 | Cancel | ביטול | |
 | Undo | ביטול פעולה | Different from Cancel, so both can sit together |
 | Log meal | הוספת ארוחה | |
@@ -51,7 +54,7 @@ the person, so:
 | Progress | התקדמות | |
 | meal | ארוחה | |
 | app | אפליקציה | Never יישום |
-| waking day | היום שלך | Owner to confirm. Never יום ערות |
+| waking day | יום המעקב | "היום שלך" would clash with the Today tab (היום). Never יום ערות |
 | estimate | הערכה | |
 | review (a proposal) | לבדוק / בדיקה | |
 | goal / target | יעד | |
@@ -59,6 +62,12 @@ the person, so:
 | workout | אימון | |
 | protein / carbs / fat | חלבון / פחמימות / שומן | |
 | Settings | הגדרות | |
+
+## Siri phrases
+
+The phrase Shortcuts shows is a neutral infinitive ("לשאול את פיפ ב-Mivu").
+The list also accepts the masculine and feminine commands ("שאל", "שאלי"), so
+people can speak naturally; nothing on screen is gendered.
 
 ## Plurals
 
