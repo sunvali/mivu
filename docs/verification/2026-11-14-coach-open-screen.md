@@ -148,3 +148,21 @@ the reset on rotate or fold; XCUITest cannot rotate or fold the inner display.
 Not verified: folding to book pose while expanded, the chat's scroll position
 across expanding, VoiceOver, and anything on the simulator-only paths above.
 The owner's device has this build.
+
+## After main moved: the weekly-report test
+
+Pull request 1 merged as `8b96cd3f` onto a `main` that had gained the
+food-questions change (`14a36222`). Together they broke
+`testSidewaysQuestionOffersProgressInPane`: that change asks the model to
+rephrase a reply with an unverifiable number, and the scripted UI-test replies
+read their context from the last developer message, which was now the rephrase
+note. The scripted replies now look for the message that carries the context.
+Test support only; the app's real replies are unchanged.
+
+On `feat/duo-pane-expand` with `main` merged in, open sideways Duo, iOS 27.1:
+`CoachEngineTests`, `CoachPaneTests`, `CoachReplyLinesTests`,
+`DuoLayoutUITests`: 105 passed, 2 failed, 8 skipped before the fix. After it,
+`CoachEngineTests` and the failing UI test: 62 passed, 0 failed. The other
+failure, `requestedProgressRereadsFactsAfterSuspendedInference`, passed on the
+rerun without a change; it waits on a fixed number of yields, so it is treated
+as a timing failure under load, not proven as one.
