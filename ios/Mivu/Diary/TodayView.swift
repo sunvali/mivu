@@ -899,7 +899,8 @@ struct TodayView: View {
 
     @ViewBuilder private func remaining(_ value: Double?) -> some View {
         if let value {
-            Text("\(abs(value).formatted(.number.precision(.fractionLength(0)))) \(value < 0 ? "above goal" : "to goal")")
+            let amount = abs(value).formatted(.number.precision(.fractionLength(0)))
+            value < 0 ? Text("\(amount) above goal", comment: "Calories eaten past the day's goal, on Today") : Text("\(amount) to goal", comment: "Calories left before the day's goal, on Today")
         } else { Text("Not estimated yet").foregroundStyle(Color.diarySecondary) }
     }
 }

@@ -9,6 +9,12 @@ import Testing
                           weightKg: weightKg, targetKg: targetKg)
     }
 
+    @Test func explanationIsAskedForInTheAppLanguage() {
+        let input = OnboardingTargets.input(answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 62, birthYear: 1990), estimate: NutritionValues(kcal: 1500))
+        guard case .message(.developer, let text, _) = input.first else { Issue.record("no developer message"); return }
+        #expect(text.contains("Write the explanation in \(CoachEngine.appLanguage)"))
+    }
+
     @Test func estimateLosesAtTheChosenPace() {
         let targets = answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 62, birthYear: 1990).estimate(year: 2026)
         #expect(targets == NutritionValues(kcal: 1360, carbs: 127, protein: 112, fat: 45))

@@ -198,9 +198,17 @@ def ternary_errors(source, keys):
             # SF Symbol names and identifiers are lowercase words joined by dots; people never read them.
             if re.search(r'[A-Za-z]{2}', literal) and ' ' in literal and literal not in keys and key not in keys:
                 found.append(f"{literal!r} is chosen by a ternary inside the view, so Xcode never extracts it; use a Text per branch")
+    # A ternary inside an interpolation hands the translated sentence an untranslated word.
+    for line in source.splitlines():
+        if 'Text("' in line or 'localized:' in line:
+            for pair in INTERPOLATED_TERNARY.findall(line):
+                for literal in pair:
+                    if re.search(r'[A-Za-z]{2}', literal) and literal not in keys:
+                        found.append(f"{literal!r} is chosen inside a translated string, so it is never translated; write a whole string per branch")
     return found
 
 
+INTERPOLATED_TERNARY = re.compile(r'\\\([^()"]*\?\s*"([^"]*)"\s*:\s*"([^"]*)"')
 WIDGET_SOURCES = ('ios/MivuWidgets', 'ios/Shared')
 
 

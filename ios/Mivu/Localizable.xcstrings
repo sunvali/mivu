@@ -281,6 +281,17 @@
         }
       }
     },
+    "%@ above goal" : {
+      "comment" : "Calories eaten past the day's goal, on Today",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ מעל היעד"
+          }
+        }
+      }
+    },
     "%@ and %@" : {
       "comment" : "Joins two items in a spoken list, e.g. two food names",
       "localizations" : {
@@ -567,6 +578,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ עד %2$@ %3$@"
+          }
+        }
+      }
+    },
+    "%@ to goal" : {
+      "comment" : "Calories left before the day's goal, on Today",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עוד %@ ליעד"
           }
         }
       }

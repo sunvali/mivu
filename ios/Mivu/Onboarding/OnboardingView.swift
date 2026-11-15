@@ -210,7 +210,7 @@ struct OnboardingView: View {
                         .accessibilityLabel("Birth year").accessibilityIdentifier("onboardingBirthYear")
                 }
                 Divider()
-                row("Sex", invalid: false) {
+                row(String(localized: "Sex", comment: "Onboarding field label"), invalid: false) {
                     Picker("Sex", selection: $about.sex) {
                         Text("Female").tag(ProfileAbout.Sex.female)
                         Text("Male").tag(ProfileAbout.Sex.male)
@@ -308,7 +308,7 @@ struct OnboardingView: View {
     @ViewBuilder private var macros: some View {
         macro(String(localized: "Protein"), $targets.protein, .diaryProtein)
         macro(String(localized: "Carbs"), $targets.carbs, .diaryCarbs)
-        macro("Fat", $targets.fat, .diaryFat)
+        macro(String(localized: "Fat"), $targets.fat, .diaryFat)
     }
 
     @ViewBuilder private var status: some View {

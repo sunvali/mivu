@@ -136,6 +136,8 @@ class Catalogs(unittest.TestCase):
         errs = languages.ternary_errors(source, {'kcal over', 'Turn off', 'Turn on'})
         self.assertEqual(len(errs), 1, errs)
         self.assertIn("'kcal left'", errs[0])
+        inside = languages.ternary_errors('Text("\\(n) \\(over ? "above goal" : "to goal")")', set())
+        self.assertEqual(len(inside), 2, inside)
 
     def test_shipped_languages_come_from_known_regions(self):
         text = 'knownRegions = (\n\t\t\t\ten,\n\t\t\t\the,\n\t\t\t\tBase,\n\t\t\t);'
