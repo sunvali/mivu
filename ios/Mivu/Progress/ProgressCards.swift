@@ -196,7 +196,7 @@ struct ProgressHeadlineCard: View {
             } else {
                 ProgressBucketChart(buckets: snapshot.buckets, range: snapshot.range, zone: snapshot.zone, height: 96)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Calories by \(snapshot.range == .week || snapshot.range == .month ? "day" : snapshot.range == .quarter ? "week" : "month")")
+                    .accessibilityLabel(snapshot.range == .week || snapshot.range == .month ? Text("Calories by day") : snapshot.range == .quarter ? Text("Calories by week") : Text("Calories by month"))
                     .accessibilityValue(ProgressSummary.buckets(snapshot.buckets, zone: snapshot.zone))
                     .accessibilityIdentifier("nutritionChartSummary")
             }

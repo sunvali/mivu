@@ -139,6 +139,14 @@ class Catalogs(unittest.TestCase):
         inside = languages.ternary_errors('Text("\\(n) \\(over ? "above goal" : "to goal")")', set())
         self.assertEqual(len(inside), 2, inside)
 
+    def test_interpolated_ternary_in_any_text_call_is_caught(self):
+        # A catalog key doesn't help, a quoted condition and a nested ternary are seen, and localized fallbacks are not branches.
+        source = '.accessibilityLabel("Weight in \\(unit == "lb" ? "pounds" : "kilograms")")\n' \
+                 '.accessibilityLabel("By \\(a ? "day" : b ? "week" : "month")")\n' \
+                 'Text("Replace \\(name ?? String(localized: "the selected profile"))")'
+        errs = languages.ternary_errors(source, {'pounds', 'day'})
+        self.assertEqual([e.split("'")[1] for e in errs], ['pounds', 'kilograms', 'day', 'week', 'month'])
+
     def test_shipped_languages_come_from_known_regions(self):
         text = 'knownRegions = (\n\t\t\t\ten,\n\t\t\t\the,\n\t\t\t\tBase,\n\t\t\t);'
         self.assertEqual(languages.shipped(text), {'en', 'he'})

@@ -200,15 +200,29 @@ def ternary_errors(source, keys):
                 found.append(f"{literal!r} is chosen by a ternary inside the view, so Xcode never extracts it; use a Text per branch")
     # A ternary inside an interpolation hands the translated sentence an untranslated word.
     for line in source.splitlines():
-        if 'Text("' in line or 'localized:' in line:
-            for pair in INTERPOLATED_TERNARY.findall(line):
-                for literal in pair:
-                    if re.search(r'[A-Za-z]{2}', literal) and literal not in keys:
+        if TRANSLATED_CALL.search(line):
+            for inner in interpolations(line):
+                if '?' not in inner:
+                    continue
+                for literal in re.findall(r'(?:\?|(?<!localized):)\s*"([^"]*)"', inner):
+                    # Being a catalog key doesn't help: an interpolated String is shown as written.
+                    if re.search(r'[A-Za-z]{2}', literal):
                         found.append(f"{literal!r} is chosen inside a translated string, so it is never translated; write a whole string per branch")
     return found
 
 
-INTERPOLATED_TERNARY = re.compile(r'\\\([^()"]*\?\s*"([^"]*)"\s*:\s*"([^"]*)"')
+TRANSLATED_CALL = re.compile(r'\b(?:Text|Label|Button|Section|LabeledContent|Toggle|navigationTitle|accessibilityLabel|accessibilityHint|accessibilityValue)\("|localized:')
+
+
+def interpolations(line):
+    """The text inside each \\( ... ), counting nested parentheses."""
+    found, start = [], line.find('\\(')
+    while start != -1:
+        depth, i = 1, start + 2
+        while i < len(line) and depth:
+            depth += {'(': 1, ')': -1}.get(line[i], 0); i += 1
+        found.append(line[start + 2:i - 1]); start = line.find('\\(', i)
+    return found
 WIDGET_SOURCES = ('ios/MivuWidgets', 'ios/Shared')
 
 

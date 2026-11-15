@@ -2766,13 +2766,35 @@
         }
       }
     },
-    "Calories by %@" : {
-      "comment" : "VoiceOver chart label; %@ is day, week or month",
+    "Calories by day" : {
+      "comment" : "VoiceOver label for the calories chart",
       "localizations" : {
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "קלוריות לפי %@"
+            "value" : "קלוריות לפי יום"
+          }
+        }
+      }
+    },
+    "Calories by month" : {
+      "comment" : "VoiceOver label for the calories chart",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קלוריות לפי חודש"
+          }
+        }
+      }
+    },
+    "Calories by week" : {
+      "comment" : "VoiceOver label for the calories chart",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קלוריות לפי שבוע"
           }
         }
       }
@@ -14594,6 +14616,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "משקל בק״ג"
+          }
+        }
+      }
+    },
+    "Weight in kilograms" : {
+      "comment" : "VoiceOver label for the weight field",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משקל בקילוגרמים"
+          }
+        }
+      }
+    },
+    "Weight in pounds" : {
+      "comment" : "VoiceOver label for the weight field",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משקל בליברות"
           }
         }
       }

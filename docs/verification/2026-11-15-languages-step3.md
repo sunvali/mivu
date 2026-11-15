@@ -54,7 +54,7 @@ simulator (iOS 27.0), "Mivu languages Duo (Claude)" simulator (iOS 27.1),
 | Check | Result |
 |---|---|
 | `python3 scripts/ci/languages.py check` | exit 0 |
-| `scripts/ci/test_languages.py` | 25/25 |
+| `scripts/ci/test_languages.py` | 25/25 (26/26 after the review) |
 | Release simulator build | `he.lproj` in Mivu.app and MivuWidgets.appex |
 | Release build, launched with `-AppleLanguages (he)` | Today and Settings in Hebrew; Language row shows "שפת האפליקציה, עברית" |
 | Release build, launched in English | Today unchanged; the Language row shows "App language, English" |
@@ -81,6 +81,27 @@ The test fix is the only change after `3891a4b7`.
 `testLargestTextGoalKeyboardDoneKeepsCoachSendReachable` could not find the
 Goals row (Settings opened before the diary loaded). Run on their own, both
 passed on this branch (2/2) and on `main` at `d2e7c49c` (2/2).
+
+## Review
+
+One independent review of the whole branch found nothing blocking and three
+smaller issues, all fixed:
+
+- Two VoiceOver labels chose an English word inside a translated sentence
+  ("Calories by day/week/month", "Weight in pounds/kilograms"); each branch is
+  now its own string, with Hebrew. The interpolation lint missed them; it now
+  reads whole interpolations in any text call (quoted conditions, nested
+  ternaries) and no longer excuses words that are catalog keys.
+- The morning check-in card showed "kg"/"lb" in Latin letters; it now uses
+  `WeightEntry.shownUnit` like receipts and the PDF.
+- The setup-targets prompt gained a language sentence for English users too;
+  it is now added only when the app language is not English, so the English
+  prompt is unchanged.
+
+After the fixes: `languages.py check` exit 0, `test_languages.py` 26/26,
+`OnboardingTargetsTests` + `DiaryUITests/testNewDayShowsMorningCheckInThatNeverBlocksLogging`
++ `ProgressUITests/testWeightChartSelectsSavedMeasurement` 9/9, LanguageSweep
+hebrew on the iPhone 6 passed, 3 skipped.
 
 ## Blocked or not run
 
