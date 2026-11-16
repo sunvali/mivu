@@ -23,9 +23,16 @@ import UIKit
             #expect(trayImage.size == CGSize(width: 96, height: 96) && trayImage.scale == 1)
             let stickers = try #require(json["stickers"] as? [[String: Any]])
             #expect(stickers.count == count)
-            for sticker in stickers {
+            let manifestURL = try #require(Bundle.main.url(forResource: animated ? "pip-animated" : "pip-still", withExtension: "json"))
+            let manifest = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
+            let files = try #require((manifest["sticker_packs"] as? [[String: Any]])?.first?["stickers"] as? [[String: Any]])
+            #expect(files.count == stickers.count)
+            for (sticker, file) in zip(stickers, files) {
                 let dataText = try #require(sticker["image_data"] as? String)
                 let data = try #require(Data(base64Encoded: dataText))
+                let name = try #require(file["image_file"] as? String)
+                let bundled = try Data(contentsOf: #require(Bundle.main.url(forResource: name, withExtension: nil)))
+                #expect(data == bundled, "\(name)")
                 #expect(data.prefix(4) == Data("RIFF".utf8))
                 #expect((1...3).contains((sticker["emojis"] as? [String])?.count ?? 0))
                 let text = sticker["accessibility_text"] as? String
