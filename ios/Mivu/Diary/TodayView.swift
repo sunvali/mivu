@@ -631,7 +631,7 @@ struct TodayView: View {
                 Section {
                     let lateDay = lateMealDay(meal)
                     NavigationLink(value: savedMealID) {
-                        Label(lateDay.map { "Added to \(wakingDayTitle($0.localDate))" } ?? "Saved on this iPhone", systemImage: "checkmark.circle")
+                        Label(lateDay.map { String(localized: "Added to \(wakingDayTitle($0.localDate))") } ?? String(localized: "Saved on this iPhone"), systemImage: "checkmark.circle")
                             .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
                     }.accessibilityIdentifier("savedMealReceipt")
                     // Moving opens today's calendar date, so offer it only while that is still the meal's date.

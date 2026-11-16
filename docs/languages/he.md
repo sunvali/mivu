@@ -35,8 +35,9 @@ the person, so:
 - A Hebrew prefix before a Latin word takes an ASCII hyphen, not the maqaf:
   "ל-ChatGPT", "ב-Mivu".
 - The same hyphen goes before a placeholder that can start with a digit or a
-  Latin letter: "נוסף ל-%@" when %@ may be "15 בנוב׳". No hyphen when it is
-  always a Hebrew word ("העברה ל%@" with a day name).
+  Latin letter: "הועברה ל-%@." when %@ is "15 בנוב׳". No hyphen when it is
+  always a Hebrew word ("נוסף ל%@" with a day name, "משקל ב%@" with ק״ג). When
+  it can be either, reword ("הועברה לתאריך %@"). Read the Swift caller to know.
 
 ## Fixed terms
 

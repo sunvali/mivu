@@ -1917,7 +1917,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "נוסף ל-%@"
+            "value" : "נוסף ל%@"
           }
         }
       }
@@ -8220,7 +8220,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ סומן כנספר."
+            "value" : "%@ סומן כיום שנספר."
           }
         }
       }
@@ -8230,7 +8230,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ סומן כמדולג."
+            "value" : "%@ סומן כיום שדולג."
           }
         }
       }
@@ -8677,7 +8677,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "הועברה ל-%@"
+            "value" : "הועברה לתאריך %@"
           }
         }
       }
@@ -10140,7 +10140,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "תמונות, הערה או שניהם — נשמרים באופן פרטי באייפון הזה."
+            "value" : "תמונות, הערה או שתיהן — נשמרים באופן פרטי באייפון הזה."
           }
         }
       }
@@ -10865,7 +10865,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "להסיר את כל ארוחת ה%@?"
+            "value" : "להסיר את כל הארוחה (%@)?"
           }
         }
       }
@@ -13291,7 +13291,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "האוכל הזה"
+            "value" : "המאכל הזה"
           }
         }
       }
@@ -13318,7 +13318,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "זה האוכל היחיד בארוחה, ולכן מחיקתו תסיר את כל הארוחה."
+            "value" : "זה המאכל היחיד בארוחה, ולכן מחיקתו תסיר את כל הארוחה."
           }
         }
       }
@@ -13645,7 +13645,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "המזונות המובילים"
+            "value" : "המאכלים המובילים"
           }
         }
       }
@@ -14598,7 +14598,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "משקל ב-%@"
+            "value" : "משקל ב%@"
           }
         }
       }
