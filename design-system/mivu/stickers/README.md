@@ -34,3 +34,19 @@ Tests: `.venv/bin/python design-system/mivu/stickers/test_pack.py` (synthetic im
 Every sticker gets a 14 px white die-cut outline (at the rig's 512 artboard) and a 16 px
 margin. An animated sticker uses one crop for all its frames. If a file goes over a size
 limit, `pack.py` first lowers the quality and then drops every other frame.
+
+## In the apps
+
+Design: [spec](../../../docs/superpowers/specs/2026-11-15-pip-stickers-in-app-design.md).
+`sync.py` copies the exports into the iOS app, the Messages pack and the Android app (and
+writes the Messages VoiceOver labels); `sync.py --check` fails on drift, and `test_pack.py`
+runs that check, so a stale copy fails the test.
+
+| Owner | What |
+|---|---|
+| `ios/Mivu/Stickers/PipStickers.swift` | sticker catalogue and share items |
+| `ios/Mivu/Stickers/PipStickerSheet.swift` | Settings sheet |
+| `ios/MivuStickers/`, `ios/Config/Stickers.xcconfig`, `Stickers-Info.plist` | `MivuStickers` Messages extension target |
+| `android/app/src/main/java/com/yakov103/mivu/stickers/PipStickers.kt` | sticker catalogue |
+| `android/app/src/main/java/com/yakov103/mivu/stickers/PipStickerProvider.kt` | WhatsApp sticker content provider |
+| `android/app/src/main/java/com/yakov103/mivu/ui/settings/PipStickerSheet.kt` | Settings sheet |
