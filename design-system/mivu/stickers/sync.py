@@ -13,6 +13,15 @@ from pack import LINEUP
 HERE = Path(__file__).resolve().parent
 PACK = "ios/MivuStickers/Stickers.xcstickers/Sticker Pack.stickerpack"
 APP_DIRS = ["ios/Mivu/Resources/Stickers", "android/app/src/main/assets/stickers"]
+# Messages reads VoiceOver text from the pack; same words as PipStickers.swift.
+LABELS = {
+    "hi": "Pip waving hello", "thanks": "Pip saying thank you",
+    "love-it": "Pip hugging a fluffy tail, with hearts", "lol": "Pip laughing",
+    "ok": "Pip winking with a paw raised", "oops": "Pip blushing, oops",
+    "good-night": "Pip curled up asleep", "yum": "Pip enjoying a salad bowl",
+    "hungry": "Pip holding an empty bowl", "hydrate": "Pip sipping water",
+    "snack": "Pip holding up an apple", "you-got-it": "Pip cheering and hopping",
+}
 
 
 def sha(path):
@@ -43,7 +52,8 @@ def generated(repo):
          "stickers": [{"filename": f"{i}.sticker"} for i in LINEUP]}, indent=2) + "\n"}
     for i in LINEUP:
         out[repo / PACK / f"{i}.sticker" / "Contents.json"] = json.dumps(
-            {"info": {"author": "xcode", "version": 1}, "properties": {"filename": f"{i}.png"}}, indent=2) + "\n"
+            {"info": {"author": "xcode", "version": 1},
+             "properties": {"accessibility-label": LABELS[i], "filename": f"{i}.png"}}, indent=2) + "\n"
     return out
 
 

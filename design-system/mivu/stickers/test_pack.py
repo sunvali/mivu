@@ -142,6 +142,12 @@ class SyncTests(unittest.TestCase):
             ok.write_bytes(bytes([ok.read_bytes()[0] ^ 1]) + ok.read_bytes()[1:])
             self.assertEqual(sync.drift(EXPORTS, repo), ["changed android/app/src/main/assets/stickers/ok.webp"])
 
+    def test_messages_labels_match_the_app(self):
+        swift = (REPO / "ios/Mivu/Stickers/PipStickers.swift").read_text()
+        self.assertEqual(list(sync.LABELS), pack.LINEUP)
+        for i, label in sync.LABELS.items():
+            self.assertIn(f'("{i}", "{label}"', swift)
+
 
 if __name__ == "__main__":
     unittest.main()

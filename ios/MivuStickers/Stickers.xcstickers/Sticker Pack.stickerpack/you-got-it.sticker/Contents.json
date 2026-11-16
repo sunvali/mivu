@@ -4,6 +4,7 @@
     "version": 1
   },
   "properties": {
+    "accessibility-label": "Pip cheering and hopping",
     "filename": "you-got-it.png"
   }
 }

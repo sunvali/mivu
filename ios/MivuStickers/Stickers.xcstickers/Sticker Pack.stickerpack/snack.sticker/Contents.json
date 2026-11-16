@@ -4,6 +4,7 @@
     "version": 1
   },
   "properties": {
+    "accessibility-label": "Pip holding up an apple",
     "filename": "snack.png"
   }
 }
