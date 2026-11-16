@@ -18,6 +18,7 @@ import XCTest
         let app = openSheet()
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'pipSticker-'")).count, 12)
         XCTAssertTrue(app.buttons["addPipMovesToWhatsApp"].exists)
+        XCTAssertEqual(app.buttons["pipSticker-hi"].value as? String, "animated")
         app.buttons["addPipToWhatsApp"].tap()
         let alert = app.alerts["WhatsApp isn't installed"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
