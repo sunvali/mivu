@@ -15406,6 +15406,94 @@
           }
         }
       }
+    },
+    "Pip stickers" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pip stickers"
+          }
+        }
+      }
+    },
+    "Tap a sticker to share it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap a sticker to share it."
+          }
+        }
+      }
+    },
+    "Add “Pip” to WhatsApp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add “Pip” to WhatsApp"
+          }
+        }
+      }
+    },
+    "Add “Pip moves” to WhatsApp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add “Pip moves” to WhatsApp"
+          }
+        }
+      }
+    },
+    "Also in Messages: tap + then Stickers." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Also in Messages: tap + then Stickers."
+          }
+        }
+      }
+    },
+    "WhatsApp isn't installed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WhatsApp isn't installed"
+          }
+        }
+      }
+    },
+    "Install WhatsApp to add Pip stickers." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install WhatsApp to add Pip stickers."
+          }
+        }
+      }
+    },
+    "Get WhatsApp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get WhatsApp"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
