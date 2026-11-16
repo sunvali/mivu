@@ -144,9 +144,11 @@ class SyncTests(unittest.TestCase):
 
     def test_messages_labels_match_the_app(self):
         swift = (REPO / "ios/Mivu/Stickers/PipStickers.swift").read_text()
+        kotlin = (REPO / "android/app/src/main/java/com/yakov103/mivu/stickers/PipStickers.kt").read_text()
         self.assertEqual(list(sync.LABELS), pack.LINEUP)
         for i, label in sync.LABELS.items():
             self.assertIn(f'("{i}", "{label}"', swift)
+            self.assertIn(f'Triple("{i}", "{label}"', kotlin)
 
 
 if __name__ == "__main__":

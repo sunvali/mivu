@@ -139,7 +139,14 @@ struct SettingsView: View {
                     Text(LocalizedStringKey(companionSelection.selectedCharacter.displayName)).accessibilityIdentifier("companionName")
                 }.frame(minHeight: 44)
             }
-            Button { showPipStickers = true } label: { settingsRow(String(localized: "Pip stickers"), symbol: "face.smiling", color: .diaryProtein) }
+            Button { showPipStickers = true } label: {
+                // Same 40 pt leading slot + 12 pt spacing as the companion row so titles align.
+                HStack(spacing: 12) {
+                    Image(systemName: "face.smiling").foregroundStyle(Color.diaryProtein).frame(width: 40).accessibilityHidden(true)
+                    Text("Pip stickers").foregroundStyle(Color.diaryText)
+                    Spacer(minLength: 8)
+                }.frame(minHeight: 44)
+            }
                 .accessibilityIdentifier("pipStickers")
         }
     }

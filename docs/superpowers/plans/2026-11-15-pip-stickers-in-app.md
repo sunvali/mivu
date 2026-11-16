@@ -213,13 +213,13 @@ UI copy, with these exact words on both platforms:
 
 **Interfaces:**
 - Consumes: the sticker pack folder from Task 1.
-- Produces: `MivuStickers.appex`, bundle ID `com.yakov103.mivu.Stickers`, display name `Pip by Mivu`, deployment target 26.0, the same team and automatic signing as `MivuWidgets` (inherited through `Shared.xcconfig`).
+- Produces: `MivuStickers.appex`, bundle ID `com.yakov103.mivu.stickers`, display name `Pip by Mivu`, deployment target 26.0, the same team and automatic signing as `MivuWidgets` (inherited through `Shared.xcconfig`).
 
 - [ ] **Step 1: Render the icon set** from the `hi` sticker's first frame (`exports/png` doesn't hold it, so use `exports/gif/hi.gif` frame 0) on the cream app background.
   - Produce every size the `stickersiconset` asks for, including 1024×768 for the App Store, with a short Python script in the scratchpad. Don't commit the script.
   - Commit the PNGs and `Contents.json`.
 - [ ] **Step 2: Add the target, config and plist.**
-  - `Stickers.xcconfig` includes `Shared.xcconfig`, sets `PRODUCT_BUNDLE_IDENTIFIER = com.yakov103.mivu.Stickers` and `INFOPLIST_KEY_CFBundleDisplayName = Pip by Mivu`, and copies `SKIP_INSTALL` from `Widgets.xcconfig`.
+  - `Stickers.xcconfig` includes `Shared.xcconfig`, sets `PRODUCT_BUNDLE_IDENTIFIER = com.yakov103.mivu.stickers` and `INFOPLIST_KEY_CFBundleDisplayName = Pip by Mivu`, and copies `SKIP_INSTALL` from `Widgets.xcconfig`.
   - The plist's `NSExtension` has `NSExtensionPointIdentifier` = `com.apple.message-payload-provider` and `NSExtensionPrincipalClass` = `StickerBrowserViewController`.
 - [ ] **Step 3: Verify.**
   - `xcodebuild build -project ios/Mivu.xcodeproj -scheme Mivu -destination 'platform=iOS Simulator,name=iPhone Air'` succeeds.

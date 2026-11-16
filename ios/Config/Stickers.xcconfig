@@ -1,6 +1,6 @@
 #include "Shared.xcconfig"
 PRODUCT_NAME = MivuStickers
-PRODUCT_BUNDLE_IDENTIFIER = com.yakov103.mivu.Stickers
+PRODUCT_BUNDLE_IDENTIFIER = com.yakov103.mivu.stickers
 INFOPLIST_FILE = Config/Stickers-Info.plist
 INFOPLIST_KEY_CFBundleDisplayName = Pip by Mivu
 INFOPLIST_KEY_NSStickerSharingLevel = OS

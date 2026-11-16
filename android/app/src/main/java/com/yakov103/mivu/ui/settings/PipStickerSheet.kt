@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -70,7 +71,7 @@ fun PipStickerSheet(onDismiss: () -> Unit, animate: Boolean = animatorsEnabled(L
     }
     ModalBottomSheet(onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Pip stickers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Pip stickers", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("Tap a sticker to share it.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LazyVerticalGrid(
                 GridCells.Adaptive(72.dp), Modifier.weight(1f, fill = false),
@@ -114,7 +115,7 @@ private fun StickerCell(sticker: PipStickerItem, animate: Boolean) {
         AndroidView({ ctx ->
             ImageView(ctx).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                setPadding(8, 8, 8, 8)
+                (8 * resources.displayMetrics.density).toInt().let { setPadding(it, it, it, it) }
                 importantForAccessibility = ImageView.IMPORTANT_FOR_ACCESSIBILITY_NO
                 val drawable = ImageDecoder.decodeDrawable(ImageDecoder.createSource(ctx.assets, sticker.shareAsset))
                 setImageDrawable(drawable)
