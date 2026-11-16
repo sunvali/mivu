@@ -11,8 +11,10 @@ the person, so:
 
 - **Buttons and menu items:** nouns or infinitives. "שמירה", "ביטול",
   "הוספת ארוחה", "לנסות שוב".
-- **Instructions and hints:** impersonal "אפשר…" / "יש ל…" or the infinitive.
-  "אפשר לנסות שוב", "יש לאפשר גישה למצלמה בהגדרות". The plural imperative
+- **Instructions and hints:** "אפשר ל…" for a hint, "צריך ל…" for a
+  requirement, or the infinitive. "אפשר לנסות שוב", "צריך לאפשר גישה למצלמה
+  בהגדרות". Not the formal "יש ל…", "נדרשת", "פירושו".
+- **Errors:** "לא הצלחנו ל…", not "לא ניתן (היה) ל…". The plural imperative
   ("נסו", "בחרו") only where nothing else reads naturally.
 - **Statements about the person:** past tense, whose spelling doesn't show
   gender ("שמרת", "אכלת"), possessives ("היום שלך", "היעד שלך"), or impersonal
@@ -27,7 +29,8 @@ the person, so:
 ## Names
 
 - **Mivu** stays in Latin letters. Other names stay too: ChatGPT, OpenAI,
-  Apple, Apple Intelligence, iPhone, Siri, USDA.
+  Apple, Apple Intelligence, Siri, USDA. iPhone is "אייפון" ("באייפון הזה"),
+  as Apple's Hebrew writes it.
 - **Pip** is "פיפ", and so is the Coach tab.
 - A Hebrew prefix before a Latin word takes an ASCII hyphen, not the maqaf:
   "ל-ChatGPT", "ב-Mivu".
@@ -63,6 +66,14 @@ the person, so:
 | workout | אימון | |
 | protein / carbs / fat | חלבון / פחמימות / שומן | |
 | Settings | הגדרות | |
+| tap | להקיש / הקשה | Apple's Hebrew; not ללחוץ |
+| Companion | דמות | |
+| voice input, dictation | הכתבה | Apple's Hebrew; not קלט קולי |
+| model (AI) | מודל / מודלים | Not דגם |
+| submission | הגשה | Not שליחות |
+| effective date | תאריך התחלה | Not תוקף, which reads as validity or expiry |
+| burn (calories burned) | שריפת קלוריות | Just שריפה in short labels next to kcal |
+| quotation marks | “…” | Gershayim ״ only inside abbreviations (קק״ל) |
 
 ## Siri phrases
 
