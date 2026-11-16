@@ -83,7 +83,7 @@ android {
         kotlin.setSrcDirs(smoke)
     }
     buildFeatures { compose = true }
-    androidResources { noCompress += listOf("sqlite", "webp") } // WhatsApp opens the webp stickers with openAssetFd; the FNDDS asset is sized with openFd before it is copied
+    androidResources { noCompress += listOf("sqlite", "webp", "png") } // WhatsApp opens the webp and tray stickers with openAssetFd; the FNDDS asset is sized with openFd before it is copied
     // Synthetic SSE and archive fixtures live at the repo root, shared with other platforms.
     sourceSets.getByName("test").resources.srcDir("../../fixtures")
     sourceSets.getByName("androidTest").resources.srcDir("../../fixtures")

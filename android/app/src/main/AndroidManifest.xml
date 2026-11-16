@@ -16,6 +16,8 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
     </queries>
 
     <application
@@ -90,6 +92,10 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/report_paths" />
         </provider>
+        <provider
+            android:name=".stickers.PipStickerProvider"
+            android:authorities="${applicationId}.stickers"
+            android:exported="true" />
         <receiver
             android:name=".day.MorningReminderReceiver"
             android:exported="false">
