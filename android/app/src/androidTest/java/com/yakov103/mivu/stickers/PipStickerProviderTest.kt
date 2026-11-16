@@ -46,7 +46,7 @@ class PipStickerProviderTest {
         }
         assertArrayEquals(expected, actual)
         resolver.openAssetFileDescriptor(uri("stickers_asset/mivu-pip-still/tray.png"), "r")!!.close()
-        listOf("stickers_asset/mivu-pip-still/../fndds.sqlite", "stickers_asset/nope/ok.webp", "stickers_asset/mivu-pip-still/hi.webp").forEach {
+        listOf("stickers_asset/mivu-pip-still/../fndds.sqlite", "stickers_asset/mivu-pip-still/..%2Ffndds.sqlite", "stickers_asset/nope/ok.webp", "stickers_asset/mivu-pip-still/hi.webp").forEach {
             try {
                 resolver.openAssetFileDescriptor(uri(it), "r")
                 fail("opened $it")

@@ -95,7 +95,8 @@
         <provider
             android:name=".stickers.PipStickerProvider"
             android:authorities="${applicationId}.stickers"
-            android:exported="true" />
+            android:exported="true"
+            android:readPermission="com.whatsapp.sticker.READ" />
         <receiver
             android:name=".day.MorningReminderReceiver"
             android:exported="false">
