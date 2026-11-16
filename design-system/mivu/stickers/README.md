@@ -16,6 +16,7 @@ xcodebuild test -project ios/Mivu.xcodeproj -scheme Mivu -testPlan Mivu \
   -only-testing:MivuTests/PipStickerExportTests         # writes build/pip-stickers/frames/<id>/
 .venv/bin/python design-system/mivu/stickers/pack.py build/pip-stickers/frames design-system/mivu/stickers/exports
 .venv/bin/python design-system/mivu/stickers/check.py design-system/mivu/stickers/exports
+.venv/bin/python design-system/mivu/stickers/sync.py   # copies the exports into both apps and the Messages pack; --check reports drift
 ```
 
 `pack.py` needs `pillow`, `numpy` and `opencv-python-headless` in the repo `.venv`.
