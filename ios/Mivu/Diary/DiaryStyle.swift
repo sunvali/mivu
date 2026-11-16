@@ -340,7 +340,7 @@ extension NutritionProvenance {
         switch self {
         case .sample: String(localized: "Synthetic apple estimate")
         case .user: String(localized: "Edited by you")
-        case .confirmedLabel: String(localized: "Confirmed label values")
+        case .confirmedLabel: String(localized: "From package label")
         case .identifiedSource: String(localized: "Retrieved nutrition source")
         case .estimate: String(localized: "Estimated nutrition")
         }

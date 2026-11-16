@@ -29,6 +29,15 @@ import UIKit
         #expect(deleted.currentStatus == "Record unavailable")
     }
 
+    @Test func labelOnlyMealsSayTheyCameFromThePackage() {
+        var receipt = receipt()
+        receipt.items[0].provenance = .confirmedLabel
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .loading).estimateLabel == "From package label")
+        receipt.items.append(CoachCommittedItem(itemID: UUID(), name: "Rice", quantity: 1, unit: "cup",
+            nutrition: NutritionValues(kcal: 200), provenance: .estimate, uncertain: true))
+        #expect(CoachReceiptPresentation(receipt: receipt, target: .loading).estimateLabel == "Estimated nutrition")
+    }
+
     @Test func unknownEstimatesStayUnknownAndRealZeroStaysZero() {
         var receipt = receipt()
         var value = CoachReceiptPresentation(receipt: receipt, target: .loading)

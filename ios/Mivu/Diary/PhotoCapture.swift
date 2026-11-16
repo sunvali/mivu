@@ -62,10 +62,11 @@ enum PhotoImport {
     static func visionCopies(_ originals: [Data]) throws -> [Data] {
         guard originals.count <= 30 else { throw ResponsesClient.Failure.invalidInput }
         if originals.isEmpty { return [] }
-        let budget = min(524_288, 4_194_304 / originals.count)
+        // Label text must survive; the total stays within the request body limit.
+        let budget = min(1_572_864, 4_194_304 / originals.count)
         return try originals.map { data in
             guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw ResponsesClient.Failure.invalidInput }
-            for pixels in [1280, 960, 720, 480, 320] {
+            for pixels in [2048, 1600, 1280, 960, 720, 480, 320] {
                 guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
                     kCGImageSourceThumbnailMaxPixelSize: pixels,
