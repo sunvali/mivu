@@ -24,7 +24,9 @@ for this native app. No web frontend is required.
 - Mivu follows the system language and layout direction. It ships English and
   Hebrew; a new language ships only once it is complete on every surface. All text a
   person reads goes through the string catalogs; stored and model-facing values
-  never localize. Follow [adding a language](docs/development/adding-a-language.md).
+  never localize. Follow [adding a language](docs/development/adding-a-language.md)
+  and, to add or review a translation, the
+  [mivu-adding-a-language skill](.agents/skills/mivu-adding-a-language/SKILL.md).
   Preserve existing profile/archive data and stored language values. Keep Dynamic
   Type, VoiceOver, reduced motion, and minimum 44-point touch targets.
 - For behavior changes, include focused evidence from source plus named tests;

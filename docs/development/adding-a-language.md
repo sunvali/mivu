@@ -95,3 +95,7 @@ text. For a new language, also run the sweep with `-AppleLanguages (<code>)`.
 - Hebrew: the owner reads every string on one review page before it ships.
 - A language the owner cannot read: a draft, a check by an independent reviewer
   for meaning, tone and fit, and the on-screen sweep.
+
+The working order, the translator and reviewer agents and their briefs are in the
+[mivu-adding-a-language skill](../../.agents/skills/mivu-adding-a-language/SKILL.md).
+`scripts/ci/catalog_rows.py` exports the rows they read and applies their changes.
