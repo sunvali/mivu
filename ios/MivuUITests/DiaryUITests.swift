@@ -542,39 +542,21 @@ import XCTest
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "English dark largest accessibility5 Today"; attachment.lifetime = .keepAlways; add(attachment)
     }
 
-    func testLegacyHebrewLaunchUsesEnglishLeftToRight() {
-        let app = launch(["--proof-hebrew", "-AppleLanguages", "(he)", "-AppleLocale", "he_IL"])
-        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "English legacy Hebrew launch"; attachment.lifetime = .keepAlways; add(attachment)
-        guard app.navigationBars["Today"].waitForExistence(timeout: 5) else { XCTFail("Legacy Hebrew settings must still open English Today"); return }
-        XCTAssertTrue(app.staticTexts["Apple sample mode"].exists)
-        let today = app.tabBars.buttons["Today"], diary = app.tabBars.buttons["Diary"], progress = app.tabBars.buttons["Progress"], coach = app.tabBars.buttons["Coach"]
-        XCTAssertLessThan(today.frame.midX, diary.frame.midX)
-        XCTAssertLessThan(diary.frame.midX, progress.frame.midX)
-        XCTAssertLessThan(progress.frame.midX, coach.frame.midX)
+    /// A Hebrew phone gets Hebrew, and the Language row hands the choice to iOS: Mivu has no picker of its own.
+    func testHebrewPhoneLanguageRowOpensSystemSettings() {
+        let app = launch(["-AppleLanguages", "(he)", "-AppleLocale", "he_IL"])
+        XCTAssertTrue(app.buttons["profileSettings"].waitForExistence(timeout: 15))
         app.buttons["profileSettings"].tap()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.segmentedControls.count, 0)
-        XCTAssertTrue(app.staticTexts["My diary"].exists)
-        let preferences = app.buttons["Diary preferences"]
+        let preferences = app.buttons["diaryPreferences"]
         reveal(preferences, in: app); preferences.tap()
-        XCTAssertTrue(app.navigationBars["Diary preferences"].waitForExistence(timeout: 5))
-        let language = app.descendants(matching: .any).matching(NSPredicate(
-            format: "label == %@ OR (label == %@ AND value == %@)", "App language, English", "App language", "English"
-        )).firstMatch
-        reveal(language, in: app)
-        XCTAssertTrue(language.isHittable)
-        XCTAssertTrue(language.label == "App language, English" || (language.label == "App language" && language.value as? String == "English"))
-        XCTAssertEqual(app.segmentedControls.count, 0, "The unsupported language selector must remain hidden")
-        app.navigationBars.buttons.firstMatch.tap()
-        let connectionRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Coach AI")).firstMatch
-        reveal(connectionRow, in: app); connectionRow.tap()
-        XCTAssertTrue(app.navigationBars["Coach AI"].waitForExistence(timeout: 5))
-        let diagnostic = app.buttons["ChatGPT connection diagnostic"]
-        reveal(diagnostic, in: app); diagnostic.tap()
-        XCTAssertTrue(app.staticTexts["Connection test"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.segmentedControls.count, 0)
-        XCTAssertGreaterThan(app.buttons["Done"].frame.midX, app.frame.midX)
-        XCTAssertLessThan(app.staticTexts["Connection test"].frame.minX, app.frame.midX)
-        let diagnosticScreen = XCTAttachment(screenshot: app.screenshot()); diagnosticScreen.name = "English connection diagnostic"; diagnosticScreen.lifetime = .keepAlways; add(diagnosticScreen)
+        let row = app.buttons["languageSettings"]
+        reveal(row, in: app)
+        XCTAssertTrue(row.isHittable)
+        XCTAssertGreaterThanOrEqual(row.frame.height, 44)
+        XCTAssertTrue(row.label.contains("עברית"), row.label)
+        XCTAssertEqual(app.segmentedControls.count, 0, "Mivu has no language picker of its own")
+        let capture = XCTAttachment(screenshot: app.screenshot()); capture.name = "Hebrew language row"; capture.lifetime = .keepAlways; add(capture)
+        row.tap()
+        XCTAssertTrue(XCUIApplication(bundleIdentifier: "com.apple.Preferences").wait(for: .runningForeground, timeout: 10))
     }
 }

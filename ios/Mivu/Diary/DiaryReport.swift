@@ -78,7 +78,9 @@ struct DiaryReport {
     }
 
     private func csv(_ header: [String], _ rows: [[String]]) -> String {
-        ([header] + rows).map { $0.map(Self.field).joined(separator: ",") + "\r\n" }.joined()
+        let text = ([header] + rows).map { $0.map(Self.field).joined(separator: ",") + "\r\n" }.joined()
+        // Excel reads a CSV without a byte order mark as the system code page, garbling Hebrew or "café".
+        return text.unicodeScalars.allSatisfy(\.isASCII) ? text : "\u{FEFF}" + text
     }
     /// RFC 4180 quoting, and a leading apostrophe so spreadsheets never run user text as a formula.
     private static func field(_ value: String) -> String {

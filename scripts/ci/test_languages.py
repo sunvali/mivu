@@ -121,6 +121,32 @@ class Catalogs(unittest.TestCase):
         entry['localizations']['he'] = {'stringSet': {'state': 'new', 'values': ['Tell']}}
         self.assertTrue(languages.errors(catalog(**{'Tell ${applicationName}': entry}), {'en', 'he'}))
 
+    def test_shortcut_phrases_name_the_app_once_per_language(self):
+        def phrases(*values):
+            return {'localizations': {'he': {'stringSet': {'state': 'translated', 'values': list(values)}}}}
+        ok = catalog(**{'Tell ${applicationName}': phrases('לספר ל-${applicationName}'), 'Ask ${applicationName}': phrases('לשאול את ${applicationName}')})
+        self.assertEqual(languages.phrase_errors(ok), [])
+        unnamed = catalog(**{'Tell ${applicationName}': phrases('לספר לפיפ')})
+        self.assertTrue(any('applicationName' in e for e in languages.phrase_errors(unnamed)))
+        twice = catalog(**{'Tell ${applicationName}': phrases('לספר ל-${applicationName}'), 'Ask ${applicationName}': phrases('לספר ל-${applicationName}')})
+        self.assertTrue(any('more than one' in e for e in languages.phrase_errors(twice)))
+
+    def test_ternary_text_must_already_be_a_catalog_key(self):
+        source = 'Text(isOver ? "kcal over" : "kcal left")\nLabel(on ? "Turn off" : "Turn on", systemImage: on ? "bell.slash" : "bell")'
+        errs = languages.ternary_errors(source, {'kcal over', 'Turn off', 'Turn on'})
+        self.assertEqual(len(errs), 1, errs)
+        self.assertIn("'kcal left'", errs[0])
+        inside = languages.ternary_errors('Text("\\(n) \\(over ? "above goal" : "to goal")")', set())
+        self.assertEqual(len(inside), 2, inside)
+
+    def test_interpolated_ternary_in_any_text_call_is_caught(self):
+        # A catalog key doesn't help, a quoted condition and a nested ternary are seen, and localized fallbacks are not branches.
+        source = '.accessibilityLabel("Weight in \\(unit == "lb" ? "pounds" : "kilograms")")\n' \
+                 '.accessibilityLabel("By \\(a ? "day" : b ? "week" : "month")")\n' \
+                 'Text("Replace \\(name ?? String(localized: "the selected profile"))")'
+        errs = languages.ternary_errors(source, {'pounds', 'day'})
+        self.assertEqual([e.split("'")[1] for e in errs], ['pounds', 'kilograms', 'day', 'week', 'month'])
+
     def test_shipped_languages_come_from_known_regions(self):
         text = 'knownRegions = (\n\t\t\t\ten,\n\t\t\t\the,\n\t\t\t\tBase,\n\t\t\t);'
         self.assertEqual(languages.shipped(text), {'en', 'he'})

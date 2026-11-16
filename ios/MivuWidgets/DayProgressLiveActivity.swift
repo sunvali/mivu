@@ -105,7 +105,8 @@ private struct Headline: View {
                     .foregroundStyle(state.isOver ? Color.diarySecondary : primary)
                     .privacySensitive(state.hideWhenLocked)
                 // One whole key per word, so a language can reorder or inflect it.
-                Text(state.word == "left" ? "kcal left" : state.word == "over" ? "kcal over" : "kcal eaten")
+                // Separate Text literals: a ternary inside one Text is never extracted into the catalog.
+                (state.word == "left" ? Text("kcal left") : state.word == "over" ? Text("kcal over") : Text("kcal eaten"))
                     .font(.footnote.weight(.medium)).foregroundStyle(Color.diarySecondary).lineLimit(1)
                     .privacySensitive(state.hideWhenLocked)
             }

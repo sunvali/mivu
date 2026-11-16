@@ -153,7 +153,7 @@ struct CoachReceiptPresentation: Equatable {
     var weightLabel: String? {
         guard receipt.weightID != nil, !receipt.operationKey.contains("/delete_weight/") else { return nil }
         guard let value = receipt.weightValue, let unit = receipt.weightUnit else { return String(localized: "Weight saved") }
-        return String(localized: "Weight saved · \(value.formatted(.number.grouping(.never))) \(unit)")
+        return String(localized: "Weight saved · \(value.formatted(.number.grouping(.never))) \(WeightEntry.shownUnit(unit))")
     }
     var canOpenTarget: Bool {
         switch target { case .meal, .workout: true; default: false }

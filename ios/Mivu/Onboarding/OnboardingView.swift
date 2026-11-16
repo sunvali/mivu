@@ -210,7 +210,7 @@ struct OnboardingView: View {
                         .accessibilityLabel("Birth year").accessibilityIdentifier("onboardingBirthYear")
                 }
                 Divider()
-                row("Sex", invalid: false) {
+                row(String(localized: "Sex", comment: "Onboarding field label"), invalid: false) {
                     Picker("Sex", selection: $about.sex) {
                         Text("Female").tag(ProfileAbout.Sex.female)
                         Text("Male").tag(ProfileAbout.Sex.male)
@@ -308,7 +308,7 @@ struct OnboardingView: View {
     @ViewBuilder private var macros: some View {
         macro(String(localized: "Protein"), $targets.protein, .diaryProtein)
         macro(String(localized: "Carbs"), $targets.carbs, .diaryCarbs)
-        macro("Fat", $targets.fat, .diaryFat)
+        macro(String(localized: "Fat"), $targets.fat, .diaryFat)
     }
 
     @ViewBuilder private var status: some View {
@@ -482,17 +482,25 @@ struct OnboardingView: View {
     private func unitMenu(_ metric: Binding<Bool>, metric metricUnit: String, imperial imperialUnit: String) -> some View {
         Menu {
             Picker("Unit", selection: metric) {
-                Text(metricUnit).tag(true)
-                Text(imperialUnit == "in" ? "ft, in" : imperialUnit).tag(false)
+                Text(shown(metricUnit)).tag(true)
+                Text(imperialUnit == "in" ? String(localized: "ft, in", comment: "Feet and inches, a height unit") : shown(imperialUnit)).tag(false)
             }
         } label: {
             HStack(spacing: 2) {
-                Text(metric.wrappedValue ? metricUnit : imperialUnit)
+                Text(shown(metric.wrappedValue ? metricUnit : imperialUnit))
                 Image(systemName: "chevron.up.chevron.down").font(.caption2)
             }
             .foregroundStyle(Color.diaryAccent).frame(minWidth: 44, minHeight: 44)
         }
-        .accessibilityLabel("Unit, \(metric.wrappedValue ? metricUnit : imperialUnit)")
+        .accessibilityLabel("Unit, \(shown(metric.wrappedValue ? metricUnit : imperialUnit))")
+    }
+    /// The units are fixed values; this is how they read on screen.
+    private func shown(_ unit: String) -> String {
+        switch unit {
+        case "cm": String(localized: "cm", comment: "Centimetres, a height unit")
+        case "in": String(localized: "in", comment: "Inches, a height unit")
+        default: WeightEntry.shownUnit(unit)
+        }
     }
 
     private func paceRow(_ pace: ProfileAbout.Pace) -> some View {

@@ -1,5 +1,7 @@
 # App Store listing (draft)
 
+Hebrew: [listing.he.md](listing.he.md).
+
 A draft for App Store Connect. Nothing here has been entered. Character limits
 are Apple's; `scripts/ci` does not check this file, so recount after edits.
 

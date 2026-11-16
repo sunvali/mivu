@@ -91,7 +91,7 @@ struct DiaryBackupSettings: View {
             case .failure: model.errorMessage = String(localized: "Export was not saved. Your local diary is preserved.")
             }
         }
-        .confirmationDialog("Restore \(imported?.profile.name ?? "this private diary")?", isPresented: $confirmRestore, titleVisibility: .visible) {
+        .confirmationDialog("Restore \(imported?.profile.name ?? String(localized: "this private diary"))?", isPresented: $confirmRestore, titleVisibility: .visible) {
             Button("Restore diary", role: .destructive) { if let archive = imported { Task { if await model.importArchive(archive) { imported = nil } } } }
             Button("Cancel", role: .cancel) { imported = nil }
         } message: {

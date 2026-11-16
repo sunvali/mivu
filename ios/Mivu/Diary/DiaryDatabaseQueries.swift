@@ -445,7 +445,7 @@ extension DiaryDatabase {
                 } else if let id = receipt.weightID {
                     do {
                         _ = try transaction.weight(id: id)
-                        if let value = facts.weightValue, let unit = facts.weightUnit { summaries.append(String(localized: "Weight saved: **\(number(value)) \(unit)**.")) }
+                        if let value = facts.weightValue, let unit = facts.weightUnit { summaries.append(String(localized: "Weight saved: **\(number(value)) \(WeightEntry.shownUnit(unit))**.")) }
                         else { summaries.append(String(localized: "Weight saved.")) }
                     } catch DiaryError.notFound { summaries.append(String(localized: "This weight was deleted.")) }
                 } else if let id = receipt.workoutID {

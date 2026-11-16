@@ -50,6 +50,7 @@ struct SettingsView: View {
                     Button { showOnboarding = true } label: { settingsRow(String(localized: "Redo setup with Pip"), symbol: "pawprint", color: .diaryProtein) }
                         .accessibilityIdentifier("redoOnboarding")
                     NavigationLink(value: SettingsSection.preferences) { settingsRow(String(localized: "Diary preferences"), symbol: "list.bullet.rectangle", color: .diaryCarbs) }
+                        .accessibilityIdentifier("diaryPreferences")
                     NavigationLink(value: SettingsSection.backup) { settingsRow(String(localized: "Backup & export"), symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
                         settingsRow(String(localized: "Coach AI"), symbol: "sparkles", color: .diaryFat,
@@ -205,8 +206,18 @@ struct SettingsView: View {
                 }
 
                     Section("Language") {
-                        LabeledContent("App language", value: Locale.current.localizedString(forLanguageCode: Bundle.main.preferredLocalizations.first ?? "en") ?? "English")
-                        Text("English is supported for this version. Your stored profile language is preserved.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        let language = LabeledContent("App language", value: Locale.current.localizedString(forLanguageCode: Bundle.main.preferredLocalizations.first ?? "en") ?? "English")
+                        if Self.shipsSeveralLanguages {
+                            // iOS keeps the per-app language on Mivu's page in Settings.
+                            Button { URL(string: UIApplication.openSettingsURLString).map { UIApplication.shared.open($0) } } label: {
+                                HStack(spacing: 8) { language; Image(systemName: "arrow.up.forward").font(.footnote.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true) }
+                            }
+                            .tint(Color.diaryText).frame(minHeight: 44).accessibilityHint("Opens iOS Settings").accessibilityIdentifier("languageSettings")
+                            Text("Change the language Mivu uses in iOS Settings.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        } else {
+                            language
+                            Text("English is supported for this version. Your stored profile language is preserved.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        }
                     }
                 }
             case .backup:
@@ -317,6 +328,9 @@ struct SettingsView: View {
         .toolbar(.hidden, for: .tabBar)
     }
 
+    /// Release builds strip languages that are not shipped yet, so this turns true when one ships.
+    static var shipsSeveralLanguages: Bool { Bundle.main.localizations.filter { $0 != "Base" }.count > 1 }
+
     private func settingsRow(_ title: String, symbol: String, color: Color, value: String? = nil) -> some View {
         HStack(spacing: 16) {
             Image(systemName: symbol).foregroundStyle(color).frame(width: 28).accessibilityHidden(true)
@@ -354,7 +368,7 @@ private struct DeleteProfileDialog: ViewModifier {
     @Binding var pending: DiaryProfile?
 
     func body(content: Content) -> some View {
-        content.confirmationDialog("Delete \(pending?.name ?? "this private local profile")?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible, presenting: pending) { profile in
+        content.confirmationDialog("Delete \(pending?.name ?? String(localized: "this private local profile"))?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible, presenting: pending) { profile in
             Button("Delete profile", role: .destructive) {
                 Task {
                     await model.deleteProfile(profile.id)

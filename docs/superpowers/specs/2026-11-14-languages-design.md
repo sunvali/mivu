@@ -167,10 +167,9 @@ baseline.
   message, to fall back to the app language when a message has no clear
   language (a photo alone, a number), and to write digits as 0–9. Food names
   are saved as the person wrote them.
-- The saved-food card and other receipts for a turn show their labels in that
-  turn's language when Mivu ships it, otherwise in the app language. The turn's
-  language is worked out from its text when shown; nothing new is stored.
-  *(My call.)*
+- The saved-food card and other receipts for a turn show their labels in the
+  app language, whatever language the turn was written in (owner, 2026-11-15).
+  Nothing new is stored.
 - A message in a language Mivu does not ship yet (Arabic before Arabic exists)
   still gets a reply in that language; its card labels use the app language.
 - Fixed fallback lines (shown when a model reply is rejected) use the app

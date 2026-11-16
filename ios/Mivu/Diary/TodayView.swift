@@ -631,7 +631,7 @@ struct TodayView: View {
                 Section {
                     let lateDay = lateMealDay(meal)
                     NavigationLink(value: savedMealID) {
-                        Label(lateDay.map { "Added to \(wakingDayTitle($0.localDate))" } ?? "Saved on this iPhone", systemImage: "checkmark.circle")
+                        Label(lateDay.map { String(localized: "Added to \(wakingDayTitle($0.localDate))") } ?? String(localized: "Saved on this iPhone"), systemImage: "checkmark.circle")
                             .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
                     }.accessibilityIdentifier("savedMealReceipt")
                     // Moving opens today's calendar date, so offer it only while that is still the meal's date.
@@ -899,7 +899,8 @@ struct TodayView: View {
 
     @ViewBuilder private func remaining(_ value: Double?) -> some View {
         if let value {
-            Text("\(abs(value).formatted(.number.precision(.fractionLength(0)))) \(value < 0 ? "above goal" : "to goal")")
+            let amount = abs(value).formatted(.number.precision(.fractionLength(0)))
+            value < 0 ? Text("\(amount) above goal", comment: "Calories eaten past the day's goal, on Today") : Text("\(amount) to goal", comment: "Calories left before the day's goal, on Today")
         } else { Text("Not estimated yet").foregroundStyle(Color.diarySecondary) }
     }
 }

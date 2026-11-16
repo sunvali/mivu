@@ -154,6 +154,21 @@ def errors(catalogs, languages):
     return found
 
 
+def phrase_errors(catalogs):
+    """Siri ignores an App Shortcut phrase without the app's name, and a phrase two shortcuts share."""
+    found, seen = [], {}
+    for path, catalog in sorted(catalogs.items()):
+        for key, entry in sorted(catalog.get('strings', {}).items()):
+            for language, localization in sorted(entry.get('localizations', {}).items()):
+                for phrase in localization.get('stringSet', {}).get('values', []):
+                    if '${applicationName}' not in phrase:
+                        found.append(f"{path}: {key!r} in {language!r}: {phrase!r} must contain ${{applicationName}}")
+                    other = seen.setdefault((language, phrase), key)
+                    if other != key:
+                        found.append(f"{path}: {phrase!r} in {language!r} is a phrase of more than one shortcut ({other!r}, {key!r})")
+    return found
+
+
 def xliff_errors(xliff, catalogs):
     """Keys the compiler extracted that no catalog holds."""
     known = {key for catalog in catalogs.values() for key in catalog.get('strings', {})}
@@ -171,6 +186,43 @@ def widget_errors(source, app_strings, widget_strings):
             for key in sorted(literals) if key and key in app_strings and key not in widget_strings]
 
 
+TERNARY = re.compile(r'\b(?:Text|Label|Button|Section|LabeledContent|Toggle|navigationTitle|accessibilityLabel|accessibilityHint)\(([^()]*\?[^()]*)\)')
+
+
+def ternary_errors(source, keys):
+    """Xcode does not extract the literals of Text(flag ? "a" : "b"), so each must already be a catalog key."""
+    found = []
+    for args in TERNARY.findall(source):
+        for literal in re.findall(r'"((?:[^"\\]|\\.)*)"', args):
+            key = re.sub(r'\\\(.*?\)', '%@', literal)
+            # SF Symbol names and identifiers are lowercase words joined by dots; people never read them.
+            if re.search(r'[A-Za-z]{2}', literal) and ' ' in literal and literal not in keys and key not in keys:
+                found.append(f"{literal!r} is chosen by a ternary inside the view, so Xcode never extracts it; use a Text per branch")
+    # A ternary inside an interpolation hands the translated sentence an untranslated word.
+    for line in source.splitlines():
+        if TRANSLATED_CALL.search(line):
+            for inner in interpolations(line):
+                if '?' not in inner:
+                    continue
+                for literal in re.findall(r'(?:\?|(?<!localized):)\s*"([^"]*)"', inner):
+                    # Being a catalog key doesn't help: an interpolated String is shown as written.
+                    if re.search(r'[A-Za-z]{2}', literal):
+                        found.append(f"{literal!r} is chosen inside a translated string, so it is never translated; write a whole string per branch")
+    return found
+
+
+TRANSLATED_CALL = re.compile(r'\b(?:Text|Label|Button|Section|LabeledContent|Toggle|navigationTitle|accessibilityLabel|accessibilityHint|accessibilityValue)\("|localized:')
+
+
+def interpolations(line):
+    """The text inside each \\( ... ), counting nested parentheses."""
+    found, start = [], line.find('\\(')
+    while start != -1:
+        depth, i = 1, start + 2
+        while i < len(line) and depth:
+            depth += {'(': 1, ')': -1}.get(line[i], 0); i += 1
+        found.append(line[start + 2:i - 1]); start = line.find('\\(', i)
+    return found
 WIDGET_SOURCES = ('ios/MivuWidgets', 'ios/Shared')
 
 
@@ -184,10 +236,12 @@ def main(argv):
     catalogs = load()
     if argv[1:2] == ['check']:
         pbxproj = (ROOT / PROJECT).read_text()
-        found = errors(catalogs, shipped(pbxproj)) + hidden_errors(pbxproj)
+        found = errors(catalogs, shipped(pbxproj)) + hidden_errors(pbxproj) + phrase_errors(catalogs)
         source = ''.join(p.read_text() for d in WIDGET_SOURCES for p in sorted((ROOT / d).glob('*.swift')))
         found += widget_errors(source, catalogs['ios/Mivu/Localizable.xcstrings']['strings'],
                                catalogs['ios/MivuWidgets/Localizable.xcstrings']['strings'])
+        swift = ''.join(p.read_text() for p in sorted((ROOT / 'ios').glob('Mivu*/**/*.swift')) + sorted((ROOT / 'ios/Shared').glob('*.swift')) if 'Tests' not in p.parts[-2])
+        found += ternary_errors(swift, {key for catalog in catalogs.values() for key in catalog.get('strings', {})})
     elif argv[1:2] == ['xliff'] and len(argv) == 3:
         found = xliff_errors(Path(argv[2]).read_text(), catalogs)
     else:

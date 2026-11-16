@@ -119,13 +119,13 @@ struct MorningCheckInCard: View {
             TextField(lastKg.map { display($0) } ?? String(localized: "Weight"), text: $weight)
                 .keyboardType(.decimalPad).focused($weightFocused)
                 .font((compact ? Font.body : .title2).weight(.semibold)).monospacedDigit()
-                .accessibilityLabel("Weight in \(unit == "lb" ? "pounds" : "kilograms")").accessibilityIdentifier("morningWeight")
+                .accessibilityLabel(unit == "lb" ? Text("Weight in pounds") : Text("Weight in kilograms")).accessibilityIdentifier("morningWeight")
             Menu {
                 Picker("Unit", selection: $unit) { Text("kg").tag("kg"); Text("lb").tag("lb") }
             } label: {
-                HStack(spacing: 4) { Text(unit); Image(systemName: "chevron.up.chevron.down").font(.caption2) }
+                HStack(spacing: 4) { Text(WeightEntry.shownUnit(unit)); Image(systemName: "chevron.up.chevron.down").font(.caption2) }
                     .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryAccent).frame(minWidth: 44, minHeight: 44)
-            }.accessibilityLabel("Unit, \(unit)")
+            }.accessibilityLabel("Unit, \(WeightEntry.shownUnit(unit))")
         }
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { weightFocused = false } } }
     }
@@ -157,13 +157,13 @@ struct MorningCheckInCard: View {
 
     private func weightResult(_ entry: WeightEntry) -> some View {
         HStack {
-            Label { Text("\(display(entry.unit == "lb" ? entry.value * 0.45359237 : entry.value)) \(unit)").monospacedDigit() }
+            Label { Text("\(display(entry.unit == "lb" ? entry.value * 0.45359237 : entry.value)) \(WeightEntry.shownUnit(unit))").monospacedDigit() }
                 icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
                 .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryText)
             Spacer()
             if let trendKg {
                 // The weekly trend, not the day-to-day change: daily swings are mostly water.
-                Text("\(trendKg > 0 ? "+" : trendKg < 0 ? "−" : "")\(display(abs(trendKg))) \(unit) this week")
+                Text("\(trendKg > 0 ? "+" : trendKg < 0 ? "−" : "")\(display(abs(trendKg))) \(WeightEntry.shownUnit(unit)) this week")
                     .font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
             }
         }.frame(minHeight: 44).accessibilityElement(children: .combine)
