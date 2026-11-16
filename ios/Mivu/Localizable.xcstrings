@@ -1648,6 +1648,40 @@
         }
       }
     },
+    "Add “Pip moves” to WhatsApp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add “Pip moves” to WhatsApp"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוספת “Pip moves” ל-WhatsApp"
+          }
+        }
+      }
+    },
+    "Add “Pip” to WhatsApp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add “Pip” to WhatsApp"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוספת “Pip” ל-WhatsApp"
+          }
+        }
+      }
+    },
     "Add a goal weight to see how far is left." : {
       "localizations" : {
         "he" : {
@@ -2030,6 +2064,23 @@
         }
       }
     },
+    "Also in Messages: tap + then Stickers." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Also in Messages: tap + then Stickers."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זמין גם בהודעות: מקישים על + ואז על מדבקות."
+          }
+        }
+      }
+    },
     "Amount" : {
       "comment" : "Field label: quantity number of a food item (e.g. 150)",
       "localizations" : {
@@ -2134,6 +2185,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "התמונה בניתוח"
+          }
+        }
+      }
+    },
+    "animated" : {
+      "comment" : "VoiceOver value: this sticker moves",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מונפש"
           }
         }
       }
@@ -6549,6 +6611,24 @@
         }
       }
     },
+    "Get WhatsApp" : {
+      "comment" : "Alert button that opens WhatsApp's App Store page",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get WhatsApp"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הורדת WhatsApp"
+          }
+        }
+      }
+    },
     "Gluten-free" : {
       "comment" : "Shown from a stored value; the value itself stays English.",
       "extractionState" : "manual",
@@ -7037,6 +7117,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "לכלול אנרגיית אימון מוערכת בחישוב הנותר המותאם"
+          }
+        }
+      }
+    },
+    "Install WhatsApp to add Pip stickers." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install WhatsApp to add Pip stickers."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יש להתקין את WhatsApp כדי להוסיף את מדבקות פיפ."
           }
         }
       }
@@ -10188,6 +10285,24 @@
         }
       }
     },
+    "Pip stickers" : {
+      "comment" : "Settings row and sheet title for the Pip chat sticker pack",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pip stickers"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מדבקות פיפ"
+          }
+        }
+      }
+    },
     "Portion" : {
       "comment" : "Section heading: portion size of a food",
       "localizations" : {
@@ -12786,6 +12901,23 @@
         }
       }
     },
+    "Tap a sticker to share it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap a sticker to share it."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אפשר להקיש על מדבקה כדי לשתף אותה."
+          }
+        }
+      }
+    },
     "Tap to add a note so Mivu can log it." : {
       "localizations" : {
         "he" : {
@@ -14811,6 +14943,23 @@
         }
       }
     },
+    "WhatsApp isn't installed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WhatsApp isn't installed"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WhatsApp לא מותקן"
+          }
+        }
+      }
+    },
     "Which day is this for?" : {
       "localizations" : {
         "he" : {
@@ -15544,144 +15693,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "הקטנה"
-          }
-        }
-      }
-    },
-    "Pip stickers" : {
-      "comment" : "Settings row and sheet title for the Pip chat sticker pack",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pip stickers"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מדבקות פיפ"
-          }
-        }
-      }
-    },
-    "Tap a sticker to share it." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap a sticker to share it."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "אפשר להקיש על מדבקה כדי לשתף אותה."
-          }
-        }
-      }
-    },
-    "Add “Pip” to WhatsApp" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add “Pip” to WhatsApp"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "הוספת “Pip” ל-WhatsApp"
-          }
-        }
-      }
-    },
-    "Add “Pip moves” to WhatsApp" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add “Pip moves” to WhatsApp"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "הוספת “Pip moves” ל-WhatsApp"
-          }
-        }
-      }
-    },
-    "Also in Messages: tap + then Stickers." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Also in Messages: tap + then Stickers."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "זמין גם בהודעות: מקישים על + ואז על מדבקות."
-          }
-        }
-      }
-    },
-    "WhatsApp isn't installed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhatsApp isn't installed"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhatsApp לא מותקן"
-          }
-        }
-      }
-    },
-    "Install WhatsApp to add Pip stickers." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Install WhatsApp to add Pip stickers."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "יש להתקין את WhatsApp כדי להוסיף את מדבקות פיפ."
-          }
-        }
-      }
-    },
-    "Get WhatsApp" : {
-      "comment" : "Alert button that opens WhatsApp's App Store page",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Get WhatsApp"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "הורדת WhatsApp"
           }
         }
       }
