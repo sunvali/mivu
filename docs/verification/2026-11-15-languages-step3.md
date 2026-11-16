@@ -103,6 +103,34 @@ After the fixes: `languages.py check` exit 0, `test_languages.py` 26/26,
 + `ProgressUITests/testWeightChartSelectsSavedMeasurement` 9/9, LanguageSweep
 hebrew on the iPhone 6 passed, 3 skipped.
 
+## Native Hebrew review
+
+After the owner tried the build on the iPhone Duo (Release, `41ca82bb`) and
+asked for more natural Hebrew, native-speaker review passes were applied:
+
+| Pass | Source | Changes | Notes |
+|---|---|---|---|
+| 1 | `6c020e72` | 116 (3 errors) | Formal register ("לא ניתן", "יש ל…"), wrong words ("תוקף", "צריכת האנרגיה", "שליחות"), Apple terms ("להקיש", "הכתבה", "אייפון"); glossary updated |
+| 2 | `bc628610` | 66 (3 errors) | Remaining "יש ל…" hints, "בתוקף מ-", and "ל" before a date that starts with a digit |
+| 3 | `efc534d9` | 10 (3 errors) | Prefixes and sentence shape once a value is filled in; Siri phrases reviewed |
+| 4 | this commit | 16 (11 errors) | Each placeholder string traced to its Swift caller (about 165 of 272) and read with real values: food names, "היום", weekday-led dates |
+
+Pass 3 also found that the late-meal receipt on Today ("Added to …" /
+"Saved on this iPhone") was a plain String and never translated; it now uses
+`String(localized:)`, with English unchanged. After each pass:
+`languages.py check` exit 0 and LanguageSweep hebrew passed (iPhone; pass 2
+also on the Duo), 6 passed and 3 skipped; after pass 3,
+`DiaryComposerCaptureTests` + `HistoricalCaptureReceiptTests` 14/14.
+
+Pass 4 also fixed three places where shown text skipped translation: the raw
+"kg"/"lb" in the weight Ask Pip line, and the English fallbacks "this private
+diary" and "this private local profile" in two confirmation titles. After pass 4:
+`CoachScaleMealTests`, `ManualNutritionTransactionTests`, `TellCoachTests`,
+`MealNotificationTests` and `ProgressUITests/testWeightAskPipQuotesRecord`
+43/43; LanguageSweep hebrew on iPhone and Duo, 6 passed and 3 skipped each.
+Left as is: a few sentences show an ISO date ("2026-11-16") in both
+languages; changing their format would change English.
+
 ## Blocked or not run
 
 - Lock Screen accessory widgets and the Control Center control: not captured;

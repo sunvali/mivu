@@ -37,7 +37,7 @@ import XCTest
     /// What a Hebrew phone shows for the English names the sweep looks for.
     static let hebrew = ["Today": "היום", "Diary": "יומן", "Progress": "התקדמות", "Coach": "פיפ", "Chat history": "היסטוריית שיחות",
                          "Cancel": "ביטול", "Close": "סגירה", "Done": "סיום", "More": "עוד",
-                         "Add to this day": "הוספה ליום הזה", "Day actions, ": "פעולות ליום, "]
+                         "Add to this day": "הוספה ליום הזה", "Day actions, ": "פעולות לתאריך: "]
     private func shown(_ english: String) -> String { mode == "hebrew" ? Self.hebrew[english] ?? english : english }
 
     private func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {

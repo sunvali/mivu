@@ -357,7 +357,7 @@ private struct DeleteProfileDialog: ViewModifier {
     @Binding var pending: DiaryProfile?
 
     func body(content: Content) -> some View {
-        content.confirmationDialog("Delete \(pending?.name ?? "this private local profile")?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible, presenting: pending) { profile in
+        content.confirmationDialog("Delete \(pending?.name ?? String(localized: "this private local profile"))?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible, presenting: pending) { profile in
             Button("Delete profile", role: .destructive) {
                 Task {
                     await model.deleteProfile(profile.id)
