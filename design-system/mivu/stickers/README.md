@@ -46,7 +46,7 @@ runs that check, so a stale copy fails the test.
 |---|---|
 | `ios/Mivu/Stickers/PipStickers.swift` | sticker catalogue and share items |
 | `ios/Mivu/Stickers/PipStickerSheet.swift` | Settings sheet |
-| `ios/MivuStickers/`, `ios/Config/Stickers.xcconfig`, `Stickers-Info.plist` | `MivuStickers` Messages extension target |
+| `ios/MivuStickers/`, `ios/Config/Stickers.xcconfig`, `ios/Config/Stickers-Info.plist` | `MivuStickers` Messages extension target |
 | `android/app/src/main/java/com/yakov103/mivu/stickers/PipStickers.kt` | sticker catalogue |
 | `android/app/src/main/java/com/yakov103/mivu/stickers/PipStickerProvider.kt` | WhatsApp sticker content provider |
 | `android/app/src/main/java/com/yakov103/mivu/ui/settings/PipStickerSheet.kt` | Settings sheet |
