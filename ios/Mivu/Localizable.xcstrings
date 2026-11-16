@@ -3712,12 +3712,12 @@
         }
       }
     },
-    "Confirmed label values" : {
+    "From package label" : {
       "localizations" : {
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ערכי תווית שאושרו"
+            "value" : "מתווית המוצר"
           }
         }
       }

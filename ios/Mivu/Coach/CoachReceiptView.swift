@@ -56,6 +56,7 @@ struct CoachReceiptPresentation: Equatable {
     }
     var estimateLabel: String? {
         guard !receipt.items.isEmpty else { return nil }
+        if receipt.items.allSatisfy({ $0.provenance == .confirmedLabel }) { return String(localized: "From package label") }
         if receipt.items.contains(where: { $0.uncertain == true || $0.provenance == .estimate }) { return String(localized: "Estimated nutrition") }
         if receipt.items.contains(where: { $0.provenance == nil }) { return String(localized: "Nutrition provenance unknown") }
         return nil
