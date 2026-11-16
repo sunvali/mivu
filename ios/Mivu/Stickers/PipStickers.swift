@@ -10,12 +10,18 @@ struct PipStickerItem: Identifiable {
 
 enum PipStickers {
     static let all: [PipStickerItem] = [
-        ("hi", "Pip waving hello", true), ("thanks", "Pip saying thank you", false),
-        ("love-it", "Pip hugging a fluffy tail, with hearts", false), ("lol", "Pip laughing", false),
-        ("ok", "Pip winking with a paw raised", false), ("oops", "Pip blushing, oops", false),
-        ("good-night", "Pip curled up asleep", true), ("yum", "Pip enjoying a salad bowl", false),
-        ("hungry", "Pip holding an empty bowl", false), ("hydrate", "Pip sipping water", false),
-        ("snack", "Pip holding up an apple", false), ("you-got-it", "Pip cheering and hopping", true),
+        ("hi", String(localized: "Pip waving hello", comment: "VoiceOver description of a Pip sticker"), true),
+        ("thanks", String(localized: "Pip saying thank you", comment: "VoiceOver description of a Pip sticker"), false),
+        ("love-it", String(localized: "Pip hugging a fluffy tail, with hearts", comment: "VoiceOver description of a Pip sticker"), false),
+        ("lol", String(localized: "Pip laughing", comment: "VoiceOver description of a Pip sticker"), false),
+        ("ok", String(localized: "Pip winking with a paw raised", comment: "VoiceOver description of a Pip sticker"), false),
+        ("oops", String(localized: "Pip blushing, oops", comment: "VoiceOver description of a Pip sticker"), false),
+        ("good-night", String(localized: "Pip curled up asleep", comment: "VoiceOver description of a Pip sticker"), true),
+        ("yum", String(localized: "Pip enjoying a salad bowl", comment: "VoiceOver description of a Pip sticker"), false),
+        ("hungry", String(localized: "Pip holding an empty bowl", comment: "VoiceOver description of a Pip sticker"), false),
+        ("hydrate", String(localized: "Pip sipping water", comment: "VoiceOver description of a Pip sticker"), false),
+        ("snack", String(localized: "Pip holding up an apple", comment: "VoiceOver description of a Pip sticker"), false),
+        ("you-got-it", String(localized: "Pip cheering and hopping", comment: "VoiceOver description of a Pip sticker"), true),
     ].map { PipStickerItem(id: $0.0, accessibilityText: $0.1, animated: $0.2) }
 
     // https://github.com/WhatsApp/stickers/blob/main/iOS/WAStickersThirdParty/Interoperability.swift

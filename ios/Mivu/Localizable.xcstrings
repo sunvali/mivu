@@ -1288,7 +1288,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld נרשמו"
+            "value" : "נרשמו: %lld"
           }
         }
       }
@@ -1728,7 +1728,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "הוספת מזון ידנית"
+            "value" : "הוספת מאכל ידנית"
           }
         }
       }
@@ -5651,7 +5651,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "נערך · הועבר ל-%@"
+            "value" : "נערכה · הועברה ל-%@"
           }
         }
       }
@@ -7133,7 +7133,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "יש להתקין את WhatsApp כדי להוסיף את מדבקות פיפ."
+            "value" : "צריך להתקין את WhatsApp כדי להוסיף את מדבקות פיפ."
           }
         }
       }
@@ -10285,6 +10285,116 @@
         }
       }
     },
+    "Pip blushing, oops" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ מסמיק, אופס"
+          }
+        }
+      }
+    },
+    "Pip cheering and hopping" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ מריע וקופץ"
+          }
+        }
+      }
+    },
+    "Pip curled up asleep" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ ישן מכורבל"
+          }
+        }
+      }
+    },
+    "Pip enjoying a salad bowl" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ נהנה מקערת סלט"
+          }
+        }
+      }
+    },
+    "Pip holding an empty bowl" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ מחזיק קערה ריקה"
+          }
+        }
+      }
+    },
+    "Pip holding up an apple" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ מרים תפוח"
+          }
+        }
+      }
+    },
+    "Pip hugging a fluffy tail, with hearts" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ מחבק זנב פרוותי, עם לבבות"
+          }
+        }
+      }
+    },
+    "Pip laughing" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ צוחק"
+          }
+        }
+      }
+    },
+    "Pip saying thank you" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ אומר תודה"
+          }
+        }
+      }
+    },
+    "Pip sipping water" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ לוגם מים"
+          }
+        }
+      }
+    },
     "Pip stickers" : {
       "comment" : "Settings row and sheet title for the Pip chat sticker pack",
       "extractionState" : "manual",
@@ -10299,6 +10409,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מדבקות פיפ"
+          }
+        }
+      }
+    },
+    "Pip waving hello" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ מנופף לשלום"
+          }
+        }
+      }
+    },
+    "Pip winking with a paw raised" : {
+      "comment" : "VoiceOver description of a Pip sticker",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ קורץ עם כף מורמת"
           }
         }
       }
@@ -14389,7 +14521,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "הצגת מזון שנשמר קודם"
+            "value" : "הצגת מאכל שנשמר קודם"
           }
         }
       }
@@ -14399,7 +14531,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "הצגת מזון שמור"
+            "value" : "הצגת מאכל שמור"
           }
         }
       }

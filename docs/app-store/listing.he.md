@@ -61,6 +61,6 @@ Captured on an iPhone 17 Pro Max simulator in Hebrew with a real ChatGPT connect
 
 1. `screenshots/he/01-coach.png` — לרשום ארוחה במילים שלך
 2. `screenshots/he/02-today.png` — כל היום במבט אחד
-3. `screenshots/he/03-progress.png` — לראות כמה קרוב הגעת
+3. `screenshots/he/03-progress.png` — לראות כמה התקרבת ליעד
 4. `screenshots/he/04-targets.png` — יעדים שמתאימים לך
 5. `screenshots/he/05-diary.png` — היומן נשאר באייפון שלך

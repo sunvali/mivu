@@ -113,7 +113,8 @@ asked for more natural Hebrew, native-speaker review passes were applied:
 | 1 | `6c020e72` | 116 (3 errors) | Formal register ("לא ניתן", "יש ל…"), wrong words ("תוקף", "צריכת האנרגיה", "שליחות"), Apple terms ("להקיש", "הכתבה", "אייפון"); glossary updated |
 | 2 | `bc628610` | 66 (3 errors) | Remaining "יש ל…" hints, "בתוקף מ-", and "ל" before a date that starts with a digit |
 | 3 | `efc534d9` | 10 (3 errors) | Prefixes and sentence shape once a value is filled in; Siri phrases reviewed |
-| 4 | this commit | 16 (11 errors) | Each placeholder string traced to its Swift caller (about 165 of 272) and read with real values: food names, "היום", weekday-led dates |
+| 4 | `bc46a612` | 16 (11 errors) | Each placeholder string traced to its Swift caller (about 165 of 272) and read with real values: food names, "היום", weekday-led dates |
+| 5 | this commit | 7 (1 error) | Final read after merging `main` (#141 stickers): the sticker strings, the remaining placeholders and the listing; screenshot 3 re-framed with its new caption |
 
 Pass 3 also found that the late-meal receipt on Today ("Added to …" /
 "Saved on this iPhone") was a plain String and never translated; it now uses
@@ -130,6 +131,14 @@ diary" and "this private local profile" in two confirmation titles. After pass 4
 43/43; LanguageSweep hebrew on iPhone and Duo, 6 passed and 3 skipped each.
 Left as is: a few sentences show an ISO date ("2026-11-16") in both
 languages; changing their format would change English.
+
+Pass 5 also made the 12 sticker descriptions VoiceOver reads translatable (they
+were plain Strings) and added their Hebrew; English is unchanged. After pass 5,
+on the merge with `main` at `9b24b3fc`: `PipStickersTests`,
+`PipStickerExportTests` and `PipStickerUITests` 9/9; LanguageSweep hebrew on
+the Duo 6 passed, 3 skipped; on the iPhone 5 passed, 3 skipped and
+`testTextIsHebrew` failed once because Settings showed no Goals row yet (the
+load timing seen above), then passed on its own.
 
 ## Blocked or not run
 
