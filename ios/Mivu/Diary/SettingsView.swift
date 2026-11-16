@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showDiagnostic = false
     @State private var showConnectionDiagnostic = false
     @State private var showGoals = false
+    @State private var showPipStickers = false
     @State private var showOnboarding = false
     @State private var fields = DiaryPreferencesDraft()
     @State private var linkedSection: SettingsSection?
@@ -101,6 +102,7 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
+        .sheet(isPresented: $showPipStickers) { PipStickerSheet() }
         .fullScreenCover(isPresented: $showOnboarding) { OnboardingView(model: model, connection: connection) { showOnboarding = false } }
         .onChange(of: model.readModel?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.readModel?.profile, restoreGeneration: model.restoreGeneration) }
@@ -138,6 +140,15 @@ struct SettingsView: View {
                     Text(LocalizedStringKey(companionSelection.selectedCharacter.displayName)).accessibilityIdentifier("companionName")
                 }.frame(minHeight: 44)
             }
+            Button { showPipStickers = true } label: {
+                // Same 40 pt leading slot + 12 pt spacing as the companion row so titles align.
+                HStack(spacing: 12) {
+                    Image(systemName: "face.smiling").foregroundStyle(Color.diaryProtein).frame(width: 40).accessibilityHidden(true)
+                    Text("Pip stickers").foregroundStyle(Color.diaryText)
+                    Spacer(minLength: 8)
+                }.frame(minHeight: 44)
+            }
+                .accessibilityIdentifier("pipStickers")
         }
     }
     private func companionPreview(_ character: CharacterDescriptor) -> some View {
