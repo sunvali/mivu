@@ -1,0 +1,81 @@
+{
+  "sticker_packs": [
+    {
+      "identifier": "mivu-pip-still",
+      "name": "Pip",
+      "publisher": "Mivu",
+      "tray_image_file": "tray.png",
+      "image_data_version": "1",
+      "publisher_email": "",
+      "publisher_website": "",
+      "privacy_policy_website": "",
+      "license_agreement_website": "",
+      "animated_sticker_pack": false,
+      "stickers": [
+        {
+          "image_file": "thanks.webp",
+          "emojis": [
+            "🙏",
+            "😊"
+          ]
+        },
+        {
+          "image_file": "love-it.webp",
+          "emojis": [
+            "❤️",
+            "😍"
+          ]
+        },
+        {
+          "image_file": "lol.webp",
+          "emojis": [
+            "😂",
+            "🤣"
+          ]
+        },
+        {
+          "image_file": "ok.webp",
+          "emojis": [
+            "👍",
+            "😉"
+          ]
+        },
+        {
+          "image_file": "oops.webp",
+          "emojis": [
+            "😅",
+            "🙈"
+          ]
+        },
+        {
+          "image_file": "yum.webp",
+          "emojis": [
+            "😋",
+            "🥗"
+          ]
+        },
+        {
+          "image_file": "hungry.webp",
+          "emojis": [
+            "🤤",
+            "🍽️"
+          ]
+        },
+        {
+          "image_file": "hydrate.webp",
+          "emojis": [
+            "💧",
+            "🥤"
+          ]
+        },
+        {
+          "image_file": "snack.webp",
+          "emojis": [
+            "🍎",
+            "😄"
+          ]
+        }
+      ]
+    }
+  ]
+}

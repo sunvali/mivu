@@ -152,7 +152,7 @@ import XCTest
 
     func testSettingsReturnKeepsCoachSendReachable() {
         let app = launch(); settings(in: app)
-        app.buttons["editGoals"].tap()
+        reveal(app.buttons["editGoals"], in: app); app.buttons["editGoals"].tap()
         let target = app.textFields["goalKcal"]
         XCTAssertTrue(target.waitForExistence(timeout: 5)); target.tap(); target.typeText("2000")
         app.buttons["saveGoals"].tap()

@@ -10,6 +10,7 @@
 		610001000000000000000001 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 610001000000000000000003 /* JOSESwift */; };
 		610001000000000000000002 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 610001000000000000000004 /* JOSESwift */; };
 		64000000000000000000000A /* MivuWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 640000000000000000000002 /* MivuWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		66000000000000000000000A /* MivuStickers.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 660000000000000000000002 /* MivuStickers.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,13 @@
 			remoteGlobalIDString = 640000000000000000000008;
 			remoteInfo = MivuWidgets;
 		};
+		66000000000000000000000C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8B41F63D2DEDD0D5001A66F9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 660000000000000000000008;
+			remoteInfo = MivuStickers;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -44,6 +52,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				64000000000000000000000A /* MivuWidgets.appex in Embed Foundation Extensions */,
+				66000000000000000000000A /* MivuStickers.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -55,6 +64,7 @@
 		8B41F6452DEDD0D5001A66F9 /* Mivu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mivu.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8B41F65C2DEDD0D6001A66F9 /* MivuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MivuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		640000000000000000000002 /* MivuWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MivuWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		660000000000000000000002 /* MivuStickers.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MivuStickers.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -67,6 +77,8 @@
 				Shared.xcconfig,
 				Tests.xcconfig,
 				MivuWidgets.entitlements,
+				Stickers-Info.plist,
+				Stickers.xcconfig,
 				Widgets-Info.plist,
 				Widgets.xcconfig,
 			);
@@ -102,6 +114,11 @@
 		640000000000000000000003 /* MivuWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MivuWidgets;
+			sourceTree = "<group>";
+		};
+		660000000000000000000003 /* MivuStickers */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MivuStickers;
 			sourceTree = "<group>";
 		};
 		630000000000000000000001 /* Shared */ = {
@@ -152,6 +169,7 @@
 				8B41F6472DEDD0D5001A66F9 /* Mivu */,
 				8B41F65F2DEDD0D6001A66F9 /* MivuTests */,
 				620000000000000000000003 /* MivuUITests */,
+				660000000000000000000003 /* MivuStickers */,
 				640000000000000000000003 /* MivuWidgets */,
 				630000000000000000000001 /* Shared */,
 				8B41F6812DEDD23B001A66F9 /* Frameworks */,
@@ -165,6 +183,7 @@
 				8B41F6452DEDD0D5001A66F9 /* Mivu.app */,
 				8B41F65C2DEDD0D6001A66F9 /* MivuTests.xctest */,
 				640000000000000000000002 /* MivuWidgets.appex */,
+				660000000000000000000002 /* MivuStickers.appex */,
 				620000000000000000000002 /* MivuUITests.xctest */,
 			);
 			name = Products;
@@ -215,6 +234,7 @@
 			);
 			dependencies = (
 				64000000000000000000000D /* PBXTargetDependency */,
+				66000000000000000000000D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8B41F6472DEDD0D5001A66F9 /* Mivu */,
@@ -275,6 +295,24 @@
 			productReference = 640000000000000000000002 /* MivuWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		660000000000000000000008 /* MivuStickers */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 660000000000000000000009 /* Build configuration list for PBXNativeTarget "MivuStickers" */;
+			buildPhases = (
+				660000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				660000000000000000000003 /* MivuStickers */,
+			);
+			name = MivuStickers;
+			productName = MivuStickers;
+			productReference = 660000000000000000000002 /* MivuStickers.appex */;
+			productType = "com.apple.product-type.app-extension.messages-sticker-pack";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -316,6 +354,7 @@
 				8B41F65B2DEDD0D6001A66F9 /* MivuTests */,
 				620000000000000000000008 /* MivuUITests */,
 				640000000000000000000008 /* MivuWidgets */,
+				660000000000000000000008 /* MivuStickers */,
 			);
 		};
 /* End PBXProject section */
@@ -343,6 +382,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		640000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		660000000000000000000005 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -439,9 +485,32 @@
 			target = 640000000000000000000008 /* MivuWidgets */;
 			targetProxy = 64000000000000000000000C /* PBXContainerItemProxy */;
 		};
+		66000000000000000000000D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 660000000000000000000008 /* MivuStickers */;
+			targetProxy = 66000000000000000000000C /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		660000000000000000000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = 8BD71C052DEE41D800CEDD92 /* Config */;
+			baseConfigurationReferenceRelativePath = Stickers.xcconfig;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+			};
+			name = Debug;
+		};
+		660000000000000000000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = 8BD71C052DEE41D800CEDD92 /* Config */;
+			baseConfigurationReferenceRelativePath = Stickers.xcconfig;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+			};
+			name = Release;
+		};
 		620000000000000000000010 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -696,6 +765,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		660000000000000000000009 /* Build configuration list for PBXNativeTarget "MivuStickers" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				660000000000000000000010 /* Debug */,
+				660000000000000000000011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		620000000000000000000009 /* Build configuration list for PBXNativeTarget "MivuUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 
 import check
 import pack
+import sync
 
 RED = (220, 60, 50, 255)
 
@@ -123,6 +124,31 @@ class CheckTests(unittest.TestCase):
     def test_check_rejects_short_pack(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertTrue(any("3-30" in p for p in check.problems(self.export(tmp, still=2))))
+
+
+EXPORTS = Path(__file__).resolve().parent / "exports"
+REPO = Path(__file__).resolve().parents[3]
+
+
+class SyncTests(unittest.TestCase):
+    def test_bundled_copies_match_exports(self):
+        self.assertEqual(sync.drift(EXPORTS, REPO), [])
+
+    def test_drift_names_a_changed_copy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            sync.write(EXPORTS, repo)
+            ok = repo / "android/app/src/main/assets/stickers/ok.webp"
+            ok.write_bytes(bytes([ok.read_bytes()[0] ^ 1]) + ok.read_bytes()[1:])
+            self.assertEqual(sync.drift(EXPORTS, repo), ["changed android/app/src/main/assets/stickers/ok.webp"])
+
+    def test_messages_labels_match_the_app(self):
+        swift = (REPO / "ios/Mivu/Stickers/PipStickers.swift").read_text()
+        kotlin = (REPO / "android/app/src/main/java/com/yakov103/mivu/stickers/PipStickers.kt").read_text()
+        self.assertEqual(list(sync.LABELS), pack.LINEUP)
+        for i, label in sync.LABELS.items():
+            self.assertIn(f'("{i}", "{label}"', swift)
+            self.assertIn(f'Triple("{i}", "{label}"', kotlin)
 
 
 if __name__ == "__main__":
