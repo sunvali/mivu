@@ -46,6 +46,7 @@ struct ResponseFailureDiagnostic: Equatable, Sendable {
             case .unauthorized: "unauthorized"
             case .forbidden: "forbidden"
             case .quotaReached: "quotaReached"
+            case .notEligible: "notEligible"
             case .usageUnavailable: "usageUnavailable"
             case .http: "http"
             case .malformedResponse: "malformedResponse"
@@ -85,7 +86,7 @@ struct ResponseFailureDiagnostic: Equatable, Sendable {
 
 struct ResponsesClient: Sendable {
     enum Failure: Error, Equatable {
-        case unauthorized, forbidden, quotaReached, usageUnavailable
+        case unauthorized, forbidden, quotaReached, usageUnavailable, notEligible
         case http(status: Int)
         case malformedResponse, incompleteResponse, responseFailed, limitExceeded, invalidInput
     }
@@ -214,7 +215,8 @@ struct ResponsesClient: Sendable {
         default: failure = .http(status: response.statusCode)
         }
         diagnostic = ResponseFailureDiagnostic(error: failure, httpStatus: response.statusCode)
-        guard captureDiagnostic || response.statusCode == 503 else { throw failure }
+        // 503 and 403 bodies carry the plan-usage codes that change what the person is told.
+        guard captureDiagnostic || response.statusCode == 503 || response.statusCode == 403 else { throw failure }
         var body = Data()
         do {
             for try await byte in bytes {
@@ -233,12 +235,11 @@ struct ResponsesClient: Sendable {
         let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
         let shape = body.isEmpty ? "empty" : object == nil ? "nonJSON" : object?["error"] != nil ? "error" : object?["detail"] != nil ? "detail" : "json"
         var classified = failure
-        if response.statusCode == 503 {
-            let code = (object?["error"] as? [String: Any])?["code"] as? String
-            switch code {
-            case "subscription_sharing_usage_unavailable", "subscription_sharing_user_unavailable": classified = .usageUnavailable
-            default: break
-            }
+        let code = (object?["error"] as? [String: Any])?["code"] as? String
+        switch (response.statusCode, code) {
+        case (503, "subscription_sharing_usage_unavailable"), (503, "subscription_sharing_user_unavailable"): classified = .usageUnavailable
+        case (403, "subscription_sharing_user_not_eligible"): classified = .notEligible
+        default: break
         }
         diagnostic = ResponseFailureDiagnostic(error: classified, httpStatus: response.statusCode, object: object, bodyShape: shape)
         throw classified
@@ -327,6 +328,7 @@ struct ResponseEventStream {
             let failure: ResponsesClient.Failure = switch code {
             case "subscription_sharing_usage_limit_exceeded": .quotaReached
             case "subscription_sharing_usage_unavailable", "subscription_sharing_user_unavailable": .usageUnavailable
+            case "subscription_sharing_user_not_eligible": .notEligible
             default: .responseFailed
             }
             failureDiagnostic = ResponseFailureDiagnostic(error: failure, httpStatus: 200, object: error ?? object, bodyShape: "streamError")
