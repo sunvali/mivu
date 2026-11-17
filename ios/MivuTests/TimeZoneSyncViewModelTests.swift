@@ -84,6 +84,19 @@ private final class Zone: @unchecked Sendable { var id: String; init(_ id: Strin
         #expect(model.timeZoneMode == .pinned(zone: "Asia/Tokyo", untilDeviceZone: nil))
     }
 
+    @Test func failedProfileWriteLeavesTheStateForTheNextSync() async throws {
+        let p = path(); defer { try? FileManager.default.removeItem(at: p) }
+        let device = Zone("Asia/Jerusalem")
+        let (model, defaults) = try await model(profileZone: "Asia/Jerusalem", device: device, p)
+        await model.syncTimeZone(now: noon)
+        let id = try #require(model.readModel?.profile.id), before = TimeZoneStateStore(defaults: defaults).state(for: id)
+        await model.store.signOut() // the store refuses writes for a deselected profile
+        device.id = "America/New_York"
+        await model.syncTimeZone(now: noon)
+        #expect(TimeZoneStateStore(defaults: defaults).state(for: id) == before)
+        #expect(model.timeZoneNotice == nil)
+    }
+
     @Test func syncSkipsWhileCoachIsSending() {
         #expect(MivuServices.shouldSync(isSending: true) == false)
         #expect(MivuServices.shouldSync(isSending: false))

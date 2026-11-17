@@ -38,7 +38,6 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var readModel: DiaryReadModel?
     private(set) var timeZoneNotice: TimeZoneSwitch?
     private(set) var timeZoneMode: TimeZoneMode?
-    private var isSyncingTimeZone = false
     private(set) var selection: DiarySelectionOwnership?
     private(set) var workStatus = CoachWorkStatus()
     private(set) var photoLoader: DiaryPhotoLoader?
@@ -262,12 +261,13 @@ enum DiaryCaptureResult: Equatable, Sendable {
     }
     /// Follows the phone's time zone at an activity point; a failed write leaves the state alone so the next sync retries.
     func syncTimeZone(now: Date = Date()) async {
-        guard !isChangingProfile, !isSyncingTimeZone, let defaults = preferences, let profile = readModel?.head.profile else { return }
-        isSyncingTimeZone = true; defer { isSyncingTimeZone = false }
+        guard !isChangingProfile, let defaults = preferences, let profile = readModel?.head.profile else { return }
         let states = TimeZoneStateStore(defaults: defaults), stored = states.state(for: profile.id)
         let decision = TimeZoneSync.decide(state: stored, profileZone: profile.timeZoneID, deviceZone: deviceTimeZone().identifier, now: now)
         if let zone = decision.newProfileZone, !(await writeProfileZone(zone, profile)) { return }
         if decision.state != stored { states.save(decision.state, for: profile.id) }
+        // A profile switch during the write must not receive this profile's mode or notice.
+        guard readModel?.profile.id == profile.id else { return }
         timeZoneMode = decision.state.mode
         // A switch made without the UI (Shortcut, Siri) shows once on the next open while it is still the same day.
         let zone = decision.state.knownProfileZone
@@ -286,6 +286,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
               await writeProfileZone(from, profile) else { return }
         state.mode = .pinned(zone: from, untilDeviceZone: from); state.knownProfileZone = from; state.lastSwitch?.announced = true
         TimeZoneStateStore(defaults: defaults).save(state, for: profile.id)
+        guard readModel?.profile.id == profile.id else { return }
         timeZoneMode = state.mode; timeZoneNotice = nil
     }
     func useDeviceTimeZone() async { await setTimeZoneMode(automatic: true, zone: nil) }
@@ -299,7 +300,9 @@ enum DiaryCaptureResult: Equatable, Sendable {
             if pinned != profile.timeZoneID, !(await writeProfileZone(pinned, profile)) { return }
             state.mode = .pinned(zone: pinned, untilDeviceZone: nil); state.knownProfileZone = pinned
         }
-        states.save(state, for: profile.id); timeZoneMode = state.mode
+        states.save(state, for: profile.id)
+        guard readModel?.profile.id == profile.id else { return }
+        timeZoneMode = state.mode
         if automatic { await syncTimeZone() }
     }
     private func writeProfileZone(_ zone: String, _ profile: DiaryProfile) async -> Bool {
