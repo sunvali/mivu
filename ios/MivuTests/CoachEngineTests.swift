@@ -509,7 +509,7 @@ private actor CoachInputFixture {
         #expect(try await exportedCoachPhotos(store, turnID: turn.id, expectedProfileID: profile.id) == photos)
     }
 
-    @Test(arguments: [ResponsesClient.Failure.unauthorized, ResponsesClient.Failure.forbidden,
+    @Test(arguments: [ResponsesClient.Failure.unauthorized, ResponsesClient.Failure.forbidden, ResponsesClient.Failure.notEligible,
                       SessionError.noActiveSession,
                       SessionError.planPermissionMissing] as [any Error])
     func permissionFailuresKeepCapturedTurnWaiting(_ error: any Error) async throws {

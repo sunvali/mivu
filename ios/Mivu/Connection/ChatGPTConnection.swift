@@ -9,7 +9,7 @@ struct ProbeResult: Equatable, Sendable {
 }
 
 enum ProofState: Equatable {
-    case disconnected, connecting, connected, planPermissionMissing
+    case disconnected, connecting, connected, planPermissionMissing, planNotEligible
     case quotaReached, unavailable, queued, analyzing, completed, needsRetry
 }
 
@@ -45,6 +45,9 @@ final class ChatGPTConnection {
     private(set) var activeRegistrationID: String?
     var state: ProofState { inferenceState ?? accountState }
     var planAuthorized: Bool { accountState == .connected }
+    /// Signed in, but OpenAI says this account's plan can't be used in other apps.
+    var planNotEligible: Bool { accountState == .planNotEligible }
+    private(set) var planScopeGranted = false
     var canCapture: Bool { isForeground && planAuthorized && !isStorageUnavailable && models.contains(where: { $0.slug == selectedModel }) && job == nil && !isConnecting && !isLoadingModels && !isDisconnecting }
     var canRetry: Bool {
         isForeground && planAuthorized && !isStorageUnavailable && job?.registrationID == activeRegistrationID && job?.state != .completed
@@ -87,9 +90,9 @@ final class ChatGPTConnection {
         get {
             access(keyPath: \.provider)
             let stored = preferences.string(forKey: "aiProvider").flatMap(Provider.init)
-            if let stored, stored == .chatGPT || available(stored) { return stored }
+            if let stored, available(stored) || (stored == .chatGPT && !planNotEligible) { return stored }
             // Someone with a saved ChatGPT connection keeps it until they pick Apple, also while it restores at launch.
-            if stored == nil, planAuthorized || preferences.string(forKey: "selectedRegistrationID") != nil { return .chatGPT }
+            if stored == nil, !planNotEligible, planAuthorized || preferences.string(forKey: "selectedRegistrationID") != nil { return .chatGPT }
             return appleModelAvailable() ? .apple : .chatGPT
         }
         set { withMutation(keyPath: \.provider) { preferences.set(newValue.rawValue, forKey: "aiProvider") } }
@@ -150,6 +153,16 @@ final class ChatGPTConnection {
     private(set) var planWelcomeSeen: Bool
     var showsPlanWelcome: Bool { provider == .chatGPT && planAuthorized && !planWelcomeSeen }
     func acknowledgePlanWelcome() { planWelcomeSeen = true; preferences.set(true, forKey: "chatGPTPlanWelcomeSeen") }
+
+    /// Explained once per account, and only when no on-device model takes over.
+    var showsNotEligibleNotice: Bool {
+        access(keyPath: \.showsNotEligibleNotice)
+        return planNotEligible && !appleModelAvailable()
+            && preferences.string(forKey: "notEligibleNoticeSeenRegistrationID") != activeRegistrationID
+    }
+    func acknowledgeNotEligibleNotice() {
+        withMutation(keyPath: \.showsNotEligibleNotice) { preferences.set(activeRegistrationID, forKey: "notEligibleNoticeSeenRegistrationID") }
+    }
 
     /// Signs in over whichever window is in front, so any screen can start it.
     func connect() async {
@@ -401,6 +414,10 @@ final class ChatGPTConnection {
         if outcome != nil, preferences.string(forKey: "selectedRegistrationID") == previousOwner {
             preferences.removeObject(forKey: "selectedRegistrationID")
         }
+        if outcome != nil {
+            preferences.removeObject(forKey: "notEligibleRegistrationID")
+            preferences.removeObject(forKey: "notEligibleNoticeSeenRegistrationID")
+        }
         await task?.value
         // No new probe can start while disconnecting; always settle its running flag.
         probeTask = nil; isAnalyzing = false
@@ -443,8 +460,10 @@ final class ChatGPTConnection {
 
     private func apply(_ snapshot: SessionSnapshot?) {
         activeRegistrationID = snapshot?.registrationID
+        planScopeGranted = snapshot?.planPermissionGranted ?? false
         accountState = snapshot.map {
-            $0.planPermissionGranted && preferences.string(forKey: "pausedRegistrationID") != $0.registrationID
+            preferences.string(forKey: "notEligibleRegistrationID") == $0.registrationID ? .planNotEligible
+                : $0.planPermissionGranted && preferences.string(forKey: "pausedRegistrationID") != $0.registrationID
                 ? .connected : .planPermissionMissing
         } ?? .disconnected
         if !planAuthorized { models = []; selectedModel = ""; lastCompletedProbe = nil; inferenceState = nil }
@@ -497,7 +516,10 @@ final class ChatGPTConnection {
             if let job { preferences.set(job.id.uuidString, forKey: "quotaJobID") }
             inferenceState = .quotaReached; notice = .quota
         }
-        else if error as? ResponsesClient.Failure == .forbidden {
+        else if error as? ResponsesClient.Failure == .notEligible {
+            markNotEligible(snapshot)
+            notice = nil
+        } else if error as? ResponsesClient.Failure == .forbidden {
             pausePermission(snapshot)
             notice = .permission
         } else if error as? ResponsesClient.Failure == .unauthorized {
@@ -507,6 +529,14 @@ final class ChatGPTConnection {
             accountState = .disconnected; models = []; selectedModel = ""; notice = .revoked
         } else if error as? SessionError == .planPermissionMissing { accountState = .planPermissionMissing; notice = .permission }
         else { notice = job == nil ? .unavailable : .retry }
+    }
+
+    private func markNotEligible(_ snapshot: SessionSnapshot?) {
+        guard let snapshot else { return pausePermission(nil) }
+        preferences.set(snapshot.registrationID, forKey: "notEligibleRegistrationID")
+        if preferences.string(forKey: "pausedRegistrationID") == snapshot.registrationID { preferences.removeObject(forKey: "pausedRegistrationID") }
+        accountState = .planNotEligible
+        models = []; selectedModel = ""; lastCompletedProbe = nil; inferenceState = nil
     }
 
     private func pausePermission(_ snapshot: SessionSnapshot?) {

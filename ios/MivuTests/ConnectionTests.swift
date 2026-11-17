@@ -335,8 +335,9 @@ extension ConnectionTests {
     let requests = ConnectionRequests()
     let jobStore: ProbeJobStore
     let connection: ChatGPTConnection
+    let session: URLSession
 
-    init(permission: Bool = true, response: (@Sendable (URLRequest) throws -> SessionReply)? = nil,
+    init(permission: Bool = true, appleAvailable: Bool = false, response: (@Sendable (URLRequest) throws -> SessionReply)? = nil,
          revocation: (@Sendable (URLRequest) throws -> SessionReply)? = nil) throws {
         preferences = UserDefaults(suiteName: preferencesName)!
         let saved = savedCredentials(now: .now, expired: false)
@@ -361,8 +362,15 @@ extension ConnectionTests {
             default: throw URLError(.badURL)
             }
         }
+        self.session = session
         connection = ChatGPTConnection(auth: AuthSession(session: session, store: store),
-            client: ResponsesClient(session: session), jobStore: jobStore, preferences: preferences)
+            client: ResponsesClient(session: session), jobStore: jobStore, preferences: preferences,
+            appleModelAvailable: { appleAvailable })
+    }
+    /// A second connection over the same saved state, as after a relaunch.
+    func relaunched() -> ChatGPTConnection {
+        ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session),
+            jobStore: jobStore, preferences: preferences, appleModelAvailable: { false })
     }
     func cleanup() {
         try? FileManager.default.removeItem(at: directory)
@@ -673,5 +681,54 @@ extension ConnectionTests {
         #expect(!fixture.connection.isStorageUnavailable)
         #expect(fixture.connection.lastCompletedProbe == nil)
         #expect(fixture.connection.canCapture)
+    }
+}
+
+private func notEligibleReply() -> SessionReply {
+    SessionReply(status: 403, data: Data(#"{"error":{"code":"subscription_sharing_user_not_eligible","message":"Synthetic"}}"#.utf8))
+}
+
+extension ConnectionTests {
+    @Test func notEligibleResponseMarksPlanNotEligibleNotPermissionMissing() async throws {
+        let fixture = try ConnectionFixture(response: { _ in notEligibleReply() })
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        #expect(fixture.connection.captureSample())
+        await fixture.connection.waitForProbe()
+        #expect(fixture.connection.accountState == .planNotEligible)
+        #expect(fixture.connection.notice == nil)
+        #expect(fixture.preferences.string(forKey: "pausedRegistrationID") == nil)
+        #expect(fixture.preferences.string(forKey: "notEligibleRegistrationID") == fixture.credentials.registrationID)
+        #expect(fixture.connection.activeRegistrationID == fixture.credentials.registrationID)
+        #expect(try fixture.jobStore.load() != nil)
+    }
+
+    @Test func notEligibleSurvivesRestore() async throws {
+        let fixture = try ConnectionFixture(response: { _ in notEligibleReply() })
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        #expect(fixture.connection.captureSample())
+        await fixture.connection.waitForProbe()
+        let relaunched = fixture.relaunched()
+        await relaunched.restore()
+        #expect(relaunched.accountState == .planNotEligible)
+        #expect(relaunched.activeRegistrationID == fixture.credentials.registrationID)
+        #expect(!relaunched.canInfer)
+    }
+
+    @Test(arguments: [false, true])
+    func notEligibleFallsBackToAppleWhenAvailable(appleAvailable: Bool) async throws {
+        let fixture = try ConnectionFixture(appleAvailable: appleAvailable, response: { _ in notEligibleReply() })
+        defer { fixture.cleanup() }
+        fixture.preferences.set("chatGPT", forKey: "aiProvider")
+        await fixture.connection.restore()
+        #expect(fixture.connection.provider == .chatGPT)
+        #expect(fixture.connection.captureSample())
+        await fixture.connection.waitForProbe()
+        #expect(fixture.connection.provider == (appleAvailable ? .apple : .chatGPT))
+        #expect(fixture.connection.canInfer == appleAvailable)
+        #expect(fixture.connection.showsNotEligibleNotice == !appleAvailable)
+        fixture.connection.acknowledgeNotEligibleNotice()
+        #expect(!fixture.connection.showsNotEligibleNotice)
     }
 }
