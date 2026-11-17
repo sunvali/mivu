@@ -38,6 +38,8 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var readModel: DiaryReadModel?
     private(set) var timeZoneNotice: TimeZoneSwitch?
     private(set) var timeZoneMode: TimeZoneMode?
+    /// Settings shows automatic until the diary is pinned; a profile with no saved mode follows the phone.
+    var timeZoneAutomatic: Bool { if case .pinned = timeZoneMode { false } else { true } }
     private(set) var deviceZoneID: String?
     /// The zones behind the header tag: pinned to a profile zone whose clock differs from the phone's.
     var pinnedZones: (profile: String, device: String)? {

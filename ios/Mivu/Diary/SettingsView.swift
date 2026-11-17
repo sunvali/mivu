@@ -178,8 +178,17 @@ struct SettingsView: View {
 
             case .preferences:
                 if let profile = model.readModel?.profile {
+                Section {
+                    Toggle("Set automatically", isOn: Binding(get: { model.timeZoneAutomatic },
+                                                              set: { on in Task { await model.setTimeZoneMode(automatic: on, zone: nil) } }))
+                        .frame(minHeight: 44).accessibilityIdentifier("timeZoneAutomatic")
+                    NavigationLink {
+                        TimeZonePicker(selected: profile.timeZoneID) { await model.setTimeZoneMode(automatic: false, zone: $0) }
+                    } label: {
+                        LabeledContent("Time zone", value: TimeZoneSync.city(profile.timeZoneID))
+                    }.frame(minHeight: 44).disabled(model.timeZoneAutomatic).accessibilityIdentifier("timeZoneRow")
+                } header: { Text("Time zone") } footer: { Text("Earlier meals keep the time where you ate them.") }
                 Section("Diary preferences") {
-                    TextField("Timezone", text: $fields.timezone).autocorrectionDisabled().textInputAutocapitalization(.never)
                     TextField("Dietary preferences and restrictions", text: $fields.preferences, axis: .vertical).lineLimit(3...6).accessibilityIdentifier("dietaryPreferences")
                     Text("A photo cannot prove that food meets a dietary restriction.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     Button("Save preferences") {
@@ -195,14 +204,13 @@ struct SettingsView: View {
                                 await model.change { try await model.store.updateProfile(updated, expectedProfile: latest, expectedProfileID: profile.id) }
                             } catch { model.errorMessage = String(localized: "Could not load the latest profile settings. Try again.") }
                         }
-                    }.frame(minHeight: 44).disabled(TimeZone(identifier: fields.timezone) == nil || fields.preferences.count > 10_000 || fields.hasConflict)
+                    }.frame(minHeight: 44).disabled(fields.preferences.count > 10_000 || fields.hasConflict)
                     if fields.hasConflict {
                         Text("These settings changed while you were editing. Your draft is preserved.")
                             .font(.subheadline).foregroundStyle(Color.diarySecondary)
                         Button("Use latest saved settings") { fields.useSaved(model.readModel?.profile) }
                             .frame(minHeight: 44)
                     }
-                    Text("Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
 
                     Section("Language") {

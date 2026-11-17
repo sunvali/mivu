@@ -26,6 +26,27 @@
         }
       }
     },
+    "City" : {
+      "comment" : "Search field placeholder: find a time zone by city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עיר"
+          }
+        }
+      }
+    },
+    "Earlier meals keep the time where you ate them." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ארוחות קודמות נשמרות לפי השעה המקומית שבה נאכלו."
+          }
+        }
+      }
+    },
     "Keep %@" : {
       "comment" : "Toast button: keep the previous time zone; %@ is a city name",
       "localizations" : {
@@ -48,8 +69,19 @@
         }
       }
     },
+    "Set automatically" : {
+      "comment" : "Toggle: the diary follows the phone's time zone",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגדרה אוטומטית"
+          }
+        }
+      }
+    },
     "Time zone" : {
-      "comment" : "Dialog title: choose the diary's time zone",
+      "comment" : "Settings section, row and screen title: the diary's time zone",
       "localizations" : {
         "he" : {
           "stringUnit" : {
@@ -13924,41 +13956,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "השעה לא תצוין."
-          }
-        }
-      }
-    },
-    "Timezone" : {
-      "comment" : "Field label: time zone",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Timezone"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "אזור זמן"
-          }
-        }
-      }
-    },
-    "Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "שינוי אזור הזמן שומר את הארוחות ואת תוויות הימים הקודמים. ייתכן שתופיע שאלה באיזה יום להשתמש."
           }
         }
       }
