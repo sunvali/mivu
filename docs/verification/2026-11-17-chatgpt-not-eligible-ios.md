@@ -2,15 +2,14 @@
 
 - Spec: `docs/superpowers/specs/2026-11-17-chatgpt-free-tier-design.md`
 - Plan: `docs/superpowers/plans/2026-11-17-chatgpt-free-tier-ios.md`
-- Tested source: `d7bb3dac` (Swift changes; later commits on the branch are docs only)
+- Tested source: `3b6be37b` for the focused and UI tests below; full unit suite at `d7bb3dac` (the later fix only adds an in-progress flag)
 - Environment: Xcode 27.2, iPhone 17 Pro simulator "Mivu free-tier" (iOS 27.0), XcodeBuildMCP, Debug, serial
 
 ## Focused tests
 
 | Suite | Result |
 | --- | --- |
-| `MivuTests/ResponsesClientTests` (403 not-eligible, plain 403, stream error) | 43 passed |
-| `MivuTests/ConnectionTests` + `MivuTests/CoachConnectionTests` (state, persistence, on-device fallback, sign-in check, transient failures, second consent, disconnect, re-check on open, throttle) | 50 passed |
+| `MivuTests/ResponsesClientTests` + `ConnectionTests` + `CoachConnectionTests` (403 not-eligible, plain 403, stream error, state, persistence, on-device fallback, sign-in check, welcome waits for the check, transient failures, second consent, disconnect, re-check on open, throttle) | 94 passed |
 | `MivuTests/CoachEngineTests/permissionFailuresKeepCapturedTurnWaiting` (incl. `.notEligible`) | passed |
 | `MivuUITests/CoachUITests/testPlanNotEligibleExplainsOnceAndInSettings` | passed |
 | `MivuUITests/CoachUITests/testOfflineTextPhotoCapturePersistsAcrossRelaunchAndTabs`, `MivuUITests/SmokeUITests` | passed |
