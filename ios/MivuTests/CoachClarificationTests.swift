@@ -69,6 +69,7 @@ private actor Replies {
         let meal = CoachContext.Meal(id: UUID(), dayID: UUID(), revision: 1, eatenAt: now, timePrecision: .dateOnly, items: [FoodItem(name: "Eggs", nutrition: NutritionValues(kcal: 100))])
         for args in [#"{"kind":"meal","candidates":[{"meal_id":"\#(meal.id)","item_id":"\#(UUID())"}]}"#,   // item not in meal
                      #"{"kind":"confirm"}"#,
+                     #"{"kind":"food","candidates":[{"meal_id":"\#(meal.id)"}],"options":["Soup"]}"#,   // options answer a different question
                      #"{"kind":"meal","candidates":[{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"}]}"#] {
             #expect(throws: CoachError.invalidArguments) { try CoachTools.parse(call("ask_clarification", args), meals: [meal], evidence: [:], receipts: []) }
         }

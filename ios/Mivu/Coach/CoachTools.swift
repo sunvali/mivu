@@ -177,13 +177,13 @@ enum CoachTools {
             // Removing a whole meal needs one explicit meal to name; a named food stands for its meal.
             guard kind != .confirm || candidates.count == 1 else { throw CoachError.invalidArguments }
             func words(_ raw: Any) throws -> String {
-                guard let words = (raw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !words.isEmpty, words.count <= 60 else { throw CoachError.invalidArguments }
+                guard let words = (raw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !words.isEmpty, words.count <= 60, !words.contains(where: \.isNewline) else { throw CoachError.invalidArguments }
                 return words
             }
             let about = try args["about"].flatMap { $0 is NSNull ? nil : try words($0) }
             var options: [String] = []
             if let raw = args["options"], !(raw is NSNull) {
-                guard kind == .food, let rows = raw as? [Any], rows.count <= 3 else { throw CoachError.invalidArguments }
+                guard kind == .food, candidates.isEmpty, let rows = raw as? [Any], rows.count <= 3 else { throw CoachError.invalidArguments }
                 options = try rows.map(words)
                 guard Set(options).count == options.count else { throw CoachError.invalidArguments }
             }

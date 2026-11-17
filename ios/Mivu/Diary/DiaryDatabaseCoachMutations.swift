@@ -62,9 +62,9 @@ extension DiaryTransaction {
         }
         guard let askingID, let asking = try self.turn(id: askingID), asking.state == .completed, asking.receipts.isEmpty,
               let kind = asking.question?.kind, [.food, .portion].contains(kind),
-              // An answer that named the food but drew a portion question still points at the photo meal; one that
-              // drew another food question did not fit it, so a resend must not carry the stale photo again.
-              let mealID = try asking.pendingMealID ?? (kind == .portion ? answeredPhotoMeal(asking) : nil),
+              // An answer that drew a portion question, or a food question naming it with options, still points at the
+              // photo meal; one that drew a plain food question did not fit it, so a resend must not carry the stale photo.
+              let mealID = try asking.pendingMealID ?? (kind == .portion || asking.question?.options != nil ? answeredPhotoMeal(asking) : nil),
               try database.mutationInteger("SELECT COUNT(*) FROM meal WHERE id = ?", [.text(mealID.uuidString)]) == 1,
               try mealItems(id: mealID).isEmpty else { return nil }
         return mealID

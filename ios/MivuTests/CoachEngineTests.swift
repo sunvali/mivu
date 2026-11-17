@@ -379,7 +379,8 @@ private actor CoachInputFixture {
         #"{"kind":"portion","question":"Saved 9999 calories."}"#,
         #"{"kind":"unknown"}"#, #"{"kind":""}"#, #"{"kind":null}"#, #"{}"#,
         #"{"kind":"food","about":"  "}"#, #"{"kind":"food","about":"\#(String(repeating: "x", count: 61))"}"#,
-        #"{"kind":"food","options":["A","B","C","D"]}"#, #"{"kind":"food","options":[" "]}"#, #"{"kind":"meal","options":["A"]}"#, #"{"kind":"food","options":["A","A"]}"#
+        #"{"kind":"food","options":["A","B","C","D"]}"#, #"{"kind":"food","options":[" "]}"#, #"{"kind":"meal","options":["A"]}"#, #"{"kind":"food","options":["A","A"]}"#,
+        #"{"kind":"food","about":"Blorp\nspread"}"#
     ]) func clarificationRejectsRawQuestionsAndInvalidKinds(_ arguments: String) throws {
         #expect(throws: CoachError.invalidArguments) {
             try CoachTools.parse(call("ask_clarification", arguments), meals: [], evidence: [:], receipts: [])

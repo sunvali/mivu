@@ -829,7 +829,11 @@ struct CoachView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if let question = replyParts(turn).question {
                         Text(CoachReplyLines.attributed(question)).font(.subheadline.weight(.semibold)).directionFromContent(question)
-                            .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader).accessibilityIdentifier("coachOptionQuestion")
+                            .fixedSize(horizontal: false, vertical: true)
+                            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
+                            .contextMenu { messageActions(turn, fromPip: true) }
+                            .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: true) }
+                            .accessibilityAddTraits(.isHeader).accessibilityIdentifier("coachOptionQuestion")
                     }
                     if isLatest {
                         // Each option answers Pip's question as a reply, so the original amount and meal stay in context.
