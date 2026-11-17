@@ -19,8 +19,10 @@ import XCTest
         XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: toast)], timeout: 5) == .completed)
         add(XCTAttachment(screenshot: app.screenshot()).named("t6-tag"))
         tag.tap()
-        app.buttons["Use New York time"].tap()
-        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: tag)], timeout: 5) == .completed)
+        let useDevice = app.buttons["Use New York time"]
+        XCTAssertTrue(useDevice.waitForExistence(timeout: 5))
+        useDevice.tap()
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: tag)], timeout: 10) == .completed)
     }
 }
 

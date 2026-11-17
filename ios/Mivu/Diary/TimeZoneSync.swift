@@ -27,9 +27,11 @@ struct TimeZoneDecision: Equatable {
 enum TimeZoneSync {
     /// Decides whether the profile's zone should follow the device zone; the caller applies `newProfileZone` and saves `state`.
     static func decide(state: TimeZoneState?, profileZone: String, deviceZone: String, now: Date) -> TimeZoneDecision {
-        // No state yet, or the profile zone changed elsewhere: adopt it, pinned when it differs from the phone.
-        guard var state, state.knownProfileZone == profileZone else {
-            var adopted = state ?? TimeZoneState(mode: .automatic, knownProfileZone: profileZone)
+        // First launch: a zone saved long ago is usually stale, so follow the phone; the announcement's Keep restores a real choice.
+        var state = state ?? TimeZoneState(mode: .automatic, knownProfileZone: profileZone)
+        // The profile zone changed elsewhere (Coach, a restore): adopt it, pinned when it differs from the phone.
+        guard state.knownProfileZone == profileZone else {
+            var adopted = state
             adopted.mode = profileZone == deviceZone ? .automatic : .pinned(zone: profileZone, untilDeviceZone: nil)
             adopted.knownProfileZone = profileZone
             return TimeZoneDecision(state: adopted, newProfileZone: nil, announce: false)

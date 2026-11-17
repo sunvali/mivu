@@ -19,7 +19,7 @@ struct CoachQuestionChips: View {
     }
     private func clock(_ meal: MealReadModel) -> (time: String, tag: String?, spoken: String) {
         meal.timePrecision == .dateOnly
-            ? (String(localized: "Time unspecified"), nil, String(localized: "Time unspecified")) : MealClock.label(meal, model: model)
+            ? (String(localized: "Time unspecified"), nil, String(localized: "Time unspecified")) : MealClock.label(meal)
     }
     var body: some View {
         if question.kind == .confirm, let target = question.candidates.first {

@@ -12,10 +12,9 @@ enum MealClock {
         return (time, city, String(localized: "\(time), \(city) time"))
     }
 
-    /// The label for a meal on screen; `model` supplies the day's zone for meals that predate the recorded zone.
-    @MainActor static func label(_ meal: MealReadModel, model: DiaryViewModel?) -> (time: String, tag: String?, spoken: String) {
-        let dayZone = model?.day(meal.dayID)?.timeZoneID ?? model?.readModel?.profile.timeZoneID ?? TimeZone.current.identifier
-        return label(meal.eatenAt, mealZone: zone(meal: meal.timeZoneID, day: dayZone), deviceZone: TimeZone.current.identifier)
+    /// The label for a meal on screen. A meal saved before zones were recorded keeps the phone's clock, as it always showed.
+    static func label(_ meal: MealReadModel, deviceZone: String = TimeZone.current.identifier) -> (time: String, tag: String?, spoken: String) {
+        label(meal.eatenAt, mealZone: meal.timeZoneID ?? deviceZone, deviceZone: deviceZone)
     }
 
     static func text(_ label: (time: String, tag: String?, spoken: String)) -> Text {

@@ -6,10 +6,13 @@ struct TimeZoneSyncTests {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     private func auto(_ zone: String) -> TimeZoneState { TimeZoneState(mode: .automatic, knownProfileZone: zone) }
 
-    @Test func migrationKeepsMatchingZoneAutomaticAndOtherZonePinned() {
-        #expect(TimeZoneSync.decide(state: nil, profileZone: "Asia/Jerusalem", deviceZone: "Asia/Jerusalem", now: now).state.mode == .automatic)
-        let pinned = TimeZoneSync.decide(state: nil, profileZone: "Asia/Jerusalem", deviceZone: "America/New_York", now: now)
-        #expect(pinned.state.mode == .pinned(zone: "Asia/Jerusalem", untilDeviceZone: nil) && pinned.newProfileZone == nil)
+    @Test func firstLaunchFollowsThePhoneAndOffersKeep() {
+        let same = TimeZoneSync.decide(state: nil, profileZone: "Asia/Jerusalem", deviceZone: "Asia/Jerusalem", now: now)
+        #expect(same.state.mode == .automatic && same.newProfileZone == nil && !same.announce)
+        // A zone saved long ago is usually stale, not a choice: follow the phone and announce, so Keep restores a real pin.
+        let moved = TimeZoneSync.decide(state: nil, profileZone: "Asia/Jerusalem", deviceZone: "America/New_York", now: now)
+        #expect(moved.state.mode == .automatic && moved.newProfileZone == "America/New_York" && moved.announce)
+        #expect(moved.state.lastSwitch?.from == "Asia/Jerusalem" && moved.state.knownProfileZone == "America/New_York")
     }
     @Test func automaticFollowsTheDeviceAndAnnouncesAClockChange() {
         let d = TimeZoneSync.decide(state: auto("Asia/Jerusalem"), profileZone: "Asia/Jerusalem", deviceZone: "America/New_York", now: now)

@@ -270,13 +270,13 @@ struct MealRow: View {
     }
     private var needsReview: Bool { meal.state == .awaitingReview }
     private var statusText: Text {
-        let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : MealClock.text(MealClock.label(meal, model: model))
+        let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : MealClock.text(MealClock.label(meal))
         let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
         return meal.state == .saved ? Text("\(time)\(estimated)") : Text("\(Text(meal.state.title)) · \(time)")
     }
     /// Combined rows read child labels, so a tagged time is spelled out in full ("7:40 PM, Jerusalem time").
     private var spokenStatus: Text? {
-        guard meal.timePrecision != .dateOnly, case let clock = MealClock.label(meal, model: model), clock.tag != nil else { return nil }
+        guard meal.timePrecision != .dateOnly, case let clock = MealClock.label(meal), clock.tag != nil else { return nil }
         let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
         return meal.state == .saved ? Text("\(Text(clock.spoken))\(estimated)") : Text("\(Text(meal.state.title)) · \(Text(clock.spoken))")
     }

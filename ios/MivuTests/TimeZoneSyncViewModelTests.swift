@@ -42,12 +42,14 @@ private final class Zone: @unchecked Sendable { var id: String; init(_ id: Strin
         #expect(model.readModel?.profile.timeZoneID == "Asia/Jerusalem")
     }
 
-    @Test func existingPinnedProfileStaysPinnedOnFirstLaunch() async throws {
+    @Test func firstLaunchWithAStaleZoneFollowsThePhoneAndOffersKeep() async throws {
         let p = path(); defer { try? FileManager.default.removeItem(at: p) }
         let (model, _) = try await model(profileZone: "Asia/Tokyo", device: Zone("Asia/Jerusalem"), p)
         await model.syncTimeZone(now: noon)
-        #expect(model.readModel?.profile.timeZoneID == "Asia/Tokyo")
-        #expect(model.timeZoneMode == .pinned(zone: "Asia/Tokyo", untilDeviceZone: nil))
+        #expect(model.readModel?.profile.timeZoneID == "Asia/Jerusalem" && model.timeZoneMode == .automatic)
+        #expect(model.timeZoneNotice?.from == "Asia/Tokyo")
+        await model.keepPreviousTimeZone()
+        #expect(model.readModel?.profile.timeZoneID == "Asia/Tokyo" && model.timeZoneMode == .pinned(zone: "Asia/Tokyo", untilDeviceZone: "Asia/Tokyo"))
     }
 
     private func seedPending(_ model: DiaryViewModel, _ defaults: UserDefaults) throws -> UUID {
