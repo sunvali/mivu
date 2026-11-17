@@ -28,8 +28,9 @@ struct ExerciseCredit: Equatable, Sendable {
 
     /// Only an imported Health workout covers another; two diary workouts always both count.
     /// A diary workout saved without a time ("ran this morning") is covered by a Health workout of the same kind.
+    /// A Health workout without calories never cancels one whose calories are known.
     static func covers(_ health: WorkoutSession, _ other: WorkoutSession) -> Bool {
-        guard health.isFromHealth else { return false }
+        guard health.isFromHealth, health.estimatedBurnKcal != nil || other.estimatedBurnKcal == nil else { return false }
         guard health.timePrecision == .exact, other.timePrecision == .exact else { return health.kind == other.kind }
         func end(_ workout: WorkoutSession) -> Date { workout.performedAt.addingTimeInterval(Double(workout.durationMinutes) * 60) }
         return health.performedAt < end(other) && other.performedAt < end(health)

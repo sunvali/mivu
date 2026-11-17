@@ -110,7 +110,7 @@ enum DiaryArchive {
         try validate(incoming)
         guard incoming.profile.id == original.profile.id else { throw DiaryError.wrongOwner }
         guard incoming.revision >= original.revision,
-              incoming == original || incoming.isVerifiedSuccessor(of: original),
+              incoming == original || incoming == original.withoutHealthWorkouts() || incoming.isVerifiedSuccessor(of: original),
               Set(incoming.meals.map(\.id)).isDisjoint(with: original.deletedMealIDs),
               Set(incoming.weights.map(\.id)).isDisjoint(with: original.deletedWeightIDs),
               Set(incoming.workouts.map(\.id)).isDisjoint(with: original.deletedWorkoutIDs) else { throw DiaryError.staleArchive }
@@ -118,6 +118,9 @@ enum DiaryArchive {
         result.deletedMealIDs = Array(Set(incoming.deletedMealIDs + original.deletedMealIDs)).sorted { $0.uuidString < $1.uuidString }
         result.deletedWeightIDs = Array(Set(incoming.deletedWeightIDs + original.deletedWeightIDs)).sorted { $0.uuidString < $1.uuidString }
         result.deletedWorkoutIDs = Array(Set(incoming.deletedWorkoutIDs + original.deletedWorkoutIDs)).sorted { $0.uuidString < $1.uuidString }
+        // Backups leave out Apple Health workouts, so keep this iPhone's copies wherever their day survives.
+        let days = Set(result.days.map(\.id)), kept = Set(result.workouts.map(\.id)).union(result.deletedWorkoutIDs)
+        result.workouts += original.workouts.filter { $0.isFromHealth && days.contains($0.dayID) && !kept.contains($0.id) }
         result.revision = max(incoming.revision, original.revision) + 1
         result.lineage = Array((incoming.lineage ?? []).suffix(255)) + [UUID()]
         return result

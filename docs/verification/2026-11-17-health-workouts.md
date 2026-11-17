@@ -45,6 +45,9 @@ does not count.
 - An iOS export that contains Health workouts doesn't import on Android yet,
   because Android has no `health` burn source.
 - Workout detail checks for an overlap only on today's workouts.
+- The deletion query filters by start date. If HealthKit leaves deletions out of a
+  date-filtered anchored query, step 4 of the phone check will fail. In that case,
+  drop the predicate on the anchored query only.
 - Active calories come from the workout's `activeEnergyBurned` statistics. If
   Garmin writes only the deprecated total energy, workouts show "No calories from
   Health". Step 2 of the phone check will show which one Garmin uses.

@@ -270,6 +270,20 @@ struct ArchiveTests {
         #expect(Set(try await store.snapshotForExport().workouts.map(\.id)) == [coach.id, health.id])
     }
 
+    @Test func restoreKeepsThisPhonesHealthWorkoutsUnlessDeleted() throws {
+        var local = fixture()
+        let health = WorkoutSession(dayID: local.days[0].id, performedAt: local.days[0].startAt, timePrecision: .exact, revision: 1, kind: .cardio,
+                                    durationMinutes: 45, exercises: [], estimatedBurnKcal: 412, burnSource: .health, healthSource: "Garmin Connect")
+        local.workouts = [health]
+        let backup = local.withoutHealthWorkouts()
+        #expect(try DiaryArchive.replacement(backup, original: local).workouts == [health])
+        var newer = backup
+        newer.revision += 1; newer.lineage = (backup.lineage ?? []) + [UUID()]
+        #expect(try DiaryArchive.replacement(newer, original: local).workouts == [health])
+        newer.deletedWorkoutIDs = [health.id]
+        #expect(try DiaryArchive.replacement(newer, original: local).workouts.isEmpty)
+    }
+
     @Test func profileSwitchRejectsWrongOwnerAndKeepsStatusesSeparate() async throws {
         let privateDirectory = try temporaryDirectory(), folder = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: privateDirectory); try? FileManager.default.removeItem(at: folder) }

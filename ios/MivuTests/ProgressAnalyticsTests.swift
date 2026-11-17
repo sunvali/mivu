@@ -159,7 +159,7 @@ import Testing
     }
 
     @Test func creditCountsKnownPartAndNotesUnknown() {
-        let report = credited { [health($0, "07:00:00", minutes: 45, burn: 400), workout($0, burn: nil)] }
+        let report = credited { [health($0, "07:00:00", minutes: 45, burn: 400), timed($0, "18:00:00", minutes: 30, burn: nil)] }
         #expect(report.estimatedBurnKcal == 400)
         #expect(report.uncountedWorkoutCount == 1)
         #expect(report.healthBurnKcal == 400)
@@ -187,6 +187,15 @@ import Testing
                                  health($0, "18:00:00", minutes: 40, burn: 100, kind: .strength)] }
         #expect(report.estimatedBurnKcal == 500)
         #expect(report.healthBurnKcal == 500)
+    }
+
+    @Test func healthWorkoutWithoutCaloriesNeverCancelsKnownCalories() {
+        let tracked = day("2026-01-07", .complete)
+        let silent = health(tracked, "07:00:00", minutes: 30, burn: nil, source: "Synthetic app")
+        let coach = ExerciseCredit.daily([silent, timed(tracked, "07:00:00", minutes: 30, burn: 300)])
+        #expect(coach.creditedKcal == 300 && coach.coveredBy.isEmpty)
+        let copies = ExerciseCredit.daily([silent, health(tracked, "07:05:00", minutes: 25, burn: 400)])
+        #expect(copies.creditedKcal == 400 && copies.healthKcal == 400)
     }
 
     @Test func diaryWorkoutsNeverCoverEachOther() {

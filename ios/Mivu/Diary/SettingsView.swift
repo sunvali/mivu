@@ -199,7 +199,8 @@ struct SettingsView: View {
                         LabeledContent("App language", value: "English")
                         Text("English is supported for this version. Your stored profile language is preserved.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }
-                    HealthSettingsSection(model: model, health: MivuServices.shared.health)
+                    // Synthetic diaries never read Apple Health.
+                    if !model.sampleMode && !DiaryLaunch.isUITest { HealthSettingsSection(model: model, health: MivuServices.shared.health) }
                 }
             case .backup:
                 Section("Backup and portability") { DiaryBackupSettings(model: model) }

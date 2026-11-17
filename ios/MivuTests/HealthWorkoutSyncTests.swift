@@ -10,7 +10,9 @@ import Testing
         func changes(since: Date, anchor: Data?) async throws -> (workouts: [HealthWorkout], deletedIDs: [UUID], anchor: Data?) {
             anchors.append(anchor); return (workouts, deleted, Data("anchor-\(anchors.count)".utf8))
         }
+        var stopped = false
         func observe(_ onChange: @escaping @Sendable () async -> Void) {}
+        func stopObserving() { stopped = true }
     }
 
     /// 10:00 in Jerusalem on 2027-01-15, with that day open.
@@ -46,7 +48,7 @@ import Testing
         sync.disconnect()
         reader.workouts = []; reader.deleted = [run.id]
         await sync.sync()
-        #expect(!sync.isConnected && reader.anchors.count == 1)
+        #expect(!sync.isConnected && reader.anchors.count == 1 && reader.stopped)
         #expect(try await diary.store.snapshotForExport().workouts.map(\.id) == [run.id])
     }
 

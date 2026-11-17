@@ -8,6 +8,7 @@ protocol HealthWorkoutReading: Sendable {
     func changes(since: Date, anchor: Data?) async throws -> (workouts: [HealthWorkout], deletedIDs: [UUID], anchor: Data?)
     /// Calls `onChange` whenever Health gets new or deleted workouts, including in the background.
     func observe(_ onChange: @escaping @Sendable () async -> Void)
+    func stopObserving()
 }
 
 /// Brings Apple Health workouts into the selected diary. Imported workouts stay when Health is disconnected.
@@ -49,6 +50,8 @@ protocol HealthWorkoutReading: Sendable {
         guard let id = profileID else { return }
         defaults.set(false, forKey: key("connected", id)); defaults.removeObject(forKey: key("anchor", id))
         isConnected = false
+        // Background delivery stays on across launches until turned off, so stop it once no profile reads Health.
+        if !Self.anyConnected(defaults) { reader.stopObserving(); observing = false }
     }
 
     /// Safe to call often: overlapping calls run once more after the current one.
@@ -94,6 +97,7 @@ func healthWorkoutKind(_ type: HKWorkoutActivityType) -> WorkoutKind {
 
 final class HKHealthReader: HealthWorkoutReading, @unchecked Sendable {
     private let store = HKHealthStore()
+    private var query: HKObserverQuery?  // main actor only: HealthWorkoutSync starts and stops it
     private let energy = HKQuantityType(.activeEnergyBurned)
 
     func requestAuthorization() async throws {
@@ -123,7 +127,14 @@ final class HKHealthReader: HealthWorkoutReading, @unchecked Sendable {
             let failed = error != nil
             Task { if !failed { await onChange() }; completion() }
         }
+        self.query = query
         store.execute(query)
         store.enableBackgroundDelivery(for: HKObjectType.workoutType(), frequency: .immediate) { _, _ in }
+    }
+
+    func stopObserving() {
+        if let query { store.stop(query) }
+        query = nil
+        store.disableBackgroundDelivery(for: HKObjectType.workoutType()) { _, _ in }
     }
 }
