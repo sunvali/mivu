@@ -615,6 +615,17 @@
       },
       "shouldTranslate" : false
     },
+    "%@, %@ time" : {
+      "comment" : "VoiceOver for a meal time: the clock time, then the city whose clock it is, for example 7:40 PM, Jerusalem time",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, שעון %2$@"
+          }
+        }
+      }
+    },
     "%@, %@ and %lld more" : {
       "localizations" : {
         "en" : {

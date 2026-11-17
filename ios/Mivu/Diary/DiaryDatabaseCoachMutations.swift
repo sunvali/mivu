@@ -258,7 +258,7 @@ extension DiaryTransaction {
             // A time the user stated wins; otherwise food for the send date, or the waking day a late-night send still
             // belongs to, takes the send time and other dates stay date-only.
             let sentToday = [diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID), wakingDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID)].contains(date)
-            var meal = try turn.pendingMealID.map { try mealRecord(id: $0) } ?? DiaryMeal(dayID: day.id, capturedAt: turn.capturedAt, eatenAt: time ?? (sentToday ? turn.capturedAt : day.startAt), revision: 0, timePrecision: time != nil || sentToday ? nil : .dateOnly)
+            var meal = try turn.pendingMealID.map { try mealRecord(id: $0) } ?? DiaryMeal(dayID: day.id, capturedAt: turn.capturedAt, eatenAt: time ?? (sentToday ? turn.capturedAt : day.startAt), revision: 0, timePrecision: time != nil || sentToday ? nil : .dateOnly, timeZoneID: turn.captureTimeZoneID)
             if isNew { try insertMeal(meal) }
             let proposalItems = try addedCoachItems(items, meal: meal, turnID: turn.id)
             if let pending = turn.pendingMealID {

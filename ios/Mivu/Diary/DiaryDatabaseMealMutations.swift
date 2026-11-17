@@ -76,7 +76,7 @@ extension DiaryDatabase {
             let day = try trackingDay(id: dayID)
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty else { throw DiaryError.emptyCapture }
             guard photos.count <= 8, Set(photos.map(\.id)).count == photos.count else { throw DiaryError.invalidData }
-            let meal = DiaryMeal(dayID: dayID, capturedAt: at, eatenAt: dateOnly ? day.startAt : at, timePrecision: dateOnly ? .dateOnly : nil)
+            let meal = DiaryMeal(dayID: dayID, capturedAt: at, eatenAt: dateOnly ? day.startAt : at, timePrecision: dateOnly ? .dateOnly : nil, timeZoneID: transaction.head.profile.timeZoneID)
             try transaction.insertMeal(meal)
             try transaction.saveSubmission(MealSubmission(id: submissionID, baseRevision: 0, text: text, photoIDs: photos.map(\.id), reviewFirst: reviewFirst), meal: meal)
             if forCoach { try transaction.appendManualCapture(meal: meal, submissionID: submissionID, text: text, photos: photos, at: at) }
@@ -218,7 +218,7 @@ extension DiaryTransaction {
         defer { sqlite3_finalize(statement) }
         let source = try database.mutationStep(statement) ? database.mutationOptionalUUID(statement, 0) : nil
         return MealReadModel(id: id, dayID: meal.dayID, capturedAt: meal.capturedAt, eatenAt: meal.eatenAt, revision: meal.revision,
-            timePrecision: meal.timePrecision, items: items, submissions: submissions, photos: photos, sourceTurnID: source)
+            timePrecision: meal.timePrecision, timeZoneID: meal.timeZoneID, items: items, submissions: submissions, photos: photos, sourceTurnID: source)
     }
     func dayProjection(_ day: TrackingDay) throws -> DiaryDayReadModel {
         let meals = try records("meal", clause: "parent = ?", values: [.text(day.id.uuidString)]).map { row -> MealReadModel in
@@ -468,7 +468,9 @@ extension DiaryTransaction {
         guard expectedRevision == nil || expectedRevision == meal.revision, expectedDayID == nil || expectedDayID == meal.dayID else { throw DiaryError.staleRevision }
         changes.dayIDs.insert(meal.dayID); meal.dayID = dayID
         if let eatenAt {
-            guard eatenAt.timeIntervalSince1970.isFinite, diaryDateLabel(eatenAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+            let mealZone = MealClock.zone(meal: meal.timeZoneID, day: day.timeZoneID)
+            guard eatenAt.timeIntervalSince1970.isFinite,
+                  instant(eatenAt, fallsOn: day, profileZone: head.profile.timeZoneID) || diaryDateLabel(eatenAt, zone: mealZone) == day.localDate else { throw DiaryError.invalidData }
             meal.eatenAt = eatenAt; meal.timePrecision = .exact
         }
         try saveMeal(meal)

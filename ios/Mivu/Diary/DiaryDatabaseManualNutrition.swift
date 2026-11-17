@@ -17,7 +17,7 @@ extension DiaryDatabase {
             case .create:
                 let day = try transaction.resolveManualNutritionDay(payload.target, capturedAt: payload.capturedAt)
                 meal = DiaryMeal(id: payload.mealID, dayID: day.id, capturedAt: payload.capturedAt,
-                    eatenAt: payload.eatenAt, timePrecision: payload.timePrecision)
+                    eatenAt: payload.eatenAt, timePrecision: payload.timePrecision, timeZoneID: transaction.head.profile.timeZoneID)
                 try transaction.insertMeal(meal)
             case .append:
                 let current = try transaction.mealProjection(id: payload.mealID)

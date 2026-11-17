@@ -17,8 +17,9 @@ struct CoachQuestionChips: View {
         let names = meal.items.prefix(3).map(\.name).joined(separator: ", ")
         return names.isEmpty ? String(localized: "Meal") : names
     }
-    private func time(_ meal: MealReadModel) -> String {
-        meal.timePrecision == .dateOnly ? String(localized: "Time unspecified") : meal.eatenAt.formatted(date: .omitted, time: .shortened)
+    private func clock(_ meal: MealReadModel) -> (time: String, tag: String?, spoken: String) {
+        meal.timePrecision == .dateOnly
+            ? (String(localized: "Time unspecified"), nil, String(localized: "Time unspecified")) : MealClock.label(meal, model: model)
     }
     var body: some View {
         if question.kind == .confirm, let target = question.candidates.first {
@@ -39,7 +40,7 @@ struct CoachQuestionChips: View {
                                 MealThumbnail(meal: meal, model: model, size: thumbnail).accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText)
-                                    Text(time(meal)).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                    MealClock.text(clock(meal)).font(.subheadline).foregroundStyle(Color.diarySecondary)
                                 }
                                 Spacer(minLength: 0)
                             }
@@ -47,7 +48,7 @@ struct CoachQuestionChips: View {
                             .background(Color.diarySummarySurface, in: RoundedRectangle(cornerRadius: 14))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityElement(children: .ignore).accessibilityLabel("\(title), \(time(meal))").accessibilityAddTraits(.isButton)
+                        .accessibilityElement(children: .ignore).accessibilityLabel("\(title), \(clock(meal).spoken)").accessibilityAddTraits(.isButton)
                         .accessibilityIdentifier("coachQuestionChip")
                     }
                 }

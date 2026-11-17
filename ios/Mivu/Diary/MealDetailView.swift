@@ -313,7 +313,10 @@ struct MealDetailView: View {
                     .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 Text("Time unspecified").font(.subheadline).foregroundStyle(Color.diarySecondary)
             } else {
-                Text(meal.eatenAt, format: .dateTime.day().month().hour().minute()).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                let clock = MealClock.label(meal, model: model)
+                let date = meal.eatenAt.formatted(Date.FormatStyle(timeZone: TimeZone(identifier: MealClock.zone(meal: meal.timeZoneID, day: model.day(meal.dayID)?.timeZoneID ?? TimeZone.current.identifier)) ?? .current).day().month())
+                Text("\(Text(verbatim: date + ", "))\(MealClock.text(clock))").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    .accessibilityLabel("\(date), \(clock.spoken)")
             }
             Label("Saved on this iPhone", systemImage: "checkmark.circle.fill")
                 .font(.subheadline).foregroundStyle(Color.diarySuccess)

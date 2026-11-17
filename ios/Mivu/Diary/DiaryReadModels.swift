@@ -48,6 +48,7 @@ struct MealReadModel: Equatable, Sendable, Identifiable {
     var eatenAt: Date
     var revision: Int
     var timePrecision: MealTimePrecision?
+    var timeZoneID: String?
     var items: [FoodItem]
     var submissions: [MealSubmission]
     var photos: [DiaryPhotoReference]

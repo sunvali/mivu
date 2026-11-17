@@ -42,6 +42,26 @@ import Testing
         let snapshot = try await store.snapshotForExport()
         #expect(snapshot.days.map(\.id) == [day.id] && weight.dayID == day.id && workout.dayID == day.id)
     }
+    @Test func newMealRecordsItsZoneAndOldPayloadsDecode() async throws {
+        let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")
+        try await move(store, profile, to: "America/New_York")
+        let meal = try await capturedMeal(store, text: "apple", photos: [], reviewFirst: false, dayID: day.id, at: DayTests.date("2026-11-17T20:00:00Z"))
+        #expect(meal.timeZoneID == "America/New_York")
+        var old = try JSONSerialization.jsonObject(with: JSONEncoder().encode(meal)) as! [String: Any]
+        old["timeZoneID"] = nil
+        #expect(try JSONDecoder().decode(DiaryMeal.self, from: JSONSerialization.data(withJSONObject: old)).timeZoneID == nil)
+        var bare = meal; bare.timeZoneID = nil
+        #expect(!String(decoding: try JSONEncoder().encode(bare), as: UTF8.self).contains("\"timeZoneID\""))
+    }
+    @Test func movingANewYorkDinnerWithinTheTravelDayIsValid() async throws {
+        let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")
+        try await move(store, profile, to: "America/New_York")
+        let meal = try await capturedMeal(store, text: "dinner", photos: [], reviewFirst: false, dayID: day.id, at: DayTests.date("2026-11-17T20:00:00Z"))
+        // 22:00 in New York is already Nov 18 in Tel Aviv, the day's own zone.
+        let dinner = DayTests.date("2026-11-18T03:00:00Z")
+        try await store.moveMeal(meal.id, to: day.id, eatenAt: dinner, expectedProfileID: profile.id)
+        #expect(try await store.snapshotForExport().meals.first { $0.id == meal.id }?.eatenAt == dinner)
+    }
     @Test func lateWeightOnTravelDayIsAccepted() async throws {
         // 21:30 New York is already Nov 18 in Tel Aviv.
         let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")

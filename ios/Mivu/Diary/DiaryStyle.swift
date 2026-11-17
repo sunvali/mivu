@@ -270,7 +270,7 @@ struct MealRow: View {
     }
     private var needsReview: Bool { meal.state == .awaitingReview }
     private var statusText: Text {
-        let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : Text(meal.eatenAt, style: .time)
+        let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : MealClock.text(MealClock.label(meal, model: model))
         let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
         return meal.state == .saved ? Text("\(time)\(estimated)") : Text("\(Text(meal.state.title)) · \(time)")
     }
