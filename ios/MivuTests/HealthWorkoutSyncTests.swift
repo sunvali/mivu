@@ -52,6 +52,15 @@ import Testing
         #expect(try await diary.store.snapshotForExport().workouts.map(\.id) == [run.id])
     }
 
+    @Test func reconnectResumesFromSavedAnchorSoDeletionsArrive() async throws {
+        let (sync, _, reader, run, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        reader.workouts = [run]
+        try await sync.connect()
+        sync.disconnect()
+        try await sync.connect()
+        #expect(reader.anchors == [nil, Data("anchor-1".utf8)])
+    }
+
     @Test func notConnectedNeverReadsHealth() async throws {
         let (sync, _, reader, _, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         sync.refresh()

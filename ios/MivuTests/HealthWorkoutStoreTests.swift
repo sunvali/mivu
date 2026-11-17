@@ -89,6 +89,12 @@ import Testing
         #expect(try await store.snapshotForExport().workouts.first?.dayID == days["2027-01-15"]?.id)
     }
 
+    @Test func zeroCaloriesAreStoredAsUnknown() async throws {
+        let (store, profile, _, root) = try await fixture(days: ["2027-01-15"]); defer { try? FileManager.default.removeItem(at: root) }
+        try await store.applyHealthWorkouts([garmin("2027-01-15T05:00:00Z", kcal: 0)], deletedIDs: [], expectedProfileID: profile.id)
+        #expect(try await store.snapshotForExport().workouts.first?.estimatedBurnKcal == nil)
+    }
+
     @Test func durationIsClamped() async throws {
         let (store, profile, _, root) = try await fixture(days: ["2027-01-15"]); defer { try? FileManager.default.removeItem(at: root) }
         let short = garmin("2027-01-15T05:00:00Z", minutes: 1.0 / 3), long = garmin("2027-01-15T06:00:00Z", minutes: 30 * 60)

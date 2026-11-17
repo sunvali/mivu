@@ -32,7 +32,8 @@ extension DiaryTransaction {
             var value = WorkoutSession(id: health.id, dayID: day.id, performedAt: health.start, timePrecision: .exact,
                 revision: existing?.revision ?? 1, kind: health.kind,
                 durationMinutes: min(max(Int((health.end.timeIntervalSince(health.start) / 60).rounded()), 1), 1440), exercises: [],
-                estimatedBurnKcal: health.activeKcal.flatMap { $0.isFinite ? min(max($0, 0), 100_000) : nil },
+                // Zero means Health has no energy for it, so it must not cancel a known estimate.
+                estimatedBurnKcal: health.activeKcal.flatMap { $0.isFinite && $0 > 0 ? min($0, 100_000) : nil },
                 burnSource: .health, healthSource: name.isEmpty ? "Apple Health" : name)
             if let existing {
                 guard existing != value else { continue }

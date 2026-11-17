@@ -48,7 +48,8 @@ protocol HealthWorkoutReading: Sendable {
 
     func disconnect() {
         guard let id = profileID else { return }
-        defaults.set(false, forKey: key("connected", id)); defaults.removeObject(forKey: key("anchor", id))
+        // Keep the anchor: on reconnect, Health reports what was deleted while Mivu wasn't reading.
+        defaults.set(false, forKey: key("connected", id))
         isConnected = false
         // Background delivery stays on across launches until turned off, so stop it once no profile reads Health.
         if !Self.anyConnected(defaults) { reader.stopObserving(); observing = false }
