@@ -138,6 +138,7 @@ final class ChatGPTConnection {
             apply(snapshot)
             updateSavedState()
             if planAuthorized { await loadModels() }
+            if planNotEligible { await checkEligibility() }
             guard revision == generation else { return }
             resumePending()
         } catch {
@@ -486,6 +487,7 @@ final class ChatGPTConnection {
         apply(snapshot)
         let storageAvailable = reloadSavedJob()
         if planAuthorized, models.isEmpty { await loadModels() }
+        if planNotEligible { await checkEligibility() }
         guard revision == generation else { return }
         if storageAvailable { resumePending() }
     }

@@ -747,6 +747,7 @@ extension ConnectionTests {
     let preferences = UserDefaults(suiteName: UUID().uuidString)!
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let connection: ChatGPTConnection
+    private let session: URLSession
 
     init(appleAvailable: Bool = false) throws {
         let signing = try ConnectionSigningFixture(), replies = replies, requests = requests
@@ -767,6 +768,7 @@ extension ConnectionTests {
             }
         }
         preferences.set(true, forKey: "openAISharingConsent")
+        self.session = session
         connection = ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session),
             jobStore: ProbeJobStore(directory: directory), preferences: preferences, appleModelAvailable: { appleAvailable })
     }
@@ -775,6 +777,11 @@ extension ConnectionTests {
             if let scope { replies.scope = scope }
             if let eligibility { replies.eligibility = eligibility }
         }
+    }
+    /// The same saved account in a fresh app launch.
+    func relaunched() -> ChatGPTConnection {
+        ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session),
+            jobStore: ProbeJobStore(directory: directory), preferences: preferences, appleModelAvailable: { false })
     }
     var eligibilityRequests: Int { requests.values.filter { $0.url?.path == "/v1/responses" }.count }
     func signIn() async {
@@ -855,5 +862,40 @@ extension ConnectionTests {
         await harness.connection.disconnect()
         #expect(harness.preferences.string(forKey: "notEligibleRegistrationID") == nil)
         #expect(harness.preferences.string(forKey: "notEligibleNoticeSeenRegistrationID") == nil)
+    }
+}
+
+extension ConnectionTests {
+    @Test func restoreRechecksNotEligibleAccount() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(eligibility: { notEligibleReply() })
+        await harness.signIn()
+        harness.set(eligibility: { connectionCompletion() })
+        let relaunched = harness.relaunched()
+        await relaunched.restore()
+        #expect(relaunched.accountState == .connected)
+        #expect(harness.eligibilityRequests == 2)
+    }
+
+    @Test func foregroundRecheckIsThrottled() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(eligibility: { notEligibleReply() })
+        await harness.signIn()
+        let relaunched = harness.relaunched()
+        await relaunched.restore()
+        await relaunched.enterForeground()
+        await relaunched.enterForeground()
+        #expect(relaunched.accountState == .planNotEligible)
+        #expect(harness.eligibilityRequests == 2)
+    }
+
+    @Test func connectedAccountIsNotRecheckedOnOpen() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        await harness.signIn()
+        let relaunched = harness.relaunched()
+        await relaunched.restore()
+        await relaunched.enterForeground()
+        #expect(relaunched.accountState == .connected)
+        #expect(harness.eligibilityRequests == 1)
     }
 }
