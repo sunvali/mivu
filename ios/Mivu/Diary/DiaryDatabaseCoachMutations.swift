@@ -113,7 +113,7 @@ extension DiaryTransaction {
     private func resolvedWeightWrite(_ write: CoachWrite, turn: CoachTurn) throws -> CoachWrite {
         guard case .weight(let date, let value, let unit, let revision) = write else { return write }
         if turn.receipts.contains(where: { $0.operationKey == "\(turn.id)/weight/\(date)" }) { return write }
-        let days = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND json_extract(CAST(payload AS TEXT), '$.timeZoneID') = ?", values: [.text(date), .text(turn.captureTimeZoneID)])
+        let days = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(date)])
         let dayIDs = Set(days.map(\.id))
         if let receipt = turn.receipts.first(where: { $0.weightID != nil && $0.operationKey == "\(turn.id)/correct_weight/\($0.weightID!)" && $0.dayID.map { dayIDs.contains($0.uuidString) } == true }) {
             guard let revision else { throw DiaryError.staleRevision }; return .correctWeight(id: receipt.weightID!, value: value, unit: unit, revision: revision)
@@ -210,7 +210,7 @@ extension DiaryTransaction {
             case .preferences(_, _, let revision): guard head.revision == revision else { throw DiaryError.staleRevision }
             case .startDay(let revision):
                 guard head.revision == revision else { throw DiaryError.staleRevision }
-                guard turn.captureTimeZoneID == head.profile.timeZoneID, diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == diaryDateLabel(at, zone: head.profile.timeZoneID), try head.activeDayID.map({ try database.trackingDay(id: $0).startAt <= turn.capturedAt }) ?? true else { throw DiaryError.ambiguousDay }
+                guard wakingDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == wakingDateLabel(at, zone: head.profile.timeZoneID), try head.activeDayID.map({ try database.trackingDay(id: $0).startAt <= turn.capturedAt }) ?? true else { throw DiaryError.ambiguousDay }
             case .coverage(let date, _): _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID)
             case .undo(let key) where try isHeldDelete(key):
                 guard try deletedUndoUsable(key, now: at, turn: turn) else { throw DiaryError.staleRevision }
@@ -228,8 +228,8 @@ extension DiaryTransaction {
             if let id = turn.resolvedDayID { return try database.trackingDay(id: id) }
             if let id = turn.activeDayID {
                 let active = try database.trackingDay(id: id), waking = wakingDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID)
-                // Before the cutoff the active day is still the waking day, so late food stays in it.
-                if active.localDate == waking { return active }
+                // The open day also covers a waking date at or before it (before the cutoff, or after flying west), so food stays in it.
+                if waking <= active.localDate { return active }
                 // After the cutoff with yesterday still open (the app stayed open), this capture starts the new day.
                 rollsOver = active.localDate < waking && date == waking && head.activeDayID == id
                 if active.localDate != date && !rollsOver { throw DiaryError.ambiguousDay }

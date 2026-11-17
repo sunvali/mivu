@@ -39,20 +39,20 @@ import Testing
     @Test func idempotentFoodRetryAfterRelaunchDoesNotResurrectDeletedMeal() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Chocolate yesterday", photos: [], at: now, expectedProfileID: profile.id)
-        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-12", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
         let reload = DiaryStore(directory: root); _ = try await reload.selectProfile(profile.id)
-        #expect(try await reload.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id) == receipt)
+        #expect(try await reload.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-12", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id) == receipt)
         let snapshot = try await reload.snapshotForExport(); #expect(snapshot.meals.count == 1)
         #expect(snapshot.meals[0].timePrecision == .dateOnly)
         #expect(snapshot.activeDayID != receipt.dayID)
         try await reload.deleteMeal(receipt.mealID!)
-        await #expect(throws: DiaryError.notFound) { try await reload.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id) }
+        await #expect(throws: DiaryError.notFound) { try await reload.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-12", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id) }
         #expect(try await reload.snapshotForExport().meals.isEmpty)
     }
     @Test func closeUntrackedRetainsFoodAndActiveDay() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Yesterday untracked", photos: [], at: now, expectedProfileID: profile.id)
-        _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
+        _ = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-12", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
         let before = try await store.snapshotForExport()
         _ = try await store.closeCoachDay(turnID: turn.id, localDate: "2027-01-14", completeness: .untracked, expectedProfileID: profile.id)
         let after = try await store.snapshotForExport()
@@ -194,16 +194,17 @@ import Testing
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Yesterday chocolate", photos: [], at: now, expectedProfileID: profile.id)
         var changed = profile; changed.timeZoneID = "Pacific/Honolulu"; try await store.updateProfile(changed)
-        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-12", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
         let snapshot = try await store.snapshotForExport()
-        #expect(snapshot.days.first { $0.id == receipt.dayID }?.timeZoneID == "Asia/Jerusalem")
+        #expect(snapshot.days.first { $0.id == receipt.dayID }?.timeZoneID == profile.timeZoneID) // the day keeps the zone the turn captured, not the changed profile zone
         #expect(snapshot.meals.first?.timePrecision == .dateOnly)
         let currentDay = try #require(snapshot.days.first { $0.id == snapshot.activeDayID })
         try await store.moveMeal(receipt.mealID!, to: currentDay.id)
         #expect(try await store.snapshotForExport().meals.first?.timePrecision == .dateOnly)
-        try await store.moveMeal(receipt.mealID!, to: currentDay.id, eatenAt: now)
+        let eaten = now.addingTimeInterval(-4 * 3600) // 23:00 on the open day in the captured zone
+        try await store.moveMeal(receipt.mealID!, to: currentDay.id, eatenAt: eaten)
         #expect(try await store.snapshotForExport().meals.first?.timePrecision == .exact)
-        #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).meals.first?.eatenAt == now)
+        #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).meals.first?.eatenAt == eaten)
     }
 
     @Test func boundedContextKeepsNewestSavedPortionAndOmissionReferencesWithoutMutation() async throws {
@@ -332,7 +333,7 @@ import Testing
         let store = DiaryStore(directory: root); let profile = DiaryProfile(name: "Synthetic first chat")
         _ = try await store.createProfile(profile)
         let historical = try await capturedTurn(store, text: "Yesterday", photos: [], at: now, expectedProfileID: profile.id)
-        _ = try await store.applyCoachFood(turnID: historical.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
+        _ = try await store.applyCoachFood(turnID: historical.id, targetLocalDate: "2027-01-12", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
         #expect(try await store.snapshotForExport().activeDayID == nil)
         let current = try await capturedTurn(store, text: "I had eggs for breakfast", photos: [], at: now, expectedProfileID: profile.id)
         let receipt = try await store.applyCoachFood(turnID: current.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], expectedProfileID: profile.id)

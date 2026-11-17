@@ -64,4 +64,32 @@ import Testing
         let second = try await store.createWorkout(localDate: "2026-11-17", draft: Self.draft, performedAt: nil, expectedProfileID: profile.id)
         #expect(second.dayID == utc.id)
     }
+
+    static let apple = FoodItem(name: "Synthetic apple", quantity: 1, unit: "portion", nutrition: NutritionValues(kcal: 95), provenance: .estimate, reference: "Synthetic estimate")
+
+    @Test func coachTurnFromTelAvivAppliesAfterLandingInNewYork() async throws {
+        let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")
+        let turn = try await capturedTurn(store, text: "Synthetic apple", photos: [], at: DayTests.date("2026-11-17T09:00:00Z"), expectedProfileID: profile.id)
+        try await move(store, profile, to: "America/New_York")
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2026-11-17", items: [Self.apple], expectedProfileID: profile.id)
+        #expect(receipt.dayID == day.id)
+        #expect(try await store.snapshotForExport().days.count == 1)
+    }
+    @Test func coachTodayIsTheOpenDayInHonolulu() async throws {
+        let (store, profile, day) = try await DayTests.ready(zone: "Asia/Tokyo", at: "2026-11-18T00:00:00Z")
+        try await move(store, profile, to: "Pacific/Honolulu")
+        let turn = try await capturedTurn(store, text: "Synthetic apple", photos: [], at: DayTests.date("2026-11-18T06:00:00Z"), expectedProfileID: profile.id)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2026-11-17", items: [Self.apple], expectedProfileID: profile.id)
+        #expect(receipt.dayID == day.id)
+    }
+    @Test func coachCaptureSavesAfterZoneChangeBetweenPrepareAndCommit() async throws {
+        let (store, profile, _) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")
+        let prepared = try await store.coachCapturePreparation(at: DayTests.date("2026-11-17T09:00:00Z"), expectedProfileID: profile.id)
+        let payload = try CoachSubmissionPayload(submissionID: UUID(), text: "Synthetic apple", attachments: [], context: prepared.context)
+        try await move(store, profile, to: "America/New_York")
+        let first = try await store.captureCoachSubmission(payload, expectedSelection: prepared.ownership, expectedProfileID: profile.id)
+        let again = try await store.captureCoachSubmission(payload, expectedSelection: prepared.ownership, expectedProfileID: profile.id)
+        #expect(first == again)
+        #expect(try await store.snapshotForExport().coachTurns.count == 1)
+    }
 }
