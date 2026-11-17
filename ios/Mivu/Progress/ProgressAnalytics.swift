@@ -11,8 +11,19 @@ struct DailyProgress: Codable, Equatable, Sendable {
     let goal: GoalRecord?
     let remainingFromRecorded: NutritionValues
     let workoutCount: Int
+    /// Calories that earn back budget (see `ExerciseCredit`); nil only when the day has no workouts.
     let estimatedBurnKcal: Double?
     let exerciseAdjustedKcalRemaining: Double?
+    /// Counted workouts with unknown calories; they add nothing.
+    var uncountedWorkoutCount = 0
+    /// The Apple Health part of `estimatedBurnKcal`; nil without Health workouts, and always nil for Coach.
+    var healthBurnKcal: Double? = nil
+
+    /// The kcal target plus earned workout calories when exercise credit is on, as the widget and Live Activity show it.
+    var creditedKcalTarget: Double? {
+        guard let target = goal?.targets.kcal else { return nil }
+        return goal?.exerciseCreditEnabled == true ? target + (estimatedBurnKcal ?? 0) : target
+    }
 }
 
 struct NutrientSampleCounts: Codable, Equatable, Sendable {
@@ -51,20 +62,18 @@ struct WeightProgress: Codable, Equatable, Sendable {
 
 enum ProgressAnalytics {
     static func daily(readModel: DiaryReadModel) -> DailyProgress {
-        let burn = readModel.workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? readModel.workouts.reduce(0) { $0 + ($1.estimatedBurnKcal ?? 0) } : nil
         return daily(localDate: readModel.activeDay?.localDate ?? dateLabel(Date(), zone: readModel.profile.timeZoneID),
             days: readModel.activeDay.map { [$0] } ?? [], subtotals: readModel.activeDay == nil ? [] : [readModel.totals],
             hasFood: readModel.meals.contains(where: \.isSaved), activeDayID: readModel.activeDayID,
-            goal: readModel.activeGoal, workoutCount: readModel.workouts.count, estimatedBurnKcal: burn)
+            goal: readModel.activeGoal, workouts: readModel.workouts)
     }
     static func daily(snapshot: DiarySnapshot, localDate: String) -> DailyProgress {
         let days = snapshot.days.filter { $0.localDate == localDate }
         let dayIDs = Set(days.map(\.id))
         let workouts = snapshot.workouts.filter { dayIDs.contains($0.dayID) }
-        let burn = workouts.allSatisfy { $0.estimatedBurnKcal != nil } ? workouts.reduce(0) { $0 + $1.estimatedBurnKcal! } : nil
         return daily(localDate: localDate, days: days, subtotals: days.map { snapshot.totals(dayID: $0.id) },
             hasFood: snapshot.meals.contains { dayIDs.contains($0.dayID) && $0.isSaved }, activeDayID: snapshot.activeDayID,
-            goal: snapshot.goal(on: localDate), workoutCount: workouts.count, estimatedBurnKcal: burn)
+            goal: snapshot.goal(on: localDate), workouts: workouts)
     }
 
     static func status(days: [TrackingDay], hasFood: Bool, activeDayID: UUID?) -> DayStatus? {
@@ -76,7 +85,8 @@ enum ProgressAnalytics {
     }
 
     static func daily(localDate: String, days: [TrackingDay], subtotals: [NutritionTotals], hasFood: Bool, activeDayID: UUID?,
-                      goal: GoalRecord?, workoutCount: Int, estimatedBurnKcal burn: Double?) -> DailyProgress {
+                      goal: GoalRecord?, workouts: [WorkoutSession]) -> DailyProgress {
+        let credit = ExerciseCredit.daily(workouts), burn = workouts.isEmpty ? nil : credit.creditedKcal
         func sum(_ field: KeyPath<NutritionTotals, Double?>) -> Double? {
             let known = subtotals.compactMap { $0[keyPath: field] }
             return known.isEmpty ? nil : known.reduce(0, +)
@@ -93,8 +103,9 @@ enum ProgressAnalytics {
         let adjusted = goal?.exerciseCreditEnabled == true ? remaining.kcal.flatMap { kcal in burn.map { kcal + $0 } } : nil
         return DailyProgress(localDate: localDate, status: status(days: days, hasFood: hasFood, activeDayID: activeDayID),
                              foodTotals: totals, goal: goal, remainingFromRecorded: remaining,
-                             workoutCount: workoutCount, estimatedBurnKcal: burn,
-                             exerciseAdjustedKcalRemaining: adjusted)
+                             workoutCount: workouts.count, estimatedBurnKcal: burn,
+                             exerciseAdjustedKcalRemaining: adjusted, uncountedWorkoutCount: credit.uncountedCount,
+                             healthBurnKcal: workouts.contains(where: \.isFromHealth) ? credit.healthKcal : nil)
     }
 
     static func period(snapshot: DiarySnapshot, endingOn: String, days: Int) -> PeriodProgress {

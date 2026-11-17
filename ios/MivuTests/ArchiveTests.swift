@@ -241,6 +241,49 @@ struct ArchiveTests {
         #expect(await backup.status(profileID: initial.profile.id).savedAt != nil)
     }
 
+    @Test func backupOmitsHealthWorkoutsButKeepsDeletedIDsAcrossRestore() async throws {
+        let privateDirectory = try temporaryDirectory(), folder = try temporaryDirectory(), restoredDirectory = try temporaryDirectory()
+        defer { [privateDirectory, folder, restoredDirectory].forEach { try? FileManager.default.removeItem(at: $0) } }
+        var initial = fixture()
+        initial.profile.timeZoneID = "Asia/Jerusalem"
+        let day = initial.days[0], deletedID = UUID(), noon = ISO8601DateFormatter().date(from: "2026-10-12T09:00:00Z")!
+        let coach = WorkoutSession(dayID: day.id, performedAt: day.startAt, timePrecision: .dateOnly, revision: 1, kind: .strength,
+                                   durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil)
+        let health = WorkoutSession(dayID: day.id, performedAt: noon.addingTimeInterval(-7_200), timePrecision: .exact, revision: 1, kind: .cardio,
+                                    durationMinutes: 45, exercises: [], estimatedBurnKcal: 412, burnSource: .health, healthSource: "Garmin Connect")
+        initial.workouts = [coach, health]; initial.deletedWorkoutIDs = [deletedID]
+        let backup = FolderBackup(directory: privateDirectory)
+        await backup.selectProfile(initial.profile.id)
+        try await backup.selectFolder(folder, profileID: initial.profile.id)
+        try await backup.save(initial, generation: try await backup.generation(profileID: initial.profile.id))
+        let saved = try DiaryArchive.read(folder.appendingPathComponent(FolderBackup.filename(profileID: initial.profile.id)))
+        #expect(saved.workouts.map(\.id) == [coach.id])
+        #expect(saved.deletedWorkoutIDs == [deletedID] && saved.revision == initial.revision)
+
+        // Restored on another iPhone: the workout deleted in Mivu stays away; Health brings back the rest.
+        let store = DiaryStore(directory: restoredDirectory, currentTime: { noon })
+        _ = try await store.importProfile(saved)
+        func fromHealth(_ id: UUID) -> HealthWorkout {
+            HealthWorkout(id: id, start: noon.addingTimeInterval(-7_200), end: noon.addingTimeInterval(-4_500), activeKcal: 412, sourceName: "Garmin Connect", kind: .cardio)
+        }
+        try await store.applyHealthWorkouts([fromHealth(deletedID), fromHealth(health.id)], deletedIDs: [], expectedProfileID: initial.profile.id)
+        #expect(Set(try await store.snapshotForExport().workouts.map(\.id)) == [coach.id, health.id])
+    }
+
+    @Test func restoreKeepsThisPhonesHealthWorkoutsUnlessDeleted() throws {
+        var local = fixture()
+        let health = WorkoutSession(dayID: local.days[0].id, performedAt: local.days[0].startAt, timePrecision: .exact, revision: 1, kind: .cardio,
+                                    durationMinutes: 45, exercises: [], estimatedBurnKcal: 412, burnSource: .health, healthSource: "Garmin Connect")
+        local.workouts = [health]
+        let backup = local.withoutHealthWorkouts()
+        #expect(try DiaryArchive.replacement(backup, original: local).workouts == [health])
+        var newer = backup
+        newer.revision += 1; newer.lineage = (backup.lineage ?? []) + [UUID()]
+        #expect(try DiaryArchive.replacement(newer, original: local).workouts == [health])
+        newer.deletedWorkoutIDs = [health.id]
+        #expect(try DiaryArchive.replacement(newer, original: local).workouts.isEmpty)
+    }
+
     @Test func profileSwitchRejectsWrongOwnerAndKeepsStatusesSeparate() async throws {
         let privateDirectory = try temporaryDirectory(), folder = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: privateDirectory); try? FileManager.default.removeItem(at: folder) }

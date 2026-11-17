@@ -31,6 +31,9 @@ and no tracking.
 - **Made for iPhone Duo.** Mivu fills the unfolded screen. Turn it sideways and
   Coach sits beside your day as it updates. Prop it half-open on the table to
   photograph your plates hands-free.
+- **Bring in your workouts.** Workouts from Garmin Connect, Apple Watch and other
+  apps that share with Apple Health show up in Mivu, and their active calories can
+  add to your daily budget. They stay on your iPhone and Coach never sees them.
 - **Keep your data.** Back up to a folder you choose, or export everything at any
   time.
 

@@ -11,7 +11,7 @@ extension DayProgressAttributes.ContentState {
         let items = readModel.meals.filter(\.isSaved).flatMap(\.items)
         let fields: [(String, KeyPath<NutritionValues, Double?>)] = [("kcal", \.kcal), ("protein", \.protein), ("carbs", \.carbs), ("fat", \.fat)]
         let partial = fields.filter { _, field in items.contains { $0.nutrition[keyPath: field] == nil } }.map(\.0)
-        self.init(kcalEaten: eaten?.kcal, kcalTarget: target?.kcal,
+        self.init(kcalEaten: eaten?.kcal, kcalTarget: report.creditedKcalTarget,
                   protein: eaten?.protein, proteinTarget: target?.protein,
                   carbs: eaten?.carbs, carbsTarget: target?.carbs,
                   fat: eaten?.fat, fatTarget: target?.fat,

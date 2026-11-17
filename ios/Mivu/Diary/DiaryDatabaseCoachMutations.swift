@@ -178,10 +178,13 @@ extension DiaryTransaction {
         case .correctWeight(let id, let value, let unit, let revision):
             var record = try weight(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }; record.value = value; record.unit = unit; record.revision += 1; try validateWeightFields(record)
         case .editWorkout(let id, let draft, let revision):
-            var record = try workout(id: id); guard record.revision == revision else { throw DiaryError.staleRevision }
+            var record = try workout(id: id); guard !record.isFromHealth else { throw DiaryError.notFound } // Coach never changes Health workouts
+            guard record.revision == revision else { throw DiaryError.staleRevision }
             record.kind = draft.kind; record.durationMinutes = draft.durationMinutes; record.exercises = draft.exercises; record.estimatedBurnKcal = draft.estimatedBurnKcal; record.burnSource = draft.burnSource; record.revision += 1; try validateWorkoutFields(record)
         case .deleteWeight(let id, let revision): guard try weight(id: id).revision == revision else { throw DiaryError.staleRevision }
-        case .deleteWorkout(let id, let revision): guard try workout(id: id).revision == revision else { throw DiaryError.staleRevision }
+        case .deleteWorkout(let id, let revision):
+            let record = try workout(id: id); guard !record.isFromHealth else { throw DiaryError.notFound }
+            guard record.revision == revision else { throw DiaryError.staleRevision }
         case .manual(let edit, _):
             switch edit {
             case .item(let id, let item, let revision, let submissionID, let explicitNutrients, let original):

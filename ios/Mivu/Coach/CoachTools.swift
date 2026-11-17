@@ -154,7 +154,7 @@ enum CoachTools {
             }
             var burn: Double?, source: WorkoutBurnSource?
             if let raw = args["estimated_burn_kcal"], !(raw is NSNull) { guard let value = number(raw), (0...100_000).contains(value) else { throw CoachError.invalidArguments }; burn = value }
-            if let raw = args["burn_source"], !(raw is NSNull) { guard let value = raw as? String, let parsed = WorkoutBurnSource(rawValue: value), burn != nil else { throw CoachError.invalidArguments }; source = parsed }
+            if let raw = args["burn_source"], !(raw is NSNull) { guard let value = raw as? String, let parsed = WorkoutBurnSource(rawValue: value), parsed != .health, burn != nil else { throw CoachError.invalidArguments }; source = parsed }
             try unconfirmedTime("performed_at")
             return WorkoutDraft(kind: kind, durationMinutes: try integer("duration_minutes", 1...1440), exercises: exercises, estimatedBurnKcal: burn, burnSource: source)
         }

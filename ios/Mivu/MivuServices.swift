@@ -14,6 +14,8 @@ import UIKit
     private var loading: Task<Void, Never>?
     private var starting: Task<Void, Never>?
     private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
+    /// Workouts from Apple Health for the selected diary.
+    lazy var health = HealthWorkoutSync(reader: HKHealthReader(), model: diary, defaults: DiaryLaunch.defaults)
 
     init(diary: DiaryViewModel, connection: ChatGPTConnection, coach: CoachViewModel, nutritionKeys: NutritionAPIKeyStore,
          inbox: CoachInbox = .local, restore: (@MainActor () async -> Void)? = nil) {
@@ -68,6 +70,14 @@ import UIKit
             }
         }
         await starting?.value
+    }
+
+    /// Loads the diary and imports from Apple Health when this profile connected it. Synthetic test diaries never read Health.
+    func startHealth() async {
+        guard !DiaryLaunch.isUITest, !DiaryLaunch.isSampleMode else { return }
+        await loadDiary(createDefaultProfile: false)
+        health.refresh()
+        await health.sync()
     }
 
     /// Keeps the Coach worker running after the app leaves the screen; onExpire runs if iOS ends the time first.

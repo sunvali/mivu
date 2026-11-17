@@ -21,6 +21,11 @@ submit.
   HTTPS, hashing and Keychain only.
 - UI-test, sample-mode and connection diagnostic switches exist only in Debug
   builds.
+- HealthKit, read-only (workouts and active energy), with background delivery.
+  Health workouts stay on the iPhone. Coach, so OpenAI, never sees them or their
+  calories, and folder backups (which may be in iCloud Drive) leave them out
+  (5.1.3). Only an export the person makes includes them. Settings › Diary
+  preferences › Apple Health turns it on.
 
 ## Still needed from the owner
 
@@ -40,7 +45,7 @@ submit.
 |---|---|---|---|---|
 | Photos or Videos (meal photos) | Yes | Yes | No | App Functionality |
 | Health (height, weight history, age, sex, goal, diet notes) | Yes | Yes | No | App Functionality |
-| Fitness (logged workouts) | Yes | Yes | No | App Functionality |
+| Fitness (logged workouts, workouts read from Apple Health) | Yes | Yes | No | App Functionality |
 | Other User Content (meal notes, Coach messages) | Yes | Yes | No | App Functionality |
 
 No analytics, advertising, location, contacts or identifiers are collected.

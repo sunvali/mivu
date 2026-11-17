@@ -253,6 +253,7 @@ extension DiaryDatabase {
             case .weight(let id): value.weight = try transaction.weight(id: id)
             case .workout(let id):
                 let workout = try transaction.workout(id: id)
+                guard !workout.isFromHealth else { throw DiaryError.notFound } // Health data never reaches Coach
                 if try JSONEncoder().encode(workout).count <= 8192 { value.workout = workout } // else ids only
             }
         } catch DiaryError.notFound { value.unavailable = true }
@@ -262,13 +263,15 @@ extension DiaryDatabase {
         let weights = try domainStatement("SELECT payload FROM weight ORDER BY ordinal DESC, id DESC LIMIT 41")
         defer { sqlite3_finalize(weights) }; var values: [WeightEntry] = []
         while try mutationStep(weights) { values.append(try JSONDecoder().decode(WeightEntry.self, from: mutationBlob(weights, 0))) }
-        let workouts = try domainStatement("SELECT w.id, w.parent, json_extract(CAST(w.payload AS TEXT), '$.revision'), json_extract(CAST(w.payload AS TEXT), '$.kind'), json_extract(CAST(w.payload AS TEXT), '$.durationMinutes') FROM workout w ORDER BY w.ordinal DESC, w.id DESC LIMIT 101")
+        // Health data never reaches Coach.
+        let notHealth = "COALESCE(json_extract(CAST(w.payload AS TEXT), '$.burnSource'), '') <> 'health'"
+        let workouts = try domainStatement("SELECT w.id, w.parent, json_extract(CAST(w.payload AS TEXT), '$.revision'), json_extract(CAST(w.payload AS TEXT), '$.kind'), json_extract(CAST(w.payload AS TEXT), '$.durationMinutes') FROM workout w WHERE \(notHealth) ORDER BY w.ordinal DESC, w.id DESC LIMIT 101")
         defer { sqlite3_finalize(workouts) }; var references: [WorkoutReference] = []
         while try mutationStep(workouts) {
             guard let id = try mutationOptionalUUID(workouts, 0), let dayID = try mutationOptionalUUID(workouts, 1), let kind = WorkoutKind(rawValue: try mutationText(workouts, 3)) else { throw DiaryError.invalidData }
             references.append(.init(id: id, dayID: dayID, localDate: try trackingDay(id: dayID).localDate, revision: Int(sqlite3_column_int64(workouts, 2)), kind: kind, durationMinutes: Int(sqlite3_column_int64(workouts, 4))))
         }
-        return (Array(values.prefix(40).reversed()), Array(references.prefix(100).reversed()), max(0, try mutationInteger("SELECT COUNT(*) FROM weight") - 40), max(0, try mutationInteger("SELECT COUNT(*) FROM workout") - 100))
+        return (Array(values.prefix(40).reversed()), Array(references.prefix(100).reversed()), max(0, try mutationInteger("SELECT COUNT(*) FROM weight") - 40), max(0, try mutationInteger("SELECT COUNT(*) FROM workout w WHERE \(notHealth)") - 100))
     }
 }
 

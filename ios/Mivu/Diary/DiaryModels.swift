@@ -201,7 +201,8 @@ struct GoalRecord: Codable, Equatable, Sendable, Identifiable {
 }
 
 enum WorkoutKind: String, Codable, Sendable { case strength, cardio, other }
-enum WorkoutBurnSource: String, Codable, Sendable { case userEstimate, modelEstimate }
+/// `health` marks a workout imported from Apple Health; its `id` is the `HKWorkout` UUID.
+enum WorkoutBurnSource: String, Codable, Sendable { case userEstimate, modelEstimate, health }
 
 struct WorkoutSet: Codable, Equatable, Sendable {
     var repetitions: Int
@@ -232,6 +233,10 @@ struct WorkoutSession: Codable, Equatable, Sendable, Identifiable {
     var exercises: [WorkoutExercise]
     var estimatedBurnKcal: Double?
     var burnSource: WorkoutBurnSource?
+    /// The Health source app's name, e.g. "Garmin Connect"; set only for imported workouts.
+    var healthSource: String? = nil
+
+    var isFromHealth: Bool { burnSource == .health }
 }
 
 struct AnalysisInput: Codable, Equatable, Sendable {
@@ -444,6 +449,14 @@ private func validAbout(_ about: ProfileAbout) -> Bool {
         && about.dietTags.count <= 32 && about.dietTags.allSatisfy { !$0.isEmpty && $0.count <= 60 } && about.healthNotes.count <= 2_000
 }
 
+extension DiarySnapshot {
+    /// Folder backups may land in iCloud Drive, where Apple Health data must not go (App Review 5.1.3).
+    /// Deleted IDs stay, so a restore never brings back a workout deleted in Mivu.
+    func withoutHealthWorkouts() -> DiarySnapshot {
+        var copy = self; copy.workouts.removeAll(where: \.isFromHealth); return copy
+    }
+}
+
 func validateDiaryMetadataCollections(goals: [GoalRecord], deletedWeightIDs: [UUID], deletedWorkoutIDs: [UUID]) throws {
     guard goals.count <= 10_000, unique(goals.map(\.id)),
           Set(goals.map(\.effectiveLocalDate)).count == goals.count,
@@ -523,7 +536,9 @@ func validateWorkoutFields(_ workout: WorkoutSession) throws {
     guard workout.performedAt.timeIntervalSince1970.isFinite, workout.revision > 0, workout.revision < 1_000_000,
           (1...1440).contains(workout.durationMinutes), workout.exercises.count <= 100,
           workout.estimatedBurnKcal == nil || (workout.estimatedBurnKcal!.isFinite && workout.estimatedBurnKcal! >= 0 && workout.estimatedBurnKcal! <= 100_000),
-          workout.burnSource == nil || workout.estimatedBurnKcal != nil else { throw DiaryError.invalidData }
+          workout.burnSource == nil || workout.isFromHealth || workout.estimatedBurnKcal != nil,
+          workout.isFromHealth == (workout.healthSource != nil),
+          workout.healthSource.map({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 100 }) ?? true else { throw DiaryError.invalidData }
     for exercise in workout.exercises {
         guard !exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               exercise.name.count <= 200, exercise.sets.count <= 100 else { throw DiaryError.invalidData }

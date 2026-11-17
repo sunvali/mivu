@@ -54,6 +54,23 @@
         }
       }
     },
+    "NSHealthShareUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu reads your workouts from Apple Health, such as those from Garmin Connect or Apple Watch, so their active calories can add to your daily food budget. They stay on this iPhone."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu קורא את האימונים שלך מ-Apple Health, למשל מ-Garmin Connect או מ-Apple Watch, כדי שהקלוריות הפעילות שלהם יתווספו לתקציב המזון היומי שלך. הם נשארים באייפון הזה."
+          }
+        }
+      }
+    },
     "NSMicrophoneUsageDescription" : {
       "extractionState" : "manual",
       "localizations" : {
