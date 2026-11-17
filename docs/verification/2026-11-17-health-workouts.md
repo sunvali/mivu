@@ -1,59 +1,57 @@
 # Workouts from Apple Health — verification
 
-- Branch: `feat/health-workouts`. Base: `main` @ `720cc3f`.
-- Spec: `docs/superpowers/specs/2026-11-17-health-workouts-design.md`
-- Plan: `docs/superpowers/plans/2026-11-17-health-workouts.md`
-- Tested source: `4d2149b7c03d389379711b4a08051b15f8742019`. The source didn't change
-  for this record. The build compiled with no errors, so no fixes were needed.
+- Branch: `feat/health-workouts`, with `main` @ `f2698a0` merged in.
 - Environment: macOS 27.0.1 and Xcode 27.2 (27B52). The simulator was a dedicated
   iPhone 17 Pro on iOS 26.5, `C9C051B0-1AA2-4A8B-BA70-8C996FFAA35B`. DerivedData was
   `build/DerivedData` in this worktree. Runs used the XcodeBuildMCP CLI, test plan
   `Mivu`, suite `-only-testing` selectors, and no parallel testing.
 
-## Results (2026-11-17)
+## Results (2026-11-17, after merging main)
 
-| Run | Scope | Passed | Failed | Result |
-|---|---|---|---|---|
-| Build | `Mivu` scheme, Debug, iOS simulator | — | — | pass (0 errors) |
-| Model | `MivuTests/HealthWorkoutTests` | 4 | 0 | pass |
-| Store import | `MivuTests/HealthWorkoutStoreTests` | 9 | 0 | pass |
-| Sync | `MivuTests/HealthWorkoutSyncTests` | 4 | 0 | pass |
-| Credit rule | `MivuTests/ProgressAnalyticsTests` | 20 | 0 | pass |
-| Progress store | `MivuTests/ProgressStoreTests` | 13 | 0 | pass |
-| Coach privacy | `MivuTests/CoachStoreTests` (incl. `coachNeverSeesHealthWorkouts`) | 44 | 4 | fail, pre-existing (see below) |
-| Coach engine | `MivuTests/CoachEngineTests` | 49 | 5 | fail, pre-existing (see below) |
-| Coach context | `MivuTests/CoachIndexedContextTests` | 17 | 0 | pass |
-| Backup | `MivuTests/ArchiveTests` (incl. `backupOmitsHealthWorkoutsButKeepsDeletedIDsAcrossRestore`) | 35 | 0 | pass |
-| Export | `MivuTests/DiaryExportConcurrencyTests` | 28 | 0 | pass |
-| Services | `MivuTests/MivuServicesTests` | 1 | 0 | pass |
-| Widget | `MivuTests/WidgetSnapshotTests` | 5 | 0 | pass |
-| Live Activity | `MivuTests/DayProgressActivityTests` | 20 | 0 | pass |
-| Diary | `MivuTests/DiaryTests` | 29 | 0 | pass |
-| Smoke | `python3 scripts/ci/smoke.py --simulator-id C9C051B0-…` | 1 | 0 | pass (64.9 s) |
+Unit suites ran at `375af329`, the merge with main plus the Hebrew strings. Review
+fixes followed in `0b0e838b`. They change only Health import code:
+`HealthWorkoutSync.disconnect` keeps its anchor, and `applyHealthWorkouts` stores
+0 kcal as unknown. At `0b0e838b`, the two Health suites, smoke and the script checks
+ran again.
 
-Unit total: 278 passed, 9 failed, 0 skipped.
+| Run | Scope | Source | Passed | Failed | Result |
+|---|---|---|---|---|---|
+| Build | `Mivu` scheme, Debug, iOS simulator | `375af329` | — | — | pass (0 errors) |
+| Model | `HealthWorkoutTests` | `375af329` | 4 | 0 | pass |
+| Store import | `HealthWorkoutStoreTests` (incl. `zeroCaloriesAreStoredAsUnknown`) | `0b0e838b` | 10 | 0 | pass |
+| Sync | `HealthWorkoutSyncTests` (incl. `reconnectResumesFromSavedAnchorSoDeletionsArrive`) | `0b0e838b` | 5 | 0 | pass |
+| Credit rule | `ProgressAnalyticsTests` | `375af329` | 20 | 0 | pass |
+| Progress store | `ProgressStoreTests` | `375af329` | 13 | 0 | pass |
+| Insights | `ProgressInsightsTests` | `375af329` | 32 | 0 | pass |
+| Coach privacy | `CoachStoreTests` (incl. `coachNeverSeesHealthWorkouts`) | `375af329` | 46 | 3 | fails the same as `main` |
+| Coach engine | `CoachEngineTests` | `375af329` | 61 | 7 | fails the same as `main` |
+| Coach lines | `CoachReplyLinesTests` | `375af329` | 9 | 3 | fails the same as `main` |
+| Coach batch | `CoachBatchTransactionTests` | `375af329` | 23 | 1 | fails the same as `main` |
+| Coach context | `CoachIndexedContextTests` | `375af329` | 17 | 0 | pass |
+| Backup | `ArchiveTests` (incl. `backupOmitsHealthWorkoutsButKeepsDeletedIDsAcrossRestore`) | `375af329` | 35 | 0 | pass |
+| Export | `DiaryExportConcurrencyTests` | `375af329` | 28 | 0 | pass |
+| Services | `MivuServicesTests` | `375af329` | 1 | 0 | pass |
+| Widget | `WidgetSnapshotTests` | `375af329` | 5 | 0 | pass |
+| Live Activity | `DayProgressActivityTests` | `375af329` | 20 | 0 | pass |
+| Diary | `DiaryTests` | `375af329` | 30 | 0 | pass |
+| Languages | `LanguageTextTests`, `HebrewSurfaceTextTests` | `375af329` | 16 | 0 | pass |
+| Smoke | `python3 scripts/ci/smoke.py --simulator-id C9C051B0-…` | `0b0e838b` | 1 | 0 | pass (74.1 s) |
+| Scripts | `scripts/ci/languages.py check`, `scripts/ci/parity.py` | `0b0e838b` | — | — | pass |
 
-**The 9 Coach failures are pre-existing.** The same two suites, run on the base
-commit `720cc3f` with the same simulator, failed the same 9 tests (92 passed,
-9 failed). The branch adds one Coach test, `coachNeverSeesHealthWorkouts`, and it
-passes. The failures expect the requested day `2027-01-15` and get `2027-01-14`, or
-get a different time zone. That points to a dependence on the clock or time zone,
-not to this change:
+**The 14 Coach failures come from `main`, not this branch.** The same four suites
+ran on `main` @ `f2698a0` with the same simulator. They failed the same 14 tests
+(138 passed, 14 failed). The failures expect the requested day `2027-01-15` and get
+`2027-01-14`, or they read "There's no food recorded". That points to a dependence
+on the clock or the time zone.
 
-- `CoachEngineTests`: `modelTimeSyntaxKeepsDateOnlyPrecisionAndRequestedDay`,
-  `progressQuestionKeepsGroundedProse`, `mealProseMayStateTheDaysNewTotal`,
-  `progressAnswerUsesRequestedActualBudget`,
-  `requestedProgressRereadsFactsAfterSuspendedInference`
-- `CoachStoreTests`: `idempotentFoodRetryAfterRelaunchDoesNotResurrectDeletedMeal`,
-  `capturedTimezoneAndExplicitHistoricalTimeSurviveProfileChange`,
-  `unconfirmedCoachTimeStaysDateOnlyAndManualCaptureRemainsExact`,
-  `progressReferencesAreBoundedAndOversizedWorkoutRefusesReplacement`
+Before the merge, `4d2149b7` on base `720cc3f` had 278 passed and 9 failed. The base
+itself had the same 9 Coach failures.
 
-Not run in this pass: `ProgressInsightsTests`, `CoachReplyLinesTests`,
-`CoachBatchTransactionTests`, and full UI tests. The plan's "Expected: FAIL" steps
-stay unticked, because the code was written without a toolchain and no failing run
-was observed. Task 2 step 5 and Task 4 step 4 also stay unticked until the suites
-listed above run, or the pre-existing Coach failures are fixed.
+The new strings have Hebrew translations, following `docs/languages/he.md`. The
+owner hasn't reviewed them yet. Not run: the full UI test suite and the language
+capture sweep. The plan's "Expected: FAIL" steps stay unticked, because no failing
+run was observed. Task 2 step 5 (`CoachReplyLinesTests`) and Task 4 step 4 stay unticked
+until the Coach failures on `main` are fixed.
 
 ## Physical phone (owner, real Garmin) — blocked
 
