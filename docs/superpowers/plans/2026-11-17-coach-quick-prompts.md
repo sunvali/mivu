@@ -286,6 +286,12 @@ git commit -m "feat(coach): choose context-aware quick prompts"
   - On removal, use `.easeOut(duration: 0.12)`.
   - Under `reduceMotion`, use `.opacity` with `.easeOut(duration: 0.15)`.
 - **Hiding:** add `.contextMenu { Button("Hide this suggestion", systemImage: "eye.slash") { hide(prompt.id) } }`.
+- **Collapse arrow:**
+  - Add `@AppStorage("coachSuggestionsCollapsed") var suggestionsCollapsed = false`.
+  - After the last chip, add a 32 pt circular `chevron.down` button with a 44 pt target and the `diarySecondary` colour, identifier `coachQuickPromptsCollapse`, labelled "Hide suggestions". It sets `suggestionsCollapsed = true`.
+  - When collapsed, the row is replaced by the same button, rotated to `chevron.up` (animated flip with `rotationEffect`), trailing-aligned. It has identifier `coachQuickPromptsExpand`, is labelled "Show suggestions", and sets the flag back to false.
+  - Under `reduceMotion`, swap without rotation.
+  - Turning the Settings switch on also clears `suggestionsCollapsed`.
 - **Settings:** in `companionSection`, add `Toggle("Show suggestions", isOn: $suggestionsEnabled)` with identifier `coachSuggestionsToggle` and the footer "Quick prompts above the Coach message box." When it switches from off to on, clear `hiddenSuggestions`.
 - **Refresh:** call `refreshRecentMeals()` in `.task`, on `scenePhase == .active`, and on `onChange(of: coach.diary.readModel?.head)`. Recompute the hour with a `TimelineView(.everyMinute)` around the row, or an equivalent hourly tick.
 - **Pip:** pass `chips: showsQuickPrompts` to `PipLine.current`. The `CompanionView` size is 64 when the window is short, otherwise `typeSize.isAccessibilitySize ? 76 : 112`.
@@ -300,6 +306,7 @@ git commit -m "feat(coach): choose context-aware quick prompts"
   - `quickPromptsHideWhileTypingAndReturn`: type "a" and expect `coachQuickPrompts` not to exist. Clear the field and expect it to exist.
   - `quickPromptsStepAsideForAClarification`: send the existing `clarify-options` fixture message, and expect `coachQuickPrompts` not to exist while `coachOptionChip` exists.
   - `hiddenSuggestionStaysHidden`: long-press a chip, then tap "Hide this suggestion". Expect that chip id to be gone after relaunch.
+  - `collapseArrowHidesAndRestoresTheRow`: tap `coachQuickPromptsCollapse` and expect no `coachQuickPrompt-` chips while `coachQuickPromptsExpand` exists. Relaunch and expect it still collapsed. Tap `coachQuickPromptsExpand` and expect the chips back.
   - `suggestionsSwitchTurnsTheRowOff`: open settings, toggle `coachSuggestionsToggle` off, return to Coach, and expect `coachQuickPrompts` not to exist.
   - `relogChipCopiesYesterdaysMeal`: launch with yesterday's meal seeded through the existing yesterday path of the inference fixture ("…yesterday…" message). Tap `coachQuickPrompt-relog`, then send. Expect the new saved-meal kcal to equal the chip's kcal.
   - Replace the `coachStarter` assertion near line 517 with `coachQuickPrompts`.

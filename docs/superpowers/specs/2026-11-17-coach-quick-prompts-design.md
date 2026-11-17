@@ -64,8 +64,14 @@ the real screenshots before the PR.
    13 pt, secondary colour, regular weight, with tabular digits.
 8. **Pip's bubble stays but is kept short.** It is a mood line of three words or fewer that never
    repeats the reply or the chips ("Morning!", "Lunch is in!", "Dinner time?").
-9. **Hiding:** long-pressing a chip offers "Hide this suggestion", and a single "Show suggestions"
-   switch in settings turns the whole row off.
+9. **Hiding:**
+   - Long-pressing a chip offers "Hide this suggestion".
+   - A single "Show suggestions" switch in settings turns the whole row off.
+   - **Collapse arrow (owner, 2026-11-17):** a small chevron button at the trailing end of the
+     row collapses it. While collapsed, only that chevron remains, flipped to point up, at the
+     tray's trailing edge, and tapping it brings the chips back. The collapsed state persists
+     across launches. The button has a 44 pt target and the labels "Hide suggestions" /
+     "Show suggestions".
 10. **Devices:**
     - On iPhone and on the upright Duo inner display, the row works as on iPhone.
     - On the **closed iPhone Duo** (outer display, 466×678 pt, system bar on the right), the row
