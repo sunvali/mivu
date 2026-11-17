@@ -178,11 +178,15 @@ struct DiaryRootView: View {
     private var lifecycleView: some View {
         companionView
         .task {
+            for await _ in NotificationCenter.default.notifications(named: .NSSystemTimeZoneDidChange) where hasLoaded { await services.syncTimeZone() }
+        }
+        .task {
             if !DiaryLaunch.isUITest, ["today", "diary", "progress", "coach"].contains(restoredTab) { selectedTab = restoredTab }
             let hadSiriPrompts = !services.inbox.entries().isEmpty
             let createDefaultProfile = (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test")
             await services.loadDiary(createDefaultProfile: createDefaultProfile)
             hasLoaded = true
+            await services.syncTimeZone()
             if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
             await services.start(createDefaultProfile: createDefaultProfile)
@@ -237,7 +241,7 @@ struct DiaryRootView: View {
                 attachCompanion()
                 refreshCompanion()
             }
-            if value == .active, hasLoaded, DiaryLaunch.rollsOverDays { Task { await model.rollOverDay() } }
+            if value == .active, hasLoaded { Task { await services.syncTimeZone(); if DiaryLaunch.rollsOverDays { await model.rollOverDay() } } }
             if value == .active { endBackgroundLease(); Task { await connection.enterForeground(); await coach.waitForWorker(); coach.enterForeground(); await drainSiriPrompts() }; model.resumeWorker(allowProcessing: true); model.queueBackup() }
         }
     }

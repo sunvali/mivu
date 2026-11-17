@@ -40,6 +40,14 @@ import UIKit
         return MivuServices(diary: diary, connection: session, coach: coach, nutritionKeys: keys)
     }
 
+    nonisolated static func shouldSync(isSending: Bool) -> Bool { !isSending }
+    /// Runs the time zone sync at an activity point, never under a Coach request that already captured its day.
+    func syncTimeZone() async {
+        await coach.waitForWorker()
+        guard Self.shouldSync(isSending: coach.isSending) else { return }
+        await diary.syncTimeZone()
+    }
+
     /// Loads the selected diary once; later calls wait for the first.
     func loadDiary(createDefaultProfile: Bool) async {
         if loading == nil {
