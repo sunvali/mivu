@@ -3,27 +3,57 @@
 - Branch: `feat/health-workouts`. Base: `main` @ `720cc3f`.
 - Spec: `docs/superpowers/specs/2026-11-17-health-workouts-design.md`
 - Plan: `docs/superpowers/plans/2026-11-17-health-workouts.md`
-- Environment so far: Linux, with no Swift toolchain or Xcode. The code was written
-  and checked by reading only. **Nothing here has been built or run yet.**
+- Tested source: `4d2149b7c03d389379711b4a08051b15f8742019`. The source didn't change
+  for this record. The build compiled with no errors, so no fixes were needed.
+- Environment: macOS 27.0.1 and Xcode 27.2 (27B52). The simulator was a dedicated
+  iPhone 17 Pro on iOS 26.5, `C9C051B0-1AA2-4A8B-BA70-8C996FFAA35B`. DerivedData was
+  `build/DerivedData` in this worktree. Runs used the XcodeBuildMCP CLI, test plan
+  `Mivu`, suite `-only-testing` selectors, and no parallel testing.
 
-## Results
+## Results (2026-11-17)
 
-Every native check is `blocked` until the owner's Mac is back. Run them with
-XcodeBuildMCP on a reserved simulator, with a checkout-specific DerivedData. Then
-record the tested SHA and the result counts here. A suite that runs zero tests
-does not count.
+| Run | Scope | Passed | Failed | Result |
+|---|---|---|---|---|
+| Build | `Mivu` scheme, Debug, iOS simulator | — | — | pass (0 errors) |
+| Model | `MivuTests/HealthWorkoutTests` | 4 | 0 | pass |
+| Store import | `MivuTests/HealthWorkoutStoreTests` | 9 | 0 | pass |
+| Sync | `MivuTests/HealthWorkoutSyncTests` | 4 | 0 | pass |
+| Credit rule | `MivuTests/ProgressAnalyticsTests` | 20 | 0 | pass |
+| Progress store | `MivuTests/ProgressStoreTests` | 13 | 0 | pass |
+| Coach privacy | `MivuTests/CoachStoreTests` (incl. `coachNeverSeesHealthWorkouts`) | 44 | 4 | fail, pre-existing (see below) |
+| Coach engine | `MivuTests/CoachEngineTests` | 49 | 5 | fail, pre-existing (see below) |
+| Coach context | `MivuTests/CoachIndexedContextTests` | 17 | 0 | pass |
+| Backup | `MivuTests/ArchiveTests` (incl. `backupOmitsHealthWorkoutsButKeepsDeletedIDsAcrossRestore`) | 35 | 0 | pass |
+| Export | `MivuTests/DiaryExportConcurrencyTests` | 28 | 0 | pass |
+| Services | `MivuTests/MivuServicesTests` | 1 | 0 | pass |
+| Widget | `MivuTests/WidgetSnapshotTests` | 5 | 0 | pass |
+| Live Activity | `MivuTests/DayProgressActivityTests` | 20 | 0 | pass |
+| Diary | `MivuTests/DiaryTests` | 29 | 0 | pass |
+| Smoke | `python3 scripts/ci/smoke.py --simulator-id C9C051B0-…` | 1 | 0 | pass (64.9 s) |
 
-| Run | Scope | Result |
-|---|---|---|
-| Build | `Mivu` scheme, Debug, iOS simulator | blocked (no Mac) |
-| Model | `MivuTests/HealthWorkoutTests` | blocked |
-| Credit rule | `MivuTests/ProgressAnalyticsTests` | blocked |
-| Store import | `MivuTests/HealthWorkoutStoreTests` | blocked |
-| Coach privacy | `MivuTests/CoachStoreTests` (incl. `coachNeverSeesHealthWorkouts`) | blocked |
-| Backup | `MivuTests/ArchiveTests` (incl. `backupOmitsHealthWorkoutsButKeepsDeletedIDsAcrossRestore`) | blocked |
-| Sync | `MivuTests/HealthWorkoutSyncTests` | blocked |
-| Direct callers | `ProgressStoreTests`, `ProgressInsightsTests`, `CoachReplyLinesTests`, `CoachEngineTests`, `CoachIndexedContextTests`, `CoachBatchTransactionTests`, `DiaryExportConcurrencyTests`, `WidgetSnapshotTests`, `DayProgressActivityTests` | blocked |
-| Smoke | `python3 scripts/ci/smoke.py --simulator-id <reserved-UUID>` | blocked |
+Unit total: 278 passed, 9 failed, 0 skipped.
+
+**The 9 Coach failures are pre-existing.** The same two suites, run on the base
+commit `720cc3f` with the same simulator, failed the same 9 tests (92 passed,
+9 failed). The branch adds one Coach test, `coachNeverSeesHealthWorkouts`, and it
+passes. The failures expect the requested day `2027-01-15` and get `2027-01-14`, or
+get a different time zone. That points to a dependence on the clock or time zone,
+not to this change:
+
+- `CoachEngineTests`: `modelTimeSyntaxKeepsDateOnlyPrecisionAndRequestedDay`,
+  `progressQuestionKeepsGroundedProse`, `mealProseMayStateTheDaysNewTotal`,
+  `progressAnswerUsesRequestedActualBudget`,
+  `requestedProgressRereadsFactsAfterSuspendedInference`
+- `CoachStoreTests`: `idempotentFoodRetryAfterRelaunchDoesNotResurrectDeletedMeal`,
+  `capturedTimezoneAndExplicitHistoricalTimeSurviveProfileChange`,
+  `unconfirmedCoachTimeStaysDateOnlyAndManualCaptureRemainsExact`,
+  `progressReferencesAreBoundedAndOversizedWorkoutRefusesReplacement`
+
+Not run in this pass: `ProgressInsightsTests`, `CoachReplyLinesTests`,
+`CoachBatchTransactionTests`, and full UI tests. The plan's "Expected: FAIL" steps
+stay unticked, because the code was written without a toolchain and no failing run
+was observed. Task 2 step 5 and Task 4 step 4 also stay unticked until the suites
+listed above run, or the pre-existing Coach failures are fixed.
 
 ## Physical phone (owner, real Garmin) — blocked
 

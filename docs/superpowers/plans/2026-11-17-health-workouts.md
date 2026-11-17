@@ -91,7 +91,7 @@ HealthKit reader passes changes to a single validated store operation.
   (the source app's display name), and
   `extension WorkoutSession { var isFromHealth: Bool }`.
 
-- [ ] **Step 1: Write failing tests** in `@Suite struct HealthWorkoutTests`:
+- [x] **Step 1: Write failing tests** in `@Suite struct HealthWorkoutTests`:
   - `oldWorkoutPayloadDecodesWithoutHealthSource`: decoding a `WorkoutSession` JSON
     with no `healthSource` gives `healthSource == nil` and `isFromHealth == false`.
   - `healthWorkoutRequiresSourceName`: `validateWorkoutFields` throws
@@ -99,12 +99,12 @@ HealthKit reader passes changes to a single validated store operation.
     non-health session with a `healthSource`, and for a name over 100 characters.
     It passes for `.health` with `"Garmin Connect"`.
 - [ ] **Step 2: Run** `MivuTests/HealthWorkoutTests`. Expected: FAIL (no `.health` case).
-- [ ] **Step 3: Implement** the new case and field (synthesized `Codable` decodes a
+- [x] **Step 3: Implement** the new case and field (synthesized `Codable` decodes a
   missing optional as nil), `isFromHealth` (`burnSource == .health`), and the
   validation rule.
-- [ ] **Step 4: Run** `MivuTests/HealthWorkoutTests` plus `MivuTests/DiaryTests`
+- [x] **Step 4: Run** `MivuTests/HealthWorkoutTests` plus `MivuTests/DiaryTests`
   (snapshot validation callers). Expected: PASS.
-- [ ] **Step 5: Commit** `feat(health): mark workouts imported from Apple Health`
+- [x] **Step 5: Commit** `feat(health): mark workouts imported from Apple Health`
 
 ### Task 2: Exercise credit rule (overlap and known part)
 
@@ -141,7 +141,7 @@ Overlap rule (not fixed by the signature):
 - Within each overlapping group, count one: a Health workout before a non-Health one,
   then the lowest `ordinal`/earliest `performedAt`, then `id`.
 
-- [ ] **Step 1: Write failing tests** in `ProgressAnalyticsTests`:
+- [x] **Step 1: Write failing tests** in `ProgressAnalyticsTests`:
   - `creditCountsKnownPartAndNotesUnknown`: Health 400 kcal plus a Coach workout with
     nil kcal, with credit on, gives `estimatedBurnKcal == 400`,
     `uncountedWorkoutCount == 1` and adjusted remaining = remaining + 400.
@@ -154,7 +154,7 @@ Overlap rule (not fixed by the signature):
     `.dateOnly` 250, Health cardio 400 and Health strength 100 give credited 500.
   - `deletingWinnerLetsRunnerUpCount`: drop the Garmin row from the previous fixture
     and the Apple Watch 380 is credited.
-- [ ] **Step 2: Write failing test** in `ProgressStoreTests`:
+- [x] **Step 2: Write failing test** in `ProgressStoreTests`:
   `coachProgressExcludesHealthWorkouts`. A day has one Coach workout (200) and one
   imported `.health` workout (400), with credit on.
   - `coachProgress(...).daily` has `workoutCount == 1`, `estimatedBurnKcal == 200`
@@ -162,7 +162,7 @@ Overlap rule (not fixed by the signature):
   - `progressForDisplay` has `workoutCount == 2` and `estimatedBurnKcal == 600`.
   - Insert the Health row with `transaction.saveWorkout` until Task 3 lands.
 - [ ] **Step 3: Run** `MivuTests/ProgressAnalyticsTests` and `MivuTests/ProgressStoreTests`. Expected: the new tests FAIL.
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
   - Add `ExerciseCredit.daily`.
   - Route both `ProgressAnalytics.daily(readModel:)` and `daily(snapshot:localDate:)`
     through it, and add the `DailyProgress` fields.
@@ -172,7 +172,7 @@ Overlap rule (not fixed by the signature):
   - Update existing assertions that expected nil burn for a day with unknown calories.
     This is the intended rule change (spec "Mixed day").
 - [ ] **Step 5: Run** the same two suites plus `MivuTests/ProgressInsightsTests` and `MivuTests/CoachReplyLinesTests`. Expected: PASS.
-- [ ] **Step 6: Commit** `feat(progress): credit known workout calories once per overlap`
+- [x] **Step 6: Commit** `feat(progress): credit known workout calories once per overlap`
 
 ### Task 3: Store operation that applies Health changes
 
@@ -211,7 +211,7 @@ Rules:
 - Everything happens in one `pagedMutation` transaction, so a single invalid
   workout skips only that workout and doesn't fail the batch.
 
-- [ ] **Step 1: Write failing tests** (fixture as in `ProgressStoreTests`: zone
+- [x] **Step 1: Write failing tests** (fixture as in `ProgressStoreTests`: zone
   `Asia/Jerusalem`, a store with injected `currentTime`):
   - `importsIntoExistingDayWithinWindow`: one day exists for today. A Health workout
     at 07:00 for 45 min with 412 kcal from "Garmin Connect" gives one `.health`
@@ -233,10 +233,10 @@ Rules:
   - `staleWindowChangesIgnored`: a Health row dated 8 days ago (seeded by
     `saveWorkout`) is not updated or deleted.
 - [ ] **Step 2: Run** `MivuTests/HealthWorkoutStoreTests`. Expected: FAIL (no `applyHealthWorkouts`).
-- [ ] **Step 3: Implement** `DiaryTransaction.applyHealthWorkouts` in the new file and
+- [x] **Step 3: Implement** `DiaryTransaction.applyHealthWorkouts` in the new file and
   the `DiaryStore` wrapper.
-- [ ] **Step 4: Run** `MivuTests/HealthWorkoutStoreTests` and `MivuTests/ProgressStoreTests`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat(health): apply Apple Health workout changes to the diary`
+- [x] **Step 4: Run** `MivuTests/HealthWorkoutStoreTests` and `MivuTests/ProgressStoreTests`. Expected: PASS.
+- [x] **Step 5: Commit** `feat(health): apply Apple Health workout changes to the diary`
 
 ### Task 4: Keep Health out of Coach
 
@@ -249,21 +249,21 @@ Rules:
 - Consumes: `WorkoutSession.isFromHealth`, `applyHealthWorkouts` (Task 3).
 - Produces: none. Coach behavior stays the same for non-Health rows.
 
-- [ ] **Step 1: Write failing test** `coachNeverSeesHealthWorkouts`: import one Health
+- [x] **Step 1: Write failing test** `coachNeverSeesHealthWorkouts`: import one Health
   workout and log one Coach workout on today's day.
   - `coachWorkout(id: healthID)` throws `DiaryError.notFound`.
   - The Coach context's `workouts` holds only the Coach workout's ID.
   - `coachJSON` of the context and of `coachProgress` contains neither the Health
     UUID string nor `"Garmin Connect"`.
 - [ ] **Step 2: Run** `MivuTests/CoachStoreTests`. Expected: FAIL.
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   - `coachWorkout` throws `.notFound` for `.health`.
   - The context SQL adds `AND COALESCE(json_extract(CAST(w.payload AS TEXT), '$.burnSource'), '') <> 'health'`.
   - The `.workout(id)` source lookup leaves Health rows out.
   - Coach edit and delete tools already require a workout Coach knows about
     (`CoachTools.swift:200`), so they can't target a Health ID.
 - [ ] **Step 4: Run** `MivuTests/CoachStoreTests`, `MivuTests/CoachEngineTests` and `MivuTests/CoachIndexedContextTests`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat(coach): keep Apple Health workouts out of Coach`
+- [x] **Step 5: Commit** `feat(coach): keep Apple Health workouts out of Coach`
 
 ### Task 5: Folder backups leave out Health workouts
 
@@ -276,7 +276,7 @@ Rules:
 - Produces: `extension DiarySnapshot { func withoutHealthWorkouts() -> DiarySnapshot }`,
   which drops `.health` workouts and keeps `deletedWorkoutIDs`.
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `backupOmitsHealthWorkoutsButKeepsTombstones`: save to a temp backup folder. The
     archive read back contains the Coach workout, not the Health one, and still lists
     a previously deleted Health ID in `deletedWorkoutIDs`.
@@ -286,13 +286,13 @@ Rules:
     then `applyHealthWorkouts` with the deleted ID and one live ID. Only the live one
     is present.
 - [ ] **Step 2: Run** `MivuTests/ArchiveTests`. Expected: FAIL.
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   - `save(_ snapshot:)` encodes `snapshot.withoutHealthWorkouts()`.
   - `save(_ request:coordinator:)` re-encodes `archive.snapshot.withoutHealthWorkouts()`
     with `DiaryArchive.encode` before `write`. Pass that same filtered snapshot to
     `beginSave` and `write`.
-- [ ] **Step 4: Run** `MivuTests/ArchiveTests` and `MivuTests/DiaryExportConcurrencyTests`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat(backup): leave Apple Health workouts out of folder backups`
+- [x] **Step 4: Run** `MivuTests/ArchiveTests` and `MivuTests/DiaryExportConcurrencyTests`. Expected: PASS.
+- [x] **Step 5: Commit** `feat(backup): leave Apple Health workouts out of folder backups`
 
 ### Task 6: HealthKit reader and sync
 
@@ -337,7 +337,7 @@ Rules:
   as those from Garmin Connect or Apple Watch, so their active calories can add to
   your daily food budget. They stay on this iPhone."
 
-- [ ] **Step 1: Write failing tests** with a fake `HealthWorkoutReading`:
+- [x] **Step 1: Write failing tests** with a fake `HealthWorkoutReading`:
   - `syncAppliesChangesAndStoresAnchor`: the first sync passes `anchor: nil`, applies
     one workout and stores the anchor. The second passes that anchor back.
   - `disconnectKeepsWorkoutsAndStopsImports`: after `disconnect()`, a `sync()` makes no
@@ -345,11 +345,11 @@ Rules:
   - `workoutKindMapping`: running gives `.cardio`, traditional strength gives
     `.strength` and yoga gives `.other`.
 - [ ] **Step 2: Run** `MivuTests/HealthWorkoutSyncTests`. Expected: FAIL.
-- [ ] **Step 3: Implement** the sync, `HKHealthReader`, entitlements, the plist string and the launch/foreground hooks.
+- [x] **Step 3: Implement** the sync, `HKHealthReader`, entitlements, the plist string and the launch/foreground hooks.
   - Skip the sync when `DiaryLaunch.isUITest` is set.
   - The observer's completion handler must always be called.
-- [ ] **Step 4: Run** `MivuTests/HealthWorkoutSyncTests` and `MivuTests/MivuServicesTests`. Expected: PASS. Build the `Mivu` scheme for the simulator. Expected: success.
-- [ ] **Step 5: Commit** `feat(health): read workouts from Apple Health`
+- [x] **Step 4: Run** `MivuTests/HealthWorkoutSyncTests` and `MivuTests/MivuServicesTests`. Expected: PASS. Build the `Mivu` scheme for the simulator. Expected: success.
+- [x] **Step 5: Commit** `feat(health): read workouts from Apple Health`
 
 ### Task 7: Settings, Today, workout detail and widget
 
@@ -392,7 +392,7 @@ UI copy (fixed):
   - Hide "Edit workout" and keep "Delete workout".
   - The delete confirmation adds: "It won't be imported again."
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `WidgetSnapshotTests.earnedCaloriesRaiseTarget`: credit on with Health at 400 kcal
     gives `earnedKcal == 400`. Credit off gives nil. An old JSON without the key
     decodes.
@@ -400,13 +400,13 @@ UI copy (fixed):
     `WorkoutDetailPresentation(session:).canEdit == false` and
     `.sourceLine == "From Garmin Connect"`.
 - [ ] **Step 2: Run** `MivuTests/WidgetSnapshotTests` and `MivuTests/HealthWorkoutTests`. Expected: FAIL.
-- [ ] **Step 3: Implement** the views and the widget field, keeping 44-point targets
+- [x] **Step 3: Implement** the views and the widget field, keeping 44-point targets
   and accessibility identifiers `healthSettingsToggle`, `todayHealthCredit` and
   `workoutOverlapRemove`.
-- [ ] **Step 4: Run** the two suites plus `MivuTests/DayProgressActivityTests`.
+- [x] **Step 4: Run** the two suites plus `MivuTests/DayProgressActivityTests`.
   Expected: PASS. Then `python3 scripts/ci/smoke.py --simulator-id <reserved-UUID>`.
   Expected: PASS within 120 s.
-- [ ] **Step 5: Commit** `feat(health): connect Apple Health and show earned workout calories`
+- [x] **Step 5: Commit** `feat(health): connect Apple Health and show earned workout calories`
 
 ### Task 8: Docs and device verification record
 
@@ -416,7 +416,7 @@ UI copy (fixed):
 - Create: `docs/verification/2026-11-17-health-workouts.md`
 - Modify: `README.md` "What you get" (one bullet: workouts from Apple Health, including Garmin)
 
-- [ ] **Step 1:** Write the verification record.
+- [x] **Step 1:** Write the verification record.
   - Record the source SHA, the simulator and OS, and every suite from Tasks 1–7 with
     its result counts, plus the smoke result.
   - Add the physical-phone checklist marked `blocked`, pending the owner's real
@@ -428,5 +428,5 @@ UI copy (fixed):
     3. Deleting it in Garmin removes it from Mivu.
     4. Deleting it in Mivu doesn't bring it back.
     5. Wearing an Apple Watch and a Garmin on the same session credits it once.
-- [ ] **Step 2:** Update parity and the App Store doc. Run `python3 scripts/ci/` checks for parity and docs, if present.
-- [ ] **Step 3: Commit** `docs(health): record Apple Health workouts verification and parity`
+- [x] **Step 2:** Update parity and the App Store doc. Run `python3 scripts/ci/` checks for parity and docs, if present.
+- [x] **Step 3: Commit** `docs(health): record Apple Health workouts verification and parity`
