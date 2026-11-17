@@ -92,4 +92,20 @@ import Testing
         #expect(first == again)
         #expect(try await store.snapshotForExport().coachTurns.count == 1)
     }
+
+    @Test func coachWeightCorrectsOnlyTheSelectedDayWhenTwoDaysShareADate() async throws {
+        let profile = DiaryProfile(name: "Synthetic", timeZoneID: "Pacific/Honolulu")
+        let utc = TrackingDay(localDate: "2026-11-17", timeZoneID: "UTC", startAt: DayTests.date("2026-11-17T01:00:00Z"))
+        let honolulu = TrackingDay(localDate: "2026-11-17", timeZoneID: "Pacific/Honolulu", startAt: DayTests.date("2026-11-17T20:00:00Z"))
+        let utcWeight = WeightEntry(dayID: utc.id, measuredAt: utc.startAt, value: 80)
+        let honoluluWeight = WeightEntry(dayID: honolulu.id, measuredAt: honolulu.startAt, value: 70)
+        let store = DiaryStore(directory: DiaryTests.directory())
+        _ = try await store.importProfile(DiarySnapshot(profile: profile, days: [utc, honolulu], weights: [utcWeight, honoluluWeight], activeDayID: honolulu.id))
+        let turn = try await capturedTurn(store, text: "Weighed 71 kg", photos: [], at: DayTests.date("2026-11-17T21:00:00Z"), expectedProfileID: profile.id)
+        let epoch = try await store.selectionEpoch(expectedProfileID: profile.id)
+        _ = try await store.applyCoachWrites([.weight(date: "2026-11-17", value: 71, unit: "kg", revision: honoluluWeight.revision)], turnID: turn.id, epoch: epoch, expectedProfileID: profile.id)
+        let weights = try await store.snapshotForExport().weights
+        #expect(weights.first { $0.id == honoluluWeight.id }?.value == 71)
+        #expect(weights.first { $0.id == utcWeight.id } == utcWeight)
+    }
 }

@@ -113,15 +113,11 @@ extension DiaryTransaction {
     private func resolvedWeightWrite(_ write: CoachWrite, turn: CoachTurn) throws -> CoachWrite {
         guard case .weight(let date, let value, let unit, let revision) = write else { return write }
         if turn.receipts.contains(where: { $0.operationKey == "\(turn.id)/weight/\(date)" }) { return write }
-        let days = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(date)])
-        let dayIDs = Set(days.map(\.id))
-        if let receipt = turn.receipts.first(where: { $0.weightID != nil && $0.operationKey == "\(turn.id)/correct_weight/\($0.weightID!)" && $0.dayID.map { dayIDs.contains($0.uuidString) } == true }) {
+        guard let day = try dayForDate(date) else { return write }
+        if let receipt = turn.receipts.first(where: { $0.weightID != nil && $0.operationKey == "\(turn.id)/correct_weight/\($0.weightID!)" && $0.dayID == day.id }) {
             guard let revision else { throw DiaryError.staleRevision }; return .correctWeight(id: receipt.weightID!, value: value, unit: unit, revision: revision)
         }
-        for row in days {
-            guard let id = UUID(uuidString: row.id) else { throw DiaryError.invalidData }
-            if let existing = try weight(on: id) { guard let revision else { throw DiaryError.staleRevision }; return .correctWeight(id: existing.id, value: value, unit: unit, revision: revision) }
-        }
+        if let existing = try weight(on: day.id) { guard let revision else { throw DiaryError.staleRevision }; return .correctWeight(id: existing.id, value: value, unit: unit, revision: revision) }
         return write
     }
     private func validateReplay(_ write: CoachWrite, receipt: CoachReceipt) throws {
