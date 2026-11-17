@@ -18,6 +18,36 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [added], timeout: 20), .completed, "A receipt card follows the tap")
     }
 
+    func testFoodOptionTapLogsTheChosenFood() {
+        let app = launch()
+        send("clarify-options", in: app)
+        let option = app.buttons["coachOptionChip"].firstMatch
+        XCTAssertTrue(option.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(identifier: "coachOptionChip").count, 2)
+        XCTAssertGreaterThanOrEqual(option.frame.height, 44)
+        XCTAssertEqual(option.label, "Silan spread")
+        let card = app.descendants(matching: .any).matching(identifier: "coachReceiptQuantity")
+        let question = app.staticTexts["coachOptionQuestion"]
+        XCTAssertTrue(question.exists && question.label.contains("Blorp spread"), "The question names the unclear food")
+        XCTAssertGreaterThan(question.frame.minY, card.firstMatch.frame.maxY, "The question sits under the saved food, beside its options")
+        XCTAssertLessThan(question.frame.maxY, option.frame.minY)
+        let before = card.count
+        option.tap()
+        XCTAssertTrue(option.waitForNonExistence(timeout: 20), "Options leave the answered exchange")
+        let added = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count > %d", before), object: card)
+        XCTAssertEqual(XCTWaiter.wait(for: [added], timeout: 20), .completed, "The picked food is logged")
+    }
+
+    func testSomethingElseOpensAReplyToTheQuestion() {
+        let app = launch()
+        send("clarify-options", in: app)
+        let other = app.buttons["coachOptionOther"]
+        XCTAssertTrue(other.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(other.frame.height, 44)
+        other.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["coachReplyBar"].waitForExistence(timeout: 5), "The composer opens as a reply to Pip")
+    }
+
     func testChipsAtLargestDynamicType() {
         let app = launch(largeType: true)
         send("Synthetic meal", in: app); send("Synthetic review", in: app); send("clarify-candidates", in: app)

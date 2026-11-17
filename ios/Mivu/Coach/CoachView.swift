@@ -304,7 +304,7 @@ struct CoachView: View {
             result.append(CoachTimelineRow(id: .exchange(turn.id), exchange: turn,
                 targets: turn.receipts.map(coach.receiptTarget), undo: turn.receipts.map(coach.undoState), questionMeals: coach.linkedMeals(turn), activity: coach.activityTurnID == turn.id ? coach.activity : nil,
                 fixtureBanner: DiaryLaunch.isCoachInferenceFixture && turn.id == timeline.exchanges.first?.id,
-                isHighlighted: coach.highlightedTurnID == turn.id))
+                isHighlighted: coach.highlightedTurnID == turn.id, isLatest: timeline.window.isLatest(turn.id)))
         }
         if let empty = timeline.window.latestEmptySegment {
             result.append(CoachTimelineRow(id: .segment(empty.segmentID), date: empty.displayLocalDate))
@@ -317,8 +317,8 @@ struct CoachView: View {
                 if row.fixtureBanner { Text("Native test fixture — no provider request").font(.caption).foregroundStyle(Color.diaryLeaf).accessibilityIdentifier("coachFixtureBanner") }
                 inputBubble(turn)
                 VStack(alignment: .leading, spacing: 12) {
-                    if let answer = turn.assistantText {
-                        Text(CoachReplyLines.attributed(answer)).font(.body).directionFromContent(answer)
+                    if let answer = turn.assistantText, case let prose = replyParts(turn).prose, !prose.isEmpty {
+                        Text(CoachReplyLines.attributed(prose)).font(.body).directionFromContent(prose)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
@@ -779,6 +779,22 @@ struct CoachView: View {
             }
         }.frame(maxWidth: .infinity, alignment: .trailing)
     }
+    /// The engine ends a reply with Pip's question; with answer options it moves under the card, beside them.
+    private func replyParts(_ turn: CoachExchangeSummary) -> (prose: String, question: String?) {
+        let text = turn.assistantText ?? ""
+        guard turn.question?.options != nil else { return (text, nil) }
+        guard let cut = text.lastIndex(of: "\n") else { return ("", text) }
+        return (String(text[..<cut]), String(text[text.index(after: cut)...]))
+    }
+    private func optionChips(_ options: [String], turn: CoachExchangeSummary) -> some View {
+        ForEach(options, id: \.self) { option in
+            Button { Task { await coach.answer(.message(turnID: turn.id, fromPip: true), label: option, excerpt: turn.assistantText) } } label: {
+                Text(option).directionFromContent(option).frame(minHeight: 44)
+            }
+            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
+            .accessibilityHint("Logs this food").accessibilityIdentifier("coachOptionChip")
+        }
+    }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if let question = turn.question, !question.candidates.isEmpty, coach.timeline?.window.isLatest(turn.id) == true {
@@ -807,6 +823,40 @@ struct CoachView: View {
                     if let id = receipt.mealID { pane = .meal(id) }
                     else if let id = receipt.workoutID { pane = .workout(id) }
                 }
+            }
+            if let options = turn.question?.options {
+                let isLatest = coach.timeline?.window.isLatest(turn.id) == true
+                VStack(alignment: .leading, spacing: 8) {
+                    if let question = replyParts(turn).question {
+                        Text(CoachReplyLines.attributed(question)).font(.subheadline.weight(.semibold)).directionFromContent(question)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
+                            .contextMenu { messageActions(turn, fromPip: true) }
+                            .accessibilityAction(named: "Reply") { reply(to: turn, fromPip: true) }
+                            .accessibilityAddTraits(.isHeader).accessibilityIdentifier("coachOptionQuestion")
+                    }
+                    if isLatest {
+                        // Each option answers Pip's question as a reply, so the original amount and meal stay in context.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 8) { optionChips(options, turn: turn) }.fixedSize()
+                            VStack(alignment: .leading, spacing: 8) { optionChips(options, turn: turn) }
+                        }
+                        Button { reply(to: turn, fromPip: true) } label: {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Image(systemName: "pencil").accessibilityHidden(true)
+                                Text("Something else? Type it").multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.borderless).foregroundStyle(Color.diaryAccent)
+                        .accessibilityHint("Opens a reply to type what it was")
+                        .accessibilityIdentifier("coachOptionOther")
+                    }
+                }
+                .font(.subheadline).disabled(coach.isWorking)
+                .padding(isLatest ? 12 : 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isLatest ? Color.diaryAccent.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             ForEach(turn.receipts.filter { $0.weightID != nil }, id: \.operationKey) { receipt in
                 if let label = CoachReceiptPresentation(receipt: receipt, target: .loading).weightLabel {

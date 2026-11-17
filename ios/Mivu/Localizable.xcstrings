@@ -8356,6 +8356,16 @@
         }
       }
     },
+    "Logs this food" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רושם את המאכל הזה"
+          }
+        }
+      }
+    },
     "Looking at your photo…" : {
       "localizations" : {
         "he" : {
@@ -10038,6 +10048,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "פותח את היומן שלך"
+          }
+        }
+      }
+    },
+    "Opens a reply to type what it was" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פותח תשובה כדי לכתוב מה זה היה"
           }
         }
       }
@@ -12916,6 +12936,17 @@
         }
       }
     },
+    "Something else? Type it" : {
+      "comment" : "Link under Pip's suggested foods; opens a reply to type the food instead.",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משהו אחר? אפשר לכתוב"
+          }
+        }
+      }
+    },
     "Something went wrong." : {
       "localizations" : {
         "he" : {
@@ -15266,6 +15297,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מה אכלת היום?"
+          }
+        }
+      }
+    },
+    "What is “%@”?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה זה ”%@”?"
           }
         }
       }
