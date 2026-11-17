@@ -83,9 +83,9 @@ struct MorningCheckInCard: View {
 
     private var greeting: String {
         switch Calendar.current.component(.hour, from: Date()) {
-        case 5..<12: "Good morning"
-        case 12..<18: "Good afternoon"
-        default: "Good evening"
+        case 5..<12: String(localized: "Good morning")
+        case 12..<18: String(localized: "Good afternoon")
+        default: String(localized: "Good evening")
         }
     }
 
@@ -97,7 +97,7 @@ struct MorningCheckInCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(kcal.formatted(.number.precision(.fractionLength(0))))
                     .font(.title2.weight(.bold)).monospacedDigit().foregroundStyle(Color.diaryText)
-                Text(previousTarget.map { "of \($0.formatted(.number.precision(.fractionLength(0)))) kcal" } ?? "kcal")
+                Text(previousTarget.map { String(localized: "of \($0.formatted(.number.precision(.fractionLength(0)))) kcal") } ?? String(localized: "kcal"))
                     .font(.subheadline).foregroundStyle(Color.diarySecondary)
             }
             if let target = previousTarget, target > 0 {
@@ -116,16 +116,16 @@ struct MorningCheckInCard: View {
     }
     private var weightField: some View {
         HStack(spacing: 8) {
-            TextField(lastKg.map { display($0) } ?? "Weight", text: $weight)
+            TextField(lastKg.map { display($0) } ?? String(localized: "Weight"), text: $weight)
                 .keyboardType(.decimalPad).focused($weightFocused)
                 .font((compact ? Font.body : .title2).weight(.semibold)).monospacedDigit()
-                .accessibilityLabel("Weight in \(unit == "lb" ? "pounds" : "kilograms")").accessibilityIdentifier("morningWeight")
+                .accessibilityLabel(unit == "lb" ? Text("Weight in pounds") : Text("Weight in kilograms")).accessibilityIdentifier("morningWeight")
             Menu {
                 Picker("Unit", selection: $unit) { Text("kg").tag("kg"); Text("lb").tag("lb") }
             } label: {
-                HStack(spacing: 4) { Text(unit); Image(systemName: "chevron.up.chevron.down").font(.caption2) }
+                HStack(spacing: 4) { Text(WeightEntry.shownUnit(unit)); Image(systemName: "chevron.up.chevron.down").font(.caption2) }
                     .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryAccent).frame(minWidth: 44, minHeight: 44)
-            }.accessibilityLabel("Unit, \(unit)")
+            }.accessibilityLabel("Unit, \(WeightEntry.shownUnit(unit))")
         }
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { weightFocused = false } } }
     }
@@ -157,13 +157,13 @@ struct MorningCheckInCard: View {
 
     private func weightResult(_ entry: WeightEntry) -> some View {
         HStack {
-            Label { Text("\(display(entry.unit == "lb" ? entry.value * 0.45359237 : entry.value)) \(unit)").monospacedDigit() }
+            Label { Text("\(display(entry.unit == "lb" ? entry.value * 0.45359237 : entry.value)) \(WeightEntry.shownUnit(unit))").monospacedDigit() }
                 icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
                 .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryText)
             Spacer()
             if let trendKg {
                 // The weekly trend, not the day-to-day change: daily swings are mostly water.
-                Text("\(trendKg > 0 ? "+" : trendKg < 0 ? "−" : "")\(display(abs(trendKg))) \(unit) this week")
+                Text("\(trendKg > 0 ? "+" : trendKg < 0 ? "−" : "")\(display(abs(trendKg))) \(WeightEntry.shownUnit(unit)) this week")
                     .font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
             }
         }.frame(minHeight: 44).accessibilityElement(children: .combine)
@@ -194,6 +194,6 @@ func wakingDayTitle(_ localDate: String, relativeTo reference: String? = nil) ->
     let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
     formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"; formatter.timeZone = .gmt
     guard let date = formatter.date(from: localDate) else { return localDate }
-    if let reference, let next = formatter.date(from: reference), next.timeIntervalSince(date) == 86_400 { return "Yesterday" }
-    return date.formatted(Date.FormatStyle(timeZone: .gmt).weekday(.abbreviated).month(.abbreviated).day())
+    if let reference, let next = formatter.date(from: reference), next.timeIntervalSince(date) == 86_400 { return String(localized: "Yesterday") }
+    return date.formatted(Date.FormatStyle(calendar: .gregorianUTC, timeZone: .gmt).weekday(.abbreviated).month(.abbreviated).day())
 }

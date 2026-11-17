@@ -34,12 +34,12 @@ enum CoachClarification: String, CaseIterable, Codable, Sendable {
     case portion, food, day, meal, workout, confirm
     var question: String {
         switch self {
-        case .portion: "How much did you eat? Give grams, a serving size, or a container size."
-        case .food: "What food did you eat?"
-        case .day: "Which day should this be recorded on?"
-        case .meal: "Which meal do you mean?"
-        case .workout: "Which workout do you mean?"
-        case .confirm: "Remove this whole meal?"
+        case .portion: String(localized: "How much did you eat? Give grams, a serving size, or a container size.")
+        case .food: String(localized: "What food did you eat?")
+        case .day: String(localized: "Which day should this be recorded on?")
+        case .meal: String(localized: "Which meal do you mean?")
+        case .workout: String(localized: "Which workout do you mean?")
+        case .confirm: String(localized: "Remove this whole meal?")
         }
     }
 }
@@ -88,7 +88,8 @@ enum CoachTools {
         let number: [String: Any] = ["type": ["number", "null"]]
         let food = object(["name": string, "quantity": ["type":"number"], "unit": string,
             "kcal": number, "carbs": number, "protein": number, "fat": number,
-            "evidence_id": ["type":["integer", "null"]]], required: ["name", "quantity", "unit", "kcal", "carbs", "protein", "fat"])
+            "evidence_id": ["type":["integer", "null"]],
+            "from_label": ["type": "boolean", "description": "True only when kcal and macros were read from a nutrition label visible in this turn's photos and scaled to the eaten amount."]], required: ["name", "quantity", "unit", "kcal", "carbs", "protein", "fat"])
         let integer: [String: Any] = ["type": "integer"]
         let unconfirmedTime: [String: Any] = ["type": "string", "description": "Use null when no time was supplied. A valid local date or ISO 8601 string is accepted for compatibility but ignored; it cannot change the requested tracking day or establish an exact time."]
         let exercise = object(["name": string, "sets": ["type": "array", "items": object(["repetitions": integer, "load_kg": number], required: ["repetitions", "load_kg"])]], required: ["name", "sets"])
@@ -107,13 +108,13 @@ enum CoachTools {
             ("find_meals", "Search saved meals by food name, newest first, at most 10 candidates with their dates. Optional inclusive from_date/to_date local dates. Use for older references; call get_meal on the chosen meal before any edit or delete of it.", object(["query": string, "from_date": string, "to_date": string], required: ["query"])),
             ("get_meal", "Retrieve actual owner-scoped meal by UUID before correction. omittedItemCount marks unavailable details requiring manual review.", object(["meal_id": string], required: ["meal_id"])),
             ("lookup_nutrition", "Search retrieved nutrition evidence; unavailable means use clearly uncertain estimates.", object(["query":string], required: ["query"])),
-            ("log_food", "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; only retrieved evidence_id with grams replaces estimates. Direct chat remains date-only; exact time requires a manual UI capture. Set review_first true when the user wants a proposal before totals. Optional eaten_at is accepted for compatibility but cannot establish a confirmed time.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":unconfirmedTime, "review_first":["type":"boolean"]], required: ["target_local_date", "items"])),
+            ("log_food", "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; for a photographed nutrition label set from_label true. Only retrieved evidence_id with grams replaces estimates. Without eaten_at, food for today's date is stamped with the send time and other dates stay date-only. Set review_first true when the user wants a proposal before totals.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":["type": "string", "description": "Local wall clock yyyy-MM-dd HH:mm (24-hour, real calendar date) of eating, only when the user stated a time (\"at 8\", \"yesterday at noon\") or a relative one (\"an hour ago\"), worked out from the captured local clock; otherwise null. Never guess a time from a meal name."], "review_first":["type":"boolean"]], required: ["target_local_date", "items"])),
             ("correct_item", "Correct only quantity on a retrieved actual item, preserving its nutrition basis and sources.", object(["meal_id":string,"item_id":string,"expected_revision":["type":"integer"],"quantity":["type":"number"]], required: ["meal_id","item_id","expected_revision","quantity"])),
         ] + manualSchemas(food: food)
         let tools = schemas.map { ["type":"function", "name":$0.0, "description":$0.1, "parameters":$0.2, "strict":true] as [String: Any] }
         return try JSONSerialization.data(withJSONObject: ["type":"namespace", "name":namespace, "description":"Private local diary and progress operations", "tools":tools])
     }
-    static func parse(_ call: CoachToolCall, meals: [CoachContext.Meal], evidence: [Int: FoodEvidenceRecord], receipts: [CoachReceipt], workouts: [WorkoutSession] = [], found: [CoachMealCandidate] = []) throws -> CoachCommand {
+    static func parse(_ call: CoachToolCall, meals: [CoachContext.Meal], evidence: [Int: FoodEvidenceRecord], receipts: [CoachReceipt], workouts: [WorkoutSession] = [], found: [CoachMealCandidate] = [], zone: String? = nil) throws -> CoachCommand {
         guard call.namespace == namespace, call.arguments.utf8.count <= 65_536,
               let data = call.arguments.data(using: .utf8),
               let args = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw CoachError.invalidTool }
@@ -213,14 +214,19 @@ enum CoachTools {
         case "log_food":
             try keys(["target_local_date", "items", "eaten_at", "review_first"], ["target_local_date", "items"])
             let items = try foodItems(args["items"], evidence: evidence)
-            // Validate legacy syntax without treating model output as owner-confirmed time.
-            try unconfirmedTime("eaten_at")
+            // Only a local wall clock on the target calendar or waking day sets the time; a mismatch is dropped
+            // rather than failing the log, and legacy date or ISO syntax stays valid but ignored.
+            let day = try string("target_local_date")
+            var eatenAt: Date?
+            if let zone, let clock = args["eaten_at"] as? String, let at = diaryLocalInstant(clock, zone: zone) {
+                if [diaryDateLabel(at, zone: zone), wakingDateLabel(at, zone: zone)].contains(day) { eatenAt = at }
+            } else { try unconfirmedTime("eaten_at") }
             var reviewFirst = false
             if let raw = args["review_first"], !(raw is NSNull) {
                 guard let value = raw as? NSNumber, CFGetTypeID(value) == CFBooleanGetTypeID() else { throw CoachError.invalidArguments }
                 reviewFirst = value.boolValue
             }
-            return .write(.food(date: try string("target_local_date"), items: items, eatenAt: nil, reviewFirst: reviewFirst))
+            return .write(.food(date: day, items: items, eatenAt: eatenAt, reviewFirst: reviewFirst))
         case "get_meals_for_date":
             try keys(["target_local_date", "after_meal_id"], ["target_local_date"])
             let cursor = args["after_meal_id"] == nil || args["after_meal_id"] is NSNull ? nil : try uuid("after_meal_id")
@@ -246,7 +252,7 @@ enum CoachTools {
     static func foodItems(_ raw: Any?, evidence: [Int: FoodEvidenceRecord]) throws -> [FoodItem] {
             guard let rows = raw as? [[String: Any]], !rows.isEmpty, rows.count <= 200 else { throw CoachError.invalidArguments }
             return try rows.map { row -> FoodItem in
-                guard Set(row.keys).isSubset(of: ["name","quantity","unit","kcal","carbs","protein","fat","evidence_id"]),
+                guard Set(row.keys).isSubset(of: ["name","quantity","unit","kcal","carbs","protein","fat","evidence_id","from_label"]),
                       let name = row["name"] as? String, let quantity = number(row["quantity"]),
                       let unit = row["unit"] as? String else { throw CoachError.invalidArguments }
                 func nutrient(_ key: String) throws -> Double? {
@@ -256,6 +262,8 @@ enum CoachTools {
                 var item = FoodItem(name: name, quantity: quantity, unit: unit,
                     nutrition: try NutritionValues(kcal: nutrient("kcal"), carbs: nutrient("carbs"), protein: nutrient("protein"), fat: nutrient("fat")),
                     provenance: .estimate, reference: "Unverified portion estimate", uncertain: true)
+                // The model's reading and the eaten portion stay unverified, so uncertain remains true.
+                if row["from_label"] as? Bool == true { item.provenance = .confirmedLabel; item.reference = "Read from package label" }
                 if let idValue = row["evidence_id"], !(idValue is NSNull) {
                     guard let value = number(idValue), value > 0, value.rounded() == value, value < Double(Int.max),
                           let record = evidence[Int(value)], ["g", "gram", "grams"].contains(unit.lowercased()) else { throw CoachError.invalidArguments }

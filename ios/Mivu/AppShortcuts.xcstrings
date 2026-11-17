@@ -1,0 +1,108 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Ask ${applicationName} Coach" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Ask ${applicationName} Coach",
+              "Open ${applicationName} Coach"
+            ]
+          }
+        },
+        "he" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "לשאול את פיפ ב-${applicationName}",
+              "שאל את ${applicationName}",
+              "שאלי את ${applicationName}",
+              "לפתוח את פיפ ב-${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Log a meal in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Log a meal in ${applicationName}",
+              "Log food with ${applicationName}"
+            ]
+          }
+        },
+        "he" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "רישום ארוחה ב-${applicationName}",
+              "לרשום ארוחה ב-${applicationName}",
+              "רשום ארוחה ב-${applicationName}",
+              "רשמי ארוחה ב-${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Snap it with ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Snap it with ${applicationName}",
+              "Snap a meal in ${applicationName}"
+            ]
+          }
+        },
+        "he" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "צילום ארוחה ב-${applicationName}",
+              "לצלם ארוחה ב-${applicationName}",
+              "צלם ארוחה ב-${applicationName}",
+              "צלמי ארוחה ב-${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Tell ${applicationName}" : {
+      "comment" : "Siri phrase to message the Coach; ${applicationName} is Mivu, keep it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Tell ${applicationName}",
+              "Tell ${applicationName} Coach",
+              "Message ${applicationName} Coach"
+            ]
+          }
+        },
+        "he" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "לספר ל-${applicationName}",
+              "ספר ל-${applicationName}",
+              "ספרי ל-${applicationName}",
+              "הודעה לפיפ ב-${applicationName}"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

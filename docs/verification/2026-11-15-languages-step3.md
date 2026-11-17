@@ -1,0 +1,152 @@
+# Languages step 3: Hebrew on every surface, and Hebrew ships
+
+Plan: [2026-11-15-languages-step3-surfaces.md](../superpowers/plans/2026-11-15-languages-step3-surfaces.md).
+Glossary: [he.md](../languages/he.md). Branch `feat/languages-step3`.
+Step 2 record: [2026-11-15-languages-step2.md](2026-11-15-languages-step2.md).
+
+## What changed
+
+- PDF report lays out right to left when the language shown is right to left
+  (`Bundle.main.preferredLocalizations`, not the phone's locale). Each cell
+  draws in its own text's direction. The weight chart keeps time running left
+  to right and Pip's artwork does not flip. English pages are pixel-identical
+  to `main`.
+- CSV keeps machine dates and numbers. It starts with a UTF-8 byte-order mark
+  only when its text is not all ASCII, so Excel reads Hebrew; an all-English
+  export is byte-for-byte unchanged.
+- The morning reminder is rescheduled each time Mivu opens, so its text follows
+  a language change.
+- Settings → Diary preferences has a Language row that opens Mivu's page in iOS
+  Settings. It shows only when more than one language ships.
+- Fixes found by using the app in Hebrew: the Dynamic Island caption, the setup
+  "Sex" and "Fat" labels, setup height and weight units, ChatGPT's setup
+  explanation (now asked for in the app language), "kg" in weight receipts,
+  Today's goal line, and the "serving" default in manual entry.
+- Lint (`languages.py check`): a ternary inside `Text`/`Label`/… whose literals
+  aren't catalog keys, a ternary inside a translated string's interpolation,
+  and Siri phrases that lack `${applicationName}` or are shared between
+  shortcuts.
+- Hebrew App Store listing ([listing.he.md](../app-store/listing.he.md)) and five
+  framed 6.9-inch screenshots ([screenshots/he](../app-store/screenshots/he)),
+  captured with a real ChatGPT connection and invented Hebrew meals. Framing
+  script: `scripts/app-store/frame.swift`. Nothing was entered in App Store
+  Connect and no build was uploaded.
+- `MIVU_HIDDEN_LANGUAGES` is empty, so Release builds ship Hebrew. The strip
+  phases stay for the next language.
+
+The owner reviewed the new Hebrew strings, the listing and the screenshots and
+approved them (2026-11-15). Receipt cards follow the app language (owner,
+2026-11-15).
+
+## Captures
+
+In [languages/step3](languages/step3): PDF summary and meal pages, small and
+medium Home Screen widgets, compact and expanded Dynamic Island, and the
+Shortcuts list, all in Hebrew.
+
+## Evidence
+
+Source: `3891a4b73b7bed18c422a82a2035709afa4d2ae7` (`feat(languages): ship Hebrew`).
+Environment: macOS, Xcode 26 toolchain, "Mivu languages iPhone 18 Pro (Claude)"
+simulator (iOS 27.0), "Mivu languages Duo (Claude)" simulator (iOS 27.1),
+"Mivu screenshots (Claude)" simulator (iPhone 17 Pro Max) for the store shots.
+
+| Check | Result |
+|---|---|
+| `python3 scripts/ci/languages.py check` | exit 0 |
+| `scripts/ci/test_languages.py` | 25/25 (26/26 after the review) |
+| Release simulator build | `he.lproj` in Mivu.app and MivuWidgets.appex |
+| Release build, launched with `-AppleLanguages (he)` | Today and Settings in Hebrew; Language row shows "שפת האפליקציה, עברית" |
+| Release build, launched in English | Today unchanged; the Language row shows "App language, English" |
+| Unit suites `DiaryReportTests`, `HebrewSurfaceTextTests`, `MealNotificationTests`, `CoachReplyNotificationTests`, `DayProgressActivityTests`, `LanguageTextTests`, `TextDirectionTests`, `OnboardingTargetsTests` | 67/68; the one failure, `DiaryReportTests/summaryCountsEveryCalendarDayInTheRequestedRange`, fails on `main` too |
+| `DiaryUITests/testHebrewPhoneLanguageRowOpensSystemSettings` | 1/1 |
+
+Sweeps (`LanguageSweepUITests`, default text):
+
+| Mode | iPhone | Duo |
+|---|---|---|
+| english | 3 passed, 6 skipped | 3 passed, 6 skipped |
+| rtl | 5 passed, 4 skipped | 5 passed, 4 skipped |
+| double | 3 passed, 6 skipped | 3 passed, 6 skipped |
+| hebrew | 6 passed, 3 skipped | 6 passed, 3 skipped (rerun) |
+
+The first Hebrew run on the Duo failed `testHebrewPhoneGetsHebrew`: it compared
+tab positions side by side, but the Duo's side rail stacks the tabs. The test
+now skips that comparison for a rail, as `testRightToLeftFlagMirrorsTheApp`
+already did (that test passed on the Duo); the rerun with the fix passed.
+The test fix is the only change after `3891a4b7`.
+
+`CompanionUITests` + `LiveActivityUITests`: 15 of 17 passed in the combined run.
+`testSettingsReturnKeepsCoachSendReachable` and
+`testLargestTextGoalKeyboardDoneKeepsCoachSendReachable` could not find the
+Goals row (Settings opened before the diary loaded). Run on their own, both
+passed on this branch (2/2) and on `main` at `d2e7c49c` (2/2).
+
+## Review
+
+One independent review of the whole branch found nothing blocking and three
+smaller issues, all fixed:
+
+- Two VoiceOver labels chose an English word inside a translated sentence
+  ("Calories by day/week/month", "Weight in pounds/kilograms"); each branch is
+  now its own string, with Hebrew. The interpolation lint missed them; it now
+  reads whole interpolations in any text call (quoted conditions, nested
+  ternaries) and no longer excuses words that are catalog keys.
+- The morning check-in card showed "kg"/"lb" in Latin letters; it now uses
+  `WeightEntry.shownUnit` like receipts and the PDF.
+- The setup-targets prompt gained a language sentence for English users too;
+  it is now added only when the app language is not English, so the English
+  prompt is unchanged.
+
+After the fixes: `languages.py check` exit 0, `test_languages.py` 26/26,
+`OnboardingTargetsTests` + `DiaryUITests/testNewDayShowsMorningCheckInThatNeverBlocksLogging`
++ `ProgressUITests/testWeightChartSelectsSavedMeasurement` 9/9, LanguageSweep
+hebrew on the iPhone 6 passed, 3 skipped.
+
+## Native Hebrew review
+
+After the owner tried the build on the iPhone Duo (Release, `41ca82bb`) and
+asked for more natural Hebrew, native-speaker review passes were applied:
+
+| Pass | Source | Changes | Notes |
+|---|---|---|---|
+| 1 | `6c020e72` | 116 (3 errors) | Formal register ("לא ניתן", "יש ל…"), wrong words ("תוקף", "צריכת האנרגיה", "שליחות"), Apple terms ("להקיש", "הכתבה", "אייפון"); glossary updated |
+| 2 | `bc628610` | 66 (3 errors) | Remaining "יש ל…" hints, "בתוקף מ-", and "ל" before a date that starts with a digit |
+| 3 | `efc534d9` | 10 (3 errors) | Prefixes and sentence shape once a value is filled in; Siri phrases reviewed |
+| 4 | `bc46a612` | 16 (11 errors) | Each placeholder string traced to its Swift caller (about 165 of 272) and read with real values: food names, "היום", weekday-led dates |
+| 5 | this commit | 7 (1 error) | Final read after merging `main` (#141 stickers): the sticker strings, the remaining placeholders and the listing; screenshot 3 re-framed with its new caption |
+
+Pass 3 also found that the late-meal receipt on Today ("Added to …" /
+"Saved on this iPhone") was a plain String and never translated; it now uses
+`String(localized:)`, with English unchanged. After each pass:
+`languages.py check` exit 0 and LanguageSweep hebrew passed (iPhone; pass 2
+also on the Duo), 6 passed and 3 skipped; after pass 3,
+`DiaryComposerCaptureTests` + `HistoricalCaptureReceiptTests` 14/14.
+
+Pass 4 also fixed three places where shown text skipped translation: the raw
+"kg"/"lb" in the weight Ask Pip line, and the English fallbacks "this private
+diary" and "this private local profile" in two confirmation titles. After pass 4:
+`CoachScaleMealTests`, `ManualNutritionTransactionTests`, `TellCoachTests`,
+`MealNotificationTests` and `ProgressUITests/testWeightAskPipQuotesRecord`
+43/43; LanguageSweep hebrew on iPhone and Duo, 6 passed and 3 skipped each.
+Left as is: a few sentences show an ISO date ("2026-11-16") in both
+languages; changing their format would change English.
+
+Pass 5 also made the 12 sticker descriptions VoiceOver reads translatable (they
+were plain Strings) and added their Hebrew; English is unchanged. After pass 5,
+on the merge with `main` at `9b24b3fc`: `PipStickersTests`,
+`PipStickerExportTests` and `PipStickerUITests` 9/9; LanguageSweep hebrew on
+the Duo 6 passed, 3 skipped; on the iPhone 5 passed, 3 skipped and
+`testTextIsHebrew` failed once because Settings showed no Goals row yet (the
+load timing seen above), then passed on its own.
+
+## Blocked or not run
+
+- Lock Screen accessory widgets and the Control Center control: not captured;
+  their text is in the checked catalogs.
+- Running "Tell Coach" from the Simulator's Shortcuts app showed no reply; its
+  Hebrew dialog text is covered by `HebrewSurfaceTextTests`.
+- Spoken Siri in Hebrew, VoiceOver in Hebrew and Hebrew dictation on a real
+  device: not checked.
+- Users get Hebrew only with the next App Store version the owner submits; the
+  1.2.0 build in review is unchanged.

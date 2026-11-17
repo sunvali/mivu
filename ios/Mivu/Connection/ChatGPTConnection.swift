@@ -63,12 +63,23 @@ final class ChatGPTConnection {
     @ObservationIgnored private var isForeground = true
 
     @ObservationIgnored private let appleModelAvailable: @Sendable () -> Bool
+    @ObservationIgnored private let appleModelSupported: @Sendable () -> Bool
 
     /// `apple` is the on-device model, a no-account fallback for logging; ChatGPT is the main Coach.
     enum Provider: String { case apple, chatGPT }
 
     nonisolated static let appleIntelligenceAvailable: @Sendable () -> Bool = {
         if #available(iOS 27.0, *) { SystemLanguageModel.default.isAvailable } else { false }
+    }
+
+    /// False only on hardware that can never run Apple's model; switched off or still downloading still counts.
+    nonisolated static let appleIntelligenceSupported: @Sendable () -> Bool = {
+        if #available(iOS 27.0, *) { appleSupported(SystemLanguageModel.default.availability) } else { false }
+    }
+
+    @available(iOS 27.0, *)
+    nonisolated static func appleSupported(_ availability: SystemLanguageModel.Availability) -> Bool {
+        if case .unavailable(.deviceNotEligible) = availability { false } else { true }
     }
 
     /// The person's choice while it can answer; otherwise Apple when this iPhone can run it, then ChatGPT.
@@ -86,14 +97,17 @@ final class ChatGPTConnection {
 
     func available(_ provider: Provider) -> Bool { provider == .apple ? appleModelAvailable() : planAuthorized }
     var appleAvailable: Bool { appleModelAvailable() }
+    var appleSupported: Bool { appleModelSupported() }
     var canInfer: Bool { available(provider) }
     /// Only ChatGPT tunes onboarding targets; the formula estimate beats the on-device model there.
     var tunesTargets: Bool { provider == .chatGPT && planAuthorized }
 
     init(auth: AuthSession = AuthSession(), client: ResponsesClient = ResponsesClient(),
          jobStore: ProbeJobStore? = nil, preferences: UserDefaults = .standard,
-         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceAvailable) {
+         appleModelAvailable: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceAvailable,
+         appleModelSupported: @escaping @Sendable () -> Bool = ChatGPTConnection.appleIntelligenceSupported) {
         self.appleModelAvailable = appleModelAvailable
+        self.appleModelSupported = appleModelSupported
         self.auth = auth
         self.client = client
         self.preferences = preferences

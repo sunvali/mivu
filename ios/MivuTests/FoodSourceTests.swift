@@ -27,6 +27,16 @@ struct FoodSourceTests {
         #expect(edited.sourceCaption == "Edited by you", "A manual edit is not credited to the model")
     }
 
+    @Test func packageLabelValuesAreMarkedAsReadFromTheLabel() throws {
+        let rows: [[String: Any]] = [["name": "Synthetic granola", "quantity": 40, "unit": "g", "kcal": 180, "carbs": 26, "protein": 4, "fat": 7, "from_label": true],
+                                     ["name": "Synthetic apple", "quantity": 1, "unit": "piece", "kcal": 80, "carbs": 20, "protein": 0, "fat": 0, "from_label": NSNull()]]
+        let items = try CoachTools.foodItems(rows, evidence: [:])
+        #expect(items[0].provenance == .confirmedLabel && items[0].reference == "Read from package label")
+        #expect(items[0].uncertain == true, "The model's reading and the eaten portion stay unverified")
+        #expect(items[0].sourceCaption.hasPrefix("From package label"))
+        #expect(items[1].provenance == .estimate)
+    }
+
     @Test func appleFoodsAreLabelledAndOlderFoodsShowNoSource() async throws {
         guard #available(iOS 27.0, *) else { Issue.record("Apple inference requires iOS 27"); return }
         let (store, profile, root) = try await store(); defer { try? FileManager.default.removeItem(at: root) }

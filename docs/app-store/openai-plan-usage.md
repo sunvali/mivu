@@ -75,5 +75,5 @@ Report Reply.
 
 - OpenAI describes this flow as a preview, and its terms may change. We will
   follow any update and change the app if needed.
-- Only eligible ChatGPT Plus and Pro accounts can use their plan. Diary features
-  work without any account.
+- Only eligible ChatGPT Go, Plus, Pro and Business accounts can use their
+  plan. Diary features work without any account.

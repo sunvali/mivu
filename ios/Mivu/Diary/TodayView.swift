@@ -63,7 +63,7 @@ private struct DiarySetupView: View {
     private func startNew() async {
         failed = false
         var created = true
-        if model.profiles.isEmpty { created = await model.createFirstProfile() } else { await model.createProfile(name: "Diary \(model.profiles.count + 1)") }
+        if model.profiles.isEmpty { created = await model.createFirstProfile() } else { await model.createProfile(name: String(localized: "Diary \(model.profiles.count + 1)")) }
         // Setup opens first so a waiting Snap It camera follows it instead of covering it.
         if model.readModel != nil { if created { onCreated() }; onSelected() } else { failed = true }
     }
@@ -77,6 +77,9 @@ struct DiaryRootView: View {
     private typealias SettingsRoute = DiarySettingsRouteOwner.Route
     @State private var routes = DiarySettingsRouteOwner()
     @State private var coachRoutes = CoachNavigationOwner()
+    /// What the pane beside the Coach chat shows on a sideways Duo; nil is Today.
+    @State private var coachPane: CoachPane?
+    @State private var coachChatExpanded = false
     @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
     @State private var showOnboarding = false
@@ -330,7 +333,7 @@ struct DiaryRootView: View {
             QuickLogCameraView(model: model, ownership: quickLogOwner) { id in
                 quickLogOwner = nil; selectedTab = "today"
                 withAnimation { loggedMealID = id }
-                AccessibilityNotification.Announcement("Meal logged").post()
+                AccessibilityNotification.Announcement(String(localized: "Meal logged")).post()
                 Task { await MealNotification.requestPermissionIfNeeded() }
             }
         }
@@ -378,13 +381,14 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth(evenWhenWide: true) }
+                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
                 NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
-                DuoBeside {
+                // Sideways the chat is on the right, with what the conversation is about on the left.
+                DuoBeside(secondaryLeading: true, primaryFills: $coachChatExpanded) {
                     NavigationStack {
                         CoachView(coach: coach, companionOutput: output(for: .coach), companionRuntime: companionRuntime,
                                   onCompanionContextChanged: updateCompanionContext,
@@ -392,17 +396,12 @@ struct DiaryRootView: View {
                                   navigationRequest: coachRoutes.request,
                                   onNavigationConsumed: { coachRoutes.consume($0) },
                                   openHistory: openCoachHistory, openToday: { selectedTab = "today" },
-                                  openProgress: { selectedTab = "progress" }) { destination in
+                                  openProgress: { selectedTab = "progress" }, pane: $coachPane, chatExpanded: $coachChatExpanded) { destination in
                             routes.route = SettingsRoute(destination: destination)
                         }.toolbar { profileControl }.duoReadableWidth()
                     }
                 } secondary: {
-                    // The day Coach is changing, beside the chat; Pip stays a still image so the rig mounts once.
-                    NavigationStack {
-                        TodayView(model: model, companionOutput: CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil),
-                                  companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, isLiveDay: true)
-                    }
-                    .accessibilityIdentifier("coachLiveDay")
+                    CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, openDiary: { selectedTab = "diary" })
                 }
             }
             .badge(coach.queuedSiri.count)
@@ -469,7 +468,7 @@ struct DiaryRootView: View {
         guard let selection = model.selection else { return }
         let meal = model.meal(id)
         let title = meal?.items.first?.name ?? meal?.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        openCoachAction(nil, reply: CoachReply(target: .meal(mealID: id), excerpt: String((title.isEmpty ? "Meal" : title).prefix(280))), expectedSelection: selection)
+        openCoachAction(nil, reply: CoachReply(target: .meal(mealID: id), excerpt: String((title.isEmpty ? String(localized: "Meal") : title).prefix(280))), expectedSelection: selection)
     }
     private var openCoachAction: OpenDiaryCoachAction {
         coachAction(from: coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile))
@@ -632,7 +631,7 @@ struct TodayView: View {
                 Section {
                     let lateDay = lateMealDay(meal)
                     NavigationLink(value: savedMealID) {
-                        Label(lateDay.map { "Added to \(wakingDayTitle($0.localDate))" } ?? "Saved on this iPhone", systemImage: "checkmark.circle")
+                        Label(lateDay.map { String(localized: "Added to \(wakingDayTitle($0.localDate))") } ?? String(localized: "Saved on this iPhone"), systemImage: "checkmark.circle")
                             .font(.subheadline).foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
                     }.accessibilityIdentifier("savedMealReceipt")
                     // Moving opens today's calendar date, so offer it only while that is still the meal's date.
@@ -654,12 +653,12 @@ struct TodayView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     summaryDate
                     if let day = model.activeDay {
-                        intakeHero(totals: snapshot.totals, day: day)
+                        intakeHero(totals: snapshot.totals.zeroIfEmpty, day: day)
                         if snapshot.activeGoal != nil {
                             todayGoal(snapshot: snapshot, day: day)
                         }
                     } else {
-                        intakeHero(totals: nutritionTotals([]), day: nil)
+                        intakeHero(totals: nutritionTotals([]).zeroIfEmpty, day: nil)
                     }
                 }.diarySummaryCard()
             }
@@ -700,7 +699,7 @@ struct TodayView: View {
                         Label { Text("Morning weight") } icon: { Image(systemName: "scalemass").foregroundStyle(Color.diaryWeight) }
                         Spacer()
                         if let entry = snapshot.weight {
-                            Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.unit)").monospacedDigit()
+                            Text("\(entry.value.formatted(.number.precision(.fractionLength(1)))) \(entry.shownUnit)").monospacedDigit()
                         } else { Text("Log weight").foregroundStyle(Color.diarySecondary) }
                     }.frame(minHeight: 44)
                 }.accessibilityIdentifier("logWeight").diarySummaryCard()
@@ -814,13 +813,13 @@ struct TodayView: View {
                 Text(displayDate).font(.subheadline)
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
             }.foregroundStyle(Color.diarySecondary).frame(minHeight: 44)
-        }.accessibilityLabel("Day actions, " + displayDate).accessibilityIdentifier("todayDayActions")
+        }.accessibilityLabel("Day actions, \(displayDate)").accessibilityIdentifier("todayDayActions")
     }
     private var displayDate: String {
-        guard let value = model.activeDay?.localDate else { return "Your waking day" }
+        guard let value = model.activeDay?.localDate else { return String(localized: "Your waking day") }
         let parts = value.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 3, let date = Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)) else { return value }
-        return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        guard parts.count == 3, let date = Calendar.gregorianUTC.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)) else { return value }
+        return date.formatted(Date.FormatStyle(calendar: .gregorianUTC, timeZone: .gmt).weekday(.wide).month(.wide).day())
     }
     private var companionArt: some View {
         // 186 keeps the hero's old height; taller pushes the first meal row under the floating Log meal bar.
@@ -863,7 +862,7 @@ struct TodayView: View {
         }
     }
     private func heroMetric(_ title: LocalizedStringKey, value: Double?, color: Color) -> some View {
-        DiaryMetric(title: title, value: value.map { $0.formatted(.number.precision(.fractionLength(0))) + " g" }, color: color)
+        DiaryMetric(title: title, value: value.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0)))) g") }, color: color)
     }
 
     @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay) -> some View {
@@ -900,7 +899,8 @@ struct TodayView: View {
 
     @ViewBuilder private func remaining(_ value: Double?) -> some View {
         if let value {
-            Text("\(abs(value).formatted(.number.precision(.fractionLength(0)))) \(value < 0 ? "above goal" : "to goal")")
+            let amount = abs(value).formatted(.number.precision(.fractionLength(0)))
+            value < 0 ? Text("\(amount) above goal", comment: "Calories eaten past the day's goal, on Today") : Text("\(amount) to goal", comment: "Calories left before the day's goal, on Today")
         } else { Text("Not estimated yet").foregroundStyle(Color.diarySecondary) }
     }
 }

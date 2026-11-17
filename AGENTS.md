@@ -21,18 +21,22 @@ for this native app. No web frontend is required.
 - Preserve durable local capture: save acknowledgement and backup-folder write
   acknowledgement are separate. Never claim remote sync from a file-provider
   write; retain pending errors and never restore stale data over deletions.
-- The MVP UI and acceptance are English-only; disable the Hebrew language
-  selector. Preserve existing profile/archive data and stored language values;
-  do not require Hebrew RTL functionality for MVP acceptance. Keep Dynamic Type,
-  VoiceOver, reduced motion, and minimum 44-point touch targets.
+- Mivu follows the system language and layout direction. It ships English and
+  Hebrew; a new language ships only once it is complete on every surface. All text a
+  person reads goes through the string catalogs; stored and model-facing values
+  never localize. Follow [adding a language](docs/development/adding-a-language.md).
+  Preserve existing profile/archive data and stored language values. Keep Dynamic
+  Type, VoiceOver, reduced motion, and minimum 44-point touch targets.
 - For behavior changes, include focused evidence from source plus named tests;
   report the source revision, environment, result counts, and any blocked gates.
   A workflow definition is not evidence of a hosted run.
 - Follow the PR/CI/release contract in [CI and delivery](docs/development/ci-cd.md):
   merge through a reviewed PR, verify required checks and artifacts, and keep
   release claims tied to the exact merged revision and observed run.
-- PRs touching `ios/`, `android/`, `fixtures/` or `design-system/mivu/` must update
-  `docs/parity.md` or state `Parity: unchanged - <reason>` in the description; CI fails otherwise.
+- Changes touching non-test product paths under `ios/`, `android/`, `fixtures/`
+  or `design-system/mivu/` must update `docs/parity.md` or state
+  `Parity: unchanged - <reason>` in a commit message or the PR description;
+  `pre-push` and CI fail otherwise.
 - Before merge, run Ponytail Review, fix blocking findings, and verify CI.
   Follow the owner's existing authorization for merging; do not add approval gates.
 - Use Conventional Commit PR/squash titles. All hosted jobs use `ubuntu-slim`

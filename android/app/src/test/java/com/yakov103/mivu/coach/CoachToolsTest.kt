@@ -158,6 +158,17 @@ class CoachToolsTest {
         rejects("get_meal", """{"meal_id":"not-a-uuid"}""")
     }
 
+    @Test fun statedLocalClockSetsFoodTimeOnTheCalendarOrWakingDay() {
+        fun at(date: String, clock: String) = ((CoachTools.parse(CoachToolCall("log_food", "log_food", "log_food", "mivu",
+            """{"target_local_date":"$date","items":[{"name":"Synthetic rice","quantity":150,"unit":"g","kcal":210.5,"carbs":null,"protein":4,"fat":0.1}],"eaten_at":"$clock"}"""),
+            listOf(meal), emptyList(), zone = "Asia/Jerusalem") as CoachCommand.Write).write as CoachWrite.Food).eatenAt
+        assertEquals(Instant.parse("2026-10-24T05:30:00Z"), at("2026-10-24", "2026-10-24 08:30"))
+        assertEquals(Instant.parse("2026-10-23T17:00:00Z"), at("2026-10-23", "2026-10-23 20:00"))
+        assertEquals(Instant.parse("2026-10-23T22:00:00Z"), at("2026-10-23", "2026-10-24 01:00")) // after midnight, still yesterday's waking day
+        assertEquals(null, at("2026-10-24", "2026-10-20 08:00")) // another day: dropped, not rejected
+        assertEquals(null, at("2026-10-24", "2026-10-24T08:30:00+03:00")) // legacy ISO stays ignored
+    }
+
     @Test fun foodToolsParse() {
         val logged = write("log_food", """{"target_local_date":"2026-10-24","items":[{"name":"Synthetic rice","quantity":150,"unit":"g","kcal":210.5,"carbs":null,"protein":4,"fat":0.1}],"eaten_at":"2026-10-24T08:30:00+02:00","review_first":true}""")
             as CoachWrite.Food

@@ -46,6 +46,7 @@ final class MivuAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UN
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // Set before launch finishes so a tap that cold-launches the app is still delivered.
         UNUserNotificationCenter.current().delegate = self
+        MorningReminder.refresh()
         return true
     }
     // Main-actor completion form: the async form finished off the main thread and UIKit crashed the app on tap.

@@ -3,7 +3,10 @@ import SwiftUI
 /// Diary tab: a week strip above the selected day's summary and meals.
 struct HistoryView: View {
     @Bindable var model: DiaryViewModel
+    /// The day shown first; nil is the active day. Set when Coach opens a day beside the chat.
+    var startDate: String? = nil
     @Environment(\.openDiaryCoach) private var openChat
+    @Environment(\.isWideLayout) private var isWide
     @State private var selected = ""
     @State private var week: DiaryWeekPage?
     @State private var weekStart: String?
@@ -39,59 +42,80 @@ struct HistoryView: View {
         return WeekScope(selection: selection, start: start, end: end, generation: model.changeGeneration, retries: retries)
     }
 
-    var body: some View {
-        List {
-            if model.readModel != nil, !selected.isEmpty {
-                Section {
-                    DiaryWeekStrip(selected: $selected, today: lastDate, earliest: week?.earliestLocalDate, summaries: summaries, activeDayID: model.activeDay?.id)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 4, trailing: 12))
-                        .listRowSeparator(.hidden).listRowBackground(Color.clear)
-                }
-                if let loadError {
-                    Section {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(loadError).foregroundStyle(Color.diarySecondary)
-                            Button("Retry") { retries += 1 }.frame(minHeight: 44).accessibilityIdentifier("retryDiaryHistory")
-                        }.diarySummaryCard()
-                    }
-                }
-                if let savedMealID, model.meal(savedMealID) != nil {
-                    Section {
-                        NavigationLink { MealDetailView(model: model, mealID: savedMealID) } label: {
-                            Label("Saved on this iPhone", systemImage: "checkmark.circle").foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
-                        }.accessibilityIdentifier("savedDayMealReceipt").diarySummaryCard()
-                    }
-                }
-                if !weekLoaded, loadError == nil {
-                    Section { ProgressView().frame(maxWidth: .infinity, minHeight: 120).listRowBackground(Color.clear).listRowSeparator(.hidden) }
-                }
-                if selectedDays.isEmpty, weekLoaded {
-                    Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(DiaryWeek.format(selected, "EEEE, d MMMM")).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
-                            ContentUnavailableView("Nothing logged", systemImage: "fork.knife", description: Text("Ask Pip to add what you ate on this day."))
-                        }.diarySummaryCard()
-                    }
-                }
-                ForEach(selectedDays, id: \.id) { day in
-                    DaySections(model: model, dayID: day.id, title: DiaryWeek.format(selected, "EEEE, d MMMM"))
-                }
-            } else if model.readModel == nil {
-                ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Profile and settings to select a private local profile."))
+    private func dayList(@ViewBuilder _ content: () -> some View) -> some View {
+        List { content() }
+            .listStyle(.plain)
+            .listRowSpacing(0)
+            .listSectionSpacing(12)
+            .contentMargins(.top, 0, for: .scrollContent)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .scrollContentBackground(.hidden).background(Color.diaryCanvas)
+    }
+    private func days(_ part: DaySections.Part) -> some View {
+        ForEach(selectedDays, id: \.id) { day in
+            DaySections(model: model, dayID: day.id, title: DiaryWeek.format(selected, "EEEE, d MMMM"), part: part)
+        }
+    }
+    /// The week strip and everything about the chosen day that is not one of its records.
+    @ViewBuilder private var header: some View {
+        Section {
+            DiaryWeekStrip(selected: $selected, today: lastDate, earliest: week?.earliestLocalDate, summaries: summaries, activeDayID: model.activeDay?.id)
+                .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 4, trailing: 12))
+                .listRowSeparator(.hidden).listRowBackground(Color.clear)
+        }
+        if let loadError {
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(loadError).foregroundStyle(Color.diarySecondary)
+                    Button("Retry") { retries += 1 }.frame(minHeight: 44).accessibilityIdentifier("retryDiaryHistory")
+                }.diarySummaryCard()
             }
         }
-        .listStyle(.plain)
-        .listRowSpacing(0)
-        .listSectionSpacing(12)
-        .contentMargins(.top, 0, for: .scrollContent)
-        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-        .scrollContentBackground(.hidden).background(Color.diaryCanvas)
+        if let savedMealID, model.meal(savedMealID) != nil {
+            Section {
+                NavigationLink { MealDetailView(model: model, mealID: savedMealID) } label: {
+                    Label("Saved on this iPhone", systemImage: "checkmark.circle").foregroundStyle(Color.diarySuccess).frame(minHeight: 44)
+                }.accessibilityIdentifier("savedDayMealReceipt").diarySummaryCard()
+            }
+        }
+        if !weekLoaded, loadError == nil {
+            Section { ProgressView().frame(maxWidth: .infinity, minHeight: 120).listRowBackground(Color.clear).listRowSeparator(.hidden) }
+        }
+        if selectedDays.isEmpty, weekLoaded {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(DiaryWeek.format(selected, "EEEE, d MMMM")).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
+                    ContentUnavailableView("Nothing logged", systemImage: "fork.knife", description: Text("Ask Pip to add what you ate on this day."))
+                }.diarySummaryCard()
+            }
+        }
+    }
+
+    var body: some View {
+        Group {
+            if isWide, model.readModel != nil, !selected.isEmpty {
+                // Sideways the week and the day's summary sit beside its meals and workouts; each column scrolls alone.
+                DuoSplit {
+                    dayList { header; days(.summary) }.accessibilityIdentifier("diarySummaryColumn")
+                } secondary: {
+                    dayList { days(.records) }.accessibilityIdentifier("diaryRecordsColumn")
+                }
+            } else {
+                dayList {
+                    if model.readModel != nil, !selected.isEmpty {
+                        header; days(.all)
+                    } else if model.readModel == nil {
+                        ContentUnavailableView("Choose your diary", systemImage: "person.crop.circle", description: Text("Open Profile and settings to select a private local profile."))
+                    }
+                }
+            }
+        }
         .task(id: weekScope) { await loadWeek() }
         .task(id: DayLoad(ids: selectedDays.map(\.id), generation: model.changeGeneration)) {
             for day in selectedDays { await model.loadDay(day.id) }
         }
-        .onAppear { if selected.isEmpty { selected = defaultDate } }
-        .onChange(of: model.activeDay?.localDate) { _, _ in if selected.isEmpty { selected = defaultDate } }
+        .onAppear { if selected.isEmpty { selected = startDate ?? defaultDate } }
+        .onChange(of: model.activeDay?.localDate) { _, _ in if selected.isEmpty { selected = startDate ?? defaultDate } }
         .onChange(of: selected) { _, _ in savedMealID = nil }
         .onChange(of: model.readModel?.profile.id) { _, _ in
             week = nil; weekStart = nil; selected = defaultDate; savedMealID = nil
@@ -148,7 +172,7 @@ struct HistoryView: View {
             let reply = CoachReply(target: .day(dayID: day.id), excerpt: DiaryWeek.format(day.localDate, "EEEE, d MMM"))
             openChat(.day(day.id), reply: reply, expectedSelection: selection)
         } else {
-            openChat(nil, draft: "For \(DiaryWeek.format(selected, "EEEE, d MMM")): ", expectedSelection: selection)
+            openChat(nil, draft: String(localized: "For \(DiaryWeek.format(selected, "EEEE, d MMM")): "), expectedSelection: selection)
         }
     }
 
@@ -196,36 +220,43 @@ private struct DaySections: View {
     @Bindable var model: DiaryViewModel
     let dayID: UUID
     let title: String
+    /// Sideways the summary and the records sit in separate columns.
+    enum Part { case all, summary, records }
+    var part = Part.all
 
     var body: some View {
         Group {
             if let snapshot = model.dayDetail(dayID) {
-                Section { summary(snapshot).diarySummaryCard() }
-                Section {
-                    let meals = snapshot.meals.filter { $0.dayID == dayID }.sorted { $0.eatenAt < $1.eatenAt }
-                    if meals.isEmpty {
-                        Text("No meals recorded for this day.").foregroundStyle(Color.diarySecondary).diarySummaryCard()
-                    }
-                    ForEach(meals, id: \.id) { meal in
-                        NavigationLink { MealDetailView(model: model, mealID: meal.id) } label: { MealRow(meal: meal, model: model) }
-                            .modifier(MealRowDeletion(meal: meal, model: model))
-                            .accessibilityIdentifier("historyMeal")
-                            .diarySummaryCard()
-                    }
-                } header: { DiarySectionHeader(title: "Meals") }
-                let workouts = snapshot.workouts.filter { $0.dayID == dayID }.sorted { $0.performedAt < $1.performedAt }
-                if !workouts.isEmpty {
-                    Section {
-                        ForEach(workouts) { workout in
-                            NavigationLink { WorkoutDetailView(model: model, sessionID: workout.id) } label: {
-                                Label { LabeledContent("Workout", value: "\(workout.durationMinutes) minutes") } icon: {
-                                    Image(systemName: "figure.strengthtraining.traditional").foregroundStyle(Color.diaryWorkout)
-                                }.frame(minHeight: 44)
-                            }.diarySummaryCard()
-                        }
-                    } header: { DiarySectionHeader(title: "Workouts") }
-                }
+                if part != .records { Section { summary(snapshot).diarySummaryCard() } }
+                if part != .summary { records(snapshot) }
             }
+        }
+    }
+
+    @ViewBuilder private func records(_ snapshot: DiaryDayReadModel) -> some View {
+        Section {
+            let meals = snapshot.meals.filter { $0.dayID == dayID }.sorted { $0.eatenAt < $1.eatenAt }
+            if meals.isEmpty {
+                Text("No meals recorded for this day.").foregroundStyle(Color.diarySecondary).diarySummaryCard()
+            }
+            ForEach(meals, id: \.id) { meal in
+                NavigationLink { MealDetailView(model: model, mealID: meal.id) } label: { MealRow(meal: meal, model: model) }
+                    .modifier(MealRowDeletion(meal: meal, model: model))
+                    .accessibilityIdentifier("historyMeal")
+                    .diarySummaryCard()
+            }
+        } header: { DiarySectionHeader(title: "Meals") }
+        let workouts = snapshot.workouts.filter { $0.dayID == dayID }.sorted { $0.performedAt < $1.performedAt }
+        if !workouts.isEmpty {
+            Section {
+                ForEach(workouts) { workout in
+                    NavigationLink { WorkoutDetailView(model: model, sessionID: workout.id) } label: {
+                        Label { LabeledContent("Workout", value: String(localized: "\(workout.durationMinutes) minutes")) } icon: {
+                            Image(systemName: "figure.strengthtraining.traditional").foregroundStyle(Color.diaryWorkout)
+                        }.frame(minHeight: 44)
+                    }.diarySummaryCard()
+                }
+            } header: { DiarySectionHeader(title: "Workouts") }
         }
     }
 
@@ -252,7 +283,7 @@ private struct DaySections: View {
                 }
             }
             if let weight = snapshot.weight {
-                LabeledContent("Morning weight", value: "\(weight.value.formatted()) \(weight.unit)").monospacedDigit()
+                LabeledContent("Morning weight", value: "\(weight.value.formatted()) \(weight.shownUnit)").monospacedDigit()
             }
         }
     }

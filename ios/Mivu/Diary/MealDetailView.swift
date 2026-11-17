@@ -105,8 +105,8 @@ struct MealDetailView: View {
                                         DisclosureGroup("Stored proposal") {
                                             ForEach(proposal.items) { item in
                                                 VStack(alignment: .leading, spacing: 4) {
-                                                    Text(item.name).font(.subheadline.weight(.medium))
-                                                    Text("\(item.quantity.formatted()) \(item.unit)").font(.subheadline).monospacedDigit()
+                                                    Text(item.name).font(.subheadline.weight(.medium)).directionFromContent(item.name)
+                                                    Text("\(item.quantity.formatted()) \(item.shownUnit)").font(.subheadline).monospacedDigit()
                                                     Text(item.sourceCaption).font(.caption).foregroundStyle(Color.diarySecondary)
                                                 }.padding(.vertical, 4)
                                             }
@@ -233,10 +233,10 @@ struct MealDetailView: View {
         }
     }
     private var deletionTitle: String {
-        if case .some(.photo(_)) = deletion { return "Delete this photo?" }
-        if case .some(.food(let item, _)) = deletion { return "Delete \(item.name)?" }
-        guard let meal = model.meal(mealID), let day = model.day(meal.dayID) else { return "Delete meal?" }
-        return "Delete “\(displayTitle(meal))” on \(day.localDate)?"
+        if case .some(.photo(_)) = deletion { return String(localized: "Delete this photo?") }
+        if case .some(.food(let item, _)) = deletion { return String(localized: "Delete \(item.name)?") }
+        guard let meal = model.meal(mealID), let day = model.day(meal.dayID) else { return String(localized: "Delete meal?") }
+        return String(localized: "Delete “\(displayTitle(meal))” on \(day.localDate)?")
     }
     /// `revision` is what the person saw when they chose to delete; a newer meal is refused as stale.
     private func deleteFood(_ item: FoodItem, revision: Int?) async -> Bool {
@@ -252,8 +252,8 @@ struct MealDetailView: View {
     /// Opens Coach at this meal's conversation (or its day), quoting the meal or food; a specific food also gets an unsent message naming it.
     private func askPip(about item: FoodItem?, in meal: MealReadModel) {
         guard let selection = model.selection else { return }
-        let day = model.day(meal.dayID).map { " from \(DiaryWeek.format($0.localDate, "EEE d MMM"))" } ?? ""
-        let draft = item.map { "About the \($0.name)\(day): " }
+        let day = model.day(meal.dayID).map { DiaryWeek.format($0.localDate, "EEE d MMM") }
+        let draft = item.map { item in day.map { String(localized: "About the \(item.name) from \($0): ") } ?? String(localized: "About the \(item.name): ") }
         let target: CoachSeekTarget = meal.sourceTurnID.map { .turn($0) } ?? .day(meal.dayID)
         editedItem = nil
         let reply = CoachReply(target: item.map { .item(mealID: meal.id, itemID: $0.id) } ?? .meal(mealID: meal.id), excerpt: String((item?.name ?? displayTitle(meal)).prefix(280)))
@@ -266,12 +266,12 @@ struct MealDetailView: View {
             } label: {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.semibold))
-                        Text("\(item.quantity.formatted()) \(item.unit)").font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
+                        Text(item.provenance == .sample ? String(localized: "Apple (sample)") : item.name).font(.body.weight(.semibold)).directionFromContent(item.name)
+                        Text("\(item.quantity.formatted()) \(item.shownUnit)").font(.subheadline).monospacedDigit().foregroundStyle(Color.diarySecondary)
                         if item.uncertain { Text("Portion or nutrients are uncertain").font(.caption).foregroundStyle(Color.diarySecondary) }
                     }
                     Spacer(minLength: 8)
-                    Text(item.nutrition.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) + " kcal" } ?? "— kcal")
+                    Text(item.nutrition.kcal.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0)))) kcal") } ?? String(localized: "— kcal"))
                         .font(.subheadline.weight(.medium)).monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).contentShape(Rectangle())
@@ -300,16 +300,16 @@ struct MealDetailView: View {
         }
     }
     private func displayTitle(_ meal: MealReadModel) -> String {
-        if let item = meal.items.first { return item.provenance == .sample ? "Apple (sample)" : item.name }
+        if let item = meal.items.first { return item.provenance == .sample ? String(localized: "Apple (sample)") : item.name }
         let note = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return note.isEmpty ? "Meal" : note
+        return note.isEmpty ? String(localized: "Meal") : note
     }
     private func mealSummary(_ meal: MealReadModel, snapshot: DiaryReadModel) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(displayTitle(meal))
                 .font(.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             if meal.timePrecision == .dateOnly {
-                Text(model.day(meal.dayID)?.localDate ?? "Historical meal")
+                Text(model.day(meal.dayID)?.localDate ?? String(localized: "Historical meal"))
                     .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 Text("Time unspecified").font(.subheadline).foregroundStyle(Color.diarySecondary)
             } else {
@@ -338,7 +338,7 @@ struct MealDetailView: View {
                     .accessibilityIdentifier("adjustMealTotal")
             }
             if meal.state == .waitingForConnection, let connection {
-                ChatGPTConnectButton(connection: connection, title: "Connect ChatGPT")
+                ChatGPTConnectButton(connection: connection, title: String(localized: "Connect ChatGPT"))
                     .frame(minHeight: 44).buttonStyle(.glass)
             }
         }.padding(.vertical, 12)
@@ -350,14 +350,14 @@ struct MealDetailView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     if typeSize.isAccessibilitySize {
-                        Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.medium))
-                        Text("\(item.quantity.formatted()) \(item.unit)").monospacedDigit().foregroundStyle(Color.diarySecondary)
+                        Text(item.provenance == .sample ? String(localized: "Apple (sample)") : item.name).font(.body.weight(.medium)).directionFromContent(item.name)
+                        Text("\(item.quantity.formatted()) \(item.shownUnit)").monospacedDigit().foregroundStyle(Color.diarySecondary)
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(item.provenance == .sample ? "Apple (sample)" : item.name).font(.body.weight(.medium))
+                            Text(item.provenance == .sample ? String(localized: "Apple (sample)") : item.name).font(.body.weight(.medium)).directionFromContent(item.name)
                             Spacer(minLength: 8)
-                            Text("\(item.quantity.formatted()) \(item.unit)").monospacedDigit().foregroundStyle(Color.diarySecondary)
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
+                            Text("\(item.quantity.formatted()) \(item.shownUnit)").monospacedDigit().foregroundStyle(Color.diarySecondary)
+                            Image(systemName: "chevron.forward").font(.caption.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
                         }
                     }
                     Text(item.sourceCaption).font(.caption).foregroundStyle(Color.diarySecondary)
@@ -401,7 +401,7 @@ private struct MoveMealSheet: View {
                 Section {
                     Picker("Destination waking day", selection: $destination) {
                         ForEach(destinations.sorted { $0.startAt > $1.startAt }) { day in
-                            Text(day.id == originalDayID ? "\(day.localDate) · Current day" : day.localDate).tag(day.id)
+                            Text(day.id == originalDayID ? String(localized: "\(day.localDate) · Current day") : day.localDate).tag(day.id)
                                 .frame(minHeight: 44)
                         }
                     }.pickerStyle(.inline).accessibilityIdentifier("moveMealDestination")
@@ -507,7 +507,6 @@ private struct ScaleMealSheet: View {
             .interactiveDismissDisabled(saving)
             .onChange(of: model.readModel?.profile.id) { _, id in if id != ownerID { dismiss() } }
         }
-        .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
     }
     private func save() async {
         guard let kcal = value, !saving else { return }
@@ -554,7 +553,7 @@ private struct FoodItemEditor: View {
             Form {
                 Section {
                     Text(name.isEmpty ? item.name : name).font(.title2.weight(.semibold)).padding(.vertical, 4)
-                    nutrientField("Amount", text: $quantity, identifier: "itemQuantity")
+                    nutrientField(String(localized: "Amount"), text: $quantity, identifier: "itemQuantity")
                     LabeledContent("Unit") { TextField("Unit", text: $unit).multilineTextAlignment(.trailing).focused($editingField, equals: "Unit") }
                     portionChips
                 } header: { Text("Portion") }
@@ -567,13 +566,13 @@ private struct FoodItemEditor: View {
                             Image(systemName: "chevron.down").rotationEffect(.degrees(showDetails ? 180 : 0)).accessibilityHidden(true)
                         }.frame(minHeight: 44)
                     }
-                    .accessibilityValue(showDetails ? "Expanded" : "Collapsed").accessibilityIdentifier("foodMoreDetails")
+                    .accessibilityValue(showDetails ? String(localized: "Expanded") : String(localized: "Collapsed")).accessibilityIdentifier("foodMoreDetails")
                     if showDetails {
                         TextField("Name", text: $name).focused($editingField, equals: "Name")
-                        nutrientField("Energy (kcal)", text: nutrientBinding("kcal", $kcal), identifier: "itemCalories")
-                        nutrientField("Protein (g)", text: nutrientBinding("protein", $protein))
-                        nutrientField("Carbs (g)", text: nutrientBinding("carbs", $carbs))
-                        nutrientField("Fat (g)", text: nutrientBinding("fat", $fat))
+                        nutrientField(String(localized: "Energy (kcal)"), text: nutrientBinding("kcal", $kcal), identifier: "itemCalories")
+                        nutrientField(String(localized: "Protein (g)"), text: nutrientBinding("protein", $protein))
+                        nutrientField(String(localized: "Carbs (g)"), text: nutrientBinding("carbs", $carbs))
+                        nutrientField(String(localized: "Fat (g)"), text: nutrientBinding("fat", $fat))
                         Text(item.sourceCaption).foregroundStyle(Color.diarySecondary)
                         if !item.reference.isEmpty { Text(item.reference).font(.subheadline).foregroundStyle(Color.diarySecondary) }
                         if item.uncertain { Label("Portion or nutrients are uncertain", systemImage: "info.circle").font(.subheadline).foregroundStyle(Color.diarySecondary) }
@@ -602,8 +601,8 @@ private struct FoodItemEditor: View {
                     Section { Label(LocalizedStringKey(message), systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) }
                 }
             }
-            .confirmationDialog(deleteFood != nil ? "Delete \(item.name)?" : "Delete this meal?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button(deleteFood != nil ? "Delete food" : "Delete meal", role: .destructive) {
+            .confirmationDialog(deleteFood != nil ? String(localized: "Delete \(item.name)?") : String(localized: "Delete this meal?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button(deleteFood != nil ? String(localized: "Delete food") : String(localized: "Delete meal"), role: .destructive) {
                     Task {
                         saving = true; defer { saving = false }
                         if await (deleteFood ?? deleteMeal)?() == true { dismiss() }
@@ -637,12 +636,10 @@ private struct FoodItemEditor: View {
                 }.disabled(edited == nil || saving).accessibilityIdentifier("saveItem") }
             }
         }
-        .environment(\.locale, Locale(identifier: "en"))
-        .environment(\.layoutDirection, .leftToRight)
     }
     private var portionChips: some View {
         HStack(spacing: 8) {
-            ForEach([(0.5, "½×", "Half"), (1, "1×", "Original"), (1.5, "1½×", "One and a half"), (2, "2×", "Double")], id: \.0) { factor, title, spoken in
+            ForEach([(0.5, "½×", String(localized: "Half")), (1, "1×", String(localized: "Original")), (1.5, "1½×", String(localized: "One and a half")), (2, "2×", String(localized: "Double"))], id: \.0) { factor, title, spoken in
                 let value = item.quantity * factor
                 let selected = number(quantity) == value
                 Button {
@@ -675,8 +672,8 @@ private struct FoodItemEditor: View {
             .accessibilityIdentifier("foodPreviewCalories")
             if let result {
                 HStack(spacing: 16) {
-                    macro("Protein", result.nutrition.protein, .diaryProtein)
-                    macro("Carbs", result.nutrition.carbs, .diaryCarbs)
+                    macro(String(localized: "Protein"), result.nutrition.protein, .diaryProtein)
+                    macro(String(localized: "Carbs"), result.nutrition.carbs, .diaryCarbs)
                     macro("Fat", result.nutrition.fat, .diaryFat)
                 }
             }
@@ -686,7 +683,7 @@ private struct FoodItemEditor: View {
     private func macro(_ title: String, _ value: Double?, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption).foregroundStyle(color)
-            Text(value.map { $0.formatted(.number.precision(.fractionLength(1))) + " g" } ?? "—").font(.subheadline.weight(.medium)).monospacedDigit()
+            Text(value.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(1)))) g") } ?? "—").font(.subheadline.weight(.medium)).monospacedDigit()
         }
         .accessibilityElement(children: .combine)
     }
@@ -808,7 +805,7 @@ private struct ZoomablePhoto: UIViewRepresentable {
         context.coordinator.zoom = $zoom
         if view.imageView.image !== image { view.imageView.image = image; view.setNeedsLayout() }
         if abs(view.zoomScale - zoom) > 0.01 { view.setZoomScale(zoom, animated: true) }
-        view.imageView.accessibilityValue = "Zoom \(Int((zoom * 100).rounded())) percent"
+        view.imageView.accessibilityValue = String(localized: "Zoom \(Int((zoom * 100).rounded())) percent")
     }
     final class Coordinator: NSObject, UIScrollViewDelegate {
         var zoom: Binding<CGFloat>
@@ -834,7 +831,7 @@ final class PhotoScrollView: UIScrollView {
         showsHorizontalScrollIndicator = false; showsVerticalScrollIndicator = false
         contentInsetAdjustmentBehavior = .never
         accessibilityIdentifier = "mealPhotoZoom"
-        imageView.isAccessibilityElement = true; imageView.accessibilityLabel = "Meal photo"
+        imageView.isAccessibilityElement = true; imageView.accessibilityLabel = String(localized: "Meal photo")
         addSubview(imageView)
     }
     required init?(coder: NSCoder) { nil }
@@ -855,5 +852,5 @@ final class PhotoScrollView: UIScrollView {
 
 extension PhotoRole {
     /// Shown only when the owner chose before or after; most photos have no timing.
-    var timing: String? { self == .before ? "Before eating" : self == .after ? "After eating" : nil }
+    var timing: String? { self == .before ? String(localized: "Before eating") : self == .after ? String(localized: "After eating") : nil }
 }

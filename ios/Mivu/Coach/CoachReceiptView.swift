@@ -15,7 +15,7 @@ struct CoachReceiptPresentation: Equatable {
     let target: CoachReceiptTarget
     var committedDate: String? { receipt.targetLocalDate }
     var committedItems: [String] {
-        receipt.items.map { "\($0.name) · \($0.quantity.formatted(.number.grouping(.never))) \($0.unit)" }
+        receipt.items.map { "\($0.name) · \($0.quantity.formatted(.number.grouping(.never))) \(FoodItem.shownUnit($0.unit))" }
     }
     /// The write after the turn ID, so an undo of a delete never reads as the delete itself.
     private static func write(_ key: String) -> Substring { key.split(separator: "/", maxSplits: 1).last ?? "" }
@@ -26,17 +26,17 @@ struct CoachReceiptPresentation: Equatable {
     /// A whole record the Coach deleted; its card only offers Undo.
     var isRemoval: Bool { ["delete_meal/", "delete_weight/", "delete_workout/"].contains { Self.write(receipt.operationKey).hasPrefix($0) } }
     var committedStatus: String {
-        if isRemoval { return "Removed" }
+        if isRemoval { return String(localized: "Removed") }
         if Self.write(receipt.operationKey).hasPrefix("delete_photo/") { return "Photo removed" }
         return switch receipt.submissionState {
-        case .saved: "Saved food"
-        case .awaitingReview: "Estimate awaiting review"
-        default: "Recorded operation"
+        case .saved: String(localized: "Saved food")
+        case .awaitingReview: String(localized: "Estimate awaiting review")
+        default: String(localized: "Recorded operation")
         }
     }
     var committedNutrition: String? {
         guard !receipt.items.isEmpty else { return nil }
-        return committedTotal(\.kcal).map(Self.energy) ?? "Energy unknown"
+        return committedTotal(\.kcal).map(Self.energy) ?? String(localized: "Energy unknown")
     }
     var committedMacros: String? {
         guard !receipt.items.isEmpty else { return nil }
@@ -52,24 +52,25 @@ struct CoachReceiptPresentation: Equatable {
         return receipt.items.contains { item in
             guard let values = item.nutrition else { return true }
             return values.kcal == nil || values.carbs == nil || values.protein == nil || values.fat == nil
-        } ? "Some nutrients unknown" : nil
+        } ? String(localized: "Some nutrients unknown") : nil
     }
     var estimateLabel: String? {
         guard !receipt.items.isEmpty else { return nil }
-        if receipt.items.contains(where: { $0.uncertain == true || $0.provenance == .estimate }) { return "Estimated nutrition" }
-        if receipt.items.contains(where: { $0.provenance == nil }) { return "Nutrition provenance unknown" }
+        if receipt.items.allSatisfy({ $0.provenance == .confirmedLabel }) { return String(localized: "From package label") }
+        if receipt.items.contains(where: { $0.uncertain == true || $0.provenance == .estimate }) { return String(localized: "Estimated nutrition") }
+        if receipt.items.contains(where: { $0.provenance == nil }) { return String(localized: "Nutrition provenance unknown") }
         return nil
     }
     var currentStatus: String {
         switch target {
-        case .loading: return "Loading current record"
-        case .unavailable: return "Record unavailable"
-        case .failed: return "Could not load current record"
+        case .loading: return String(localized: "Loading current record")
+        case .unavailable: return String(localized: "Record unavailable")
+        case .failed: return String(localized: "Could not load current record")
         case .meal(let meal, _):
-            if meal.state == .awaitingReview { return "Needs review" }
-            if meal.state == .needsRetry { return "Analysis needs retry" }
-            return meal.isSaved ? "Current saved meal" : "Captured on this iPhone"
-        case .workout: return "Current workout"
+            if meal.state == .awaitingReview { return String(localized: "Needs review") }
+            if meal.state == .needsRetry { return String(localized: "Analysis needs retry") }
+            return meal.isSaved ? String(localized: "Current saved meal") : String(localized: "Captured on this iPhone")
+        case .workout: return String(localized: "Current workout")
         }
     }
     var currentDate: String? {
@@ -77,7 +78,7 @@ struct CoachReceiptPresentation: Equatable {
     }
     var currentNutrition: String? {
         switch target {
-        case .meal(let meal, _): meal.totals.kcal.map(Self.energy) ?? "Energy unknown"
+        case .meal(let meal, _): meal.totals.kcal.map(Self.energy) ?? String(localized: "Energy unknown")
         default: nil
         }
     }
@@ -115,18 +116,21 @@ struct CoachReceiptPresentation: Equatable {
                 }
             }
         }
-        if moved, let date = currentDate { return (edited ? "Edited · moved to " : "Moved to ") + CoachReplyLines.shortDate(date) }
-        if edited { return "Edited later" }
-        return stateChanged ? "Status changed later" : nil
+        if moved, let date = currentDate {
+            let day = CoachReplyLines.shortDate(date)
+            return edited ? String(localized: "Edited · moved to \(day)") : String(localized: "Moved to \(day)")
+        }
+        if edited { return String(localized: "Edited later") }
+        return stateChanged ? String(localized: "Status changed later") : nil
     }
     private static func macros(carbs: Double?, protein: Double?, fat: Double?) -> String {
         func grams(_ value: Double?) -> String {
-            value.map { $0.formatted(.number.precision(.fractionLength(0...1))) + " g" } ?? "unknown"
+            value.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0...1)))) g") } ?? String(localized: "unknown")
         }
-        return "Carbs " + grams(carbs) + " · Protein " + grams(protein) + " · Fat " + grams(fat)
+        return String(localized: "Carbs \(grams(carbs)) · Protein \(grams(protein)) · Fat \(grams(fat))")
     }
     var itemRows: [(name: String, amount: String, kcal: String)] {
-        receipt.items.map { ($0.name, "\($0.quantity.formatted(.number.grouping(.never))) \($0.unit)", $0.nutrition?.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—") }
+        receipt.items.map { ($0.name, "\($0.quantity.formatted(.number.grouping(.never))) \(FoodItem.shownUnit($0.unit))", $0.nutrition?.kcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—") }
     }
     /// Energy share of carbs, protein and fat (4/4/9 kcal per gram); nil when any total is unknown.
     var macroShare: (carbs: Double, protein: Double, fat: Double)? {
@@ -137,7 +141,7 @@ struct CoachReceiptPresentation: Equatable {
     }
     var macroTotals: (carbs: String, protein: String, fat: String)? {
         guard let carbs = committedTotal(\.carbs), let protein = committedTotal(\.protein), let fat = committedTotal(\.fat) else { return nil }
-        func grams(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0...1))) + " g" }
+        func grams(_ value: Double) -> String { String(localized: "\(value.formatted(.number.precision(.fractionLength(0...1)))) g") }
         return (grams(carbs), grams(protein), grams(fat))
     }
     /// Per-dish grams for the disclosure; nil for a single dish, whose totals the legend already shows.
@@ -149,13 +153,13 @@ struct CoachReceiptPresentation: Equatable {
     }
     var weightLabel: String? {
         guard receipt.weightID != nil, !receipt.operationKey.contains("/delete_weight/") else { return nil }
-        guard let value = receipt.weightValue, let unit = receipt.weightUnit else { return "Weight saved" }
-        return "Weight saved · \(value.formatted(.number.grouping(.never))) \(unit)"
+        guard let value = receipt.weightValue, let unit = receipt.weightUnit else { return String(localized: "Weight saved") }
+        return String(localized: "Weight saved · \(value.formatted(.number.grouping(.never))) \(WeightEntry.shownUnit(unit))")
     }
     var canOpenTarget: Bool {
         switch target { case .meal, .workout: true; default: false }
     }
-    private static func energy(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0))) + " kcal" }
+    private static func energy(_ value: Double) -> String { String(localized: "\(value.formatted(.number.precision(.fractionLength(0)))) kcal") }
 }
 
 struct CoachReceiptView: View {
@@ -176,10 +180,10 @@ struct CoachReceiptView: View {
             ForEach(Array(presentation.itemRows.enumerated()), id: \.offset) { _, row in
                 Group {
                     if dynamicTypeSize.isAccessibilitySize {
-                        VStack(alignment: .leading, spacing: 2) { Text(row.name); Text(row.amount).foregroundStyle(Color.diarySecondary); Text(row.kcal + " kcal").monospacedDigit() }
+                        VStack(alignment: .leading, spacing: 2) { Text(row.name).directionFromContent(row.name); Text(row.amount).foregroundStyle(Color.diarySecondary); Text("\(row.kcal) kcal").monospacedDigit() }
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(row.name).lineLimit(2)
+                            Text(row.name).lineLimit(2).directionFromContent(row.name)
                             Text(row.amount).foregroundStyle(Color.diarySecondary).lineLimit(1)
                             Spacer(minLength: 8)
                             Text(row.kcal).monospacedDigit().foregroundStyle(Color.diarySecondary)
@@ -188,7 +192,7 @@ struct CoachReceiptView: View {
                 }
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(row.name), \(row.amount), \(row.kcal == "—" ? "calories unknown" : row.kcal + " calories")")
+                .accessibilityLabel(row.kcal == "—" ? "\(row.name), \(row.amount), calories unknown" : "\(row.name), \(row.amount), \(row.kcal) calories")
                 .accessibilityAddTraits(.isStaticText)
                 .accessibilityIdentifier("coachReceiptQuantity")
             }
@@ -207,7 +211,7 @@ struct CoachReceiptView: View {
                     // The legend shows meal totals; the disclosure holds each dish's grams.
                     Text(presentation.itemMacros ?? macros).monospacedDigit().foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachReceiptMacros")
                 } label: {
-                    Text(presentation.estimateLabel ?? "Nutrition details")
+                    Text(presentation.estimateLabel ?? String(localized: "Nutrition details"))
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(minHeight: 44, alignment: .leading)
                 }
@@ -226,7 +230,7 @@ struct CoachReceiptView: View {
         .accessibilityIdentifier("coachReceipt-" + receipt.operationKey)
     }
     private var receiptStatus: some View {
-        Text(undoState == .undone ? "Undone" : presentation.committedStatus).font(.subheadline.weight(.semibold))
+        Text(undoState == .undone ? String(localized: "Undone") : presentation.committedStatus).font(.subheadline.weight(.semibold))
     }
     @ViewBuilder private var undoButton: some View {
         if undoState == .available {
@@ -290,7 +294,7 @@ struct CoachReceiptView: View {
                 }
                 .frame(minWidth: 44, minHeight: 44)
             }
-                .accessibilityLabel(presentation.currentStatus + ". Review / Edit")
+                .accessibilityLabel(String(localized: "\(presentation.currentStatus). Review / Edit"))
                 .disabled(!presentation.canOpenTarget)
                 .accessibilityIdentifier(receipt.mealID == nil ? "coachWorkoutLink" : "coachMealLink")
         }
@@ -305,7 +309,7 @@ private struct CoachReceiptDisclosureStyle: DisclosureGroupStyle {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     configuration.label
                     Spacer(minLength: 0)
-                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
+                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.forward")
                         .font(.caption.weight(.semibold))
                 }
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -314,7 +318,7 @@ private struct CoachReceiptDisclosureStyle: DisclosureGroupStyle {
             // A wrapped label at accessibility sizes must grow the row, not draw past the card.
             .fixedSize(horizontal: false, vertical: true)
             .buttonStyle(.plain).textSelection(.disabled)
-            .accessibilityValue(configuration.isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityValue(configuration.isExpanded ? String(localized: "Expanded") : String(localized: "Collapsed"))
             .accessibilityIdentifier("coachReceiptDetails")
             if configuration.isExpanded { configuration.content }
         }

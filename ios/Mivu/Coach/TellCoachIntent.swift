@@ -5,11 +5,11 @@ enum TellCoachOutcome: Equatable {
     case sent, savedLocked, savedNeedsConnection, needsSetup, failed
     var dialog: String {
         switch self {
-        case .sent: "Sent to the Coach."
-        case .savedLocked: "Saved. Open Mivu after you unlock to see the Coach's reply."
-        case .savedNeedsConnection: "Saved. Open Mivu to connect the Coach."
-        case .needsSetup: "Open Mivu to finish setup first."
-        case .failed: "I couldn't save that. Please try again."
+        case .sent: String(localized: "Sent to the Coach.")
+        case .savedLocked: String(localized: "Saved. Open Mivu after you unlock to see the Coach's reply.")
+        case .savedNeedsConnection: String(localized: "Saved. Open Mivu to connect the Coach.")
+        case .needsSetup: String(localized: "Open Mivu to finish setup first.")
+        case .failed: String(localized: "I couldn't save that. Please try again.")
         }
     }
 }
@@ -61,6 +61,7 @@ struct TellCoachIntent: AppIntent {
                                           onBackgroundCapture: { CoachReplyNotification.follow($0, services: services) })
         // Not awaited: Siri answers now, and a prompt that cannot show in the background must not hold the reply.
         if outcome == .sent || outcome == .savedNeedsConnection { Task { await MealNotification.requestPermissionIfNeeded() } }
+        // Already localized: the plain-string initializer shows it as is.
         return .result(dialog: IntentDialog(stringLiteral: outcome.dialog))
     }
 }

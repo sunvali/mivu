@@ -34,17 +34,17 @@ enum DiaryError: Error, Equatable, LocalizedError {
     case noProfile, wrongOwner, invalidData, invalidAmountUnitChange, persistenceFailed, staleRevision, undoExpired, notFound, emptyCapture, ambiguousDay, staleArchive
     var errorDescription: String? {
         switch self {
-        case .noProfile: "Choose a local profile first."
-        case .wrongOwner: "The profile changed. Please try again."
-        case .invalidData: "This diary contains invalid or unsupported data."
-        case .invalidAmountUnitChange: "Enter or clear each known nutrient when changing to an unrelated unit."
-        case .persistenceFailed: "The diary could not be saved. Your input is still available."
-        case .staleRevision: "This meal changed. Please retry the correction."
-        case .undoExpired: "Undo is no longer available."
-        case .notFound: "This diary entry no longer exists."
-        case .emptyCapture: "Add a photo or a meal description."
-        case .ambiguousDay: "Your day just changed. Save again to add this to the new day."
-        case .staleArchive: "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover."
+        case .noProfile: String(localized: "Choose a local profile first.")
+        case .wrongOwner: String(localized: "The profile changed. Please try again.")
+        case .invalidData: String(localized: "This diary contains invalid or unsupported data.")
+        case .invalidAmountUnitChange: String(localized: "Enter or clear each known nutrient when changing to an unrelated unit.")
+        case .persistenceFailed: String(localized: "The diary could not be saved. Your input is still available.")
+        case .staleRevision: String(localized: "This meal changed. Please retry the correction.")
+        case .undoExpired: String(localized: "Undo is no longer available.")
+        case .notFound: String(localized: "This diary entry no longer exists.")
+        case .emptyCapture: String(localized: "Add a photo or a meal description.")
+        case .ambiguousDay: String(localized: "Your day just changed. Save again to add this to the new day.")
+        case .staleArchive: String(localized: "This backup conflicts with the diary or contains deleted meals. Keep both copies and choose how to recover.")
         }
     }
 }
@@ -66,6 +66,10 @@ struct NutritionTotals: Equatable, Sendable {
     var protein: Double?
     var fat: Double?
     var unknownItemCount: Int
+    /// Nothing logged yet reads 0; a logged-but-unknown nutrient stays nil.
+    var zeroIfEmpty: NutritionTotals {
+        self == nutritionTotals([]) ? NutritionTotals(kcal: 0, carbs: 0, protein: 0, fat: 0, unknownItemCount: 0) : self
+    }
 }
 
 struct FoodItem: Codable, Equatable, Sendable, Identifiable {
@@ -81,6 +85,29 @@ struct FoodItem: Codable, Equatable, Sendable, Identifiable {
     var nutritionBasis: NutritionValues? = nil
     /// The Coach model that estimated this food; nil for manual and older foods.
     var estimatedBy: String? = nil
+
+    /// The unit as people read it. Coach writes units in English ("g", "slice"), and the stored value stays as written.
+    var shownUnit: String { FoodItem.shownUnit(unit) }
+
+    nonisolated static func shownUnit(_ unit: String) -> String {
+        switch unit.lowercased() {
+        case "g": String(localized: "g")
+        case "ml": String(localized: "ml")
+        case "piece": String(localized: "piece", comment: "Food unit after a quantity: one piece")
+        case "pieces": String(localized: "pieces", comment: "Food unit after a quantity: several pieces")
+        case "slice": String(localized: "slice", comment: "Food unit after a quantity: one slice")
+        case "slices": String(localized: "slices", comment: "Food unit after a quantity: several slices")
+        case "cup": String(localized: "cup", comment: "Food unit after a quantity: one cup")
+        case "cups": String(localized: "cups", comment: "Food unit after a quantity: several cups")
+        case "serving": String(localized: "serving", comment: "Food unit after a quantity: one serving")
+        case "servings": String(localized: "servings", comment: "Food unit after a quantity: several servings")
+        case "bowl": String(localized: "bowl", comment: "Food unit after a quantity: one bowl")
+        case "medium": String(localized: "medium")
+        case "tbsp": String(localized: "tbsp", comment: "Food unit after a quantity: tablespoon")
+        case "tsp": String(localized: "tsp", comment: "Food unit after a quantity: teaspoon")
+        default: unit
+        }
+    }
 
     var estimatedByLabel: String? {
         estimatedBy.map { $0 == "apple-intelligence" ? "Apple Intelligence" : "ChatGPT" }
@@ -143,6 +170,10 @@ struct WeightEntry: Codable, Equatable, Sendable, Identifiable {
     var unit = "kg"
     var revision = 1
     var timePrecision: MealTimePrecision = .exact
+
+    /// The unit as people read it; `unit` stays the stored "kg" or "lb".
+    var shownUnit: String { Self.shownUnit(unit) }
+    nonisolated static func shownUnit(_ unit: String) -> String { unit == "kg" ? String(localized: "kg") : unit == "lb" ? String(localized: "lb") : unit }
 }
 
 extension WeightEntry {

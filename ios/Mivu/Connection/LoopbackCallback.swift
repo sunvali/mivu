@@ -156,7 +156,7 @@ import Network
     }
 
     private func respond(_ connection: NWConnection, status: Int, then action: (@MainActor @Sendable () -> Void)? = nil) {
-        let body = status == 200 ? "You can return to Mivu." : "Invalid request."
+        let body = status == 200 ? String(localized: "You can return to Mivu.") : String(localized: "Invalid request.")
         let response = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "Bad Request")\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
         connection.send(content: Data(response.utf8), completion: .contentProcessed { [weak self] _ in
             Task { @MainActor in

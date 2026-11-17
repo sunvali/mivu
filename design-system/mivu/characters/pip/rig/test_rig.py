@@ -214,6 +214,14 @@ class RigTests(unittest.TestCase):
         for p in self.parts:
             self.assertRegex(p["path"], r"^[MLCQZ0-9.,\s-]+$", p["id"])
 
+    def test_sleep_z_parts(self):
+        # Good-night sticker: hidden until a pose gives the fx part a joint.
+        by_id = {p["id"]: p for p in self.parts}
+        for n in (1, 2, 3):
+            part = by_id[f"fx-z-{n}@curled"]
+            self.assertEqual(part["set"], "curled")
+            self.assertFalse(part["visible"])
+
 
 if __name__ == "__main__":
     unittest.main()

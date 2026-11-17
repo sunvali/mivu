@@ -51,7 +51,7 @@ private struct CompactFigure: View {
             .lineLimit(1).minimumScaleFactor(0.6)
             .foregroundStyle(state.isOver ? Color.diarySecondary : Color.diaryAccent)
             .privacySensitive(state.hideWhenLocked)
-            .accessibilityLabel(isStale ? "Open Mivu for today" : redaction.contains(.privacy) ? "Mivu day progress" : state.spoken)
+            .accessibilityLabel(isStale ? Text("Open Mivu for today") : redaction.contains(.privacy) ? Text("Mivu day progress") : Text(verbatim: state.spoken))
     }
 }
 
@@ -104,16 +104,18 @@ private struct Headline: View {
                 Text(state.figure).font(figureFont).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                     .foregroundStyle(state.isOver ? Color.diarySecondary : primary)
                     .privacySensitive(state.hideWhenLocked)
-                Text("kcal \(state.word)")
+                // One whole key per word, so a language can reorder or inflect it.
+                // Separate Text literals: a ternary inside one Text is never extracted into the catalog.
+                (state.word == "left" ? Text("kcal left") : state.word == "over" ? Text("kcal over") : Text("kcal eaten"))
                     .font(.footnote.weight(.medium)).foregroundStyle(Color.diarySecondary).lineLimit(1)
                     .privacySensitive(state.hideWhenLocked)
             }
         }
         .accessibilityElement(children: .ignore)
         // Redacted numbers must not come back through VoiceOver on a locked phone.
-        .accessibilityLabel(isStale ? "Open Mivu for today"
-                            : redaction.contains(.privacy) ? "Mivu day progress"
-                            : state.spoken)
+        .accessibilityLabel(isStale ? Text("Open Mivu for today")
+                            : redaction.contains(.privacy) ? Text("Mivu day progress")
+                            : Text(verbatim: state.spoken))
     }
 }
 
@@ -155,7 +157,7 @@ private struct MacroRow: View {
         .accessibilityHidden(true)
     }
 
-    private func column(_ name: String, _ value: Double?, _ target: Double?, _ tint: Color, partial: Bool) -> some View {
+    private func column(_ name: LocalizedStringKey, _ value: Double?, _ target: Double?, _ tint: Color, partial: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Capsule().fill(tint.opacity(0.22)).frame(height: 5)
                 .overlay(alignment: .leading) {

@@ -30,7 +30,7 @@ enum CoachInferenceInput: Equatable, Sendable {
             var content: [[String: String]] = [["type": role == .assistant ? "output_text" : "input_text", "text": text]]
             for image in images {
                 let mime = try Self.imageMIME(image)
-                content.append(["type": "input_image", "image_url": "data:\(mime);base64," + image.base64EncodedString()])
+                content.append(["type": "input_image", "detail": "high", "image_url": "data:\(mime);base64," + image.base64EncodedString()])
             }
             return ["role": role.rawValue, "content": content]
         case let .priorOutput(data):

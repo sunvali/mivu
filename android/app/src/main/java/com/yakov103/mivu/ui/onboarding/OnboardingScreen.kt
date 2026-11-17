@@ -578,7 +578,7 @@ private fun Page(model: OnboardingViewModel, connection: ConnectionState, pip: S
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Promise(R.drawable.ic_shield, "Private by default", "Mivu asks before sharing anything with OpenAI. Your diary stays on this phone.")
                     HorizontalDivider()
-                    Promise(R.drawable.ic_person, "Your own plan", "Recommended. Works with ChatGPT Plus or Pro and uses its allowance. No extra cost.")
+                    Promise(R.drawable.ic_person, "Your own plan", "Recommended. Works with ChatGPT Go, Plus or Pro and uses its allowance. No extra cost.")
                 }
             }
             if (connection.isConnecting) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),

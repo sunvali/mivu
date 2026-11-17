@@ -123,7 +123,7 @@ struct CaloriesWidgetView: View {
                 .font(.system(size: size, weight: .bold)).tracking(-1).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.6)
                 .foregroundStyle(Color.diaryText)
-            Text(snapshot.target.map { "of \(kcal($0)) kcal" } ?? "kcal recorded")
+            (snapshot.target.map { Text("of \(kcal($0)) kcal") } ?? Text("kcal recorded"))
                 .font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
                 .foregroundStyle(Color.diaryText)
         }
@@ -154,7 +154,7 @@ struct CaloriesWidgetView: View {
         }
     }
 
-    private func capsule(_ title: String, systemImage: String, fill: Color, text: Color) -> some View {
+    private func capsule(_ title: LocalizedStringKey, systemImage: String, fill: Color, text: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: systemImage).imageScale(.small)
             Text(title)
@@ -195,7 +195,7 @@ struct CaloriesWidgetView: View {
         if let snapshot, snapshot.hasDiary {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Mivu").font(.headline).widgetAccentable()
-                Text(snapshot.target.map { "\(kcal(snapshot.eaten)) / \(kcal($0)) kcal" } ?? "\(kcal(snapshot.eaten)) kcal recorded")
+                (snapshot.target.map { Text("\(kcal(snapshot.eaten)) / \(kcal($0)) kcal") } ?? Text("\(kcal(snapshot.eaten)) kcal recorded"))
                     .minimumScaleFactor(0.7).lineLimit(1)
                 if snapshot.target != nil {
                     Gauge(value: snapshot.ringFraction) { EmptyView() }.gaugeStyle(.accessoryLinearCapacity)
@@ -211,8 +211,9 @@ struct CaloriesWidgetView: View {
 
     private func kcal(_ value: Double) -> String { Int(value.rounded()).formatted() }
 
-    private func spoken(_ snapshot: WidgetSnapshot) -> String {
-        snapshot.target.map { "\(kcal(snapshot.eaten)) of \(kcal($0)) calories eaten" } ?? "\(kcal(snapshot.eaten)) calories eaten"
+    // Text keys, not String(localized:): only SwiftUI keys are extracted into the widget's catalog.
+    private func spoken(_ snapshot: WidgetSnapshot) -> Text {
+        snapshot.target.map { Text("\(kcal(snapshot.eaten)) of \(kcal($0)) calories eaten") } ?? Text("\(kcal(snapshot.eaten)) calories eaten")
     }
 }
 

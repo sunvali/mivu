@@ -18,19 +18,19 @@ enum CoachReplyNotification {
         case .completed:
             let reply = CoachReplyLines.plain(turn.assistantText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !reply.isEmpty else { return nil }
-            return ("Coach", reply.count <= 180 ? reply : String(reply.prefix(179)) + "…")
-        case .needsClarification: return ("Coach", "The Coach needs a quick answer.")
-        case .needsRetry, .waitingForNetwork, .waitingForConnection: return ("Coach", savedBody)
+            return (String(localized: "Coach"), reply.count <= 180 ? reply : String(reply.prefix(179)) + "…")
+        case .needsClarification: return (String(localized: "Coach"), String(localized: "The Coach needs a quick answer."))
+        case .needsRetry, .waitingForNetwork, .waitingForConnection: return (String(localized: "Coach"), savedBody)
         }
     }
-    private nonisolated static let savedBody = "Your message is saved. Open Mivu for the Coach's reply."
+    private nonisolated static var savedBody: String { String(localized: "Your message is saved. Open Mivu for the Coach's reply.") }
 
     nonisolated static func post(_ turn: CoachTurnResult) {
         guard let text = text(for: turn) else { return }
         add(turnID: turn.id, title: text.title, body: text.body)
     }
     /// Keyed like the reply, so a reply that still arrives replaces this one.
-    nonisolated static func postSaved(turnID: UUID) { add(turnID: turnID, title: "Coach", body: savedBody) }
+    nonisolated static func postSaved(turnID: UUID) { add(turnID: turnID, title: String(localized: "Coach"), body: savedBody) }
 
     /// Keeps the turn processing in the background; posts its reply when the worker drains, the saved note if iOS ends the time first.
     @MainActor static func follow(_ turnID: UUID, services: MivuServices) {

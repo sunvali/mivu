@@ -16,8 +16,8 @@ struct ChatGPTConnectButton: View {
     }
 
     private var defaultTitle: String {
-        connection.accountState == .planPermissionMissing ? "Enable ChatGPT plan usage"
-            : connection.activeRegistrationID == nil ? "Continue with ChatGPT" : "Reauthorize ChatGPT"
+        connection.accountState == .planPermissionMissing ? String(localized: "Enable ChatGPT plan usage")
+            : connection.activeRegistrationID == nil ? String(localized: "Continue with ChatGPT") : String(localized: "Reauthorize ChatGPT")
     }
 
     private func connect() { Task { await connection.connect() } }

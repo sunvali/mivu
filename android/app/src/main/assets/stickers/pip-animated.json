@@ -1,0 +1,39 @@
+{
+  "sticker_packs": [
+    {
+      "identifier": "mivu-pip-animated",
+      "name": "Pip moves",
+      "publisher": "Mivu",
+      "tray_image_file": "tray.png",
+      "image_data_version": "1",
+      "publisher_email": "",
+      "publisher_website": "",
+      "privacy_policy_website": "",
+      "license_agreement_website": "",
+      "animated_sticker_pack": true,
+      "stickers": [
+        {
+          "image_file": "hi.webp",
+          "emojis": [
+            "👋",
+            "😊"
+          ]
+        },
+        {
+          "image_file": "good-night.webp",
+          "emojis": [
+            "😴",
+            "🌙"
+          ]
+        },
+        {
+          "image_file": "you-got-it.webp",
+          "emojis": [
+            "💪",
+            "🎉"
+          ]
+        }
+      ]
+    }
+  ]
+}

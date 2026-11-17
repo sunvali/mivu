@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Prepared reports only: the share sheet can read cacheDir/reports, nothing else. -->
+<!-- Prepared reports and Pip sticker copies only: the share sheet can read cacheDir/reports and cacheDir/stickers, nothing else. -->
 <paths>
     <cache-path name="reports" path="reports/" />
+    <cache-path name="stickers" path="stickers/" />
 </paths>
