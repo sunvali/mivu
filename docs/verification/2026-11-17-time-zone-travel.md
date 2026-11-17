@@ -26,20 +26,22 @@ Branch `feat/time-zone-travel`.
 - Coach is told the local time and the trip on a travel day, and "today" is
   the open diary day.
 - All new on-screen text has English and Hebrew in the string catalog.
+- Apple Health workout import (merged from `main`) now finds the day through
+  the same one-day-per-date lookup as every other write.
 
 ## Evidence
 
-Source: `795d2891e0a3ac7127aead3a20de6e8be4d2b7a2` (`feat(coach): tell Coach
-the local time and trip on travel days`), the last commit that changes native
-inputs. Later commits change docs only.
+Source: `8ad045026205ca6d48a6ee17bd8f93959ea6d290` (`main` at `dce655de`,
+with Apple Health workouts, merged into the branch). Later commits change docs
+only.
 Environment: macOS 27.0.1, Xcode 27.2, "Mivu time-zone-travel" simulator
 (iOS 27.0), XcodeBuildMCP, `-parallel-testing-enabled NO`.
 
 | Check | Result |
 |---|---|
-| Unit suites `TimeZoneSyncTests`, `DayTests`, `ManualNutritionTransactionTests`, `ProgressStoreTests`, `TimeZoneTravelTests`, `CoachCaptureTransactionTests`, `CoachClarificationTests`, `CoachStoreTests`, `ArchiveFixtureTests`, `ArchiveTests`, `DiaryReportTests`, `MealClockTests`, `DiaryPreferencesDraftTests`, `ProfileTimezoneTests`, `TellCoachTests`, `TimeZoneSyncViewModelTests`, `WidgetSnapshotTests`, `TimeZonePickerTests`, `ProgressAnalyticsTests`, `DiaryWeekStripTests`, `CoachEngineTests`, `AppleInferenceTests`, `CoachContextMessagesTests`, `CoachBatchTransactionTests`, `ProgressEditorStateTests` (one run) | 335/345; the 10 failures all fail on `main` too (below) |
+| Unit suites `TimeZoneSyncTests`, `DayTests`, `ManualNutritionTransactionTests`, `ProgressStoreTests`, `TimeZoneTravelTests`, `CoachCaptureTransactionTests`, `CoachClarificationTests`, `CoachStoreTests`, `ArchiveFixtureTests`, `ArchiveTests`, `DiaryReportTests`, `MealClockTests`, `DiaryPreferencesDraftTests`, `ProfileTimezoneTests`, `TellCoachTests`, `TimeZoneSyncViewModelTests`, `WidgetSnapshotTests`, `TimeZonePickerTests`, `ProgressAnalyticsTests`, `DiaryWeekStripTests`, `CoachEngineTests`, `AppleInferenceTests`, `CoachContextMessagesTests`, `CoachBatchTransactionTests`, `ProgressEditorStateTests`, `HealthWorkoutStoreTests`, `HealthWorkoutSyncTests`, `HealthWorkoutTests` (one run) | 365/375; the 10 failures all fail on `main` too (below) |
 | `MivuUITests/TimeZoneTravelUITests` | 1/1 |
-| `scripts/ci/smoke.py` (MivuQuick plan) | pass, 43.65 s |
+| `scripts/ci/smoke.py` (MivuQuick plan) | pass, 43.59 s |
 | `python3 scripts/ci/languages.py check` | exit 0 |
 | `python3 scripts/ci/parity.py` | exit 0 |
 
