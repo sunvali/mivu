@@ -410,6 +410,32 @@ struct DiaryRootView: View {
             }
             .badge(coach.queuedSiri.count)
         }
+        .overlay(alignment: .top) { if let notice = model.timeZoneNotice { timeZoneToast(notice) } }
+        .task(id: model.timeZoneNotice) {
+            guard let notice = model.timeZoneNotice else { return }
+            AccessibilityNotification.Announcement(String(localized: "Now on \(TimeZoneSync.city(notice.to)) time")).post()
+            try? await Task.sleep(for: .seconds(UIAccessibility.isVoiceOverRunning ? 10 : 6))
+            if !Task.isCancelled { withAnimation { model.markTimeZoneNoticeShown() } }
+        }
+    }
+    private func timeZoneToast(_ notice: TimeZoneSwitch) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "globe").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+            Text("Now on \(TimeZoneSync.city(notice.to)) time").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
+            Spacer(minLength: 8)
+            Button { Task { await model.keepPreviousTimeZone() } } label: {
+                Text("Keep \(TimeZoneSync.city(notice.from))").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+                    .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+            }.accessibilityIdentifier("timeZoneKeep")
+        }
+        .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 6)
+        .background(Color.diarySurface, in: .capsule)
+        .overlay(Capsule().strokeBorder(Color.diaryRule))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        .padding(.horizontal, 16).padding(.top, 8)
+        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("timeZoneToast")
     }
     private func openQuickLog() {
         guard quickLog.pending else { return }
@@ -625,6 +651,7 @@ struct TodayView: View {
     @State private var showWeight = false
     @State private var showGoals = false
     @State private var savedMealID: UUID?
+    @State private var choosingZone = false
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
     @Environment(\.isWideLayout) private var isWide
     // Sideways on the Duo, the summary and the meals sit in two columns; otherwise one list, unchanged order.
@@ -656,6 +683,7 @@ struct TodayView: View {
             Section {
                 VStack(alignment: .leading, spacing: 16) {
                     summaryDate
+                    if let zones = model.pinnedZones { pinnedZoneTag(zones) }
                     if let day = model.activeDay {
                         intakeHero(totals: snapshot.totals.zeroIfEmpty, day: day)
                         if snapshot.activeGoal != nil {
@@ -818,6 +846,18 @@ struct TodayView: View {
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
             }.foregroundStyle(Color.diarySecondary).frame(minHeight: 44)
         }.accessibilityLabel("Day actions, \(displayDate)").accessibilityIdentifier("todayDayActions")
+    }
+    private func pinnedZoneTag(_ zones: (profile: String, device: String)) -> some View {
+        Button { choosingZone = true } label: {
+            HStack(spacing: 4) {
+                Text("\(TimeZoneSync.city(zones.profile)) time").font(.subheadline)
+                Image(systemName: "chevron.forward").font(.caption2.weight(.semibold)).accessibilityHidden(true)
+            }.foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
+        }
+        .accessibilityIdentifier("pinnedZoneTag")
+        .confirmationDialog("Time zone", isPresented: $choosingZone, titleVisibility: .visible) {
+            Button("Use \(TimeZoneSync.city(zones.device)) time") { Task { await model.useDeviceTimeZone() } }
+        } message: { Text("Your diary stays on \(TimeZoneSync.city(zones.profile)) time until you switch.") }
     }
     private var displayDate: String {
         guard let value = model.activeDay?.localDate else { return String(localized: "Your waking day") }

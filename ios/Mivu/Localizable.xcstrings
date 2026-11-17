@@ -15,6 +15,72 @@
         }
       }
     },
+    "%@ time" : {
+      "comment" : "Tag in the Today header: the diary is on this city's time; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שעון %@"
+          }
+        }
+      }
+    },
+    "Keep %@" : {
+      "comment" : "Toast button: keep the previous time zone; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להישאר בשעון %@"
+          }
+        }
+      }
+    },
+    "Now on %@ time" : {
+      "comment" : "Toast: the diary followed the phone to a new time zone; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "השעון עבר לשעון %@"
+          }
+        }
+      }
+    },
+    "Time zone" : {
+      "comment" : "Dialog title: choose the diary's time zone",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אזור זמן"
+          }
+        }
+      }
+    },
+    "Use %@ time" : {
+      "comment" : "Dialog button: follow the phone's time zone; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מעבר לשעון %@"
+          }
+        }
+      }
+    },
+    "Your diary stays on %@ time until you switch." : {
+      "comment" : "Dialog message; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "היומן נשאר בשעון %@ עד שתעברו."
+          }
+        }
+      }
+    },
     "— kcal" : {
       "comment" : "Placeholder when calories are unknown; kcal is the unit",
       "localizations" : {

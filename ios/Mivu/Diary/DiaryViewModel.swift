@@ -38,6 +38,13 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var readModel: DiaryReadModel?
     private(set) var timeZoneNotice: TimeZoneSwitch?
     private(set) var timeZoneMode: TimeZoneMode?
+    private(set) var deviceZoneID: String?
+    /// The zones behind the header tag: pinned to a profile zone whose clock differs from the phone's.
+    var pinnedZones: (profile: String, device: String)? {
+        guard case .pinned = timeZoneMode, let profile = readModel?.profile.timeZoneID, let device = deviceZoneID,
+              TimeZoneSync.clockDiffers(profile, device, at: Date()) else { return nil }
+        return (profile, device)
+    }
     private(set) var selection: DiarySelectionOwnership?
     private(set) var workStatus = CoachWorkStatus()
     private(set) var photoLoader: DiaryPhotoLoader?
@@ -124,8 +131,11 @@ enum DiaryCaptureResult: Equatable, Sendable {
             #endif
             return Date()
         }
+        var deviceZone: @Sendable () -> TimeZone = { NSTimeZone.resetSystemTimeZone(); return .current }
+        if DiaryLaunch.isTimeZoneUITest { deviceZone = { TimeZone(identifier: "America/New_York") ?? .gmt } }
         return DiaryViewModel(store: DiaryStore(directory: directory, currentTime: processTime), sampleMode: DiaryLaunch.isSampleMode, preferences: DiaryLaunch.defaults,
-            backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)))
+            backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)),
+            deviceTimeZone: deviceZone)
     }
     var activeDay: TrackingDay? { readModel?.activeDay }
     var todaysMeals: [MealReadModel] { readModel?.meals.sorted { $0.capturedAt > $1.capturedAt } ?? [] }
@@ -188,7 +198,13 @@ enum DiaryCaptureResult: Equatable, Sendable {
             if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 try await install(try await profileSelection(profile.id))
             } else if createDefaultProfile {
-                try await install(try await store.createProfile(DiaryProfile(name: String(localized: "My diary"), language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
+                // The time-zone fixture starts a Jerusalem diary, automatic, on a phone that is in New York.
+                let zone = DiaryLaunch.isTimeZoneUITest ? "Asia/Jerusalem" : deviceTimeZone().identifier
+                let created = try await store.createProfile(DiaryProfile(name: String(localized: "My diary"), language: DiaryLaunch.language, timeZoneID: zone))
+                if DiaryLaunch.isTimeZoneUITest, let preferences {
+                    TimeZoneStateStore(defaults: preferences).save(TimeZoneState(mode: .automatic, knownProfileZone: zone), for: created.head.profile.id)
+                }
+                try await install(created)
                 profiles = try await store.profiles()
             }
         } catch { await recoverProfileSelection(previous); presentUnlessLocked(error) }
@@ -262,8 +278,9 @@ enum DiaryCaptureResult: Equatable, Sendable {
     /// Follows the phone's time zone at an activity point; a failed write leaves the state alone so the next sync retries.
     func syncTimeZone(now: Date = Date()) async {
         guard !isChangingProfile, let defaults = preferences, let profile = readModel?.head.profile else { return }
-        let states = TimeZoneStateStore(defaults: defaults), stored = states.state(for: profile.id)
-        let decision = TimeZoneSync.decide(state: stored, profileZone: profile.timeZoneID, deviceZone: deviceTimeZone().identifier, now: now)
+        let states = TimeZoneStateStore(defaults: defaults), stored = states.state(for: profile.id), device = deviceTimeZone().identifier
+        deviceZoneID = device
+        let decision = TimeZoneSync.decide(state: stored, profileZone: profile.timeZoneID, deviceZone: device, now: now)
         if let zone = decision.newProfileZone, !(await writeProfileZone(zone, profile)) { return }
         if decision.state != stored { states.save(decision.state, for: profile.id) }
         // A profile switch during the write must not receive this profile's mode or notice.
@@ -668,6 +685,7 @@ enum DiaryLaunch {
         #endif
     }
     static var isUITest: Bool { testID != nil }
+    static var isTimeZoneUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--time-zone-ui-test") }
     /// UI tests run at any wall-clock time, so fixtures keep their day unless a test asks for the rollover.
     static var rollsOverDays: Bool { !isUITest || ProcessInfo.processInfo.arguments.contains("--rollover-ui-test") }
     #if DEBUG
