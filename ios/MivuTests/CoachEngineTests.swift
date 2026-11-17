@@ -363,11 +363,21 @@ private actor CoachInputFixture {
         #expect(after.coachTurns[0].receipts == before.coachTurns[0].receipts)
     }
 
+    @Test func unclearItemIsAskedByNameAfterTheClearFoodsSave() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let replies = CoachFixture([result([call("log_food", logArgs)]), result([call("ask_clarification", #"{"kind":"food","about":"Blorp ממרח"}"#, id: "question")])])
+        let finished = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(finished.receipts.count == 1)
+        #expect(try await store.snapshotForExport().meals.first?.isSaved == true)
+        #expect(finished.assistantText?.hasSuffix("\nWhat is “\u{2068}Blorp ממרח\u{2069}”?") == true)
+    }
+
     @Test(arguments: [
         #"{"question":"Saved the yogurt. What portion did you eat?"}"#,
         #"{"question":"The yogurt was logged. How much?"}"#,
         #"{"kind":"portion","question":"Saved 9999 calories."}"#,
-        #"{"kind":"unknown"}"#, #"{"kind":""}"#, #"{"kind":null}"#, #"{}"#
+        #"{"kind":"unknown"}"#, #"{"kind":""}"#, #"{"kind":null}"#, #"{}"#,
+        #"{"kind":"food","about":"  "}"#, #"{"kind":"food","about":"\#(String(repeating: "x", count: 61))"}"#
     ]) func clarificationRejectsRawQuestionsAndInvalidKinds(_ arguments: String) throws {
         #expect(throws: CoachError.invalidArguments) {
             try CoachTools.parse(call("ask_clarification", arguments), meals: [], evidence: [:], receipts: [])

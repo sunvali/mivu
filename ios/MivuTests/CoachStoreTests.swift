@@ -749,6 +749,16 @@ import Testing
         #expect(try await store.coachInferencePhotos(turnID: second, expectedProfileID: profile.id) == [asking.photo.data])
         #expect(try await logJuice(store, profile, turnID: second).mealID == asking.meal.id)
     }
+    @Test func resendAfterARepeatedFoodQuestionDropsThePhoto() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let asking = try await askingPhotoMeal(store, profile)
+        let first = try await answer(store, profile, "Toast and an omelet")
+        try await store.completeCoachTurn(turnID: first, assistantText: CoachClarification.food.question,
+            question: CoachQuestion(kind: .food, candidates: [], originalText: "Toast and an omelet"), expectedProfileID: profile.id)
+        let resend = try await answer(store, profile, "Toast and an omelet")
+        #expect(try await store.coachInferencePhotos(turnID: resend, expectedProfileID: profile.id).isEmpty)
+        #expect(try await logJuice(store, profile, turnID: resend).mealID != asking.meal.id)
+    }
     @Test func laterMessageDoesNotFillAnOldPhotoMeal() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let asking = try await askingPhotoMeal(store, profile)

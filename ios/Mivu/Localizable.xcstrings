@@ -15045,6 +15045,16 @@
         }
       }
     },
+    "What is “%@”?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה זה ”%@”?"
+          }
+        }
+      }
+    },
     "What should I tell the Coach?" : {
       "localizations" : {
         "he" : {
