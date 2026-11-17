@@ -10820,6 +10820,22 @@
         }
       }
     },
+    "Protein %@ · Carbs %@ · Fat %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protein %1$@ · Carbs %2$@ · Fat %3$@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חלבון %1$@ · פחמימות %2$@ · שומן %3$@"
+          }
+        }
+      }
+    },
     "Protein" : {
       "comment" : "Nutrient name: protein",
       "extractionState" : "manual",

@@ -31,13 +31,23 @@ import UserNotifications
         // Foods without calories are left out of the sum, so the figure is a floor.
         let partial = items.contains { $0.nutrition.kcal == nil }
         // Plain digits, as before: an Int placeholder would add grouping.
-        let kcal = nutritionTotals(items).kcal.map { String(Int($0.rounded())) }
+        let totals = nutritionTotals(items)
+        func grams(_ field: KeyPath<NutritionValues, Double?>, total: Double?) -> String {
+            guard let total else { return "—" }
+            let partial = items.contains { $0.nutrition[keyPath: field] == nil }
+            return "\(partial ? "≥" : "")\(Int(total.rounded()))g"
+        }
+        let protein = grams(\.protein, total: totals.protein)
+        let carbs = grams(\.carbs, total: totals.carbs)
+        let fat = grams(\.fat, total: totals.fat)
+        let macros = String(localized: "Protein \(protein) · Carbs \(carbs) · Fat \(fat)")
+        let kcal = totals.kcal.map { String(Int($0.rounded())) }
         if review {
-            guard let kcal else { return (String(localized: "\(name) is ready to review"), String(localized: "Tap to review")) }
-            return (String(localized: "\(name) is ready to review"), partial ? String(localized: "At least \(kcal) kcal · Tap to review") : String(localized: "About \(kcal) kcal · Tap to review"))
+            guard let kcal else { return (String(localized: "\(name) is ready to review"), String(localized: "Tap to review") + "\n" + macros) }
+            return (String(localized: "\(name) is ready to review"), (partial ? String(localized: "At least \(kcal) kcal · Tap to review") : String(localized: "About \(kcal) kcal · Tap to review")) + "\n" + macros)
         }
         let calories = kcal.map { partial ? String(localized: "At least \($0) kcal") : String(localized: "\($0) kcal") }
-        return (String(localized: "\(name) logged"), calories ?? String(localized: "Calories not known yet"))
+        return (String(localized: "\(name) logged"), (calories ?? String(localized: "Calories not known yet")) + "\n" + macros)
     }
 
     nonisolated static func post(_ meal: MealReadModel) {
