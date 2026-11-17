@@ -795,13 +795,6 @@ struct CoachView: View {
                     Task { await coach.answer(target, label: label, excerpt: excerpt) }
                 }.disabled(coach.isWorking)
             }
-            if let options = turn.question?.options, coach.timeline?.window.isLatest(turn.id) == true {
-                // Each option answers Pip's question as a reply, so the original amount and meal stay in context.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) { optionChips(options, turn: turn) }
-                    VStack(alignment: .leading, spacing: 8) { optionChips(options, turn: turn) }
-                }.disabled(coach.isWorking)
-            }
             if turn.state != .completed {
                 if let activity = coach.activity, coach.activityTurnID == turn.id, turn.receipts.isEmpty {
                     CoachActivityView(activity: activity)
@@ -823,6 +816,13 @@ struct CoachView: View {
                     if let id = receipt.mealID { pane = .meal(id) }
                     else if let id = receipt.workoutID { pane = .workout(id) }
                 }
+            }
+            if let options = turn.question?.options, coach.timeline?.window.isLatest(turn.id) == true {
+                // Each option answers Pip's question as a reply, so the original amount and meal stay in context.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { optionChips(options, turn: turn) }
+                    VStack(alignment: .leading, spacing: 8) { optionChips(options, turn: turn) }
+                }.disabled(coach.isWorking)
             }
             ForEach(turn.receipts.filter { $0.weightID != nil }, id: \.operationKey) { receipt in
                 if let label = CoachReceiptPresentation(receipt: receipt, target: .loading).weightLabel {
