@@ -493,6 +493,9 @@ final class ChatGPTConnection {
     }
 
     private func apply(_ snapshot: SessionSnapshot?) {
+        #if DEBUG
+        if isNotEligibleFixture { return }
+        #endif
         activeRegistrationID = snapshot?.registrationID
         planScopeGranted = snapshot?.planPermissionGranted ?? false
         accountState = snapshot.map {
@@ -564,6 +567,12 @@ final class ChatGPTConnection {
         } else if error as? SessionError == .planPermissionMissing { accountState = .planPermissionMissing; notice = .permission }
         else { notice = job == nil ? .unavailable : .retry }
     }
+
+    #if DEBUG
+    /// UI tests only: a signed-in account whose plan OpenAI won't share. It has no saved session, so lifecycle re-applies keep it.
+    @ObservationIgnored private var isNotEligibleFixture = false
+    func applyNotEligibleFixture() { isNotEligibleFixture = true; activeRegistrationID = "fixture-registration"; accountState = .planNotEligible }
+    #endif
 
     private func markNotEligible(_ snapshot: SessionSnapshot?) {
         guard let snapshot else { return pausePermission(nil) }

@@ -219,6 +219,13 @@ struct DiaryRootView: View {
         } message: {
             Text("Coach and meal analysis in Mivu use your ChatGPT plan and count toward its usage limits.")
         }
+        .alert("Your ChatGPT plan can’t be used in Mivu", isPresented: Binding(get: { showsNotEligibleNotice },
+                                                                             set: { if !$0 { connection.acknowledgeNotEligibleNotice() } })) {
+            Button("Got it", role: .cancel) {}
+            Button("Learn more") { openURL(MivuLinks.chatGPTPlanHelp) }
+        } message: {
+            Text("You’re signed in, but your ChatGPT plan can’t be used in other apps. You can keep logging meals by hand.")
+        }
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
@@ -421,6 +428,10 @@ struct DiaryRootView: View {
         routes.route = nil; coachHistory = nil; noteMealID = nil
         selectedTab = "today"
         withTransaction(instant) { quickLogOwner = owner; quickLogEarly = false }
+    }
+    private var showsNotEligibleNotice: Bool {
+        hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
+            && noteMealID == nil && notifiedMealID == nil && connection.showsNotEligibleNotice
     }
     private var showsPlanWelcome: Bool {
         hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil

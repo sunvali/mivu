@@ -1473,16 +1473,16 @@
                   "value" : "אימון אחד בלי קלוריות"
                 }
               },
-              "two" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "שני אימונים בלי קלוריות"
-                }
-              },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld אימונים בלי קלוריות"
+                }
+              },
+              "two" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "שני אימונים בלי קלוריות"
                 }
               }
             }
@@ -2344,6 +2344,7 @@
       }
     },
     "Apple Health" : {
+      "comment" : "Section header and screen title in Settings: the name of Apple's Health app",
       "localizations" : {
         "he" : {
           "stringUnit" : {
@@ -2351,8 +2352,7 @@
             "value" : "Apple Health"
           }
         }
-      },
-      "comment" : "Section header and screen title in Settings: the name of Apple's Health app"
+      }
     },
     "Apple Intelligence" : {
       "comment" : "Product name of Apple's on-device AI; option for Coach AI. Keep as is",
@@ -3519,6 +3519,16 @@
         }
       }
     },
+    "ChatGPT plan unavailable" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תוכנית ה-ChatGPT לא זמינה"
+          }
+        }
+      }
+    },
     "ChatGPT tunes calories, protein, carbs and fat." : {
       "localizations" : {
         "he" : {
@@ -3540,6 +3550,17 @@
           }
         }
       }
+    },
+    "Check again" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בדיקה חוזרת"
+          }
+        }
+      },
+      "comment" : "Button: checks again whether OpenAI lets this ChatGPT plan be used in Mivu"
     },
     "Check the meal's photos." : {
       "localizations" : {
@@ -6613,6 +6634,7 @@
       }
     },
     "From %@" : {
+      "comment" : "Workout source line: %@ is the app that recorded it, for example Garmin Connect",
       "localizations" : {
         "he" : {
           "stringUnit" : {
@@ -6620,8 +6642,7 @@
             "value" : "מ-%@"
           }
         }
-      },
-      "comment" : "Workout source line: %@ is the app that recorded it, for example Garmin Connect"
+      }
     },
     "From Diary" : {
       "comment" : "Label: opened from the Diary screen",
@@ -7665,6 +7686,17 @@
           }
         }
       }
+    },
+    "Learn more" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מידע נוסף"
+          }
+        }
+      },
+      "comment" : "Link: opens OpenAI's help article about using a ChatGPT plan in other apps"
     },
     "Leave a nutrient blank if you have no target for it." : {
       "localizations" : {
@@ -10594,6 +10626,27 @@
         }
       }
     },
+    "Plan can't be used in other apps" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אי אפשר להשתמש בתוכנית באפליקציות אחרות"
+          }
+        }
+      }
+    },
+    "Plan unavailable" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "התוכנית לא זמינה"
+          }
+        }
+      },
+      "comment" : "Settings value: the ChatGPT plan can't be used in Mivu"
+    },
     "Portion" : {
       "comment" : "Section heading: portion size of a food",
       "localizations" : {
@@ -11035,12 +11088,12 @@
         }
       }
     },
-    "Recommended. Works with ChatGPT Go, Plus or Pro and uses its allowance. No extra cost." : {
+    "Recommended. Works with your ChatGPT plan and uses its allowance. No extra cost." : {
       "localizations" : {
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "מומלץ. עובד עם ChatGPT Go, Plus או Pro ומשתמש במכסה שלהם. בלי עלות נוספת."
+            "value" : "מומלץ. עובד עם תוכנית ה-ChatGPT שלך ומשתמש במכסה שלה. בלי עלות נוספת."
           }
         }
       }
@@ -14681,12 +14734,12 @@
         }
       }
     },
-    "Uses your ChatGPT Go, Plus or Pro plan. Coach messages and photos you send are shared with OpenAI." : {
+    "Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI." : {
       "localizations" : {
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "שימוש בתוכנית ChatGPT Go, Plus או Pro שלך. הודעות ותמונות שנשלחות לפיפ משותפות עם OpenAI."
+            "value" : "שימוש בתוכנית ה-ChatGPT שלך. הודעות ותמונות שנשלחות לפיפ משותפות עם OpenAI."
           }
         }
       }
@@ -14697,6 +14750,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "שימוש בתוכנית ChatGPT"
+          }
+        }
+      }
+    },
+    "Using on-device AI. Your ChatGPT plan can’t be used in other apps." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משתמשים ב-AI במכשיר. אי אפשר להשתמש בתוכנית ה-ChatGPT שלך באפליקציות אחרות."
           }
         }
       }
@@ -15681,6 +15744,16 @@
         }
       }
     },
+    "You’re signed in, but your ChatGPT plan can’t be used in other apps. You can keep logging meals by hand." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "התחברת, אבל אי אפשר להשתמש בתוכנית ה-ChatGPT שלך באפליקציות אחרות. אפשר להמשיך לתעד ארוחות ידנית."
+          }
+        }
+      }
+    },
     "You’re using your ChatGPT plan" : {
       "localizations" : {
         "he" : {
@@ -15724,6 +15797,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "הגוף והיעד שלך"
+          }
+        }
+      }
+    },
+    "Your ChatGPT plan can’t be used in Mivu" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אי אפשר להשתמש בתוכנית ה-ChatGPT שלך ב-Mivu"
+          }
+        }
+      }
+    },
+    "Your ChatGPT plan can’t be used in other apps." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אי אפשר להשתמש בתוכנית ה-ChatGPT שלך באפליקציות אחרות."
+          }
+        }
+      }
+    },
+    "Your ChatGPT plan can’t be used in other apps. Add nutrition by hand." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אי אפשר להשתמש בתוכנית ה-ChatGPT שלך באפליקציות אחרות. אפשר להוסיף ערכים תזונתיים ידנית."
           }
         }
       }

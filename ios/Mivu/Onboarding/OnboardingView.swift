@@ -257,7 +257,7 @@ struct OnboardingView: View {
             card {
                 promise("lock.shield", String(localized: "Private by default"), String(localized: "Mivu asks before sharing anything with OpenAI. Your diary stays on this iPhone."))
                 Divider()
-                promise("person.crop.circle.badge.checkmark", String(localized: "Your own plan"), String(localized: "Recommended. Works with ChatGPT Go, Plus or Pro and uses its allowance. No extra cost."))
+                promise("person.crop.circle.badge.checkmark", String(localized: "Your own plan"), String(localized: "Recommended. Works with your ChatGPT plan and uses its allowance. No extra cost."))
             }
             if connection.isConnecting { ProgressView("Waiting for ChatGPT…").frame(maxWidth: .infinity) }
             if let notice = connection.notice { footnote(String(localized: String.LocalizationValue(notice.rawValue))) }

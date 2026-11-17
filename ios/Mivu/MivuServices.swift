@@ -32,6 +32,9 @@ import UIKit
         if DiaryLaunch.isUITest { appleModelAvailable = { false }; appleModelSupported = { false } }
         let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults, appleModelAvailable: appleModelAvailable,
                                                                         appleModelSupported: appleModelSupported)
+        #if DEBUG
+        if DiaryLaunch.isPlanNotEligibleFixture { session.applyNotEligibleFixture() }
+        #endif
         let keys = NutritionAPIKeyStore.local
         let foodSource = FoodEvidenceClient()
         let fixture: (() throws -> CoachViewModel.Inference)? = DiaryLaunch.isCoachInferenceFixture

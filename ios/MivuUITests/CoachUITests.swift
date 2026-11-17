@@ -35,6 +35,28 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
     }
 
+    func testPlanNotEligibleExplainsOnceAndInSettings() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--plan-not-eligible-fixture", "--proof-english"]
+        app.launch()
+        let alert = app.alerts["Your ChatGPT plan can’t be used in Mivu"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 15))
+        XCTAssertTrue(alert.buttons["Learn more"].exists)
+        alert.buttons["Got it"].tap()
+        XCTAssertTrue(app.staticTexts["Your ChatGPT plan can’t be used in other apps."].waitForExistence(timeout: 5),
+                      "Coach explains the plan instead of offering to connect")
+        XCTAssertFalse(app.buttons["connectChatGPT"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 3), "The explanation shows once per account")
+        openConnectionSettings(in: app)
+        let checkAgain = app.buttons["Check again"]
+        revealList(checkAgain, in: app)
+        XCTAssertTrue(app.staticTexts["ChatGPT plan unavailable"].exists)
+        XCTAssertFalse(app.buttons["Enable ChatGPT plan usage"].exists)
+        XCTAssertFalse(app.buttons["connectChatGPT"].exists)
+    }
+
     func testOfflineTextPhotoCapturePersistsAcrossRelaunchAndTabs() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
