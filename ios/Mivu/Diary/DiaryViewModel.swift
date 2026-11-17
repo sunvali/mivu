@@ -38,6 +38,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private(set) var readModel: DiaryReadModel?
     private(set) var timeZoneNotice: TimeZoneSwitch?
     private(set) var timeZoneMode: TimeZoneMode?
+    private var isSyncingTimeZone = false
     private(set) var selection: DiarySelectionOwnership?
     private(set) var workStatus = CoachWorkStatus()
     private(set) var photoLoader: DiaryPhotoLoader?
@@ -94,7 +95,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
          dayDetailLoading: (@Sendable (UUID, UUID) async throws -> DiaryDayReadModel)? = nil,
          photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil,
          manualNutritionSaving: (@Sendable (ManualNutritionPayload, DiarySelectionOwnership) async throws -> ManualNutritionSaveResult)? = nil,
-         deviceTimeZone: @Sendable @escaping () -> TimeZone = { .current },
+         deviceTimeZone: @Sendable @escaping () -> TimeZone = { NSTimeZone.resetSystemTimeZone(); return .current },
          beginCaptureProtection: @escaping @MainActor () -> (@MainActor () -> Void) = { CoachCaptureProtection.begin() },
          captureDayAssignment: (@Sendable (Date, DiarySelectionOwnership) async throws -> DayAssignment)? = nil) {
         self.manualNutritionSaving = manualNutritionSaving ?? { try await store.saveManualNutrition($0, expectedSelection: $1, expectedProfileID: $0.profileID) }
@@ -216,6 +217,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         selection = token; exactMeals = [:]; exactDays = [:]; savedMealID = nil; manualCaptureAttempt = nil
         photoRequestGeneration &+= 1; changeGeneration &+= 1
         readModel = current; workStatus = status
+        timeZoneNotice = nil; timeZoneMode = preferences.flatMap { TimeZoneStateStore(defaults: $0).state(for: owner)?.mode }
         #if DEBUG
         if CoachCorrectionUITestFixture.isEnabled { try CoachCorrectionUITestFixture.installAudit() }
         #endif
@@ -260,17 +262,16 @@ enum DiaryCaptureResult: Equatable, Sendable {
     }
     /// Follows the phone's time zone at an activity point; a failed write leaves the state alone so the next sync retries.
     func syncTimeZone(now: Date = Date()) async {
-        guard !isChangingProfile, let defaults = preferences, let profile = readModel?.head.profile else { return }
+        guard !isChangingProfile, !isSyncingTimeZone, let defaults = preferences, let profile = readModel?.head.profile else { return }
+        isSyncingTimeZone = true; defer { isSyncingTimeZone = false }
         let states = TimeZoneStateStore(defaults: defaults), stored = states.state(for: profile.id)
         let decision = TimeZoneSync.decide(state: stored, profileZone: profile.timeZoneID, deviceZone: deviceTimeZone().identifier, now: now)
         if let zone = decision.newProfileZone, !(await writeProfileZone(zone, profile)) { return }
         if decision.state != stored { states.save(decision.state, for: profile.id) }
         timeZoneMode = decision.state.mode
         // A switch made without the UI (Shortcut, Siri) shows once on the next open while it is still the same day.
-        if let last = decision.state.lastSwitch, !last.announced, let zone = TimeZone(identifier: decision.state.knownProfileZone) {
-            var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
-            if calendar.isDate(last.at, inSameDayAs: now) { timeZoneNotice = last }
-        }
+        let zone = decision.state.knownProfileZone
+        if let last = decision.state.lastSwitch, !last.announced, wakingDateLabel(last.at, zone: zone) == wakingDateLabel(now, zone: zone) { timeZoneNotice = last }
     }
     func markTimeZoneNoticeShown() {
         guard let defaults = preferences, let id = readModel?.profile.id else { return }
@@ -541,11 +542,11 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard !isChangingProfile, !isSaving else { return false }; isChangingProfile = true; photoRequestGeneration &+= 1
         changesTask?.cancel(); cancelSampleWorker(); backupTask?.cancel(); backupRequested = nil; return true
     }
-    private func finishProfileTransition() { isChangingProfile = false; queueBackup(); resumeWorker() }
+    private func finishProfileTransition() { isChangingProfile = false; queueBackup(); resumeWorker(); Task { await syncTimeZone() } }
     private func clearProfileSelection(rememberSignOut: Bool = true) async {
         await backup?.selectProfile(nil); await store.signOut()
         if let photoLoader { await photoLoader.purgeForMemoryPressure() }
-        selection = nil; manualCaptureAttempt = nil; readModel = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
+        selection = nil; timeZoneNotice = nil; timeZoneMode = nil; manualCaptureAttempt = nil; readModel = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
         photoRequestGeneration &+= 1; changeGeneration &+= 1
         backupGeneration = nil; backupStatus = FolderBackupStatus(); backupScheduledRevision = nil
         if rememberSignOut { preferences?.set(true, forKey: "diarySignedOut"); preferences?.removeObject(forKey: "diarySelectedProfile") }

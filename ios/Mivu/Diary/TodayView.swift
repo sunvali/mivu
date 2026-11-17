@@ -178,7 +178,7 @@ struct DiaryRootView: View {
     private var lifecycleView: some View {
         companionView
         .task {
-            for await _ in NotificationCenter.default.notifications(named: .NSSystemTimeZoneDidChange) where hasLoaded { await services.syncTimeZone() }
+            for await _ in NotificationCenter.default.notifications(named: .NSSystemTimeZoneDidChange) where hasLoaded { await services.syncTimeZone(); if DiaryLaunch.rollsOverDays { await model.rollOverDay() } }
         }
         .task {
             if !DiaryLaunch.isUITest, ["today", "diary", "progress", "coach"].contains(restoredTab) { selectedTab = restoredTab }

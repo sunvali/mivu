@@ -50,6 +50,40 @@ private final class Zone: @unchecked Sendable { var id: String; init(_ id: Strin
         #expect(model.timeZoneMode == .pinned(zone: "Asia/Tokyo", untilDeviceZone: nil))
     }
 
+    private func seedPending(_ model: DiaryViewModel, _ defaults: UserDefaults) throws -> UUID {
+        let id = try #require(model.readModel?.profile.id)
+        let last = TimeZoneSwitch(from: "America/New_York", to: "Asia/Jerusalem", at: noon, announced: false)
+        TimeZoneStateStore(defaults: defaults).save(TimeZoneState(mode: .automatic, knownProfileZone: "Asia/Jerusalem", lastSwitch: last), for: id)
+        return id
+    }
+
+    @Test func unannouncedSwitchShowsOnlyOnTheSameWakingDay() async throws {
+        let p = path(); defer { try? FileManager.default.removeItem(at: p) }
+        let (model, defaults) = try await model(profileZone: "Asia/Jerusalem", device: Zone("Asia/Jerusalem"), p)
+        _ = try seedPending(model, defaults)
+        await model.syncTimeZone(now: noon.addingTimeInterval(2 * 86_400))
+        #expect(model.timeZoneNotice == nil)
+        await model.syncTimeZone(now: noon.addingTimeInterval(3600))
+        #expect(model.timeZoneNotice?.from == "America/New_York")
+        model.markTimeZoneNoticeShown()
+        #expect(model.timeZoneNotice == nil)
+        await model.syncTimeZone(now: noon.addingTimeInterval(7200))
+        #expect(model.timeZoneNotice == nil)
+    }
+
+    @Test func switchingProfilesDropsTheOtherProfilesNoticeAndLoadsItsMode() async throws {
+        let p = path(); defer { try? FileManager.default.removeItem(at: p) }
+        let (model, defaults) = try await model(profileZone: "Asia/Jerusalem", device: Zone("Asia/Jerusalem"), p)
+        _ = try seedPending(model, defaults)
+        await model.syncTimeZone(now: noon.addingTimeInterval(3600))
+        #expect(model.timeZoneNotice != nil)
+        let other = try await model.store.createProfile(DiaryProfile(name: "Synthetic B", timeZoneID: "Asia/Tokyo")).head.profile.id
+        TimeZoneStateStore(defaults: defaults).save(TimeZoneState(mode: .pinned(zone: "Asia/Tokyo", untilDeviceZone: nil), knownProfileZone: "Asia/Tokyo"), for: other)
+        await model.switchProfile(other)
+        #expect(model.timeZoneNotice == nil)
+        #expect(model.timeZoneMode == .pinned(zone: "Asia/Tokyo", untilDeviceZone: nil))
+    }
+
     @Test func syncSkipsWhileCoachIsSending() {
         #expect(MivuServices.shouldSync(isSending: true) == false)
         #expect(MivuServices.shouldSync(isSending: false))
