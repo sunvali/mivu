@@ -117,7 +117,7 @@ import Testing
         #expect(report.remainingFromRecorded.fat == -3)
     }
 
-    @Test func workoutBurnIsSeparateAndCreditRequiresOptInAndKnownBurn() {
+    @Test func workoutBurnIsSeparateAndCreditRequiresOptInAndCountsKnownBurn() {
         var data = snapshot()
         let tracked = day("2026-01-07", .complete)
         data.days = [tracked]
@@ -133,8 +133,88 @@ import Testing
         data.workouts.append(workout(tracked, burn: nil))
         let unknown = ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate)
         #expect(unknown.workoutCount == 2)
-        #expect(unknown.estimatedBurnKcal == nil)
-        #expect(unknown.exerciseAdjustedKcalRemaining == nil)
+        #expect(unknown.estimatedBurnKcal == 40)
+        #expect(unknown.uncountedWorkoutCount == 1)
+        #expect(unknown.exerciseAdjustedKcalRemaining == 60)
+        #expect(unknown.healthBurnKcal == nil)
+    }
+
+    private func health(_ day: TrackingDay, _ hour: String, minutes: Int, burn: Double?, source: String = "Garmin Connect",
+                        kind: WorkoutKind = .cardio) -> WorkoutSession {
+        WorkoutSession(dayID: day.id, performedAt: date(day.localDate, hour: hour), timePrecision: .exact, revision: 1, kind: kind,
+                       durationMinutes: minutes, exercises: [], estimatedBurnKcal: burn, burnSource: .health, healthSource: source)
+    }
+
+    private func timed(_ day: TrackingDay, _ hour: String, minutes: Int, burn: Double?) -> WorkoutSession {
+        WorkoutSession(dayID: day.id, performedAt: date(day.localDate, hour: hour), timePrecision: .exact, revision: 1, kind: .cardio,
+                       durationMinutes: minutes, exercises: [], estimatedBurnKcal: burn, burnSource: burn == nil ? nil : .userEstimate)
+    }
+
+    private func credited(_ workouts: (TrackingDay) -> [WorkoutSession]) -> DailyProgress {
+        var data = snapshot()
+        let tracked = day("2026-01-07", .complete)
+        data.days = [tracked]; data.meals = [meal(tracked, kcal: 80)]; data.goals = [goal("2026-01-01", credit: true)]
+        data.workouts = workouts(tracked)
+        return ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate)
+    }
+
+    @Test func creditCountsKnownPartAndNotesUnknown() {
+        let report = credited { [health($0, "07:00:00", minutes: 45, burn: 400), timed($0, "18:00:00", minutes: 30, burn: nil)] }
+        #expect(report.estimatedBurnKcal == 400)
+        #expect(report.uncountedWorkoutCount == 1)
+        #expect(report.healthBurnKcal == 400)
+        #expect(report.exerciseAdjustedKcalRemaining == 420)
+    }
+
+    @Test func overlappingHealthWorkoutsCountOnce() {
+        let report = credited { [health($0, "07:00:00", minutes: 45, burn: 400),
+                                 health($0, "07:05:00", minutes: 35, burn: 380, source: "Apple Watch")] }
+        #expect(report.workoutCount == 2)
+        #expect(report.estimatedBurnKcal == 400)
+        #expect(report.healthBurnKcal == 400)
+    }
+
+    @Test func healthBeatsOverlappingCoachWorkout() {
+        let tracked = day("2026-01-07", .complete)
+        let coach = timed(tracked, "07:00:00", minutes: 30, burn: 300), garmin = health(tracked, "07:10:00", minutes: 30, burn: 400)
+        let credit = ExerciseCredit.daily([coach, garmin])
+        #expect(credit.creditedKcal == 400)
+        #expect(credit.coveredBy[coach.id] == garmin)
+    }
+
+    @Test func dateOnlyCoachWorkoutOverlapsSameKindHealth() {
+        let report = credited { [workout($0, burn: 250), health($0, "07:00:00", minutes: 30, burn: 400),
+                                 health($0, "18:00:00", minutes: 40, burn: 100, kind: .strength)] }
+        #expect(report.estimatedBurnKcal == 500)
+        #expect(report.healthBurnKcal == 500)
+    }
+
+    @Test func healthWorkoutWithoutCaloriesNeverCancelsKnownCalories() {
+        let tracked = day("2026-01-07", .complete)
+        let silent = health(tracked, "07:00:00", minutes: 30, burn: nil, source: "Synthetic app")
+        let coach = ExerciseCredit.daily([silent, timed(tracked, "07:00:00", minutes: 30, burn: 300)])
+        #expect(coach.creditedKcal == 300 && coach.coveredBy.isEmpty)
+        let copies = ExerciseCredit.daily([silent, health(tracked, "07:05:00", minutes: 25, burn: 400)])
+        #expect(copies.creditedKcal == 400 && copies.healthKcal == 400)
+    }
+
+    @Test func diaryWorkoutsNeverCoverEachOther() {
+        let report = credited { [timed($0, "07:00:00", minutes: 30, burn: 100), timed($0, "07:10:00", minutes: 30, burn: 50)] }
+        #expect(report.estimatedBurnKcal == 150)
+    }
+
+    @Test func widgetTargetAddsCreditOnlyWhenEnabled() {
+        #expect(credited { [health($0, "07:00:00", minutes: 45, burn: 400)] }.creditedKcalTarget == 500)
+        var data = snapshot()
+        let tracked = day("2026-01-07", .complete)
+        data.days = [tracked]; data.goals = [goal("2026-01-01")]
+        data.workouts = [health(tracked, "07:00:00", minutes: 45, burn: 400)]
+        #expect(ProgressAnalytics.daily(snapshot: data, localDate: tracked.localDate).creditedKcalTarget == 100)
+    }
+
+    @Test func deletingWinnerLetsRunnerUpCount() {
+        let report = credited { [health($0, "07:05:00", minutes: 35, burn: 380, source: "Apple Watch")] }
+        #expect(report.estimatedBurnKcal == 380)
     }
 
     @Test func sameStoredDateAcrossTravelCombinesAllDayIDs() {

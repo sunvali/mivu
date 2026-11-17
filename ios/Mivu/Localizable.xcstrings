@@ -608,6 +608,16 @@
         }
       }
     },
+    "%@ may have this workout already. Remove yours?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ייתכן שהאימון הזה כבר נמצא ב-%@. להסיר את שלך?"
+          }
+        }
+      }
+    },
     "%@ of %@ kcal target" : {
       "localizations" : {
         "en" : {
@@ -1553,6 +1563,53 @@
         }
       }
     },
+    "%lld workouts without calories" : {
+      "comment" : "Today, under exercise-adjusted remaining: %lld is how many workouts have no calories",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld workout without calories"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld workouts without calories"
+                }
+              }
+            }
+          }
+        },
+        "he" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "אימון אחד בלי קלוריות"
+                }
+              },
+              "two" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "שני אימונים בלי קלוריות"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld אימונים בלי קלוריות"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld%%" : {
       "shouldTranslate" : false
     },
@@ -1753,6 +1810,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מודל החשבון"
+          }
+        }
+      }
+    },
+    "Active calories: %@ kcal" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קלוריות פעילות: %@ קק״ל"
           }
         }
       }
@@ -1994,6 +2061,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "הוספת משקל ידנית"
+          }
+        }
+      }
+    },
+    "Add workout calories to my budget" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוספת קלוריות האימונים לתקציב שלי"
           }
         }
       }
@@ -2386,6 +2463,17 @@
         }
       }
     },
+    "Apple Health" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Health"
+          }
+        }
+      },
+      "comment" : "Section header and screen title in Settings: the name of Apple's Health app"
+    },
     "Apple Intelligence" : {
       "comment" : "Product name of Apple's on-device AI; option for Coach AI. Keep as is",
       "localizations" : {
@@ -2447,6 +2535,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מצב דוגמה: תפוח"
+          }
+        }
+      }
+    },
+    "Apply workout calories to your budget?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף את קלוריות האימונים לתקציב שלך?"
           }
         }
       }
@@ -3959,16 +4057,6 @@
         }
       }
     },
-    "From package label" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מתווית המוצר"
-          }
-        }
-      }
-    },
     "Connect" : {
       "comment" : "Button: starts ChatGPT sign-in",
       "localizations" : {
@@ -4325,6 +4413,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "לא הצלחנו לוודא שהשמירה בוצעה. אפשר לנסות שוב עם אותו מזון, וכך לבדוק בלי סיכון."
+          }
+        }
+      }
+    },
+    "Could not connect to Apple Health. Check iOS Settings › Health › Data Access › Mivu." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא הצלחנו להתחבר ל-Apple Health. אפשר לבדוק בהגדרות iOS › בריאות › גישה לנתונים › Mivu."
           }
         }
       }
@@ -6634,6 +6732,17 @@
         }
       }
     },
+    "From %@" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מ-%@"
+          }
+        }
+      },
+      "comment" : "Workout source line: %@ is the app that recorded it, for example Garmin Connect"
+    },
     "From Diary" : {
       "comment" : "Label: opened from the Diary screen",
       "localizations" : {
@@ -6641,6 +6750,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מהיומן"
+          }
+        }
+      }
+    },
+    "From package label" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מתווית המוצר"
           }
         }
       }
@@ -7237,6 +7356,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "לכלול אנרגיית אימון מוערכת בחישוב הנותר המותאם"
+          }
+        }
+      }
+    },
+    "Includes %@ kcal from Apple Health" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כולל %@ קק״ל מ-Apple Health"
           }
         }
       }
@@ -9151,6 +9280,16 @@
         }
       }
     },
+    "No calories from Health" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אין קלוריות מ-Apple Health"
+          }
+        }
+      }
+    },
     "No chat for this date" : {
       "localizations" : {
         "he" : {
@@ -9513,6 +9652,16 @@
         }
       }
     },
+    "No workouts yet? In Garmin Connect, turn on Apple Health sharing; in iOS Settings › Health › Data Access, allow Mivu." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עדיין אין אימונים? צריך להפעיל ב-Garmin Connect שיתוף עם Apple Health, ולאשר את Mivu בהגדרות iOS › בריאות › גישה לנתונים."
+          }
+        }
+      }
+    },
     "None yet" : {
       "comment" : "Placeholder: nothing recorded so far",
       "localizations" : {
@@ -9806,6 +9955,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "רק ניתוח שהושלם יופיע כתוצאה."
+          }
+        }
+      }
+    },
+    "Only each workout's active calories count, once per session. You can change this later in Goals." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נספרות רק הקלוריות הפעילות של כל אימון, פעם אחת לכל אימון. אפשר לשנות את זה אחר כך ביעדים."
           }
         }
       }
@@ -10941,6 +11100,16 @@
         }
       }
     },
+    "Read workouts from Apple Health" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קריאת אימונים מ-Apple Health"
+          }
+        }
+      }
+    },
     "Reading archive" : {
       "comment" : "Progress text while an import file is read",
       "extractionState" : "manual",
@@ -11253,6 +11422,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "להסיר את כל הארוחה הזו?"
+          }
+        }
+      }
+    },
+    "Remove your cardio workout" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסרת אימון הקרדיו שלך"
+          }
+        }
+      }
+    },
+    "Remove your other workout" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסרת האימון האחר שלך"
+          }
+        }
+      }
+    },
+    "Remove your strength workout" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסרת אימון הכוח שלך"
           }
         }
       }
@@ -13861,6 +14060,16 @@
         }
       }
     },
+    "This removes only this workout and its exercise details. Meals, weights and other workouts are preserved. It won't be imported again." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הפעולה מסירה רק את האימון הזה ואת פרטי התרגילים שלו. ארוחות, משקלים ואימונים אחרים נשמרים. האימון לא ייובא שוב."
+          }
+        }
+      }
+    },
     "This removes the meal and its attached photos from this diary." : {
       "localizations" : {
         "he" : {
@@ -15432,6 +15641,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "אימונים"
+          }
+        }
+      }
+    },
+    "Workouts from Garmin Connect, Apple Watch and other apps that share with Health. They stay on this iPhone and are not shared with Coach." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אימונים מ-Garmin Connect, מ-Apple Watch ומאפליקציות אחרות שמשתפות עם Apple Health. הם נשארים באייפון הזה ולא משותפים עם פיפ."
           }
         }
       }

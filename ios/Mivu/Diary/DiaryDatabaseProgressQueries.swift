@@ -32,7 +32,7 @@ extension DiaryDatabase {
         }
     }
 
-    func progressRange(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, includeDailyReports: Bool = false, expectedProfileID: UUID) throws -> CoachProgress {
+    func progressRange(endingOn: String, days: Int, finalizingTurnID: UUID? = nil, includeDailyReports: Bool = false, includeHealth: Bool = false, expectedProfileID: UUID) throws -> CoachProgress {
         // Only the Progress screen asks for a quarter or a year; the Coach stays on 1/7/30.
         guard validLocalDate(endingOn), (includeDailyReports ? [1, 7, 30, 91, 365] : [1, 7, 30]).contains(days) else { throw CoachError.invalidArguments }
         return try domainRead(expectedProfileID: expectedProfileID) { head in
@@ -46,7 +46,7 @@ extension DiaryDatabase {
             for label in horizon {
                 let rows = try transaction.records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(label)])
                 let tracked = try rows.map { row in let day = try decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day }
-                var totals: [NutritionTotals] = [], dailyWorkoutCount = 0, burn: Double? = 0, travel = false
+                var totals: [NutritionTotals] = [], dayWorkouts: [WorkoutSession] = [], travel = false
                 for day in tracked {
                     let summary = try transaction.daySummary(day)
                     if summary.savedMealCount > 0 { savedFoodDates.insert(label) }
@@ -55,22 +55,20 @@ extension DiaryDatabase {
                         let weight = try decode(WeightEntry.self, row); try validateWeightFields(weight)
                         weights.append((row.ordinal, CoachWeightReference(localDate: label, record: weight)))
                     }
-                    let statement = try domainStatement("SELECT COUNT(*), CASE WHEN COUNT(*) = COUNT(json_extract(CAST(payload AS TEXT), '$.estimatedBurnKcal')) THEN COALESCE(SUM(json_extract(CAST(payload AS TEXT), '$.estimatedBurnKcal')), 0) END FROM workout WHERE parent = ?", [.text(day.id.uuidString)])
-                    defer { sqlite3_finalize(statement) }; guard try mutationStep(statement) else { throw DiaryError.invalidData }
-                    let count = Int(sqlite3_column_int64(statement, 0)); dailyWorkoutCount += count
-                    if sqlite3_column_type(statement, 1) == SQLITE_NULL { burn = nil } else if let previous = burn { burn = previous + sqlite3_column_double(statement, 1) }
+                    // Coach never sees Apple Health workouts or their calories.
+                    var listed: [(Int, WorkoutSession)] = []
+                    for row in try transaction.records("workout", clause: "parent = ?", values: [.text(day.id.uuidString)]) {
+                        let workout = try decode(WorkoutSession.self, row); try validateWorkoutFields(workout)
+                        if includeHealth || !workout.isFromHealth { listed.append((row.ordinal, workout)) }
+                    }
+                    dayWorkouts += listed.map(\.1)
                     if label >= horizon[horizon.count - days] {
-                        workoutCount += count
-                        let selected = try domainStatement("SELECT id, ordinal, json_extract(CAST(payload AS TEXT), '$.revision'), json_extract(CAST(payload AS TEXT), '$.kind'), json_extract(CAST(payload AS TEXT), '$.durationMinutes') FROM workout WHERE parent = ? ORDER BY ordinal DESC, id DESC LIMIT 100", [.text(day.id.uuidString)])
-                        defer { sqlite3_finalize(selected) }
-                        while try mutationStep(selected) {
-                            guard let id = try mutationOptionalUUID(selected, 0), let kind = WorkoutKind(rawValue: try mutationText(selected, 3)) else { throw DiaryError.invalidData }
-                            workouts.append((Int(sqlite3_column_int64(selected, 1)), WorkoutReference(id: id, dayID: day.id, localDate: label, revision: Int(sqlite3_column_int64(selected, 2)), kind: kind, durationMinutes: Int(sqlite3_column_int64(selected, 4)))))
-                        }
+                        workoutCount += listed.count
+                        workouts += listed.suffix(100).map { ($0.0, WorkoutReference(id: $0.1.id, dayID: day.id, localDate: label, revision: $0.1.revision, kind: $0.1.kind, durationMinutes: $0.1.durationMinutes)) }
                         workouts = Array(workouts.sorted { $0.0 < $1.0 }.suffix(100))
                     }
                 }
-                reports[label] = ProgressAnalytics.daily(localDate: label, days: tracked, subtotals: totals, hasFood: savedFoodDates.contains(label), activeDayID: head.activeDayID, goal: try transaction.goal(on: label), workoutCount: dailyWorkoutCount, estimatedBurnKcal: burn, isTravelDay: travel)
+                reports[label] = ProgressAnalytics.daily(localDate: label, days: tracked, subtotals: totals, hasFood: savedFoodDates.contains(label), activeDayID: head.activeDayID, goal: try transaction.goal(on: label), workouts: dayWorkouts, isTravelDay: travel)
             }
             var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone)!
             let start = calendar.startOfDay(for: try diaryDateOnlyInstant(horizon[0], zone: zone))

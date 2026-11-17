@@ -616,6 +616,36 @@ import Testing
         await #expect(throws: CoachError.invalidArguments) { try await store.applyCoachWrites([.editWorkout(id: workout.id, draft: strength, revision: 1), .deleteWorkout(id: workout.id, revision: 2)], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id) }
         #expect(try await store.snapshotForExport() == before)
     }
+    @Test func coachNeverSeesHealthWorkouts() async throws {
+        let root = URL.temporaryDirectory.appending(path: "CoachHealth-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
+        let clock = now, store = DiaryStore(directory: root, currentTime: { clock })
+        let profile = DiaryProfile(name: "Synthetic", timeZoneID: "Asia/Jerusalem")
+        _ = try await store.createProfile(profile); let day = try await store.startDay(at: now)
+        let healthID = UUID()
+        try await store.applyHealthWorkouts([HealthWorkout(id: healthID, start: now.addingTimeInterval(-3_600), end: now.addingTimeInterval(-900),
+                                                           activeKcal: 412, sourceName: "Garmin Connect", kind: .cardio)], deletedIDs: [], expectedProfileID: profile.id)
+        let coach = try await store.createWorkout(localDate: day.localDate, draft: WorkoutDraft(kind: .strength, durationMinutes: 30, exercises: [], estimatedBurnKcal: 200, burnSource: .userEstimate),
+                                                  performedAt: nil, expectedProfileID: profile.id)
+        #expect(try await store.snapshotForExport().workouts.count == 2)
+        await #expect(throws: DiaryError.notFound) { try await store.coachWorkout(id: healthID, expectedProfileID: profile.id) }
+        #expect(try await store.workout(id: healthID, expectedProfileID: profile.id).healthSource == "Garmin Connect")
+        let turn = try await capturedTurn(store, text: "How was my training today?", photos: [], at: now, expectedProfileID: profile.id)
+        let context = try await store.coachContext(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(context.workouts?.map(\.id) == [coach.id])
+        let progress = try await store.coachProgress(endingOn: day.localDate, days: 1, expectedProfileID: profile.id)
+        #expect(progress.workouts.map(\.id) == [coach.id])
+        #expect(progress.daily.workoutCount == 1 && progress.daily.estimatedBurnKcal == 200 && progress.daily.healthBurnKcal == nil)
+        let display = try await store.progressForDisplay(endingOn: day.localDate, days: 1, expectedProfileID: profile.id)
+        #expect(display.daily.workoutCount == 2 && display.daily.estimatedBurnKcal == 612 && display.daily.healthBurnKcal == 412)
+        for json in [try coachJSON(context), try coachJSON(progress)] {
+            #expect(!json.contains(healthID.uuidString) && !json.contains("Garmin"))
+        }
+        let edit = CoachWrite.editWorkout(id: healthID, draft: WorkoutDraft(kind: .cardio, durationMinutes: 10, exercises: [], estimatedBurnKcal: nil, burnSource: nil), revision: 1)
+        await #expect(throws: DiaryError.notFound) {
+            try await store.applyCoachWrites([edit], turnID: turn.id, epoch: store.selectionEpoch(expectedProfileID: profile.id), expectedProfileID: profile.id)
+        }
+    }
+
     @Test func progressJSONDistinguishesUnknownFromCompleteZeroAndRoundTrips() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let day = try await store.snapshotForExport().days[0]
