@@ -428,6 +428,10 @@ struct ResponseEventStream {
         return .malformedResponse
     }
 }
+/// The smallest request that tells whether this account's plan can be used here.
+enum EligibilityCheck {
+    static let prompt = "Synthetic eligibility check. Reply with OK."
+}
 enum SyntheticConnectionProbe {
     static let prompt = "Synthetic connection test. Briefly describe the image."
     // A generated 32x32 orange square on a neutral background, containing no personal data.

@@ -64,6 +64,7 @@ final class ChatGPTConnection {
     @ObservationIgnored private var listener: LoopbackCallback?
     private var generation = 0
     @ObservationIgnored private var isForeground = true
+    @ObservationIgnored private var lastEligibilityCheck: Date?
 
     @ObservationIgnored private let appleModelAvailable: @Sendable () -> Bool
     @ObservationIgnored private let appleModelSupported: @Sendable () -> Bool
@@ -205,8 +206,9 @@ final class ChatGPTConnection {
             let returning = registrations.first { $0.id == selection }
             let redirect = try await callback.start()
             guard revision == generation else { return }
+            let askedConsent = returning != nil && (accountState == .planPermissionMissing || planNotEligible)
             var attempt = try OAuthAttempt.make(hostID: hostID, issuedClientID: returning?.issuedClientID,
-                callbackURL: redirect, requestPlanConsent: returning != nil && accountState == .planPermissionMissing)
+                callbackURL: redirect, requestPlanConsent: askedConsent)
             var code: AuthorizationCode?
             _ = try await callback.receive(validating: { code = try attempt.consumeCallback($0) },
                 openBrowser: openBrowser, browserURL: attempt.authorizationURL)
@@ -220,10 +222,15 @@ final class ChatGPTConnection {
             if preferences.string(forKey: "pausedRegistrationID") == snapshot.registrationID {
                 preferences.removeObject(forKey: "pausedRegistrationID")
             }
+            // Asked for plan permission twice and still refused: OpenAI won't share this plan, so stop offering Enable.
+            if snapshot.planPermissionGranted { preferences.removeObject(forKey: "notEligibleRegistrationID") }
+            else if askedConsent { preferences.set(snapshot.registrationID, forKey: "notEligibleRegistrationID") }
             apply(snapshot)
             models = []; selectedModel = ""
             let storageAvailable = reloadSavedJob()
             if planAuthorized { await loadModels() }
+            guard revision == generation else { return }
+            if planAuthorized { await checkEligibility(force: true) }
             guard revision == generation else { return }
             if storageAvailable { resumePending() }
         } catch {
@@ -261,6 +268,31 @@ final class ChatGPTConnection {
             guard revision == generation else { return }
             await reflectFailure(error, revision: revision)
         }
+    }
+
+    /// One tiny request that tells whether OpenAI lets this account's plan be used here; temporary failures change nothing.
+    func checkEligibility(force: Bool = false) async {
+        guard planNotEligible || accountState == .connected, planScopeGranted, let owner = activeRegistrationID, !isDisconnecting else { return }
+        if !force, let last = lastEligibilityCheck, Date.now.timeIntervalSince(last) < 900 { return }
+        lastEligibilityCheck = .now
+        let revision = generation
+        do {
+            let token = try await auth.accessToken(expectedRegistrationID: owner)
+            let catalog = models.isEmpty ? try await client.models(accessToken: token) : models
+            guard let model = catalog.first(where: { $0.slug == selectedModel })?.slug ?? catalog.first?.slug else { return }
+            _ = try await client.respond(model: model, input: [.message(role: .user, text: EligibilityCheck.prompt, images: [])],
+                                         toolNamespace: nil, accessToken: token)
+            guard revision == generation, planNotEligible else { return }
+            preferences.removeObject(forKey: "notEligibleRegistrationID")
+            apply(await auth.snapshot())
+            guard revision == generation, planAuthorized else { return }
+            models = catalog
+            if !catalog.contains(where: { $0.slug == selectedModel }) { selectedModel = catalog.first?.slug ?? "" }
+            resumePending()
+        } catch ResponsesClient.Failure.notEligible {
+            guard revision == generation else { return }
+            markNotEligible(await auth.snapshot())
+        } catch {}
     }
 
     @discardableResult
