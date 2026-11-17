@@ -93,7 +93,19 @@ import Testing
         try await move(store, profile, to: "America/New_York")
         let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2026-11-17", items: [Self.apple], expectedProfileID: profile.id)
         #expect(receipt.dayID == day.id)
-        #expect(try await store.snapshotForExport().days.count == 1)
+        let snapshot = try await store.snapshotForExport()
+        #expect(snapshot.days.count == 1 && snapshot.meals.allSatisfy { $0.timeZoneID == "Asia/Jerusalem" }) // the turn's capture zone, not the landing zone
+    }
+    @Test func manualNutritionMealRecordsTheProfileZone() async throws {
+        let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")
+        try await move(store, profile, to: "America/New_York")
+        let item = FoodItem(name: "Synthetic manual", quantity: 1, unit: "cup", nutrition: NutritionValues(kcal: 100), provenance: .user, reference: "Entered", uncertain: false)
+        let at = DayTests.date("2026-11-17T20:00:00Z")
+        let payload = ManualNutritionPayload(profileID: profile.id, mealID: UUID(), submissionID: UUID(), operation: .create,
+            target: .recorded(dayID: day.id, localDate: day.localDate, timeZoneID: day.timeZoneID), capturedAt: at, eatenAt: at, timePrecision: .exact, expectedMealRevision: nil, items: [item])
+        let selection = try await store.selectionOwnership(expectedProfileID: profile.id)
+        _ = try await store.saveManualNutrition(payload, expectedSelection: selection, expectedProfileID: profile.id)
+        #expect(try await store.snapshotForExport().meals.first { $0.id == payload.mealID }?.timeZoneID == "America/New_York")
     }
     @Test func coachTodayIsTheOpenDayInHonolulu() async throws {
         let (store, profile, day) = try await DayTests.ready(zone: "Asia/Tokyo", at: "2026-11-18T00:00:00Z")

@@ -274,6 +274,12 @@ struct MealRow: View {
         let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
         return meal.state == .saved ? Text("\(time)\(estimated)") : Text("\(Text(meal.state.title)) · \(time)")
     }
+    /// Combined rows read child labels, so a tagged time is spelled out in full ("7:40 PM, Jerusalem time").
+    private var spokenStatus: Text? {
+        guard meal.timePrecision != .dateOnly, case let clock = MealClock.label(meal, model: model), clock.tag != nil else { return nil }
+        let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
+        return meal.state == .saved ? Text("\(Text(clock.spoken))\(estimated)") : Text("\(Text(meal.state.title)) · \(Text(clock.spoken))")
+    }
     @ViewBuilder private var calories: some View {
         if meal.isSaved {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
@@ -289,7 +295,8 @@ struct MealRow: View {
                 Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).lineLimit(typeSize.isAccessibilitySize ? nil : 2).directionFromContent(title)
                 if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
             }
-            statusText.font(.subheadline).foregroundStyle(meal.state == .saved ? Color.diarySecondary : meal.state.color)
+            Group { if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText } }
+                .font(.subheadline).foregroundStyle(meal.state == .saved ? Color.diarySecondary : meal.state.color)
         }
     }
     var body: some View {
