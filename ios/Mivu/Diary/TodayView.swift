@@ -375,7 +375,8 @@ struct DiaryRootView: View {
                 NavigationStack {
                     TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
                               onCompanionContextChanged: updateCompanionContext,
-                              onCompanionTouch: touchCompanion).toolbar { profileControl }.duoReadableWidth()
+                              onCompanionTouch: touchCompanion).zoneToastInset(model: model, toast: timeZoneToast)
+                        .toolbar { profileControl }.duoReadableWidth()
                 }
                 .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
                 .task(id: loggedMealID) {
@@ -385,10 +386,10 @@ struct DiaryRootView: View {
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
-                NavigationStack { HistoryView(model: model).toolbar { profileControl }.duoReadableWidth() }
+                NavigationStack { HistoryView(model: model).zoneToastInset(model: model, toast: timeZoneToast).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Progress", systemImage: "chart.bar.fill", value: "progress") {
-                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).toolbar { profileControl }.duoReadableWidth() }
+                NavigationStack { DiaryProgressView(model: model, openDiary: { selectedTab = "diary" }).zoneToastInset(model: model, toast: timeZoneToast).toolbar { profileControl }.duoReadableWidth() }
             }
             Tab("Coach", systemImage: "bubble.left.fill", value: "coach") {
                 // Sideways the chat is on the right, with what the conversation is about on the left.
@@ -402,7 +403,7 @@ struct DiaryRootView: View {
                                   openHistory: openCoachHistory, openToday: { selectedTab = "today" },
                                   openProgress: { selectedTab = "progress" }, pane: $coachPane, chatExpanded: $coachChatExpanded) { destination in
                             routes.route = SettingsRoute(destination: destination)
-                        }.toolbar { profileControl }.duoReadableWidth()
+                        }.zoneToastInset(model: model, toast: timeZoneToast).toolbar { profileControl }.duoReadableWidth()
                     }
                 } secondary: {
                     CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, openDiary: { selectedTab = "diary" })
@@ -410,7 +411,6 @@ struct DiaryRootView: View {
             }
             .badge(coach.queuedSiri.count)
         }
-        .overlay(alignment: .top) { if let notice = model.timeZoneNotice { timeZoneToast(notice) } }
         .task(id: model.timeZoneNotice) {
             guard let notice = model.timeZoneNotice else { return }
             AccessibilityNotification.Announcement(String(localized: "Now on \(TimeZoneSync.city(notice.to)) time")).post()
@@ -432,8 +432,8 @@ struct DiaryRootView: View {
         .background(Color.diarySurface, in: .capsule)
         .overlay(Capsule().strokeBorder(Color.diaryRule))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
-        .padding(.horizontal, 16).padding(.top, 8)
-        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+        .padding(.horizontal, 16).padding(.bottom, 8)
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timeZoneToast")
     }
@@ -682,8 +682,13 @@ struct TodayView: View {
             }
             Section {
                 VStack(alignment: .leading, spacing: 16) {
-                    summaryDate
-                    if let zones = model.pinnedZones { pinnedZoneTag(zones) }
+                    if let zones = model.pinnedZones {
+                        // Beside the date, or under it when large text leaves no room.
+                        ViewThatFits(in: .horizontal) {
+                            HStack { summaryDate; Spacer(minLength: 8); pinnedZoneTag(zones) }
+                            VStack(alignment: .leading, spacing: 0) { summaryDate; pinnedZoneTag(zones) }
+                        }
+                    } else { summaryDate }
                     if let day = model.activeDay {
                         intakeHero(totals: snapshot.totals.zeroIfEmpty, day: day)
                         if snapshot.activeGoal != nil {
@@ -946,5 +951,13 @@ struct TodayView: View {
             let amount = abs(value).formatted(.number.precision(.fractionLength(0)))
             value < 0 ? Text("\(amount) above goal", comment: "Calories eaten past the day's goal, on Today") : Text("\(amount) to goal", comment: "Calories left before the day's goal, on Today")
         } else { Text("Not estimated yet").foregroundStyle(Color.diarySecondary) }
+    }
+}
+
+private extension View {
+    /// An inset, not an overlay: each tab makes room above its tab bar, so no control sits under the toast.
+    func zoneToastInset(model: DiaryViewModel, toast: @escaping (TimeZoneSwitch) -> some View) -> some View {
+        safeAreaInset(edge: .bottom) { if let notice = model.timeZoneNotice { toast(notice) } }
+            .animation(.default, value: model.timeZoneNotice)
     }
 }

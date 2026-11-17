@@ -16,7 +16,7 @@ import XCTest
         let tag = app.buttons["pinnedZoneTag"]
         XCTAssertTrue(tag.waitForExistence(timeout: 5))
         XCTAssertEqual(tag.label, "Jerusalem time")
-        XCTAssertFalse(toast.exists)
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: toast)], timeout: 5) == .completed)
         add(XCTAttachment(screenshot: app.screenshot()).named("t6-tag"))
         tag.tap()
         app.buttons["Use New York time"].tap()
