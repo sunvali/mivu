@@ -122,10 +122,12 @@ The owner picked A.
   revision changed mid-reply.
 - `updateProfile` clearing `previousDayConfirmedAt` on a zone change stays. The
   field no longer drives decisions (day rollover design), so it's harmless.
-- **Existing profiles on first launch after the update:** a profile whose
-  stored zone equals the device zone starts in `automatic`. One whose stored
-  zone differs was pinned on purpose and starts as `pinned(storedZone,
-  untilDeviceZone: nil)`. Nothing is prompted or changed.
+- **Existing profiles on first launch after the update:** every profile starts
+  in `automatic`. A stored zone that differs from the device zone is usually
+  stale (the old app never followed the phone), so the first sync switches to
+  the device zone and announces it; "Keep <city>" restores a zone that was
+  chosen on purpose. (Changed 2026-11-17 after an owner device test: pinning
+  on a mismatch silently kept a stale Jerusalem diary in New York.)
 - An explicit zone change by the user (the Settings picker, or Coach's
   `update_preferences` timezone) sets the mode to match. The device zone means
   automatic; any other zone means pinned with no auto-release.
@@ -274,8 +276,8 @@ A date has one diary day, whatever zone it was opened in.
 Unit (`ios/MivuTests`):
 - The sync switches the profile zone in automatic mode, does nothing when
   pinned, and releases a trip pin when the device returns to the pinned zone.
-- The migration default: stored zone equals device zone means automatic;
-  otherwise pinned.
+- The migration default: always automatic; a different stored zone switches
+  to the device zone and announces it, with Keep.
 - `dayAssignment` keeps a different-zone active day until the new zone's waking
   date passes it, and never goes back a date. Covers the three worked examples.
 - Logging a weight, workout or manual meal for the travel date after the sync

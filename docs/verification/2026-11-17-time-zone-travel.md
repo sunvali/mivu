@@ -29,6 +29,27 @@ Branch `feat/time-zone-travel`.
 - Apple Health workout import (merged from `main`) now finds the day through
   the same one-day-per-date lookup as every other write.
 
+## Fix after the owner's device test
+
+On the owner's iPhone Duo (phone in New York, diary saved in Jerusalem since it
+was created), the first launch pinned the diary to Jerusalem without a word, so
+a new photo meal was saved and shown as "Jerusalem", and older meals, which
+have no zone of their own, showed their day's Jerusalem clock.
+
+- First launch now follows the phone and shows the usual "Now on New York time"
+  toast; "Keep Jerusalem" restores a deliberate pin
+  (`TimeZoneSyncTests/firstLaunchFollowsThePhoneAndOffersKeep`,
+  `TimeZoneSyncViewModelTests/firstLaunchWithAStaleZoneFollowsThePhoneAndOffersKeep`).
+- A meal saved before zones were recorded shows the phone's clock with no city,
+  as before the update (`MealClockTests/olderMealsShowThePhoneClockWithoutATag`).
+  The report still uses the day's zone for those meals.
+
+Fix verified at `1a3111e9ebe46a67a70c4dae745838469db697fe`: `TimeZoneSyncTests`, `MealClockTests`,
+`TimeZoneSyncViewModelTests`, `TimeZoneTravelTests`, `TellCoachTests`,
+`ProfileTimezoneTests` 48/48; `TimeZoneTravelUITests` 1/1 (the first run right
+after a fresh build timed out on the last step; the test now waits for the
+dialog's button); `smoke.py` pass, 46.81 s.
+
 ## Evidence
 
 Source: `8ad045026205ca6d48a6ee17bd8f93959ea6d290` (`main` at `dce655de`,
