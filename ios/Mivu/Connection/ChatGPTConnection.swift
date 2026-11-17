@@ -48,6 +48,7 @@ final class ChatGPTConnection {
     /// Signed in, but OpenAI says this account's plan can't be used in other apps.
     var planNotEligible: Bool { accountState == .planNotEligible }
     private(set) var planScopeGranted = false
+    private(set) var isCheckingEligibility = false
     var canCapture: Bool { isForeground && planAuthorized && !isStorageUnavailable && models.contains(where: { $0.slug == selectedModel }) && job == nil && !isConnecting && !isLoadingModels && !isDisconnecting }
     var canRetry: Bool {
         isForeground && planAuthorized && !isStorageUnavailable && job?.registrationID == activeRegistrationID && job?.state != .completed
@@ -153,7 +154,8 @@ final class ChatGPTConnection {
 
     /// OpenAI's Sign in with ChatGPT guidelines: confirm plan use once, the first time it is enabled.
     private(set) var planWelcomeSeen: Bool
-    var showsPlanWelcome: Bool { provider == .chatGPT && planAuthorized && !planWelcomeSeen }
+    // Waits for the eligibility check, so a Free account is never welcomed to plan usage first.
+    var showsPlanWelcome: Bool { provider == .chatGPT && planAuthorized && !planWelcomeSeen && !isCheckingEligibility }
     func acknowledgePlanWelcome() { planWelcomeSeen = true; preferences.set(true, forKey: "chatGPTPlanWelcomeSeen") }
 
     /// Explained once per account, and only when no on-device model takes over.
@@ -277,6 +279,8 @@ final class ChatGPTConnection {
         if !force, let last = lastEligibilityCheck, Date.now.timeIntervalSince(last) < 900 { return }
         lastEligibilityCheck = .now
         let revision = generation
+        isCheckingEligibility = true
+        defer { isCheckingEligibility = false }
         do {
             let token = try await auth.accessToken(expectedRegistrationID: owner)
             let catalog = models.isEmpty ? try await client.models(accessToken: token) : models

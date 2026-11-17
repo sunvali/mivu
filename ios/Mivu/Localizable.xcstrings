@@ -3552,6 +3552,7 @@
       }
     },
     "Check again" : {
+      "comment" : "Button: checks again whether OpenAI lets this ChatGPT plan be used in Mivu",
       "localizations" : {
         "he" : {
           "stringUnit" : {
@@ -3559,8 +3560,7 @@
             "value" : "בדיקה חוזרת"
           }
         }
-      },
-      "comment" : "Button: checks again whether OpenAI lets this ChatGPT plan be used in Mivu"
+      }
     },
     "Check the meal's photos." : {
       "localizations" : {
@@ -3588,6 +3588,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "צריך לבדוק את הערך"
+          }
+        }
+      }
+    },
+    "Checking" : {
+      "comment" : "Progress label: checking whether OpenAI lets this ChatGPT plan be used in Mivu",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בודקים"
           }
         }
       }
@@ -7688,6 +7699,7 @@
       }
     },
     "Learn more" : {
+      "comment" : "Link: opens OpenAI's help article about using a ChatGPT plan in other apps",
       "localizations" : {
         "he" : {
           "stringUnit" : {
@@ -7695,8 +7707,7 @@
             "value" : "מידע נוסף"
           }
         }
-      },
-      "comment" : "Link: opens OpenAI's help article about using a ChatGPT plan in other apps"
+      }
     },
     "Leave a nutrient blank if you have no target for it." : {
       "localizations" : {
@@ -10637,6 +10648,7 @@
       }
     },
     "Plan unavailable" : {
+      "comment" : "Settings value: the ChatGPT plan can't be used in Mivu",
       "localizations" : {
         "he" : {
           "stringUnit" : {
@@ -10644,8 +10656,7 @@
             "value" : "התוכנית לא זמינה"
           }
         }
-      },
-      "comment" : "Settings value: the ChatGPT plan can't be used in Mivu"
+      }
     },
     "Portion" : {
       "comment" : "Section heading: portion size of a food",

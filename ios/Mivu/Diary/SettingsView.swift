@@ -255,9 +255,12 @@ struct SettingsView: View {
                     else { Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle") }
                     if connection.planNotEligible {
                         Text("You’re signed in, but your ChatGPT plan can’t be used in other apps. You can keep logging meals by hand.").font(.subheadline).foregroundStyle(Color.diarySecondary)
-                        Button("Check again") {
-                            Task { if connection.planScopeGranted { await connection.checkEligibility(force: true) } else { await connection.connect() } }
-                        }.frame(minHeight: 44).disabled(connection.isConnecting || connection.isDisconnecting)
+                        if connection.isCheckingEligibility { ProgressView("Checking").frame(minHeight: 44) }
+                        else {
+                            Button("Check again") {
+                                Task { if connection.planScopeGranted { await connection.checkEligibility(force: true) } else { await connection.connect() } }
+                            }.frame(minHeight: 44).disabled(connection.isConnecting || connection.isDisconnecting)
+                        }
                         Link("Learn more", destination: MivuLinks.chatGPTPlanHelp).frame(minHeight: 44)
                     } else {
                         Text("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection.").font(.subheadline).foregroundStyle(Color.diarySecondary)

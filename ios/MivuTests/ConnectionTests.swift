@@ -899,3 +899,23 @@ extension ConnectionTests {
         #expect(harness.eligibilityRequests == 1)
     }
 }
+
+extension ConnectionTests {
+    @Test func planWelcomeWaitsForTheEligibilityCheck() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        let release = DispatchSemaphore(value: 0)
+        harness.set(eligibility: {
+            guard release.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+            return notEligibleReply()
+        })
+        let signIn = Task { await harness.signIn() }
+        for _ in 0..<2_000 where harness.eligibilityRequests == 0 { try await Task.sleep(for: .milliseconds(1)) }
+        #expect(harness.connection.isCheckingEligibility)
+        #expect(!harness.connection.showsPlanWelcome, "A Free account must not be welcomed to plan usage first")
+        release.signal()
+        await signIn.value
+        #expect(!harness.connection.isCheckingEligibility)
+        #expect(!harness.connection.showsPlanWelcome)
+        #expect(harness.connection.showsNotEligibleNotice)
+    }
+}
