@@ -32,6 +32,28 @@ import Testing
         try await save("Synthetic dinner", at: "2026-11-17T20:00:00Z")
         #expect(try await flagged() == true)
     }
+    @Test func threeZonesInOneDayStayOneTravelDay() async throws {
+        let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T05:00:00Z")
+        func save(_ text: String, at: String) async throws -> DiaryMeal {
+            let meal = try await capturedMeal(store, text: text, photos: [], reviewFirst: false, dayID: day.id, at: DayTests.date(at))
+            try await store.applyAnalysis(AnalysisOutput(profileID: profile.id, mealID: meal.id, submissionID: meal.submissions[0].id, baseRevision: 0, items: [Self.apple]), expectedProfileID: profile.id)
+            return meal
+        }
+        let breakfast = try await save("Synthetic breakfast", at: "2026-11-17T05:30:00Z")
+        try await move(store, profile, to: "Europe/Berlin")
+        #expect(try await store.dayAssignment(at: DayTests.date("2026-11-17T12:00:00Z")) == .existing(day.id))
+        let lunch = try await save("Synthetic layover lunch", at: "2026-11-17T12:00:00Z")
+        var landed = profile; landed.timeZoneID = "Europe/Berlin"
+        try await move(store, landed, to: "America/New_York")
+        #expect(try await store.dayAssignment(at: DayTests.date("2026-11-17T23:00:00Z")) == .existing(day.id))
+        let dinner = try await save("Synthetic dinner", at: "2026-11-17T23:00:00Z")
+        #expect([breakfast, lunch, dinner].map(\.timeZoneID) == ["Asia/Jerusalem", "Europe/Berlin", "America/New_York"])
+        let summary = try #require(try await store.diaryWeek(from: "2026-11-17", through: "2026-11-17", expectedProfileID: profile.id).days.first)
+        #expect(summary.day.id == day.id && summary.savedMealCount == 3 && summary.isTravelDay)
+        #expect(try await store.snapshotForExport().days.count == 1)
+        // The next day starts at 4 AM where the person is now.
+        #expect(try await store.dayAssignment(at: DayTests.date("2026-11-18T09:00:00Z")) == .newDay)
+    }
     @Test func telAvivToNewYorkKeepsTheDayUntilFourAMNewYork() async throws {
         let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")
         try await move(store, profile, to: "America/New_York")
