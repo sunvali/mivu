@@ -246,7 +246,11 @@ extension DiaryTransaction {
         defer { sqlite3_finalize(totals) }; guard try database.mutationStep(totals) else { throw DiaryError.invalidData }
         let emptyComplete = sqlite3_column_int64(totals, 0) == 0 && day.completeness == .complete && pending == 0
         func value(_ column: Int32) -> Double? { emptyComplete ? 0 : (sqlite3_column_type(totals, column) == SQLITE_NULL ? nil : sqlite3_column_double(totals, column)) }
-        return DiaryDaySummary(mealCount: Int(sqlite3_column_int64(statement, 0)), day: day, totals: NutritionTotals(kcal: value(1), carbs: value(2), protein: value(3), fat: value(4), unknownItemCount: Int(sqlite3_column_int64(totals, 5))), savedMealCount: saved, pendingMealCount: pending)
+        let zones = try database.domainStatement("SELECT DISTINCT json_extract(CAST(payload AS TEXT), '$.timeZoneID') FROM meal WHERE parent = ? AND json_extract(CAST(payload AS TEXT), '$.revision') > 0", [.text(day.id.uuidString)])
+        defer { sqlite3_finalize(zones) }; var mealZones: [String?] = []
+        while try database.mutationStep(zones) { mealZones.append(sqlite3_column_type(zones, 0) == SQLITE_NULL ? nil : try database.mutationText(zones, 0)) }
+        return DiaryDaySummary(mealCount: Int(sqlite3_column_int64(statement, 0)), day: day, totals: NutritionTotals(kcal: value(1), carbs: value(2), protein: value(3), fat: value(4), unknownItemCount: Int(sqlite3_column_int64(totals, 5))), savedMealCount: saved, pendingMealCount: pending,
+                               isTravelDay: isTravelDay(dayZone: day.timeZoneID, mealZones: mealZones, at: day.startAt))
     }
     func records(_ table: String, clause: String, values: [DiaryDatabase.Value], limit: Int? = nil) throws -> [DiaryDatabase.Record] {
         let hasParent = ["meal", "submission", "item", "photo", "weight", "workout", "coach_photo"].contains(table)
@@ -661,6 +665,11 @@ extension DiaryTransaction {
 /// Whether an instant belongs to the day: its own calendar date there, or the travel day (waking date in the profile zone not past it).
 func instant(_ at: Date, fallsOn day: TrackingDay, profileZone: String) -> Bool {
     diaryDateLabel(at, zone: day.timeZoneID) == day.localDate || (wakingDateLabel(at, zone: profileZone) <= day.localDate && at >= day.startAt)
+}
+
+/// A day whose saved meals were eaten on more than one clock; a meal without its own zone ate on the day's.
+func isTravelDay(dayZone: String, mealZones: [String?], at: Date) -> Bool {
+    Set(mealZones.map { TimeZone(identifier: $0 ?? dayZone)?.secondsFromGMT(for: at) }).count > 1
 }
 
 func diaryDateLabel(_ at: Date, zone: String) -> String {

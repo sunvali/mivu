@@ -52,8 +52,8 @@ struct HistoryView: View {
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
     }
     private func days(_ part: DaySections.Part) -> some View {
-        ForEach(selectedDays, id: \.id) { day in
-            DaySections(model: model, dayID: day.id, title: DiaryWeek.format(selected, "EEEE, d MMMM"), part: part)
+        ForEach(summaries[selected] ?? [], id: \.day.id) { summary in
+            DaySections(model: model, dayID: summary.day.id, title: DiaryWeek.format(selected, "EEEE, d MMMM"), isTravelDay: summary.isTravelDay, part: part)
         }
     }
     /// The week strip and everything about the chosen day that is not one of its records.
@@ -220,6 +220,7 @@ private struct DaySections: View {
     @Bindable var model: DiaryViewModel
     let dayID: UUID
     let title: String
+    var isTravelDay = false
     /// Sideways the summary and the records sit in separate columns.
     enum Part { case all, summary, records }
     var part = Part.all
@@ -260,17 +261,23 @@ private struct DaySections: View {
         }
     }
 
+    private var heading: some View {
+        HStack(spacing: 6) {
+            Text(title).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
+            if isTravelDay { Image(systemName: "airplane").foregroundStyle(Color.diarySecondary).accessibilityLabel("Travel day") }
+        }
+    }
     private func summary(_ snapshot: DiaryDayReadModel) -> some View {
         let totals = snapshot.totals
         return VStack(alignment: .leading, spacing: 16) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center) {
-                    Text(title).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
+                    heading
                     Spacer(minLength: 8)
                     coverage(snapshot)
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(title).font(.title3.weight(.bold)).accessibilityAddTraits(.isHeader)
+                    heading
                     coverage(snapshot)
                 }
             }

@@ -91,6 +91,17 @@
         }
       }
     },
+    "Travel day" : {
+      "comment" : "Spoken label for the airplane icon: meals that day were eaten in more than one time zone",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יום נסיעה"
+          }
+        }
+      }
+    },
     "Use %@ time" : {
       "comment" : "Dialog button: follow the phone's time zone; %@ is a city name",
       "localizations" : {

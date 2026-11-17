@@ -10,6 +10,28 @@ import Testing
         try await store.updateProfile(changed)
     }
 
+    @Test func travelDayNeedsTwoOffsets() {
+        let at = DayTests.date("2026-11-17T08:00:00Z")
+        #expect(!isTravelDay(dayZone: "Asia/Jerusalem", mealZones: ["Asia/Jerusalem", nil], at: at))
+        #expect(isTravelDay(dayZone: "Asia/Jerusalem", mealZones: ["America/New_York", nil], at: at))
+        #expect(!isTravelDay(dayZone: "Europe/Paris", mealZones: ["Europe/Paris", "Europe/Berlin"], at: at))
+    }
+    @Test func historySummaryFlagsTheTravelDay() async throws {
+        let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")
+        // Only saved meals count, so each capture gets its synthetic analysis.
+        func save(_ text: String, at: String) async throws {
+            let meal = try await capturedMeal(store, text: text, photos: [], reviewFirst: false, dayID: day.id, at: DayTests.date(at))
+            try await store.applyAnalysis(AnalysisOutput(profileID: profile.id, mealID: meal.id, submissionID: meal.submissions[0].id, baseRevision: 0, items: [Self.apple]), expectedProfileID: profile.id)
+        }
+        func flagged() async throws -> Bool? { try await store.diaryWeek(from: "2026-11-17", through: "2026-11-17", expectedProfileID: profile.id).days.first?.isTravelDay }
+        try await save("Synthetic breakfast", at: "2026-11-17T08:00:00Z")
+        #expect(try await flagged() == false)
+        try await move(store, profile, to: "America/New_York")
+        _ = try await capturedMeal(store, text: "Synthetic pending dinner", photos: [], reviewFirst: false, dayID: day.id, at: DayTests.date("2026-11-17T19:00:00Z"))
+        #expect(try await flagged() == false)
+        try await save("Synthetic dinner", at: "2026-11-17T20:00:00Z")
+        #expect(try await flagged() == true)
+    }
     @Test func telAvivToNewYorkKeepsTheDayUntilFourAMNewYork() async throws {
         let (store, profile, day) = try await DayTests.ready(zone: "Asia/Jerusalem", at: "2026-11-17T08:00:00Z")
         try await move(store, profile, to: "America/New_York")

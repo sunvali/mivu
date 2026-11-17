@@ -46,11 +46,11 @@ extension DiaryDatabase {
             for label in horizon {
                 let rows = try transaction.records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(label)])
                 let tracked = try rows.map { row in let day = try decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day }
-                var totals: [NutritionTotals] = [], dailyWorkoutCount = 0, burn: Double? = 0
+                var totals: [NutritionTotals] = [], dailyWorkoutCount = 0, burn: Double? = 0, travel = false
                 for day in tracked {
                     let summary = try transaction.daySummary(day)
                     if summary.savedMealCount > 0 { savedFoodDates.insert(label) }
-                    totals.append(summary.totals)
+                    totals.append(summary.totals); travel = travel || summary.isTravelDay
                     for row in try transaction.records("weight", clause: "parent = ?", values: [.text(day.id.uuidString)]) {
                         let weight = try decode(WeightEntry.self, row); try validateWeightFields(weight)
                         weights.append((row.ordinal, CoachWeightReference(localDate: label, record: weight)))
@@ -70,7 +70,7 @@ extension DiaryDatabase {
                         workouts = Array(workouts.sorted { $0.0 < $1.0 }.suffix(100))
                     }
                 }
-                reports[label] = ProgressAnalytics.daily(localDate: label, days: tracked, subtotals: totals, hasFood: savedFoodDates.contains(label), activeDayID: head.activeDayID, goal: try transaction.goal(on: label), workoutCount: dailyWorkoutCount, estimatedBurnKcal: burn)
+                reports[label] = ProgressAnalytics.daily(localDate: label, days: tracked, subtotals: totals, hasFood: savedFoodDates.contains(label), activeDayID: head.activeDayID, goal: try transaction.goal(on: label), workoutCount: dailyWorkoutCount, estimatedBurnKcal: burn, isTravelDay: travel)
             }
             var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone)!
             let start = calendar.startOfDay(for: try diaryDateOnlyInstant(horizon[0], zone: zone))
