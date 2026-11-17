@@ -35,15 +35,15 @@ understand why and can keep using the app.
 
 1. A Free (or otherwise ineligible) account learns, plainly and once, that its ChatGPT
    plan can't be used in other apps, and is never sent back through sign-in for it.
-2. The app stays fully useful: the diary works by hand everywhere; on iPhones with
-   Apple's on-device model, photo analysis and Coach keep working on-device.
+2. The app stays fully useful: the diary works by hand everywhere; on devices with an
+   on-device model (Apple Intelligence on iOS, Gemini Nano on Android), photo analysis
+   and Coach keep working on-device.
 3. If the person later upgrades, Mivu notices without them signing out.
 
 ## Non-goals
 
 - Detecting plan type from token claims.
 - Bring-your-own-key or any paid alternative (PR #126 stays parked).
-- An Android on-device model.
 - Changing usage-limit (429) handling, which already exists.
 
 ## Anti-goals
@@ -86,8 +86,10 @@ Copy (draft, English only):
 - "Learn more" opens OpenAI's help article "Using your ChatGPT plan in other apps and
   sites" (help.openai.com/articles/20001542). No plan names, no upgrade button.
 
-**iOS with Apple's on-device model.** "Not eligible" makes ChatGPT unavailable, so the
-existing provider fallback picks Apple automatically. Show one line where the provider
+**Devices with an on-device model** (Apple Intelligence on iOS; Gemini Nano on Android,
+which already has the same provider fallback — the owner's on-device decision applies to
+both). "Not eligible" makes ChatGPT unavailable, so the existing provider fallback picks
+the on-device model automatically. Show one line where the provider
 is shown (Settings, and the Coach/analysis surfaces' existing provider indication):
 "Using on-device AI. Your ChatGPT plan can't be used in other apps. Learn more". No
 sheet. When a re-check succeeds and the person never explicitly chose Apple, ChatGPT
@@ -119,14 +121,21 @@ the owner.)*
   launch, so locked surfaces show the right copy before the re-check returns. It clears
   on sign-out or a successful re-check. A per-registration "sheet shown" flag keeps the
   sheet to once; sign-out clears it.
-- **iOS provider.** An explicit Apple choice is the existing stored `aiProvider`
-  value; no migration. Change the getter so a stored ChatGPT choice that is "not
-  eligible" falls back to Apple when Apple is available. Clearing "not eligible"
-  restores ChatGPT with no extra record.
+- **Provider.** An explicit on-device choice is the existing stored `aiProvider`
+  value on both platforms; no migration. Change the provider getter so a stored ChatGPT
+  choice that is "not eligible" falls back to the on-device model when it is available.
+  Clearing "not eligible" restores ChatGPT with no extra record.
+- **The once-only message** is a native alert like the existing "You're using your
+  ChatGPT plan" welcome (iOS `.alert`, Android `AlertDialog`), with "Got it" and
+  "Learn more".
+- **In-app plan names.** Settings footer and onboarding say "ChatGPT Go, Plus or Pro" on
+  both platforms; change to "your ChatGPT plan" wording without plan names.
+- **Android error bodies.** Android never reads non-200 bodies today; read the body on
+  403 only, to find the code.
 - **Re-check throttle.** At most once per 15 minutes from app-open; "Check again"
   always runs.
-- **Android Coach and analysis.** Same as iOS without the on-device line: tapping the
-  AI action shows the plan explanation. Manual entry stays reachable as it is today.
+- **Android Coach and analysis.** Same as iOS: the AI surfaces show the plan
+  explanation instead of "Connect". Manual entry stays reachable as it is today.
 - **Stays as is.** Tapping "Check again" with an eligible plan, or a re-check that
   succeeds, runs the normal connected path; no new success screen.
 
