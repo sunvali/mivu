@@ -136,6 +136,23 @@ import Testing
         #expect(metrics.counters.completeReads == 0 && metrics.counters.completeReconciles == 0 && metrics.counters.originalPhotoBytes == 0)
     }
 
+    @Test func newCurrentOnDuplicateLegacyDatesPicksTheDayResolveDayPicks() async throws {
+        var source = ChatHistoryFixture.snapshot(exchanges: 1)
+        source.profile.timeZoneID = "UTC"
+        let at = try #require(ISO8601DateFormatter().date(from: "2027-01-17T10:00:00Z"))
+        let later = TrackingDay(localDate: "2027-01-17", timeZoneID: "Pacific/Honolulu", startAt: at)
+        let earliest = TrackingDay(localDate: "2027-01-17", timeZoneID: "UTC", startAt: at.addingTimeInterval(-3600))
+        source.days += [later, earliest]
+        let f = try CaptureFixture(snapshot: source); defer { f.remove() }
+        let store = DiaryStore(directory: f.root)
+        _ = try await store.selectPagedProfile(f.profileID)
+        let selection = try await store.selectionOwnership(expectedProfileID: f.profileID)
+        let target = try await store.prepareManualNutritionTarget(choice: .newCurrent, at: at, expectedSelection: selection, expectedProfileID: f.profileID)
+        #expect(target == .newCurrent(dayID: earliest.id, localDate: "2027-01-17", timeZoneID: "UTC", previousActiveDayID: source.activeDayID))
+        let saved = try await store.saveManualNutrition(manualPayload(f, target: target), expectedSelection: selection, expectedProfileID: f.profileID)
+        #expect(saved.meal.dayID == earliest.id)
+    }
+
     @Test func preparationReusesRecordedCurrentDayWithoutMutationAndRejectsStaleSelection() async throws {
         var source = ChatHistoryFixture.snapshot(exchanges: 1)
         source.profile.timeZoneID = "UTC"

@@ -194,16 +194,17 @@ import Testing
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Yesterday chocolate", photos: [], at: now, expectedProfileID: profile.id)
         var changed = profile; changed.timeZoneID = "Pacific/Honolulu"; try await store.updateProfile(changed)
-        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-12", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
         let snapshot = try await store.snapshotForExport()
-        #expect(snapshot.days.first { $0.id == receipt.dayID }?.timeZoneID == "Asia/Jerusalem")
+        #expect(snapshot.days.first { $0.id == receipt.dayID }?.timeZoneID == profile.timeZoneID) // the day keeps the zone the turn captured, not the changed profile zone
         #expect(snapshot.meals.first?.timePrecision == .dateOnly)
         let currentDay = try #require(snapshot.days.first { $0.id == snapshot.activeDayID })
         try await store.moveMeal(receipt.mealID!, to: currentDay.id)
         #expect(try await store.snapshotForExport().meals.first?.timePrecision == .dateOnly)
-        try await store.moveMeal(receipt.mealID!, to: currentDay.id, eatenAt: now)
+        let eaten = now.addingTimeInterval(-4 * 3600) // 23:00 on the open day in the captured zone
+        try await store.moveMeal(receipt.mealID!, to: currentDay.id, eatenAt: eaten)
         #expect(try await store.snapshotForExport().meals.first?.timePrecision == .exact)
-        #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).meals.first?.eatenAt == now)
+        #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).meals.first?.eatenAt == eaten)
     }
 
     @Test func boundedContextKeepsNewestSavedPortionAndOmissionReferencesWithoutMutation() async throws {

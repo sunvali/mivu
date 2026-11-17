@@ -51,7 +51,7 @@ This design adds a predictable automatic trigger.
    food or party snacks belongs to the night before; breakfast or anything else belongs to the new day. It
    decides without asking. A meal it moves gets the same "Added to … · Move to …" receipt, so one tap undoes it.
    Outside the window, Coach is told the current waking day.
-5. **Time zone change.** A day in another zone starts a new day; history is kept. The existing behavior stays: the profile zone decides.
+5. **Time zone change.** A day in another zone starts a new day; history is kept. Superseded by [2026-11-17 time zone travel](2026-11-17-time-zone-travel-design.md): one day per date, and the profile zone follows the phone.
    The cutoff applies in that zone.
 
 ## Morning card

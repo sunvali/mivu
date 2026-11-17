@@ -83,10 +83,8 @@ extension AppleInference {
         }
         // An edit that names no saved food is usually a bare food mention such as "coke zero".
         if turn.intent != .other, !foods.isEmpty {
-            let formatter = DateFormatter()
-            formatter.calendar = Calendar(identifier: .gregorian); formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone(identifier: context.captureTimeZoneID); formatter.dateFormat = "yyyy-MM-dd"
-            let date = context.days.first { $0.id == context.activeDayID }?.localDate ?? formatter.string(from: context.capturedAt)
+            // Same "today" CoachEngine tells the cloud model: the open day on a travel day.
+            let date = WakingDayInstruction.today(context: context)
             var items: [[String: Any]] = []
             for food in foods {
                 let weighed = ["g", "gram", "grams", "ml", "milliliter", "milliliters"].contains(food.unit.lowercased())

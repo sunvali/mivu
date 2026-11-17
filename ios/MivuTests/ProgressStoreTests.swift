@@ -72,7 +72,7 @@ import Testing
         #expect(try await store.snapshotForExport() == before)
     }
 
-    @Test func correctedWeightUsesCurrentTimeZoneDayAfterProfileChange() async throws {
+    @Test func correctedWeightKeepsTheSingleDayAfterProfileChange() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let original = try await store.recordWeight(value: 70, at: morning, expectedProfileID: profile.id)
         var shifted = profile; shifted.timeZoneID = "America/Los_Angeles"
@@ -84,27 +84,22 @@ import Testing
                                                   expectedProfileID: profile.id)
         let snapshot = try await store.snapshotForExport()
         #expect(corrected.id == local.id && corrected.revision == local.revision + 1)
-        #expect(corrected.dayID != original.dayID && corrected.measuredAt == lateLocal)
-        #expect(snapshot.weights.first { $0.id == original.id } == original)
-        #expect(snapshot.days.first { $0.id == original.dayID }?.timeZoneID == "Asia/Jerusalem")
-        #expect(snapshot.days.first { $0.id == corrected.dayID }?.timeZoneID == "America/Los_Angeles")
+        #expect(corrected.dayID == original.dayID && corrected.measuredAt == lateLocal)
+        #expect(snapshot.days.map(\.id) == [original.dayID] && snapshot.days[0].timeZoneID == "Asia/Jerusalem")
     }
 
     @Test(arguments: [false, true])
-    func weightIDCorrectionPreservesHistoricalRecordWhenDateAndRevisionCollide(exactTime: Bool) async throws {
+    func weightIDCorrectionKeepsTheRecordAfterProfileChange(exactTime: Bool) async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let measured = try #require(ISO8601DateFormatter().date(from: "2027-01-14T10:00:00Z"))
         let original = try await store.setWeight(dayLocalDate: "2027-01-14", value: 70, unit: "kg", measuredAt: exactTime ? measured : nil, expectedRevision: nil, expectedProfileID: profile.id)
         var shifted = profile; shifted.timeZoneID = "America/Los_Angeles"
         try await store.updateProfile(shifted, expectedProfileID: profile.id)
-        let sameDate = try await store.setWeight(dayLocalDate: "2027-01-14", value: 80, unit: "kg", measuredAt: nil, expectedRevision: nil, expectedProfileID: profile.id)
-        #expect(original.revision == sameDate.revision && original.dayID != sameDate.dayID)
         let before = try await store.snapshotForExport()
         let corrected = try await store.updateWeight(id: original.id, value: 71, expectedRevision: original.revision, expectedProfileID: profile.id)
         var expected = original; expected.value = 71; expected.revision += 1
         #expect(corrected == expected)
         let saved = try await store.snapshotForExport()
-        #expect(saved.weights.first { $0.id == sameDate.id } == sameDate)
         #expect(saved.days == before.days && saved.activeDayID == before.activeDayID)
         #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).weights.first { $0.id == original.id } == expected)
         await #expect(throws: DiaryError.staleRevision) { try await store.updateWeight(id: original.id, value: 72, expectedRevision: original.revision, expectedProfileID: profile.id) }
@@ -141,9 +136,8 @@ import Testing
         var shifted = profile; shifted.timeZoneID = "America/Los_Angeles"
         try await store.updateProfile(shifted, expectedProfileID: profile.id)
         let current = try await store.startDay(at: measured, expectedProfileID: profile.id)
-        let currentWeight = try await store.recordWeight(value: 80, at: measured, expectedProfileID: profile.id)
         let before = try await store.snapshotForExport()
-        #expect(historical.localDate == current.localDate && historical.id != current.id)
+        #expect(historical.id == current.id && current.timeZoneID == "Asia/Jerusalem")
         let weight = try await store.setWeight(dayID: historical.id, value: 70, expectedRevision: nil, expectedProfileID: profile.id)
         let workout = try await store.createWorkout(dayID: historical.id, draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil), expectedProfileID: profile.id)
         #expect(weight.dayID == historical.id && workout.dayID == historical.id)
@@ -154,7 +148,6 @@ import Testing
         #expect(corrected.id == weight.id && corrected.measuredAt == weight.measuredAt && corrected.timePrecision == weight.timePrecision)
         let saved = try await store.snapshotForExport()
         #expect(saved.days == before.days && saved.activeDayID == current.id)
-        #expect(saved.weights.first { $0.id == currentWeight.id } == currentWeight)
         await #expect(throws: DiaryError.staleRevision) { try await store.setWeight(dayID: historical.id, value: 72, expectedRevision: weight.revision, expectedProfileID: profile.id) }
         await #expect(throws: DiaryError.notFound) { try await store.setWeight(dayID: UUID(), value: 72, expectedRevision: nil, expectedProfileID: profile.id) }
         await #expect(throws: DiaryError.notFound) { try await store.createWorkout(dayID: UUID(), draft: WorkoutDraft(kind: .cardio, durationMinutes: 30, exercises: [], estimatedBurnKcal: nil, burnSource: nil), expectedProfileID: profile.id) }
@@ -163,7 +156,7 @@ import Testing
         #expect(try await store.snapshotForExport() == saved)
     }
 
-    @Test func workoutsUseCurrentTimeZoneDayAfterProfileChange() async throws {
+    @Test func workoutsKeepTheSingleDayAfterProfileChange() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let originalDay = try await store.startDay(at: morning, expectedProfileID: profile.id)
         var shifted = profile; shifted.timeZoneID = "America/Los_Angeles"
@@ -179,9 +172,8 @@ import Testing
         let snapshot = try await store.snapshotForExport()
         #expect(corrected.id == recorded.id && corrected.revision == 2 && corrected.performedAt == lateLocal)
         #expect(corrected.dayID == dateOnly.dayID && dateOnly.timePrecision == .dateOnly)
-        #expect(corrected.dayID != originalDay.id)
-        #expect(snapshot.days.first { $0.id == originalDay.id }?.timeZoneID == "Asia/Jerusalem")
-        #expect(snapshot.days.first { $0.id == corrected.dayID }?.timeZoneID == "America/Los_Angeles")
+        #expect(corrected.dayID == originalDay.id)
+        #expect(snapshot.days.map(\.id) == [originalDay.id] && snapshot.days[0].timeZoneID == "Asia/Jerusalem")
     }
 
     @Test func separateWorkoutCallsCreateTwoSessionsForOneDay() async throws {

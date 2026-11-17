@@ -25,7 +25,8 @@ extension DiaryTransaction {
             let label = diaryDateLabel(health.start, zone: zone)
             guard window.contains(label), health.end.timeIntervalSince1970.isFinite,
                   try database.mutationInteger("SELECT COUNT(*) FROM workout_tombstone WHERE id = ?", [.text(health.id.uuidString)]) == 0,
-                  let day = try existingDay(localDate: label, preferredZone: zone) else { continue }
+                  let day = try dayForDate(label) else { continue }
+            try validateTrackingDayFields(day)
             let existing = try existingWorkout(health.id)
             if let existing { guard existing.isFromHealth, try inWindow(existing) else { continue } }
             let name = String(health.sourceName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
@@ -45,13 +46,5 @@ extension DiaryTransaction {
 
     private func existingWorkout(_ id: UUID) throws -> WorkoutSession? {
         do { return try workout(id: id) } catch DiaryError.notFound { return nil }
-    }
-
-    /// Prefers the day recorded in the profile's time zone when travel left two days with the same date.
-    private func existingDay(localDate: String, preferredZone: String) throws -> TrackingDay? {
-        let days = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(localDate)]).map { row in
-            let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day
-        }
-        return days.first { $0.timeZoneID == preferredZone } ?? days.first
     }
 }
