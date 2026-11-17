@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showDiagnostic = false
     @State private var showConnectionDiagnostic = false
     @State private var showGoals = false
+    @State private var showPipStickers = false
     @State private var showOnboarding = false
     @State private var fields = DiaryPreferencesDraft()
     @State private var linkedSection: SettingsSection?
@@ -34,7 +35,7 @@ struct SettingsView: View {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.largeTitle).foregroundStyle(Color.diaryProtein).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(model.readModel?.profile.name ?? "Local profiles").font(.title3.weight(.semibold))
+                            Text(model.readModel?.profile.name ?? String(localized: "Local profiles")).font(.title3.weight(.semibold))
                             Text("Private diary on this iPhone").font(.subheadline).foregroundStyle(Color.diarySecondary)
                         }
                     }.frame(minHeight: 72)
@@ -44,25 +45,26 @@ struct SettingsView: View {
             if model.readModel != nil {
                 DaySettingsSection(readModel: model.readModel)
                 Section("Setup") {
-                    Button { showGoals = true } label: { settingsRow("Goals", symbol: "scope", color: .diaryAccent) }
+                    Button { showGoals = true } label: { settingsRow(String(localized: "Goals"), symbol: "scope", color: .diaryAccent) }
                         .accessibilityIdentifier("editGoals")
-                    Button { showOnboarding = true } label: { settingsRow("Redo setup with Pip", symbol: "pawprint", color: .diaryProtein) }
+                    Button { showOnboarding = true } label: { settingsRow(String(localized: "Redo setup with Pip"), symbol: "pawprint", color: .diaryProtein) }
                         .accessibilityIdentifier("redoOnboarding")
-                    NavigationLink(value: SettingsSection.preferences) { settingsRow("Diary preferences", symbol: "list.bullet.rectangle", color: .diaryCarbs) }
-                    NavigationLink(value: SettingsSection.backup) { settingsRow("Backup & export", symbol: "square.and.arrow.up", color: .diaryProtein) }
+                    NavigationLink(value: SettingsSection.preferences) { settingsRow(String(localized: "Diary preferences"), symbol: "list.bullet.rectangle", color: .diaryCarbs) }
+                        .accessibilityIdentifier("diaryPreferences")
+                    NavigationLink(value: SettingsSection.backup) { settingsRow(String(localized: "Backup & export"), symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
-                        settingsRow("Coach AI", symbol: "sparkles", color: .diaryFat,
-                                    value: connection.provider == .apple ? "Apple Intelligence" : connection.planAuthorized ? "ChatGPT" : "Connect ChatGPT")
+                        settingsRow(String(localized: "Coach AI"), symbol: "sparkles", color: .diaryFat,
+                                    value: connection.provider == .apple ? String(localized: "Apple Intelligence") : connection.planAuthorized ? String(localized: "ChatGPT") : String(localized: "Connect ChatGPT"))
                     }
                     NavigationLink(value: SettingsSection.nutritionSource) {
-                        settingsRow("Nutrition source", symbol: "fork.knife", color: .diaryCarbs, value: nutritionConfigured ? "Configured" : "Optional")
+                        settingsRow(String(localized: "Nutrition source"), symbol: "fork.knife", color: .diaryCarbs, value: nutritionConfigured ? String(localized: "Configured") : String(localized: "Optional"))
                     }
                 }
                 Section {
                     #if DEBUG
-                    Button { showDiagnostic = true } label: { settingsRow("Diagnostics", symbol: "stethoscope", color: .diarySuccess) }
+                    Button { showDiagnostic = true } label: { settingsRow(String(localized: "Diagnostics"), symbol: "stethoscope", color: .diarySuccess) }
                     #endif
-                    Link(destination: MivuLinks.privacyPolicy) { settingsRow("Privacy Policy", symbol: "hand.raised", color: .diaryAccent) }
+                    Link(destination: MivuLinks.privacyPolicy) { settingsRow(String(localized: "Privacy Policy"), symbol: "hand.raised", color: .diaryAccent) }
                         .accessibilityIdentifier("privacyPolicy")
                     Text("Calorie and nutrition figures are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     Text("Keep a backup or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -98,10 +100,9 @@ struct SettingsView: View {
                 HStack { Spacer(); Button("Done") { showDiagnostic = false }.frame(minHeight: 44) }.padding(.horizontal)
                 ConnectionProofView(connection: connection)
             }
-            .environment(\.locale, Locale(identifier: "en"))
-            .environment(\.layoutDirection, .leftToRight)
         }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
+        .sheet(isPresented: $showPipStickers) { PipStickerSheet() }
         .fullScreenCover(isPresented: $showOnboarding) { OnboardingView(model: model, connection: connection) { showOnboarding = false } }
         .onChange(of: model.readModel?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.readModel?.profile, restoreGeneration: model.restoreGeneration) }
@@ -124,7 +125,7 @@ struct SettingsView: View {
                     Button { companionSelection.select(character.id) } label: {
                         HStack(spacing: 12) {
                             companionPreview(character)
-                            Text(character.displayName).foregroundStyle(Color.diaryText)
+                            Text(LocalizedStringKey(character.displayName)).foregroundStyle(Color.diaryText)
                             Spacer()
                             if character.id == companionSelection.selectedCharacterID {
                                 Image(systemName: "checkmark").accessibilityLabel("Selected companion")
@@ -136,9 +137,18 @@ struct SettingsView: View {
             } else {
                 HStack(spacing: 12) {
                     companionPreview(companionSelection.selectedCharacter)
-                    Text(companionSelection.selectedCharacter.displayName).accessibilityIdentifier("companionName")
+                    Text(LocalizedStringKey(companionSelection.selectedCharacter.displayName)).accessibilityIdentifier("companionName")
                 }.frame(minHeight: 44)
             }
+            Button { showPipStickers = true } label: {
+                // Same 40 pt leading slot + 12 pt spacing as the companion row so titles align.
+                HStack(spacing: 12) {
+                    Image(systemName: "face.smiling").foregroundStyle(Color.diaryProtein).frame(width: 40).accessibilityHidden(true)
+                    Text("Pip stickers").foregroundStyle(Color.diaryText)
+                    Spacer(minLength: 8)
+                }.frame(minHeight: 44)
+            }
+                .accessibilityIdentifier("pipStickers")
         }
     }
     private func companionPreview(_ character: CharacterDescriptor) -> some View {
@@ -183,7 +193,7 @@ struct SettingsView: View {
                                 }
                                 let updated = fields.applying(to: latest)
                                 await model.change { try await model.store.updateProfile(updated, expectedProfile: latest, expectedProfileID: profile.id) }
-                            } catch { model.errorMessage = "Could not load the latest profile settings. Try again." }
+                            } catch { model.errorMessage = String(localized: "Could not load the latest profile settings. Try again.") }
                         }
                     }.frame(minHeight: 44).disabled(TimeZone(identifier: fields.timezone) == nil || fields.preferences.count > 10_000 || fields.hasConflict)
                     if fields.hasConflict {
@@ -196,8 +206,18 @@ struct SettingsView: View {
                 }
 
                     Section("Language") {
-                        LabeledContent("App language", value: "English")
-                        Text("English is supported for this version. Your stored profile language is preserved.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        let language = LabeledContent("App language", value: Locale.current.localizedString(forLanguageCode: Bundle.main.preferredLocalizations.first ?? "en") ?? "English")
+                        if Self.shipsSeveralLanguages {
+                            // iOS keeps the per-app language on Mivu's page in Settings.
+                            Button { URL(string: UIApplication.openSettingsURLString).map { UIApplication.shared.open($0) } } label: {
+                                HStack(spacing: 8) { language; Image(systemName: "arrow.up.forward").font(.footnote.weight(.semibold)).foregroundStyle(Color.diarySecondary).accessibilityHidden(true) }
+                            }
+                            .tint(Color.diaryText).frame(minHeight: 44).accessibilityHint("Opens iOS Settings").accessibilityIdentifier("languageSettings")
+                            Text("Change the language Mivu uses in iOS Settings.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        } else {
+                            language
+                            Text("English is supported for this version. Your stored profile language is preserved.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        }
                     }
                     // Synthetic diaries never read Apple Health.
                     if !model.sampleMode && !DiaryLaunch.isUITest { HealthSettingsSection(model: model, health: MivuServices.shared.health) }
@@ -209,17 +229,21 @@ struct SettingsView: View {
                 Section {
                     Picker("Coach AI", selection: $connection.provider) {
                         Text("ChatGPT (recommended)").tag(ChatGPTConnection.Provider.chatGPT)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Apple Intelligence on iPhone")
-                            Text("No account, but much lower accuracy").font(.caption).foregroundStyle(Color.diarySecondary)
+                        // Hidden on iPhones that can never run it; shown but disabled while it is off or downloading.
+                        if connection.appleSupported {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Apple Intelligence on iPhone")
+                                Text(connection.appleAvailable ? "No account, but much lower accuracy" : "Turn on Apple Intelligence in iOS Settings, or wait for it to finish downloading")
+                                    .font(.caption).foregroundStyle(Color.diarySecondary)
+                            }
+                            .tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.available(.apple))
                         }
-                        .tag(ChatGPTConnection.Provider.apple).selectionDisabled(!connection.available(.apple))
                     }
                     .pickerStyle(.inline).labelsHidden()
                 } header: { Text("Coach AI") } footer: {
                     switch connection.provider {
                     case .apple: Text("Runs on this iPhone with no account, but estimates are much less accurate. It only logs meals and changes amounts; connect ChatGPT for accurate estimates, questions and other edits.")
-                    case .chatGPT: Text("Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI.")
+                    case .chatGPT: Text("Uses your ChatGPT Go, Plus or Pro plan. Coach messages and photos you send are shared with OpenAI.")
                     }
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
@@ -240,7 +264,7 @@ struct SettingsView: View {
                     if connection.activeRegistrationID != nil {
                         Button("Disconnect ChatGPT", role: .destructive) { Task { await connection.disconnect() } }.frame(minHeight: 44)
                     }
-                    if let notice = connection.notice { Text(notice.rawValue).font(.subheadline).foregroundStyle(Color.diarySecondary) }
+                    if let notice = connection.notice { Text(LocalizedStringKey(notice.rawValue)).font(.subheadline).foregroundStyle(Color.diarySecondary) }
                     Link("Manage usage", destination: MivuLinks.chatGPTUsage).frame(minHeight: 44)
                     #if DEBUG
                     Button("ChatGPT connection diagnostic") { showConnectionDiagnostic = true }.frame(minHeight: 44)
@@ -258,8 +282,8 @@ struct SettingsView: View {
                     }.frame(minHeight: 44).disabled(nutritionDraft.text.isEmpty)
                     if nutritionConfigured {
                         Button("Remove lookup key", role: .destructive) {
-                            do { try nutritionKeys.remove(); nutritionConfigured = false; nutritionDraft.message = "Nutrition lookup key removed." }
-                            catch { nutritionDraft.message = "Could not remove the key securely. Try again." }
+                            do { try nutritionKeys.remove(); nutritionConfigured = false; nutritionDraft.message = String(localized: "Nutrition lookup key removed.") }
+                            catch { nutritionDraft.message = String(localized: "Could not remove the key securely. Try again.") }
                         }.frame(minHeight: 44)
                     }
                     if let message = nutritionDraft.message { Text(message).font(.subheadline).foregroundStyle(Color.diarySecondary) }
@@ -298,8 +322,6 @@ struct SettingsView: View {
                 HStack { Spacer(); Button("Done") { showConnectionDiagnostic = false }.frame(minHeight: 44) }.padding(.horizontal)
                 ConnectionProofView(connection: connection)
             }
-            .environment(\.locale, Locale(identifier: "en"))
-            .environment(\.layoutDirection, .leftToRight)
         }
         .disabled(model.isChangingProfile)
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
@@ -307,6 +329,9 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
     }
+
+    /// Release builds strip languages that are not shipped yet, so this turns true when one ships.
+    static var shipsSeveralLanguages: Bool { Bundle.main.localizations.filter { $0 != "Base" }.count > 1 }
 
     private func settingsRow(_ title: String, symbol: String, color: Color, value: String? = nil) -> some View {
         HStack(spacing: 16) {
@@ -319,11 +344,11 @@ struct SettingsView: View {
 
     private func title(_ section: SettingsSection) -> String {
         switch section {
-        case .profiles: "Local profiles"
-        case .preferences: "Diary preferences"
-        case .backup: "Backup & export"
-        case .connection: "Coach AI"
-        case .nutritionSource: "Nutrition source"
+        case .profiles: String(localized: "Local profiles")
+        case .preferences: String(localized: "Diary preferences")
+        case .backup: String(localized: "Backup & export")
+        case .connection: String(localized: "Coach AI")
+        case .nutritionSource: String(localized: "Nutrition source")
         }
     }
 
@@ -345,7 +370,7 @@ private struct DeleteProfileDialog: ViewModifier {
     @Binding var pending: DiaryProfile?
 
     func body(content: Content) -> some View {
-        content.confirmationDialog("Delete \(pending?.name ?? "this private local profile")?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible, presenting: pending) { profile in
+        content.confirmationDialog("Delete \(pending?.name ?? String(localized: "this private local profile"))?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible, presenting: pending) { profile in
             Button("Delete profile", role: .destructive) {
                 Task {
                     await model.deleteProfile(profile.id)

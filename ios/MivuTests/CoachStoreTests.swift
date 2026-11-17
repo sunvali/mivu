@@ -338,7 +338,7 @@ import Testing
         let receipt = try await store.applyCoachFood(turnID: current.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], expectedProfileID: profile.id)
         let snapshot = try await store.snapshotForExport(), meal = try #require(snapshot.meals.first { $0.id == receipt.mealID })
         #expect(snapshot.activeDayID == receipt.dayID)
-        #expect(meal.timePrecision == .dateOnly)
+        #expect(meal.timePrecision == nil && meal.eatenAt == current.capturedAt)
         #expect(snapshot.totals(dayID: try #require(receipt.dayID)).kcal == 140)
     }
 
@@ -452,18 +452,27 @@ import Testing
         #expect(try await store.snapshotForExport() == before)
     }
 
-    @Test func unconfirmedCoachTimeStaysDateOnlyAndManualCaptureRemainsExact() async throws {
+    @Test func lateNightChatFoodForTheWakingDayTakesTheSendTime() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        // 01:00 on 2027-01-15 in Asia/Jerusalem still belongs to the 2027-01-14 waking day.
+        let turn = try await capturedTurn(store, text: "Late snack", photos: [], at: now.addingTimeInterval(-9 * 3600), expectedProfileID: profile.id)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chips", 1, 150)], expectedProfileID: profile.id)
+        let meal = try #require(await store.snapshotForExport().meals.first { $0.id == receipt.mealID })
+        #expect(meal.timePrecision == nil && meal.eatenAt == turn.capturedAt)
+    }
+
+    @Test func statedCoachTimeSetsMealTimeForChatAndManualCapture() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Breakfast at eight", photos: [], at: now, expectedProfileID: profile.id)
         let time = now.addingTimeInterval(-7200)
         let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-15", items: [food("Eggs", 2, 140)], eatenAt: time, expectedProfileID: profile.id)
         let explicit = try #require(await store.snapshotForExport().meals.first { $0.id == receipt.mealID })
-        #expect(explicit.timePrecision == .dateOnly); #expect(explicit.eatenAt != time)
+        #expect(explicit.timePrecision == nil); #expect(explicit.eatenAt == time)
         let day = try await store.snapshotForExport().days[0], id = UUID()
         _ = try await capturedMeal(store, text: "Manual", photos: [], reviewFirst: false, dayID: day.id, at: now, submissionID: id, forCoach: true)
         let manual = try await store.applyCoachFood(turnID: id, targetLocalDate: day.localDate, items: [food("Soup", 1, 100)], eatenAt: time, expectedProfileID: profile.id)
         let saved = try #require(await store.snapshotForExport().meals.first { $0.id == manual.mealID })
-        #expect((saved.timePrecision ?? .exact) == .exact); #expect(saved.eatenAt == now)
+        #expect((saved.timePrecision ?? .exact) == .exact); #expect(saved.eatenAt == time)
     }
 
     private var strength: WorkoutDraft {

@@ -107,7 +107,7 @@ struct CoachPagedHistoryWindow {
         reservations[reservation.direction] = nil
         guard !pages.isEmpty, identity == page.identity, Self.valid(page, for: reservation.request),
               !page.exchanges.contains(where: { row in exchanges.contains(where: { $0.id == row.id || $0.sequence == row.sequence }) }) else {
-            failures[reservation.direction] = "The conversation page was invalid. Try again."
+            failures[reservation.direction] = String(localized: "The conversation page was invalid. Try again.")
             return false
         }
         failures[reservation.direction] = nil

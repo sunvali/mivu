@@ -63,6 +63,7 @@ class ReleaseAutomation(unittest.TestCase):
             "python3 -m unittest discover -s scripts/ci -p 'test_*.py'",
             'bash -n scripts/ci/native.sh scripts/ci/signed.sh',
             'python3 scripts/ci/parity.py',
+            'python3 scripts/ci/languages.py check',
             'python3 scripts/ci/play_ledger.py android/play-uploads.txt',
         ])
 

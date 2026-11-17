@@ -62,10 +62,11 @@ enum PhotoImport {
     static func visionCopies(_ originals: [Data]) throws -> [Data] {
         guard originals.count <= 30 else { throw ResponsesClient.Failure.invalidInput }
         if originals.isEmpty { return [] }
-        let budget = min(524_288, 4_194_304 / originals.count)
+        // Label text must survive; the total stays within the request body limit.
+        let budget = min(1_572_864, 4_194_304 / originals.count)
         return try originals.map { data in
             guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw ResponsesClient.Failure.invalidInput }
-            for pixels in [1280, 960, 720, 480, 320] {
+            for pixels in [2048, 1600, 1280, 960, 720, 480, 320] {
                 guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
                     kCGImageSourceThumbnailMaxPixelSize: pixels,
@@ -145,7 +146,7 @@ struct PhotoInput: View {
             }
             Text("\(photos.count) of 8 photos").font(.caption).foregroundStyle(Color.diarySecondary)
             if !UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Text(DiaryLaunch.isSampleMode ? "Camera is unavailable here. Choose Photos or use the synthetic sample." : "Camera is unavailable here. Choose Photos instead.").font(.caption).foregroundStyle(Color.diarySecondary)
+                Text(DiaryLaunch.isSampleMode ? String(localized: "Camera is unavailable here. Choose Photos or use the synthetic sample.") : String(localized: "Camera is unavailable here. Choose Photos instead.")).font(.caption).foregroundStyle(Color.diarySecondary)
                 if DiaryLaunch.isSampleMode || DiaryLaunch.isCoachUITest { Button(DiaryLaunch.isSampleMode ? "Add synthetic apple photo" : "Add synthetic test photo") { if let data = PhotoImport.syntheticApple() { photos.append(data) } }.frame(minHeight: 44).disabled(photos.count >= 8 || preparation.isPreparing).accessibilityIdentifier("syntheticPhoto") }
             }
             if preparation.isPreparing { ProgressView("Importing photo") }
@@ -180,7 +181,7 @@ struct PhotoInput: View {
             case .cameraDenied:
                 Text("Allow camera access in Settings, or choose a photo instead.")
             case .importFailure(let positions):
-                Text("\(positions.map { "Photo \($0)" }.joined(separator: ", ")) from this selection could not be imported. Your other photos and note are preserved. Choose a smaller image or another photo.")
+                Text("\(positions.map { String(localized: "Photo \($0)") }.joined(separator: ", ")) from this selection could not be imported. Your other photos and note are preserved. Choose a smaller image or another photo.")
             }
         }
         .onChange(of: selected) { _, selection in
@@ -228,7 +229,7 @@ struct PhotoInput: View {
     }
 
     private var noticeTitle: String {
-        if case .some(.cameraDenied) = notice { "Camera access is off" } else { "Could not import selected photos" }
+        if case .some(.cameraDenied) = notice { String(localized: "Camera access is off") } else { String(localized: "Could not import selected photos") }
     }
     private func openCamera() async {
         let status = AVCaptureDevice.authorizationStatus(for: .video)

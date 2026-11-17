@@ -47,7 +47,7 @@ import Observation
             page = result; errorMessage = nil
         } catch {
             guard !Task.isCancelled, generation == operation, isCurrent(), dateFilter == filter else { return }
-            errorMessage = "Chat history is unavailable. Try again."
+            errorMessage = String(localized: "Chat history is unavailable. Try again.")
         }
     }
 }
@@ -110,7 +110,7 @@ struct CoachHistoryView: View {
                     ProgressView("Loading chat history")
                 } else if history.page?.segments.isEmpty == true {
                     ContentUnavailableView(history.dateFilter == nil ? "No saved chat" : "No chat for this date", systemImage: "bubble.left", description:
-                        Text(history.dateFilter.map { "No saved conversation is labeled \(CoachReplyLines.dayTitle($0, zone: zone))." } ?? "Your saved conversations will appear here."))
+                        Text(history.dateFilter.map { String(localized: "No saved conversation is labeled \(CoachReplyLines.dayTitle($0, zone: zone)).") } ?? String(localized: "Your saved conversations will appear here.")))
                         .accessibilityIdentifier("coachHistoryEmpty")
                 }
                 ForEach(history.page?.segments ?? []) { row in

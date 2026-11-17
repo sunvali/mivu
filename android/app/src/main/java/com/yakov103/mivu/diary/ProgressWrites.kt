@@ -2,7 +2,10 @@ package com.yakov103.mivu.diary
 
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
 import java.util.UUID
 
 // Ports of the DiaryTransaction progress store in ios/Mivu/Diary/DiaryDatabaseProgress.swift: weight(id:) :41,
@@ -18,6 +21,16 @@ internal fun diaryDateOnlyInstant(date: String, zone: String): Instant {
     if (!validLocalDate(date) || !validZone(zone)) throw DiaryError.InvalidData("date")
     return LocalDate.parse(date).atTime(12, 0).atZone(ZoneId.of(zone, ZoneId.SHORT_IDS)).toInstant()
 }
+
+private val localClock = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm").withResolverStyle(ResolverStyle.STRICT)
+
+/** iOS `diaryLocalInstant`: the instant of a local 24-hour `yyyy-MM-dd HH:mm` wall clock, or null when it is not valid. */
+internal fun diaryLocalInstant(clock: String, zone: String): Instant? = if (!validZone(zone)) null else runCatching {
+    LocalDateTime.parse(clock, localClock).atZone(ZoneId.of(zone, ZoneId.SHORT_IDS)).toInstant()
+}.getOrNull()
+
+/** iOS `diaryLocalClock`. */
+internal fun diaryLocalClock(at: Instant, zone: String): String = localClock.format(at.atZone(ZoneId.of(zone, ZoneId.SHORT_IDS)))
 
 internal fun DiaryDatabase.Tx.weight(id: UUID): WeightEntry =
     boundedRecords("weight", WeightEntry.serializer(), "id = ?", listOf(id.swift), "ordinal", 1).firstOrNull() ?: throw DiaryError.NotFound

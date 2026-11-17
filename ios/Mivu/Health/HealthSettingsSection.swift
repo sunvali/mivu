@@ -68,7 +68,7 @@ struct HealthSettingsSection: View {
             }
             failure = nil; showConnect = false
         } catch {
-            failure = "Could not connect to Apple Health. Check iOS Settings › Health › Data Access › Mivu."
+            failure = String(localized: "Could not connect to Apple Health. Check iOS Settings › Health › Data Access › Mivu.")
         }
     }
 }

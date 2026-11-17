@@ -4,6 +4,8 @@ import SwiftUI
 struct DiaryProgressView: View {
     @Bindable var model: DiaryViewModel
     let openDiary: () -> Void
+    /// False beside the Coach chat, where Coach's own Pip is the only rig allowed to run.
+    var showsCompanion = true
     @Environment(\.isWideLayout) private var isWide
     @Environment(\.duoPosture) private var posture
     @State private var range = ProgressRange.week
@@ -116,14 +118,14 @@ struct DiaryProgressView: View {
         .accessibilityIdentifier("progressRange")
         // The last report stays on screen during a range switch, so a failed switch must still say so.
         if let loadError { loadFailure(loadError) }
-        ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: companion(snapshot.headline), openDiary: openDiary)
+        ProgressHeadlineCard(snapshot: snapshot, dates: dates(progress), companion: showsCompanion ? companion(snapshot.headline) : nil, openDiary: openDiary)
         sectionTitle("Weight")
         NavigationLink { weightDetail } label: { ProgressWeightCard(snapshot: snapshot) }
             .buttonStyle(.plain).accessibilityIdentifier("openWeight")
     }
     @ViewBuilder private func secondaryCards(_ snapshot: ProgressSnapshot, _ progress: CoachProgress) -> some View {
         sectionTitle("Average day")
-        detail("progressMacros", "Macros", content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
+        detail("progressMacros", String(localized: "Macros"), content: { snapshot, _ in ProgressDetails.macros(snapshot) }) { ProgressMacrosCard(snapshot: snapshot) }
         sectionTitle("More")
         more(snapshot, progress)
     }
@@ -193,8 +195,8 @@ struct DiaryProgressView: View {
             await companionRuntime.apply(companionOutput(snapshot.headline), darkMode: colorScheme == .dark)
         }
         .onChange(of: range) { _, _ in pipReaction = PipReaction(pose: .progressRange) }
-        .onAppear { companionVisible = true }
-        .onDisappear { companionVisible = false; pipEntered = false; companionRuntime.stop() }
+        .onAppear { companionVisible = showsCompanion }
+        .onDisappear { companionVisible = false; pipEntered = false; if showsCompanion { companionRuntime.stop() } }
         .onChange(of: model.selection) { _, _ in
             selectedWeightDate = nil
             weightBefore = nil; workoutBefore = nil; editingWeight = nil
@@ -212,25 +214,25 @@ struct DiaryProgressView: View {
     /// Everything else, one line each, a tap deeper.
     private func more(_ snapshot: ProgressSnapshot, _ progress: CoachProgress) -> some View {
         VStack(spacing: 0) {
-            moreLink("progressCalendar", "Calendar", "calendar", value: "\(snapshot.loggedDays) of \(snapshot.days.count) days logged") {
-                ProgressDetail(title: "Calendar", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calendar(snapshot) }
+            moreLink("progressCalendar", String(localized: "Calendar"), "calendar", value: String(localized: "\(snapshot.loggedDays) of \(snapshot.days.count) days logged")) {
+                ProgressDetail(title: String(localized: "Calendar"), model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calendar(snapshot) }
             }
             Divider()
-            moreLink("progressCalories", "Calories", "flame", value: snapshot.averageKcal.map { "avg \(kcal($0))" } ?? "No complete days") {
-                ProgressDetail(title: "Calories", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calories(snapshot) }
+            moreLink("progressCalories", String(localized: "Calories"), "flame", value: snapshot.averageKcal.map { String(localized: "avg \(kcal($0))") } ?? String(localized: "No complete days")) {
+                ProgressDetail(title: String(localized: "Calories"), model: model, range: range, today: today) { snapshot, _ in ProgressDetails.calories(snapshot) }
             }
             Divider()
-            moreLink("progressBurn", "Estimated burn", "bolt.heart", value: snapshot.burnSummary) {
-                ProgressDetail(title: "Estimated burn", model: model, range: range, today: today) { snapshot, _ in ProgressDetails.burn(snapshot) }
+            moreLink("progressBurn", String(localized: "Estimated burn"), "bolt.heart", value: snapshot.burnSummary) {
+                ProgressDetail(title: String(localized: "Estimated burn"), model: model, range: range, today: today) { snapshot, _ in ProgressDetails.burn(snapshot) }
             }
             Divider()
-            moreLink("progressTopFoods", "Top foods", "fork.knife", value: foods.first?.name ?? "None yet") {
-                ProgressDetail(title: "Top foods", model: model, range: range, today: today, foodLimit: 200) { _, foods in ProgressDetails.foods(foods) }
+            moreLink("progressTopFoods", String(localized: "Top foods"), "fork.knife", value: foods.first?.name ?? String(localized: "None yet")) {
+                ProgressDetail(title: String(localized: "Top foods"), model: model, range: range, today: today, foodLimit: 200) { _, foods in ProgressDetails.foods(foods) }
             }
             Divider()
-            moreLink("openWorkouts", "Workouts", "figure.run", value: "\(progress.workoutTotal ?? 0) recorded") { workoutList }
+            moreLink("openWorkouts", String(localized: "Workouts"), "figure.run", value: String(localized: "\(progress.workoutTotal ?? 0) recorded")) { workoutList }
             Divider()
-            Button { showGoals = true } label: { moreRow("Goals", "target", value: "Manage") }
+            Button { showGoals = true } label: { moreRow(String(localized: "Goals"), "target", value: String(localized: "Manage")) }
                 .buttonStyle(.plain).accessibilityIdentifier("progressGoals")  // Settings owns "editGoals"; this stack keeps every row on screen
         }
         .padding(.horizontal, 16).padding(.vertical, 4)
@@ -249,7 +251,7 @@ struct DiaryProgressView: View {
             Text(title).foregroundStyle(Color.diaryText)
             Spacer(minLength: 8)
             Text(value).foregroundStyle(Color.diarySecondary).lineLimit(1)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
+            Image(systemName: "chevron.forward").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
         }
         .frame(minHeight: 52).contentShape(Rectangle())
     }
@@ -288,7 +290,7 @@ struct DiaryProgressView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Latest measurement").font(.subheadline).foregroundStyle(Color.diarySecondary)
-                        Text("\(latest.value.formatted()) \(latest.unit)").font(.largeTitle.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diaryWeight)
+                        Text("\(latest.value.formatted()) \(latest.shownUnit)").font(.largeTitle.weight(.semibold)).monospacedDigit().foregroundStyle(Color.diaryWeight)
                         Text(weightDate(latest)).font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }.padding(.vertical, 8)
                 }.listRowBackground(Color.diarySummarySurface)
@@ -305,6 +307,7 @@ struct DiaryProgressView: View {
                             PointMark(x: .value("Date", point.date, unit: .day), y: .value("Weight kg", point.value))
                                 .foregroundStyle(Color.diaryWeight)
                         }
+                        .environment(\.layoutDirection, .leftToRight)
                         .chartXSelection(value: $selectedWeightDate)
                         .chartGesture { proxy in
                             SpatialTapGesture()
@@ -344,7 +347,7 @@ struct DiaryProgressView: View {
                     } else if loadedWeights != weightRequest { ProgressView("Loading measurements…") }
                     ForEach(visibleWeights.sorted { $0.measuredAt > $1.measuredAt }) { entry in
                         Button { editingWeight = entry } label: {
-                            LabeledContent(weightDate(entry), value: "\(entry.value.formatted()) \(entry.unit)")
+                            LabeledContent(weightDate(entry), value: "\(entry.value.formatted()) \(entry.shownUnit)")
                                 .foregroundStyle(Color.diaryText).monospacedDigit().frame(minHeight: 44)
                         }.accessibilityIdentifier("editWeight")
                         .contextMenu { askPipButton("askPipWeight", weightPrompt(entry)) }
@@ -388,8 +391,11 @@ struct DiaryProgressView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(session.kind.title).font(.headline)
-                                Text("\(workoutDate(session)) · \(session.durationMinutes) minutes\(session.healthSource.map { " · from \($0)" } ?? "")")
+                                Text("\(workoutDate(session)) · \(session.durationMinutes) minutes")
                                     .font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                if let source = WorkoutDetailPresentation(session: session).sourceLine {
+                                    Text(source).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                                }
                             }
                             .frame(minHeight: 44, alignment: .leading)
                         }
@@ -424,22 +430,22 @@ struct DiaryProgressView: View {
     }
 
     private var weightSummary: String {
-        let samples = weights.map { "\($0.label): \($0.value.formatted(.number.precision(.fractionLength(1)))) kg" }
-        let average = weightReport?.currentSevenDayAverageKg.map { "Seven-day average \($0.formatted(.number.precision(.fractionLength(1)))) kg from \(weightReport!.currentSevenDayObservedCount) dates." }
-            ?? "Seven-day average: insufficient data."
-        let change = weightReport?.changeFromSevenDaysAgoKg.map { "Seven-day change \($0.formatted(.number.precision(.fractionLength(1)))) kg." }
-            ?? "Seven-day change: insufficient data."
-        return "Weight chart: \(weights.count) measured dates. " + average + " " + change + " " + samples.joined(separator: "; ")
+        let samples = weights.map { String(localized: "\($0.label): \($0.value.formatted(.number.precision(.fractionLength(1)))) kg") }
+        let average = weightReport?.currentSevenDayAverageKg.map { String(localized: "Seven-day average \($0.formatted(.number.precision(.fractionLength(1)))) kg from \(weightReport!.currentSevenDayObservedCount) dates.") }
+            ?? String(localized: "Seven-day average: insufficient data.")
+        let change = weightReport?.changeFromSevenDaysAgoKg.map { String(localized: "Seven-day change \($0.formatted(.number.precision(.fractionLength(1)))) kg.") }
+            ?? String(localized: "Seven-day change: insufficient data.")
+        return String(localized: "Weight chart: \(weights.count) measured dates.") + " " + average + " " + change + " " + samples.joined(separator: "; ")
     }
     private func askPipButton(_ id: String, _ action: @escaping () -> Void) -> some View {
         Button("Ask Pip", systemImage: "sparkles", action: action).accessibilityIdentifier(id)
     }
     private func weightPrompt(_ entry: WeightEntry) -> () -> Void {
-        let text = "Weight · \(entry.value.formatted()) \(entry.unit) · \(DiaryWeek.format(weightDate(entry), "EEE d MMM"))"
+        let text = String(localized: "Weight · \(entry.value.formatted()) \(entry.shownUnit) · \(DiaryWeek.format(weightDate(entry), "EEE d MMM"))")
         return { askPip(.weight(weightID: entry.id), text, day: entry.dayID) }
     }
     private func workoutPrompt(_ session: WorkoutSession) -> () -> Void {
-        let text = "\(session.kind.title) · \(session.durationMinutes) min · \(DiaryWeek.format(workoutDate(session), "EEE d MMM"))"
+        let text = String(localized: "\(session.kind.title) · \(session.durationMinutes) min · \(DiaryWeek.format(workoutDate(session), "EEE d MMM"))")
         return { askPip(.workout(workoutID: session.id), text, day: session.dayID) }
     }
     private func askPip(_ target: CoachReply.Target, _ excerpt: String, day: UUID?) {
@@ -464,7 +470,7 @@ struct DiaryProgressView: View {
             progress = value; foods = top; loadedReport = key
         } catch {
             guard !Task.isCancelled, model.selection == ownership, reportRequest == key, reportRequestID == requestID else { return }
-            loadError = "Could not load progress. Your diary is preserved."; return
+            loadError = String(localized: "Could not load progress. Your diary is preserved."); return
         }
     }
 
@@ -492,7 +498,7 @@ struct DiaryProgressView: View {
             weightPage = page; weightDates = dates; loadedWeights = key
         } catch {
             guard !Task.isCancelled, model.selection == ownership, weightRequest == key, weightRequestID == requestID else { return }
-            weightError = "Could not load measurements. Your diary is preserved."
+            weightError = String(localized: "Could not load measurements. Your diary is preserved.")
         }
     }
 
@@ -511,7 +517,7 @@ struct DiaryProgressView: View {
             workoutPage = page; workoutDates = dates; loadedWorkouts = key
         } catch {
             guard !Task.isCancelled, model.selection == ownership, workoutRequest == key, workoutRequestID == requestID else { return }
-            workoutError = "Could not load workouts. Your diary is preserved."
+            workoutError = String(localized: "Could not load workouts. Your diary is preserved.")
         }
     }
 }
@@ -551,7 +557,7 @@ struct WorkoutDetailView: View {
                 Section {
                     Text(session.kind.title).font(.title2.weight(.semibold))
                     Text("\(session.durationMinutes) minutes")
-                    Text(session.timePrecision == .dateOnly ? "Time unspecified" : session.performedAt.formatted(date: .omitted, time: .shortened))
+                    Text(session.timePrecision == .dateOnly ? String(localized: "Time unspecified") : session.performedAt.formatted(date: .omitted, time: .shortened))
                     Text(WorkoutDetailPresentation(session: session).burnLine)
                     if let source = WorkoutDetailPresentation(session: session).sourceLine { Text(source).foregroundStyle(Color.diarySecondary) }
                     // shortcut: only today's workouts are checked for overlap; upgrade if past-day receipts need the warning.
@@ -564,10 +570,10 @@ struct WorkoutDetailView: View {
                     ForEach(session.exercises.indices, id: \.self) { exerciseIndex in
                         let exercise = session.exercises[exerciseIndex]
                         VStack(alignment: .leading) {
-                            Text(exercise.name).font(.headline)
+                            Text(exercise.name).font(.headline).directionFromContent(exercise.name)
                             ForEach(exercise.sets.indices, id: \.self) { index in
                                 let set = exercise.sets[index]
-                                Text("Set \(index + 1): \(set.repetitions) repetitions · \(set.loadKg.map { "\($0.formatted()) kg" } ?? "bodyweight")")
+                                Text(set.line(number: index + 1))
                             }
                         }
                     }
@@ -617,8 +623,11 @@ struct WorkoutDetailView: View {
             }
             Button("Cancel", role: .cancel) { pendingDeletion = nil }
         } message: { session in
-            Text("This removes only this workout and its exercise details. Meals, weights and other workouts are preserved."
-                 + (session.isFromHealth ? " It won't be imported again." : ""))
+            if session.isFromHealth {
+                Text("This removes only this workout and its exercise details. Meals, weights and other workouts are preserved. It won't be imported again.")
+            } else {
+                Text("This removes only this workout and its exercise details. Meals, weights and other workouts are preserved.")
+            }
         }
         .task(id: model.changeGeneration) { await loadSession() }
         .onChange(of: model.selection) { _, selected in
@@ -631,9 +640,8 @@ struct WorkoutDetailView: View {
     }
 
     private var deletionTitle: String {
-        guard let session = pendingDeletion else { return "Delete workout?" }
-        let date = day?.localDate ?? "its recorded day"
-        return "Delete \(session.kind.title.lowercased()) workout on \(date)?"
+        guard let session = pendingDeletion else { return String(localized: "Delete workout?") }
+        return session.kind.deletionTitle(on: day?.localDate)
     }
 
     private func loadSession() async {
@@ -649,18 +657,57 @@ struct WorkoutDetailView: View {
         } catch {
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
             session = nil; day = nil; loading = false
-            loadError = "Could not load this workout. It may have been removed."
+            loadError = String(localized: "Could not load this workout. It may have been removed.")
         }
     }
 
 }
 
-private extension WorkoutKind {
+// Whole sentences per kind, so a language can inflect or reorder the kind word.
+extension WorkoutKind {
     var title: String {
         switch self {
-        case .strength: "Strength"
-        case .cardio: "Cardio"
-        case .other: "Other"
+        case .strength: String(localized: "Strength")
+        case .cardio: String(localized: "Cardio")
+        case .other: String(localized: "Other")
         }
+    }
+
+    func factLine(minutes: Int) -> String {
+        switch self {
+        case .strength: String(localized: "Strength, \(minutes) minutes.")
+        case .cardio: String(localized: "Cardio, \(minutes) minutes.")
+        case .other: String(localized: "Other, \(minutes) minutes.")
+        }
+    }
+
+    func savedLine(minutes: Int) -> String {
+        switch self {
+        case .strength: String(localized: "Workout saved: strength, \(minutes) minutes.")
+        case .cardio: String(localized: "Workout saved: cardio, \(minutes) minutes.")
+        case .other: String(localized: "Workout saved: other, \(minutes) minutes.")
+        }
+    }
+
+    func deletionTitle(on localDate: String?) -> String {
+        guard let localDate else {
+            switch self {
+            case .strength: return String(localized: "Delete strength workout on its recorded day?")
+            case .cardio: return String(localized: "Delete cardio workout on its recorded day?")
+            case .other: return String(localized: "Delete other workout on its recorded day?")
+            }
+        }
+        switch self {
+        case .strength: return String(localized: "Delete strength workout on \(localDate)?")
+        case .cardio: return String(localized: "Delete cardio workout on \(localDate)?")
+        case .other: return String(localized: "Delete other workout on \(localDate)?")
+        }
+    }
+}
+
+extension WorkoutSet {
+    func line(number: Int) -> String {
+        guard let loadKg else { return String(localized: "Set \(number): \(repetitions) repetitions · bodyweight") }
+        return String(localized: "Set \(number): \(repetitions) repetitions · \(loadKg.formatted()) kg")
     }
 }

@@ -15,10 +15,10 @@ struct CoachQuestionChips: View {
     private func name(_ meal: MealReadModel, _ target: CoachReply.Target) -> String {
         if case .item(_, let itemID) = target, let item = meal.items.first(where: { $0.id == itemID }) { return item.name }
         let names = meal.items.prefix(3).map(\.name).joined(separator: ", ")
-        return names.isEmpty ? "Meal" : names
+        return names.isEmpty ? String(localized: "Meal") : names
     }
     private func time(_ meal: MealReadModel) -> String {
-        meal.timePrecision == .dateOnly ? "Time unspecified" : meal.eatenAt.formatted(date: .omitted, time: .shortened)
+        meal.timePrecision == .dateOnly ? String(localized: "Time unspecified") : meal.eatenAt.formatted(date: .omitted, time: .shortened)
     }
     var body: some View {
         if question.kind == .confirm, let target = question.candidates.first {

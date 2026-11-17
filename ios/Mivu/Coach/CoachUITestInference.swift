@@ -12,13 +12,12 @@ enum CoachUITestInference {
         }) == true {
             try await Task.sleep(for: .seconds(8))
         }
-        guard let developer = input.compactMap({ entry -> String? in
-            if case .message(role: .developer, let text, _) = entry { return text }; return nil
-        }).last, let range = developer.range(of: "Context: "),
-        let data = String(developer[range.upperBound...]).data(using: .utf8) else { throw CoachError.invalidArguments }
+        // History exchanges precede the context message; only the current capture follows it. A later
+        // developer note (the engine's rephrase request) carries no context, so it is not the tail.
+        guard let tail = input.lastIndex(where: { if case .message(role: .developer, let text, _) = $0 { return text.contains("Context: ") }; return false }),
+              case .message(_, let developer, _) = input[tail], let range = developer.range(of: "Context: "),
+              let data = String(developer[range.upperBound...]).data(using: .utf8) else { throw CoachError.invalidArguments }
         let context = try JSONDecoder().decode(CoachContext.self, from: data)
-        // History exchanges precede the tail developer message; only the current capture follows it.
-        let tail = input.lastIndex { if case .message(role: .developer, _, _) = $0 { return true }; return false } ?? 0
         let text = input[tail...].compactMap { entry -> String? in
             if case .message(role: .user, let text, _) = entry { return text }; return nil
         }.joined(separator: " ").lowercased()

@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// Decides whether the model's prose may be shown: every number must come from this turn's facts.
 /// Independent of the store and UI so a server worker can run the same check.
@@ -30,22 +31,62 @@ enum CoachReplyCheck {
     }
 
     static func numbers(in text: String) -> [Decimal] {
-        let pattern = /-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?/
-        return text.matches(of: pattern).compactMap { match in
-            var token = String(match.output).replacingOccurrences(of: ",", with: "")
+        // Digits in any script (Arabic-Indic, Devanagari…) read as 0–9, with Arabic separators as "." and ",".
+        let text = String(text.map { character -> Character in
+            if character == "٫" { return "." }
+            if character == "٬" { return "," }
+            guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1,
+                  scalar.properties.numericType == .decimal, let digit = character.wholeNumberValue else { return character }
+            return Character(String(digit))
+        })
+        // Groups of three after a comma or a thin or no-break space ("1,240", "1 240"); a comma before one or two
+        // digits is a decimal ("73,5"), as many languages write it.
+        let pattern = /-?\d{1,3}(?:[, \u{202F}\u{00A0}]\d{3}(?!\d))+(?:[.,]\d{1,2}(?!\d)|\.\d+)?|-?\d+(?:,\d{1,2}(?!\d)|\.\d+)?/
+        return text.matches(of: pattern).map { match in
+            var token = String(match.output).replacing(/[ \u{202F}\u{00A0}]|,(?=\d{3})/, with: "").replacingOccurrences(of: ",", with: ".")
             // A hyphen joining date parts or a range is not a minus sign.
             if token.hasPrefix("-"), match.range.lowerBound > text.startIndex, text[text.index(before: match.range.lowerBound)].isNumber { token.removeFirst() }
-            return Decimal(string: token, locale: Locale(identifier: "en_US_POSIX"))
+            // An unreadable number fails closed: NaN is never in the allowed set.
+            return Decimal(string: token, locale: Locale(identifier: "en_US_POSIX")) ?? .nan
         }
     }
 
-    static func passes(_ prose: String, allowed: Set<Decimal>, receipts: [CoachCommittedReceipt]) -> Bool {
+    /// The model ends a reply with this line when the reply says something was saved, in any language.
+    static let saveMarker = "<saved/>"
+
+    /// The prose without the marker, and whether the marker was present.
+    static func splitSaveClaim(_ prose: String) -> (text: String, claimsSave: Bool) {
+        // Models vary the spelling ("<saved />", "<Saved/>", in backticks), so match the tag loosely.
+        let marker = /`?<\s*saved\s*\/?\s*>`?/.ignoresCase()
+        return (prose.replacing(marker, with: "").trimmingCharacters(in: .whitespacesAndNewlines), prose.contains(marker))
+    }
+
+    /// `generalFacts` lets a read-only answer use typical food values in hedged sentences that do not describe the diary.
+    static func passes(_ prose: String, allowed: Set<Decimal>, receipts: [CoachCommittedReceipt], claimsSave: Bool = false, generalFacts: Bool = false) -> Bool {
         guard !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         if receipts.contains(where: { $0.mealID != nil && $0.submissionState == .awaitingReview }) {
+            // shortcut: English-only net beside the marker, remove once a live evaluation shows the marker alone holds.
             let lowered = prose.lowercased()
-            if lowered.contains("logged") || lowered.contains("saved") { return false }
+            if claimsSave || lowered.contains("logged") || lowered.contains("saved") { return false }
         }
-        return numbers(in: prose).allSatisfy { allowed.contains(abs($0)) }
+        func grounded(_ text: some StringProtocol) -> Bool { numbers(in: String(text)).allSatisfy { allowed.contains(abs($0)) } }
+        // A review-only turn counts nothing toward the day, so it may answer the question like a read-only turn.
+        guard generalFacts, receipts.allSatisfy({ $0.mealID != nil && $0.submissionState == .awaitingReview }) else { return grounded(prose) }
+        let hedge = /~|\b(?i:about|around|roughly|approximately|typically|usually|nearly)\b/
+        // A hedged sentence may skip grounding only when it doesn't describe the diary, and only in a language whose
+        // diary words are known; any other language grounds every number. Hebrew words also match inside longer words
+        // ("ושלך"), which only fails closed.
+        // shortcut: English and Hebrew only; add a language's diary words when it ships.
+        let diaryWords: Regex<Substring>
+        switch NLLanguageRecognizer.dominantLanguage(for: prose) {
+        case .english: diaryWords = /\b(?i:left|remaining|to go|so far|today|yesterday|this week|goal|target|budget|average|you're|you are|you've|you have|you had|you ate|your)\b/
+        case .hebrew: diaryWords = /היום|אתמול|השבוע|נשאר|נותר|עד עכשיו|יעד|תקציב|ממוצע|שלך|לך|אכלת|שתית|שקלת/
+        default: return grounded(prose)
+        }
+        return prose.split(separator: /[.!?]\s+|\n+/).allSatisfy { sentence in
+            let plain = sentence.replacingOccurrences(of: "’", with: "'")
+            return grounded(plain) || (plain.contains(hedge) && !plain.contains(diaryWords))
+        }
     }
 
     // Decimal(Double) keeps binary noise (73.6 → 73.59999…); the shortest description does not.

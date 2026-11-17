@@ -347,7 +347,7 @@ struct ResponsesClientTests {
         #expect(input.count == 1)
         #expect(input[0]["role"] as? String == "user")
         let content = try #require(input[0]["content"] as? [[String: String]])
-        #expect(content == [["type": "input_text", "text": "Synthetic context שלום"], ["type": "input_image", "image_url": "data:image/png;base64," + SyntheticConnectionProbe.image.base64EncodedString()]])
+        #expect(content == [["type": "input_text", "text": "Synthetic context שלום"], ["type": "input_image", "detail": "high", "image_url": "data:image/png;base64," + SyntheticConnectionProbe.image.base64EncodedString()]])
     }
 
     @Test func parsesEveryByteBoundaryIncludingUTF8() throws {

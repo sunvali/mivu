@@ -17,6 +17,10 @@ import XCTest
         defer { app.terminate() }
         let variant = appearance + (largestText ? " largest" : " normal")
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 15))
+        if !largestText {
+            XCTAssertTrue(app.staticTexts["0"].exists, "A blank day reads 0 kcal, not a dash")
+            XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", "0 g")).count, 3)
+        }
         let logMeal = app.buttons["logMeal"]
         XCTAssertTrue(logMeal.isHittable)
         XCTAssertGreaterThanOrEqual(logMeal.frame.height, 44)

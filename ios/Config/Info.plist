@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationShortcutItems</key>
@@ -11,8 +15,8 @@
 			<string>com.yakov103.mivu.log-food</string>
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Snap It</string>
-			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>camera</string>
+			<key>UIApplicationShortcutItemIconFile</key>
+			<string>pip.head</string>
 		</dict>
 	</array>
 </dict>

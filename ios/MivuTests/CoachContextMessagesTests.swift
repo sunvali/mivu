@@ -44,6 +44,7 @@ private actor InputLog {
         #expect(receiptReply.contains("meal="))
         let tail = try #require(text(input[5]))
         #expect(role(input[5]) == .developer && tail.contains("Context: ") && tail.contains("\"recentTurns\":[]"))
+        #expect(tail.hasPrefix("The app language is English. "))
         #expect(role(input[6]) == .user && text(input[6]) == "What did I eat?" && input.count == 7)
     }
 

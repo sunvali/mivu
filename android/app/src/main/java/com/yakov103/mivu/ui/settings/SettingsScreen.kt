@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yakov103.mivu.R
@@ -84,6 +85,8 @@ fun SettingsScreen(
 ) {
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val uri = LocalUriHandler.current
+    var stickers by remember { mutableStateOf(false) }
+    if (stickers) PipStickerSheet(onDismiss = { stickers = false })
     Scaffold(
         Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = {
@@ -106,6 +109,7 @@ fun SettingsScreen(
                 Column {
                     SettingsRow("Goals", R.drawable.ic_target, onClick = onOpenGoals)
                     SettingsRow("Redo setup with Pip", R.drawable.ic_pets, onClick = onRedoSetup)
+                    SettingsRow("Pip stickers", R.drawable.ic_sticker, modifier = Modifier.testTag("pipStickers"), onClick = { stickers = true })
                     SettingsRow("Backup & export", R.drawable.ic_ios_share, onClick = onOpenBackup)
                 }
             }
@@ -207,7 +211,7 @@ fun ConnectionScreen(
     }
 }
 
-private const val CHATGPT_FOOTER = "Uses your ChatGPT Plus or Pro plan. Coach messages and photos you send are shared with OpenAI."
+private const val CHATGPT_FOOTER = "Uses your ChatGPT Go, Plus or Pro plan. Coach messages and photos you send are shared with OpenAI."
 private const val ON_DEVICE_FOOTER = "Runs on this phone with no account, but estimates are much less accurate. It only logs meals and " +
     "changes amounts; connect ChatGPT for accurate estimates, questions and other edits."
 

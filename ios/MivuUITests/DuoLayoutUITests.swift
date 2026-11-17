@@ -44,8 +44,33 @@ import XCTest
         let input = app.textFields["coachInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap()
         try XCTSkipUnless(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Needs the software keyboard")
-        XCTAssertFalse(app.descendants(matching: .any)["coachLiveDay"].waitForExistence(timeout: 3),
+        XCTAssertFalse(app.descendants(matching: .any)["coachSidePane"].waitForExistence(timeout: 3),
                        "The keyboard shortens the view, but the window is still upright")
+    }
+
+    /// Closed and sideways with the keyboard up, the empty conversation is only a few lines tall.
+    func testShortCoachEmptyStateStaysInItsSpace() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launch()
+        // Upright there is room, so hiding it must be about space, never a blanket hide.
+        XCTAssertTrue(app.staticTexts["What would you like to record?"].waitForExistence(timeout: 15), "A tall window shows the empty state")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap()
+        try XCTSkipUnless(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Needs the software keyboard")
+        let strip = app.descendants(matching: .any)["coachCompanionStrip"]
+        XCTAssertTrue(strip.exists, "Pip's strip is on screen")
+        let top = app.navigationBars["Coach"].frame.maxY, bottom = strip.frame.minY
+        for text in ["What would you like to record?", "Describe a meal"] {
+            let element = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", text)).firstMatch
+            guard element.exists else { continue }
+            XCTAssertGreaterThanOrEqual(element.frame.minY, top, "\(text) runs under the bar")
+            XCTAssertLessThanOrEqual(element.frame.maxY, bottom, "\(text) runs under Pip")
+        }
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "short-coach-empty"; capture.lifetime = .keepAlways; add(capture)
+        XCUIDevice.shared.orientation = .portrait
     }
 
     func testSidewaysCoachShowsLiveDayAndHighlightsChange() {
@@ -54,25 +79,181 @@ import XCTest
                                "--proof-english", "--wide-layout-ui-test"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
-        let liveDay = app.descendants(matching: .any)["coachLiveDay"]
+        let liveDay = app.descendants(matching: .any)["coachSidePane"]
         XCTAssertTrue(liveDay.waitForExistence(timeout: 5))
         let input = app.textFields["coachInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Two eggs, three bread slices and salad")
         app.buttons["coachSend"].tap()
         let changed = app.descendants(matching: .any)["justChangedMeal"]
         XCTAssertTrue(changed.waitForExistence(timeout: 20), "The meal Coach logged lights up in the live day")
-        XCTAssertGreaterThan(changed.frame.minX, input.frame.maxX - 1, "The live day sits beside the chat")
+        XCTAssertLessThan(changed.frame.maxX, input.frame.minX + 1, "The live day sits left of the chat")
         XCTAssertLessThan(changed.frame.minY, liveDay.frame.midY, "The changed meal shows near the top, above the keyboard")
         XCTAssertFalse(app.buttons["coachFollowUp-today"].exists, "See today is redundant beside the live day")
     }
 
-    func testSidewaysDiaryKeepsReadableWidth() throws {
+    /// Coach with scripted replies. Sideways the pane sits left of the chat.
+    private func launchCoach(wide: Bool = true) throws -> (XCUIApplication, XCUIElement) {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]
+            + (wide ? ["--wide-layout-ui-test"] : [])
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        let window = app.windows.firstMatch.frame
+        if wide { try XCTSkipIf(window.width < 760, "Needs the sideways inner display") }
+        else { try XCTSkipIf(window.width > window.height, "Needs an upright window: run Closed, or rotate the open Duo upright") }
+        let input = app.textFields["coachInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        return (app, input)
+    }
+    private func send(_ text: String, _ app: XCUIApplication, _ input: XCUIElement) {
+        input.tap(); input.typeText(text); app.buttons["coachSend"].tap()
+    }
+    private func pane(_ app: XCUIApplication) -> XCUIElement { app.descendants(matching: .any)["coachSidePane"] }
+
+    func testSidewaysChatSitsRightOfThePane() throws {
+        let (app, input) = try launchCoach()
+        XCTAssertTrue(pane(app).waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(pane(app).frame.maxX, input.frame.minX + 1, "The pane is on the left, the chat on the right")
+    }
+
+    func testSidewaysTapOpensMealBesideChat() throws {
+        let (app, input) = try launchCoach()
+        send("Two eggs, three bread slices and salad", app, input)
+        let link = app.buttons["coachMealLink"]
+        XCTAssertTrue(link.waitForExistence(timeout: 20)); link.tap()
+        let meal = app.navigationBars["Meal"]
+        XCTAssertTrue(meal.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(meal.frame.maxX, input.frame.minX + 1, "The meal opens in the pane, not over the chat")
+        XCTAssertTrue(input.isHittable, "The composer stays usable beside the meal")
+        meal.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5), "Back returns the pane to Today")
+        XCTAssertFalse(meal.exists)
+    }
+
+    func testSidewaysQuestionOffersProgressInPane() throws {
+        let (app, input) = try launchCoach()
+        send("Show my weekly report", app, input)
+        let followUp = app.buttons["coachFollowUp-progress"]
+        XCTAssertTrue(followUp.waitForExistence(timeout: 20), "A reply that read progress offers it"); followUp.tap()
+        let progress = app.navigationBars["Progress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(progress.frame.maxX, input.frame.minX + 1, "Progress opens in the pane")
+        XCTAssertTrue(input.exists, "Coach stays the selected tab")
+    }
+
+    func testSidewaysWeightChangeMovesPaneToProgress() throws {
+        let (app, input) = try launchCoach()
+        send("This morning I weighed 70 kg", app, input)
+        let progress = app.navigationBars["Progress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 20), "A weight Coach saved shows where it landed")
+        XCTAssertLessThanOrEqual(progress.frame.maxX, input.frame.minX + 1)
+    }
+
+    func testSidewaysChangeOnAnotherDayShowsThatDay() throws {
+        let (app, input) = try launchCoach()
+        send("Yesterday I had dessert", app, input)
+        let diary = app.navigationBars["Diary"]
+        XCTAssertTrue(diary.waitForExistence(timeout: 20), "A meal Coach saved on another day shows that day")
+        XCTAssertLessThanOrEqual(diary.frame.maxX, input.frame.minX + 1)
+    }
+
+    func testSidewaysTapOpensAnotherDaysMealBesideChat() throws {
+        let (app, input) = try launchCoach()
+        send("Yesterday I had dessert", app, input)
+        XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 20))
+        app.buttons["coachMealLink"].tap()
+        let meal = app.navigationBars["Meal"]
+        XCTAssertTrue(meal.waitForExistence(timeout: 5), "Yesterday's meal opens from its card while the pane shows that day")
+        XCTAssertLessThanOrEqual(meal.frame.maxX, input.frame.minX + 1)
+        XCTAssertTrue(app.buttons["deleteMeal"].exists || app.buttons["Meal actions"].exists, "The full meal loaded, not a placeholder")
+    }
+
+    func testExpandedChatOpensAnotherDaysMealOverTheChat() throws {
+        let (app, input) = try launchCoach()
+        send("Yesterday I had dessert", app, input)
+        XCTAssertTrue(app.navigationBars["Diary"].waitForExistence(timeout: 20))
+        app.buttons["coachExpand"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5), "Expanding shows the chat, not what the pane held")
+        XCTAssertFalse(app.navigationBars["Diary"].exists)
+        app.buttons["coachMealLink"].tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5), "A card opens its meal over the expanded chat")
+    }
+
+    func testDeletingPaneMealReturnsToToday() throws {
+        let (app, input) = try launchCoach()
+        send("Two eggs, three bread slices and salad", app, input)
+        let link = app.buttons["coachMealLink"]
+        XCTAssertTrue(link.waitForExistence(timeout: 20)); link.tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+        app.buttons["Meal actions"].tap()
+        app.buttons["deleteMeal"].tap()
+        app.alerts.buttons["Delete meal"].tap()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10), "A deleted meal leaves the pane on Today")
+        XCTAssertFalse(app.navigationBars["Meal"].exists)
+    }
+
+    func testUndoingPaneMealReturnsToToday() throws {
+        let (app, input) = try launchCoach()
+        send("Two eggs, three bread slices and salad", app, input)
+        let link = app.buttons["coachMealLink"]
+        XCTAssertTrue(link.waitForExistence(timeout: 20)); link.tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+        app.buttons["coachUndo"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10), "An undone meal leaves the pane on Today, not an empty detail")
+        XCTAssertFalse(app.navigationBars["Meal"].exists)
+    }
+
+    func testSidewaysChatExpandsAndCollapses() throws {
+        let (app, input) = try launchCoach()
+        XCTAssertTrue(pane(app).waitForExistence(timeout: 5))
+        input.tap(); input.typeText("draft text")
+        let besideWidth = input.frame.width
+        let expand = app.buttons["coachExpand"].firstMatch
+        XCTAssertTrue(expand.waitForExistence(timeout: 5)); expand.tap()
+        // Expanded, the chat takes the screen and the side pane is gone; Today keeps its own tab.
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !self.pane(app).exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "The side pane leaves")
+        XCTAssertGreaterThan(input.frame.width, besideWidth + 100, "The chat is wider than its half")
+        XCTAssertLessThan(input.frame.minX, app.windows.firstMatch.frame.midX, "The chat reaches into the left half")
+        XCTAssertEqual(input.value as? String, "draft text", "The draft survives expanding")
+        app.buttons["coachExpand"].firstMatch.tap()
+        XCTAssertTrue(pane(app).waitForExistence(timeout: 5), "Collapsed, the side pane is back")
+        XCTAssertLessThanOrEqual(pane(app).frame.maxX, input.frame.minX + 1)
+        XCTAssertEqual(input.value as? String, "draft text", "The draft survives collapsing")
+    }
+
+    func testUprightTapStillPushesOverChat() throws {
+        let (app, input) = try launchCoach(wide: false)
+        send("Two eggs, three bread slices and salad", app, input)
+        let link = app.buttons["coachMealLink"]
+        XCTAssertTrue(link.waitForExistence(timeout: 20)); link.tap()
+        XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
+        XCTAssertFalse(pane(app).exists, "Upright has no side pane")
+        XCTAssertFalse(input.exists, "Upright the meal covers the chat, as before")
+    }
+
+    func testSidewaysDiarySplitsSummaryAndRecords() throws {
         let app = launch(wide: true)
-        try XCTSkipIf(app.windows.firstMatch.frame.width < 760, "Needs the sideways inner display, wider than the readable width")
+        try XCTSkipIf(app.windows.firstMatch.frame.width < 760, "Needs the sideways inner display")
         app.buttons["Diary"].firstMatch.tap()
-        let intake = app.staticTexts["Recorded intake"]
-        XCTAssertTrue(intake.waitForExistence(timeout: 10))
-        XCTAssertGreaterThan(intake.frame.minX, 70, "Diary is capped and centered, not stretched")
+        let summary = app.descendants(matching: .any)["diarySummaryColumn"]
+        let records = app.descendants(matching: .any)["diaryRecordsColumn"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        XCTAssertTrue(records.exists)
+        XCTAssertLessThanOrEqual(summary.frame.maxX, records.frame.minX + 1)
+        XCTAssertLessThan(app.descendants(matching: .any)["diaryWeekStrip"].frame.midX, records.frame.minX, "The week strip stays with the day's summary")
+        let meal = app.descendants(matching: .any)["historyMeal"].firstMatch
+        XCTAssertTrue(meal.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(meal.frame.minX, records.frame.minX - 1, "Meals sit in the second column")
+    }
+
+    func testUprightDiaryStaysOneColumn() throws {
+        let app = launch(wide: false)
+        let window = app.windows.firstMatch.frame
+        try XCTSkipIf(window.width > window.height, "Needs an upright window: run Closed, or rotate the open Duo upright")
+        app.buttons["Diary"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["diaryWeekStrip"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["diaryRecordsColumn"].exists)
     }
 
     func testSidewaysProgressUsesTwoColumns() {

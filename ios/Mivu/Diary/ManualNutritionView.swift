@@ -6,14 +6,16 @@ struct ManualNutritionDraft: Equatable {
     var submissionID = UUID()
     var name = ""
     var quantity = "1"
-    var unit = "serving"
+    /// The person edits the unit as text, so it starts in their language and is saved as written.
+    static let defaultUnit = FoodItem.shownUnit("serving")
+    var unit = defaultUnit
     var kcal = ""
     var carbs = ""
     var protein = ""
     var fat = ""
 
     private(set) var frozenPayload: ManualNutritionPayload?
-    var isDirty: Bool { !name.isEmpty || quantity != "1" || unit != "serving" || ![kcal, carbs, protein, fat].allSatisfy(\.isEmpty) }
+    var isDirty: Bool { !name.isEmpty || quantity != "1" || unit != Self.defaultUnit || ![kcal, carbs, protein, fat].allSatisfy(\.isEmpty) }
     func item() throws -> FoodItem {
         func number(_ text: String) -> Double? { Double(text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")) }
         let strings = [kcal, carbs, protein, fat]
@@ -71,15 +73,15 @@ struct ManualNutritionView: View {
                 Section("Food") {
                     TextField("Food name", text: $draft.name).font(.title2.weight(.semibold)).padding(.vertical, 8)
                         .focused($editingField, equals: "Name").accessibilityIdentifier("manualFoodName")
-                    numberField("Amount", text: $draft.quantity, identifier: "manualAmount")
+                    numberField(String(localized: "Amount"), text: $draft.quantity, identifier: "manualAmount")
                     TextField("Unit", text: $draft.unit).focused($editingField, equals: "Unit").frame(minHeight: 44)
                         .accessibilityIdentifier("manualUnit")
                 }
                 Section {
-                    numberField("Energy (kcal)", text: $draft.kcal, identifier: "manualCalories")
-                    numberField("Protein (g)", text: $draft.protein, identifier: "manualProtein")
-                    numberField("Carbs (g)", text: $draft.carbs, identifier: "manualCarbs")
-                    numberField("Fat (g)", text: $draft.fat, identifier: "manualFat")
+                    numberField(String(localized: "Energy (kcal)"), text: $draft.kcal, identifier: "manualCalories")
+                    numberField(String(localized: "Protein (g)"), text: $draft.protein, identifier: "manualProtein")
+                    numberField(String(localized: "Carbs (g)"), text: $draft.carbs, identifier: "manualCarbs")
+                    numberField(String(localized: "Fat (g)"), text: $draft.fat, identifier: "manualFat")
                 } header: { Text("Nutrition for this amount") } footer: {
                     Text("Enter at least one nutrient. Leave unknown values blank; zero means a known zero. Saved as entered manually.")
                 }
@@ -122,7 +124,6 @@ struct ManualNutritionView: View {
             } message: { Text("Your unsaved food and nutrition will be discarded.") }
             .task { if ownership == nil { ownership = model.selection } }
         }
-        .environment(\.locale, Locale(identifier: "en")).environment(\.layoutDirection, .leftToRight)
     }
     private func numberField(_ title: String, text: Binding<String>, identifier: String) -> some View {
         Group {
@@ -145,7 +146,7 @@ struct ManualNutritionView: View {
                     guard model.selection == token else { return }
                     reconciledMealID = committed.meal.id
                     draft.releaseUncommittedIdentity()
-                    message = "Your earlier food was saved. These changed values have not been saved."
+                    message = String(localized: "Your earlier food was saved. These changed values have not been saved.")
                     await model.loadMeal(committed.meal.id)
                     return
                 }
@@ -173,7 +174,7 @@ struct ManualNutritionView: View {
                 onSaved(result.meal.id); dismiss()
             } else if model.selection == token, model.manualDayChanged {
                 draft.releaseUncommittedIdentity(); message = DiaryError.ambiguousDay.localizedDescription // nothing was saved; the next Save re-resolves the day
-            } else if model.selection == token { message = model.errorMessage ?? "Could not confirm this save. Retry with the same food to check it safely." }
+            } else if model.selection == token { message = model.errorMessage ?? String(localized: "Could not confirm this save. Retry with the same food to check it safely.") }
         } catch DiaryError.ambiguousDay { draft.releaseUncommittedIdentity(); message = DiaryError.ambiguousDay.localizedDescription }
         catch { if model.selection == token { message = error.localizedDescription } }
     }

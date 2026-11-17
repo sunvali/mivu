@@ -143,8 +143,14 @@ extension DiaryTransaction {
 }
 
 func diaryDateOnlyInstant(_ date: String, zone: String) throws -> Date {
-    guard validLocalDate(date), TimeZone(identifier: zone) != nil else { throw DiaryError.invalidData }
-    let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.timeZone = TimeZone(identifier: zone); formatter.dateFormat = "yyyy-MM-dd HH:mm"; formatter.isLenient = false
-    guard let value = formatter.date(from: date + " 12:00") else { throw DiaryError.invalidData }; return value
+    guard validLocalDate(date), let value = diaryLocalInstant(date + " 12:00", zone: zone) else { throw DiaryError.invalidData }; return value
 }
+private func localClockFormatter(zone: String) -> DateFormatter? {
+    guard let timeZone = TimeZone(identifier: zone) else { return nil }
+    let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.timeZone = timeZone; formatter.dateFormat = "yyyy-MM-dd HH:mm"; formatter.isLenient = false
+    return formatter
+}
+/// The instant of a local 24-hour `yyyy-MM-dd HH:mm` wall clock, or nil when it is not valid in that zone.
+func diaryLocalInstant(_ clock: String, zone: String) -> Date? { localClockFormatter(zone: zone)?.date(from: clock) }
+func diaryLocalClock(_ at: Date, zone: String) -> String { localClockFormatter(zone: zone)?.string(from: at) ?? "" }

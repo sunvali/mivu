@@ -190,11 +190,11 @@ private final class CoachNavigationReadFence: Sendable {
     }
     private static func quote(_ turn: CoachExchangeSummary, fromPip: Bool) -> CoachReply {
         let text = (fromPip ? turn.assistantText ?? "" : turn.text).trimmingCharacters(in: .whitespacesAndNewlines)
-        return CoachReply(target: .message(turnID: turn.id, fromPip: fromPip), excerpt: text.isEmpty ? "Photo" : String(text.prefix(280)))
+        return CoachReply(target: .message(turnID: turn.id, fromPip: fromPip), excerpt: text.isEmpty ? String(localized: "Photo") : String(text.prefix(280)))
     }
     /// Asks Coach to finish what an incomplete exchange could not, quoting what already saved.
     func finishRest(of turn: CoachExchangeSummary) async {
-        await sendTap(turn.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Finish the rest" : turn.text, reply: Self.quote(turn, fromPip: true))
+        await sendTap(turn.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "Finish the rest") : turn.text, reply: Self.quote(turn, fromPip: true))
     }
     /// Answers Coach's question with one tap: the chosen record is quoted and the label is the message.
     func answer(_ target: CoachReply.Target, label: String, excerpt: String? = nil) async {
@@ -255,7 +255,7 @@ private final class CoachNavigationReadFence: Sendable {
         } catch {
             traceHistoryNavigation("catch", request, generation: generation, fence: fence)
             guard generation == seekGeneration, diary.selection == owner, !Task.isCancelled else { return false }
-            errorMessage = "This conversation is unavailable for the current diary."
+            errorMessage = String(localized: "This conversation is unavailable for the current diary.")
             return false
         }
     }
@@ -368,7 +368,7 @@ private final class CoachNavigationReadFence: Sendable {
             if followsLatest, let timeline { await timeline.jumpToLatest() }
             return true
         } catch {
-            if diary.selection == token, !diary.isChangingProfile { errorMessage = "Could not save on this iPhone. Your input is still here." }
+            if diary.selection == token, !diary.isChangingProfile { errorMessage = String(localized: "Could not save on this iPhone. Your input is still here.") }
             return false
         }
     }
@@ -411,7 +411,7 @@ private final class CoachNavigationReadFence: Sendable {
         do {
             try await captureExternal(profileID: entry.profileID, entry.text, submissionID: entry.id, capturedAt: entry.capturedAt)
             try inbox?.remove(entry.id)
-        } catch { errorMessage = "Could not save on this iPhone. Your input is still here." }
+        } catch { errorMessage = String(localized: "Could not save on this iPhone. Your input is still here.") }
         loadQueuedSiri()
     }
     func discardQueued(_ entry: CoachInbox.Entry) {
@@ -501,6 +501,8 @@ private final class CoachNavigationReadFence: Sendable {
                                 try await photoLimiter.withPermit { try PhotoImport.visionCopies(originals) }
                             }, onActivity: { phase in
                                 await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
+                            }, onConsulted: { read in
+                                await self.noteConsulted(read, turnID: turn.id)
                             }).run(turnID: turn.id, expectedProfileID: owner)
                         } catch {
                             guard !Task.isCancelled, diary.selection == selected else { break }
@@ -596,7 +598,7 @@ private final class CoachNavigationReadFence: Sendable {
         do {
             try await recoverLegacyCaptures(owner: owner)
             guard let turnID = try await diary.store.coachTurnForMeal(mealID, expectedProfileID: owner) else {
-                errorMessage = "This meal changed. Review it before retrying its earlier input."; return
+                errorMessage = String(localized: "This meal changed. Review it before retrying its earlier input."); return
             }
             await retry(turnID)
         } catch { errorMessage = message(for: error) }
@@ -660,6 +662,14 @@ private final class CoachNavigationReadFence: Sendable {
     func cancel() { activity = nil; activityTurnID = nil; worker?.cancel() }
     deinit { monitor.cancel() }
     func waitForWorker() async { await worker?.value }
+    // shortcut: session only, lost on relaunch; store with the turn if users miss the button.
+    private var consultedByTurn: (turnID: UUID, items: [CoachConsulted])?
+    /// What the engine read to answer this turn, in this session; empty for any other turn.
+    func consulted(_ turnID: UUID) -> [CoachConsulted] { consultedByTurn.flatMap { $0.turnID == turnID ? $0.items : nil } ?? [] }
+    private func noteConsulted(_ read: CoachConsulted, turnID: UUID) {
+        if consultedByTurn?.turnID != turnID { consultedByTurn = (turnID, []) }
+        if consultedByTurn?.items.contains(read) == false { consultedByTurn?.items.append(read) }
+    }
     private func reportActivity(_ phase: CoachActivity, workerID id: UUID, owner: UUID, turnID: UUID) async {
         guard active, presentationActive, !Task.isCancelled, workerID == id, diary.readModel?.head.profile.id == owner, !diary.isChangingProfile else { return }
         activity = phase; activityTurnID = turnID
@@ -761,16 +771,16 @@ private final class CoachNavigationReadFence: Sendable {
         return Set(turn.receipts.compactMap(\.workoutID)).compactMap { if case .workout(let workout, _) = receiptTargets[$0] { workout } else { nil } }
     }
     private func message(for error: Error) -> String {
-        if error as? ResponsesClient.Failure == .usageUnavailable { return "ChatGPT is busy right now. Your message is saved; try again soon." }
-        if ProbeRunner.isTransient(error) { return "You're offline. Your message is saved and I'll reply when you're back online." }
-        if error is CancellationError || error as? SessionError == .sessionChanged { return "The connection changed. Your message is saved; tap Try again." }
-        if error as? ResponsesClient.Failure == .quotaReached { return "You've reached your ChatGPT usage limit. Your message is saved; see Manage usage in Settings." }
-        if error as? DiaryError == .staleRevision { return "Something changed while I was working. Check it, then try again." }
+        if error as? ResponsesClient.Failure == .usageUnavailable { return String(localized: "ChatGPT is busy right now. Your message is saved; try again soon.") }
+        if ProbeRunner.isTransient(error) { return String(localized: "You're offline. Your message is saved and I'll reply when you're back online.") }
+        if error is CancellationError || error as? SessionError == .sessionChanged { return String(localized: "The connection changed. Your message is saved; tap Try again.") }
+        if error as? ResponsesClient.Failure == .quotaReached { return String(localized: "You've reached your ChatGPT usage limit. Your message is saved; see Manage usage in Settings.") }
+        if error as? DiaryError == .staleRevision { return String(localized: "Something changed while I was working. Check it, then try again.") }
         if error as? DiaryError == .invalidAmountUnitChange { return error.localizedDescription }
-        if error as? DiaryError == .ambiguousDay { return "Which day is this for?" }
-        if error as? CoachError == .ungroundedConfirmation { return "I need a little more detail to log that." }
-        if error as? DiaryError == .persistenceFailed { return "Couldn't save that. Your message is kept; tap Try again." }
-        return "Something went wrong. Your message is saved; tap Try again." }
+        if error as? DiaryError == .ambiguousDay { return String(localized: "Which day is this for?") }
+        if error as? CoachError == .ungroundedConfirmation { return String(localized: "I need a little more detail to log that.") }
+        if error as? DiaryError == .persistenceFailed { return String(localized: "Couldn't save that. Your message is kept; tap Try again.") }
+        return String(localized: "Something went wrong. Your message is saved; tap Try again.") }
 }
 
 @MainActor enum CoachCaptureProtection {

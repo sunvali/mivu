@@ -4,10 +4,13 @@ import SwiftUI
 struct WorkoutDetailPresentation {
     let session: WorkoutSession
     var canEdit: Bool { !session.isFromHealth }
-    var sourceLine: String? { session.healthSource.map { "From \($0)" } }
+    var sourceLine: String? { session.healthSource.map { String(localized: "From \($0)") } }
     var burnLine: String {
-        guard let kcal = session.estimatedBurnKcal else { return session.isFromHealth ? "No calories from Health" : "Estimated burn: unknown" }
-        return session.isFromHealth ? "Active calories: \(kcal.formatted(.number.precision(.fractionLength(0)))) kcal" : "Estimated burn: \(kcal.formatted()) kcal"
+        guard let kcal = session.estimatedBurnKcal else {
+            return session.isFromHealth ? String(localized: "No calories from Health") : String(localized: "Estimated burn: unknown")
+        }
+        return session.isFromHealth ? String(localized: "Active calories: \(kcal.formatted(.number.precision(.fractionLength(0)))) kcal")
+            : String(localized: "Estimated burn: \(kcal.formatted()) kcal")
     }
 }
 
@@ -26,7 +29,8 @@ struct WorkoutOverlapWarning: View {
     }
 
     private var message: some View {
-        Label("\(coveredBy.healthSource ?? "Apple Health") may have this workout already. Remove yours?", systemImage: "exclamationmark.circle")
+        let source = coveredBy.healthSource ?? "Apple Health"
+        return Label("\(source) may have this workout already. Remove yours?", systemImage: "exclamationmark.circle")
             .font(.caption).foregroundStyle(Color.diarySecondary)
     }
 
@@ -41,7 +45,15 @@ struct WorkoutOverlapWarning: View {
         }
         .frame(minHeight: 44)
         .disabled(removing)
-        .accessibilityLabel("Remove your \(workout.kind.rawValue) workout")
+        .accessibilityLabel(removeLabel)
         .accessibilityIdentifier("workoutOverlapRemove")
+    }
+
+    private var removeLabel: String {
+        switch workout.kind {
+        case .strength: String(localized: "Remove your strength workout")
+        case .cardio: String(localized: "Remove your cardio workout")
+        case .other: String(localized: "Remove your other workout")
+        }
     }
 }

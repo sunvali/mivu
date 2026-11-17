@@ -35,6 +35,13 @@ struct DiaryReportTests {
         #expect(lines[3] == "2026-09-02,12:30,Burrito bowl,2100,40,10,5")
         #expect(!Self.range.mealsCSV.contains("Still analyzing") && !Self.range.mealsCSV.contains("Out of range"))
     }
+    @Test func csvMarksUTF8OnlyWhenItNeedsTo() {
+        #expect(!Self.range.mealsCSV.hasPrefix("\u{FEFF}"))
+        var snapshot = Self.snapshot()
+        snapshot.meals[0].items[0].name = "שקשוקה"
+        let csv = DiaryReport(snapshot, from: "2026-09-01", through: "2026-09-02").mealsCSV
+        #expect(csv.hasPrefix("\u{FEFF}") && csv.contains("2026-09-01,08:10,שקשוקה,310"))
+    }
     @Test func daysCSVComparesEachDayWithTheTargetInEffectThatDay() {
         let lines = Self.range.daysCSV.components(separatedBy: "\r\n")
         #expect(lines[0] == "Date,Calories (kcal),Calorie target (kcal),Protein (g),Protein target (g),Carbs (g),Fat (g),Weight")
@@ -59,6 +66,20 @@ struct DiaryReportTests {
         #expect(meals.contains("Burrito bowl") && !meals.contains("Still analyzing"))
         #expect(summary.contains("MIVU") && summary.contains("Made with Mivu") && summary.contains("Page 1 of \(document.pageCount)"))
         #expect(meals.contains("Page 2 of \(document.pageCount)"))
+    }
+    /// Where a string sits on a page: true when its left edge is right of the middle.
+    static func isOnTheRight(_ text: String, in document: PDFDocument, page index: Int) throws -> Bool {
+        let page = try #require(document.page(at: index))
+        let found = try #require(document.findString(text, withOptions: []).first { $0.pages.contains(page) })
+        return found.bounds(for: page).minX > page.bounds(for: .mediaBox).midX
+    }
+    @Test func pdfMirrorsForRightToLeft() throws {
+        let mirrored = try #require(PDFDocument(data: Self.range.pdfData(rightToLeft: true)))
+        let plain = try #require(PDFDocument(data: Self.range.pdfData(rightToLeft: false)))
+        #expect(try Self.isOnTheRight("Food log", in: mirrored, page: 0))
+        #expect(try !Self.isOnTheRight("Food log", in: plain, page: 0))
+        #expect(try Self.isOnTheRight("Burrito bowl", in: mirrored, page: 1))
+        #expect(try !Self.isOnTheRight("Burrito bowl", in: plain, page: 1))
     }
     @Test func lastDaysFollowTheWakingDayAcrossMidnight() {
         #expect(DiaryReport.lastDays(7, now: Self.date("2026-10-11T01:30:00Z"), zone: "UTC", cutoffHour: 4) == ("2026-10-04", "2026-10-10"))

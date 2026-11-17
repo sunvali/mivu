@@ -27,4 +27,16 @@ import Testing
         let body = try JSONSerialization.data(withJSONObject: ["model": "fixture", "input": [input], "store": false, "stream": true])
         #expect(body.count <= 8_388_608)
     }
+
+    @Test func aSinglePhotoKeepsEnoughDetailToReadALabel() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 3000, height: 4000), format: { let f = UIGraphicsImageRendererFormat(); f.scale = 1; return f }())
+        let original = try #require(renderer.image { context in
+            UIColor.white.setFill(); context.fill(CGRect(x: 0, y: 0, width: 3000, height: 4000))
+            for row in 0..<60 { ("Synthetic nutrient \(row)  12 g  per 100 g" as NSString).draw(at: CGPoint(x: 40, y: 40 + row * 64), withAttributes: [.font: UIFont.systemFont(ofSize: 40)]) }
+        }.jpegData(compressionQuality: 0.9))
+        let copy = try #require(try PhotoImport.visionCopies([original]).first)
+        let source = try #require(CGImageSourceCreateWithData(copy as CFData, nil))
+        let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        #expect(properties[kCGImagePropertyPixelHeight] as? Int == 2048)
+    }
 }

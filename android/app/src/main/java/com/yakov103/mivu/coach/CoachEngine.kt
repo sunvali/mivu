@@ -21,6 +21,7 @@ import com.yakov103.mivu.diary.validateCoachWrites
 import com.yakov103.mivu.diary.blankLikeSwift
 import com.yakov103.mivu.diary.CoachClarification
 import com.yakov103.mivu.diary.diaryDateLabel
+import com.yakov103.mivu.diary.diaryLocalClock
 import com.yakov103.mivu.diary.effectiveGoal
 import com.yakov103.mivu.diary.failCoachTurn
 import com.yakov103.mivu.diary.finishCoachTurn
@@ -130,7 +131,7 @@ class CoachEngine(
         val input = (listOf(CoachInferenceInput.Message(CoachInferenceInput.Role.developer, STABLE_RULES)) +
             coachHistoryMessages(context.recentTurns) +
             CoachInferenceInput.Message(CoachInferenceInput.Role.developer,
-                "${wakingDayInstruction(context.capturedAt, context.captureTimeZoneID)} ${reply}Context: " + coachJSON(CoachContext.serializer(), bare)) +
+                "The captured local clock is ${diaryLocalClock(context.capturedAt, context.captureTimeZoneID)}. ${wakingDayInstruction(context.capturedAt, context.captureTimeZoneID)} ${reply}Context: " + coachJSON(CoachContext.serializer(), bare)) +
             capturedInput(turn.text, images)).toMutableList()
         val knownMeals = context.meals.toMutableList()
         val foundMeals = mutableListOf<CoachMealCandidate>()
@@ -200,7 +201,7 @@ class CoachEngine(
             val clarification: CoachCommand.Clarification?
             try {
                 commands = response.calls.map {
-                    CoachTools.parse(it, knownMeals, currentTurn.receipts, knownWorkouts, foundMeals).estimatedBy(response.model)
+                    CoachTools.parse(it, knownMeals, currentTurn.receipts, knownWorkouts, foundMeals, context.captureTimeZoneID).estimatedBy(response.model)
                 }
                 writes = commands.mapNotNull { (it as? CoachCommand.Write)?.write }
                 clarification = commands.firstNotNullOfOrNull { it as? CoachCommand.Clarification }

@@ -110,7 +110,7 @@ struct CoachTimelineRefresh: Sendable {
                     continue
                 }
                 guard window.reset(page, request: intent.request) else {
-                    error = "The conversation page was invalid. Try again."; queryError = nil
+                    error = String(localized: "The conversation page was invalid. Try again."); queryError = nil
                     continue
                 }
                 error = nil; queryError = nil
@@ -248,7 +248,7 @@ struct CoachTimelineRefresh: Sendable {
                 let result = try await refreshSource(ids, identity, current)
                 guard isCurrent(current, identity: identity), refreshID == operation, mutation == mutationGeneration, !Task.isCancelled else { return }
                 guard window.refresh(result, requestedIDs: ids) else {
-                    error = "The conversation update was invalid. Try again."; queryError = nil
+                    error = String(localized: "The conversation update was invalid. Try again."); queryError = nil
                     return
                 }
                 error = nil; queryError = nil

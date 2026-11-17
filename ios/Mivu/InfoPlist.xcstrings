@@ -1,31 +1,121 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "NSCameraUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {"stringUnit": {"state": "translated", "value": "Mivu uses the camera to attach meal photos to your private diary."}},
-        "he": {"stringUnit": {"state": "translated", "value": "Mivu משתמש במצלמה כדי לצרף תמונות של ארוחות ליומן הפרטי שלך."}}
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "comment" : "Bundle display name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mivu"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
+        }
       }
     },
-    "NSHealthShareUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {"stringUnit": {"state": "translated", "value": "Mivu reads your workouts from Apple Health, such as those from Garmin Connect or Apple Watch, so their active calories can add to your daily food budget. They stay on this iPhone."}}
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mivu"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
+        }
       }
     },
-    "NSMicrophoneUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {"stringUnit": {"state": "translated", "value": "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved."}}
+    "NSCameraUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu uses the camera to attach meal photos to your private diary."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המצלמה משמשת להוספת תמונות של ארוחות ליומן הפרטי שלך."
+          }
+        }
       }
     },
-    "NSSpeechRecognitionUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {"stringUnit": {"state": "translated", "value": "Mivu turns your spoken meal into text on this iPhone so you can review it before sending."}}
+    "NSHealthShareUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu reads your workouts from Apple Health, such as those from Garmin Connect or Apple Watch, so their active calories can add to your daily food budget. They stay on this iPhone."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu קורא את האימונים שלך מ-Apple Health, למשל מ-Garmin Connect או מ-Apple Watch, כדי שהקלוריות הפעילות שלהם יתווספו לתקציב המזון היומי שלך. הם נשארים באייפון הזה."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המיקרופון מאזין כשמספרים על ארוחה, כדי לכתוב אותה בשיחה עם פיפ. השמע נשאר באייפון הזה ולא נשמר."
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu turns your spoken meal into text on this iPhone so you can review it before sending."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הדיבור הופך לטקסט באייפון הזה, כדי שאפשר יהיה לבדוק אותו לפני השליחה."
+          }
+        }
+      }
+    },
+    "Snap It" : {
+      "comment" : "Home-screen quick-action title: opens camera to log a meal",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snap It"
+          }
+        }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }
