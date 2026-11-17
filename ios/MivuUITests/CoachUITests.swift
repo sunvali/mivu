@@ -55,6 +55,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["ChatGPT plan unavailable"].exists)
         XCTAssertFalse(app.buttons["Enable ChatGPT plan usage"].exists)
         XCTAssertFalse(app.buttons["connectChatGPT"].exists)
+        XCTAssertFalse(app.links["Manage usage"].exists, "There is no plan usage to manage")
     }
 
     func testOfflineTextPhotoCapturePersistsAcrossRelaunchAndTabs() {
