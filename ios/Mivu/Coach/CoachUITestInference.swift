@@ -37,6 +37,11 @@ enum CoachUITestInference {
             return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: "no_such_tool", namespace: "mivu", arguments: "{}")], outputItems: [])
         }
         if !hasOutput, let result = try clarification(input, context: context) { return result }
+        if hasOutput, text.contains("clarify-options") {
+            // Like a real multi-food message: the clear foods save first, then the unclear one is asked about.
+            let id = UUID().uuidString, args = #"{"about":"Blorp spread","kind":"food","options":["Silan spread","Date jam"]}"#
+            return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: "ask_clarification", namespace: "mivu", arguments: args)], outputItems: [])
+        }
         if hasOutput || (text.contains("synthetic partial") && context.replyTo != nil) {
             // Progress questions get an invented number so UI tests see the app's fact-line fallback.
             let reply = text.contains("remaining budget") || text.contains("weekly report") ? "You have 9999 kcal left." : "All set."
@@ -110,9 +115,6 @@ enum CoachUITestInference {
         }
         if last.contains("clarify-candidates") {
             return try call("ask_clarification", ["kind": "meal", "candidates": context.meals.suffix(2).map { ["meal_id": $0.id.uuidString] }])
-        }
-        if last.contains("clarify-options") {
-            return try call("ask_clarification", ["kind": "food", "about": "Blorp spread", "options": ["Silan spread", "Date jam"]])
         }
         if last.contains("clarify-confirm"), let meal = context.meals.last {
             return try call("ask_clarification", ["kind": "confirm", "candidates": [["meal_id": meal.id.uuidString]]])

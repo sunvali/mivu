@@ -8227,6 +8227,16 @@
         }
       }
     },
+    "Logs this food" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רושם את המאכל הזה"
+          }
+        }
+      }
+    },
     "Looking at your photo…" : {
       "localizations" : {
         "he" : {
@@ -9879,6 +9889,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "פותח את היומן שלך"
+          }
+        }
+      }
+    },
+    "Opens a reply to type what it was" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פותח תשובה כדי לכתוב מה זה היה"
           }
         }
       }
@@ -12697,6 +12717,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "משהו השתנה בזמן שעבדתי. אפשר לבדוק ולנסות שוב."
+          }
+        }
+      }
+    },
+    "Something else? Type it" : {
+      "comment" : "Link under Pip's suggested foods; opens a reply to type the food instead.",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משהו אחר? אפשר לכתוב"
           }
         }
       }
