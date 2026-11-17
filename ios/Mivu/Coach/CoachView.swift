@@ -826,9 +826,9 @@ struct CoachView: View {
             }
             if let options = turn.question?.options {
                 let isLatest = coach.timeline?.window.isLatest(turn.id) == true
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
                     if let question = replyParts(turn).question {
-                        Text(CoachReplyLines.attributed(question)).font(.body.weight(.semibold)).directionFromContent(question)
+                        Text(CoachReplyLines.attributed(question)).font(.subheadline.weight(.semibold)).directionFromContent(question)
                             .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader).accessibilityIdentifier("coachOptionQuestion")
                     }
                     if isLatest {
@@ -849,8 +849,8 @@ struct CoachView: View {
                         .accessibilityIdentifier("coachOptionOther")
                     }
                 }
-                .disabled(coach.isWorking)
-                .padding(isLatest ? 14 : 0)
+                .font(.subheadline).disabled(coach.isWorking)
+                .padding(isLatest ? 12 : 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(isLatest ? Color.diaryAccent.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
