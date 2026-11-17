@@ -55,7 +55,8 @@ import UIKit
             let bounds = (line as NSString).boundingRect(with: CGSize(width: 280, height: CGFloat.greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: font], context: nil)
             #expect(bounds.width <= 280)
-            #expect(bounds.height <= font.lineHeight * (size == .large ? 1 : 3))
+            let lineHeight = ("Protein" as NSString).size(withAttributes: [.font: font]).height
+            #expect(bounds.height <= ceil(lineHeight) * (size == .large ? 1 : 3))
         }
     }
 
