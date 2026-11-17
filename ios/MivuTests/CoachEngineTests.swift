@@ -177,6 +177,19 @@ private actor CoachInputFixture {
         #expect(completed.assistantText?.contains("9999") == false)
         #expect(completed.assistantText?.contains("420") == true)
     }
+    @Test func quotedRelogLogsTheSameKcal() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let first = CoachFixture([result([call("log_food", logArgs)]), result(text: "Done")])
+        _ = try await CoachEngine(store: store, infer: { try await first.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let source = try #require(try await store.snapshotForExport().meals.first)
+        let again = try await capturedTurn(store, text: "For breakfast I had Eggs 2 egg, Bread 3 slice, Salad 1 bowl", photos: [], at: now, expectedProfileID: profile.id)
+        let copy = #"{"source_meal_id":"\#(source.id.uuidString)","expected_revision":\#(source.revision),"target_local_date":"2027-01-15","eaten_at":null}"#
+        let second = CoachFixture([result([call("get_meal", #"{"meal_id":"\#(source.id.uuidString)"}"#)]), result([call("copy_meal", copy, id: "copy")]), result(text: "Logged it again.")])
+        let completed = try await CoachEngine(store: store, infer: { try await second.infer($0, $1) }).run(turnID: again.id, expectedProfileID: profile.id)
+        let meals = try await store.snapshotForExport().meals
+        #expect(completed.state == .completed && completed.receipts.count == 1)
+        #expect(meals.count == 2 && meals.allSatisfy { $0.totals.kcal == 420 })
+    }
     @Test func conflictingOrForeignBatchWritesNothing() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let replies = CoachFixture([result([call("log_food", logArgs), call("log_food", logArgs, id: "other")])])

@@ -109,6 +109,7 @@ enum CoachTools {
             ("get_meal", "Retrieve actual owner-scoped meal by UUID before correction. omittedItemCount marks unavailable details requiring manual review.", object(["meal_id": string], required: ["meal_id"])),
             ("lookup_nutrition", "Search retrieved nutrition evidence; unavailable means use clearly uncertain estimates.", object(["query":string], required: ["query"])),
             ("log_food", "Log all new foods for this turn/date once, keeping new intake distinct from earlier reviews. For a clear repeat, reuse the most recent matching committed quantity/unit as an uncertain estimate, never an unaccepted proposal. Explicit current amounts or labels and visible changed food or serving override history; a same-food photo without a measurable amount keeps a clear matching committed portion. Interpret photos with their description. For photo-only intake, estimate the visible serving first, then a labelled typical serving when identified but unmeasurable, without claiming unseen mixture ratios are verified. On a saved manual meal append only newly named foods, preserving every existing item; correct existing foods with correct_item. Nutrition numbers are portion totals; for a photographed nutrition label set from_label true. Only retrieved evidence_id with grams replaces estimates. Without eaten_at, food for today's date is stamped with the send time and other dates stay date-only. Set review_first true when the user wants a proposal before totals.", object(["target_local_date":string, "items":["type":"array", "items":food], "eaten_at":["type": "string", "description": "Local wall clock yyyy-MM-dd HH:mm (24-hour, real calendar date) of eating, only when the user stated a time (\"at 8\", \"yesterday at noon\") or a relative one (\"an hour ago\"), worked out from the captured local clock; otherwise null. Never guess a time from a meal name."], "review_first":["type":"boolean"]], required: ["target_local_date", "items"])),
+            ("copy_meal", "Log again, unchanged, a saved meal the user quoted to repeat when their message keeps the same foods and amounts. Call get_meal on it first. Copies its items and nutrition exactly as a new meal on target_local_date. If they changed foods or amounts, or get_meal fails, use log_food instead.", object(["source_meal_id": string, "expected_revision": ["type": "integer"], "target_local_date": string, "eaten_at": ["type": "string", "description": "Same rules as log_food eaten_at; otherwise null."]], required: ["source_meal_id", "expected_revision", "target_local_date"])),
             ("correct_item", "Correct only quantity on a retrieved actual item, preserving its nutrition basis and sources.", object(["meal_id":string,"item_id":string,"expected_revision":["type":"integer"],"quantity":["type":"number"]], required: ["meal_id","item_id","expected_revision","quantity"])),
         ] + manualSchemas(food: food)
         let tools = schemas.map { ["type":"function", "name":$0.0, "description":$0.1, "parameters":$0.2, "strict":true] as [String: Any] }
@@ -132,6 +133,14 @@ enum CoachTools {
             guard let value = number(args[name]), value.rounded() == value, value >= Double(range.lowerBound), value <= Double(range.upperBound) else { throw CoachError.invalidArguments }; return Int(value)
         }
         func revision() throws -> Int { try integer("expected_revision", 1...999_999) }
+        // Only a local wall clock on the target calendar or waking day sets the time; a mismatch is dropped
+        // rather than failing the log, and legacy date or ISO syntax stays valid but ignored.
+        func eatenAt(on day: String) throws -> Date? {
+            if let zone, let clock = args["eaten_at"] as? String, let at = diaryLocalInstant(clock, zone: zone) {
+                return [diaryDateLabel(at, zone: zone), wakingDateLabel(at, zone: zone)].contains(day) ? at : nil
+            }
+            try unconfirmedTime("eaten_at"); return nil
+        }
         func unconfirmedTime(_ name: String) throws {
             guard let raw = args[name], !(raw is NSNull) else { return }
             guard let value = raw as? String else { throw CoachError.invalidArguments }
@@ -225,19 +234,22 @@ enum CoachTools {
         case "log_food":
             try keys(["target_local_date", "items", "eaten_at", "review_first"], ["target_local_date", "items"])
             let items = try foodItems(args["items"], evidence: evidence)
-            // Only a local wall clock on the target calendar or waking day sets the time; a mismatch is dropped
-            // rather than failing the log, and legacy date or ISO syntax stays valid but ignored.
-            let day = try string("target_local_date")
-            var eatenAt: Date?
-            if let zone, let clock = args["eaten_at"] as? String, let at = diaryLocalInstant(clock, zone: zone) {
-                if [diaryDateLabel(at, zone: zone), wakingDateLabel(at, zone: zone)].contains(day) { eatenAt = at }
-            } else { try unconfirmedTime("eaten_at") }
+            let day = try string("target_local_date"), eatenAt = try eatenAt(on: day)
             var reviewFirst = false
             if let raw = args["review_first"], !(raw is NSNull) {
                 guard let value = raw as? NSNumber, CFGetTypeID(value) == CFBooleanGetTypeID() else { throw CoachError.invalidArguments }
                 reviewFirst = value.boolValue
             }
             return .write(.food(date: day, items: items, eatenAt: eatenAt, reviewFirst: reviewFirst))
+        case "copy_meal":
+            // A quoted meal logged again unchanged: same foods and nutrition, fresh item IDs, as a new meal.
+            try keys(["source_meal_id", "expected_revision", "target_local_date", "eaten_at"], ["source_meal_id", "expected_revision", "target_local_date"])
+            let id = try uuid("source_meal_id"), expected = try revision()
+            guard let source = meals.first(where: { $0.id == id && $0.revision == expected }), !source.items.isEmpty else { throw CoachError.invalidArguments }
+            let items = source.items.map { var item = $0; item.id = UUID(); return item }
+            try validateItems(items)
+            let day = try date("target_local_date")
+            return .write(.food(date: day, items: items, eatenAt: try eatenAt(on: day), reviewFirst: false))
         case "get_meals_for_date":
             try keys(["target_local_date", "after_meal_id"], ["target_local_date"])
             let cursor = args["after_meal_id"] == nil || args["after_meal_id"] is NSNull ? nil : try uuid("after_meal_id")
