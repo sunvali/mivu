@@ -183,6 +183,7 @@ struct DiaryRootView: View {
             if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
             await services.start(createDefaultProfile: createDefaultProfile)
+            await services.startHealth()
             // The first Siri use may have been on a locked phone, where no permission prompt can show.
             if hadSiriPrompts { await MealNotification.requestPermissionIfNeeded() }
         }
@@ -203,6 +204,7 @@ struct DiaryRootView: View {
         .onChange(of: model.readModel?.profile.id) { _, _ in
             coach.draft = MealDraft(); coach.errorMessage = nil
             resetCompanionProfile()
+            if hasLoaded { Task { await services.startHealth() } }
         }
         .onChange(of: connection.sessionRevision) { _, _ in coach.cancel() }
         .onChange(of: connection.planAuthorized) { _, authorized in if authorized { coach.resume() } }
@@ -217,7 +219,7 @@ struct DiaryRootView: View {
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
-            if value == .active { syncDayProgressActivity(model.readModel) }
+            if value == .active { syncDayProgressActivity(model.readModel); if hasLoaded { Task { await services.startHealth() } } }
             if value != .active {
                 companionRuntime.stop()
                 if value == .background {
@@ -867,7 +869,7 @@ struct TodayView: View {
     }
 
     @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay) -> some View {
-        let report = ProgressAnalytics.daily(readModel: snapshot)
+        let report = ProgressAnalytics.daily(readModel: snapshot), covered = ExerciseCredit.daily(snapshot.workouts).coveredBy
         if let target = report.goal?.targets.kcal {
             VStack(alignment: .leading, spacing: 8) {
                 ViewThatFits(in: .horizontal) {
@@ -887,8 +889,21 @@ struct TodayView: View {
                         .accessibilityValue("\(recorded.formatted(.number.precision(.fractionLength(0)))) of \(target.formatted(.number.precision(.fractionLength(0)))) kilocalories")
                 }
                 if report.goal?.exerciseCreditEnabled == true, let adjusted = report.exerciseAdjustedKcalRemaining {
-                    Text("Exercise-adjusted remaining: \(adjusted.formatted(.number.precision(.fractionLength(0)))) kcal")
-                        .font(.caption).foregroundStyle(Color.diarySecondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Exercise-adjusted remaining: \(adjusted.formatted(.number.precision(.fractionLength(0)))) kcal")
+                        if let health = report.healthBurnKcal, health > 0 {
+                            Text("Includes \(health.formatted(.number.precision(.fractionLength(0)))) kcal from Apple Health")
+                        }
+                        if report.uncountedWorkoutCount > 0 {
+                            Text(report.uncountedWorkoutCount == 1 ? "1 workout without calories" : "\(report.uncountedWorkoutCount) workouts without calories")
+                        }
+                    }
+                    .font(.caption).foregroundStyle(Color.diarySecondary)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("todayHealthCredit")
+                }
+                ForEach(snapshot.workouts.filter { covered[$0.id] != nil }) { workout in
+                    WorkoutOverlapWarning(model: model, workout: workout, coveredBy: covered[workout.id]!)
                 }
             }.accessibilityIdentifier("todayGoalSummary")
         } else {

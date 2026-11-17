@@ -8,6 +8,12 @@
         "he": {"stringUnit": {"state": "translated", "value": "Mivu משתמש במצלמה כדי לצרף תמונות של ארוחות ליומן הפרטי שלך."}}
       }
     },
+    "NSHealthShareUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Mivu reads your workouts from Apple Health, such as those from Garmin Connect or Apple Watch, so their active calories can add to your daily food budget. They stay on this iPhone."}}
+      }
+    },
     "NSMicrophoneUsageDescription": {
       "extractionState": "manual",
       "localizations": {

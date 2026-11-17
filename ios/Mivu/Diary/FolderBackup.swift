@@ -242,6 +242,7 @@ actor FolderBackup {
     }
 
     func save(_ snapshot: DiarySnapshot, generation: UUID) throws {
+        let snapshot = snapshot.withoutHealthWorkouts()
         let selection = try selectedConfiguration(snapshot.profile.id, generation: generation)
         guard selection.bookmark != nil else { return }
         do {
@@ -263,7 +264,8 @@ actor FolderBackup {
         var ticket: DiaryExportTicket?
         do {
             let cloned = try await coordinator.makeClone(request); ticket = cloned
-            let archive = try await coordinator.archiveContent(cloned)
+            let content = try await coordinator.archiveContent(cloned).snapshot.withoutHealthWorkouts()
+            let archive = (snapshot: content, data: try DiaryArchive.encode(content))
             let intent = try beginSave(archive.snapshot, generation: generation)
             let folder = try resolve(intent.configuration.bookmark!)
             let target = folder.appendingPathComponent(Self.filename(profileID: request.profileID))

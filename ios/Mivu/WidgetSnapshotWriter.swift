@@ -11,7 +11,7 @@ extension WidgetSnapshot {
             return
         }
         let report = ProgressAnalytics.daily(readModel: readModel)
-        self.init(day: report.localDate, eaten: report.foodTotals?.kcal ?? 0, target: report.goal?.targets.kcal,
+        self.init(day: report.localDate, eaten: report.foodTotals?.kcal ?? 0, target: report.creditedKcalTarget,
                   hasDiary: true, rolloverAt: rolloverAt, writtenAt: now)
     }
 }

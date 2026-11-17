@@ -388,15 +388,16 @@ struct DiaryProgressView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(session.kind.title).font(.headline)
-                                Text("\(workoutDate(session)) · \(session.durationMinutes) minutes")
+                                Text("\(workoutDate(session)) · \(session.durationMinutes) minutes\(session.healthSource.map { " · from \($0)" } ?? "")")
                                     .font(.subheadline).foregroundStyle(Color.diarySecondary)
                             }
                             .frame(minHeight: 44, alignment: .leading)
                         }
                         .accessibilityIdentifier("workoutRow")
-                        .contextMenu { askPipButton("askPipWorkout", workoutPrompt(session)) }
-                        .swipeActions(edge: .leading) { askPipButton("askPipWorkout", workoutPrompt(session)).tint(.diaryAccent) }
-                        .accessibilityAction(named: "Ask Pip", workoutPrompt(session))
+                        // Health workouts never go to Coach, so they offer no Ask Pip.
+                        .contextMenu { if !session.isFromHealth { askPipButton("askPipWorkout", workoutPrompt(session)) } }
+                        .swipeActions(edge: .leading) { if !session.isFromHealth { askPipButton("askPipWorkout", workoutPrompt(session)).tint(.diaryAccent) } }
+                        .accessibilityActions { if !session.isFromHealth { Button("Ask Pip", action: workoutPrompt(session)) } }
                     }
                     if loadedWorkouts == workoutRequest, workoutPage?.hasMore == true {
                         Button("Older workouts") { workoutBefore = workoutPage?.cursor }.frame(minHeight: 44)
@@ -551,7 +552,12 @@ struct WorkoutDetailView: View {
                     Text(session.kind.title).font(.title2.weight(.semibold))
                     Text("\(session.durationMinutes) minutes")
                     Text(session.timePrecision == .dateOnly ? "Time unspecified" : session.performedAt.formatted(date: .omitted, time: .shortened))
-                    Text(session.estimatedBurnKcal.map { "Estimated burn: \($0.formatted()) kcal" } ?? "Estimated burn: unknown")
+                    Text(WorkoutDetailPresentation(session: session).burnLine)
+                    if let source = WorkoutDetailPresentation(session: session).sourceLine { Text(source).foregroundStyle(Color.diarySecondary) }
+                    // shortcut: only today's workouts are checked for overlap; upgrade if past-day receipts need the warning.
+                    if let cover = ExerciseCredit.daily(model.readModel?.workouts ?? []).coveredBy[session.id] {
+                        WorkoutOverlapWarning(model: model, workout: session, coveredBy: cover)
+                    }
                 }
                 Section {
                     if session.exercises.isEmpty { Text("No exercise details recorded.") }
@@ -569,11 +575,13 @@ struct WorkoutDetailView: View {
                     Label { Text("Exercises") } icon: { Image(systemName: "dumbbell").foregroundStyle(Color.diaryWorkout) }
                 }
                 Section {
-                    Button("Edit workout") {
-                        guard let day else { return }
-                        editingWorkout = WorkoutEdit(session: session, localDate: day.localDate)
-                    }.frame(minHeight: 44)
-                        .accessibilityIdentifier("editWorkout")
+                    if WorkoutDetailPresentation(session: session).canEdit {
+                        Button("Edit workout") {
+                            guard let day else { return }
+                            editingWorkout = WorkoutEdit(session: session, localDate: day.localDate)
+                        }.frame(minHeight: 44)
+                            .accessibilityIdentifier("editWorkout")
+                    }
                     Button("Delete workout", role: .destructive) {
                         pendingDeletion = session
                     }.frame(minHeight: 44).accessibilityIdentifier("deleteWorkout")
@@ -608,8 +616,9 @@ struct WorkoutDetailView: View {
                 }
             }
             Button("Cancel", role: .cancel) { pendingDeletion = nil }
-        } message: { _ in
-            Text("This removes only this workout and its exercise details. Meals, weights and other workouts are preserved.")
+        } message: { session in
+            Text("This removes only this workout and its exercise details. Meals, weights and other workouts are preserved."
+                 + (session.isFromHealth ? " It won't be imported again." : ""))
         }
         .task(id: model.changeGeneration) { await loadSession() }
         .onChange(of: model.selection) { _, selected in
@@ -632,7 +641,7 @@ struct WorkoutDetailView: View {
         let generation = model.changeGeneration, request = UUID()
         requestID = request; loading = true; loadError = nil
         do {
-            let value = try await model.store.coachWorkout(id: sessionID, expectedProfileID: ownership.identity.profileID)
+            let value = try await model.store.workout(id: sessionID, expectedProfileID: ownership.identity.profileID)
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }
             let recordedDay = try await model.store.trackingDay(id: value.dayID, expectedProfileID: ownership.identity.profileID)
             guard !Task.isCancelled, model.selection == ownership, model.changeGeneration == generation, requestID == request else { return }

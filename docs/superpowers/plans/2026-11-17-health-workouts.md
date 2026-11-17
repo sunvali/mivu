@@ -19,6 +19,23 @@ HealthKit reader passes changes to a single validated store operation.
 
 **Spec:** `docs/superpowers/specs/2026-11-17-health-workouts-design.md`
 
+## Changes made during implementation
+
+- **Widget:** there's no `WidgetSnapshot.earnedKcal`. `DailyProgress.creditedKcalTarget`
+  (the target plus credited burn when credit is on) feeds both the widget and the
+  Live Activity target, so the widget code doesn't change.
+- **Sync:** `changes(since:anchor:)` returns the full window of workouts every time,
+  plus deletions since the anchor. A restored or reinstalled diary gets its recent
+  workouts back without resetting the anchor.
+- **No calories:** a Health workout with no active energy is stored with nil kcal,
+  not 0. It counts in `uncountedWorkoutCount`, and the earn-back line still shows,
+  as the spec requires.
+- **Reading workouts:** Coach reads through `coachWorkout`, which refuses Health
+  rows. The workout screen uses the new `DiaryStore.workout(id:expectedProfileID:)`.
+  Progress rows for Health workouts offer no Ask Pip.
+- **Exercise credit:** `DiaryStore.enableExerciseCredit(from:expectedProfileID:)`
+  turns credit on from today.
+
 ## Global Constraints
 
 - iOS only. Read-only HealthKit types: `HKObjectType.workoutType()` and
