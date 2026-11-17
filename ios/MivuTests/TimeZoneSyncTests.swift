@@ -13,16 +13,16 @@ struct TimeZoneSyncTests {
     }
     @Test func automaticFollowsTheDeviceAndAnnouncesAClockChange() {
         let d = TimeZoneSync.decide(state: auto("Asia/Jerusalem"), profileZone: "Asia/Jerusalem", deviceZone: "America/New_York", now: now)
-        #expect(d.newProfileZone == "America/New_York" && d.announce && d.state.lastSwitch?.from == "Asia/Jerusalem")
+        #expect(d.newProfileZone == "America/New_York" && d.announce && d.state.lastSwitch?.from == "Asia/Jerusalem" && d.state.lastSwitch?.announced == false)
     }
     @Test func sameOffsetSwitchIsSilent() {
         let d = TimeZoneSync.decide(state: auto("Europe/Paris"), profileZone: "Europe/Paris", deviceZone: "Europe/Berlin", now: now)
-        #expect(d.newProfileZone == "Europe/Berlin" && !d.announce)
+        #expect(d.newProfileZone == "Europe/Berlin" && !d.announce && d.state.lastSwitch?.announced == true)
     }
     @Test func flipBackWithinAnHourIsSilent() {
         let first = TimeZoneSync.decide(state: auto("Asia/Jerusalem"), profileZone: "Asia/Jerusalem", deviceZone: "Asia/Amman", now: now)
         let back = TimeZoneSync.decide(state: first.state, profileZone: "Asia/Amman", deviceZone: "Asia/Jerusalem", now: now + 1800)
-        #expect(back.newProfileZone == "Asia/Jerusalem" && !back.announce)
+        #expect(back.newProfileZone == "Asia/Jerusalem" && !back.announce && back.state.lastSwitch?.announced == true)
     }
     @Test func tripPinHoldsAwayAndReleasesAtHome() {
         let pin = TimeZoneState(mode: .pinned(zone: "Asia/Jerusalem", untilDeviceZone: "Asia/Jerusalem"), knownProfileZone: "Asia/Jerusalem")
@@ -41,5 +41,6 @@ struct TimeZoneSyncTests {
         store.save(auto("UTC"), for: b)
         #expect(store.state(for: a)?.mode == .pinned(zone: "Asia/Jerusalem", untilDeviceZone: nil) && store.state(for: b)?.mode == .automatic)
     }
+    @Test func unknownZoneIsNotAClockChange() { #expect(!TimeZoneSync.clockDiffers("Nope/Zone", "UTC", at: now)) }
     @Test func cityNames() { #expect(TimeZoneSync.city("America/New_York") == "New York" && TimeZoneSync.city("UTC") == "UTC") }
 }

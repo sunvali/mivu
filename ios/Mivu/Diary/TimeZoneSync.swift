@@ -41,12 +41,14 @@ enum TimeZoneSync {
         let announce = clockDiffers(profileZone, deviceZone, at: now)
             && state.lastSwitch.map { now.timeIntervalSince($0.at) >= 3600 } ?? true
         state.knownProfileZone = deviceZone
-        state.lastSwitch = TimeZoneSwitch(from: profileZone, to: deviceZone, at: now, announced: announce)
+        state.lastSwitch = TimeZoneSwitch(from: profileZone, to: deviceZone, at: now, announced: !announce)
         return TimeZoneDecision(state: state, newProfileZone: deviceZone, announce: announce)
     }
 
     static func clockDiffers(_ a: String, _ b: String, at: Date) -> Bool {
-        TimeZone(identifier: a)!.secondsFromGMT(for: at) != TimeZone(identifier: b)!.secondsFromGMT(for: at)
+        // An unknown identifier (corrupt backup) must not trap the foreground sync; treat it as no clock change.
+        guard let za = TimeZone(identifier: a), let zb = TimeZone(identifier: b) else { return false }
+        return za.secondsFromGMT(for: at) != zb.secondsFromGMT(for: at)
     }
 
     static func city(_ zoneID: String) -> String {
