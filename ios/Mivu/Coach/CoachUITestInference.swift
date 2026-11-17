@@ -111,6 +111,9 @@ enum CoachUITestInference {
         if last.contains("clarify-candidates") {
             return try call("ask_clarification", ["kind": "meal", "candidates": context.meals.suffix(2).map { ["meal_id": $0.id.uuidString] }])
         }
+        if last.contains("clarify-options") {
+            return try call("ask_clarification", ["kind": "food", "about": "Blorp spread", "options": ["Silan spread", "Date jam"]])
+        }
         if last.contains("clarify-confirm"), let meal = context.meals.last {
             return try call("ask_clarification", ["kind": "confirm", "candidates": [["meal_id": meal.id.uuidString]]])
         }

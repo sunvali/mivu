@@ -12,6 +12,8 @@ struct CoachTimelineRow: Equatable, Identifiable {
     var activity: CoachActivity?
     var fixtureBanner = false
     var isHighlighted = false
+    /// Latest-only controls (question chips, follow-ups) must leave a row once a newer exchange arrives.
+    var isLatest = false
 }
 
 /// One renderer: SwiftUI content in native self-sizing cells. It owns geometry only.

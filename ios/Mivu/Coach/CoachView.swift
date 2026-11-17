@@ -304,7 +304,7 @@ struct CoachView: View {
             result.append(CoachTimelineRow(id: .exchange(turn.id), exchange: turn,
                 targets: turn.receipts.map(coach.receiptTarget), undo: turn.receipts.map(coach.undoState), questionMeals: coach.linkedMeals(turn), activity: coach.activityTurnID == turn.id ? coach.activity : nil,
                 fixtureBanner: DiaryLaunch.isCoachInferenceFixture && turn.id == timeline.exchanges.first?.id,
-                isHighlighted: coach.highlightedTurnID == turn.id))
+                isHighlighted: coach.highlightedTurnID == turn.id, isLatest: timeline.window.isLatest(turn.id)))
         }
         if let empty = timeline.window.latestEmptySegment {
             result.append(CoachTimelineRow(id: .segment(empty.segmentID), date: empty.displayLocalDate))
@@ -779,11 +779,27 @@ struct CoachView: View {
             }
         }.frame(maxWidth: .infinity, alignment: .trailing)
     }
+    private func optionChips(_ options: [String], turn: CoachExchangeSummary) -> some View {
+        ForEach(options, id: \.self) { option in
+            Button { Task { await coach.answer(.message(turnID: turn.id, fromPip: true), label: option, excerpt: turn.assistantText) } } label: {
+                Text(option).frame(minHeight: 44)
+            }
+            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
+            .accessibilityIdentifier("coachOptionChip")
+        }
+    }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if let question = turn.question, !question.candidates.isEmpty, coach.timeline?.window.isLatest(turn.id) == true {
                 CoachQuestionChips(question: question, meals: coach.linkedMeals(turn), model: coach.diary) { target, label, excerpt in
                     Task { await coach.answer(target, label: label, excerpt: excerpt) }
+                }.disabled(coach.isWorking)
+            }
+            if let options = turn.question?.options, coach.timeline?.window.isLatest(turn.id) == true {
+                // Each option answers Pip's question as a reply, so the original amount and meal stay in context.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { optionChips(options, turn: turn) }
+                    VStack(alignment: .leading, spacing: 8) { optionChips(options, turn: turn) }
                 }.disabled(coach.isWorking)
             }
             if turn.state != .completed {

@@ -18,6 +18,19 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [added], timeout: 20), .completed, "A receipt card follows the tap")
     }
 
+    func testFoodOptionTapLogsTheChosenFood() {
+        let app = launch()
+        send("clarify-options", in: app)
+        let option = app.buttons["coachOptionChip"].firstMatch
+        XCTAssertTrue(option.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(identifier: "coachOptionChip").count, 2)
+        XCTAssertGreaterThanOrEqual(option.frame.height, 44)
+        XCTAssertEqual(option.label, "Silan spread")
+        option.tap()
+        XCTAssertTrue(option.waitForNonExistence(timeout: 20), "Options leave the answered exchange")
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "coachReceiptQuantity").firstMatch.waitForExistence(timeout: 20), "The picked food is logged")
+    }
+
     func testChipsAtLargestDynamicType() {
         let app = launch(largeType: true)
         send("Synthetic meal", in: app); send("Synthetic review", in: app); send("clarify-candidates", in: app)
