@@ -56,7 +56,7 @@ extension DiaryDatabase {
                 return .active(dayID: id, localDate: day.localDate, timeZoneID: day.timeZoneID, confirmPrevious: false)
             case (.newCurrent, .newDay):
                 let date = try transaction.newDayLabel(at: at)
-                let day = try transaction.manualDay(localDate: date, timeZoneID: head.profile.timeZoneID)
+                let day = try transaction.dayForDate(date)
                 return .newCurrent(dayID: day?.id ?? UUID(), localDate: date, timeZoneID: head.profile.timeZoneID, previousActiveDayID: head.activeDayID)
             default: throw DiaryError.ambiguousDay
             }
@@ -91,13 +91,6 @@ extension DiaryTransaction {
         case .append: _ = try mealRecord(id: payload.mealID)
         }
         return nil
-    }
-    func manualDay(localDate: String, timeZoneID: String) throws -> TrackingDay? {
-        let rows = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?",
-            values: [.text(localDate)], limit: 2)
-        guard rows.count <= 1 else { throw DiaryError.invalidData }
-        guard let row = rows.first else { return nil }
-        let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day
     }
     func manualRecordedDay(_ target: ManualNutritionTarget) throws -> TrackingDay {
         let day = try database.trackingDay(id: target.day.id)

@@ -258,10 +258,13 @@ extension DiaryTransaction {
     func nextOrdinal(_ table: String, parent: UUID? = nil) throws -> Int {
         try database.mutationInteger("SELECT COALESCE(MAX(ordinal) + 1, 0) FROM \(table) \(parent == nil ? "" : "WHERE parent = ?")", parent.map { [.text($0.uuidString)] } ?? [])
     }
-    func resolveDay(localDate: String, timeZoneID: String, at: Date, newDayID: UUID? = nil) throws -> TrackingDay {
-        // One day per date, whatever zone it was created in; duplicates from older data resolve to the active day, then the earliest.
+    /// One day per date, whatever zone it was opened in; duplicates from older data resolve to the active day, then the earliest.
+    func dayForDate(_ localDate: String) throws -> TrackingDay? {
         let days = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(localDate)]).map { try database.decode(TrackingDay.self, $0) }
-        if let day = days.first(where: { $0.id == head.activeDayID }) ?? days.min(by: { $0.startAt < $1.startAt }) {
+        return days.first { $0.id == head.activeDayID } ?? days.min { $0.startAt < $1.startAt }
+    }
+    func resolveDay(localDate: String, timeZoneID: String, at: Date, newDayID: UUID? = nil) throws -> TrackingDay {
+        if let day = try dayForDate(localDate) {
             try validateTrackingDayFields(day)
             guard newDayID == nil || newDayID == day.id else { throw DiaryError.invalidData }; return day
         }

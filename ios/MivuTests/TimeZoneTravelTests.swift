@@ -48,6 +48,9 @@ import Testing
         try await move(store, profile, to: "America/New_York")
         let saved = try await store.setWeight(dayLocalDate: "2026-11-17", value: 70, unit: "kg", measuredAt: DayTests.date("2026-11-18T02:30:00Z"), expectedRevision: nil, expectedProfileID: profile.id)
         #expect(saved.dayID == day.id)
+        for outside in ["2026-11-16T10:00:00Z", "2026-11-18T09:00:00Z"] { // before the day started; New York waking date already Nov 18
+            await #expect(throws: DiaryError.invalidData) { _ = try await store.setWeight(dayLocalDate: "2026-11-17", value: 71, unit: "kg", measuredAt: DayTests.date(outside), expectedRevision: saved.revision, expectedProfileID: profile.id) }
+        }
     }
     @Test func duplicateLegacyDatesResolveToActiveThenEarliest() async throws {
         let profile = DiaryProfile(name: "Synthetic", timeZoneID: "Pacific/Honolulu")
