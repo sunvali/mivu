@@ -752,13 +752,28 @@ private func diaryUnitConversion(from previous: String, to edited: String) -> Do
 /// Tells Coach which waking day new intake goes to. In the first three hours after the cutoff it lets the model
 /// judge from the food: a late drink or fast food belongs to the night before, breakfast to the new day.
 enum WakingDayInstruction {
-    static func text(capturedAt: Date, zone: String, cutoffHour: Int = DayCutoff.hour) -> String {
-        let today = wakingDateLabel(capturedAt, zone: zone, cutoffHour: cutoffHour)
+    /// "Today" is the open diary day while the capture's waking date has not passed it, even where the local date is behind.
+    static func today(context: CoachContext, cutoffHour: Int = DayCutoff.hour) -> String {
+        let waking = wakingDateLabel(context.capturedAt, zone: context.captureTimeZoneID, cutoffHour: cutoffHour)
+        guard let open = context.days.first(where: { $0.id == context.activeDayID }), waking <= open.localDate else { return waking }
+        return open.localDate
+    }
+    /// The waking-day rule, plus where and when the person is on a travel day. Model-facing, so English only.
+    static func text(context: CoachContext, cutoffHour: Int = DayCutoff.hour) -> String {
+        let zone = context.captureTimeZoneID, at = context.capturedAt
+        let base = text(capturedAt: at, zone: zone, cutoffHour: cutoffHour, today: today(context: context, cutoffHour: cutoffHour))
+        guard let open = context.days.first(where: { $0.id == context.activeDayID }),
+              TimeZoneSync.clockDiffers(open.timeZoneID, zone, at: at) else { return base }
+        let clock = diaryLocalClock(at, zone: zone).split(separator: " ").last.map(String.init) ?? ""
+        return base + " Local time \(clock) in \(TimeZoneSync.city(zone)); arrived from \(TimeZoneSync.city(open.timeZoneID)) today; the open diary day is \(open.localDate). Times the person mentions are local."
+    }
+    static func text(capturedAt: Date, zone: String, cutoffHour: Int = DayCutoff.hour, today: String? = nil) -> String {
+        let today = today ?? wakingDateLabel(capturedAt, zone: zone, cutoffHour: cutoffHour)
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
         guard (cutoffHour..<cutoffHour + 3).contains(calendar.component(.hour, from: capturedAt)) else {
             return "The current waking day is \(today); log new intake to it unless the person names another day."
         }
-        let previous = wakingDateLabel(capturedAt.addingTimeInterval(-86_400), zone: zone, cutoffHour: cutoffHour)
+        let previous = DiaryWeek.adding(-1, to: today) ?? wakingDateLabel(capturedAt.addingTimeInterval(-86_400), zone: zone, cutoffHour: cutoffHour)
         return "This was captured early in the morning, so choose the waking day from the food without asking: late-night intake such as alcohol, fast food or party snacks belongs to the night before (\(previous)); breakfast or anything else belongs to \(today)."
     }
 }

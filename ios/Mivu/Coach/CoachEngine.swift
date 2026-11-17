@@ -39,7 +39,7 @@ struct CoachEngine: Sendable {
             let reply = context.replyTo == nil ? "" : "The user's message replies to replyTo, a quoted message or record: act on its real IDs rather than another record, and ask if it is unavailable. "
             var input: [CoachInferenceInput] = [.message(role: .developer, text: Self.stableRules)]
                 + Self.historyMessages(context.recentTurns)
-                + [.message(role: .developer, text: "The app language is \(Self.appLanguage). The captured local clock is \(diaryLocalClock(context.capturedAt, zone: context.captureTimeZoneID)). \(WakingDayInstruction.text(capturedAt: context.capturedAt, zone: context.captureTimeZoneID)) \(reply)Context: " + (try coachJSON(bare)))]
+                + [.message(role: .developer, text: "The app language is \(Self.appLanguage). The captured local clock is \(diaryLocalClock(context.capturedAt, zone: context.captureTimeZoneID)). \(WakingDayInstruction.text(context: context)) \(reply)Context: " + (try coachJSON(bare)))]
                 + capturedInput(text: turn.text, images: images)
             var knownMeals = context.meals
             var foundMeals: [CoachMealCandidate] = []
