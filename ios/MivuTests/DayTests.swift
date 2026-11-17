@@ -56,14 +56,6 @@ struct DayTests {
         #expect(try await store.dayAssignment(at: Self.date("2026-11-01T05:30:00Z")) == .existing(day.id))
         #expect(try await store.startDay(at: Self.date("2026-11-01T12:00:00Z")).localDate == "2026-11-01")
     }
-    @Test func timezoneChangeStartsADayInTheNewZoneAndPreservesHistory() async throws {
-        let (store, profile, day) = try await Self.ready()
-        var changed = profile
-        changed.timeZoneID = "America/New_York"
-        try await store.updateProfile(changed)
-        #expect(try await store.dayAssignment(at: day.startAt) == .newDay)
-        #expect(try await store.snapshotForExport().days[0] == day)
-    }
     @Test func moveUpdatesBothDayTotalsAndCompletenessStaysIndependent() async throws {
         let (store, _, oldDay) = try await Self.ready()
         let meal = try await capturedMeal(store, text: "apple", photos: [], reviewFirst: false, dayID: oldDay.id)

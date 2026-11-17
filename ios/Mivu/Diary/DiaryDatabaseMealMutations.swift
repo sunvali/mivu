@@ -259,9 +259,10 @@ extension DiaryTransaction {
         try database.mutationInteger("SELECT COALESCE(MAX(ordinal) + 1, 0) FROM \(table) \(parent == nil ? "" : "WHERE parent = ?")", parent.map { [.text($0.uuidString)] } ?? [])
     }
     func resolveDay(localDate: String, timeZoneID: String, at: Date, newDayID: UUID? = nil) throws -> TrackingDay {
-        let row = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND json_extract(CAST(payload AS TEXT), '$.timeZoneID') = ?", values: [.text(localDate), .text(timeZoneID)], limit: 1).first
-        if let row {
-            let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day)
+        // One day per date, whatever zone it was created in; duplicates from older data resolve to the active day, then the earliest.
+        let days = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(localDate)]).map { try database.decode(TrackingDay.self, $0) }
+        if let day = days.first(where: { $0.id == head.activeDayID }) ?? days.min(by: { $0.startAt < $1.startAt }) {
+            try validateTrackingDayFields(day)
             guard newDayID == nil || newDayID == day.id else { throw DiaryError.invalidData }; return day
         }
         if let newDayID {
@@ -294,7 +295,10 @@ extension DiaryTransaction {
     func newDayLabel(at: Date) throws -> String {
         let zone = head.profile.timeZoneID, waking = wakingDateLabel(at, zone: zone)
         let active = try head.activeDayID.map { try database.trackingDay(id: $0) }
-        return active.map { $0.localDate >= waking } == true ? diaryDateLabel(at, zone: zone) : waking
+        guard let active, active.localDate >= waking else { return waking }
+        let calendar = diaryDateLabel(at, zone: zone)
+        // Never back a date (westward travel); the active date itself stays, so a repeated start is idempotent.
+        return calendar >= active.localDate ? calendar : DiaryWeek.adding(1, to: active.localDate) ?? calendar
     }
     func saveDay(_ day: TrackingDay) throws {
         try validateTrackingDayFields(day); _ = try database.trackingDay(id: day.id)
@@ -647,6 +651,11 @@ extension DiaryTransaction {
         try contribution(table: "tombstone", rowID: mealID.uuidString, encodedBytes: payload.count)
         changes.mealIDs.insert(mealID); changes.dayIDs.insert(meal.dayID)
     }
+}
+
+/// Whether an instant belongs to the day: its own calendar date there, or the travel day (waking date in the profile zone not past it).
+func instant(_ at: Date, fallsOn day: TrackingDay, profileZone: String) -> Bool {
+    diaryDateLabel(at, zone: day.timeZoneID) == day.localDate || (wakingDateLabel(at, zone: profileZone) <= day.localDate && at >= day.startAt)
 }
 
 func diaryDateLabel(_ at: Date, zone: String) -> String {

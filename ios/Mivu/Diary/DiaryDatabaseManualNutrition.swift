@@ -93,8 +93,8 @@ extension DiaryTransaction {
         return nil
     }
     func manualDay(localDate: String, timeZoneID: String) throws -> TrackingDay? {
-        let rows = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND json_extract(CAST(payload AS TEXT), '$.timeZoneID') = ?",
-            values: [.text(localDate), .text(timeZoneID)], limit: 2)
+        let rows = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?",
+            values: [.text(localDate)], limit: 2)
         guard rows.count <= 1 else { throw DiaryError.invalidData }
         guard let row = rows.first else { return nil }
         let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day); return day
@@ -109,7 +109,7 @@ extension DiaryTransaction {
         guard let id = head.activeDayID else { return .newDay }
         // The active day holds until the cutoff passes; then the next activity starts a new day, so logging never asks.
         let day = try database.trackingDay(id: id)
-        return day.timeZoneID == head.profile.timeZoneID && day.localDate >= wakingDateLabel(at, zone: head.profile.timeZoneID) ? .existing(id) : .newDay
+        return day.localDate >= wakingDateLabel(at, zone: head.profile.timeZoneID) ? .existing(id) : .newDay
     }
     func resolveManualNutritionDay(_ target: ManualNutritionTarget, capturedAt: Date) throws -> TrackingDay {
         switch target {
@@ -119,7 +119,7 @@ extension DiaryTransaction {
             guard head.activeDayID == id, try dayAssignment(at: capturedAt) == .existing(id) else { throw DiaryError.ambiguousDay }
             return day
         case let .newCurrent(id, date, zone, previous):
-            guard head.activeDayID == previous, zone == head.profile.timeZoneID,
+            guard head.activeDayID == previous,
                   date == (try newDayLabel(at: capturedAt)),
                   try head.activeDayID.map({ try database.trackingDay(id: $0).startAt <= capturedAt }) ?? true else { throw DiaryError.ambiguousDay }
             if case .existing = try dayAssignment(at: capturedAt) { throw DiaryError.ambiguousDay }
