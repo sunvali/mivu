@@ -62,7 +62,7 @@ speaker has read it yet.
 | streak | racha | |
 | check-in | repaso del día | |
 | protein / carbs / fat / fiber | proteínas / carbohidratos / grasas / fibra | |
-| Settings | Configuración | Apple's Latin American Spanish |
+| Settings (iOS app and Mivu's screen) | Ajustes (masculine plural: «los Ajustes de iOS») | Owner's choice: what iPhones in Spain show, understood everywhere |
 | Apple Health | Salud; "la app Salud" when the bare word is ambiguous | Never "Apple Salud" |
 | Lock Screen | pantalla de bloqueo | |
 | phone (the device) | iPhone | As Apple writes it |

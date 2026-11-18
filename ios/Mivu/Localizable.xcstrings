@@ -4395,7 +4395,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permite el acceso a la cámara en Configuración para registrar comidas con una foto."
+            "value" : "Permite el acceso a la cámara en Ajustes para registrar comidas con una foto."
           }
         },
         "ru" : {
@@ -4424,7 +4424,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permite el acceso a la cámara en Configuración o elige una foto."
+            "value" : "Permite el acceso a la cámara en Ajustes o elige una foto."
           }
         },
         "ru" : {
@@ -4446,7 +4446,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permite el acceso a la cámara en Configuración o elige fotos."
+            "value" : "Permite el acceso a la cámara en Ajustes o elige fotos."
           }
         },
         "ru" : {
@@ -4468,7 +4468,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permite el acceso al micrófono en Configuración para registrar por voz."
+            "value" : "Permite el acceso al micrófono en Ajustes para registrar por voz."
           }
         },
         "ru" : {
@@ -4490,7 +4490,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permite el reconocimiento de voz en Configuración para registrar por voz."
+            "value" : "Permite el reconocimiento de voz en Ajustes para registrar por voz."
           }
         },
         "ru" : {
@@ -4974,7 +4974,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apple Intelligence en el iPhone solo registra comidas y cambia cantidades, con menor precisión. Elige ChatGPT en Configuración → IA de Coach para más funciones."
+            "value" : "Apple Intelligence en el iPhone solo registra comidas y cambia cantidades, con menor precisión. Elige ChatGPT en Ajustes → IA de Coach para más funciones."
           }
         },
         "ru" : {
@@ -7009,7 +7009,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cambia el idioma que usa Mivu en la Configuración de iOS."
+            "value" : "Cambia el idioma que usa Mivu en los Ajustes de iOS."
           }
         },
         "ru" : {
@@ -7286,7 +7286,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se alcanzó el límite de uso de ChatGPT. Abre Administrar uso en Configuración y reintenta cuando haya uso disponible."
+            "value" : "Se alcanzó el límite de uso de ChatGPT. Abre Administrar uso en Ajustes y reintenta cuando haya uso disponible."
           }
         },
         "ru" : {
@@ -7470,7 +7470,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сначала выбери локальный профиль."
+            "value" : "Сначала выбери профиль на этом iPhone."
           }
         }
       }
@@ -7522,13 +7522,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige un perfil local privado en Configuración para abrir tu diario."
+            "value" : "Elige un perfil local privado en Ajustes para abrir tu diario."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выбери личный локальный профиль в Настройках, чтобы открыть дневник."
+            "value" : "Выбери профиль на этом iPhone в Настройках, чтобы открыть дневник."
           }
         }
       }
@@ -7887,7 +7887,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Анализ в Coach использует лимит тарифа выбранного аккаунта ChatGPT, если он доступен, и подчиняется его ограничениям. Записи сохраняются на iPhone даже без подключения."
+            "value" : "Анализ в коуче использует лимит тарифа выбранного аккаунта ChatGPT, если он доступен, и подчиняется его ограничениям. Записи сохраняются на iPhone даже без подключения."
           }
         }
       }
@@ -7909,7 +7909,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Coach и анализ еды в Mivu используют твой тариф ChatGPT и расходуют его лимиты."
+            "value" : "Коуч и анализ еды в Mivu используют твой тариф ChatGPT и расходуют его лимиты."
           }
         }
       }
@@ -8186,7 +8186,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Conecta ChatGPT en Configuración para continuar"
+            "value" : "Conecta ChatGPT en Ajustes para continuar"
           }
         },
         "ru" : {
@@ -8830,7 +8830,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudo conectar con la app Salud. Revisa Configuración de iOS › Salud › Acceso a datos › Mivu."
+            "value" : "No se pudo conectar con la app Salud. Revisa Ajustes de iOS › Salud › Acceso a datos › Mivu."
           }
         },
         "ru" : {
@@ -9693,7 +9693,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Создать локальный профиль"
+            "value" : "Создать профиль на этом iPhone"
           }
         }
       }
@@ -10588,7 +10588,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удалить этот локальный профиль"
+            "value" : "Удалить профиль на этом iPhone"
           }
         }
       }
@@ -10697,7 +10697,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удалить этот личный локальный профиль?"
+            "value" : "Удалить профиль на этом iPhone?"
           }
         }
       }
@@ -10794,7 +10794,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Опиши еду, добавь фото или запиши взвешивание или тренировку. Каждую оценку можно проверить и исправить. Coach даёт оценки, а не медицинские советы."
+            "value" : "Опиши еду, добавь фото или запиши взвешивание или тренировку. Каждую оценку можно проверить и исправить. Коуч даёт оценки, а не медицинские советы."
           }
         }
       }
@@ -10965,7 +10965,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Диеты, аллергии или состояния, о которых Coach стоит знать."
+            "value" : "Диеты, аллергии или состояния, о которых коучу стоит знать."
           }
         }
       }
@@ -14148,7 +14148,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Скрыть отметку"
+            "value" : "Скрыть взвешивание"
           }
         }
       }
@@ -15905,7 +15905,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las Actividades en vivo están desactivadas para Mivu en la Configuración de iOS."
+            "value" : "Las Actividades en vivo están desactivadas para Mivu en los Ajustes de iOS."
           }
         },
         "ru" : {
@@ -16370,7 +16370,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Локальные профили"
+            "value" : "Профили на этом iPhone"
           }
         }
       }
@@ -18023,7 +18023,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Утренняя отметка"
+            "value" : "Утреннее взвешивание"
           }
         }
       }
@@ -19488,7 +19488,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Aún no hay entrenamientos? En Garmin Connect, activa el uso compartido con Salud; en Configuración de iOS › Salud › Acceso a datos, permite a Mivu."
+            "value" : "¿Aún no hay entrenamientos? En Garmin Connect, activa el uso compartido con Salud; en Ajustes de iOS › Salud › Acceso a datos, permite a Mivu."
           }
         },
         "ru" : {
@@ -19630,7 +19630,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las notificaciones de Mivu están desactivadas. Puedes permitirlas en la Configuración de iOS."
+            "value" : "Las notificaciones de Mivu están desactivadas. Puedes permitirlas en los Ajustes de iOS."
           }
         },
         "ru" : {
@@ -20401,7 +20401,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Открыть локальные профили"
+            "value" : "Открыть профили на этом iPhone"
           }
         }
       }
@@ -20461,13 +20461,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abre Perfil y configuración para elegir un perfil local privado."
+            "value" : "Abre Perfil y ajustes para elegir un perfil local privado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Открой «Профиль и настройки», чтобы выбрать личный локальный профиль."
+            "value" : "Открой «Профиль и настройки», чтобы выбрать профиль на этом iPhone."
           }
         }
       }
@@ -20491,7 +20491,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abrir Configuración"
+            "value" : "Abrir Ajustes"
           }
         },
         "ru" : {
@@ -20513,13 +20513,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abre Configuración para elegir un perfil local privado."
+            "value" : "Abre Ajustes para elegir un perfil local privado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Открой Настройки, чтобы выбрать личный локальный профиль."
+            "value" : "Открой Настройки, чтобы выбрать профиль на этом iPhone."
           }
         }
       }
@@ -20602,7 +20602,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abre la Configuración de iOS"
+            "value" : "Abre los Ajustes de iOS"
           }
         },
         "ru" : {
@@ -21321,7 +21321,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выбери всё, что подходит. Coach учитывает это в каждом совете."
+            "value" : "Выбери всё, что подходит. Коуч учитывает это в каждом совете."
           }
         }
       }
@@ -22079,7 +22079,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Личный локальный профиль"
+            "value" : "Профиль на этом iPhone"
           }
         }
       }
@@ -22095,7 +22095,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Perfil y configuración"
+            "value" : "Perfil y ajustes"
           }
         },
         "ru" : {
@@ -24767,7 +24767,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сохранено. Открой Mivu после разблокировки, чтобы увидеть ответ Coach."
+            "value" : "Сохранено. Открой Mivu после разблокировки, чтобы увидеть ответ коуча."
           }
         }
       }
@@ -24789,7 +24789,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сохранено. Открой Mivu, чтобы подключить Coach."
+            "value" : "Сохранено. Открой Mivu, чтобы подключить коуча."
           }
         }
       }
@@ -25571,7 +25571,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Configuración"
+            "value" : "Ajustes"
           }
         },
         "ru" : {
@@ -25594,7 +25594,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Error de configuración"
+            "value" : "Error de ajustes"
           }
         },
         "ru" : {
@@ -26064,7 +26064,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выйти из локального профиля"
+            "value" : "Выйти из профиля на этом iPhone"
           }
         }
       }
@@ -27365,7 +27365,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Написать Coach"
+            "value" : "Написать коучу"
           }
         }
       }
@@ -27387,7 +27387,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Лучше написать Coach"
+            "value" : "Лучше написать коучу"
           }
         }
       }
@@ -27588,7 +27588,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Coach нужен быстрый ответ."
+            "value" : "Коуч нужен быстрый ответ."
           }
         }
       }
@@ -27919,7 +27919,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Son estimaciones, no consejo médico. Consulta a un médico o a un profesional de la nutrición antes de hacer cambios grandes en tu alimentación, sobre todo si tienes alguna condición de salud. Puedes cambiar las metas cuando quieras en Configuración › Objetivos."
+            "value" : "Son estimaciones, no consejo médico. Consulta a un médico o a un profesional de la nutrición antes de hacer cambios grandes en tu alimentación, sobre todo si tienes alguna condición de salud. Puedes cambiar las metas cuando quieras en Ajustes › Objetivos."
           }
         },
         "ru" : {
@@ -27999,7 +27999,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Этот архив относится к другому локальному профилю. Выбери этот профиль перед восстановлением."
+            "value" : "Этот архив относится к другому профилю на этом iPhone. Выбери этот профиль перед восстановлением."
           }
         }
       }
@@ -28448,7 +28448,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "этот личный локальный профиль"
+            "value" : "этот профиль"
           }
         }
       }
@@ -28818,13 +28818,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Para estimar la nutrición y responder en Coach, Mivu envía a OpenAI, a través de tu cuenta de ChatGPT, lo que registras: comidas, fotos, mensajes, pesos, entrenamientos, objetivos y datos del perfil. Si agregas una clave de USDA, las búsquedas de alimentos van a USDA FoodData Central. Tu diario se queda en este iPhone y puedes desconectarte cuando quieras en Configuración."
+            "value" : "Para estimar la nutrición y responder en Coach, Mivu envía a OpenAI, a través de tu cuenta de ChatGPT, lo que registras: comidas, fotos, mensajes, pesos, entrenamientos, objetivos y datos del perfil. Si agregas una clave de USDA, las búsquedas de alimentos van a USDA FoodData Central. Tu diario se queda en este iPhone y puedes desconectarte cuando quieras en Ajustes."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Чтобы оценить питательность и ответить в Coach, Mivu отправляет в OpenAI через твой аккаунт ChatGPT то, что ты записываешь: приёмы пищи, фото, сообщения, вес, тренировки, цели и данные профиля. Если добавить ключ USDA, поиск продуктов идёт в USDA FoodData Central. Твой дневник остаётся на этом iPhone, а отключить доступ можно в любой момент в Настройках."
+            "value" : "Чтобы оценить питательность и ответить в коуче, Mivu отправляет в OpenAI через твой аккаунт ChatGPT то, что ты записываешь: приёмы пищи, фото, сообщения, вес, тренировки, цели и данные профиля. Если добавить ключ USDA, поиск продуктов идёт в USDA FoodData Central. Твой дневник остаётся на этом iPhone, а отключить доступ можно в любой момент в Настройках."
           }
         }
       }
@@ -29127,7 +29127,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Activa Apple Intelligence en la Configuración de iOS o espera a que termine de descargarse"
+            "value" : "Activa Apple Intelligence en los Ajustes de iOS o espera a que termine de descargarse"
           }
         },
         "ru" : {
@@ -29873,7 +29873,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usa el enlace de Configuración para continuar."
+            "value" : "Usa el enlace de Ajustes para continuar."
           }
         },
         "ru" : {
@@ -31203,7 +31203,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что передать Coach?"
+            "value" : "Что передать коучу?"
           }
         }
       }
@@ -31851,7 +31851,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Тренировки из Garmin Connect, Apple Watch и других приложений, которые передают данные в «Здоровье». Они остаются на этом iPhone и не передаются Coach."
+            "value" : "Тренировки из Garmin Connect, Apple Watch и других приложений, которые передают данные в «Здоровье». Они остаются на этом iPhone и не передаются коучу."
           }
         }
       }
@@ -32142,7 +32142,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alcanzaste el límite de uso de ChatGPT. Tu mensaje está guardado; consulta Administrar uso en Configuración."
+            "value" : "Alcanzaste el límite de uso de ChatGPT. Tu mensaje está guardado; consulta Administrar uso en Ajustes."
           }
         },
         "ru" : {
@@ -32649,7 +32649,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Твоё сообщение сохранено. Открой Mivu, чтобы увидеть ответ Coach."
+            "value" : "Твоё сообщение сохранено. Открой Mivu, чтобы увидеть ответ коуча."
           }
         }
       }

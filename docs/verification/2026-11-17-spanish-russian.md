@@ -33,6 +33,22 @@ Dropped from review output: hand-written thousands with commas in Spanish
 (glossary keeps a non-breaking space) and «с дружелюбным Coach» in the Russian
 listing.
 
+## Regional native review (2026-11-18)
+
+At the owner's request, one more native-reviewer agent per language: Moscow for
+Russian (2 errors, 37 improvements; 31 rows and 2 listing lines applied) and
+Madrid for Spanish, checking the Latin American text from Spain's side (0 errors,
+7 improvements; 6 applied). Dropped: rewrites that undo the pass-2 placeholder
+fixes (a food name or weekday-led date after «от», «за», «Удалить «%@»?»,
+«Registros: %@»), and a Russian plural set whose forms were in the wrong order.
+
+Owner decisions from this round: Spanish Settings is «Ajustes» (27 rows);
+Russian morning check-in is «утреннее взвешивание», «личный локальный профиль»
+becomes «профиль на этом iPhone», and running sentences say «коуч» (declined)
+while the tab and feature name stay "Coach" (33 rows). After this round:
+`languages.py check` passes; `testPhoneGetsItsLanguage` (spanish, russian) and
+`testTextIsTranslated` (russian) pass on the same simulator.
+
 ## Code changes found by the review
 
 - The calorie band "Off" had the same key as the switched-off status, so it read

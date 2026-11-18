@@ -28,7 +28,7 @@ owner reads every string on one page before the language ships.
 - **Pip** is «Пип», declined as an animate masculine noun: Пип, Пипа, Пипу,
   с Пипом, о Пипе ("Спроси Пипа"). Pip is a fox. The sentence about Pip may be
   masculine; Pip's own lines still avoid gendered past tense.
-- **Coach** (the tab and the feature) stays "Coach", in Latin letters.
+- **Coach** stays "Coach", in Latin letters, as the name of the tab and feature. In a running sentence it is «коуч», declined: «спроси коуча», «с коучем» (owner's choice).
 - **Snap It** stays in English, undeclined, after a noun where grammar needs
   one: "в Snap It", "режим Snap It".
 
@@ -39,7 +39,7 @@ owner reads every string on one page before the language ships.
 | kcal (next to a number) | ккал | Never "кал" |
 | calories (in prose) | калории | |
 | g / kg / lb / ml / cm | г / кг / фнт / мл / см | |
-| Coach (tab, feature) | Coach | Owner's choice |
+| Coach (tab, feature name) / coach in a sentence | Coach / коуч | Owner's choice |
 | You (own chat messages) | Ты | |
 | Snap It | Snap It | Owner's choice |
 | Cancel | Отменить | |
@@ -60,9 +60,10 @@ owner reads every string on one page before the language ships.
 | weight | вес | |
 | workout | тренировка | |
 | streak | серия дней | |
-| check-in | утренняя отметка | |
+| check-in (morning) | утреннее взвешивание | Owner's choice; not «отметка», which reads like a school grade |
 | protein / carbs / fat / fiber | белки / углеводы / жиры / клетчатка | |
 | Settings | Настройки | |
+| private local profile | профиль на этом iPhone | Owner's choice; never «личный локальный профиль» |
 | Apple Health | «Здоровье»; приложение «Здоровье» in a sentence | As Apple's Russian names it |
 | Live Activities | Актуальные события | |
 | Discard (button) / Discard changes? | Удалить / Отменить изменения? | Not «Отбросить» |

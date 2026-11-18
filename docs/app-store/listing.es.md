@@ -46,7 +46,7 @@ PRIVADO DESDE EL DISEÑO
 • Haz respaldos en una carpeta que elijas, o exporta tu diario y tus fotos cuando quieras.
 
 IA QUE USA TU PROPIO PLAN
-Conecta tu cuenta de ChatGPT para estimar la nutrición y conversar con Coach. Las solicitudes usan tu plan de ChatGPT, y puedes administrar el uso o desconectarte en Configuración. Mivu pregunta antes de compartir algo con OpenAI. En los iPhone compatibles, Apple Intelligence puede registrar comidas en el dispositivo, sin cuenta.
+Conecta tu cuenta de ChatGPT para estimar la nutrición y conversar con Coach. Las solicitudes usan tu plan de ChatGPT, y puedes administrar el uso o desconectarte en Ajustes. Mivu pregunta antes de compartir algo con OpenAI. En los iPhone compatibles, Apple Intelligence puede registrar comidas en el dispositivo, sin cuenta.
 
 Las cifras de nutrición son estimaciones, no consejo médico. Habla con un profesional de la salud antes de tomar decisiones médicas o de alimentación.
 
