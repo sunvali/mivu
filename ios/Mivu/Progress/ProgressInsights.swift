@@ -15,7 +15,7 @@ enum ProgressBand: Int, CaseIterable {
         switch self {
         case .near: String(localized: "Near")
         case .bitOff: String(localized: "A bit off")
-        case .off: String(localized: "Off")
+        case .off: String(localized: "calorieBand.off", defaultValue: "Off", comment: "Progress calorie band title: intake 21–35% away from the target (not a switched-off setting)")
         case .farOff: String(localized: "Far off")
         }
     }

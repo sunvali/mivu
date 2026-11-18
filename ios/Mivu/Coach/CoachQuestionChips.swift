@@ -23,7 +23,7 @@ struct CoachQuestionChips: View {
     }
     var body: some View {
         if question.kind == .confirm, let target = question.candidates.first {
-            let meal = mealID(target).flatMap { id in meals.first { $0.id == id } }.map { name($0, .meal(mealID: $0.id)) } ?? "Meal"
+            let meal = mealID(target).flatMap { id in meals.first { $0.id == id } }.map { name($0, .meal(mealID: $0.id)) } ?? String(localized: "Meal")
             HStack(spacing: 12) {
                 Button(role: .destructive) { onPick(target, "Remove it", meal) } label: { Text("Remove").frame(maxWidth: .infinity, minHeight: 44) }
                     .buttonStyle(.bordered).tint(Color.diaryError).accessibilityIdentifier("coachConfirmRemove")

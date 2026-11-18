@@ -38,10 +38,10 @@ it is in Swift, not in the catalog.
      `.hebrew`, and a test beside the Hebrew one in `CoachReplyCheckTests`.
      Without it the language falls to `default`, which grounds every number:
      safe, but stricter.
-   - `LanguageSweepUITests.swift`: the `hebrew` mode is hard-coded. Add a mode
-     for the code (launch arguments, locale, tab-name map) and the equivalents of
-     `testHebrewPhoneGetsHebrew` and `testTextIsHebrew`; drop the right-to-left
-     assertion for a left-to-right language.
+   - `LanguageSweepUITests.swift`: add the language to `languages` (mode name,
+     code, locale, and what it shows for the names the sweep looks for).
+     `testPhoneGetsItsLanguage` and `testTextIsTranslated` then cover it;
+     the second skips languages written in Latin letters.
    - `SampleAnalyzer`/`DiaryModels` `["en","he"]` check stored profile values;
      leave them.
 6. **Review passes** (below) until the stop rule holds.

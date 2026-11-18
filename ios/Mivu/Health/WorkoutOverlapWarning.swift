@@ -29,7 +29,7 @@ struct WorkoutOverlapWarning: View {
     }
 
     private var message: some View {
-        let source = coveredBy.healthSource ?? "Apple Health"
+        let source = coveredBy.healthSource ?? String(localized: "Apple Health")
         return Label("\(source) may have this workout already. Remove yours?", systemImage: "exclamationmark.circle")
             .font(.caption).foregroundStyle(Color.diarySecondary)
     }

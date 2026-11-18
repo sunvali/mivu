@@ -597,7 +597,7 @@ struct WorkoutDetailView: View {
                 }
             } else if loading { ProgressView("Loading workout…") }
             else {
-                ContentUnavailableView(loadError ?? "Workout unavailable", systemImage: "figure.run")
+                ContentUnavailableView(loadError ?? String(localized: "Workout unavailable"), systemImage: "figure.run")
                 Button("Reload workout") { Task { await loadSession() } }.frame(minHeight: 44)
             }
         }

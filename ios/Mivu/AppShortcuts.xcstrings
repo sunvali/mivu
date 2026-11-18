@@ -23,6 +23,24 @@
               "לפתוח את פיפ ב-${applicationName}"
             ]
           }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Pregúntale a ${applicationName} Coach",
+              "Abre ${applicationName} Coach"
+            ]
+          }
+        },
+        "ru" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Спроси Coach в ${applicationName}",
+              "Открой Coach в ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -46,6 +64,24 @@
               "לרשום ארוחה ב-${applicationName}",
               "רשום ארוחה ב-${applicationName}",
               "רשמי ארוחה ב-${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Registra una comida en ${applicationName}",
+              "Registra alimentos con ${applicationName}"
+            ]
+          }
+        },
+        "ru" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Запиши еду в ${applicationName}",
+              "Добавь еду в ${applicationName}"
             ]
           }
         }
@@ -73,6 +109,24 @@
               "צלמי ארוחה ב-${applicationName}"
             ]
           }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Usa Snap It con ${applicationName}",
+              "Fotografía una comida en ${applicationName}"
+            ]
+          }
+        },
+        "ru" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Запусти Snap It в ${applicationName}",
+              "Сфотографируй еду в ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -98,6 +152,26 @@
               "ספר ל-${applicationName}",
               "ספרי ל-${applicationName}",
               "הודעה לפיפ ב-${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Dile algo a ${applicationName}",
+              "Dile algo a ${applicationName} Coach",
+              "Escribe a ${applicationName} Coach"
+            ]
+          }
+        },
+        "ru" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Напиши в ${applicationName}",
+              "Напиши Coach в ${applicationName}",
+              "Отправь сообщение Coach в ${applicationName}"
             ]
           }
         }

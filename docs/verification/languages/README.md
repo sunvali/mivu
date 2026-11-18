@@ -1,7 +1,7 @@
 # Language sweep
 
 `MivuUITests/LanguageSweepUITests` opens every main screen and attaches a
-capture of each. It runs in one of three modes, chosen by the test runner's
+capture of each. It runs in one of these modes, chosen by the test runner's
 environment:
 
 | `TEST_RUNNER_SWEEP_MODE` | What it launches with | What it proves |
@@ -9,6 +9,7 @@ environment:
 | `english` (default) | nothing extra | the screens open; captures for comparison |
 | `rtl` | `-AppleTextDirection YES -NSForceRightToLeftWritingDirection YES` | layouts mirror |
 | `double` | `-NSDoubleLocalizedStrings YES` | every string goes through localization and long text fits |
+| `hebrew`, `spanish`, `russian` | `-AppleLanguages (<code>) -AppleLocale <locale>` | the phone's language reaches every screen (`testPhoneGetsItsLanguage`); Hebrew and Russian screens show no English (`testTextIsTranslated`) |
 
 `TEST_RUNNER_SWEEP_TEXT=largest` adds the largest accessibility text size.
 

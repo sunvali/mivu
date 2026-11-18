@@ -53,8 +53,11 @@ enum TimeZoneSync {
         return za.secondsFromGMT(for: at) != zb.secondsFromGMT(for: at)
     }
 
-    static func city(_ zoneID: String) -> String {
-        String(zoneID.split(separator: "/").last ?? "").replacingOccurrences(of: "_", with: " ")
+    /// The zone's city in the app's language ("Нью-Йорк" for "America/New_York"); a zone with no city ("UTC", "Etc/GMT+5") keeps its own name.
+    static func city(_ zoneID: String, locale: Locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en")) -> String {
+        let name = String(zoneID.split(separator: "/").last ?? "").replacingOccurrences(of: "_", with: " ")
+        guard zoneID.contains("/"), !zoneID.hasPrefix("Etc/"), let zone = TimeZone(identifier: zoneID) else { return name }
+        return Date.now.formatted(Date.VerbatimFormatStyle(format: "\(timeZone: .exemplarLocation)", locale: locale, timeZone: zone, calendar: Calendar(identifier: .gregorian)))
     }
 }
 

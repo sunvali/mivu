@@ -765,7 +765,7 @@ enum WakingDayInstruction {
         guard let open = context.days.first(where: { $0.id == context.activeDayID }),
               TimeZoneSync.clockDiffers(open.timeZoneID, zone, at: at) else { return base }
         let clock = diaryLocalClock(at, zone: zone).split(separator: " ").last.map(String.init) ?? ""
-        return base + " Local time \(clock) in \(TimeZoneSync.city(zone)); arrived from \(TimeZoneSync.city(open.timeZoneID)) today; the open diary day is \(open.localDate). Times the person mentions are local."
+        return base + " Local time \(clock) in \(TimeZoneSync.city(zone, locale: Locale(identifier: "en"))); arrived from \(TimeZoneSync.city(open.timeZoneID, locale: Locale(identifier: "en"))) today; the open diary day is \(open.localDate). Times the person mentions are local."
     }
     static func text(capturedAt: Date, zone: String, cutoffHour: Int = DayCutoff.hour, today: String? = nil) -> String {
         let today = today ?? wakingDateLabel(capturedAt, zone: zone, cutoffHour: cutoffHour)
