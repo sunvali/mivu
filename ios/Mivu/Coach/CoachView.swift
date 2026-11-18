@@ -11,7 +11,6 @@ struct CoachView: View {
     var onNavigationConsumed: (UUID) -> Void = { _ in }
     var openHistory: () -> Void = {}
     var openToday: () -> Void = {}
-    var openProgress: () -> Void = {}
     /// Shared with the side pane: sideways it shows this beside the chat, upright it is pushed over the chat.
     @Binding var pane: CoachPane?
     /// True while the chat takes the whole sideways screen and the side pane is put away.
@@ -854,29 +853,10 @@ struct CoachView: View {
         .accessibilityElement(children: .contain).accessibilityIdentifier("coachReplyBar")
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
     }
-    /// Sideways a follow-up opens beside the chat. Upright, Today and Progress switch tabs as before
-    /// and another day is pushed over the chat.
-    private func open(_ followUp: CoachReplyLines.FollowUp) {
-        if isWide { pane = followUp.pane; return }
-        switch followUp {
-        case .today: openToday()
-        case .progress: openProgress()
-        case .day: pane = followUp.pane
-        }
-    }
+    /// Sideways the past day opens beside the chat; upright it is pushed over the chat.
+    private func open(_ followUp: CoachReplyLines.FollowUp) { pane = followUp.pane }
     private func title(_ followUp: CoachReplyLines.FollowUp) -> String {
-        switch followUp {
-        case .today: String(localized: "See today")
-        case .progress: String(localized: "See progress")
-        case .day(let date): String(localized: "See \(CoachReplyLines.shortDate(date))")
-        }
-    }
-    private func identifier(_ followUp: CoachReplyLines.FollowUp) -> String {
-        switch followUp {
-        case .today: "coachFollowUp-today"
-        case .progress: "coachFollowUp-progress"
-        case .day: "coachFollowUp-day"
-        }
+        switch followUp { case .day(let date): String(localized: "See \(CoachReplyLines.shortDate(date))") }
     }
     private func openQuote(_ reply: CoachReply) {
         let target: CoachSeekTarget
@@ -1019,16 +999,13 @@ struct CoachView: View {
                 }
             }
             if coach.timeline?.window.isLatest(turn.id) == true {
-                // Sideways Today is the pane's root, one back tap away. Rows don't redraw when the pane
-                // changes, so the other buttons stay; tapping one the pane already shows changes nothing.
                 let followUps = CoachReplyLines.followUps(for: turn, consulted: coach.consulted(turn.id), today: coach.diary.activeDay?.localDate)
-                    .filter { !(isWide && $0 == .today) }
                 if !followUps.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(followUps, id: \.self) { followUp in
                             Button { open(followUp) } label: { Text(title(followUp)).frame(minHeight: 36) }
                                 .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
-                                .accessibilityIdentifier(identifier(followUp))
+                                .accessibilityIdentifier("coachFollowUp-day")
                         }
                     }
                 }

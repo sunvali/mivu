@@ -107,25 +107,20 @@ struct CoachPaneTests {
         #expect(!observe(&memory, owner, [weight("a/weight/1")]).jumps)
     }
 
-    @Test func consultedProgressOffersSeeProgress() {
-        #expect(CoachReplyLines.followUps(for: turn([]), consulted: [.progress], today: "2026-11-14") == [.progress])
+    // Quick prompts cover today and progress, so only a past day gets a follow-up.
+    @Test func consultedProgressOrTodayOffersNothing() {
+        #expect(CoachReplyLines.followUps(for: turn([weight("weight/2026-11-14")]), consulted: [.progress, .day("2026-11-14")], today: "2026-11-14") == [])
     }
 
     @Test func consultedOtherDayOffersThatDay() {
         #expect(CoachReplyLines.followUps(for: turn([]), consulted: [.day("2026-11-10")], today: "2026-11-14") == [.day("2026-11-10")])
     }
 
-    @Test func consultedTodayOffersToday() {
-        #expect(CoachReplyLines.followUps(for: turn([]), consulted: [.day("2026-11-14")], today: "2026-11-14") == [.today])
-    }
-
     @Test func followUpsHaveNoDuplicates() {
-        #expect(CoachReplyLines.followUps(for: turn([weight("weight/2026-11-14")]), consulted: [.progress], today: "2026-11-14") == [.progress])
+        #expect(CoachReplyLines.followUps(for: turn([]), consulted: [.day("2026-11-10"), .day("2026-11-10")], today: "2026-11-14") == [.day("2026-11-10")])
     }
 
     @Test func followUpsNameTheirPane() {
-        #expect(CoachReplyLines.FollowUp.today.pane == nil)
-        #expect(CoachReplyLines.FollowUp.progress.pane == .progress)
         #expect(CoachReplyLines.FollowUp.day("2026-11-10").pane == .day("2026-11-10"))
     }
 }

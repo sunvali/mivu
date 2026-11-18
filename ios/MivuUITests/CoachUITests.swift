@@ -192,8 +192,6 @@ import XCTest
         app.buttons["coachSend"].tap()
         XCTAssertTrue(app.staticTexts["coachFixtureBanner"].waitForExistence(timeout: 5))
         waitForReply(to: "Two eggs, three bread slices and salad", in: app)
-        let seeToday = app.buttons["coachFollowUp-today"]
-        XCTAssertTrue(seeToday.waitForExistence(timeout: 5)); XCTAssertGreaterThanOrEqual(seeToday.frame.height, 44)
         openLatestMeal(in: app)
         for food in ["Eggs", "Bread", "Salad"] { revealMealDetailItem(app.staticTexts[food].firstMatch, in: app) }
         revealMealDetailItem(app.staticTexts["3 slice"], in: app)

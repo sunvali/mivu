@@ -12809,28 +12809,6 @@
         }
       }
     },
-    "See progress" : {
-      "comment" : "Button: opens Progress",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מעבר להתקדמות"
-          }
-        }
-      }
-    },
-    "See today" : {
-      "comment" : "Button: opens Today",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מעבר להיום"
-          }
-        }
-      }
-    },
     "Selected" : {
       "comment" : "Label of a chosen option, with a checkmark",
       "localizations" : {
