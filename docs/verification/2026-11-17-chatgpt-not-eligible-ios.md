@@ -13,6 +13,7 @@
 | `MivuTests/CoachEngineTests/permissionFailuresKeepCapturedTurnWaiting` (incl. `.notEligible`) | passed |
 | `MivuUITests/CoachUITests/testPlanNotEligibleExplainsOnceAndInSettings` | passed |
 | `MivuUITests/CoachUITests/testOfflineTextPhotoCapturePersistsAcrossRelaunchAndTabs`, `MivuUITests/SmokeUITests` | passed |
+| `MivuUITests/DiaryUITests/testSetupSkipsConnectForAPlanThatCannotBeUsed` + `testFirstRunOpensSetupWithoutInventingRecords` + `CoachUITests/testPlanNotEligibleExplainsOnceAndInSettings` (setup skips Connect for a plan OpenAI won't share) | 3 passed |
 | `scripts/ci/languages.py check` | clean |
 
 ## Full unit suite

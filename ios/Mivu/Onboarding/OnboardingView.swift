@@ -89,7 +89,8 @@ struct OnboardingView: View {
             react(.greeting)
         }
         .onDisappear { runtime.stop() }
-        .onChange(of: connection.planAuthorized && connection.models.contains { $0.slug == connection.selectedModel }) { _, ready in
+        // A plan OpenAI won't share can never connect here, so setup moves on to the estimate.
+        .onChange(of: connection.planAuthorized && connection.models.contains { $0.slug == connection.selectedModel } || connection.planNotEligible) { _, ready in
             if ready && step == .connect { go(to: .results) }
         }
     }
@@ -351,13 +352,13 @@ struct OnboardingView: View {
 
     private func advance() {
         var next = Step(rawValue: step.rawValue + 1) ?? .results
-        if next == .connect, connection.planAuthorized { next = .results }
+        if next == .connect, connection.planAuthorized || connection.planNotEligible { next = .results }
         go(to: next)
     }
 
     private func back() {
         var previous = Step(rawValue: step.rawValue - 1) ?? .hello
-        if previous == .connect, connection.planAuthorized { previous = .diet }
+        if previous == .connect, connection.planAuthorized || connection.planNotEligible { previous = .diet }
         go(to: previous)
     }
 
