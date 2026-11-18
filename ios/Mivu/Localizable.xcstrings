@@ -297,7 +297,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пока ты не переключишь, дневник остаётся на времени: %@."
+            "value" : "Пока не переключишь, дневник ведётся по времени: %@."
           }
         }
       }
@@ -995,7 +995,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@, в граммах"
+            "value" : "%@, г"
           }
         }
       }
@@ -5688,7 +5688,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Резервные копии не совпадают. Локальный дневник и существующая копия сохранены. Экспортируй копию и устрани расхождение в папке в Файлах, затем повтори."
+            "value" : "Резервные копии не совпадают. Локальный дневник и существующая копия сохранены. Экспортируй копию, устрани расхождение в папке через «Файлы» и повтори."
           }
         }
       }
@@ -6287,7 +6287,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Камера не может продолжить работу."
+            "value" : "Не удалось продолжить съёмку."
           }
         }
       }
@@ -6309,7 +6309,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Камера не может продолжить работу. Введённое сохранено."
+            "value" : "Не удалось продолжить съёмку. Введённое сохранено."
           }
         }
       }
@@ -7683,7 +7683,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выбери день учёта перед сохранением."
+            "value" : "Выбери день перед сохранением."
           }
         }
       }
@@ -8836,7 +8836,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не удалось подключиться к приложению «Здоровье». Проверь Настройки iOS › Здоровье › Доступ к данным › Mivu."
+            "value" : "Не удалось подключиться к приложению «Здоровье». Проверь: Настройки iOS › Здоровье › Доступ к данным и устройства › Mivu."
           }
         }
       }
@@ -9502,7 +9502,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не удалось закончить остальное"
+            "value" : "Не удалось доделать остальное"
           }
         }
       }
@@ -11565,7 +11565,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Проще всего поддерживать"
+            "value" : "Проще всего выдерживать"
           }
         }
       }
@@ -12177,7 +12177,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta versión es compatible con inglés. Se conserva el idioma guardado en tu perfil."
+            "value" : "Esta versión solo admite inglés. Se conserva el idioma guardado en tu perfil."
           }
         },
         "ru" : {
@@ -12404,7 +12404,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "При смене единицы на несвязанную введи заново или очисти каждое известное значение."
+            "value" : "Если новая единица не связана со старой, введи каждое известное значение заново или очисти его."
           }
         }
       }
@@ -12679,7 +12679,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Важна каждая"
+            "value" : "Каждый день на счету"
           }
         }
       }
@@ -13175,7 +13175,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Закончить остальное"
+            "value" : "Доделать остальное"
           }
         }
       }
@@ -14395,7 +14395,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Qué tan rápido quieres aumentar de peso?"
+            "value" : "¿A qué ritmo quieres aumentar de peso?"
           }
         },
         "ru" : {
@@ -14417,7 +14417,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Qué tan rápido quieres bajar de peso?"
+            "value" : "¿A qué ritmo quieres bajar de peso?"
           }
         },
         "ru" : {
@@ -14805,7 +14805,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Включить расчётные затраты на тренировку в скорректированный остаток"
+            "value" : "Учитывать расчётный расход на тренировках в остатке калорий"
           }
         }
       }
@@ -15426,7 +15426,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "За последние %1$lld дн.: около %2$@ ккал в день по %#@tracked@."
+            "value" : "За последние %1$lld дн.: около %2$@ ккал в день (%#@tracked@)."
           },
           "substitutions" : {
             "tracked" : {
@@ -15437,19 +15437,19 @@
                   "few" : {
                     "stringUnit" : {
                       "state" : "translated",
-                      "value" : "%arg дням с записями"
+                      "value" : "%arg дня с записями"
                     }
                   },
                   "many" : {
                     "stringUnit" : {
                       "state" : "translated",
-                      "value" : "%arg дням с записями"
+                      "value" : "%arg дней с записями"
                     }
                   },
                   "one" : {
                     "stringUnit" : {
                       "state" : "translated",
-                      "value" : "%arg дню с записями"
+                      "value" : "%arg день с записями"
                     }
                   },
                   "other" : {
@@ -16347,7 +16347,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Локальные учётные данные удалены. Удалённый отзыв не подтверждён."
+            "value" : "Локальные учётные данные удалены. Отзыв доступа на сервере не подтверждён."
           }
         }
       }
@@ -18764,7 +18764,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Нет завершённых дней"
+            "value" : "Нет полных дней"
           }
         }
       }
@@ -19383,7 +19383,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пока нет дней учёта"
+            "value" : "Пока нет дней с записями"
           }
         }
       }
@@ -19494,7 +19494,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пока нет тренировок? В Garmin Connect включи передачу данных в «Здоровье», а в Настройках iOS › Здоровье › Доступ к данным разреши доступ для Mivu."
+            "value" : "Пока нет тренировок? В Garmin Connect включи передачу данных в «Здоровье», а в Настройках iOS › Здоровье › Доступ к данным и устройства разреши доступ для Mivu."
           }
         }
       }
@@ -20155,7 +20155,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Учитываются только активные калории каждой тренировки, один раз за занятие. Это можно изменить позже в Целях."
+            "value" : "Учитываются только активные калории каждой тренировки, один раз за занятие. Это можно изменить позже в разделе «Цели»."
           }
         }
       }
@@ -21815,7 +21815,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не хочу указывать"
+            "value" : "Не указывать"
           }
         }
       }
@@ -22160,7 +22160,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Профили — это отдельные личные дневники на этом iPhone. Перед сменой телефона сохрани папку резервной копии или экспортируй данные."
+            "value" : "Профили — это отдельные личные дневники на этом iPhone. Перед сменой телефона сохрани резервную копию в папку или сделай экспорт."
           }
         }
       }
@@ -25497,7 +25497,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Define un objetivo de calorías para ver qué tan cerca llegas"
+            "value" : "Define un objetivo de calorías para ver cuánto te acercas"
           }
         },
         "ru" : {
@@ -27269,7 +27269,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Peso meta"
+            "value" : "Peso objetivo"
           }
         },
         "ru" : {
@@ -28953,7 +28953,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Дней учёта"
+            "value" : "Дней с записями"
           }
         }
       }
@@ -29111,7 +29111,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Настроено ChatGPT"
+            "value" : "Уточнено ChatGPT"
           }
         }
       }
@@ -31159,7 +31159,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что было сегодня из еды?"
+            "value" : "Что у тебя сегодня было на тарелке?"
           }
         }
       }

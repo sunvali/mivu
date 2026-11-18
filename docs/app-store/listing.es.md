@@ -60,6 +60,6 @@ Captured on an iPhone 17 Pro Max simulator in Spanish with a real ChatGPT connec
 
 1. `screenshots/es/01-coach.png` — Registra una comida con tus palabras
 2. `screenshots/es/02-today.png` — Tu día de un vistazo
-3. `screenshots/es/03-progress.png` — Mira qué tan cerca llegas
+3. `screenshots/es/03-progress.png` — Mira cuánto te acercas a tu meta
 4. `screenshots/es/04-targets.png` — Metas que se ajustan a ti
 5. `screenshots/es/05-diary.png` — Tu diario se queda en tu iPhone

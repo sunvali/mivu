@@ -69,7 +69,7 @@ owner reads every string on one page before the language ships.
 | Earlier, Older (lists) | Более ранние | Not «Прежние» |
 | sample (mode, estimate, request) | тестовый; the sample itself: тестовый образец | "apple sample" is the fruit: «тестовое яблоко» |
 | tracked days | дни с записями | |
-| food units after a number | шт., ломт., порц., чаш., миск. | Invariable: the number is glued on in code |
+| food units after a number | шт., кус., порц., чаш., миск. | Invariable: the number is glued on in code |
 | tap | коснуться / касание | Apple's Russian; not "нажать" on touch |
 | Companion | персонаж | |
 | voice input, dictation | диктовка | |
