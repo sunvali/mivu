@@ -40,12 +40,14 @@ struct CoachView: View {
     @State private var requestAccessibilityPage: CoachTimelineView.AccessibilityPageRequest?
     @State private var diagnostics = CoachTimelineDiagnostics()
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
+    @AppStorage("morningWeightSkippedDay") private var skippedWeightDay = ""
     @AppStorage("coachSuggestionsEnabled", store: DiaryLaunch.defaults) private var suggestionsEnabled = true
     @AppStorage("coachSuggestionsCollapsed", store: DiaryLaunch.defaults) private var suggestionsCollapsed = false
     /// Comma-joined chip IDs the person chose to hide.
     @AppStorage("coachHiddenSuggestions", store: DiaryLaunch.defaults) private var hiddenSuggestions = ""
     @State private var clockHour = Calendar.current.component(.hour, from: .now)
     @State private var windowHeight: CGFloat = 0
+    @State private var promptsOverflow = false
     @State private var fillTaps = 0
     @State private var sendTaps = 0
     @FocusState private var editing: Bool
@@ -383,7 +385,7 @@ struct CoachView: View {
         HStack(alignment: .bottom, spacing: 12) {
             // Pip peeks over the composer (character sheet): the crop's bottom is the bar line his paws rest on.
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                          size: typeSize.isAccessibilitySize ? 76 : windowHeight > 0 && windowHeight < 700 ? 64 : 112, runtime: companionRuntime, surface: .coach,
+                          size: typeSize.isAccessibilitySize ? 76 : isShortWindow ? 64 : 112, runtime: companionRuntime, surface: .coach,
                           onTouch: onCompanionTouch)
             // The chip's 44-point tap area already pads it, so the stack itself adds no gap.
             VStack(alignment: .leading, spacing: 0) {
@@ -592,14 +594,20 @@ struct CoachView: View {
     }
     private var listening: Bool { voice.phase == .listening }
     private var showsSend: Bool { voice.phase == .idle && (coach.isSending || coach.attachmentDraft.isValid) }
+    /// Matches the compact card, which shows only while it still asks for today's weight.
     private var showsMorningCard: Bool {
-        guard !editing, let day = coach.diary.activeDay, coach.diary.morningRecap != nil, coach.diary.todaysMeals.isEmpty else { return false }
-        return dismissedMorningDay != day.id.uuidString
+        guard !editing, let day = coach.diary.activeDay, coach.diary.morningRecap != nil, coach.diary.todaysMeals.isEmpty,
+              coach.diary.readModel?.weight == nil else { return false }
+        return dismissedMorningDay != day.id.uuidString && skippedWeightDay != day.id.uuidString
     }
-    /// The row steps aside while the person composes, records, attaches, replies, sends, or answers Pip's question.
+    /// The closed Duo's outer screen and other short windows, keyboard excluded.
+    private var isShortWindow: Bool { windowHeight > 0 && windowHeight < 700 }
+    /// The row steps aside while the person composes, records, attaches, replies, sends, or answers Pip's question,
+    /// and on a short upright screen (the closed Duo) while the check-in card already asks something.
     private var showsQuickPromptRow: Bool {
         guard suggestionsEnabled, coach.attachmentDraft.text.isEmpty, coach.attachmentDraft.attachments.isEmpty,
-              coach.attachmentDraft.reply == nil, voice.phase == .idle, !coach.isSending, !hasOpenQuestion else { return false }
+              coach.attachmentDraft.reply == nil, voice.phase == .idle, !coach.isSending, !hasOpenQuestion,
+              !(isShortWindow && !isWide && showsMorningCard) else { return false }
         return suggestionsCollapsed || !quickPrompts.isEmpty
     }
     private var hasOpenQuestion: Bool {
@@ -617,7 +625,6 @@ struct CoachView: View {
         if let fixed = QuickPromptsUITestFixture.hour { hour = fixed }
         #endif
         let saved = model.meals.filter(\.isSaved), totals = nutritionTotals(saved.flatMap(\.items))
-        let short = windowHeight > 0 && windowHeight < 700
         return QuickPrompts.choose(QuickPromptInput(
             hour: hour, today: today,
             yesterday: ProgressAnalytics.window(endingOn: today, days: 1, offset: 1, zone: model.profile.timeZoneID).first ?? "",
@@ -625,7 +632,7 @@ struct CoachView: View {
             kcalEaten: totals.kcal, kcalTarget: model.activeGoal?.targets.kcal,
             proteinEaten: totals.protein, proteinTarget: model.activeGoal?.targets.protein,
             weighedToday: model.weight != nil, morningCardShowing: showsMorningCard, latest: latestForQuickPrompts,
-            limit: isWide || short || typeSize >= .accessibility3 ? 2 : 4, wide: isWide,
+            limit: isWide || isShortWindow || typeSize >= .accessibility3 ? 2 : 4, wide: isWide,
             hidden: Set(hiddenSuggestions.split(separator: ",").map(String.init))))
     }
     private var latestForQuickPrompts: QuickPromptLatest? {
@@ -644,6 +651,12 @@ struct CoachView: View {
                     HStack(spacing: 8) {
                         ForEach(Array(quickPrompts.enumerated()), id: \.element.id) { index, prompt in
                             quickPromptChip(prompt)
+                                // A chip that would peek as a sliver (a stray glyph) stays out of sight until scrolled in.
+                                .visualEffect { content, proxy in
+                                    let shown = proxy.bounds(of: .scrollView(axis: .horizontal))
+                                        .map { $0.intersection(CGRect(origin: .zero, size: proxy.size)).width } ?? proxy.size.width
+                                    return content.opacity(shown >= min(48, proxy.size.width - 1) ? 1 : 0)
+                                }
                                 .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
                                 .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.22).delay(Double(index) * 0.03), value: prompt.id)
                         }
@@ -651,15 +664,21 @@ struct CoachView: View {
                     .scrollTargetLayout()
                 }
                 .scrollTargetBehavior(.viewAligned).scrollIndicators(.hidden)
-                // The last chip fades under the arrow, so a longer row reads as more rather than clipped.
-                .mask { HStack(spacing: 0) { Color.black; LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24) } }
+                // Only a row with more to scroll fades at its end, so it reads as more; chips that fit stay whole.
+                .onScrollGeometryChange(for: Bool.self) { $0.contentSize.width > $0.containerSize.width + $0.contentOffset.x + 1 } action: { _, more in promptsOverflow = more }
+                .mask {
+                    HStack(spacing: 0) {
+                        Color.black
+                        if promptsOverflow { LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24) }
+                    }
+                }
                 .accessibilityElement(children: .contain).accessibilityIdentifier("coachQuickPrompts")
             }
             Button { suggestionsCollapsed.toggle() } label: {
-                Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.diarySecondary)
+                // A bare glyph, so it reads as a control rather than another chip; the tap area reaches 44 points.
+                Image(systemName: "chevron.down").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.diarySecondary)
                     .rotationEffect(.degrees(suggestionsCollapsed && !reduceMotion ? 180 : 0))
-                    .frame(width: 32, height: 32).background(Color.diarySurface, in: .circle)
-                    .frame(width: 44, height: 44).contentShape(.circle)
+                    .frame(width: 32, height: 44).contentShape(.rect.inset(by: -6))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(suggestionsCollapsed ? String(localized: "Show suggestions") : String(localized: "Hide suggestions"))
@@ -669,26 +688,32 @@ struct CoachView: View {
     }
     private func quickPromptChip(_ prompt: QuickPrompt) -> some View {
         Button { use(prompt) } label: {
-            HStack(spacing: prompt.kcal == nil ? 6 : 8) {
+            // Footnote-sized (owner, 2026-11-17) so two whole chips fit on an iPhone and the closed Duo.
+            HStack(spacing: prompt.kcal == nil ? 5 : 7) {
                 if prompt.kcal != nil { quickPromptThumbnail(prompt) }
-                else if let symbol = prompt.symbol {
-                    Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+                // A question's arrow disc already marks it, so only fill chips lead with a symbol.
+                else if let symbol = prompt.symbol, !prompt.sends {
+                    Image(systemName: symbol).font(.footnote.weight(.medium)).foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
                 }
-                Text(prompt.title).font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryText).lineLimit(1)
-                if let kcal = prompt.kcal { Text(kcal, format: .number).font(.footnote).foregroundStyle(Color.diarySecondary).monospacedDigit() }
+                Text(prompt.title).font(.footnote.weight(.medium)).foregroundStyle(Color.diaryText).lineLimit(1)
+                if let kcal = prompt.kcal { Text(kcal, format: .number).font(.caption).foregroundStyle(Color.diarySecondary).monospacedDigit() }
                 if prompt.sends {
                     // Echoes the Send button: this chip asks right away.
-                    Image(systemName: "arrow.up").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.diaryActionText)
-                        .frame(width: 20, height: 20).background(Color.diaryAccent, in: .circle).accessibilityHidden(true)
+                    Image(systemName: "arrow.up").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.diaryActionText)
+                        .frame(width: 18, height: 18).background(Color.diaryAccent, in: .circle).accessibilityHidden(true)
                 }
             }
-            .padding(.leading, prompt.kcal == nil ? 11 : 3).padding(.trailing, prompt.sends ? 8 : 13)
-            .frame(minHeight: 36)
+            .padding(.leading, prompt.kcal != nil ? 3 : prompt.sends ? 12 : 10).padding(.trailing, prompt.sends ? 7 : 12)
+            .frame(minHeight: 34)
             .background {
                 Capsule().fill(Color.diarySurface)
                     .overlay { if prompt.kcal != nil { Capsule().fill(Color.diaryAccent.opacity(colorScheme == .dark ? 0.22 : 0.09)) } }
             }
-            .overlay { if prompt.kcal == nil { Capsule().strokeBorder(Color.diaryRule.opacity(0.6), lineWidth: 0.5) } }
+            .overlay {
+                if prompt.kcal == nil {
+                    Capsule().strokeBorder(colorScheme == .dark ? Color.white.opacity(0.16) : Color.diaryRule.opacity(0.6), lineWidth: 0.5)
+                }
+            }
             .frame(minHeight: 44).contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -703,10 +728,10 @@ struct CoachView: View {
     }
     private func quickPromptThumbnail(_ prompt: QuickPrompt) -> some View {
         Group {
-            if let photo = prompt.photo { DiaryPhotoPreview(model: coach.diary, reference: photo, height: 30).frame(width: 30, height: 30) }
+            if let photo = prompt.photo { DiaryPhotoPreview(model: coach.diary, reference: photo, height: 28).frame(width: 28, height: 28) }
             else {
-                Image(systemName: "fork.knife").font(.system(size: 15, weight: .medium)).foregroundStyle(Color.diaryAccent)
-                    .frame(width: 30, height: 30).background(Color.diaryAccent.opacity(0.12))
+                Image(systemName: "fork.knife").font(.footnote.weight(.medium)).foregroundStyle(Color.diaryAccent)
+                    .frame(width: 28, height: 28).background(Color.diaryAccent.opacity(0.12))
             }
         }
         .clipShape(.circle).accessibilityHidden(true)

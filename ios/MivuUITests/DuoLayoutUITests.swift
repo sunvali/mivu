@@ -96,8 +96,8 @@ import XCTest
                                "--wide-layout-ui-test", "--quick-prompts-fixture", "--quick-prompts-hour", "13"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.buttons["coachQuickPrompt-ask.balanced"].waitForExistence(timeout: 5), "Beside the live day Coach asks what the day doesn't show")
-        XCTAssertFalse(app.buttons["coachQuickPrompt-ask.calories"].exists)
+        XCTAssertTrue(app.buttons["coachQuickPrompt-relog"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["coachQuickPrompt-ask.calories"].exists, "Beside the live day the number is already on screen")
         XCTAssertLessThanOrEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "coachQuickPrompt-")).count, 2)
     }
 

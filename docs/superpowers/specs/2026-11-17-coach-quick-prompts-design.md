@@ -108,6 +108,12 @@ the real screenshots before the PR.
       quick-prompt chip covers.
     - The Today and Progress tabs stay one tap away in the tab bar, and on the Duo, in the system
       bar.
+15. **Chip fit (owner, 2026-11-17, after the UX review of real screenshots):** chip text is one size
+    smaller (footnote, 13 pt; 44 pt targets kept) so two whole chips fit on an iPhone and the closed
+    Duo. Further chips peek and scroll, and only a row with more to scroll fades at its end. Question
+    chips drop their leading symbol (the arrow disc marks them), the collapse arrow is a bare chevron,
+    "Calories left?" needs a calorie goal, "Was it balanced?" needs food logged today, and on a short
+    screen the row steps aside while the check-in card shows.
 
 ## Chip catalog
 

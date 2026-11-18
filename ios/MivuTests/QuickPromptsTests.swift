@@ -76,9 +76,12 @@ struct QuickPromptsTests {
     }
 
     @Test func wideSwapsCaloriesForBalancedAndLimitKeepsASend() {
-        let ids = QuickPrompts.choose(input(hour: 13, wide: true)).map(\.id)
+        let ids = QuickPrompts.choose(input(hour: 13, todaysMeals: [meal(hour: 9)], wide: true)).map(\.id)
         #expect(ids.contains("ask.balanced"))
         #expect(!ids.contains("ask.calories"))
+        // With nothing eaten yet there is no day to judge.
+        let empty = QuickPrompts.choose(input(hour: 13, wide: true)).map(\.id)
+        #expect(!empty.contains("ask.balanced") && !empty.contains("ask.calories"))
         let source = meal(day: 16, hour: 8)
         let two = QuickPrompts.choose(input(hour: 8, recent: [recent(16, source)], limit: 2))
         #expect(two.count == 2)
@@ -103,6 +106,14 @@ struct QuickPromptsTests {
         let chips = QuickPrompts.choose(input(hour: 13, kcalTarget: nil))
         #expect(chips.map(\.id) == ["log.slot", "log.weight"])
         #expect(!chips.contains { $0.sends })
+    }
+
+    @Test func withoutACalorieGoalAMealAsksAboutBalance() {
+        let lunch = meal(hour: 13, minute: 10)
+        let ids = QuickPrompts.choose(input(hour: 13, todaysMeals: [lunch], kcalTarget: nil,
+                                            latest: .meal(id: lunch.id, items: committed(lunch), localDate: "2026-11-17"))).map(\.id)
+        #expect(ids == ["ask.balanced", "fix.portion", "add.drink"])
+        #expect(QuickPrompts.choose(input(hour: 13, kcalTarget: nil, latest: .workout(localDate: "2026-11-17"))).map(\.id) == ["log.slot", "log.weight"])
     }
 
     @Test func loggedSlotOffersASnack() {

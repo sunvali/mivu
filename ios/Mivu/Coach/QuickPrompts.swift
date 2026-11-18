@@ -103,7 +103,7 @@ enum QuickPrompts {
             if let meal = input.todaysMeals.first(where: { $0.id == id }),
                meal.items.map({ [$0.id.uuidString, "\($0.quantity)", $0.unit] }) == committed.map({ [$0.itemID.uuidString, "\($0.quantity)", $0.unit] }) {
                 let slot = MealSlot.at(hour: input.calendar.component(.hour, from: meal.eatenAt))
-                chips = [calories(input),
+                chips = [calories(input)].compactMap { $0 } + [
                          QuickPrompt(id: "fix.portion", title: String(localized: "Smaller portion…"), symbol: "minus.circle",
                                      action: .fill(slot.smallerPortion)),
                          QuickPrompt(id: "add.drink", title: String(localized: "Add a drink…"), symbol: "cup.and.saucer",
@@ -113,7 +113,7 @@ enum QuickPrompts {
             chips = [QuickPrompt(id: "ask.trend", title: String(localized: "Weekly trend?"), symbol: "chart.line.uptrend.xyaxis",
                                  action: .send(String(localized: "Weekly trend?")))] + slotChips(input)
         case .workout(let date) where date == input.today:
-            chips = [calories(input)] + slotChips(input)
+            chips = [calories(input)].compactMap { $0 } + slotChips(input)
         default:
             chips = slotChips(input)
         }
@@ -150,14 +150,17 @@ enum QuickPrompts {
             return QuickPrompt(id: "ask.protein", title: String(localized: "Protein ideas?"), symbol: "leaf.fill",
                                action: .send(String(localized: "Protein ideas?")))
         }
-        return input.kcalTarget == nil ? nil : calories(input)
+        return calories(input)
     }
 
-    private static func calories(_ input: QuickPromptInput) -> QuickPrompt {
-        // Beside the live day the number is already on screen, so ask something it doesn't show.
-        input.wide
-            ? QuickPrompt(id: "ask.balanced", title: String(localized: "Was it balanced?"), symbol: "leaf.fill", action: .send(String(localized: "Was it balanced?")))
-            : QuickPrompt(id: "ask.calories", title: String(localized: "Calories left?"), symbol: "chart.bar.fill", action: .send(String(localized: "Calories left?")))
+    /// "Calories left?" needs a calorie goal. Beside the live day the number is already on screen, so, as without
+    /// a goal, ask about balance instead, once there is food today to judge.
+    private static func calories(_ input: QuickPromptInput) -> QuickPrompt? {
+        if !input.wide, input.kcalTarget != nil {
+            return QuickPrompt(id: "ask.calories", title: String(localized: "Calories left?"), symbol: "chart.bar.fill", action: .send(String(localized: "Calories left?")))
+        }
+        return input.todaysMeals.isEmpty ? nil
+            : QuickPrompt(id: "ask.balanced", title: String(localized: "Was it balanced?"), symbol: "leaf.fill", action: .send(String(localized: "Was it balanced?")))
     }
 
     private static func relog(_ input: QuickPromptInput, slot: MealSlot) -> QuickPrompt? {
