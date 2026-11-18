@@ -35,3 +35,11 @@ Alert, Coach bubble and Settings → Coach AI were inspected on the simulator wi
 - Live check with a real Free ChatGPT account: blocked, owner-only. It also answers whether
   a Free account is granted the plan scope at consent.
 - Full UI suite: not run (targeted runs only).
+
+## After merging main
+
+Source `ed0632f7` (branch merged with main `5a6f845b`), simulator "Mivu free-tier"
+(iPhone 17 Pro, iOS 27.0), test plan `Mivu`: ResponsesClientTests, ConnectionTests,
+CoachConnectionTests, the three setup and not-eligible UI tests above and SmokeUITests —
+98 passed, 0 failed. Result bundle:
+`~/Library/Developer/XcodeBuildMCP/workspaces/mivu-free-tier-3bf596a12d45/result-bundles/test_sim_2026-11-18T02-03-03-092Z_pid16302_a1a3d9d9.xcresult`.
