@@ -7,6 +7,9 @@ struct SettingsView: View {
     let destination: CoachDestination?
     @Binding var companionSelection: CompanionSelection
     @State private var nutritionDraft = NutritionKeyDraft()
+    @AppStorage("coachSuggestionsEnabled", store: DiaryLaunch.defaults) private var suggestionsEnabled = true
+    @AppStorage("coachSuggestionsCollapsed", store: DiaryLaunch.defaults) private var suggestionsCollapsed = false
+    @AppStorage("coachHiddenSuggestions", store: DiaryLaunch.defaults) private var hiddenSuggestions = ""
     @State private var nutritionConfigured = false
     @State private var profileName = ""
     @State private var creatingProfile = false
@@ -150,6 +153,20 @@ struct SettingsView: View {
                 }.frame(minHeight: 44)
             }
                 .accessibilityIdentifier("pipStickers")
+            Toggle(isOn: Binding(get: { suggestionsEnabled }, set: { on in
+                // Turning suggestions back on brings back every chip the person hid or collapsed.
+                if on { hiddenSuggestions = ""; suggestionsCollapsed = false }
+                suggestionsEnabled = on
+            })) {
+                HStack(spacing: 12) {
+                    Image(systemName: "text.bubble").foregroundStyle(Color.diaryAccent).frame(width: 40).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show suggestions").foregroundStyle(Color.diaryText)
+                        Text("Quick prompts above the Coach message box.").font(.footnote).foregroundStyle(Color.diarySecondary)
+                    }
+                }.frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("coachSuggestionsToggle")
         }
     }
     private func companionPreview(_ character: CharacterDescriptor) -> some View {

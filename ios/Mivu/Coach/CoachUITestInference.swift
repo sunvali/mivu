@@ -36,6 +36,9 @@ enum CoachUITestInference {
             let id = UUID().uuidString
             return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: "no_such_tool", namespace: "mivu", arguments: "{}")], outputItems: [])
         }
+        if case .meal(let source)? = context.replyTo?.target, text.hasPrefix("for "), text.contains(" i had ") {
+            return try relog(input, context: context, source: source)
+        }
         if !hasOutput, let result = try clarification(input, context: context) { return result }
         if hasOutput, text.contains("clarify-options") {
             // Like a real multi-food message: the clear foods save first, then the unclear one is asked about.
@@ -91,6 +94,24 @@ enum CoachUITestInference {
         let argumentsJSON = String(data: try JSONSerialization.data(withJSONObject: arguments, options: .sortedKeys), encoding: .utf8)!
         let id = UUID().uuidString
         return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: name, namespace: "mivu", arguments: argumentsJSON)], outputItems: [])
+    }
+    /// A quick-prompt re-log quotes the saved meal: read it, then copy it unchanged.
+    private static func relog(_ input: [CoachInferenceInput], context: CoachContext, source: UUID) throws -> CoachInferenceResult {
+        let outputs = input.compactMap { value -> String? in if case .functionOutput(_, let text) = value { return text }; return nil }
+        func call(_ name: String, _ args: [String: Any]) throws -> CoachInferenceResult {
+            let id = UUID().uuidString, json = String(decoding: try JSONSerialization.data(withJSONObject: args), as: UTF8.self)
+            return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: name, namespace: "mivu", arguments: json)], outputItems: [])
+        }
+        switch outputs.count {
+        case 0: return try call("get_meal", ["meal_id": source.uuidString])
+        case 1:
+            let meal = try JSONDecoder().decode(CoachContext.Meal.self, from: Data(outputs[0].utf8))
+            let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"
+            formatter.timeZone = TimeZone(identifier: context.captureTimeZoneID) ?? .gmt
+            return try call("copy_meal", ["source_meal_id": source.uuidString, "expected_revision": meal.revision,
+                                          "target_local_date": formatter.string(from: context.capturedAt), "eaten_at": NSNull()])
+        default: return CoachInferenceResult(model: "native-test-fixture", text: "Logged it again.", calls: [], outputItems: [])
+        }
     }
     /// Scenarios "clarify-candidates" / "clarify-confirm": ask on the first turn, resolve against pendingQuestion on the next.
     private static func clarification(_ input: [CoachInferenceInput], context: CoachContext) throws -> CoachInferenceResult? {

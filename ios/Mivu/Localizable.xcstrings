@@ -26,6 +26,90 @@
         }
       }
     },
+    "%@ · %lld kcal" : {
+      "comment" : "Quoted re-log: chip title and the meal's calories",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$lld קק״ל"
+          }
+        }
+      }
+    },
+    "%@, %lld calories" : {
+      "comment" : "VoiceOver label for a re-log chip: title and calories",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$lld קלוריות"
+          }
+        }
+      }
+    },
+    "Add a drink to breakfast: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף משקה לארוחת הבוקר: "
+          }
+        }
+      }
+    },
+    "Add a drink to dinner: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף משקה לארוחת הערב: "
+          }
+        }
+      }
+    },
+    "Add a drink to lunch: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף משקה לארוחת הצהריים: "
+          }
+        }
+      }
+    },
+    "Add a drink…" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוספת משקה…"
+          }
+        }
+      }
+    },
+    "Anything else?" : {
+      "comment" : "Pip's short line beside the quick prompts after something was logged",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עוד משהו?"
+          }
+        }
+      }
+    },
+    "Calories left?" : {
+      "comment" : "Coach quick-prompt chip question sent to Coach about calories remaining today",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמה קלוריות נשארו?"
+          }
+        }
+      }
+    },
     "City" : {
       "comment" : "Search field placeholder: find a time zone by city name",
       "localizations" : {
@@ -37,12 +121,135 @@
         }
       }
     },
+    "Dinner time?" : {
+      "comment" : "Pip's short line in the evening beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זמן ארוחת ערב?"
+          }
+        }
+      }
+    },
     "Earlier meals keep the time where you ate them." : {
       "localizations" : {
         "he" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "ארוחות קודמות נשמרות לפי השעה המקומית שבה נאכלו."
+          }
+        }
+      }
+    },
+    "Fills the message" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ממלא את ההודעה"
+          }
+        }
+      }
+    },
+    "For a snack I had " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כנשנוש אכלתי "
+          }
+        }
+      }
+    },
+    "For breakfast I had %@" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת בוקר אכלתי %@"
+          }
+        }
+      }
+    },
+    "For dinner I had " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת ערב אכלתי "
+          }
+        }
+      }
+    },
+    "For dinner I had %@" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת ערב אכלתי %@"
+          }
+        }
+      }
+    },
+    "For lunch I had " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת צהריים אכלתי "
+          }
+        }
+      }
+    },
+    "For lunch I had %@" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת צהריים אכלתי %@"
+          }
+        }
+      }
+    },
+    "Hi again!" : {
+      "comment" : "Pip's short greeting at night beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שוב שלום!"
+          }
+        }
+      }
+    },
+    "Hide suggestions" : {
+      "comment" : "Button that collapses the Coach quick-prompt chips",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסתרת הצעות"
+          }
+        }
+      }
+    },
+    "Hide this suggestion" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסתרת ההצעה הזו"
+          }
+        }
+      }
+    },
+    "How was yesterday?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "איך היה אתמול?"
           }
         }
       }
@@ -58,6 +265,112 @@
         }
       }
     },
+    "Log a snack…" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום נשנוש…"
+          }
+        }
+      }
+    },
+    "Log breakfast…" : {
+      "comment" : "Coach quick-prompt chip that starts a breakfast entry for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום ארוחת בוקר…"
+          }
+        }
+      }
+    },
+    "Log dinner…" : {
+      "comment" : "Coach quick-prompt chip that starts a dinner entry for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום ארוחת ערב…"
+          }
+        }
+      }
+    },
+    "Log lunch…" : {
+      "comment" : "Coach quick-prompt chip that starts a lunch entry for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום ארוחת צהריים…"
+          }
+        }
+      }
+    },
+    "Log weight…" : {
+      "comment" : "Coach quick-prompt chip that starts a weigh-in for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום משקל…"
+          }
+        }
+      }
+    },
+    "Lunch time?" : {
+      "comment" : "Pip's short line at lunchtime beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זמן ארוחת צהריים?"
+          }
+        }
+      }
+    },
+    "Make breakfast a smaller portion: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להקטין את המנה בארוחת הבוקר: "
+          }
+        }
+      }
+    },
+    "Make dinner a smaller portion: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להקטין את המנה בארוחת הערב: "
+          }
+        }
+      }
+    },
+    "Make lunch a smaller portion: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להקטין את המנה בארוחת הצהריים: "
+          }
+        }
+      }
+    },
+    "Morning!" : {
+      "comment" : "Pip's short morning greeting beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בוקר טוב!"
+          }
+        }
+      }
+    },
     "Now on %@ time" : {
       "comment" : "Toast: the diary followed the phone to a new time zone; %@ is a city name",
       "localizations" : {
@@ -69,6 +382,70 @@
         }
       }
     },
+    "Protein ideas?" : {
+      "comment" : "Coach quick-prompt chip question sent to Coach for protein-rich food ideas",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רעיונות לחלבון?"
+          }
+        }
+      }
+    },
+    "Quick prompts above the Coach message box." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הצעות מהירות מעל תיבת ההודעה לפיפ."
+          }
+        }
+      }
+    },
+    "Same breakfast" : {
+      "comment" : "Coach quick-prompt chip: log yesterday's breakfast again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמו אתמול בבוקר"
+          }
+        }
+      }
+    },
+    "Same dinner" : {
+      "comment" : "Coach quick-prompt chip: log yesterday's dinner again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמו אתמול בערב"
+          }
+        }
+      }
+    },
+    "Same lunch" : {
+      "comment" : "Coach quick-prompt chip: log yesterday's lunch again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמו אתמול בצהריים"
+          }
+        }
+      }
+    },
+    "Sends to Coach" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נשלח לפיפ"
+          }
+        }
+      }
+    },
     "Set automatically" : {
       "comment" : "Toggle: the diary follows the phone's time zone",
       "localizations" : {
@@ -76,6 +453,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "הגדרה אוטומטית"
+          }
+        }
+      }
+    },
+    "Show suggestions" : {
+      "comment" : "Button and setting that show the Coach quick-prompt chips",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הצגת הצעות"
+          }
+        }
+      }
+    },
+    "Smaller portion…" : {
+      "comment" : "Coach quick-prompt chip that starts asking Coach to shrink the meal just logged",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מנה קטנה יותר…"
+          }
+        }
+      }
+    },
+    "Snack time?" : {
+      "comment" : "Pip's short line in the afternoon beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זמן נשנוש?"
           }
         }
       }
@@ -109,6 +519,60 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מעבר לשעון %@"
+          }
+        }
+      }
+    },
+    "Usual breakfast" : {
+      "comment" : "Coach quick-prompt chip: log the most frequent breakfast again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ארוחת הבוקר הקבועה"
+          }
+        }
+      }
+    },
+    "Usual dinner" : {
+      "comment" : "Coach quick-prompt chip: log the most frequent dinner again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ארוחת הערב הקבועה"
+          }
+        }
+      }
+    },
+    "Usual lunch" : {
+      "comment" : "Coach quick-prompt chip: log the most frequent lunch again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ארוחת הצהריים הקבועה"
+          }
+        }
+      }
+    },
+    "Was it balanced?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זה היה מאוזן?"
+          }
+        }
+      }
+    },
+    "Weekly trend?" : {
+      "comment" : "Coach quick-prompt chip question sent to Coach about the week's weight",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה המגמה השבועית?"
           }
         }
       }
@@ -8367,17 +8831,6 @@
         }
       }
     },
-    "Log breakfast" : {
-      "comment" : "Siri/shortcut or button: record a breakfast meal",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "רישום ארוחת בוקר"
-          }
-        }
-      }
-    },
     "Log meal" : {
       "comment" : "Button/action: record a meal",
       "extractionState" : "manual",
@@ -8420,16 +8873,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "רישום משקל בוקר"
-          }
-        }
-      }
-    },
-    "Log my weight" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "רישום המשקל שלי"
           }
         }
       }
@@ -12362,28 +12805,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מעבר אל %@"
-          }
-        }
-      }
-    },
-    "See progress" : {
-      "comment" : "Button: opens Progress",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מעבר להתקדמות"
-          }
-        }
-      }
-    },
-    "See today" : {
-      "comment" : "Button: opens Today",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מעבר להיום"
           }
         }
       }

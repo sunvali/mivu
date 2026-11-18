@@ -11,7 +11,6 @@ struct CoachView: View {
     var onNavigationConsumed: (UUID) -> Void = { _ in }
     var openHistory: () -> Void = {}
     var openToday: () -> Void = {}
-    var openProgress: () -> Void = {}
     /// Shared with the side pane: sideways it shows this beside the chat, upright it is pushed over the chat.
     @Binding var pane: CoachPane?
     /// True while the chat takes the whole sideways screen and the side pane is put away.
@@ -41,6 +40,16 @@ struct CoachView: View {
     @State private var requestAccessibilityPage: CoachTimelineView.AccessibilityPageRequest?
     @State private var diagnostics = CoachTimelineDiagnostics()
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
+    @AppStorage("morningWeightSkippedDay") private var skippedWeightDay = ""
+    @AppStorage("coachSuggestionsEnabled", store: DiaryLaunch.defaults) private var suggestionsEnabled = true
+    @AppStorage("coachSuggestionsCollapsed", store: DiaryLaunch.defaults) private var suggestionsCollapsed = false
+    /// Comma-joined chip IDs the person chose to hide.
+    @AppStorage("coachHiddenSuggestions", store: DiaryLaunch.defaults) private var hiddenSuggestions = ""
+    @State private var clockHour = Calendar.current.component(.hour, from: .now)
+    @State private var windowHeight: CGFloat = 0
+    @State private var promptsOverflow = false
+    @State private var fillTaps = 0
+    @State private var sendTaps = 0
     @FocusState private var editing: Bool
     @ScaledMetric(relativeTo: .subheadline) private var dayRowHeight: CGFloat = 36
     /// Upright, a record or day is pushed over the chat. Progress keeps its own tab there, and sideways
@@ -219,6 +228,19 @@ struct CoachView: View {
             coach.synchronizeDraftOwnership(); restoreKeyboard = false; showPhotos = false; editing = false; pane = nil
             stopListening()
         }
+        // Quick prompts follow the diary and the hour.
+        .task(id: coach.diary.changeGeneration) { await coach.refreshRecentMeals() }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                let hour = Calendar.current.component(.hour, from: .now); if hour != clockHour { clockHour = hour }
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { clockHour = Calendar.current.component(.hour, from: .now) } }
+        // The whole window, keyboard included: a short one (the closed Duo) keeps the row to two chips.
+        .background { Color.clear.onGeometryChange(for: CGFloat.self, of: \.size.height) { windowHeight = $0 }.ignoresSafeArea() }
+        .sensoryFeedback(.selection, trigger: fillTaps)
+        .sensoryFeedback(.impact(weight: .light), trigger: sendTaps)
     }
 
     @ViewBuilder private func accessibilityPageAction(_ direction: CoachPageDirection, timeline: CoachTimelineViewModel) -> some View {
@@ -363,7 +385,7 @@ struct CoachView: View {
         HStack(alignment: .bottom, spacing: 12) {
             // Pip peeks over the composer (character sheet): the crop's bottom is the bar line his paws rest on.
             CompanionView(presentation: companionOutput, darkMode: colorScheme == .dark,
-                          size: typeSize.isAccessibilitySize ? 76 : 112, runtime: companionRuntime, surface: .coach,
+                          size: typeSize.isAccessibilitySize ? 76 : isShortWindow ? 64 : 112, runtime: companionRuntime, surface: .coach,
                           onTouch: onCompanionTouch)
             // The chip's 44-point tap area already pads it, so the stack itself adds no gap.
             VStack(alignment: .leading, spacing: 0) {
@@ -395,7 +417,7 @@ struct CoachView: View {
         let line = PipLine.current(hour: Calendar.current.component(.hour, from: .now), mealsLogged: !coach.diary.todaysMeals.isEmpty,
                                    typing: editing, connected: coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture,
                                    processing: companionProcessing, withPhotos: sentWithPhotos, recovery: companionRecovery,
-                                   error: coach.errorMessage, turnState: coach.companionTurn?.state)
+                                   error: coach.errorMessage, turnState: coach.companionTurn?.state, chips: showsQuickPromptRow && !suggestionsCollapsed)
         // At accessibility sizes the greeting would crowd the conversation; status and errors still show.
         if typeSize.isAccessibilitySize, case .say = line { return nil }
         return line
@@ -471,27 +493,32 @@ struct CoachView: View {
                     }
                 }
             }
-            if !editing, let day = coach.diary.activeDay, let recap = coach.diary.morningRecap, coach.diary.todaysMeals.isEmpty,
-               dismissedMorningDay != day.id.uuidString {
+            if showsMorningCard, let day = coach.diary.activeDay, let recap = coach.diary.morningRecap {
                 MorningCheckInCard(model: coach.diary, day: day, previous: recap.previous, previousTarget: recap.target,
                                    todayWeight: coach.diary.readModel?.weight, compact: true,
                                    onTellCoach: { coach.attachmentDraft.text = String(localized: "My weight this morning is "); editing = true }) {
                     withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
                 }.transition(.opacity)
             }
-            if showsStarters { starters }
             if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
             // Pip stands on the left of the field's flat top edge, never on the round button; his bubble and chip
             // may run over the button's column so short lines do not wrap.
             VStack(alignment: .leading, spacing: 0) {
                 companionStrip
-                HStack(alignment: .bottom, spacing: 8) {
-                    composerInput
-                    // One round action: the mic while the draft is empty, Send once there is something to send.
-                    Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
+                // One tray holds the quick prompts and the field, so the shortcuts read as part of the input.
+                VStack(alignment: .leading, spacing: 8) {
+                    if showsQuickPromptRow { quickPromptRow }
+                    HStack(alignment: .bottom, spacing: 8) {
+                        composerInput
+                        // One round action: the mic while the draft is empty, Send once there is something to send.
+                        Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
+                    }
+                    .animation(reduceMotion ? nil : .snappy, value: showsSend)
                 }
-                .animation(reduceMotion ? nil : .snappy, value: showsSend)
+                .padding(8)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 30, style: .continuous).strokeBorder(Color.diaryRule.opacity(0.5), lineWidth: 0.5) }
             }
             if let note = voice.note {
                 Text(note).font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachVoiceNote")
@@ -530,7 +557,8 @@ struct CoachView: View {
             }.allowsHitTesting(false)
         }
         .disabled(coach.isSending || coach.diary.isChangingProfile)
-        .animation(reduceMotion ? nil : .snappy, value: showsStarters)
+        .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.22), value: showsQuickPromptRow)
+        .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.22), value: suggestionsCollapsed)
     }
     private var composerInput: some View {
         // A reply quote sits inside the field's top, as in Messages; the camera sits at its trailing edge.
@@ -566,24 +594,161 @@ struct CoachView: View {
     }
     private var listening: Bool { voice.phase == .listening }
     private var showsSend: Bool { voice.phase == .idle && (coach.isSending || coach.attachmentDraft.isValid) }
-    private var showsStarters: Bool {
-        coach.timeline?.exchanges.isEmpty == true && !coach.attachmentDraft.isValid && !editing && voice.phase == .idle
+    /// Matches the compact card, which shows only while it still asks for today's weight.
+    private var showsMorningCard: Bool {
+        guard !editing, let day = coach.diary.activeDay, coach.diary.morningRecap != nil, coach.diary.todaysMeals.isEmpty,
+              coach.diary.readModel?.weight == nil else { return false }
+        return dismissedMorningDay != day.id.uuidString && skippedWeightDay != day.id.uuidString
     }
-    private var starters: some View {
-        // Each starter fills the draft for review; nothing is sent until the user taps Send.
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach([(String(localized: "Log breakfast"), String(localized: "For breakfast I had ")), (String(localized: "Log my weight"), String(localized: "My weight this morning is ")),
-                         (String(localized: "How am I doing today?"), String(localized: "How am I doing today?"))], id: \.0) { title, draft in
-                    Button(title) { coach.attachmentDraft.text = draft; editing = true }
-                        .font(.subheadline).controlSize(.large)
-                        .buttonStyle(.glass).accessibilityIdentifier("coachStarter")
+    /// The closed Duo's outer screen and other short windows, keyboard excluded.
+    private var isShortWindow: Bool { windowHeight > 0 && windowHeight < 700 }
+    /// The row steps aside while the person composes, records, attaches, replies, sends, or answers Pip's question,
+    /// and on a short upright screen (the closed Duo) while the check-in card already asks something.
+    private var showsQuickPromptRow: Bool {
+        guard suggestionsEnabled, coach.attachmentDraft.text.isEmpty, coach.attachmentDraft.attachments.isEmpty,
+              coach.attachmentDraft.reply == nil, voice.phase == .idle, !coach.isSending, !hasOpenQuestion,
+              !(isShortWindow && !isWide && showsMorningCard) else { return false }
+        return suggestionsCollapsed || !quickPrompts.isEmpty
+    }
+    private var hasOpenQuestion: Bool {
+        guard let turn = coach.timeline?.exchanges.last, coach.timeline?.window.isLatest(turn.id) == true, let question = turn.question else { return false }
+        return question.options != nil || !question.candidates.isEmpty
+    }
+    private var quickPrompts: [QuickPrompt] {
+        guard let model = coach.diary.readModel else { return [] }
+        // Before the morning starts a day, today's date still drives the chips.
+        let today = model.activeDay?.localDate ?? ProgressAnalytics.dateLabel(.now, zone: model.profile.timeZoneID)
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: model.profile.timeZoneID) ?? .current
+        _ = clockHour // re-evaluates when the hour turns
+        var hour = calendar.component(.hour, from: .now)
+        #if DEBUG
+        if let fixed = QuickPromptsUITestFixture.hour { hour = fixed }
+        #endif
+        let saved = model.meals.filter(\.isSaved), totals = nutritionTotals(saved.flatMap(\.items))
+        return QuickPrompts.choose(QuickPromptInput(
+            hour: hour, today: today,
+            yesterday: ProgressAnalytics.window(endingOn: today, days: 1, offset: 1, zone: model.profile.timeZoneID).first ?? "",
+            calendar: calendar, todaysMeals: saved, recent: coach.recentMeals,
+            kcalEaten: totals.kcal, kcalTarget: model.activeGoal?.targets.kcal,
+            proteinEaten: totals.protein, proteinTarget: model.activeGoal?.targets.protein,
+            weighedToday: model.weight != nil, morningCardShowing: showsMorningCard, latest: latestForQuickPrompts,
+            limit: isWide || isShortWindow || typeSize >= .accessibility3 ? 2 : 4, wide: isWide,
+            hidden: Set(hiddenSuggestions.split(separator: ",").map(String.init))))
+    }
+    private var latestForQuickPrompts: QuickPromptLatest? {
+        guard let turn = coach.timeline?.exchanges.last, coach.timeline?.window.isLatest(turn.id) == true,
+              let receipt = turn.receipts.last(where: { ($0.mealID != nil || $0.weightID != nil || $0.workoutID != nil) && !$0.operationKey.contains("/delete_") })
+        else { return nil }
+        if let id = receipt.mealID { return .meal(id: id, items: receipt.items, localDate: turn.displayLocalDate) }
+        return receipt.weightID != nil ? .weight(localDate: turn.displayLocalDate) : .workout(localDate: turn.displayLocalDate)
+    }
+    private var quickPromptRow: some View {
+        HStack(spacing: 4) {
+            if suggestionsCollapsed {
+                Spacer(minLength: 0)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(quickPrompts.enumerated()), id: \.element.id) { index, prompt in
+                            quickPromptChip(prompt)
+                                // A chip that would peek as a sliver (a stray glyph) stays out of sight until scrolled in.
+                                .visualEffect { content, proxy in
+                                    let shown = proxy.bounds(of: .scrollView(axis: .horizontal))
+                                        .map { $0.intersection(CGRect(origin: .zero, size: proxy.size)).width } ?? proxy.size.width
+                                    return content.opacity(shown >= min(48, proxy.size.width - 1) ? 1 : 0)
+                                }
+                                .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+                                .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.22).delay(Double(index) * 0.03), value: prompt.id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.viewAligned).scrollIndicators(.hidden)
+                // Only a row with more to scroll fades at its end, so it reads as more; chips that fit stay whole.
+                .onScrollGeometryChange(for: Bool.self) { $0.contentSize.width > $0.containerSize.width + $0.contentOffset.x + 1 } action: { _, more in promptsOverflow = more }
+                .mask {
+                    HStack(spacing: 0) {
+                        Color.black
+                        if promptsOverflow { LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24) }
+                    }
+                }
+                .accessibilityElement(children: .contain).accessibilityIdentifier("coachQuickPrompts")
+            }
+            Button { suggestionsCollapsed.toggle() } label: {
+                // A bare glyph, so it reads as a control rather than another chip; the tap area reaches 44 points.
+                Image(systemName: "chevron.down").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.diarySecondary)
+                    .rotationEffect(.degrees(suggestionsCollapsed && !reduceMotion ? 180 : 0))
+                    .frame(width: 32, height: 44).contentShape(.rect.inset(by: -6))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(suggestionsCollapsed ? String(localized: "Show suggestions") : String(localized: "Hide suggestions"))
+            .accessibilityIdentifier(suggestionsCollapsed ? "coachQuickPromptsExpand" : "coachQuickPromptsCollapse")
+        }
+        .padding(.bottom, -4).transition(.opacity)
+    }
+    private func quickPromptChip(_ prompt: QuickPrompt) -> some View {
+        Button { use(prompt) } label: {
+            // Footnote-sized (owner, 2026-11-17) so two whole chips fit on an iPhone and the closed Duo.
+            HStack(spacing: prompt.kcal == nil ? 5 : 7) {
+                if prompt.kcal != nil { quickPromptThumbnail(prompt) }
+                // A question's arrow disc already marks it, so only fill chips lead with a symbol.
+                else if let symbol = prompt.symbol, !prompt.sends {
+                    Image(systemName: symbol).font(.footnote.weight(.medium)).foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+                }
+                Text(prompt.title).font(.footnote.weight(.medium)).foregroundStyle(Color.diaryText).lineLimit(1)
+                if let kcal = prompt.kcal { Text(kcal, format: .number).font(.caption).foregroundStyle(Color.diarySecondary).monospacedDigit() }
+                if prompt.sends {
+                    // Echoes the Send button: this chip asks right away.
+                    Image(systemName: "arrow.up").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.diaryActionText)
+                        .frame(width: 18, height: 18).background(Color.diaryAccent, in: .circle).accessibilityHidden(true)
                 }
             }
+            .padding(.leading, prompt.kcal != nil ? 3 : prompt.sends ? 12 : 10).padding(.trailing, prompt.sends ? 7 : 12)
+            .frame(minHeight: 34)
+            .background {
+                Capsule().fill(Color.diarySurface)
+                    .overlay { if prompt.kcal != nil { Capsule().fill(Color.diaryAccent.opacity(colorScheme == .dark ? 0.22 : 0.09)) } }
+            }
+            .overlay {
+                if prompt.kcal == nil {
+                    Capsule().strokeBorder(colorScheme == .dark ? Color.white.opacity(0.16) : Color.diaryRule.opacity(0.6), lineWidth: 0.5)
+                }
+            }
+            .frame(minHeight: 44).contentShape(.rect)
         }
-        // Scrolls under the composer's side margins so the last chip reads as more, not as clipped.
-        .contentMargins(.horizontal, 20, for: .scrollContent).padding(.horizontal, -20)
-        .scrollIndicators(.hidden).transition(.opacity)
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(String(localized: "Hide this suggestion"), systemImage: "eye.slash") {
+                hiddenSuggestions = (hiddenSuggestions.split(separator: ",").map(String.init) + [prompt.id]).joined(separator: ",")
+            }
+        }
+        .accessibilityLabel(prompt.kcal.map { String(localized: "\(prompt.title), \($0) calories") } ?? prompt.title)
+        .accessibilityHint(prompt.sends ? String(localized: "Sends to Coach") : String(localized: "Fills the message"))
+        .accessibilityIdentifier("coachQuickPrompt-" + prompt.id)
+    }
+    private func quickPromptThumbnail(_ prompt: QuickPrompt) -> some View {
+        Group {
+            if let photo = prompt.photo { DiaryPhotoPreview(model: coach.diary, reference: photo, height: 28).frame(width: 28, height: 28) }
+            else {
+                Image(systemName: "fork.knife").font(.footnote.weight(.medium)).foregroundStyle(Color.diaryAccent)
+                    .frame(width: 28, height: 28).background(Color.diaryAccent.opacity(0.12))
+            }
+        }
+        .clipShape(.circle).accessibilityHidden(true)
+    }
+    /// Fill and re-log chips only write the draft; nothing is sent until the person taps Send.
+    private func use(_ prompt: QuickPrompt) {
+        switch prompt.action {
+        case .fill(let text):
+            coach.attachmentDraft.text = text; editing = true; fillTaps += 1
+        case .relog(let mealID, let text, let excerpt):
+            coach.attachmentDraft.text = text
+            coach.attachmentDraft.reply = CoachReply(target: .meal(mealID: mealID), excerpt: excerpt)
+            editing = true; fillTaps += 1
+        case .send(let text):
+            coach.attachmentDraft.text = text; sendTaps += 1
+            Task { _ = await coach.send() }
+        }
     }
     /// While listening, the words stream in with a three-line sound wave as their cursor.
     /// Taps fall through to the hidden field, so tapping to type stops listening.
@@ -713,29 +878,10 @@ struct CoachView: View {
         .accessibilityElement(children: .contain).accessibilityIdentifier("coachReplyBar")
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
     }
-    /// Sideways a follow-up opens beside the chat. Upright, Today and Progress switch tabs as before
-    /// and another day is pushed over the chat.
-    private func open(_ followUp: CoachReplyLines.FollowUp) {
-        if isWide { pane = followUp.pane; return }
-        switch followUp {
-        case .today: openToday()
-        case .progress: openProgress()
-        case .day: pane = followUp.pane
-        }
-    }
+    /// Sideways the past day opens beside the chat; upright it is pushed over the chat.
+    private func open(_ followUp: CoachReplyLines.FollowUp) { pane = followUp.pane }
     private func title(_ followUp: CoachReplyLines.FollowUp) -> String {
-        switch followUp {
-        case .today: String(localized: "See today")
-        case .progress: String(localized: "See progress")
-        case .day(let date): String(localized: "See \(CoachReplyLines.shortDate(date))")
-        }
-    }
-    private func identifier(_ followUp: CoachReplyLines.FollowUp) -> String {
-        switch followUp {
-        case .today: "coachFollowUp-today"
-        case .progress: "coachFollowUp-progress"
-        case .day: "coachFollowUp-day"
-        }
+        switch followUp { case .day(let date): String(localized: "See \(CoachReplyLines.shortDate(date))") }
     }
     private func openQuote(_ reply: CoachReply) {
         let target: CoachSeekTarget
@@ -878,16 +1024,13 @@ struct CoachView: View {
                 }
             }
             if coach.timeline?.window.isLatest(turn.id) == true {
-                // Sideways Today is the pane's root, one back tap away. Rows don't redraw when the pane
-                // changes, so the other buttons stay; tapping one the pane already shows changes nothing.
                 let followUps = CoachReplyLines.followUps(for: turn, consulted: coach.consulted(turn.id), today: coach.diary.activeDay?.localDate)
-                    .filter { !(isWide && $0 == .today) }
                 if !followUps.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(followUps, id: \.self) { followUp in
                             Button { open(followUp) } label: { Text(title(followUp)).frame(minHeight: 36) }
                                 .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.diaryAccent)
-                                .accessibilityIdentifier(identifier(followUp))
+                                .accessibilityIdentifier("coachFollowUp-day")
                         }
                     }
                 }

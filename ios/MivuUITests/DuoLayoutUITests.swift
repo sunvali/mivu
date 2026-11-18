@@ -88,7 +88,17 @@ import XCTest
         XCTAssertTrue(changed.waitForExistence(timeout: 20), "The meal Coach logged lights up in the live day")
         XCTAssertLessThan(changed.frame.maxX, input.frame.minX + 1, "The live day sits left of the chat")
         XCTAssertLessThan(changed.frame.minY, liveDay.frame.midY, "The changed meal shows near the top, above the keyboard")
-        XCTAssertFalse(app.buttons["coachFollowUp-today"].exists, "See today is redundant beside the live day")
+    }
+
+    func testQuickPromptsShowTwoChipsSidewaysAndSkipCaloriesBesideTheDay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english",
+                               "--wide-layout-ui-test", "--quick-prompts-fixture", "--quick-prompts-hour", "13"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["coachQuickPrompt-relog"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["coachQuickPrompt-ask.calories"].exists, "Beside the live day the number is already on screen")
+        XCTAssertLessThanOrEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "coachQuickPrompt-")).count, 2)
     }
 
     /// Coach with scripted replies. Sideways the pane sits left of the chat.
@@ -130,15 +140,11 @@ import XCTest
         XCTAssertFalse(meal.exists)
     }
 
-    func testSidewaysQuestionOffersProgressInPane() throws {
+    func testSidewaysProgressQuestionAddsNoFollowUp() throws {
         let (app, input) = try launchCoach()
         send("Show my weekly report", app, input)
-        let followUp = app.buttons["coachFollowUp-progress"]
-        XCTAssertTrue(followUp.waitForExistence(timeout: 20), "A reply that read progress offers it"); followUp.tap()
-        let progress = app.navigationBars["Progress"]
-        XCTAssertTrue(progress.waitForExistence(timeout: 5))
-        XCTAssertLessThanOrEqual(progress.frame.maxX, input.frame.minX + 1, "Progress opens in the pane")
-        XCTAssertTrue(input.exists, "Coach stays the selected tab")
+        XCTAssertTrue(app.descendants(matching: .any)["coachReply"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["coachFollowUp-progress"].exists, "Quick prompts replace See progress")
     }
 
     func testSidewaysWeightChangeMovesPaneToProgress() throws {

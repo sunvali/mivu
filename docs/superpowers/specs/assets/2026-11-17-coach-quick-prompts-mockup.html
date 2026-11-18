@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coach Quick Prompts v4</title>
+<style>
+.mv{
+  --canvas:#F5F8F8; --surface:#FFFFFF; --text:#142023; --text2:#53646B; --accent:#006D75; --onAccent:#FFFFFF;
+  --sep:#D5DFE1; --success:#237448; --protein:#195DC2; --carbs:#925000; --fat:#7740AD; --summary:#EAF5F3;
+  --glass:rgba(255,255,255,.74); --glassEdge:rgba(255,255,255,.95); --shadow:0 1px 2px rgba(20,32,35,.06),0 6px 18px rgba(20,32,35,.08);
+  --tray:rgba(234,240,241,.86); --tint:rgba(0,109,117,.10); --kbd:#D1D5DB; --key:#fff;
+  color:var(--foreground,#142023);
+}
+.mv[data-theme="dark"]{
+  --canvas:#111516; --surface:#1D2324; --text:#F4F7F6; --text2:#B7C4C8; --accent:#63D5CD; --onAccent:#092126;
+  --sep:#374346; --success:#80D5A4; --protein:#91BCFF; --carbs:#F4BC62; --fat:#CCA5F8; --summary:#142D2D;
+  --glass:rgba(46,54,56,.78); --glassEdge:rgba(255,255,255,.10); --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.35);
+  --tray:rgba(30,36,38,.88); --tint:rgba(99,213,205,.14); --kbd:#2B2F31; --key:#5B6063;
+}
+*{box-sizing:border-box;margin:0}
+body{font:15px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+.page{display:flex;flex-wrap:wrap;gap:10px;align-items:end;justify-content:space-between}
+h1{font-size:21px;letter-spacing:-.02em}
+.lede,.sub{color:var(--muted-foreground,#53646B);font-size:13.5px;max-width:700px;margin-top:4px}
+.toggle{border:1px solid var(--border,#D5DFE1);background:var(--card,#fff);color:inherit;border-radius:999px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+section{margin-top:26px}
+section>h2{font-size:17px;letter-spacing:-.01em}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;margin-top:12px}
+figure{display:flex;flex-direction:column;gap:8px}
+figcaption{color:var(--muted-foreground,#53646B);font-size:12.5px}
+figcaption b{color:var(--foreground,#142023);display:block;font-size:13.5px}
+
+/* device shells (true point sizes, scaled with zoom) */
+.dev{background:var(--canvas);color:var(--text);position:relative;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 0 0 9px #1b1f20,0 0 0 10px #3a4143,0 24px 50px rgba(0,0,0,.22)}
+.iphone{width:390px;height:844px;border-radius:54px;zoom:.58}
+.closed{width:466px;height:678px;border-radius:40px;zoom:.62;flex-direction:row}
+.open{width:951px;height:669px;border-radius:36px;zoom:.735;flex-direction:row}
+.status{height:50px;display:flex;justify-content:space-between;align-items:center;padding:14px 34px 0;font-weight:600;font-size:16px;flex:none}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+/* Duo system vertical bar on the right: clock, camera, profile, tabs */
+.vbar{width:58px;flex:none;display:flex;flex-direction:column;align-items:center;padding:16px 0 18px;gap:10px;font-weight:700;font-size:14px}
+.vbar .cam{width:26px;height:26px;border-radius:50%;background:#000}
+.vbar .tabs{margin-top:auto;display:flex;flex-direction:column;gap:6px;padding:6px;border-radius:26px;background:var(--glass);border:1px solid var(--glassEdge);box-shadow:var(--shadow)}
+.vbar .tabs span{width:38px;height:38px;display:grid;place-items:center;border-radius:19px}
+.vbar .tabs span.on{background:var(--tint);color:var(--accent)}
+.vbar svg{width:20px;height:20px}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:6px 20px 4px;flex:none}
+.nav h3{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.nav.inline h3{font-size:17px;font-weight:600;letter-spacing:0}
+.round{width:44px;height:44px;border-radius:50%;background:var(--glass);border:1px solid var(--glassEdge);box-shadow:var(--shadow);display:grid;place-items:center}
+.dayline{display:flex;justify-content:space-between;color:var(--text2);font-size:14px;margin:2px 20px 0;padding-bottom:8px;border-bottom:1px solid var(--sep);flex:none}
+.thread{flex:1;overflow:hidden;padding:12px 20px 0;display:flex;flex-direction:column;gap:9px;justify-content:flex-end}
+.thread.top{justify-content:flex-start}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;color:var(--text2);padding:0 28px}
+.empty strong{color:var(--text);font-size:20px}
+.me{align-self:flex-end;background:var(--accent);color:var(--onAccent);padding:10px 14px;border-radius:20px;max-width:80%}
+.bot{background:var(--surface);padding:11px 14px;border-radius:18px;max-width:92%}
+.card{background:var(--surface);border-radius:18px;padding:11px 14px;display:flex;flex-direction:column;gap:5px}
+.card .t{color:var(--success);font-weight:600;font-size:14px}
+.card .m{display:flex;justify-content:space-between;align-items:center}
+.card .m small{display:block;color:var(--success);font-size:12px}
+.card .m b{font-size:18px}.card .m b span{font-weight:400;font-size:12px;color:var(--text2)}
+.pipzone{display:flex;align-items:flex-end;gap:4px;padding:0 16px;height:104px;flex:none}
+.pipzone img{width:112px;height:112px;margin-bottom:-12px;object-fit:contain}
+.pipzone.small{height:60px}.pipzone.small img{width:66px;height:66px;margin-bottom:-8px}
+.say{background:var(--surface);padding:8px 13px;border-radius:17px;margin-bottom:12px;font-size:14.5px;box-shadow:var(--shadow)}
+.pipzone.small .say{margin-bottom:8px;font-size:13.5px}
+.mv img.pip.d{display:none}.mv[data-theme="dark"] img.pip.l{display:none}.mv[data-theme="dark"] img.pip.d{display:block}
+
+/* composer tray (option A) */
+.tray{margin:0 10px 8px;border-radius:30px;background:var(--tray);backdrop-filter:blur(20px);border:1px solid var(--glassEdge);box-shadow:var(--shadow);padding:8px;display:flex;flex-direction:column;gap:8px;flex:none}
+.compose{display:flex;gap:8px;align-items:center}
+.field{flex:1;height:44px;border-radius:22px;background:var(--surface);color:var(--text2);display:flex;align-items:center;padding:0 16px;font-size:16px;white-space:nowrap;overflow:hidden}
+.field.typing{color:var(--text)}
+.caret{display:inline-block;width:2px;height:20px;background:var(--accent);margin-left:1px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.btn{width:44px;height:44px;border-radius:50%;background:var(--surface);display:grid;place-items:center;flex:none}
+.btn.send{background:var(--accent);color:var(--onAccent)}
+.btn svg{width:22px;height:22px}
+
+/* chips */
+.chips{display:flex;gap:8px;overflow:hidden;margin:0 -8px;padding:0 8px 0 12px;mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.chips.fit{mask-image:none}
+.chip{flex:none;height:36px;display:inline-flex;align-items:center;gap:6px;padding:0 13px 0 11px;border-radius:18px;
+  background:var(--surface);border:1px solid var(--sep);font-size:14.5px;font-weight:500;color:var(--text);white-space:nowrap;
+  animation:rise .22s cubic-bezier(.2,.8,.2,1) both}
+.chip:nth-child(2){animation-delay:.03s}.chip:nth-child(3){animation-delay:.06s}.chip:nth-child(4){animation-delay:.09s}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+@media (prefers-reduced-motion:reduce){.chip{animation:fade .15s both}@keyframes fade{from{opacity:0}}}
+.chip svg{width:16px;height:16px;color:var(--accent);flex:none}
+.chip .go{width:20px;height:20px;border-radius:50%;background:var(--accent);display:grid;place-items:center;margin-right:-6px}
+.chip .go svg{width:11px;height:11px;color:var(--onAccent)}
+/* rich re-log chip: your own meal, with a thumbnail and its kcal */
+.chip.rich{padding:0 13px 0 3px;gap:8px;background:color-mix(in srgb,var(--accent) 9%,var(--surface));border-color:transparent}
+.thumb{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--tint);color:var(--accent)}
+.thumb svg{width:15px!important;height:15px!important}
+.thumb.photo{background:repeating-linear-gradient(45deg,var(--sep) 0 3px,transparent 3px 6px);box-shadow:inset 0 0 0 1px var(--sep);color:var(--text2);font-size:8px;font-weight:600}
+.thumb.photo{background:center/cover;font-size:0}
+.chip.rich .kc{color:var(--text2);font-weight:400;font-size:13px;font-variant-numeric:tabular-nums}
+
+.kbd{height:270px;background:var(--kbd);display:flex;flex-direction:column;gap:9px;padding:10px 4px 0;flex:none}
+.kbd div{display:flex;gap:6px;justify-content:center}
+.kbd i{flex:0 1 34px;height:42px;border-radius:6px;background:var(--key);box-shadow:0 1px 0 rgba(0,0,0,.25)}
+.kbd i.w{flex-basis:200px}.kbd i.m{flex-basis:48px}
+.tabbar{margin:0 10px 22px;height:62px;border-radius:31px;background:var(--glass);border:1px solid var(--glassEdge);box-shadow:var(--shadow);display:flex;justify-content:space-around;align-items:center;font-size:11px;font-weight:500;flex:none}
+.tabbar span{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 14px;border-radius:22px}
+.tabbar span.on{background:var(--tint);color:var(--accent)}
+.tabbar svg{width:22px;height:22px}
+
+/* open sideways panes */
+.pane{display:flex;flex-direction:column;min-width:0;padding-top:20px}
+.pane.chat{width:475px;flex:none}
+.today{flex:1;padding:24px 16px 20px 22px;display:flex;flex-direction:column;gap:12px;border-left:1px solid var(--sep)}
+.today h3{font-size:28px;letter-spacing:-.02em}
+.sum{background:var(--summary);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.big{font-size:30px;font-weight:700;letter-spacing:-.02em}.big small{font-size:14px;color:var(--text2);font-weight:500}
+.bar{height:8px;border-radius:4px;background:var(--sep);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}
+.macros{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12.5px;color:var(--text2)}
+.macros b{display:block;font-size:15px;color:var(--text)}
+.meal{background:var(--surface);border-radius:16px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+.meal small{display:block;color:var(--text2);font-size:12px}
+.meal.new{box-shadow:0 0 0 2px var(--accent)}
+
+/* close-up */
+.closeup{background:var(--canvas);color:var(--text);border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:14px;zoom:1.15}
+.closeup .lbl{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text2)}
+.closeup .line{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.note{margin-top:22px;background:var(--card,#fff);border-radius:16px;padding:14px 16px;color:var(--muted-foreground,#53646B);font-size:13px}
+.note b{color:var(--foreground,#142023)}
+</style>
+</head>
+<body><div class="mv" data-theme="light">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="fork" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 1-3 4-3 7h3v11"/></symbol>
+  <symbol id="scale" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M9 9.5a4 4 0 0 1 6 0M12 12l1.5-2.5"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path fill="currentColor" d="M4 13h4v7H4zM10 8h4v12h-4zM16 4h4v16h-4z"/></symbol>
+  <symbol id="cup" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 8h11v6a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10h2a2 2 0 0 1 0 4h-2M8 3v2M11 3v2"/></symbol>
+  <symbol id="minus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M8 12h8"/></symbol>
+  <symbol id="leaf" viewBox="0 0 24 24"><path fill="currentColor" d="M5 21c0-9 5-15 15-16-1 10-6 15-15 16zm2-2c3-4 6-7 10-10-4 2-7 5-10 10z"/></symbol>
+  <symbol id="up" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="cam" viewBox="0 0 24 24"><path fill="currentColor" d="M9 4h6l1.5 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.5zM12 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 11a6 6 0 0 0 12 0M12 17v4"/></symbol>
+  <symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="3.2" fill="currentColor"/><path fill="currentColor" d="M6.3 18.2a7 7 0 0 1 11.4 0A8.5 8.5 0 0 1 12 20.5a8.5 8.5 0 0 1-5.7-2.3z"/></symbol>
+  <symbol id="doc" viewBox="0 0 24 24"><path fill="currentColor" d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm2 11v2h8v-2zm0 4v2h8v-2z"/></symbol>
+  <symbol id="bubble" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></symbol>
+  <symbol id="wifi" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M3 9a13 13 0 0 1 18 0M6.5 12.5a8 8 0 0 1 11 0M10 16a3 3 0 0 1 4 0"/></symbol>
+</svg>
+
+<div class="page">
+  <div>
+    <h1>Coach quick prompts · round 4</h1>
+    <p class="lede">Round 3 added the rich re-log chip, Duo screens at their true point sizes (closed 466×678 and open 951×669, with the system bar on the right), and only 2 chips on the closed Duo with Pip kept small. A filled <b>↑</b> sends a question. Every other chip fills the box for you to check. Round 4 applies the reviewer's second pass: a meal photo or a symbol in place of emoji, quieter kcal, labels of 18 characters or fewer, a cleaner closed Duo, 2 chips on the open Duo, and Pip's line kept to a mood so it never repeats Coach's reply.</p>
+  </div>
+  <button class="toggle" onclick="const r=document.querySelector('.mv');r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">Light / Dark</button>
+</div>
+
+<section>
+  <h2>1 · The rich re-log chip, close up</h2>
+  <p class="sub">Your own meal gets a round thumbnail and its kcal. The thumbnail is the meal's photo, cropped round, when there is one, and a fork-and-knife symbol when there isn't. Emoji are never used. The kcal is quieter, and the chip has a tint with no border. Tapping fills the box with the meal's foods, e.g. "For dinner I had grilled chicken, rice and salad", so you can tweak and send. Nothing is saved until you press Send.</p>
+  <div class="row">
+    <div class="closeup">
+      <div><div class="lbl">Round 2</div><div class="line" style="margin-top:6px">
+        <span class="chip" style="background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:color-mix(in srgb,var(--accent) 40%,transparent)"><svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 12a8 8 0 0 1 13.7-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.7L4 15.5M4 20v-4.5h4.5"/></svg>Usual dinner</span>
+        <span class="chip"><svg><use href="#leaf"/></svg>Protein ideas?<span class="go"><svg><use href="#up"/></svg></span></span>
+      </div></div>
+      <div><div class="lbl">Round 4 · rich</div><div class="line" style="margin-top:6px">
+        <span class="chip rich"><span class="thumb"><svg><use href="#fork"/></svg></span>Usual dinner<span class="kc">540</span></span>
+        <span class="chip"><svg><use href="#leaf"/></svg>Protein ideas?<span class="go"><svg><use href="#up"/></svg></span></span>
+      </div></div>
+      <div><div class="lbl">Meal photo when there is one · symbol when not</div><div class="line" style="margin-top:6px">
+        <span class="chip rich"><span class="thumb photo">PHOTO</span>Shawarma lunch<span class="kc">690</span></span>
+        <span class="chip rich"><span class="thumb"><svg><use href="#fork"/></svg></span>Same breakfast<span class="kc">320</span></span>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>2 · iPhone (390×844)</h2>
+  <div class="row">
+    <figure><div class="dev iphone">
+      <div class="status"><span>8:10</span><span>●●●</span></div>
+      <div class="nav"><h3>Coach</h3><div class="round"><svg width="24" height="24"><use href="#person"/></svg></div></div>
+      <div class="dayline"><span>Tue, Nov 17</span><span>0 of 1,600 kcal</span></div>
+      <div class="empty"><strong>What would you like to record?</strong><span>Describe a meal, add a photo, or record a weigh-in or workout.</span></div>
+      <div class="pipzone"><img class="pip l" src="../../../../android/app/src/main/res/drawable-nodpi/pip_preview.png" alt=""><img class="pip d" src="../../../../android/app/src/main/res/drawable-night-nodpi/pip_preview.png" alt=""><div class="say">Morning!</div></div>
+      <div class="tray"><div class="chips">
+        <span class="chip rich"><span class="thumb"><svg><use href="#fork"/></svg></span>Same breakfast<span class="kc">320</span></span>
+        <span class="chip"><svg><use href="#chart"/></svg>How was yesterday?<span class="go"><svg><use href="#up"/></svg></span></span>
+        <span class="chip"><svg><use href="#scale"/></svg>Log weight…</span>
+      </div><div class="compose"><div class="field">Message Coach</div><div class="btn"><svg><use href="#cam"/></svg></div><div class="btn" style="color:var(--accent)"><svg><use href="#mic"/></svg></div></div></div>
+      <div class="tabbar"><span><svg><use href="#fork"/></svg>Today</span><span><svg><use href="#doc"/></svg>Diary</span><span><svg><use href="#chart"/></svg>Progress</span><span class="on"><svg><use href="#bubble"/></svg>Coach</span></div>
+    </div><figcaption><b>Morning, empty chat</b>The re-log chip leads, because that's the fastest log.</figcaption></figure>
+
+    <figure><div class="dev iphone">
+      <div class="status"><span>13:12</span><span>●●●</span></div>
+      <div class="nav"><h3>Coach</h3><div class="round"><svg width="24" height="24"><use href="#person"/></svg></div></div>
+      <div class="dayline"><span>Tue, Nov 17</span><span>1,010 of 1,600 kcal</span></div>
+      <div class="thread">
+        <div class="me">Chicken shawarma wrap with tahini and an Israeli salad</div>
+        <div class="bot">Logged chicken shawarma wrap (1) and Israeli salad (1 side). 690 kcal.</div>
+        <div class="card"><div class="t">✓ Saved meal</div><div class="m"><div>Lunch<small>Saved · 13:10 · Estimated</small></div><b>690 <span>kcal</span></b></div></div>
+      </div>
+      <div class="pipzone"><img class="pip l" src="../../../../android/app/src/main/res/drawable-nodpi/pip_preview.png" alt=""><img class="pip d" src="../../../../android/app/src/main/res/drawable-night-nodpi/pip_preview.png" alt=""><div class="say">Lunch is in!</div></div>
+      <div class="tray"><div class="chips">
+        <span class="chip"><svg><use href="#chart"/></svg>Calories left?<span class="go"><svg><use href="#up"/></svg></span></span>
+        <span class="chip"><svg><use href="#minus"/></svg>Smaller portion…</span>
+        <span class="chip"><svg><use href="#cup"/></svg>Add a drink…</span>
+      </div><div class="compose"><div class="field">Message Coach</div><div class="btn"><svg><use href="#cam"/></svg></div><div class="btn" style="color:var(--accent)"><svg><use href="#mic"/></svg></div></div></div>
+      <div class="tabbar"><span><svg><use href="#fork"/></svg>Today</span><span><svg><use href="#doc"/></svg>Diary</span><span><svg><use href="#chart"/></svg>Progress</span><span class="on"><svg><use href="#bubble"/></svg>Coach</span></div>
+    </div><figcaption><b>Right after a log</b>The follow-ups lead with the question chip, so it is never cut off.</figcaption></figure>
+
+    <figure><div class="dev iphone">
+      <div class="status"><span>20:35</span><span>●●●</span></div>
+      <div class="nav"><h3>Coach</h3><div class="round"><svg width="24" height="24"><use href="#person"/></svg></div></div>
+      <div class="dayline"><span>Tue, Nov 17</span><span>1,240 of 1,600 kcal</span></div>
+      <div class="thread"><div class="bot">Logged apple (1) and coffee with milk (1 cup). 130 kcal. You're at 1,240 kcal and 72 g protein.</div></div>
+      <div class="tray"><div class="chips">
+        <span class="chip rich"><span class="thumb"><svg><use href="#fork"/></svg></span>Usual dinner<span class="kc">540</span></span>
+        <span class="chip"><svg><use href="#leaf"/></svg>Protein ideas?<span class="go"><svg><use href="#up"/></svg></span></span>
+        <span class="chip"><svg><use href="#fork"/></svg>Log dinner…</span>
+      </div><div class="compose"><div class="field typing"><span class="caret"></span></div><div class="btn"><svg><use href="#cam"/></svg></div><div class="btn" style="color:var(--accent)"><svg><use href="#mic"/></svg></div></div></div>
+      <div class="kbd"><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i class="m"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="m"></i></div><div><i class="m"></i><i class="w"></i><i class="m"></i></div></div>
+    </div><figcaption><b>Evening, keyboard up</b>The row rides the keyboard, and Pip steps aside as it does today.</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>3 · iPhone Duo closed — outer screen (466×678)</h2>
+  <p class="sub">The screen is short and wide, and the clock, camera and tabs live in the system bar on the right. Following your call, it shows <b>2 chips</b> (one re-log and one question), Pip stays visible but small, the large title shrinks to an inline title, and today's kcal moves into the title row in place of the date line.</p>
+  <div class="row">
+    <figure><div class="dev closed">
+      <div class="main">
+        <div class="nav inline" style="padding-top:14px"><h3>Coach <span style="font-weight:400;color:var(--text2);font-size:14px;margin-left:6px">1,240 of 1,600 kcal</span></h3><div class="round"><svg width="22" height="22"><use href="#person"/></svg></div></div>
+        <div class="thread">
+          <div class="me">Had an apple and a coffee</div>
+          <div class="bot">Logged apple (1) and coffee with milk (1 cup). 130 kcal.</div>
+        </div>
+        <div class="pipzone small"><img class="pip l" src="../../../../android/app/src/main/res/drawable-nodpi/pip_preview.png" alt=""><img class="pip d" src="../../../../android/app/src/main/res/drawable-night-nodpi/pip_preview.png" alt=""><div class="say">Dinner time?</div></div>
+        <div class="tray" style="margin-bottom:14px"><div class="chips fit">
+          <span class="chip rich"><span class="thumb"><svg><use href="#fork"/></svg></span>Usual dinner<span class="kc">540</span></span>
+          <span class="chip"><svg><use href="#leaf"/></svg>Protein ideas?<span class="go"><svg><use href="#up"/></svg></span></span>
+        </div><div class="compose"><div class="field">Message Coach</div><div class="btn"><svg><use href="#cam"/></svg></div><div class="btn" style="color:var(--accent)"><svg><use href="#mic"/></svg></div></div></div>
+      </div>
+      <div class="vbar"><div class="cam"></div><span>20:34</span><svg><use href="#wifi"/></svg>
+        <div class="tabs"><span><svg><use href="#fork"/></svg></span><span><svg><use href="#doc"/></svg></span><span><svg><use href="#chart"/></svg></span><span class="on"><svg><use href="#bubble"/></svg></span></div></div>
+    </div><figcaption><b>Closed, keyboard down</b>Both chips fit fully, with no scrolling and no cut-off.</figcaption></figure>
+
+    <figure><div class="dev closed">
+      <div class="main">
+        <div class="nav inline" style="padding-top:14px"><h3>Coach</h3><div class="round"><svg width="22" height="22"><use href="#person"/></svg></div></div>
+        <div class="thread"><div class="bot">Logged apple (1) and coffee with milk (1 cup). 130 kcal.</div></div>
+        <div class="pipzone small" style="height:52px"><img class="pip l" src="../../../../android/app/src/main/res/drawable-nodpi/pip_preview.png" alt="" style="width:56px;height:56px"><img class="pip d" src="../../../../android/app/src/main/res/drawable-night-nodpi/pip_preview.png" alt="" style="width:56px;height:56px"></div>
+        <div class="tray" style="margin-bottom:6px"><div class="chips fit">
+          <span class="chip rich"><span class="thumb"><svg><use href="#fork"/></svg></span>Usual dinner<span class="kc">540</span></span>
+          <span class="chip"><svg><use href="#leaf"/></svg>Protein ideas?<span class="go"><svg><use href="#up"/></svg></span></span>
+        </div><div class="compose"><div class="field typing"><span class="caret"></span></div><div class="btn"><svg><use href="#cam"/></svg></div><div class="btn" style="color:var(--accent)"><svg><use href="#mic"/></svg></div></div></div>
+        <div class="kbd"><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i class="m"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="m"></i></div><div><i class="m"></i><i class="w"></i><i class="m"></i></div></div>
+      </div>
+      <div class="vbar"><div class="cam"></div><span>20:35</span><svg><use href="#wifi"/></svg></div>
+    </div><figcaption><b>Closed, keyboard up</b>Pip's bubble gives way. A small Pip, the 2 chips and the box sit on the keyboard, and the latest reply stays readable.</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>4 · iPhone Duo open, sideways (951×669)</h2>
+  <p class="sub">The chips belong to the Coach column, left of the crease, and never cross it. With the day on screen, "Calories left?" becomes "Was it balanced?". It shows 2 full chips with no fade, and the Today panel covers the rest.</p>
+  <figure style="margin-top:12px"><div class="dev open">
+    <div class="pane chat">
+      <div class="nav"><h3 style="font-size:28px">Coach</h3></div>
+      <div class="thread">
+        <div class="me">Chicken shawarma wrap with tahini and an Israeli salad</div>
+        <div class="bot">Logged chicken shawarma wrap (1) and Israeli salad (1 side). 690 kcal.</div>
+      </div>
+      <div class="pipzone"><img class="pip l" src="../../../../android/app/src/main/res/drawable-nodpi/pip_preview.png" alt=""><img class="pip d" src="../../../../android/app/src/main/res/drawable-night-nodpi/pip_preview.png" alt=""><div class="say">Lunch is in!</div></div>
+      <div class="tray" style="margin-bottom:18px"><div class="chips fit">
+        <span class="chip"><svg><use href="#leaf"/></svg>Was it balanced?<span class="go"><svg><use href="#up"/></svg></span></span>
+        <span class="chip"><svg><use href="#minus"/></svg>Smaller portion…</span>
+      </div><div class="compose"><div class="field">Message Coach</div><div class="btn"><svg><use href="#cam"/></svg></div><div class="btn" style="color:var(--accent)"><svg><use href="#mic"/></svg></div></div></div>
+    </div>
+    <div class="today">
+      <h3>Today</h3>
+      <div class="sum"><div class="big">1,010 <small>of 1,600 kcal</small></div><div class="bar"><i style="width:63%"></i></div>
+        <div class="macros"><span><b style="color:var(--protein)">58 g</b>protein</span><span><b style="color:var(--carbs)">112 g</b>carbs</span><span><b style="color:var(--fat)">34 g</b>fat</span></div></div>
+      <div class="meal"><div>Breakfast<small>08:20 · oats, banana, coffee</small></div><b>320</b></div>
+      <div class="meal new"><div>Lunch<small>13:10 · shawarma wrap, Israeli salad</small></div><b>690</b></div>
+    </div>
+    <div class="vbar"><span>13:12</span><svg><use href="#wifi"/></svg><div class="round" style="margin-top:8px"><svg width="22" height="22"><use href="#person"/></svg></div>
+      <div class="tabs"><span><svg><use href="#fork"/></svg></span><span><svg><use href="#doc"/></svg></span><span><svg><use href="#chart"/></svg></span><span class="on"><svg><use href="#bubble"/></svg></span></div></div>
+  </div></figure>
+</section>
+
+<div class="note"><b>Applies everywhere:</b> chips are 36 pt visible with 44 pt targets, and they rise with a 30 ms stagger (a plain fade under Reduce Motion). Haptics are a selection tick for fill and a light impact for send. Long-press a chip for "Hide this suggestion". Coach settings has a "Show suggestions" switch. VoiceOver reads "Usual dinner, 540 calories, fills message" and "Protein ideas?, sends to Coach". Hatched discs mark where a real meal photo would go.</div>
+</div></body>
+</html>

@@ -410,7 +410,7 @@ struct DiaryRootView: View {
                                   navigationRequest: coachRoutes.request,
                                   onNavigationConsumed: { coachRoutes.consume($0) },
                                   openHistory: openCoachHistory, openToday: { selectedTab = "today" },
-                                  openProgress: { selectedTab = "progress" }, pane: $coachPane, chatExpanded: $coachChatExpanded) { destination in
+                                  pane: $coachPane, chatExpanded: $coachChatExpanded) { destination in
                             routes.route = SettingsRoute(destination: destination)
                         }.zoneToastInset(model: model, toast: timeZoneToast).toolbar { profileControl }.duoReadableWidth()
                     }
