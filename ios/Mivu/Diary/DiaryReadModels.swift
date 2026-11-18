@@ -48,6 +48,7 @@ struct MealReadModel: Equatable, Sendable, Identifiable {
     var eatenAt: Date
     var revision: Int
     var timePrecision: MealTimePrecision?
+    var timeZoneID: String?
     var items: [FoodItem]
     var submissions: [MealSubmission]
     var photos: [DiaryPhotoReference]
@@ -133,6 +134,7 @@ struct DiaryDaySummary: Equatable, Sendable {
     var totals: NutritionTotals
     var savedMealCount: Int
     var pendingMealCount: Int
+    var isTravelDay = false
 }
 struct DiaryWeekPage: Equatable, Sendable {
     var days: [DiaryDaySummary]

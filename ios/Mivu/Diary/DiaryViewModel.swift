@@ -36,6 +36,17 @@ enum DiaryCaptureResult: Equatable, Sendable {
     private let preferences: UserDefaults?
     let backup: FolderBackup?
     private(set) var readModel: DiaryReadModel?
+    private(set) var timeZoneNotice: TimeZoneSwitch?
+    private(set) var timeZoneMode: TimeZoneMode?
+    /// Settings shows automatic until the diary is pinned; a profile with no saved mode follows the phone.
+    var timeZoneAutomatic: Bool { if case .pinned = timeZoneMode { false } else { true } }
+    private(set) var deviceZoneID: String?
+    /// The zones behind the header tag: pinned to a profile zone whose clock differs from the phone's.
+    var pinnedZones: (profile: String, device: String)? {
+        guard case .pinned = timeZoneMode, let profile = readModel?.profile.timeZoneID, let device = deviceZoneID,
+              TimeZoneSync.clockDiffers(profile, device, at: Date()) else { return nil }
+        return (profile, device)
+    }
     private(set) var selection: DiarySelectionOwnership?
     private(set) var workStatus = CoachWorkStatus()
     private(set) var photoLoader: DiaryPhotoLoader?
@@ -92,7 +103,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
          dayDetailLoading: (@Sendable (UUID, UUID) async throws -> DiaryDayReadModel)? = nil,
          photoWorkLimiter: PhotoWorkLimiter = PhotoWorkLimiter(), exportCoordinator: DiaryExportCoordinator? = nil,
          manualNutritionSaving: (@Sendable (ManualNutritionPayload, DiarySelectionOwnership) async throws -> ManualNutritionSaveResult)? = nil,
-         deviceTimeZone: @Sendable @escaping () -> TimeZone = { .current },
+         deviceTimeZone: @Sendable @escaping () -> TimeZone = { NSTimeZone.resetSystemTimeZone(); return .current },
          beginCaptureProtection: @escaping @MainActor () -> (@MainActor () -> Void) = { CoachCaptureProtection.begin() },
          captureDayAssignment: (@Sendable (Date, DiarySelectionOwnership) async throws -> DayAssignment)? = nil) {
         self.manualNutritionSaving = manualNutritionSaving ?? { try await store.saveManualNutrition($0, expectedSelection: $1, expectedProfileID: $0.profileID) }
@@ -122,8 +133,11 @@ enum DiaryCaptureResult: Equatable, Sendable {
             #endif
             return Date()
         }
+        var deviceZone: @Sendable () -> TimeZone = { NSTimeZone.resetSystemTimeZone(); return .current }
+        if DiaryLaunch.isTimeZoneUITest { deviceZone = { TimeZone(identifier: "America/New_York") ?? .gmt } }
         return DiaryViewModel(store: DiaryStore(directory: directory, currentTime: processTime), sampleMode: DiaryLaunch.isSampleMode, preferences: DiaryLaunch.defaults,
-            backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)))
+            backup: FolderBackup(directory: directory.deletingLastPathComponent().appending(path: DiaryLaunch.isUITest ? "BackupSettings-" + (DiaryLaunch.testID?.uuidString ?? "test") : "BackupSettings", directoryHint: .isDirectory)),
+            deviceTimeZone: deviceZone)
     }
     var activeDay: TrackingDay? { readModel?.activeDay }
     var todaysMeals: [MealReadModel] { readModel?.meals.sorted { $0.capturedAt > $1.capturedAt } ?? [] }
@@ -186,7 +200,13 @@ enum DiaryCaptureResult: Equatable, Sendable {
             if let profile = profiles.first(where: { $0.id.uuidString == preferences?.string(forKey: "diarySelectedProfile") }) ?? profiles.first {
                 try await install(try await profileSelection(profile.id))
             } else if createDefaultProfile {
-                try await install(try await store.createProfile(DiaryProfile(name: String(localized: "My diary"), language: DiaryLaunch.language, timeZoneID: deviceTimeZone().identifier)))
+                // The time-zone fixture starts a Jerusalem diary, automatic, on a phone that is in New York.
+                let zone = DiaryLaunch.isTimeZoneUITest ? "Asia/Jerusalem" : deviceTimeZone().identifier
+                let created = try await store.createProfile(DiaryProfile(name: String(localized: "My diary"), language: DiaryLaunch.language, timeZoneID: zone))
+                if DiaryLaunch.isTimeZoneUITest, let preferences {
+                    TimeZoneStateStore(defaults: preferences).save(TimeZoneState(mode: .automatic, knownProfileZone: zone), for: created.head.profile.id)
+                }
+                try await install(created)
                 profiles = try await store.profiles()
             }
         } catch { await recoverProfileSelection(previous); presentUnlessLocked(error) }
@@ -214,6 +234,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         selection = token; exactMeals = [:]; exactDays = [:]; savedMealID = nil; manualCaptureAttempt = nil
         photoRequestGeneration &+= 1; changeGeneration &+= 1
         readModel = current; workStatus = status
+        timeZoneNotice = nil; timeZoneMode = preferences.flatMap { TimeZoneStateStore(defaults: $0).state(for: owner)?.mode }
         #if DEBUG
         if CoachCorrectionUITestFixture.isEnabled { try CoachCorrectionUITestFixture.installAudit() }
         #endif
@@ -255,6 +276,58 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard let previous = page.days.first(where: { $0.day.id != day.id && $0.day.localDate < day.localDate }) else { morningRecap = nil; return }
         let target = (try? await store.goal(on: previous.day.localDate, expectedProfileID: owner))??.targets.kcal
         if activeDay?.id == day.id { morningRecap = MorningRecap(previous: previous, target: target) }
+    }
+    /// Follows the phone's time zone at an activity point; a failed write leaves the state alone so the next sync retries.
+    func syncTimeZone(now: Date = Date()) async {
+        guard !isChangingProfile, let defaults = preferences, let profile = readModel?.head.profile else { return }
+        let states = TimeZoneStateStore(defaults: defaults), stored = states.state(for: profile.id), device = deviceTimeZone().identifier
+        deviceZoneID = device
+        let decision = TimeZoneSync.decide(state: stored, profileZone: profile.timeZoneID, deviceZone: device, now: now)
+        if let zone = decision.newProfileZone, !(await writeProfileZone(zone, profile)) { return }
+        if decision.state != stored { states.save(decision.state, for: profile.id) }
+        // A profile switch during the write must not receive this profile's mode or notice.
+        guard readModel?.profile.id == profile.id else { return }
+        timeZoneMode = decision.state.mode
+        // A switch made without the UI (Shortcut, Siri) shows once on the next open while it is still the same day.
+        let zone = decision.state.knownProfileZone
+        if let last = decision.state.lastSwitch, !last.announced, wakingDateLabel(last.at, zone: zone) == wakingDateLabel(now, zone: zone) { timeZoneNotice = last }
+    }
+    func markTimeZoneNoticeShown() {
+        guard let defaults = preferences, let id = readModel?.profile.id else { return }
+        timeZoneNotice = nil
+        let states = TimeZoneStateStore(defaults: defaults)
+        guard var state = states.state(for: id), state.lastSwitch?.announced == false else { return }
+        state.lastSwitch?.announced = true; states.save(state, for: id)
+    }
+    func keepPreviousTimeZone() async {
+        guard let defaults = preferences, let profile = readModel?.head.profile,
+              var state = TimeZoneStateStore(defaults: defaults).state(for: profile.id), let from = state.lastSwitch?.from,
+              await writeProfileZone(from, profile) else { return }
+        state.mode = .pinned(zone: from, untilDeviceZone: from); state.knownProfileZone = from; state.lastSwitch?.announced = true
+        TimeZoneStateStore(defaults: defaults).save(state, for: profile.id)
+        guard readModel?.profile.id == profile.id else { return }
+        timeZoneMode = state.mode; timeZoneNotice = nil
+    }
+    func useDeviceTimeZone() async { await setTimeZoneMode(automatic: true, zone: nil) }
+    func setTimeZoneMode(automatic: Bool, zone: String?) async {
+        guard let defaults = preferences, let profile = readModel?.head.profile else { return }
+        let states = TimeZoneStateStore(defaults: defaults)
+        var state = states.state(for: profile.id) ?? TimeZoneState(mode: .automatic, knownProfileZone: profile.timeZoneID)
+        if automatic { state.mode = .automatic }
+        else {
+            let pinned = zone ?? profile.timeZoneID
+            if pinned != profile.timeZoneID, !(await writeProfileZone(pinned, profile)) { return }
+            state.mode = .pinned(zone: pinned, untilDeviceZone: nil); state.knownProfileZone = pinned
+        }
+        states.save(state, for: profile.id)
+        guard readModel?.profile.id == profile.id else { return }
+        timeZoneMode = state.mode
+        if automatic { await syncTimeZone() }
+    }
+    private func writeProfileZone(_ zone: String, _ profile: DiaryProfile) async -> Bool {
+        var updated = profile; updated.timeZoneID = zone
+        do { try await store.updateProfile(updated, expectedProfile: profile, expectedProfileID: profile.id) } catch { return false }
+        try? await refresh(profileID: profile.id); return true
     }
     /// Starts the new waking day once the cutoff has passed, so logging never has to ask which day.
     func rollOverDay(at: Date = Date()) async {
@@ -478,7 +551,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard beginProfileTransition() else { return }; defer { finishProfileTransition() }
         let selected = readModel?.head.profile.id == owner
         do {
-            try await backup?.removeProfile(owner); try await store.deleteProfile(owner); preferences.map { CompanionLastActive(defaults: $0).forget(owner) }
+            try await backup?.removeProfile(owner); try await store.deleteProfile(owner); preferences.map { CompanionLastActive(defaults: $0).forget(owner); TimeZoneStateStore(defaults: $0).forget(owner) }
             if selected { await clearProfileSelection() }
             profiles = try await store.profiles()
         } catch { present(error) }
@@ -491,11 +564,11 @@ enum DiaryCaptureResult: Equatable, Sendable {
         guard !isChangingProfile, !isSaving else { return false }; isChangingProfile = true; photoRequestGeneration &+= 1
         changesTask?.cancel(); cancelSampleWorker(); backupTask?.cancel(); backupRequested = nil; return true
     }
-    private func finishProfileTransition() { isChangingProfile = false; queueBackup(); resumeWorker() }
+    private func finishProfileTransition() { isChangingProfile = false; queueBackup(); resumeWorker(); Task { await syncTimeZone() } }
     private func clearProfileSelection(rememberSignOut: Bool = true) async {
         await backup?.selectProfile(nil); await store.signOut()
         if let photoLoader { await photoLoader.purgeForMemoryPressure() }
-        selection = nil; manualCaptureAttempt = nil; readModel = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
+        selection = nil; timeZoneNotice = nil; timeZoneMode = nil; manualCaptureAttempt = nil; readModel = nil; exactMeals = [:]; exactDays = [:]; workStatus = CoachWorkStatus()
         photoRequestGeneration &+= 1; changeGeneration &+= 1
         backupGeneration = nil; backupStatus = FolderBackupStatus(); backupScheduledRevision = nil
         if rememberSignOut { preferences?.set(true, forKey: "diarySignedOut"); preferences?.removeObject(forKey: "diarySelectedProfile") }
@@ -614,6 +687,7 @@ enum DiaryLaunch {
         #endif
     }
     static var isUITest: Bool { testID != nil }
+    static var isTimeZoneUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--time-zone-ui-test") }
     /// UI tests run at any wall-clock time, so fixtures keep their day unless a test asks for the rollover.
     static var rollsOverDays: Bool { !isUITest || ProcessInfo.processInfo.arguments.contains("--rollover-ui-test") }
     #if DEBUG

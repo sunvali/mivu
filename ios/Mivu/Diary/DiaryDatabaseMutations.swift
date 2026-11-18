@@ -98,8 +98,7 @@ extension DiaryDatabase {
             if let existing = try transaction.turn(id: payload.submissionID) {
                 guard existing.submissionManifest == payload.manifest else { throw DiaryError.staleRevision }
             } else {
-                guard payload.context.timeZoneID == expected.profile.timeZoneID,
-                      payload.context.activeDayID == expected.activeDayID,
+                guard payload.context.activeDayID == expected.activeDayID,
                       payload.context.previousDayConfirmedAt == expected.previousDayConfirmedAt,
                       payload.context.activeConversationSegmentID == expected.effectiveConversationSegmentID else { throw DiaryError.staleRevision }
                 // Pending meal adapters compose their own validated meal/turn batch in the next stage.

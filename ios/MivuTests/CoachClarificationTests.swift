@@ -69,6 +69,7 @@ private actor Replies {
         let meal = CoachContext.Meal(id: UUID(), dayID: UUID(), revision: 1, eatenAt: now, timePrecision: .dateOnly, items: [FoodItem(name: "Eggs", nutrition: NutritionValues(kcal: 100))])
         for args in [#"{"kind":"meal","candidates":[{"meal_id":"\#(meal.id)","item_id":"\#(UUID())"}]}"#,   // item not in meal
                      #"{"kind":"confirm"}"#,
+                     #"{"kind":"food","candidates":[{"meal_id":"\#(meal.id)"}],"options":["Soup"]}"#,   // options answer a different question
                      #"{"kind":"meal","candidates":[{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"},{"meal_id":"\#(meal.id)"}]}"#] {
             #expect(throws: CoachError.invalidArguments) { try CoachTools.parse(call("ask_clarification", args), meals: [meal], evidence: [:], receipts: []) }
         }
@@ -79,10 +80,10 @@ private actor Replies {
         let found = CoachMealCandidate(id: UUID(), dayID: UUID(), localDate: "2027-01-01", timeZoneID: "UTC", revision: 1, eatenAt: now, timePrecision: .dateOnly,
             items: [item], omittedItemCount: 0, capturedDescription: "Pizza", descriptionTruncated: false)
         let pick = #"{"kind":"meal","candidates":[{"meal_id":"\#(found.id)","item_id":"\#(item.id)"}]}"#
-        guard case .clarification(_, let candidates) = try CoachTools.parse(call("ask_clarification", pick), meals: [], evidence: [:], receipts: [], found: [found]) else { Issue.record("must parse"); return }
+        guard case .clarification(_, let candidates, _, _) = try CoachTools.parse(call("ask_clarification", pick), meals: [], evidence: [:], receipts: [], found: [found]) else { Issue.record("must parse"); return }
         #expect(candidates == [.item(mealID: found.id, itemID: item.id)])
         let confirm = #"{"kind":"confirm","candidates":[{"meal_id":"\#(found.id)","item_id":"\#(item.id)"}]}"#
-        guard case .clarification(.confirm, let target) = try CoachTools.parse(call("ask_clarification", confirm), meals: [], evidence: [:], receipts: [], found: [found]) else { Issue.record("must parse"); return }
+        guard case .clarification(.confirm, let target, _, _) = try CoachTools.parse(call("ask_clarification", confirm), meals: [], evidence: [:], receipts: [], found: [found]) else { Issue.record("must parse"); return }
         #expect(target == [.meal(mealID: found.id)])
     }
 

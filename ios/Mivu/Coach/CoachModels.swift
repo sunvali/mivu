@@ -338,4 +338,6 @@ struct CoachQuestion: Codable, Equatable, Sendable {
     var kind: CoachClarification
     var candidates: [CoachReply.Target]
     var originalText: String
+    /// Likely foods for an unclear name, shown as one-tap answers.
+    var options: [String]? = nil
 }

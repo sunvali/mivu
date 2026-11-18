@@ -15,6 +15,115 @@
         }
       }
     },
+    "%@ time" : {
+      "comment" : "Tag in the Today header: the diary is on this city's time; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שעון %@"
+          }
+        }
+      }
+    },
+    "City" : {
+      "comment" : "Search field placeholder: find a time zone by city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עיר"
+          }
+        }
+      }
+    },
+    "Earlier meals keep the time where you ate them." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ארוחות קודמות נשמרות לפי השעה המקומית שבה נאכלו."
+          }
+        }
+      }
+    },
+    "Keep %@" : {
+      "comment" : "Toast button: keep the previous time zone; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להישאר בשעון %@"
+          }
+        }
+      }
+    },
+    "Now on %@ time" : {
+      "comment" : "Toast: the diary followed the phone to a new time zone; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "השעון עבר לשעון %@"
+          }
+        }
+      }
+    },
+    "Set automatically" : {
+      "comment" : "Toggle: the diary follows the phone's time zone",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגדרה אוטומטית"
+          }
+        }
+      }
+    },
+    "Time zone" : {
+      "comment" : "Settings section, row and screen title: the diary's time zone",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אזור זמן"
+          }
+        }
+      }
+    },
+    "Travel day" : {
+      "comment" : "Spoken label for the airplane icon: meals that day were eaten in more than one time zone",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יום נסיעה"
+          }
+        }
+      }
+    },
+    "Use %@ time" : {
+      "comment" : "Dialog button: follow the phone's time zone; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מעבר לשעון %@"
+          }
+        }
+      }
+    },
+    "Your diary stays on %@ time until you switch." : {
+      "comment" : "Dialog message; %@ is a city name",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "היומן נשאר בשעון %@ עד שתעברו."
+          }
+        }
+      }
+    },
     "— kcal" : {
       "comment" : "Placeholder when calories are unknown; kcal is the unit",
       "localizations" : {
@@ -624,6 +733,17 @@
         }
       },
       "shouldTranslate" : false
+    },
+    "%@, %@ time" : {
+      "comment" : "VoiceOver for a meal time: the clock time, then the city whose clock it is, for example 7:40 PM, Jerusalem time",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, שעון %2$@"
+          }
+        }
+      }
     },
     "%@, %@ and %lld more" : {
       "localizations" : {
@@ -8399,6 +8519,16 @@
         }
       }
     },
+    "Logs this food" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רושם את המאכל הזה"
+          }
+        }
+      }
+    },
     "Looking at your photo…" : {
       "localizations" : {
         "he" : {
@@ -10085,6 +10215,16 @@
         }
       }
     },
+    "Opens a reply to type what it was" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פותח תשובה כדי לכתוב מה זה היה"
+          }
+        }
+      }
+    },
     "Opens iOS Settings" : {
       "localizations" : {
         "he" : {
@@ -10880,6 +11020,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "התקדמות"
+          }
+        }
+      }
+    },
+    "Protein %@ · Carbs %@ · Fat %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protein %1$@ · Carbs %2$@ · Fat %3$@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חלבון %1$@ · פחמימות %2$@ · שומן %3$@"
           }
         }
       }
@@ -12964,6 +13120,17 @@
         }
       }
     },
+    "Something else? Type it" : {
+      "comment" : "Link under Pip's suggested foods; opens a reply to type the food instead.",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משהו אחר? אפשר לכתוב"
+          }
+        }
+      }
+    },
     "Something went wrong." : {
       "localizations" : {
         "he" : {
@@ -14120,41 +14287,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "השעה לא תצוין."
-          }
-        }
-      }
-    },
-    "Timezone" : {
-      "comment" : "Field label: time zone",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Timezone"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "אזור זמן"
-          }
-        }
-      }
-    },
-    "Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Timezone changes preserve earlier meals and day labels. You may be asked which waking day to use."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "שינוי אזור הזמן שומר את הארוחות ואת תוויות הימים הקודמים. ייתכן שתופיע שאלה באיזה יום להשתמש."
           }
         }
       }
@@ -15324,6 +15456,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מה אכלת היום?"
+          }
+        }
+      }
+    },
+    "What is “%@”?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה זה ”%@”?"
           }
         }
       }

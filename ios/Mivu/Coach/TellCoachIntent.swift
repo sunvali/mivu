@@ -30,6 +30,7 @@ enum TellCoachOutcome: Equatable {
         }
         // Save first; restoring the connection can wait on the network.
         await services.loadDiary(createDefaultProfile: false)
+        await services.syncTimeZone()
         guard let profileID = services.diary.selection?.identity.profileID else { return .needsSetup }
         let id = UUID()
         func capture() async throws { try await services.coach.captureExternal(profileID: profileID, text, submissionID: id, capturedAt: now) }

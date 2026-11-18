@@ -194,16 +194,17 @@ import Testing
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let turn = try await capturedTurn(store, text: "Yesterday chocolate", photos: [], at: now, expectedProfileID: profile.id)
         var changed = profile; changed.timeZoneID = "Pacific/Honolulu"; try await store.updateProfile(changed)
-        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-14", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
+        let receipt = try await store.applyCoachFood(turnID: turn.id, targetLocalDate: "2027-01-12", items: [food("Chocolate", 30, 160)], expectedProfileID: profile.id)
         let snapshot = try await store.snapshotForExport()
-        #expect(snapshot.days.first { $0.id == receipt.dayID }?.timeZoneID == "Asia/Jerusalem")
+        #expect(snapshot.days.first { $0.id == receipt.dayID }?.timeZoneID == profile.timeZoneID) // the day keeps the zone the turn captured, not the changed profile zone
         #expect(snapshot.meals.first?.timePrecision == .dateOnly)
         let currentDay = try #require(snapshot.days.first { $0.id == snapshot.activeDayID })
         try await store.moveMeal(receipt.mealID!, to: currentDay.id)
         #expect(try await store.snapshotForExport().meals.first?.timePrecision == .dateOnly)
-        try await store.moveMeal(receipt.mealID!, to: currentDay.id, eatenAt: now)
+        let eaten = now.addingTimeInterval(-4 * 3600) // 23:00 on the open day in the captured zone
+        try await store.moveMeal(receipt.mealID!, to: currentDay.id, eatenAt: eaten)
         #expect(try await store.snapshotForExport().meals.first?.timePrecision == .exact)
-        #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).meals.first?.eatenAt == now)
+        #expect(try await completeSelectedProfile(DiaryStore(directory: root), profile.id).meals.first?.eatenAt == eaten)
     }
 
     @Test func boundedContextKeepsNewestSavedPortionAndOmissionReferencesWithoutMutation() async throws {
@@ -778,6 +779,26 @@ import Testing
         let second = try await answer(store, profile, "One glass")
         #expect(try await store.coachInferencePhotos(turnID: second, expectedProfileID: profile.id) == [asking.photo.data])
         #expect(try await logJuice(store, profile, turnID: second).mealID == asking.meal.id)
+    }
+    @Test func resendAfterARepeatedFoodQuestionDropsThePhoto() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let asking = try await askingPhotoMeal(store, profile)
+        let first = try await answer(store, profile, "Toast and an omelet")
+        try await store.completeCoachTurn(turnID: first, assistantText: CoachClarification.food.question,
+            question: CoachQuestion(kind: .food, candidates: [], originalText: "Toast and an omelet"), expectedProfileID: profile.id)
+        let resend = try await answer(store, profile, "Toast and an omelet")
+        #expect(try await store.coachInferencePhotos(turnID: resend, expectedProfileID: profile.id).isEmpty)
+        #expect(try await logJuice(store, profile, turnID: resend).mealID != asking.meal.id)
+    }
+    @Test func pickedOptionForANamedPhotoFoodFillsThePhotoMeal() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let asking = try await askingPhotoMeal(store, profile)
+        let named = try await answer(store, profile, "Blorp")
+        try await store.completeCoachTurn(turnID: named, assistantText: "What is “Blorp”?",
+            question: CoachQuestion(kind: .food, candidates: [], originalText: "Blorp", options: ["Orange juice", "Mango juice"]), expectedProfileID: profile.id)
+        let picked = try await answer(store, profile, "Orange juice")
+        #expect(try await store.coachInferencePhotos(turnID: picked, expectedProfileID: profile.id).count == 1)
+        #expect(try await logJuice(store, profile, turnID: picked).mealID == asking.meal.id)
     }
     @Test func laterMessageDoesNotFillAnOldPhotoMeal() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }

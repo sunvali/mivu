@@ -45,7 +45,7 @@ enum CoachClarification: String, CaseIterable, Codable, Sendable {
 }
 
 enum CoachCommand: Sendable {
-    case clarification(CoachClarification, candidates: [CoachReply.Target])
+    case clarification(CoachClarification, candidates: [CoachReply.Target], about: String?, options: [String])
     case goals(String)
     case preferences
     case context
@@ -95,7 +95,7 @@ enum CoachTools {
         let exercise = object(["name": string, "sets": ["type": "array", "items": object(["repetitions": integer, "load_kg": number], required: ["repetitions", "load_kg"])]], required: ["name", "sets"])
         let workout: [String: Any] = ["kind": ["type": "string", "enum": ["strength", "cardio", "other"]], "duration_minutes": integer, "exercises": ["type": "array", "items": exercise], "estimated_burn_kcal": number, "burn_source": ["type": ["string", "null"], "enum": ["userEstimate", "modelEstimate", NSNull()]], "performed_at": unconfirmedTime]
         let schemas: [(String, String, [String: Any])] = [
-            ("ask_clarification", "Ask before logging only when food, serving, day or an existing record is genuinely ambiguous. Unknown exact grams or milliliters alone do not block a clearly labelled estimate from text, photos or a clear matching committed portion. Choose portion for an ambiguous serving, food only when no reasonable food guess exists, day for the recording date, meal or workout for an ambiguous existing record. Use this tool alone, before any writes in this turn. Add candidates (at most 4 real meal_id, optional item_id) when the choice is among known records. Use kind confirm with exactly one meal candidate (meal_id only) before deleting a whole meal. The app displays its own question; the user answers in a new turn.", object(["kind": ["type": "string", "enum": CoachClarification.allCases.map(\.rawValue)], "candidates": ["type": "array", "maxItems": 4, "items": object(["meal_id": string, "item_id": string], required: ["meal_id"])]], required: ["kind"])),
+            ("ask_clarification", "Ask before logging only when food, serving, day or an existing record is genuinely ambiguous. Unknown exact grams or milliliters alone do not block a clearly labelled estimate from text, photos or a clear matching committed portion. Choose portion for an ambiguous serving, food only when no reasonable food guess exists, day for the recording date, meal or workout for an ambiguous existing record. Use this tool alone in its call. When a message names several foods, log the clear ones before asking. For the one unclear food, set about to the person's name for it without the amount, and options to 2 or 3 short plain names of the most likely foods it could be; the app shows them as one-tap answers. Add candidates (at most 4 real meal_id, optional item_id) when the choice is among known records. Use kind confirm with exactly one meal candidate (meal_id only) before deleting a whole meal. The app displays its own question; the user answers in a new turn.", object(["kind": ["type": "string", "enum": CoachClarification.allCases.map(\.rawValue)], "candidates": ["type": "array", "maxItems": 4, "items": object(["meal_id": string, "item_id": string], required: ["meal_id"])], "about": string, "options": ["type": "array", "maxItems": 3, "items": string]], required: ["kind"])),
             ("get_progress", "Read actual progress for an inclusive 1, 7 or 30 calendar-day window. Real record IDs/revisions and omitted counts support historical corrections. Food remaining and estimated burn are separate; adherence means Within 10% of target.", object(["ending_on": string, "days": ["type": "integer", "enum": [1, 7, 30]]], required: ["ending_on", "days"])),
             ("get_workout", "Read a complete owned workout before replacement/edit. Oversized records are refused; never replace unseen sets.", object(["workout_id": string], required: ["workout_id"])),
             ("log_weight", "Log one weight per date. Corrections require expected_revision; historical correction after travel must use retrieved weight_id, preserving day and measured time. Model measured_at cannot confirm exact time. Current morning weight explicitly starts that waking day.", object(["local_date": string, "value": ["type": "number"], "unit": ["type": "string", "enum": ["kg", "lb"]], "weight_id": string, "expected_revision": integer, "measured_at": unconfirmedTime], required: ["local_date", "value", "unit"])),
@@ -160,7 +160,7 @@ enum CoachTools {
         }
         switch call.name {
         case "ask_clarification":
-            try keys(["kind", "candidates"], ["kind"])
+            try keys(["kind", "candidates", "about", "options"], ["kind"])
             guard let kind = CoachClarification(rawValue: try string("kind")) else { throw CoachError.invalidArguments }
             var candidates: [CoachReply.Target] = []
             if let raw = args["candidates"], !(raw is NSNull) {
@@ -176,7 +176,18 @@ enum CoachTools {
             }
             // Removing a whole meal needs one explicit meal to name; a named food stands for its meal.
             guard kind != .confirm || candidates.count == 1 else { throw CoachError.invalidArguments }
-            return .clarification(kind, candidates: candidates)
+            func words(_ raw: Any) throws -> String {
+                guard let words = (raw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !words.isEmpty, words.count <= 60, !words.contains(where: \.isNewline) else { throw CoachError.invalidArguments }
+                return words
+            }
+            let about = try args["about"].flatMap { $0 is NSNull ? nil : try words($0) }
+            var options: [String] = []
+            if let raw = args["options"], !(raw is NSNull) {
+                guard kind == .food, candidates.isEmpty, let rows = raw as? [Any], rows.count <= 3 else { throw CoachError.invalidArguments }
+                options = try rows.map(words)
+                guard Set(options).count == options.count else { throw CoachError.invalidArguments }
+            }
+            return .clarification(kind, candidates: candidates, about: about, options: options)
         case "get_progress":
             try keys(["ending_on", "days"], ["ending_on", "days"])
             let days = try integer("days", 1...30); guard [1, 7, 30].contains(days) else { throw CoachError.invalidArguments }

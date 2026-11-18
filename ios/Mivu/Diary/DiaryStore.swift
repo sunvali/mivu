@@ -590,7 +590,7 @@ actor DiaryStore {
         return try pagedMutation(expectedProfileID) { database, head in
         try database.transaction(expected: head, maximumBytes: maximumFileBytes) { transaction in
             let day = try transaction.resolveDay(localDate: dayLocalDate, timeZoneID: head.profile.timeZoneID, at: diaryDateOnlyInstant(dayLocalDate, zone: head.profile.timeZoneID))
-            if let measuredAt { guard measuredAt.timeIntervalSince1970.isFinite, diaryDateLabel(measuredAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData } }
+            if let measuredAt { guard measuredAt.timeIntervalSince1970.isFinite, instant(measuredAt, fallsOn: day, profileZone: head.profile.timeZoneID) else { throw DiaryError.invalidData } }
             return try transaction.setWeight(dayID: day.id, value: value, unit: unit, expectedRevision: expectedRevision, measuredAt: measuredAt ?? diaryDateOnlyInstant(day.localDate, zone: day.timeZoneID), precision: measuredAt == nil ? .dateOnly : .exact)
         }
         }

@@ -89,11 +89,13 @@ struct ProgressDayRow: View {
     let title: String
     let value: String
     var band: ProgressBand?
+    var isTravelDay = false
     var body: some View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 3).fill(band?.color ?? Color.diaryRule.opacity(0.6)).frame(width: 10, height: 10)
                 .accessibilityHidden(true)
             Text(title).foregroundStyle(Color.diaryText)
+            if isTravelDay { Image(systemName: "airplane").font(.footnote).foregroundStyle(Color.diarySecondary).accessibilityLabel("Travel day") }
             Spacer()
             Text(value).monospacedDigit().foregroundStyle(Color.diarySecondary)
         }
@@ -114,7 +116,8 @@ extension ProgressSnapshot {
             Section { ProgressCaloriesCard(snapshot: snapshot).listCardRow() }
             Section("Days") {
                 ForEach(snapshot.days.reversed(), id: \.localDate) { day in
-                    ProgressDayRow(title: snapshot.dayTitle(day), value: ProgressInsights.plainResult(day), band: snapshot.band(day))
+                    ProgressDayRow(title: snapshot.dayTitle(day), value: ProgressInsights.plainResult(day), band: snapshot.band(day),
+                                   isTravelDay: day.isTravelDay == true)
                 }
             }
         }

@@ -22,7 +22,7 @@ extension DiaryDatabase {
         try transaction(expected: expected, maximumBytes: maximumBytes) { transaction in
             let previous = try transaction.workout(id: session.id), day = try trackingDay(id: session.dayID)
             guard previous.revision == expectedRevision else { throw DiaryError.staleRevision }
-            guard session.dayID == previous.dayID, diaryDateLabel(session.performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+            guard session.dayID == previous.dayID, instant(session.performedAt, fallsOn: day, profileZone: transaction.head.profile.timeZoneID) else { throw DiaryError.invalidData }
             var saved = session; saved.revision = previous.revision + 1; try transaction.saveWorkout(saved); return saved
         }
     }
@@ -83,7 +83,7 @@ extension DiaryTransaction {
     }
     func createWorkout(dayID: UUID, draft: WorkoutDraft, performedAt: Date? = nil) throws -> WorkoutSession {
         let day = try database.trackingDay(id: dayID)
-        if let performedAt { guard performedAt.timeIntervalSince1970.isFinite, diaryDateLabel(performedAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData } }
+        if let performedAt { guard performedAt.timeIntervalSince1970.isFinite, instant(performedAt, fallsOn: day, profileZone: head.profile.timeZoneID) else { throw DiaryError.invalidData } }
         let value = WorkoutSession(dayID: dayID, performedAt: try performedAt ?? diaryDateOnlyInstant(day.localDate, zone: day.timeZoneID), timePrecision: performedAt == nil ? .dateOnly : .exact, revision: 1,
             kind: draft.kind, durationMinutes: draft.durationMinutes, exercises: draft.exercises, estimatedBurnKcal: draft.estimatedBurnKcal, burnSource: draft.burnSource)
         try saveWorkout(value); return value

@@ -150,6 +150,8 @@ struct DiaryMeal: Codable, Equatable, Sendable, Identifiable {
     /// Diary head revision that last wrote this meal; nil on payloads saved before Coach focus.
     var changedRevision: Int? = nil
     var timePrecision: MealTimePrecision? = nil
+    /// The zone where the meal was eaten; nil on payloads saved before time zone travel (the day's zone applies).
+    var timeZoneID: String? = nil
     var items: [FoodItem] = []
     var photos: [MealPhoto] = []
     var submissions: [MealSubmission] = []

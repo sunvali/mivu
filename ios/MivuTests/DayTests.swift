@@ -30,6 +30,30 @@ struct DayTests {
         #expect(late == "The current waking day is 2026-10-11; log new intake to it unless the person names another day.")
         #expect(WakingDayInstruction.text(capturedAt: Self.date("2026-10-11T01:30:00Z"), zone: "UTC", cutoffHour: 4).contains("2026-10-10"))
     }
+    static func coachContext(open: TrackingDay?, at: String, zone: String) -> CoachContext {
+        CoachContext(profile: DiaryProfile(name: "Synthetic", timeZoneID: zone), capturedAt: date(at), captureTimeZoneID: zone,
+                     activeDayID: open?.id, days: open.map { [$0] } ?? [], meals: [], weights: [], recentTurns: [])
+    }
+    @Test func travelContextNamesLocalTimeAndOpenDay() {
+        let open = TrackingDay(localDate: "2026-11-17", timeZoneID: "Asia/Jerusalem", startAt: Self.date("2026-11-17T05:00:00Z"))
+        let text = WakingDayInstruction.text(context: Self.coachContext(open: open, at: "2026-11-17T20:10:00Z", zone: "America/New_York"))
+        #expect(text.contains("Local time 15:10 in New York") && text.contains("arrived from Jerusalem") && text.contains("2026-11-17"))
+        #expect(text.hasPrefix("The current waking day is 2026-11-17;"))
+    }
+    @Test func honoluluTodayIsTheOpenDay() {
+        let open = TrackingDay(localDate: "2026-11-18", timeZoneID: "Asia/Tokyo", startAt: Self.date("2026-11-17T20:00:00Z"))
+        let text = WakingDayInstruction.text(context: Self.coachContext(open: open, at: "2026-11-18T06:00:00Z", zone: "Pacific/Honolulu"))
+        #expect(text.contains("The current waking day is 2026-11-18"))
+    }
+    @Test func sameZoneContextIsUnchanged() {
+        let open = TrackingDay(localDate: "2026-10-11", timeZoneID: "UTC", startAt: Self.date("2026-10-11T04:00:00Z"))
+        for at in ["2026-10-11T07:00:00Z", "2026-10-11T05:30:00Z"] {
+            #expect(WakingDayInstruction.text(context: Self.coachContext(open: open, at: at, zone: "UTC"), cutoffHour: 4)
+                    == WakingDayInstruction.text(capturedAt: Self.date(at), zone: "UTC", cutoffHour: 4))
+        }
+        #expect(WakingDayInstruction.text(context: Self.coachContext(open: nil, at: "2026-10-11T07:00:00Z", zone: "UTC"), cutoffHour: 4)
+                == WakingDayInstruction.text(capturedAt: Self.date("2026-10-11T07:00:00Z"), zone: "UTC", cutoffHour: 4))
+    }
     @Test func explicitStartBeforeTheCutoffOpensTheCalendarDateOnce() async throws {
         let (store, _, day) = try await Self.ready(zone: "UTC")
         let next = try await store.startDay(at: Self.date("2026-10-11T01:30:00Z"))
@@ -55,14 +79,6 @@ struct DayTests {
         let (store, _, day) = try await Self.ready(zone: "America/New_York", at: "2026-10-31T12:00:00Z")
         #expect(try await store.dayAssignment(at: Self.date("2026-11-01T05:30:00Z")) == .existing(day.id))
         #expect(try await store.startDay(at: Self.date("2026-11-01T12:00:00Z")).localDate == "2026-11-01")
-    }
-    @Test func timezoneChangeStartsADayInTheNewZoneAndPreservesHistory() async throws {
-        let (store, profile, day) = try await Self.ready()
-        var changed = profile
-        changed.timeZoneID = "America/New_York"
-        try await store.updateProfile(changed)
-        #expect(try await store.dayAssignment(at: day.startAt) == .newDay)
-        #expect(try await store.snapshotForExport().days[0] == day)
     }
     @Test func moveUpdatesBothDayTotalsAndCompletenessStaysIndependent() async throws {
         let (store, _, oldDay) = try await Self.ready()

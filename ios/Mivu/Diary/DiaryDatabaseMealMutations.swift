@@ -76,7 +76,7 @@ extension DiaryDatabase {
             let day = try trackingDay(id: dayID)
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty else { throw DiaryError.emptyCapture }
             guard photos.count <= 8, Set(photos.map(\.id)).count == photos.count else { throw DiaryError.invalidData }
-            let meal = DiaryMeal(dayID: dayID, capturedAt: at, eatenAt: dateOnly ? day.startAt : at, timePrecision: dateOnly ? .dateOnly : nil)
+            let meal = DiaryMeal(dayID: dayID, capturedAt: at, eatenAt: dateOnly ? day.startAt : at, timePrecision: dateOnly ? .dateOnly : nil, timeZoneID: transaction.head.profile.timeZoneID)
             try transaction.insertMeal(meal)
             try transaction.saveSubmission(MealSubmission(id: submissionID, baseRevision: 0, text: text, photoIDs: photos.map(\.id), reviewFirst: reviewFirst), meal: meal)
             if forCoach { try transaction.appendManualCapture(meal: meal, submissionID: submissionID, text: text, photos: photos, at: at) }
@@ -218,7 +218,7 @@ extension DiaryTransaction {
         defer { sqlite3_finalize(statement) }
         let source = try database.mutationStep(statement) ? database.mutationOptionalUUID(statement, 0) : nil
         return MealReadModel(id: id, dayID: meal.dayID, capturedAt: meal.capturedAt, eatenAt: meal.eatenAt, revision: meal.revision,
-            timePrecision: meal.timePrecision, items: items, submissions: submissions, photos: photos, sourceTurnID: source)
+            timePrecision: meal.timePrecision, timeZoneID: meal.timeZoneID, items: items, submissions: submissions, photos: photos, sourceTurnID: source)
     }
     func dayProjection(_ day: TrackingDay) throws -> DiaryDayReadModel {
         let meals = try records("meal", clause: "parent = ?", values: [.text(day.id.uuidString)]).map { row -> MealReadModel in
@@ -246,7 +246,11 @@ extension DiaryTransaction {
         defer { sqlite3_finalize(totals) }; guard try database.mutationStep(totals) else { throw DiaryError.invalidData }
         let emptyComplete = sqlite3_column_int64(totals, 0) == 0 && day.completeness == .complete && pending == 0
         func value(_ column: Int32) -> Double? { emptyComplete ? 0 : (sqlite3_column_type(totals, column) == SQLITE_NULL ? nil : sqlite3_column_double(totals, column)) }
-        return DiaryDaySummary(mealCount: Int(sqlite3_column_int64(statement, 0)), day: day, totals: NutritionTotals(kcal: value(1), carbs: value(2), protein: value(3), fat: value(4), unknownItemCount: Int(sqlite3_column_int64(totals, 5))), savedMealCount: saved, pendingMealCount: pending)
+        let zones = try database.domainStatement("SELECT DISTINCT json_extract(CAST(payload AS TEXT), '$.timeZoneID') FROM meal WHERE parent = ? AND json_extract(CAST(payload AS TEXT), '$.revision') > 0", [.text(day.id.uuidString)])
+        defer { sqlite3_finalize(zones) }; var mealZones: [String?] = []
+        while try database.mutationStep(zones) { mealZones.append(sqlite3_column_type(zones, 0) == SQLITE_NULL ? nil : try database.mutationText(zones, 0)) }
+        return DiaryDaySummary(mealCount: Int(sqlite3_column_int64(statement, 0)), day: day, totals: NutritionTotals(kcal: value(1), carbs: value(2), protein: value(3), fat: value(4), unknownItemCount: Int(sqlite3_column_int64(totals, 5))), savedMealCount: saved, pendingMealCount: pending,
+                               isTravelDay: isTravelDay(dayZone: day.timeZoneID, mealZones: mealZones, at: day.startAt))
     }
     func records(_ table: String, clause: String, values: [DiaryDatabase.Value], limit: Int? = nil) throws -> [DiaryDatabase.Record] {
         let hasParent = ["meal", "submission", "item", "photo", "weight", "workout", "coach_photo"].contains(table)
@@ -258,10 +262,14 @@ extension DiaryTransaction {
     func nextOrdinal(_ table: String, parent: UUID? = nil) throws -> Int {
         try database.mutationInteger("SELECT COALESCE(MAX(ordinal) + 1, 0) FROM \(table) \(parent == nil ? "" : "WHERE parent = ?")", parent.map { [.text($0.uuidString)] } ?? [])
     }
+    /// One day per date, whatever zone it was opened in; duplicates from older data resolve to the active day, then the earliest.
+    func dayForDate(_ localDate: String) throws -> TrackingDay? {
+        let days = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ?", values: [.text(localDate)]).map { try database.decode(TrackingDay.self, $0) }
+        return days.first { $0.id == head.activeDayID } ?? days.min { $0.startAt < $1.startAt }
+    }
     func resolveDay(localDate: String, timeZoneID: String, at: Date, newDayID: UUID? = nil) throws -> TrackingDay {
-        let row = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND json_extract(CAST(payload AS TEXT), '$.timeZoneID') = ?", values: [.text(localDate), .text(timeZoneID)], limit: 1).first
-        if let row {
-            let day = try database.decode(TrackingDay.self, row); try validateTrackingDayFields(day)
+        if let day = try dayForDate(localDate) {
+            try validateTrackingDayFields(day)
             guard newDayID == nil || newDayID == day.id else { throw DiaryError.invalidData }; return day
         }
         if let newDayID {
@@ -294,7 +302,10 @@ extension DiaryTransaction {
     func newDayLabel(at: Date) throws -> String {
         let zone = head.profile.timeZoneID, waking = wakingDateLabel(at, zone: zone)
         let active = try head.activeDayID.map { try database.trackingDay(id: $0) }
-        return active.map { $0.localDate >= waking } == true ? diaryDateLabel(at, zone: zone) : waking
+        guard let active, active.localDate >= waking else { return waking }
+        let calendar = diaryDateLabel(at, zone: zone)
+        // Never back a date (westward travel); the active date itself stays, so a repeated start is idempotent.
+        return calendar >= active.localDate ? calendar : DiaryWeek.adding(1, to: active.localDate) ?? calendar
     }
     func saveDay(_ day: TrackingDay) throws {
         try validateTrackingDayFields(day); _ = try database.trackingDay(id: day.id)
@@ -461,7 +472,9 @@ extension DiaryTransaction {
         guard expectedRevision == nil || expectedRevision == meal.revision, expectedDayID == nil || expectedDayID == meal.dayID else { throw DiaryError.staleRevision }
         changes.dayIDs.insert(meal.dayID); meal.dayID = dayID
         if let eatenAt {
-            guard eatenAt.timeIntervalSince1970.isFinite, diaryDateLabel(eatenAt, zone: day.timeZoneID) == day.localDate else { throw DiaryError.invalidData }
+            let mealZone = MealClock.zone(meal: meal.timeZoneID, day: day.timeZoneID)
+            guard eatenAt.timeIntervalSince1970.isFinite,
+                  instant(eatenAt, fallsOn: day, profileZone: head.profile.timeZoneID) || diaryDateLabel(eatenAt, zone: mealZone) == day.localDate else { throw DiaryError.invalidData }
             meal.eatenAt = eatenAt; meal.timePrecision = .exact
         }
         try saveMeal(meal)
@@ -649,6 +662,16 @@ extension DiaryTransaction {
     }
 }
 
+/// Whether an instant belongs to the day: its own calendar date there, or the travel day (waking date in the profile zone not past it).
+func instant(_ at: Date, fallsOn day: TrackingDay, profileZone: String) -> Bool {
+    diaryDateLabel(at, zone: day.timeZoneID) == day.localDate || (wakingDateLabel(at, zone: profileZone) <= day.localDate && at >= day.startAt)
+}
+
+/// A day whose saved meals were eaten on more than one clock; a meal without its own zone ate on the day's.
+func isTravelDay(dayZone: String, mealZones: [String?], at: Date) -> Bool {
+    Set(mealZones.map { TimeZone(identifier: $0 ?? dayZone)?.secondsFromGMT(for: at) }).count > 1
+}
+
 func diaryDateLabel(_ at: Date, zone: String) -> String {
     let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
     formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"; formatter.timeZone = TimeZone(identifier: zone)
@@ -729,13 +752,28 @@ private func diaryUnitConversion(from previous: String, to edited: String) -> Do
 /// Tells Coach which waking day new intake goes to. In the first three hours after the cutoff it lets the model
 /// judge from the food: a late drink or fast food belongs to the night before, breakfast to the new day.
 enum WakingDayInstruction {
-    static func text(capturedAt: Date, zone: String, cutoffHour: Int = DayCutoff.hour) -> String {
-        let today = wakingDateLabel(capturedAt, zone: zone, cutoffHour: cutoffHour)
+    /// "Today" is the open diary day while the capture's waking date has not passed it, even where the local date is behind.
+    static func today(context: CoachContext, cutoffHour: Int = DayCutoff.hour) -> String {
+        let waking = wakingDateLabel(context.capturedAt, zone: context.captureTimeZoneID, cutoffHour: cutoffHour)
+        guard let open = context.days.first(where: { $0.id == context.activeDayID }), waking <= open.localDate else { return waking }
+        return open.localDate
+    }
+    /// The waking-day rule, plus where and when the person is on a travel day. Model-facing, so English only.
+    static func text(context: CoachContext, cutoffHour: Int = DayCutoff.hour) -> String {
+        let zone = context.captureTimeZoneID, at = context.capturedAt
+        let base = text(capturedAt: at, zone: zone, cutoffHour: cutoffHour, today: today(context: context, cutoffHour: cutoffHour))
+        guard let open = context.days.first(where: { $0.id == context.activeDayID }),
+              TimeZoneSync.clockDiffers(open.timeZoneID, zone, at: at) else { return base }
+        let clock = diaryLocalClock(at, zone: zone).split(separator: " ").last.map(String.init) ?? ""
+        return base + " Local time \(clock) in \(TimeZoneSync.city(zone)); arrived from \(TimeZoneSync.city(open.timeZoneID)) today; the open diary day is \(open.localDate). Times the person mentions are local."
+    }
+    static func text(capturedAt: Date, zone: String, cutoffHour: Int = DayCutoff.hour, today: String? = nil) -> String {
+        let today = today ?? wakingDateLabel(capturedAt, zone: zone, cutoffHour: cutoffHour)
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone) ?? .gmt
         guard (cutoffHour..<cutoffHour + 3).contains(calendar.component(.hour, from: capturedAt)) else {
             return "The current waking day is \(today); log new intake to it unless the person names another day."
         }
-        let previous = wakingDateLabel(capturedAt.addingTimeInterval(-86_400), zone: zone, cutoffHour: cutoffHour)
+        let previous = DiaryWeek.adding(-1, to: today) ?? wakingDateLabel(capturedAt.addingTimeInterval(-86_400), zone: zone, cutoffHour: cutoffHour)
         return "This was captured early in the morning, so choose the waking day from the food without asking: late-night intake such as alcohol, fast food or party snacks belongs to the night before (\(previous)); breakfast or anything else belongs to \(today)."
     }
 }

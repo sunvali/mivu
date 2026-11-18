@@ -18,6 +18,8 @@ struct DailyProgress: Codable, Equatable, Sendable {
     var uncountedWorkoutCount = 0
     /// The Apple Health part of `estimatedBurnKcal`; nil without Health workouts, and always nil for Coach.
     var healthBurnKcal: Double? = nil
+    /// Optional so progress caches written before travel days still decode.
+    var isTravelDay: Bool? = nil
 
     /// The kcal target plus earned workout calories when exercise credit is on, as the widget and Live Activity show it.
     var creditedKcalTarget: Double? {
@@ -65,7 +67,10 @@ enum ProgressAnalytics {
         return daily(localDate: readModel.activeDay?.localDate ?? dateLabel(Date(), zone: readModel.profile.timeZoneID),
             days: readModel.activeDay.map { [$0] } ?? [], subtotals: readModel.activeDay == nil ? [] : [readModel.totals],
             hasFood: readModel.meals.contains(where: \.isSaved), activeDayID: readModel.activeDayID,
-            goal: readModel.activeGoal, workouts: readModel.workouts)
+            goal: readModel.activeGoal, workouts: readModel.workouts,
+            isTravelDay: readModel.activeDay.map { day in
+                isTravelDay(dayZone: day.timeZoneID, mealZones: readModel.meals.filter { $0.isSaved && $0.dayID == day.id }.map(\.timeZoneID), at: day.startAt)
+            } ?? false)
     }
     static func daily(snapshot: DiarySnapshot, localDate: String) -> DailyProgress {
         let days = snapshot.days.filter { $0.localDate == localDate }
@@ -73,7 +78,10 @@ enum ProgressAnalytics {
         let workouts = snapshot.workouts.filter { dayIDs.contains($0.dayID) }
         return daily(localDate: localDate, days: days, subtotals: days.map { snapshot.totals(dayID: $0.id) },
             hasFood: snapshot.meals.contains { dayIDs.contains($0.dayID) && $0.isSaved }, activeDayID: snapshot.activeDayID,
-            goal: snapshot.goal(on: localDate), workouts: workouts)
+            goal: snapshot.goal(on: localDate), workouts: workouts,
+            isTravelDay: days.contains { day in
+                isTravelDay(dayZone: day.timeZoneID, mealZones: snapshot.meals.filter { $0.isSaved && $0.dayID == day.id }.map(\.timeZoneID), at: day.startAt)
+            })
     }
 
     static func status(days: [TrackingDay], hasFood: Bool, activeDayID: UUID?) -> DayStatus? {
@@ -85,7 +93,7 @@ enum ProgressAnalytics {
     }
 
     static func daily(localDate: String, days: [TrackingDay], subtotals: [NutritionTotals], hasFood: Bool, activeDayID: UUID?,
-                      goal: GoalRecord?, workouts: [WorkoutSession]) -> DailyProgress {
+                      goal: GoalRecord?, workouts: [WorkoutSession], isTravelDay: Bool) -> DailyProgress {
         let credit = ExerciseCredit.daily(workouts), burn = workouts.isEmpty ? nil : credit.creditedKcal
         func sum(_ field: KeyPath<NutritionTotals, Double?>) -> Double? {
             let known = subtotals.compactMap { $0[keyPath: field] }
@@ -105,7 +113,7 @@ enum ProgressAnalytics {
                              foodTotals: totals, goal: goal, remainingFromRecorded: remaining,
                              workoutCount: workouts.count, estimatedBurnKcal: burn,
                              exerciseAdjustedKcalRemaining: adjusted, uncountedWorkoutCount: credit.uncountedCount,
-                             healthBurnKcal: workouts.contains(where: \.isFromHealth) ? credit.healthKcal : nil)
+                             healthBurnKcal: workouts.contains(where: \.isFromHealth) ? credit.healthKcal : nil, isTravelDay: isTravelDay)
     }
 
     static func period(snapshot: DiarySnapshot, endingOn: String, days: Int) -> PeriodProgress {

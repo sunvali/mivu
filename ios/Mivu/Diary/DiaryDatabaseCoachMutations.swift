@@ -62,8 +62,9 @@ extension DiaryTransaction {
         }
         guard let askingID, let asking = try self.turn(id: askingID), asking.state == .completed, asking.receipts.isEmpty,
               let kind = asking.question?.kind, [.food, .portion].contains(kind),
-              // An answer that drew a follow-up question still points at the same photo meal.
-              let mealID = try asking.pendingMealID ?? answeredPhotoMeal(asking),
+              // An answer that drew a portion question, or a food question naming it with options, still points at the
+              // photo meal; one that drew a plain food question did not fit it, so a resend must not carry the stale photo.
+              let mealID = try asking.pendingMealID ?? (kind == .portion || asking.question?.options != nil ? answeredPhotoMeal(asking) : nil),
               try database.mutationInteger("SELECT COUNT(*) FROM meal WHERE id = ?", [.text(mealID.uuidString)]) == 1,
               try mealItems(id: mealID).isEmpty else { return nil }
         return mealID
@@ -113,15 +114,11 @@ extension DiaryTransaction {
     private func resolvedWeightWrite(_ write: CoachWrite, turn: CoachTurn) throws -> CoachWrite {
         guard case .weight(let date, let value, let unit, let revision) = write else { return write }
         if turn.receipts.contains(where: { $0.operationKey == "\(turn.id)/weight/\(date)" }) { return write }
-        let days = try records("day", clause: "json_extract(CAST(payload AS TEXT), '$.localDate') = ? AND json_extract(CAST(payload AS TEXT), '$.timeZoneID') = ?", values: [.text(date), .text(turn.captureTimeZoneID)])
-        let dayIDs = Set(days.map(\.id))
-        if let receipt = turn.receipts.first(where: { $0.weightID != nil && $0.operationKey == "\(turn.id)/correct_weight/\($0.weightID!)" && $0.dayID.map { dayIDs.contains($0.uuidString) } == true }) {
+        guard let day = try dayForDate(date) else { return write }
+        if let receipt = turn.receipts.first(where: { $0.weightID != nil && $0.operationKey == "\(turn.id)/correct_weight/\($0.weightID!)" && $0.dayID == day.id }) {
             guard let revision else { throw DiaryError.staleRevision }; return .correctWeight(id: receipt.weightID!, value: value, unit: unit, revision: revision)
         }
-        for row in days {
-            guard let id = UUID(uuidString: row.id) else { throw DiaryError.invalidData }
-            if let existing = try weight(on: id) { guard let revision else { throw DiaryError.staleRevision }; return .correctWeight(id: existing.id, value: value, unit: unit, revision: revision) }
-        }
+        if let existing = try weight(on: day.id) { guard let revision else { throw DiaryError.staleRevision }; return .correctWeight(id: existing.id, value: value, unit: unit, revision: revision) }
         return write
     }
     private func validateReplay(_ write: CoachWrite, receipt: CoachReceipt) throws {
@@ -213,7 +210,7 @@ extension DiaryTransaction {
             case .preferences(_, _, let revision): guard head.revision == revision else { throw DiaryError.staleRevision }
             case .startDay(let revision):
                 guard head.revision == revision else { throw DiaryError.staleRevision }
-                guard turn.captureTimeZoneID == head.profile.timeZoneID, diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == diaryDateLabel(at, zone: head.profile.timeZoneID), try head.activeDayID.map({ try database.trackingDay(id: $0).startAt <= turn.capturedAt }) ?? true else { throw DiaryError.ambiguousDay }
+                guard wakingDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID) == wakingDateLabel(at, zone: head.profile.timeZoneID), try head.activeDayID.map({ try database.trackingDay(id: $0).startAt <= turn.capturedAt }) ?? true else { throw DiaryError.ambiguousDay }
             case .coverage(let date, _): _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID)
             case .undo(let key) where try isHeldDelete(key):
                 guard try deletedUndoUsable(key, now: at, turn: turn) else { throw DiaryError.staleRevision }
@@ -231,8 +228,8 @@ extension DiaryTransaction {
             if let id = turn.resolvedDayID { return try database.trackingDay(id: id) }
             if let id = turn.activeDayID {
                 let active = try database.trackingDay(id: id), waking = wakingDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID)
-                // Before the cutoff the active day is still the waking day, so late food stays in it.
-                if active.localDate == waking { return active }
+                // The open day also covers a waking date at or before it (before the cutoff, or after flying west), so food stays in it.
+                if waking <= active.localDate { return active }
                 // After the cutoff with yesterday still open (the app stayed open), this capture starts the new day.
                 rollsOver = active.localDate < waking && date == waking && head.activeDayID == id
                 if active.localDate != date && !rollsOver { throw DiaryError.ambiguousDay }
@@ -265,7 +262,7 @@ extension DiaryTransaction {
             // A time the user stated wins; otherwise food for the send date, or the waking day a late-night send still
             // belongs to, takes the send time and other dates stay date-only.
             let sentToday = [diaryDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID), wakingDateLabel(turn.capturedAt, zone: turn.captureTimeZoneID)].contains(date)
-            var meal = try turn.pendingMealID.map { try mealRecord(id: $0) } ?? DiaryMeal(dayID: day.id, capturedAt: turn.capturedAt, eatenAt: time ?? (sentToday ? turn.capturedAt : day.startAt), revision: 0, timePrecision: time != nil || sentToday ? nil : .dateOnly)
+            var meal = try turn.pendingMealID.map { try mealRecord(id: $0) } ?? DiaryMeal(dayID: day.id, capturedAt: turn.capturedAt, eatenAt: time ?? (sentToday ? turn.capturedAt : day.startAt), revision: 0, timePrecision: time != nil || sentToday ? nil : .dateOnly, timeZoneID: turn.captureTimeZoneID)
             if isNew { try insertMeal(meal) }
             let proposalItems = try addedCoachItems(items, meal: meal, turnID: turn.id)
             if let pending = turn.pendingMealID {
